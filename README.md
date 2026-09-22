@@ -4,6 +4,14 @@ One Next.js app for Al-Rahmah Complex: School Landing Page, Admissions Portal an
 Referral Tracking System. Agent workflow lives in [AGENTS.md](AGENTS.md); the domain
 language lives in [CONTEXT.md](CONTEXT.md).
 
+## Releases
+
+Each release is tagged with [Semantic Versioning](https://semver.org) and written up
+in [CHANGELOG.md](CHANGELOG.md). `v1.0.0` is reserved for the complete app, with all
+three products implemented, so releases before that stay in the `0.x` range. The
+current release is `v0.1.0`, which bootstraps the app with Al-Rahmah branding and
+staff sign-in.
+
 ## Requirements
 
 - Node 24 or newer

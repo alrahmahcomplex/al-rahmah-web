@@ -5,9 +5,12 @@
 --   staff@example.test         / fixture-password  on the allowlist
 --   former-staff@example.test  / fixture-password  removed from the allowlist
 
+-- new-hire@example.test is allowlisted with no account behind it, which is
+-- what a staff member looks like between being added and being invited.
 insert into public.allowed_admin_emails (email) values
     ('staff@example.test'),
-    ('former-staff@example.test');
+    ('former-staff@example.test'),
+    ('new-hire@example.test');
 
 insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password,

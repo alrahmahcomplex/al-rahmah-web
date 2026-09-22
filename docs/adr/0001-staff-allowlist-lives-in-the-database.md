@@ -26,6 +26,11 @@ The allowlist is the `allowed_admin_emails` table, and the database enforces it:
   can read or change the list.
 - A `before insert` trigger on `auth.users` refuses to create an account for an
   email that is not on the list.
+- Public sign-up is off (`enable_signup = false` in `supabase/config.toml`), and
+  email confirmation is on. Because the allowlist authorizes by email address, an
+  open sign-up endpoint would let whoever registers first claim an allowlisted
+  address that has no account yet and choose its password. Staff accounts are
+  created by invitation instead.
 
 The app then checks the same function rather than trusting a session: `signInStaff`
 drops a session whose email is not allowlisted, and `getStaffUser` rechecks on every
@@ -37,6 +42,13 @@ authorization boundary.
 
 Removing a row revokes access on the staff member's next request, with no
 deployment and no session surgery.
+
+Adding a staff member takes two steps, not one: insert the email, then invite the
+account. An email on the allowlist with no account behind it grants nothing.
+
+Note that `[auth.email] enable_signup` is a different lever and stays `true`. It
+turns the whole email provider on or off, so setting it to `false` also stops
+existing staff signing in with a password.
 
 The `auth.users` trigger blocks **every** account whose email is not on the staff
 allowlist. That is right while staff are the only account holders. If the admissions

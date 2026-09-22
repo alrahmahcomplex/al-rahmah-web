@@ -48,8 +48,12 @@ refuses to reuse one already there.
 
 Only emails in the `allowed_admin_emails` table can sign in. The table is created by
 `supabase/migrations/20260922000000_allowed_admin_emails.sql` with row-level security,
-and a trigger refuses to create an account for any other email. Add a staff member by
-inserting their email before their first sign-in.
+and a trigger refuses to create an account for any other email.
+
+Adding a staff member takes two steps: insert their email into the allowlist, then
+invite the account from the Supabase dashboard. Public sign-up is off, so an
+allowlisted email with no account behind it grants nothing and cannot be claimed by
+someone else registering it. See `docs/adr/0001-staff-allowlist-lives-in-the-database.md`.
 
 `supabase/seed.sql` creates local-only fixture accounts on the reserved `.test` domain:
 `staff@example.test` (allowlisted) and `former-staff@example.test` (removed from the

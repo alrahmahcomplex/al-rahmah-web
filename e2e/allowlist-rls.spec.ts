@@ -42,7 +42,7 @@ test.describe("allowed_admin_emails row-level security", () => {
 
     const { data } = await supabase.from("allowed_admin_emails").select("email")
 
-    expect(data).toEqual([{ email: STAFF.email }])
+    expect(data?.map((row) => row.email).sort()).toEqual(["new-hire@example.test", STAFF.email])
   })
 
   test("sign-up is refused for an email missing from the allowlist", async () => {
@@ -53,5 +53,26 @@ test.describe("allowed_admin_emails row-level security", () => {
 
     expect(error).not.toBeNull()
     expect(data.user).toBeNull()
+  })
+
+  // Public sign-up is off, so an allowlisted address that has no account yet
+  // cannot be claimed by whoever registers it first.
+  test("sign-up cannot claim an allowlisted address that has no account yet", async () => {
+    const supabase = anonClient()
+    const unclaimed = "new-hire@example.test"
+
+    const { data, error } = await supabase.auth.signUp({
+      email: unclaimed,
+      password: "attacker-chosen-password",
+    })
+
+    expect(error).not.toBeNull()
+    expect(data.user).toBeNull()
+
+    const signIn = await supabase.auth.signInWithPassword({
+      email: unclaimed,
+      password: "attacker-chosen-password",
+    })
+    expect(signIn.data.session).toBeNull()
   })
 })

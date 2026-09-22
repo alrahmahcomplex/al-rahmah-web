@@ -1,9 +1,9 @@
 import type { NextRequest } from "next/server"
 
-import { updateSession } from "@/utils/supabase/proxy"
+import { refreshSessionAndGuardStaffRoutes } from "@/utils/supabase/proxy"
 
 export async function proxy(request: NextRequest) {
-  return await updateSession(request)
+  return await refreshSessionAndGuardStaffRoutes(request)
 }
 
 export const config = {

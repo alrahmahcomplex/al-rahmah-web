@@ -22,7 +22,7 @@ export function LoginForm({ notice }: { notice: LoginNotice | null }) {
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-blue-100/50 to-white w-full p-4 sm:p-8 relative">
-      <div className="w-[325px] max-w-[90vw] shrink-0 bg-white px-8 py-[40px] rounded-[40px] sm:rounded-[50px] shadow-[0_30px_80px_-15px_rgba(9,0,187,0.25)] flex flex-col items-center">
+      <div className="w-[325px] max-w-[90vw] shrink-0 bg-white px-8 py-[40px] rounded-[40px] sm:rounded-[50px] shadow-[0_30px_80px_-15px] shadow-blue-600/25 flex flex-col items-center">
         <div className="mb-5 shrink-0">
           <Image
             src="/Al-Rahmah_Official_Logo.svg"

@@ -38,6 +38,16 @@ describe("signInStaff", () => {
     expect(result).toEqual({ ok: false, error: "invalid-credentials" })
   })
 
+  it("reports an outage as unavailable rather than blaming the password", async () => {
+    const { client } = fakeSupabase({
+      signInError: { message: "request failed", code: "over_request_rate_limit" },
+    })
+
+    const result = await signInStaff(client, "staff@example.test", "fixture-password")
+
+    expect(result).toEqual({ ok: false, error: "unavailable" })
+  })
+
   it("refuses a correct password for an email missing from the allowlist and ends the session", async () => {
     const { client, signOut } = fakeSupabase({ isAdmin: false })
 

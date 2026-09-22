@@ -1,0 +1,12 @@
+# Agent worktrees
+.worktrees/
+.claude/worktrees/
+
+# Real family and student records never enter git
+*.xlsx
+*.xls
+*.csv
+
+# Local secrets
+.env*
+!.env.example

@@ -10,3 +10,31 @@
 # Local secrets
 .env*
 !.env.example
+
+# Dependencies
+/node_modules
+
+# Next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+.vercel
+
+# Tests and evidence
+/coverage
+/.artifacts/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Supabase CLI local state
+supabase/.branches
+supabase/.temp
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*

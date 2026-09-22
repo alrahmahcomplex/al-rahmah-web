@@ -19,6 +19,7 @@ One Next.js app for Al-Rahmah Complex: School Landing Page, Admissions Portal, R
 3. **Build**: `implement` → `tdd`, to the invariants below.
 4. **Prove**: `evidence-driven-testing`. Capture *before* while reproducing, *after* once it works.
 5. **Ship**: `code-review` → cross-review (the human starts the other agent on `code-review` for the PR) → `before-and-after` (production vs PR preview) → PR → `greploop` (`greploop-apps` over the file limit) until **5/5, zero unresolved**. End by presenting the PR URL. **Stop**: merge is the human's.
+6. **Release**: once the human approves the merge, merge, tag and changelog it. See *Releasing*.
 
 End an unfinished session with `handoff`.
 
@@ -66,6 +67,16 @@ Next.js App Router (TypeScript), Tailwind v4, shadcn (`base-nova`), Supabase (da
 7. `greploop` to 5/5 with zero unresolved comments.
 8. Present the PR URL. Keep the worktree until the PR merges or closes.
 
+## Releasing
+
+Every merge to `main` is a release: it carries a SemVer tag and a `CHANGELOG.md` entry. A merge without both is unfinished work. Add the changelog entry to the PR before merging, so the tag contains the entry that describes it.
+
+1. Pick the version. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
+2. Write the entry, newest at the top, as a date heading carrying the version, then only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
+3. Merge the PR with a message that says what the change does.
+4. Tag the merge commit on `main`, annotated, message `<version>: <one line>`, then `git push origin <version>`.
+5. Give the human the tag and the release entry alongside the merged PR URL.
+
 ## Writing for humans
 
 Run `unslop` over text a person will read (commits, PR title and body, docs, comments, the closing reply), only on text you wrote or changed.
@@ -83,3 +94,13 @@ The five defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-h
 ### Domain docs
 
 Single-context: `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

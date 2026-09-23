@@ -9,8 +9,8 @@ language lives in [CONTEXT.md](CONTEXT.md).
 Each release is tagged with [Semantic Versioning](https://semver.org) and written up
 in [CHANGELOG.md](CHANGELOG.md). `v1.0.0` is reserved for the complete app, with all
 three products implemented, so releases before that stay in the `0.x` range. The
-current release is `v0.1.0`, which bootstraps the app with Al-Rahmah branding and
-staff sign-in.
+current release is `v0.1.1`, which brings the site back up after `v0.1.0` and keeps
+the public pages up when staff sign-in is misconfigured.
 
 ## Requirements
 
@@ -24,8 +24,8 @@ npm install
 npm run db:start
 ```
 
-`npm run db:start` prints `API_URL` and `ANON_KEY`. Copy `.env.example` to `.env.local`
-and paste them in as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+`npm run db:start` prints `API_URL` and `PUBLISHABLE_KEY`. Copy `.env.example` to `.env.local`
+and paste them in as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 Then:
 
 ```bash

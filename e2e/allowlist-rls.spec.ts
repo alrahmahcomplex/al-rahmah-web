@@ -3,10 +3,10 @@ import { expect, test } from "@playwright/test"
 
 import { FORMER_STAFF, STAFF } from "./fixtures"
 
-// Talks to local Supabase directly with the public anon key, the same access
+// Talks to local Supabase directly with the publishable key, the same access
 // any visitor's browser has, to prove what row-level security allows.
 function anonClient() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
     auth: { persistSession: false },
   })
 }

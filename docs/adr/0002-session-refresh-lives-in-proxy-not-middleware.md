@@ -36,3 +36,14 @@ in the Supabase docs will need translating until they catch up with Next.js 16.
 
 Because `proxy` is Node-only, session refresh no longer runs on the edge runtime.
 This app has no edge requirement, and deployment is Vercel's Node runtime.
+
+## Amendment, 2026-09-23: the proxy runs only on auth-bound routes
+
+The first matcher covered every route except static assets. When a Supabase variable
+went missing in production, `supabaseEnv()` threw inside the proxy and every page
+returned 500, the public home page included.
+
+The matcher now lists only `/staff`, `/login` and `/auth`, the routes that read the
+staff session. Public pages no longer refresh the session cookie. Nothing on them
+reads it, so nothing is lost, and a Supabase fault can no longer take them down. A
+route that starts reading the session must join the matcher.

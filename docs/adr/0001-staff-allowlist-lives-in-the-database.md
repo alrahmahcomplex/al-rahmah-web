@@ -9,7 +9,7 @@ Accepted
 ## Context
 
 Only named staff may reach the staff side of the app. Supabase Auth is reachable
-directly from any browser holding the public anon key, so a rule enforced only in
+directly from any browser holding the public publishable key, so a rule enforced only in
 the Next.js app would not hold: anyone could call the Auth API and the PostgREST
 API without going through our pages.
 

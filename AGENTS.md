@@ -35,12 +35,21 @@ Next.js App Router (TypeScript), Tailwind v4, shadcn (`base-nova`), Supabase (da
 2. Every table has RLS, with its policies in the migration that creates it.
 3. The Supabase service-role key lives on the server only, never in `NEXT_PUBLIC_*`.
 4. Add shadcn components with its CLI into `components/ui/`.
+5. `proxy.ts` runs only on the routes that read the staff session (`/staff`, `/login`, `/auth`), so public pages stay up when Supabase is down or misconfigured. A new route joins its matcher only if it needs the session.
 
 ## Data and evidence
 
 - Schema changes are files in `supabase/migrations/`, tested against local Supabase. Hosted databases change only through the Supabase GitHub integration on merge; agents hold no hosted database credentials.
 - Real family and student records stay out of git and out of evidence. Screens, recordings and tests use the seeded fixture data and the seeded test account.
 - Upload images with `IMAGE_ADAPTER=gist`. Post videos through the PR comment box in the signed-in browser.
+
+### Hosted setup
+
+The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human owns every change below; an agent asks for it and says why.
+
+- **Migrations** reach the hosted database when their PR merges to `main`, through the Supabase GitHub integration. The human confirms the version under Database → Migrations.
+- **Vercel** needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in both Production and Preview. Next.js bakes `NEXT_PUBLIC_*` values in at build, so a changed value takes effect only after a redeploy. A Preview without them serves 500 on `/staff`, `/login` and `/auth`, and `before-and-after` then captures error pages.
+- **The first staff member**: the `enforce_staff_allowlist` trigger refuses any auth user whose email is missing from `allowed_admin_emails`, so the order is fixed. First insert the lowercase email into `allowed_admin_emails` (SQL editor), then create or invite the user under Authentication → Users. Later staff follow the same two steps; RLS also lets a signed-in staff member insert allowlist rows, but no screen does that yet.
 
 ## Checks
 

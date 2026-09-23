@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 23, 2026 `v0.1.1`
+
+### FIXED
+
+- Fixed every page, the home page included, showing "Internal Server Error" since the
+  first release.
+- Fixed the home page and other public pages going down along with staff sign-in.
+  When sign-in is misconfigured or down, only the staff pages are affected.
+
 ## September 22, 2026 `v0.1.0`
 
 ### NEW

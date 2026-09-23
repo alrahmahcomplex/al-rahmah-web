@@ -5,8 +5,6 @@ import { describe, expect, it } from "vitest"
 
 import { config } from "@/proxy"
 
-// The proxy needs Supabase, so it runs only where a session matters. Public
-// pages stay up when Supabase is misconfigured or down.
 function runsOn(url: string) {
   return unstable_doesMiddlewareMatch({ config, url })
 }

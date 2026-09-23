@@ -10,9 +10,9 @@ stay in the `0.x` range.
 ### FIXED
 
 - Fixed every page, the home page included, showing "Internal Server Error" since the
-  first release. The app now reads the Supabase key under the name Vercel holds.
-- The home page and other public pages stay up when the staff sign-in service is
-  misconfigured or down. Only the staff pages depend on it.
+  first release.
+- Fixed the home page and other public pages going down along with staff sign-in.
+  When sign-in is misconfigured or down, only the staff pages are affected.
 
 ## September 22, 2026 `v0.1.0`
 

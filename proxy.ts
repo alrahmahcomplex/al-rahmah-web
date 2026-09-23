@@ -7,8 +7,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // Everything except Next.js assets, the favicon and static images.
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  // Only the routes that read the staff session. The proxy needs Supabase, so
+  // running it on public pages would let a Supabase fault take them down too.
+  matcher: ["/staff/:path*", "/login/:path*", "/auth/:path*"],
 }

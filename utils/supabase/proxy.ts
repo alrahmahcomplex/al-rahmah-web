@@ -3,14 +3,14 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { supabaseEnv } from "./env"
 
-// Refreshes the Supabase session cookie on every request and sends visitors
+// Refreshes the Supabase session cookie on the auth-bound routes and sends visitors
 // with no session away from staff pages. The guard here is optimistic only:
 // the staff pages confirm the allowlist themselves through getStaffUser.
 export async function refreshSessionAndGuardStaffRoutes(request: NextRequest) {
   let response = NextResponse.next({ request })
-  const { url, anonKey } = supabaseEnv()
+  const { url, publishableKey } = supabaseEnv()
 
-  const supabase = createServerClient(url, anonKey, {
+  const supabase = createServerClient(url, publishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll()

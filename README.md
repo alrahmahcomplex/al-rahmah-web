@@ -24,8 +24,8 @@ npm install
 npm run db:start
 ```
 
-`npm run db:start` prints `API_URL` and `ANON_KEY`. Copy `.env.example` to `.env.local`
-and paste them in as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+`npm run db:start` prints `API_URL` and `PUBLISHABLE_KEY`. Copy `.env.example` to `.env.local`
+and paste them in as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 Then:
 
 ```bash

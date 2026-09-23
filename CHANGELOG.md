@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 23, 2026 `v0.1.1`
+
+### FIXED
+
+- Fixed every page, the home page included, showing "Internal Server Error" since the
+  first release. The app now reads the Supabase key under the name Vercel holds.
+- The home page and other public pages stay up when the staff sign-in service is
+  misconfigured or down. Only the staff pages depend on it.
+
 ## September 22, 2026 `v0.1.0`
 
 ### NEW

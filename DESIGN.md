@@ -71,6 +71,7 @@ components:
     height: "44px"
   button-invite-hover:
     backgroundColor: "{colors.sunrise-ember}"
+    textColor: "{colors.indigo-night}"
   name-band:
     backgroundColor: "{colors.rahmah-indigo}"
     textColor: "{colors.paper}"

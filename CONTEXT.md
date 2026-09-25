@@ -154,13 +154,22 @@ The history also records **Action events**: things staff do that change no recor
 
 Admissions records are never deleted. A record may be marked **Inactive** or **Archived** when it is no longer operationally active, while remaining permanently available with its complete audit history.
 
-**Inactive** means temporarily not active and potentially eligible to return to active work. **Archived** means permanently closed for normal operations while remaining available for historical reference.
+**Inactive** means temporarily not active and potentially eligible to return to active work. **Archived** means permanently closed for normal operations while remaining available for historical reference. **Inactive** and **Archived** are closure marks, not lifecycle statuses: a lead keeps its status while it carries one.
 
 When any staff member enters a new lead, the system checks for an existing **Inactive** or **Archived** record with matching student name and parent/guardian details. It prevents a duplicate record and prompts staff to reopen the existing lead instead.
 
 The reopening prompt submits an approval request to the Admissions Manager. The matched record is not reactivated until the Admissions Manager approves the request.
 
 If the Admissions Manager rejects the reopening request, the system continues to block creation of a duplicate lead. The existing record remains the sole record for that matching student and parent/guardian combination.
+
+**Reopening request**:
+A staff member's request to bring a **Declined**, **Inactive** or **Archived** lead back into active work. It is raised from a duplicate match, from the **Reopen** route on the lead, or from reviewing a **Re-application**; the **Admission form** never raises one by itself. The requester must write why the family is back.
+
+A request is **Pending** until it becomes **Approved**, **Rejected** or **Withdrawn**. Only the staff member who raised it may withdraw it, and only while it is **Pending**. A lead has at most one **Pending** request; anyone else who reaches the same lead sees who raised it and when. A rejection needs a written reason, which the requester sees on the lead. After a rejection or withdrawal a new request may be raised; every earlier request stays in the lead's history. An Admissions Manager may approve a request they raised themselves.
+
+Pending requests wait in a **Reopening requests** queue, oldest first, visible with a count to staff who may approve them. Nobody is notified outside the system; the requester sees the outcome on the lead.
+
+Approval reopens the lead fully: a **Declined** lead returns to the status it held before it was declined, and an **Inactive** or **Archived** mark is cleared without changing the status.
 
 When an **Admission form** names a child who matches an existing lead, the form accepts it blindly: the parent or guardian sees exactly the same confirmation as for any other child, including the lead's **Admission Number**, and nothing shows that a match happened. No second lead is ever created for the same child. The submission is recorded on the existing lead as a **Re-application**, and the lead is flagged **Returning family** so admissions staff know when the family comes for the interview. A re-application never changes the lead's current details or status: the submitted details, any that differ from the stored ones, and any discount code are kept on the re-application for staff to review, and a **Declined**, **Inactive** or **Archived** lead still needs Admissions Manager approval to reopen. Other, unmatched children on the same form become new **Applied** leads as usual.
 

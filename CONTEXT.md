@@ -84,6 +84,13 @@ Any accountant may create a payment adjustment; the adjustment is not restricted
 
 Original payment entries are locked after recording. Corrections must be made through adjustment records rather than direct edits.
 
+**Payment adjustment**:
+A correction to one school-fee payment, stating what that payment should have said: its corrected amount, payment type and payment date, or that it is void when the reason is **Duplicate entry**. It carries a reason from the fixed list and an optional note. A payment's effective values are those of its latest adjustment; the original entry and every adjustment remain visible. A wrong adjustment is corrected by another adjustment to the same payment, never by adjusting the adjustment or reversing it, and a voided payment is restored the same way with **Data-entry correction**.
+
+Every school-fee payment amount is above zero and any payment type qualifies for **Enrolled**, so only a void removes a payment's effect. When the payment that triggered **Enrolled** is voided, the earliest remaining effective payment becomes the trigger; if none remains, the lead returns to the status it held before **Enrolled**. The lead history records that the adjustment caused the change.
+
+A lead shows **Total paid**, the sum of its effective school-fee payments. The system does not yet know the amount owed.
+
 ## Roles
 
 **Staff member**:
@@ -156,7 +163,7 @@ Admissions records are never deleted. A record may be marked **Inactive** or **A
 
 **Inactive** means temporarily not active and potentially eligible to return to active work. **Archived** means permanently closed for normal operations while remaining available for historical reference. **Inactive** and **Archived** are closure marks, not lifecycle statuses: a lead keeps its status while it carries one.
 
-A **Declined**, **Inactive** or **Archived** lead is read-only. Staff can find and read it, and the only action it offers is a **Reopening request**; follow-ups and school-fee payments wait until a reopening is approved.
+A **Declined**, **Inactive** or **Archived** lead is read-only. Staff can find and read it, and the only action it offers is a **Reopening request**; follow-ups and school-fee payments wait until a reopening is approved. The one exception is a **Payment adjustment**, which corrects history rather than continuing work; a closed lead keeps its closure mark even if an adjustment changes its status.
 
 When any staff member enters a new lead, the system checks for an existing **Inactive** or **Archived** record with matching student name and parent/guardian details. It prevents a duplicate record and prompts staff to reopen the existing lead instead.
 

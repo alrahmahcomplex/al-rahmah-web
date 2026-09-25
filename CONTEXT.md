@@ -47,7 +47,7 @@ When an interview is retaken, the lead's current status becomes **Interviewed**.
 **Declined reason**:
 A required choice from a fixed list recorded when a lead is marked **Declined**, describing why the family or school will not proceed. Staff may add an optional explanation. A lead cannot be concluded as declined without selecting a reason.
 
-The initial choices are: **Enrolled elsewhere**, **Family changed plans**, **Fees or cost**, **Did not pass interview**, **Unreachable after follow-up**, **School decision**, and **Other**.
+The initial choices are: **Enrolled elsewhere**, **Family changed plans**, **Fees or cost**, **Fee payment not completed**, **Did not pass interview**, **Unreachable after follow-up**, **School decision**, and **Other**.
 
 **Interview payment**:
 The payment status for the admission interview, in Tanzanian shillings (TZS). The standard interview amount is **TZS 50,000**. An **Approved** **Referral code** on the lead grants a **TZS 20,000** discount, making the calculated expected amount **TZS 30,000**. Staff cannot override the calculated fee. The Accountant records only **Paid** or **Not Paid**; payment date, method, and receipt reference are outside the current scope.
@@ -72,11 +72,36 @@ The initial choices are **Complete enrollment** and **Contact the admissions off
 
 The system restricts the next action automatically: **Passed** leads to **Complete enrollment**, while **Failed** leads to **Contact the admissions office**.
 
-**Enrolled** is reached only when the accountant records an actual school-fee amount paid for the student. The record must identify whether the payment was a full payment, first installment, or initial deposit. Once a qualifying amount exists, the system changes the lead to **Enrolled**; staff cannot select this status manually. This enrollment trigger is separate from the admission interview payment.
+**School fee**:
+The annual fee a student owes for their **Enrollment year**, taken from the **Fee schedule** for their class and **Day or boarding** choice, less any **School-fee discount**. It is paid in three instalments: 40%, 40% and 20% of the discounted fee, each with its due date. This is separate from the interview fee.
 
-The accountant may record multiple school-fee payments over time. The system preserves the first qualifying payment as the event that triggered **Enrolled**, while later payments remain part of the student's payment history.
+**Fee schedule**:
+The school's fees for one **Enrollment year**. It groups the classes into fee bands (Nursery: **DAY CARE**, **KG 1**, **KG 2**; Primary: **STD 1** to **STD 4**; Primary: **STD 5** to **STD 7**; Secondary: **FORM 1** to **FORM 4**), gives each band a Day and a Boarding annual fee, and holds the instalment split and due dates, the minimum **Initial deposit**, and the **Pre-Form One programme** fee. The Accountant maintains the amounts. The Admissions Manager sets the year's **Academic-year start** and the number of seats in each class, separately for day and boarding. A new year's fees are added as a new schedule; a lead always uses the schedule of its own enrollment year.
 
-Each school-fee payment record includes the actual amount paid, payment type, payment date, and the accountant who entered it.
+**Day or boarding**:
+Whether the student will be a day scholar or a boarder. Every lead records it; the **Admission form** and staff registration both ask it, and staff may correct it.
+
+**School-fee payment**:
+Money the Accountant records against a student's **School fee**, with its amount, payment type, payment date, and the accountant who entered it. The payment types are **Full payment**, **Initial deposit**, **First instalment**, **Second instalment** and **Third instalment**, plus **Fee waived**, which carries no amount and may be recorded only while the lead has an approved 100% **School-fee discount**. Every other payment is above zero. School-fee payments may be recorded only for a lead whose current interview result is **Passed**, or a reopened lead the Admissions Manager approved to enrol without a retaken interview.
+
+**Initial deposit**:
+An advance a parent or guardian pays, at least the schedule's minimum, to hold the child's place before paying the first instalment. It counts toward the **School fee**. Refunding a deposit is outside the system.
+
+**Seat priority**:
+A badge on a lead, derived from **Total paid** against its **School fee**: **Full** when the fee is fully paid or waived, **First instalment** when at least 40% is paid, and **Deposit** when at least the minimum **Initial deposit** is paid. A lead with less has no priority. It is never chosen by hand. Every lead with a priority takes a seat in its class, year and day or boarding choice. When a class has more such leads than seats, the system warns the Accountant on recording a lead's first payment, and shows the Admissions Manager the leads ranked **Full**, then **First instalment**, then **Deposit**, then by the date each reached its priority, so the Manager decides who keeps a place.
+
+**Academic-year start**:
+The date the school year of an **Enrollment year** begins, in January, set by the Admissions Manager.
+
+**Enrolled** is derived from **Seat priority**; staff cannot select it. A lead becomes **Enrolled** as soon as its priority is **Full**. From the **Academic-year start**, a lead whose priority is **First instalment** also becomes **Enrolled**, automatically on that date for leads already there. A **Deposit** lead is not enrolled until it reaches **First instalment**, and a family that does not get there may be **Declined** with **Fee payment not completed**. A lead with no payment is never **Enrolled**. The system records what triggered **Enrolled**: the payment that brought the lead to the required priority, or the academic-year start.
+
+**Enrolled** is recomputed whenever **Total paid** or the **School fee** changes. A correction that drops a lead below the required priority returns it to the status it held before **Enrolled**; a discount that lowers the fee may enrol it. The lead history records the cause.
+
+**School-fee discount**:
+A reduction of the annual **School fee**: **Sibling** 10%, **Staff child** 25%, or **Qualified orphan** 100%. A lead has at most one; when more than one applies, the largest is used. **Sibling** applies automatically to every child of a **Family** after the first to become **Enrolled**, decided when the child enrols; staff may also tick **Has a sibling already at Al-Rahmah** with the sibling's name and class, for a sibling from before the system. **Staff child** and **Qualified orphan** are requested by admissions staff with a note and granted only by the Admissions Manager; supporting documents are checked outside the system. No discount applies to the **Pre-Form One programme** fee, and the **Discount code** never affects school fees.
+
+**Pre-Form One programme**:
+A preparatory programme offered to students admitted to **FORM 1**, before Form 1 begins. It is not a class: staff tick it on a **FORM 1** lead when the family takes it up. It has its own fee in the **Fee schedule** for day and boarding, recorded as a separate **Pre-Form One fee** payment that counts toward neither the **School fee**, **Seat priority** nor **Enrolled**.
 
 School-fee payments cannot be deleted. A correction creates a separate adjustment record while preserving the original payment entry and its audit history.
 
@@ -87,9 +112,10 @@ Original payment entries are locked after recording. Corrections must be made th
 **Payment adjustment**:
 A correction to one school-fee payment, stating what that payment should have said: its corrected amount, payment type and payment date, or that it is void when the reason is **Duplicate entry**. It carries a reason from the fixed list and an optional note. A payment's effective values are those of its latest adjustment; the original entry and every adjustment remain visible. A wrong adjustment is corrected by another adjustment to the same payment, never by adjusting the adjustment or reversing it, and a voided payment is restored the same way with **Data-entry correction**.
 
-Every school-fee payment amount is above zero and any payment type qualifies for **Enrolled**, so only a void removes a payment's effect. When the payment that triggered **Enrolled** is voided, the earliest remaining effective payment becomes the trigger; if none remains, the lead returns to the status it held before **Enrolled**. The lead history records that the adjustment caused the change.
+An adjustment changes **Total paid**, so **Seat priority** and **Enrolled** are recomputed after it, and the lead history records that the adjustment caused any change.
 
-A lead shows **Total paid**, the sum of its effective school-fee payments. The system does not yet know the amount owed.
+**Total paid**:
+The sum of a lead's effective school-fee payments. The lead shows its **School fee** (naming any discount), **Total paid**, the balance, and the three instalments with their amounts and due dates. The instalments are for reference: the system sends no fee reminders.
 
 ## Roles
 
@@ -108,7 +134,7 @@ The permissions are:
 |---|---|
 | `leads.view` | Finding and reading leads and their history, the dashboard, and the follow-up queue. |
 | `leads.create` | Entering a new lead. A lead matching an existing record becomes a reopening request instead. |
-| `leads.edit` | Correcting a lead's details, parent/guardian contacts, class, enrollment year and referral code, and reviewing re-applications. |
+| `leads.edit` | Correcting a lead's details, parent/guardian contacts, class, enrollment year, day or boarding, **Pre-Form One programme** and referral code, requesting a **Staff child** or **Qualified orphan** discount, and reviewing re-applications. |
 | `visits.record` | Recording a campus visit. |
 | `interviews.record` | Registering a lead for interview and recording its result and score, including editing a recorded result or score. |
 | `interview_payments.record` | Marking the interview fee **Paid** or **Not Paid**. |
@@ -120,7 +146,9 @@ The permissions are:
 | `lifecycle.intervene` | Correcting or advancing a lead outside the normal lifecycle sequence. |
 | `agents.approve` | Approving a Marketing Agent's **Pending** **Referral code**. |
 | `payments.view` | Seeing school-fee payments and payment adjustments. |
-| `payments.record` | Recording school-fee payments and payment adjustments. |
+| `payments.record` | Recording school-fee payments and payment adjustments, and maintaining the fee amounts in the **Fee schedule**. |
+| `discounts.approve` | Granting or refusing a **Staff child** or **Qualified orphan** discount. |
+| `academic_years.manage` | Setting the **Academic-year start** and the seats in each class. |
 | `staff.administer` | Inviting, deactivating and reactivating staff members, assigning their roles, and defining roles. This is the permission the role guardrails protect. |
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
@@ -144,15 +172,17 @@ The three starting roles hold:
 | `agents.approve` | | ✓ | |
 | `payments.view` | ✓ | ✓ | ✓ |
 | `payments.record` | | | ✓ |
+| `discounts.approve` | | ✓ | |
+| `academic_years.manage` | | ✓ | |
 | `staff.administer` | | ✓ | |
 
 **Admissions Staff** may create and update leads, record visits, record interviews, add follow-ups, mark leads **Declined**, and send interview results. They see school-fee payments but may not record them, mark the interview fee paid, reopen leads, or perform lifecycle interventions.
 
 Admissions Staff may edit interview results and percentage scores directly. Every edit preserves the previous value, the new value, the staff member who made the edit, and the audit history.
 
-**Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. The Admissions Manager also administers the staff side: adding and removing staff members, assigning each one's role, and defining roles.
+**Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. They grant **Staff child** and **Qualified orphan** discounts and set each year's **Academic-year start** and class seats. The Admissions Manager also administers the staff side: adding and removing staff members, assigning each one's role, and defining roles.
 
-**Accountant** records school-fee payments and payment adjustments, and marks the interview fee **Paid** or **Not Paid**. School-fee payment records are the source of the system-derived **Enrolled** status. The Accountant reads leads to find the student being paid for, but does not change them.
+**Accountant** records school-fee payments and payment adjustments, maintains the fee amounts, and marks the interview fee **Paid** or **Not Paid**. School-fee payment records are the source of the system-derived **Enrolled** status. The Accountant reads leads to find the student being paid for, but does not change them.
 
 **Audit history**:
 The preserved record of changes to admissions data. Every edit records the previous value, the new value, the user who made the change, and the change history. This applies across student details, parent/guardian contacts, class, enrollment year, referral code, interviews, follow-ups, lifecycle status, and payments.
@@ -270,7 +300,7 @@ Sibling students are interviewed and assessed independently. Each student receiv
 The single calendar year in which the student is planned to enroll, such as **2026** or **2027**. It is selected by staff, or on the **Admission form** from the current calendar year and the next, and must not be represented as an academic-year range.
 
 **Class**:
-A fixed school class selected from the current workbook list: **DAY CARE**, **KG 1**, **KG 2**, **PRE-FORM ONE**, **STD 1** through **STD 7**, and **FORM 1** through **FORM 4**. Staff cannot create ad hoc class values.
+A fixed school class selected from the current workbook list: **DAY CARE**, **KG 1**, **KG 2**, **STD 1** through **STD 7**, and **FORM 1** through **FORM 4**. Staff cannot create ad hoc class values. The workbook's **PRE-FORM ONE** is not a class: such a student is a **FORM 1** lead on the **Pre-Form One programme**.
 
 Student gender is not part of the admissions-lead information model.
 

@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 25, 2026 `v0.1.2`
+
+### IMPROVED
+
+- Nothing in the app changes in this release. The project's written rules now describe
+  what comes next: parents applying online and getting an Admission Number, Marketing
+  Agents and the discount codes parents enter, and staff roles the Admissions Manager
+  can edit. Building starts from these.
+
 ## September 23, 2026 `v0.1.1`
 
 ### FIXED

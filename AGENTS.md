@@ -25,7 +25,7 @@ End an unfinished session with `handoff`.
 
 ## What this repo holds
 
-The repo is complete on its own: everything it needs is committed, and it holds only permanent project material (code, `CONTEXT.md`, `docs/adr/`, `docs/agents/`, agent instructions). Transient working files (handoffs, prototypes, scratch notes) go to the workspace `docs/` folder one level above the repo root, never into the repo.
+The repo is complete on its own: everything it needs is committed, and it holds only permanent project material (code, `CONTEXT.md`, `docs/adr/`, `docs/agents/`, agent instructions). Transient working files never reach `main`. They use the default location of the skill that makes them: `handoff` writes to the OS temp directory, and `research` and `prototype` findings go on their own throwaway branches.
 
 ## Stack and invariants
 

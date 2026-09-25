@@ -48,7 +48,7 @@ Al-Rahmah Complex (Al-Rahmah Schools) offers Islamic values alongside academic r
 - **Stack**: Next.js App Router, TypeScript, Tailwind v4, shadcn (`base-nova`), Supabase and Vercel, as recorded in [AGENTS.md](AGENTS.md).
 - Public pages must stay up when Supabase or staff sign-in is down.
 - Admissions records are never deleted, only marked Inactive or Archived. Payments are never edited, only adjusted.
-- Class names are fixed: DAY CARE, KG 1, KG 2, PRE-FORM ONE, STD 1 to STD 7, FORM 1 to FORM 4.
+- Class names are fixed: DAY CARE, KG 1, KG 2, STD 1 to STD 7, FORM 1 to FORM 4. Pre-Form One is a programme on a FORM 1 lead, not a class.
 - **Open**: the landing page's final section list, the Swahili copy, and whether fees are published on the site.
 
 ## Brand Commitments

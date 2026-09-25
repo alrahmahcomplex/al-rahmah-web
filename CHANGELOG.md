@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 25, 2026 `v0.1.5`
+
+### IMPROVED
+
+- Nothing in the app changes in this release. The project's written rules now settle
+  the rest of the Admissions Portal before it is built: the Swahili WhatsApp and SMS
+  result messages, how a reopening request is approved, how the front desk checks a
+  family in and finds siblings, how school fees, discounts and seat priority decide
+  when a student counts as enrolled, and which periods the dashboard reports by.
+
 ## September 25, 2026 `v0.1.4`
 
 ### IMPROVED

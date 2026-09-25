@@ -234,6 +234,10 @@ All dashboard metrics show overall totals by default. Each metric provides a fil
 
 **Leads by enrollment class** shows the number of leads in each fixed class for the selected reporting period.
 
+The reporting period says when something happened, in calendar terms and Tanzania time; a week starts on Monday. Each metric counts by its own date: **Visited leads** by **Visit date**, **Interviewed leads**, **Passed interviews** and **Failed interviews** by interview date, **Enrolled students** by the date **Enrolled** was triggered, and **Leads by enrollment class** by the date the lead was created. A separate **Enrollment year** filter on every metric says which intake is counted, because one intake's visits run into the next's.
+
+**Seats by class** shows, for each class and **Enrollment year**, the seats taken against the seats available, split by **Seat priority** and by day and boarding.
+
 The system provides a dedicated follow-up queue containing leads with upcoming or overdue follow-ups.
 
 The queue is divided into **Overdue** and **Upcoming** sections. Overdue follow-ups are ordered oldest first; upcoming follow-ups are ordered by the nearest scheduled date.
@@ -265,7 +269,7 @@ A person outside the school who refers families to Al-Rahmah. Anyone may registe
 _Avoid_: External referral agent, referrer, staff owner, follow-up staff
 
 **Agent approval**:
-A newly registered Marketing Agent's **Referral code** is **Pending** until the Admissions Manager approves it, after which it is **Approved**. Only an **Approved** code grants the interview discount.
+A newly registered Marketing Agent's **Referral code** is **Pending** until the Admissions Manager approves it, after which it is **Approved**. Only an **Approved** code grants the interview discount. Staff tell the agent about the approval themselves, outside the system; any message the system sends to agents belongs to the future Marketing Agent Epic.
 
 **Referral code**:
 The code that identifies a Marketing Agent, issued when the agent registers. It is the only referral field on a lead: the agent's name is never entered separately and is resolved from the code. A lead gets its code from a **Referral link**, from the parent or guardian typing it into the **Admission form**, or from staff entering it for a walk-in family. However it arrives, an **Approved** code on the lead is what grants the interview discount. A code typed on the form that matches no Marketing Agent is kept on the lead as **Unrecognised** and grants no discount; staff may correct it to a real code, and the correction is audited.

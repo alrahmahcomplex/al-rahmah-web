@@ -4,7 +4,7 @@ Date: 2026-09-22
 
 ## Status
 
-Accepted
+Accepted. The allowlist table is superseded by ADR 3 (editable RBAC); database-enforced access and invitation-only accounts stand.
 
 ## Context
 

@@ -38,3 +38,9 @@ supabase/.temp
 .DS_Store
 *.pem
 npm-debug.log*
+
+# Impeccable design-hook config and cache (per machine)
+.impeccable/
+# Machine-local agent hook manifests (absolute paths to this machine's skills)
+.claude/settings.local.json
+.codex/hooks.json

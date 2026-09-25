@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 25, 2026 `v0.1.3`
+
+### IMPROVED
+
+- Nothing in the app changes in this release. The project's written rules now say how
+  the Admissions Portal keeps its history: every change to a lead, payment, role or
+  staff member records who made it, what it was before and what it became, and the
+  history can never be edited or deleted.
+
 ## September 25, 2026 `v0.1.2`
 
 ### IMPROVED

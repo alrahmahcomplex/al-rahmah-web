@@ -156,6 +156,8 @@ Admissions records are never deleted. A record may be marked **Inactive** or **A
 
 **Inactive** means temporarily not active and potentially eligible to return to active work. **Archived** means permanently closed for normal operations while remaining available for historical reference. **Inactive** and **Archived** are closure marks, not lifecycle statuses: a lead keeps its status while it carries one.
 
+A **Declined**, **Inactive** or **Archived** lead is read-only. Staff can find and read it, and the only action it offers is a **Reopening request**; follow-ups and school-fee payments wait until a reopening is approved.
+
 When any staff member enters a new lead, the system checks for an existing **Inactive** or **Archived** record with matching student name and parent/guardian details. It prevents a duplicate record and prompts staff to reopen the existing lead instead.
 
 The reopening prompt submits an approval request to the Admissions Manager. The matched record is not reactivated until the Admissions Manager approves the request.
@@ -171,9 +173,21 @@ Pending requests wait in a **Reopening requests** queue, oldest first, visible w
 
 Approval reopens the lead fully: a **Declined** lead returns to the status it held before it was declined, and an **Inactive** or **Archived** mark is cleared without changing the status.
 
-When an **Admission form** names a child who matches an existing lead, the form accepts it blindly: the parent or guardian sees exactly the same confirmation as for any other child, including the lead's **Admission Number**, and nothing shows that a match happened. No second lead is ever created for the same child. The submission is recorded on the existing lead as a **Re-application**, and the lead is flagged **Returning family** so admissions staff know when the family comes for the interview. A re-application never changes the lead's current details or status: the submitted details, any that differ from the stored ones, and any discount code are kept on the re-application for staff to review, and a **Declined**, **Inactive** or **Archived** lead still needs Admissions Manager approval to reopen. Other, unmatched children on the same form become new **Applied** leads as usual.
+When an **Admission form** names a child who matches an existing lead, the form accepts it blindly: the parent or guardian sees exactly the same confirmation as for any other child, including the lead's **Admission Number**, and nothing shows that a match happened. No second lead is ever created for the same child. The submission is recorded on the existing lead as a **Re-application**, and the lead is flagged **Returning family**. A re-application never changes the lead's current details or status: the submitted details, any that differ from the stored ones, and any discount code are kept on the re-application for staff to review, and a **Declined**, **Inactive** or **Archived** lead still needs Admissions Manager approval to reopen. Other, unmatched children on the same form become new **Applied** leads as usual.
 
-Duplicate matching uses the student name and parent/guardian phone number as the primary identity signals. Matching normalizes capitalization and phone-number formatting before comparing records.
+Duplicate matching uses the student name and parent/guardian phone number as the primary identity signals. Matching normalizes capitalization and phone-number formatting before comparing records. This check runs whenever a lead is created, even after a **Family** match at the front desk, and blocks the duplicate.
+
+**Family**:
+The leads that share a parent/guardian contact, such as siblings. A parent or guardian is matched to an existing Family by phone number alone, normalized and compared against both direct and WhatsApp numbers; names are not compared. A new child whose parent matches joins that Family, including a child submitted through the **Admission form**, where nothing tells the parent that a match happened.
+
+**Returning family**:
+The flag on a lead whose parent or guardian already had a lead on record when it was created or re-applied for. It covers both a sibling joining a known **Family** and a **Re-application** for the same child, and tells staff to expect a family the school already knows.
+
+**Front-desk check-in**:
+How admissions staff receive a family on campus. Staff first ask for an **Admission Number**. If the family has one, staff enter it and go straight to that lead; a number that matches nothing says so and offers to try again or start a **New Student**. If the family has none, staff start a **New Student**: they enter the parent or guardian first, and if the parent matches a **Family** and staff confirm it is the same person, the system shows that Family's children. A child already listed is not entered again: an active lead opens as it is, and a **Declined**, **Inactive** or **Archived** lead leads to a **Reopening request**. A child not listed is a new sibling and staff continue the registration. Staff never need to search before starting a registration.
+
+**Lead search**:
+Searching by exact **Admission Number** always finds the lead, whatever its status or closure mark. Searching by name also returns **Declined**, **Inactive** and **Archived** leads, marked as such and listed after active ones. The lead list without a search term shows active leads only, with a filter for **Inactive**, **Archived** or all leads.
 
 ## Reporting
 
@@ -259,5 +273,5 @@ Student date of birth is not part of the admissions-lead information model.
 An automatically incremented number representing the count of current interviews. The system assigns it whenever a lead is registered for an admission interview. It is not the permanent identifier of the lead.
 
 **Lead ID**:
-A permanent, system-generated identifier for an admissions lead. It is separate from the interview registration number and remains attached to the lead throughout corrections, follow-up, and status changes. Parents and guardians know it as the **Admission Number** (Swahili: **Namba ya Udahili**): **ADMSN-** followed by five random digits (for example **ADMSN-40719**), the same form for walk-in and applied leads. The digits are random so a number reveals nothing about when or whether a lead existed before. The Admission Number is a lookup key, not proof of identity: staff confirm the parent or guardian in person before discussing a lead. It is shown when the **Admission form** is submitted, and staff find the lead by it, or by the student's name, when the family arrives.
+A permanent, system-generated identifier for an admissions lead. It is separate from the interview registration number and remains attached to the lead throughout corrections, follow-up, and status changes. Parents and guardians know it as the **Admission Number** (Swahili: **Namba ya Udahili**): **ADMSN-** followed by five random digits (for example **ADMSN-40719**), the same form for walk-in and applied leads. The digits are random so a number reveals nothing about when or whether a lead existed before. The Admission Number is a lookup key, not proof of identity: staff confirm the parent or guardian in person before discussing a lead. It is issued when the lead is created, on submitting the **Admission form** or a **New Student** registration, never earlier, and is shown on the confirmation. Staff find the lead by it, or by the student's name, when the family arrives.
 _Avoid_: Application number, reference number

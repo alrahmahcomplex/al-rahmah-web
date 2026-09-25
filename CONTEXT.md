@@ -50,7 +50,7 @@ A required choice from a fixed list recorded when a lead is marked **Declined**,
 The initial choices are: **Enrolled elsewhere**, **Family changed plans**, **Fees or cost**, **Did not pass interview**, **Unreachable after follow-up**, **School decision**, and **Other**.
 
 **Interview payment**:
-The payment status for the admission interview, in Tanzanian shillings (TZS). The standard interview amount is **TZS 50,000**. An **Approved** **Referral code** on the lead grants a **TZS 20,000** discount, making the calculated expected amount **TZS 30,000**. Staff cannot override the calculated fee and record only **Paid** or **Not Paid**; payment date, method, and receipt reference are outside the current scope.
+The payment status for the admission interview, in Tanzanian shillings (TZS). The standard interview amount is **TZS 50,000**. An **Approved** **Referral code** on the lead grants a **TZS 20,000** discount, making the calculated expected amount **TZS 30,000**. Staff cannot override the calculated fee. The Accountant records only **Paid** or **Not Paid**; payment date, method, and receipt reference are outside the current scope.
 
 An unpaid interview may still be conducted and its result recorded internally. The interview result must not be released to the parent or guardian until the interview payment status is **Paid**.
 
@@ -92,13 +92,57 @@ A named set of **Permissions** held by staff members. The system starts with thr
 **Permission**:
 A single capability in the system, such as recording a school-fee payment or approving a Marketing Agent. Permissions are fixed by the system; roles only choose among them.
 
-**Admissions Staff** may create and update leads, record visits, record interviews, add follow-ups, mark leads **Declined**, and send interview results. They may not reopen leads, perform lifecycle interventions, or record school-fee payments.
+The permissions are:
+
+| Permission | Allows |
+|---|---|
+| `leads.view` | Finding and reading leads and their history, the dashboard, and the follow-up queue. |
+| `leads.create` | Entering a new lead. A lead matching an existing record becomes a reopening request instead. |
+| `leads.edit` | Correcting a lead's details, parent/guardian contacts, class, enrollment year and referral code, and reviewing re-applications. |
+| `visits.record` | Recording a campus visit. |
+| `interviews.record` | Registering a lead for interview and recording its result and score, including editing a recorded result or score. |
+| `interview_payments.record` | Marking the interview fee **Paid** or **Not Paid**. |
+| `results.send` | Releasing an interview result through **Send through WhatsApp** or the copied **Send SMS** text. |
+| `follow_ups.record` | Adding follow-ups and completing them. |
+| `leads.decline` | Marking a lead **Declined** with a **Declined reason**. |
+| `leads.close` | Marking a record **Inactive** or **Archived**. |
+| `reopenings.approve` | Approving or rejecting a reopening request. |
+| `lifecycle.intervene` | Correcting or advancing a lead outside the normal lifecycle sequence. |
+| `agents.approve` | Approving a Marketing Agent's **Pending** **Referral code**. |
+| `payments.view` | Seeing school-fee payments and payment adjustments. |
+| `payments.record` | Recording school-fee payments and payment adjustments. |
+| `staff.administer` | Inviting, deactivating and reactivating staff members, assigning their roles, and defining roles. This is the permission the role guardrails protect. |
+
+Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
+
+The three starting roles hold:
+
+| Permission | Admissions Staff | Admissions Manager | Accountant |
+|---|:-:|:-:|:-:|
+| `leads.view` | ✓ | ✓ | ✓ |
+| `leads.create` | ✓ | ✓ | |
+| `leads.edit` | ✓ | ✓ | |
+| `visits.record` | ✓ | ✓ | |
+| `interviews.record` | ✓ | ✓ | |
+| `interview_payments.record` | | | ✓ |
+| `results.send` | ✓ | ✓ | |
+| `follow_ups.record` | ✓ | ✓ | |
+| `leads.decline` | ✓ | ✓ | |
+| `leads.close` | ✓ | ✓ | |
+| `reopenings.approve` | | ✓ | |
+| `lifecycle.intervene` | | ✓ | |
+| `agents.approve` | | ✓ | |
+| `payments.view` | ✓ | ✓ | ✓ |
+| `payments.record` | | | ✓ |
+| `staff.administer` | | ✓ | |
+
+**Admissions Staff** may create and update leads, record visits, record interviews, add follow-ups, mark leads **Declined**, and send interview results. They see school-fee payments but may not record them, mark the interview fee paid, reopen leads, or perform lifecycle interventions.
 
 Admissions Staff may edit interview results and percentage scores directly. Every edit preserves the previous value, the new value, the staff member who made the edit, and the audit history.
 
 **Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. The Admissions Manager also administers the staff side: adding and removing staff members, assigning each one's role, and defining roles.
 
-**Accountant** records school-fee payments and payment adjustments. School-fee payment records are the source of the system-derived **Enrolled** status.
+**Accountant** records school-fee payments and payment adjustments, and marks the interview fee **Paid** or **Not Paid**. School-fee payment records are the source of the system-derived **Enrolled** status. The Accountant reads leads to find the student being paid for, but does not change them.
 
 **Audit history**:
 The preserved record of changes to admissions data. Every edit records the previous value, the new value, the user who made the change, and the change history. This applies across student details, parent/guardian contacts, class, enrollment year, referral code, interviews, follow-ups, lifecycle status, and payments.

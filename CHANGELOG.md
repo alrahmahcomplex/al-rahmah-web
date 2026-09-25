@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 25, 2026 `v0.1.4`
+
+### IMPROVED
+
+- Nothing in the app changes in this release. The project's written rules now list
+  every permission a staff role can hold and what the Admissions Staff, Admissions
+  Manager and Accountant roles start with. Only the Accountant marks the interview fee
+  as paid, and all three roles can see school-fee payments.
+
 ## September 25, 2026 `v0.1.3`
 
 ### IMPROVED

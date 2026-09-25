@@ -44,3 +44,7 @@ Old and new values are `jsonb`, so a column rename leaves old entries under the 
 `audit_log` keeps copies of names and phone numbers indefinitely, including values later corrected. That follows from "records are never deleted" and is on the list for the Personal Data Protection Act 2022 compliance check planned before slice 6, which may add a retention or redaction rule.
 
 Scope-to-permission mapping depends on the permission list, which is decided separately and may rename the scopes' checks without changing this design.
+
+## Amendment, 2026-09-25: the permission names
+
+The permission list in `CONTEXT.md` fixes the names this ADR described in words. The read scopes map as `lead` to `leads.view`, `payment` to `payments.view` and `staff_admin` to `staff.administer`. The action kinds need `staff.administer` for `invite_sent` and `results.send` for `result_released`.

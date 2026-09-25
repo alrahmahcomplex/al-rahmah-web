@@ -88,7 +88,7 @@ Money the Accountant records against a student's **School fee**, with its amount
 An advance a parent or guardian pays, at least the schedule's minimum, to hold the child's place before paying the first instalment. It counts toward the **School fee**. Refunding a deposit is outside the system.
 
 **Seat priority**:
-A badge on a lead, derived from **Total paid** against its **School fee**: **Full** when the fee is fully paid or waived, **First instalment** when at least 40% is paid, and **Deposit** when at least the minimum **Initial deposit** is paid. A lead with less has no priority. It is never chosen by hand, and it follows the amounts, not the payment types: a deposit that reaches 40% of the fee counts as the first instalment. Every lead with a priority takes a seat in its class, year and day or boarding choice. When a class has more such leads than seats, the system warns the Accountant on recording a lead's first payment, and shows the Admissions Manager the leads ranked **Full**, then **First instalment**, then **Deposit**, then by the date each reached its priority, so the Manager decides who keeps a place. The Manager releases a seat by marking a lead **Declined** with **No seat available**; nothing else frees a seat.
+A badge on a lead, derived from **Total paid** against its **School fee**: **Full** when the fee is fully paid or waived, **First instalment** when at least 40% is paid, and **Deposit** when at least the minimum **Initial deposit** is paid. A lead with less has no priority. It is never chosen by hand, and it follows the amounts, not the payment types: a deposit that reaches 40% of the fee counts as the first instalment. Every lead with a priority takes a seat in its class, year and day or boarding choice. When a class has more such leads than seats, the system warns the Accountant on recording a lead's first payment, and shows the Admissions Manager the leads ranked **Full**, then **First instalment**, then **Deposit**, then by the date each reached its priority, so the Manager decides who keeps a place. The Manager releases a seat by marking a lead **Declined** with **No seat available**; only staff who may set the seats (`academic_years.manage`) may use that reason, and nothing else frees a seat. Approving a **Reopening request** for a lead that would take a seat in a full class shows the approver the same warning and ranking before they decide.
 
 **Academic-year start**:
 The date the school year of an **Enrollment year** begins, in January, set by the Admissions Manager.
@@ -140,7 +140,7 @@ The permissions are:
 | `interview_payments.record` | Marking the interview fee **Paid** or **Not Paid**. |
 | `results.send` | Releasing an interview result through **Send through WhatsApp** or the copied **Send SMS** text. |
 | `follow_ups.record` | Adding follow-ups and completing them. |
-| `leads.decline` | Marking a lead **Declined** with a **Declined reason**. |
+| `leads.decline` | Marking a lead **Declined** with a **Declined reason**. The reason **No seat available** also needs `academic_years.manage`. |
 | `leads.close` | Marking a record **Inactive** or **Archived**. |
 | `reopenings.approve` | Approving or rejecting a reopening request. |
 | `lifecycle.intervene` | Correcting or advancing a lead outside the normal lifecycle sequence. |
@@ -148,7 +148,7 @@ The permissions are:
 | `payments.view` | Seeing school-fee payments and payment adjustments. |
 | `payments.record` | Recording school-fee payments and payment adjustments, and maintaining the fee amounts in the **Fee schedule**. |
 | `discounts.approve` | Granting or refusing a **Staff child** or **Qualified orphan** discount. |
-| `academic_years.manage` | Setting the **Academic-year start** and the seats in each class. |
+| `academic_years.manage` | Setting the **Academic-year start** and the seats in each class, and releasing a seat with **No seat available**. |
 | `staff.administer` | Inviting, deactivating and reactivating staff members, assigning their roles, and defining roles. This is the permission the role guardrails protect. |
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.

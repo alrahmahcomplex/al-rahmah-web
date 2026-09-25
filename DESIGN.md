@@ -65,7 +65,7 @@ spacing:
 components:
   button-invite:
     backgroundColor: "{colors.sunrise-orange}"
-    textColor: "{colors.paper}"
+    textColor: "{colors.rahmah-indigo}"
     typography: "{typography.action}"
     rounded: "{rounded.pill}"
     height: "44px"

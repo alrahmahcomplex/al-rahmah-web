@@ -54,11 +54,14 @@ The payment status for the admission interview, in Tanzanian shillings (TZS). Th
 
 An unpaid interview may still be conducted and its result recorded internally. The interview result must not be released to the parent or guardian until the interview payment status is **Paid**.
 
-Once payment is **Paid**, staff may release the result through a **Send through WhatsApp** action. This action generates a short WhatsApp link containing a predefined message with the interview result and next action. It is an intentional staff-triggered release, not an unsolicited automatic message.
+Once payment is **Paid**, staff may release the result through a **Send through WhatsApp** action. This action generates a WhatsApp link containing a predefined message with the interview result and next action. It is an intentional staff-triggered release, not an unsolicited automatic message.
 
 The result message is written in Swahili, uses warm and expressive language, congratulates the family when the result is **Passed**, and responds empathetically when the result is **Failed**. The message is structured for WhatsApp readability using appropriate bold, italics, and bullets.
 
-The prepared result message includes the student's interview result, percentage score, and selected next action.
+**Result message**:
+The prepared Swahili message that releases an interview result, one for **Passed** and one for **Failed**. It greets the parent or guardian it is sent to by name and gives the student's name, interview result, percentage score, **Admission Number** and **Next action**; the **Passed** message also gives the class and enrollment year, and the **Failed** message gives the admissions office phone number. It is signed by the admissions office, never by a staff member. Its wording is fixed: staff release it as prepared and cannot edit it in the system. It never mentions a retaken interview, which only a reopening can lead to.
+
+**Send SMS** uses a separate, shorter plain-text version of each message with no formatting or emoji, so it fits in two SMS segments.
 
 The WhatsApp action targets the parent/guardian's separate WhatsApp contact when available, otherwise it falls back to the direct phone contact. If no WhatsApp-capable number is available, the action is presented as **Send SMS**; it reveals the prepared message and provides a copy function instead of generating a WhatsApp link.
 

@@ -134,14 +134,16 @@ function checkout(): Checkout {
 function readClaim(claimsDir: string, slot: number): SlotClaim | undefined {
   const file = join(claimsDir, `slot${slot}`)
   // A claim can be removed by `db:stop` at any moment, so a missing file is
-  // an answer, not an error.
+  // an answer, not an error. A claim that exists but can't be read counts as
+  // in use: when in doubt, never hand out a slot someone may hold.
   const stat = statSync(file, { throwIfNoEntry: false })
   if (stat === undefined) return undefined
   let worktree: string
   try {
     worktree = readFileSync(file, "utf8").trim()
-  } catch {
-    return undefined
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
+    return { slot, worktree: "(unreadable claim)", running: true }
   }
   const fresh = Date.now() - stat.mtimeMs < CLAIM_GRACE_MS
   return { slot, worktree, running: fresh || isRunning(slot) }
@@ -209,7 +211,12 @@ function claimSlot(co: Checkout): number | null {
     // A slot whose lock was abandoned counts as taken, so the pick moves on to
     // the next free slot instead of retrying the stuck one.
     const stuck = stuckSlots(co.claimsDir)
-    const claims = readClaims(co.claimsDir).filter((claim) => !stuck.includes(claim.slot))
+    const all = readClaims(co.claimsDir)
+    // Never move a worktree off its own slot: its mirror, .env.local and a
+    // later db:stop all point there. A stuck lock on it is reported instead.
+    const own = all.find((claim) => claim.worktree === co.root)
+    if (own && stuck.includes(own.slot)) return null
+    const claims = all.filter((claim) => !stuck.includes(claim.slot))
     for (const slot of stuck) claims.push({ slot, worktree: "(abandoned lock)", running: true })
     const slot = pickSlot(claims, co.root)
     if (slot === null) return null
@@ -305,7 +312,6 @@ function main(command: string | undefined, flags: string[]): number {
       if (stuck.length > 0) {
         console.error(`A slot lock was left behind by a process that stopped while holding it:\n  ${stuck.join("\n  ")}`)
         console.error("If no other `npm run db:start` or `db:reset` is running, delete that folder and try again.")
-        return 1
       }
       console.error(`All ${SLOT_COUNT} worktree database slots are in use:\n${describeClaims(co)}`)
       console.error("Wait for one to stop, or ask the human. Never stop another worktree's stack.")

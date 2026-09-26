@@ -308,7 +308,13 @@ function main(command: string | undefined, flags: string[]): number {
       return 0
     }
     const claim = co.isMain ? undefined : readClaim(co.claimsDir, slot)
-    if (claim && claim.worktree !== co.root && claim.worktree !== "(unreadable claim)") {
+    // Stop only a slot this worktree provably holds, or one nobody claims.
+    if (claim?.worktree === "(unreadable claim)") {
+      console.error(`The claim for slot ${slot} can't be read: ${join(co.claimsDir, `slot${slot}`)}`)
+      console.error("Check who holds that slot before stopping anything; nothing was stopped.")
+      return 1
+    }
+    if (claim && claim.worktree !== co.root) {
       // Our stack stopped earlier and someone else has taken the slot since.
       console.log(`Slot ${slot} now belongs to ${claim.worktree}; nothing of this worktree's to stop.`)
       return 0

@@ -24,20 +24,27 @@ npm install
 npm run db:start
 ```
 
-`npm run db:start` prints `API_URL` and `PUBLISHABLE_KEY`. Copy `.env.example` to `.env.local`
-and paste them in as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-Then:
+`npm run db:start` starts this checkout's own local Supabase and writes `.env.local` for you.
+It prints the dev-server port to use:
 
 ```bash
-npm run dev
+npm run dev -- -p <port it printed>
 ```
+
+Every checkout gets its own stack. The main checkout uses slot 0 (the ports in
+`supabase/config.toml`, dev server 3000, e2e server 3100). A git worktree takes one of
+three slots, with ports shifted by 100 per slot (slot 1: API 55521, dev 3001, e2e
+3101). It runs only Postgres, Auth, REST, Kong and Mailpit, about 210 MB against 2 GB
+for the full stack. `npm run db:status` lists the slots, `npm run db:stop` frees
+yours, and `npm run db:start -- --full` adds Studio and the other services.
 
 The Supabase CLI is a dev dependency, so every command goes through npm scripts or
 `npx supabase` and everyone gets the version pinned in the lockfile. Do not install it
 globally.
 
 The local stack listens on 55420–55429 rather than the Supabase defaults, because
-Windows reserves the 543xx range for Hyper-V. Studio is at <http://127.0.0.1:55423>.
+Windows reserves the 543xx range for Hyper-V. Studio (with `--full`) is at
+<http://127.0.0.1:55423>.
 
 ## Checks
 
@@ -49,8 +56,9 @@ npm run test:e2e
 npm run build
 ```
 
-`test:e2e` needs local Supabase running; it starts its own server on port 3100 and
-refuses to reuse one already there.
+`test:e2e` needs this checkout's local Supabase running. It starts its own server on
+the checkout's `E2E_PORT` (3100 in the main checkout) and refuses to reuse one already
+there.
 
 ## Staff sign-in
 

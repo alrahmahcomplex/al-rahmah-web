@@ -5,9 +5,10 @@ import { defineConfig, devices } from "@playwright/test"
 // The app and these tests both talk to local Supabase (`npm run db:start`).
 if (existsSync(".env.local")) process.loadEnvFile(".env.local")
 
-// A dedicated port, never reused: if something else already listens here the
-// run fails instead of silently testing another worktree's server.
-const PORT = 3100
+// Each checkout's own port, written to .env.local by `npm run db:start` (3100 in
+// the main checkout, 3101+ in worktrees). Never reused: if something else
+// already listens here the run fails instead of testing another worktree's server.
+const PORT = Number(process.env.E2E_PORT ?? 3100)
 
 export default defineConfig({
   testDir: "e2e",

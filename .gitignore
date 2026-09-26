@@ -33,6 +33,8 @@ next-env.d.ts
 # Supabase CLI local state
 supabase/.branches
 supabase/.temp
+# Per-worktree Supabase mirror written by scripts/local-db.ts
+.local-db/
 
 # misc
 .DS_Store

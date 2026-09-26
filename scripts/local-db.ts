@@ -101,8 +101,14 @@ function git(...args: string[]): string {
   return execFileSync("git", args, { encoding: "utf8" }).trim()
 }
 
-function supabase(args: string[]): number {
-  const result = spawnSync("npx", ["supabase", ...args], { stdio: "inherit", shell: process.platform === "win32" })
+// Runs the lockfile-pinned CLI through Node itself, never through a shell, so
+// paths with spaces (this repo lives under "01 PROJECTS") reach it intact.
+function cli(co: Checkout): string {
+  return join(co.root, "node_modules", "supabase", "dist", "supabase.js")
+}
+
+function supabase(co: Checkout, args: string[]): number {
+  const result = spawnSync(process.execPath, [cli(co), ...args], { stdio: "inherit" })
   return result.status ?? 1
 }
 
@@ -194,9 +200,8 @@ function workdirArgs(co: Checkout): string[] {
 }
 
 function writeEnvLocal(co: Checkout, slot: number) {
-  const status = spawnSync("npx", ["supabase", "status", "-o", "env", ...workdirArgs(co)], {
+  const status = spawnSync(process.execPath, [cli(co), "status", "-o", "env", ...workdirArgs(co)], {
     encoding: "utf8",
-    shell: process.platform === "win32",
   })
   const values = Object.fromEntries(
     status.stdout
@@ -242,7 +247,7 @@ function main(command: string | undefined, flags: string[]): number {
       console.log("This worktree holds no database slot; nothing to stop.")
       return 0
     }
-    const code = supabase(["stop", ...workdirArgs(co)])
+    const code = supabase(co, ["stop", ...workdirArgs(co)])
     if (!co.isMain) rmSync(join(co.claimsDir, `slot${slot}`), { force: true })
     return code
   }
@@ -259,7 +264,7 @@ function main(command: string | undefined, flags: string[]): number {
       command === "start"
         ? ["start", ...workdirArgs(co), ...(full ? [] : ["-x", SLIM_EXCLUDES.join(",")])]
         : ["db", "reset", ...workdirArgs(co)]
-    const code = supabase(args)
+    const code = supabase(co, args)
     if (code !== 0) return code
     writeEnvLocal(co, slot)
     const { dev, e2e } = portsFor(slot)

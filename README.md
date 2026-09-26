@@ -34,7 +34,7 @@ npm run dev -- -p <port it printed>
 Every checkout gets its own stack. The main checkout uses slot 0 (the ports in
 `supabase/config.toml`, dev server 3000, e2e server 3100). A git worktree takes one of
 three slots, with ports shifted by 100 per slot (slot 1: API 55521, dev 3001, e2e
-3101). It runs only Postgres, Auth, REST, Kong and Mailpit, about 450 MB against 2 GB
+3101). It runs only Postgres, Auth, REST, Kong and Mailpit, about 210 MB against 2 GB
 for the full stack. `npm run db:status` lists the slots, `npm run db:stop` frees
 yours, and `npm run db:start -- --full` adds Studio and the other services.
 

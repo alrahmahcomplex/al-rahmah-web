@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "db:start": "node scripts/local-db.ts start",
-    "db:stop": "node scripts/local-db.ts stop",
-    "db:reset": "node scripts/local-db.ts reset",
-    "db:status": "node scripts/local-db.ts status"
+    "db:start": "node scripts/local-db.mts start",
+    "db:stop": "node scripts/local-db.mts stop",
+    "db:reset": "node scripts/local-db.mts reset",
+    "db:status": "node scripts/local-db.mts status"
   },
   "engines": {
     "node": ">=24"

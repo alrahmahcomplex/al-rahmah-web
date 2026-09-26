@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { mergeEnv, pickSlot, projectIdFor, rewriteConfig, SLOT_COUNT } from "@/scripts/local-db"
+import { mergeEnv, pickSlot, projectIdFor, rewriteConfig, SLOT_COUNT } from "@/scripts/local-db.mjs"
 
 const CONFIG = [
   'project_id = "al-rahmah-web"',

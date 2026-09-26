@@ -23,7 +23,7 @@ const CLAIM_GRACE_MS = 15 * 60 * 1000
 
 // Everything the app does not use. What stays: Postgres, Auth (gotrue), REST
 // (postgrest), Kong in front of them, and Mailpit to catch invite emails.
-// That set is about 450 MB, against about 2 GB for the full stack.
+// That set measures about 210 MB, against about 2 GB for the full stack.
 export const SLIM_EXCLUDES = [
   "realtime",
   "storage-api",
@@ -273,7 +273,7 @@ function main(command: string | undefined, flags: string[]): number {
     return 0
   }
 
-  console.error("Usage: node scripts/local-db.ts <start|stop|reset|status> [--full]")
+  console.error("Usage: node scripts/local-db.mts <start|stop|reset|status> [--full]")
   return 1
 }
 

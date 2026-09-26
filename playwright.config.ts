@@ -23,6 +23,8 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
+    // `npm run test:e2e` takes the build lock before Playwright starts (see
+    // scripts/build-lock.mts), so this build runs under it without waiting.
     command: `npm run build && npx next start -p ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,

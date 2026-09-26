@@ -60,6 +60,19 @@ npm run build
 the checkout's `E2E_PORT` (3100 in the main checkout) and refuses to reuse one already
 there.
 
+One Next.js build runs at a time per machine, because two at once ran a 7.7 GB machine
+out of memory. `npm run build` and `npm run test:e2e` share a lock with every other
+checkout of the repo. When another checkout holds it, they print what they are waiting
+for and start once it is released. `test:e2e` holds the lock for its whole run, since
+its build happens inside Playwright's five-minute server timeout. Run it through npm:
+`npx playwright test` still waits for the lock, but the wait counts against that
+timeout.
+
+A build that is killed mid-run leaves its lock behind, in `.git/build.lock` of the main
+checkout. The next run names that folder and stops instead of waiting. Check that no
+build or e2e run is going on in any checkout, delete the folder, and run the command
+again.
+
 ## Staff sign-in
 
 Only emails in the `allowed_admin_emails` table can sign in. The table is created by

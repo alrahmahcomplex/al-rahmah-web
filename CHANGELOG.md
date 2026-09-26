@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- Nothing in the app changes in this release. When two copies of the project on the
+  same computer build the app at once, the second now waits for the first to finish,
+  so they no longer run the computer out of memory and both fail.
+
 ## September 26, 2026 `v0.1.6`
 
 ### IMPROVED

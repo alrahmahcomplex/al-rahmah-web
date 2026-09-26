@@ -8,7 +8,7 @@
 // Node 24 runs this file directly (type stripping), so keep to erasable syntax.
 
 import { execFileSync, spawnSync } from "node:child_process"
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 export const BASE_PROJECT_ID = "al-rahmah-web"
@@ -17,6 +17,9 @@ export const PORT_STEP = 100
 export const E2E_BASE_PORT = 3100
 export const DEV_BASE_PORT = 3000
 const MIRROR_DIR = ".local-db"
+// A claim counts as in use this long after it was written, even before its
+// containers are up: a first `supabase start` pulls images and can take minutes.
+const CLAIM_GRACE_MS = 15 * 60 * 1000
 
 // Everything the app does not use. What stays: Postgres, Auth (gotrue), REST
 // (postgrest), Kong in front of them, and Mailpit to catch invite emails.
@@ -65,14 +68,21 @@ export type SlotClaim = {
   slot: number
   // The worktree that last took the slot.
   worktree: string
-  // Whether that slot's database container is running right now.
+  // Whether the slot is in use: its database container is running, or the
+  // claim is fresh enough that its stack may still be starting.
   running: boolean
 }
 
 // Chooses the slot for `worktree`, or null when every slot is held.
 // `claims` holds one entry per slot that has a claim file, in any order.
 export function pickSlot(claims: SlotClaim[], worktree: string): number | null {
-  // TODO(human)
+  // Sticky first: a worktree keeps its slot, so its ports and .env.local stay put.
+  const own = claims.find((claim) => claim.worktree === worktree)
+  if (own) return own.slot
+  for (let slot = 1; slot <= SLOT_COUNT; slot++) {
+    const claim = claims.find((c) => c.slot === slot)
+    if (!claim || !claim.running) return slot
+  }
   return null
 }
 
@@ -118,14 +128,51 @@ function readClaims(claimsDir: string): SlotClaim[] {
     .filter((match): match is RegExpMatchArray => match !== null)
     .map((match) => {
       const slot = Number(match[1])
-      const worktree = readFileSync(join(claimsDir, match[0]), "utf8").trim()
-      return { slot, worktree, running: isRunning(slot) }
+      const file = join(claimsDir, match[0])
+      const worktree = readFileSync(file, "utf8").trim()
+      const fresh = Date.now() - statSync(file).mtimeMs < CLAIM_GRACE_MS
+      return { slot, worktree, running: fresh || isRunning(slot) }
     })
 }
 
-function slotFor(co: Checkout): number | null {
+function ownSlot(co: Checkout): number | null {
   if (co.isMain) return 0
-  return pickSlot(readClaims(co.claimsDir), co.root)
+  return readClaims(co.claimsDir).find((claim) => claim.worktree === co.root)?.slot ?? null
+}
+
+// Picks a slot and claims it in one step that two sessions cannot both win.
+// A new claim is created only if no file exists ("wx"). A stale claim from
+// someone else is first renamed away, and only one session's rename succeeds.
+// The loser re-reads the claims and picks again.
+function claimSlot(co: Checkout): number | null {
+  if (co.isMain) return 0
+  mkdirSync(co.claimsDir, { recursive: true })
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const claims = readClaims(co.claimsDir)
+    const slot = pickSlot(claims, co.root)
+    if (slot === null) return null
+    const file = join(co.claimsDir, `slot${slot}`)
+    const existing = claims.find((claim) => claim.slot === slot)
+    const mine = existing?.worktree === co.root
+    if (existing && !mine) {
+      const stale = `${file}.stale-${process.pid}`
+      try {
+        renameSync(file, stale)
+      } catch {
+        continue
+      }
+      rmSync(stale, { force: true })
+    }
+    try {
+      // Rewriting our own claim also refreshes its time for the grace period.
+      writeFileSync(file, co.root, { flag: mine ? "w" : "wx" })
+      return slot
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") continue
+      throw error
+    }
+  }
+  return null
 }
 
 // Copies supabase/ into .local-db/supabase with the slot's config, so the
@@ -176,7 +223,7 @@ function writeEnvLocal(co: Checkout, slot: number) {
 function describeClaims(co: Checkout): string {
   const claims = readClaims(co.claimsDir).sort((a, b) => a.slot - b.slot)
   if (claims.length === 0) return "  (no worktree slots claimed)"
-  return claims.map((c) => `  slot ${c.slot}: ${c.running ? "running" : "stopped"}  ${c.worktree}`).join("\n")
+  return claims.map((c) => `  slot ${c.slot}: ${c.running ? "in use" : "free"}  ${c.worktree}`).join("\n")
 }
 
 function main(command: string | undefined, flags: string[]): number {
@@ -189,25 +236,25 @@ function main(command: string | undefined, flags: string[]): number {
     return 0
   }
 
-  const slot = slotFor(co)
-  if (slot === null) {
-    console.error(`All ${SLOT_COUNT} worktree database slots are in use:\n${describeClaims(co)}`)
-    console.error("Wait for one to stop, or ask the human. Never stop another worktree's stack.")
-    return 1
-  }
-
   if (command === "stop") {
+    const slot = ownSlot(co)
+    if (slot === null) {
+      console.log("This worktree holds no database slot; nothing to stop.")
+      return 0
+    }
     const code = supabase(["stop", ...workdirArgs(co)])
     if (!co.isMain) rmSync(join(co.claimsDir, `slot${slot}`), { force: true })
     return code
   }
 
   if (command === "start" || command === "reset") {
-    if (!co.isMain) {
-      mkdirSync(co.claimsDir, { recursive: true })
-      writeFileSync(join(co.claimsDir, `slot${slot}`), co.root)
-      mirror(co, slot)
+    const slot = claimSlot(co)
+    if (slot === null) {
+      console.error(`All ${SLOT_COUNT} worktree database slots are in use:\n${describeClaims(co)}`)
+      console.error("Wait for one to stop, or ask the human. Never stop another worktree's stack.")
+      return 1
     }
+    if (!co.isMain) mirror(co, slot)
     const args =
       command === "start"
         ? ["start", ...workdirArgs(co), ...(full ? [] : ["-x", SLIM_EXCLUDES.join(",")])]

@@ -8,7 +8,7 @@
 // Node 24 runs this file directly (type stripping), so keep to erasable syntax.
 
 import { execFileSync, spawnSync } from "node:child_process"
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 export const BASE_PROJECT_ID = "al-rahmah-web"
@@ -20,6 +20,9 @@ const MIRROR_DIR = ".local-db"
 // A claim counts as in use this long after it was written, even before its
 // containers are up: a first `supabase start` pulls images and can take minutes.
 const CLAIM_GRACE_MS = 15 * 60 * 1000
+// A slot lock is held for milliseconds. One older than this was left by a
+// process that died while holding it.
+const LOCK_STALE_MS = 30 * 1000
 
 // Everything the app does not use. What stays: Postgres, Auth (gotrue), REST
 // (postgrest), Kong in front of them, and Mailpit to catch invite emails.
@@ -127,18 +130,21 @@ function checkout(): Checkout {
   return { root, isMain: gitDir === commonDir, claimsDir: join(commonDir, "local-db-slots") }
 }
 
+function readClaim(claimsDir: string, slot: number): SlotClaim | undefined {
+  const file = join(claimsDir, `slot${slot}`)
+  if (!existsSync(file)) return undefined
+  const worktree = readFileSync(file, "utf8").trim()
+  const fresh = Date.now() - statSync(file).mtimeMs < CLAIM_GRACE_MS
+  return { slot, worktree, running: fresh || isRunning(slot) }
+}
+
 function readClaims(claimsDir: string): SlotClaim[] {
   if (!existsSync(claimsDir)) return []
   return readdirSync(claimsDir)
     .map((file) => file.match(/^slot(\d+)$/))
     .filter((match): match is RegExpMatchArray => match !== null)
-    .map((match) => {
-      const slot = Number(match[1])
-      const file = join(claimsDir, match[0])
-      const worktree = readFileSync(file, "utf8").trim()
-      const fresh = Date.now() - statSync(file).mtimeMs < CLAIM_GRACE_MS
-      return { slot, worktree, running: fresh || isRunning(slot) }
-    })
+    .map((match) => readClaim(claimsDir, Number(match[1])))
+    .filter((claim): claim is SlotClaim => claim !== undefined)
 }
 
 function ownSlot(co: Checkout): number | null {
@@ -146,37 +152,47 @@ function ownSlot(co: Checkout): number | null {
   return readClaims(co.claimsDir).find((claim) => claim.worktree === co.root)?.slot ?? null
 }
 
-// Picks a slot and claims it in one step that two sessions cannot both win.
-// A new claim is created only if no file exists ("wx"). A stale claim from
-// someone else is first renamed away, and only one session's rename succeeds.
-// The loser re-reads the claims and picks again.
+// Runs `fn` while holding the slot's lock, or returns undefined if another
+// process holds it. Creating a directory either succeeds or fails with EEXIST,
+// so two processes can never both hold the lock.
+function withSlotLock<T>(claimsDir: string, slot: number, fn: () => T): T | undefined {
+  const lock = join(claimsDir, `slot${slot}.lock`)
+  try {
+    mkdirSync(lock)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+    if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmSync(lock, { recursive: true, force: true })
+    return undefined
+  }
+  try {
+    return fn()
+  } finally {
+    rmSync(lock, { recursive: true, force: true })
+  }
+}
+
+function pause(ms: number) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+// Picks a slot and claims it so that two sessions can never both win. The pick
+// is made from a snapshot, then re-checked under the slot's lock before the
+// claim is written. A session that loses the race picks again.
 function claimSlot(co: Checkout): number | null {
   if (co.isMain) return 0
   mkdirSync(co.claimsDir, { recursive: true })
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const claims = readClaims(co.claimsDir)
-    const slot = pickSlot(claims, co.root)
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const slot = pickSlot(readClaims(co.claimsDir), co.root)
     if (slot === null) return null
-    const file = join(co.claimsDir, `slot${slot}`)
-    const existing = claims.find((claim) => claim.slot === slot)
-    const mine = existing?.worktree === co.root
-    if (existing && !mine) {
-      const stale = `${file}.stale-${process.pid}`
-      try {
-        renameSync(file, stale)
-      } catch {
-        continue
-      }
-      rmSync(stale, { force: true })
-    }
-    try {
-      // Rewriting our own claim also refreshes its time for the grace period.
-      writeFileSync(file, co.root, { flag: mine ? "w" : "wx" })
-      return slot
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") continue
-      throw error
-    }
+    const won = withSlotLock(co.claimsDir, slot, () => {
+      const current = readClaim(co.claimsDir, slot)
+      if (current && current.worktree !== co.root && current.running) return false
+      // Writing our own claim again also refreshes its time for the grace period.
+      writeFileSync(join(co.claimsDir, `slot${slot}`), co.root)
+      return true
+    })
+    if (won) return slot
+    pause(100)
   }
   return null
 }
@@ -248,7 +264,8 @@ function main(command: string | undefined, flags: string[]): number {
       return 0
     }
     const code = supabase(co, ["stop", ...workdirArgs(co)])
-    if (!co.isMain) rmSync(join(co.claimsDir, `slot${slot}`), { force: true })
+    // Keep the claim if the stack may still be running, so nobody else takes it.
+    if (!co.isMain && code === 0) rmSync(join(co.claimsDir, `slot${slot}`), { force: true })
     return code
   }
 

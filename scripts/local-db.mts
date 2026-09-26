@@ -133,9 +133,17 @@ function checkout(): Checkout {
 
 function readClaim(claimsDir: string, slot: number): SlotClaim | undefined {
   const file = join(claimsDir, `slot${slot}`)
-  if (!existsSync(file)) return undefined
-  const worktree = readFileSync(file, "utf8").trim()
-  const fresh = Date.now() - statSync(file).mtimeMs < CLAIM_GRACE_MS
+  // A claim can be removed by `db:stop` at any moment, so a missing file is
+  // an answer, not an error.
+  const stat = statSync(file, { throwIfNoEntry: false })
+  if (stat === undefined) return undefined
+  let worktree: string
+  try {
+    worktree = readFileSync(file, "utf8").trim()
+  } catch {
+    return undefined
+  }
+  const fresh = Date.now() - stat.mtimeMs < CLAIM_GRACE_MS
   return { slot, worktree, running: fresh || isRunning(slot) }
 }
 
@@ -176,7 +184,15 @@ function stuckLocks(claimsDir: string): string[] {
   return readdirSync(claimsDir)
     .filter((name) => /^slot\d+\.lock$/.test(name))
     .map((name) => join(claimsDir, name))
-    .filter((lock) => Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS)
+    .filter((lock) => {
+      // The lock may be released between listing and checking it.
+      const stat = statSync(lock, { throwIfNoEntry: false })
+      return stat !== undefined && Date.now() - stat.mtimeMs > LOCK_STALE_MS
+    })
+}
+
+function stuckSlots(claimsDir: string): number[] {
+  return stuckLocks(claimsDir).map((lock) => Number(lock.match(/slot(\d+)\.lock$/)![1]))
 }
 
 function pause(ms: number) {
@@ -190,7 +206,12 @@ function claimSlot(co: Checkout): number | null {
   if (co.isMain) return 0
   mkdirSync(co.claimsDir, { recursive: true })
   for (let attempt = 0; attempt < 50; attempt++) {
-    const slot = pickSlot(readClaims(co.claimsDir), co.root)
+    // A slot whose lock was abandoned counts as taken, so the pick moves on to
+    // the next free slot instead of retrying the stuck one.
+    const stuck = stuckSlots(co.claimsDir)
+    const claims = readClaims(co.claimsDir).filter((claim) => !stuck.includes(claim.slot))
+    for (const slot of stuck) claims.push({ slot, worktree: "(abandoned lock)", running: true })
+    const slot = pickSlot(claims, co.root)
     if (slot === null) return null
     const won = withSlotLock(co.claimsDir, slot, () => {
       const current = readClaim(co.claimsDir, slot)

@@ -21,7 +21,8 @@ const MIRROR_DIR = ".local-db"
 // containers are up: a first `supabase start` pulls images and can take minutes.
 const CLAIM_GRACE_MS = 15 * 60 * 1000
 // A slot lock is held for milliseconds. One older than this was left by a
-// process that died while holding it.
+// process that died while holding it. It is reported, never removed
+// automatically: removing it could race with a session taking a fresh lock.
 const LOCK_STALE_MS = 30 * 1000
 
 // Everything the app does not use. What stays: Postgres, Auth (gotrue), REST
@@ -161,7 +162,6 @@ function withSlotLock<T>(claimsDir: string, slot: number, fn: () => T): T | unde
     mkdirSync(lock)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
-    if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmSync(lock, { recursive: true, force: true })
     return undefined
   }
   try {
@@ -169,6 +169,14 @@ function withSlotLock<T>(claimsDir: string, slot: number, fn: () => T): T | unde
   } finally {
     rmSync(lock, { recursive: true, force: true })
   }
+}
+
+function stuckLocks(claimsDir: string): string[] {
+  if (!existsSync(claimsDir)) return []
+  return readdirSync(claimsDir)
+    .filter((name) => /^slot\d+\.lock$/.test(name))
+    .map((name) => join(claimsDir, name))
+    .filter((lock) => Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS)
 }
 
 function pause(ms: number) {
@@ -272,6 +280,12 @@ function main(command: string | undefined, flags: string[]): number {
   if (command === "start" || command === "reset") {
     const slot = claimSlot(co)
     if (slot === null) {
+      const stuck = stuckLocks(co.claimsDir)
+      if (stuck.length > 0) {
+        console.error(`A slot lock was left behind by a process that stopped while holding it:\n  ${stuck.join("\n  ")}`)
+        console.error("If no other `npm run db:start` or `db:reset` is running, delete that folder and try again.")
+        return 1
+      }
       console.error(`All ${SLOT_COUNT} worktree database slots are in use:\n${describeClaims(co)}`)
       console.error("Wait for one to stop, or ask the human. Never stop another worktree's stack.")
       return 1

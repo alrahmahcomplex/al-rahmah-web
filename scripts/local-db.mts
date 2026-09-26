@@ -158,8 +158,16 @@ function readClaims(claimsDir: string): SlotClaim[] {
     .filter((claim): claim is SlotClaim => claim !== undefined)
 }
 
+// The slot this worktree's stack runs in. The mirror's config records it, so
+// this still works when the claim file is missing or unreadable.
 function ownSlot(co: Checkout): number | null {
   if (co.isMain) return 0
+  const config = join(co.root, MIRROR_DIR, "supabase", "config.toml")
+  if (existsSync(config)) {
+    const id = readFileSync(config, "utf8").match(/^project_id = "(.*)"/m)?.[1]
+    const slot = Number(id?.match(/-slot(\d+)$/)?.[1])
+    if (Number.isInteger(slot) && slot > 0) return slot
+  }
   return readClaims(co.claimsDir).find((claim) => claim.worktree === co.root)?.slot ?? null
 }
 
@@ -297,6 +305,12 @@ function main(command: string | undefined, flags: string[]): number {
     const slot = ownSlot(co)
     if (slot === null) {
       console.log("This worktree holds no database slot; nothing to stop.")
+      return 0
+    }
+    const claim = co.isMain ? undefined : readClaim(co.claimsDir, slot)
+    if (claim && claim.worktree !== co.root && claim.worktree !== "(unreadable claim)") {
+      // Our stack stopped earlier and someone else has taken the slot since.
+      console.log(`Slot ${slot} now belongs to ${claim.worktree}; nothing of this worktree's to stop.`)
       return 0
     }
     const code = supabase(co, ["stop", ...workdirArgs(co)])

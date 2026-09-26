@@ -312,6 +312,7 @@ function main(command: string | undefined, flags: string[]): number {
       if (stuck.length > 0) {
         console.error(`A slot lock was left behind by a process that stopped while holding it:\n  ${stuck.join("\n  ")}`)
         console.error("If no other `npm run db:start` or `db:reset` is running, delete that folder and try again.")
+        return 1
       }
       console.error(`All ${SLOT_COUNT} worktree database slots are in use:\n${describeClaims(co)}`)
       console.error("Wait for one to stop, or ask the human. Never stop another worktree's stack.")

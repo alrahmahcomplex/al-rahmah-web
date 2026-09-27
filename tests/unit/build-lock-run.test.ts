@@ -91,9 +91,12 @@ describe("scripts/build-lock.mts", () => {
     return new Promise((done) => child.on("exit", (code) => done({ code, out })))
   }
 
-  async function lockTaken() {
-    while (!existsSync(join(lockDir, "owner.json"))) await new Promise((done) => setTimeout(done, 20))
+  async function waitFor(done: () => boolean) {
+    while (!done()) await new Promise((wake) => setTimeout(wake, 20))
   }
+
+  const lockTaken = () => waitFor(() => existsSync(join(lockDir, "owner.json")))
+  const logged = (entry: string) => existsSync(log) && readFileSync(log, "utf8").includes(entry)
 
   // When each stub started and ended, by name.
   function events(): Record<string, number> {
@@ -135,13 +138,9 @@ describe("scripts/build-lock.mts", () => {
 
   it("keeps the lock until the build Playwright started has ended, when Playwright alone is killed", async () => {
     const e2e = start("test:e2e", "E", { STUB_MS: "2000" })
-    let runner = 0
-    while (!runner) {
-      const line = existsSync(log) ? readFileSync(log, "utf8").split("\n") : []
-      if (line.some((entry) => entry.startsWith("start E/webServer"))) {
-        runner = Number(line.find((entry) => entry.startsWith("e2e-start E"))?.split(" ")[3])
-      } else await new Promise((done) => setTimeout(done, 20))
-    }
+    await waitFor(() => logged("start E/webServer"))
+    const lines = readFileSync(log, "utf8").split("\n")
+    const runner = Number(lines.find((entry) => entry.startsWith("e2e-start E"))?.split(" ")[3])
     process.kill(runner, "SIGKILL")
     const build = start("build", "B")
     const [e, b] = await Promise.all([e2e, build])
@@ -159,9 +158,7 @@ describe("scripts/build-lock.mts", () => {
 
   it("reports the lock of a holder that was killed, and leaves it for a person to delete", async () => {
     const holder = start("build", "A", { STUB_MS: "20000" })
-    while (!(existsSync(log) && readFileSync(log, "utf8").includes("start A"))) {
-      await new Promise((done) => setTimeout(done, 20))
-    }
+    await waitFor(() => logged("start A"))
     started[started.length - 1].kill("SIGKILL")
     await holder
     const next = await start("build", "B")

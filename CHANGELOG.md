@@ -7,11 +7,11 @@ stay in the `0.x` range.
 
 ## Unreleased
 
-### IMPROVED
+### FIXED
 
-- Nothing in the app changes in this release. When two copies of the project on the
-  same computer build the app at once, the second now waits for the first to finish,
-  so they no longer run the computer out of memory and both fail.
+- Nothing in the app changes in this release. Fixed two copies of the project on the
+  same computer running it out of memory, and both failing, when they built the app at
+  the same time. The second build now waits for the first to finish.
 
 ## September 26, 2026 `v0.1.6`
 

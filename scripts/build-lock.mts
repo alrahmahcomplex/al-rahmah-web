@@ -77,10 +77,10 @@ export type LockSnapshot = {
 // What one waiter has seen of the lock over its looks so far.
 export type Watch = { token?: string; refreshedMs?: number; quietLooks: number; missingLooks: number }
 
-export const FIRST_LOOK: Watch = { quietLooks: 0, missingLooks: 0 }
+export const NOTHING_SEEN: Watch = { quietLooks: 0, missingLooks: 0 }
 
 export function observe(watch: Watch, lock: LockSnapshot | undefined): Watch {
-  if (lock === undefined) return FIRST_LOOK
+  if (lock === undefined) return NOTHING_SEEN
   const { owner, refreshedMs } = lock
   if (owner === undefined) return { quietLooks: 0, missingLooks: watch.missingLooks + 1 }
   const unchanged = owner.token === watch.token && refreshedMs === watch.refreshedMs
@@ -205,7 +205,7 @@ export async function acquire(
   const start = deps.now()
   let reported: string | undefined
   let reportedAt = start
-  let watch = FIRST_LOOK
+  let watch = NOTHING_SEEN
   let busy = 0
   for (;;) {
     let state: LockState
@@ -219,7 +219,7 @@ export async function acquire(
       // A holder can finish, release and exit between our reading its record
       // and checking its pid. Only a lock it still owns was left behind.
       if (state.kind === "abandoned" && state.holder !== undefined) {
-        if (snapshot(lockDir, deps.alive)?.owner?.token !== state.holder.token) continue
+        if (ownerToken(lockDir) !== state.holder.token) continue
       }
       busy = 0
     } catch (error) {
@@ -244,16 +244,25 @@ export async function acquire(
   }
 }
 
+function ownerToken(lockDir: string): string | undefined {
+  return snapshot(lockDir, () => true)?.owner?.token
+}
+
+// Blocks, where release() runs: in a finally that must finish before exit.
+function pauseSync(ms: number) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
 // Removes the lock, but only while it is still the one this process took.
 export function release(lockDir: string, token: string) {
   for (let attempt = 0; ; attempt++) {
     try {
-      if (snapshot(lockDir, () => true)?.owner?.token !== token) return
+      if (ownerToken(lockDir) !== token) return
       rmSync(lockDir, { recursive: true, force: true, maxRetries: 10, retryDelay: BUSY_PAUSE_MS })
       return
     } catch (error) {
       if (!isBusy(error) || attempt >= BUSY_RETRIES) throw error
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, BUSY_PAUSE_MS)
+      pauseSync(BUSY_PAUSE_MS)
     }
   }
 }

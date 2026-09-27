@@ -8,7 +8,7 @@ import {
   acquire,
   assessLock,
   type Deps,
-  FIRST_LOOK,
+  NOTHING_SEEN,
   formatDuration,
   heldByParent,
   type Holder,
@@ -33,21 +33,21 @@ describe("observe", () => {
   const lock = { owner: other, refreshedMs: 1000, alive: true }
 
   it("counts looks at an owner file that hasn't moved", () => {
-    const once = observe(FIRST_LOOK, lock)
+    const once = observe(NOTHING_SEEN, lock)
     expect(once.quietLooks).toBe(0)
     expect(observe(observe(once, lock), lock).quietLooks).toBe(2)
   })
 
   it("starts counting again when the holder checks in or the holder changes", () => {
-    const quiet = observe(observe(FIRST_LOOK, lock), lock)
+    const quiet = observe(observe(NOTHING_SEEN, lock), lock)
     expect(observe(quiet, { ...lock, refreshedMs: 11_000 }).quietLooks).toBe(0)
     expect(observe(quiet, { ...lock, owner: { ...other, token: "token-next" } }).quietLooks).toBe(0)
   })
 
   it("counts looks at a lock without an owner record, and forgets them once the lock is gone", () => {
     const noOwner = { owner: undefined, refreshedMs: 0, alive: false }
-    expect(observe(observe(FIRST_LOOK, noOwner), noOwner).missingLooks).toBe(2)
-    expect(observe(observe(FIRST_LOOK, noOwner), undefined)).toEqual(FIRST_LOOK)
+    expect(observe(observe(NOTHING_SEEN, noOwner), noOwner).missingLooks).toBe(2)
+    expect(observe(observe(NOTHING_SEEN, noOwner), undefined)).toEqual(NOTHING_SEEN)
   })
 })
 
@@ -56,15 +56,15 @@ describe("assessLock", () => {
   const noOwner = { owner: undefined, refreshedMs: 0, alive: false }
 
   it("finds no lock free", () => {
-    expect(assessLock(undefined, FIRST_LOOK)).toEqual({ kind: "free" })
+    expect(assessLock(undefined, NOTHING_SEEN)).toEqual({ kind: "free" })
   })
 
   it("waits on a live holder that keeps checking in", () => {
-    expect(assessLock(live, { ...FIRST_LOOK, quietLooks: STALE_LOOKS - 1 })).toEqual({ kind: "held", holder: other })
+    expect(assessLock(live, { ...NOTHING_SEEN, quietLooks: STALE_LOOKS - 1 })).toEqual({ kind: "held", holder: other })
   })
 
   it("reports a lock whose holder's process is gone", () => {
-    expect(assessLock({ ...live, alive: false }, FIRST_LOOK)).toEqual({
+    expect(assessLock({ ...live, alive: false }, NOTHING_SEEN)).toEqual({
       kind: "abandoned",
       holder: other,
       reason: "process 4242 is gone",
@@ -72,7 +72,7 @@ describe("assessLock", () => {
   })
 
   it("reports a holder that stopped checking in, even when its pid runs again", () => {
-    expect(assessLock(live, { ...FIRST_LOOK, quietLooks: STALE_LOOKS })).toEqual({
+    expect(assessLock(live, { ...NOTHING_SEEN, quietLooks: STALE_LOOKS })).toEqual({
       kind: "abandoned",
       holder: other,
       reason: "its holder has not checked in for 2m 00s",
@@ -80,11 +80,11 @@ describe("assessLock", () => {
   })
 
   it("gives a new lock time to record its owner", () => {
-    expect(assessLock(noOwner, { ...FIRST_LOOK, missingLooks: OWNER_GRACE_LOOKS - 1 })).toEqual({ kind: "starting" })
+    expect(assessLock(noOwner, { ...NOTHING_SEEN, missingLooks: OWNER_GRACE_LOOKS - 1 })).toEqual({ kind: "starting" })
   })
 
   it("reports a lock that stays without an owner record", () => {
-    expect(assessLock(noOwner, { ...FIRST_LOOK, missingLooks: OWNER_GRACE_LOOKS })).toEqual({
+    expect(assessLock(noOwner, { ...NOTHING_SEEN, missingLooks: OWNER_GRACE_LOOKS })).toEqual({
       kind: "abandoned",
       reason: "it has no readable owner record",
     })
@@ -168,6 +168,11 @@ describe("acquire, release and the heartbeat", () => {
     writeFileSync(join(lockDir, "owner.json"), JSON.stringify(owner))
   }
 
+  // The holder releases the lock after the waiter's `count`th pause.
+  function freeAfter(pauses: number, count: number) {
+    if (pauses === count) rmSync(lockDir, { recursive: true })
+  }
+
   function checkIn() {
     const now = new Date(Date.now() + 1000)
     utimesSync(join(lockDir, "owner.json"), now, now)
@@ -181,7 +186,7 @@ describe("acquire, release and the heartbeat", () => {
 
   it("waits while another checkout builds, then takes the lock", async () => {
     hold({ ...other, since: Date.now() - 65_000 })
-    const { deps, lines } = fake({ afterPause: (n) => n === 3 && rmSync(lockDir, { recursive: true }) })
+    const { deps, lines } = fake({ afterPause: (n) => freeAfter(n, 3) })
     expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 3000 })
     expect(lines).toEqual([
       "Another build holds the build lock: npm run build in D:/repo/.claude/worktrees/other (pid 4242, running 1m 05s).",
@@ -192,7 +197,10 @@ describe("acquire, release and the heartbeat", () => {
   it("says once a minute that it is still waiting", async () => {
     hold(other)
     const { deps, lines } = fake({
-      afterPause: (n) => (n === 61 ? rmSync(lockDir, { recursive: true }) : n % 10 === 0 && checkIn()),
+      afterPause: (n) => {
+        if (n % 10 === 0) checkIn()
+        freeAfter(n, 61)
+      },
     })
     expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 61_000 })
     expect(lines.slice(2)).toEqual(["Still waiting for the build lock (1m 00s so far)."])
@@ -207,7 +215,7 @@ describe("acquire, release and the heartbeat", () => {
     const { deps, clock } = fake({
       afterPause: (n) => {
         if (n === 5) checkIn()
-        if (n === 8) rmSync(lockDir, { recursive: true })
+        freeAfter(n, 8)
       },
     })
     clock.now += sleepMs
@@ -227,7 +235,7 @@ describe("acquire, release and the heartbeat", () => {
 
   it("waits on a leftover token that isn't the holder's", async () => {
     hold(other)
-    const { deps } = fake({ afterPause: (n) => n === 1 && rmSync(lockDir, { recursive: true }) })
+    const { deps } = fake({ afterPause: (n) => freeAfter(n, 1) })
     expect(await acquire(lockDir, me, "token-left-over", deps)).toMatchObject({ outcome: "taken", waitedMs: 1000 })
   })
 

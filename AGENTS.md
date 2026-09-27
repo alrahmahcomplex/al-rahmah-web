@@ -56,7 +56,7 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 
 `npm run lint`, `npm run typecheck`, `npm run test`, `npm run test:e2e`, `npm run build`. Run all of them before opening a PR and again after rebasing.
 
-`build` and `test:e2e` wait for a build lock that every checkout shares, so one Next.js build runs on the machine at a time. Give them room to wait, with a long timeout or a background run: a build killed mid-run leaves its lock behind. When a run reports a lock left behind, delete the folder it names once no build or e2e run is going on in any checkout; if you can't tell, ask the human.
+`build` and `test:e2e` wait for a build lock that every checkout shares, so one Next.js build runs on the machine at a time. Give them room to wait, with a long timeout or a background run: a build killed mid-run leaves its lock behind. When a run reports a lock left behind, delete the folder it names only once no process runs `build-lock.mts` (check the command lines of running `node` processes); if you can't tell, ask the human.
 
 ## Multi-agent rules
 

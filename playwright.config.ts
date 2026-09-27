@@ -10,6 +10,14 @@ if (existsSync(".env.local")) process.loadEnvFile(".env.local")
 // already listens here the run fails instead of testing another worktree's server.
 const PORT = Number(process.env.E2E_PORT ?? 3100)
 
+// `npm run test:e2e` waits for the build lock (scripts/build-lock.mts) before
+// Playwright starts and passes its token down, so the webServer's build runs
+// under it. Run directly, Playwright would queue that build inside its
+// five-minute timeout and, on timing out, kill it while it holds the lock.
+if (process.env.BUILD_LOCK_TOKEN === undefined && !process.env.CI) {
+  throw new Error("Run the e2e tests with `npm run test:e2e` (Playwright options go after `--`), so they wait for the build lock first.")
+}
+
 export default defineConfig({
   testDir: "e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -23,8 +31,6 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    // `npm run test:e2e` takes the build lock before Playwright starts (see
-    // scripts/build-lock.mts), so this build runs under it without waiting.
     command: `npm run build && npx next start -p ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,

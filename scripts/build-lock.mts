@@ -14,27 +14,32 @@
 // Run through npm: `npm run build` and `npm run test:e2e`.
 // Node 24 runs this file directly (type stripping), so keep to erasable syntax.
 
-import { execFileSync, spawn } from "node:child_process"
+import { type ChildProcess, execFileSync, spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { mkdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs"
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
+import { setTimeout as sleep } from "node:timers/promises"
 
 // Set in the job's environment to the holder's token, so a build the job
 // starts itself (Playwright's webServer runs `npm run build`) runs under the
 // lock its parent holds instead of waiting for that parent forever.
+// playwright.config.ts checks for it too.
 export const TOKEN_ENV = "BUILD_LOCK_TOKEN"
 const LOCK_NAME = "build.lock"
 const OWNER_FILE = "owner.json"
-const POLL_MS = 1000
-const REPORT_EVERY_MS = 60 * 1000
-// The holder refreshes its owner file this often while its job runs...
-const HEARTBEAT_MS = 10 * 1000
-// ...so one left untouched this long belongs to a holder that died, even when
-// Windows has since handed its pid to another process.
-export const STALE_MS = 2 * 60 * 1000
+// Waiters look at the lock once a second...
+export const POLL_MS = 1000
+// ...and the holder refreshes its owner file this often while its job runs...
+export const HEARTBEAT_MS = 10 * 1000
+// ...so an owner file unchanged across this many looks belongs to a holder that
+// died, even when Windows has since handed its pid to another process. Counted
+// in looks, not clock time: a machine that sleeps mid-build wakes with its
+// clock minutes past the holder's last refresh, and that holder is fine.
+export const STALE_LOOKS = 120
 // Taking the lock and writing its owner file are milliseconds apart. A lock
-// seen without one for this long was left by a process that died in between.
-export const OWNER_GRACE_MS = 10 * 1000
+// without one across this many looks was left by a process that died between.
+export const OWNER_GRACE_LOOKS = 10
+const REPORT_EVERY_MS = 60 * 1000
 // Windows refuses to create, read or remove a directory for a moment while
 // another process deletes it. Such errors are retried, this many times.
 const BUSY_CODES = ["EPERM", "EACCES", "EBUSY"]
@@ -63,29 +68,40 @@ export type Holder = {
 export type LockSnapshot = {
   // Undefined while the holder is still writing it, or if it can't be parsed.
   owner: Holder | undefined
-  // When the holder last refreshed its owner file.
+  // The owner file's mtime, which the holder's heartbeat moves.
   refreshedMs: number
   // Whether the owner's pid is a running process.
   alive: boolean
+}
+
+// What one waiter has seen of the lock over its looks so far.
+export type Watch = { token?: string; refreshedMs?: number; quietLooks: number; missingLooks: number }
+
+export const FIRST_LOOK: Watch = { quietLooks: 0, missingLooks: 0 }
+
+export function observe(watch: Watch, lock: LockSnapshot | undefined): Watch {
+  if (lock === undefined) return FIRST_LOOK
+  const { owner, refreshedMs } = lock
+  if (owner === undefined) return { quietLooks: 0, missingLooks: watch.missingLooks + 1 }
+  const unchanged = owner.token === watch.token && refreshedMs === watch.refreshedMs
+  return { token: owner.token, refreshedMs, quietLooks: unchanged ? watch.quietLooks + 1 : 0, missingLooks: 0 }
 }
 
 export type Abandoned = { kind: "abandoned"; holder?: Holder; reason: string }
 
 export type LockState = { kind: "free" } | { kind: "starting" } | { kind: "held"; holder: Holder } | Abandoned
 
-// `missingSince` is when this waiter first found the lock without an owner, in
-// its current run of lookups. A lock that stays that way was abandoned.
-export function assessLock(lock: LockSnapshot | undefined, now: number, missingSince: number): LockState {
+export function assessLock(lock: LockSnapshot | undefined, watch: Watch): LockState {
   if (lock === undefined) return { kind: "free" }
   const { owner } = lock
   if (owner === undefined) {
-    if (now - missingSince < OWNER_GRACE_MS) return { kind: "starting" }
+    if (watch.missingLooks < OWNER_GRACE_LOOKS) return { kind: "starting" }
     return { kind: "abandoned", reason: "it has no readable owner record" }
   }
   if (!lock.alive) return { kind: "abandoned", holder: owner, reason: `process ${owner.pid} is gone` }
-  const silent = now - lock.refreshedMs
-  if (silent > STALE_MS) {
-    return { kind: "abandoned", holder: owner, reason: `its holder has not checked in for ${formatDuration(silent)}` }
+  if (watch.quietLooks >= STALE_LOOKS) {
+    const quiet = formatDuration(watch.quietLooks * POLL_MS)
+    return { kind: "abandoned", holder: owner, reason: `its holder has not checked in for ${quiet}` }
   }
   return { kind: "held", holder: owner }
 }
@@ -123,23 +139,24 @@ function isHolder(value: unknown): value is Holder {
 function snapshot(lockDir: string, alive: (pid: number) => boolean): LockSnapshot | undefined {
   if (statSync(lockDir, { throwIfNoEntry: false }) === undefined) return undefined
   const file = join(lockDir, OWNER_FILE)
+  const noOwner = { owner: undefined, refreshedMs: 0, alive: false }
   const stat = statSync(file, { throwIfNoEntry: false })
-  if (stat === undefined) return { owner: undefined, refreshedMs: 0, alive: false }
+  if (stat === undefined) return noOwner
   let text: string
   try {
     text = readFileSync(file, "utf8")
   } catch (error) {
     // Released between the stat and the read.
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { owner: undefined, refreshedMs: 0, alive: false }
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return noOwner
     throw error
   }
   let owner: unknown
   try {
     owner = JSON.parse(text)
   } catch {
-    owner = undefined
+    return noOwner
   }
-  if (!isHolder(owner)) return { owner: undefined, refreshedMs: 0, alive: false }
+  if (!isHolder(owner)) return noOwner
   return { owner, refreshedMs: stat.mtimeMs, alive: alive(owner.pid) }
 }
 
@@ -166,7 +183,7 @@ function take(lockDir: string, holder: Holder): boolean {
 
 export type Deps = {
   now: () => number
-  pause: (ms: number) => void
+  pause: (ms: number) => Promise<void>
   alive: (pid: number) => boolean
   log: (line: string) => void
 }
@@ -179,16 +196,16 @@ export type Acquired =
 
 // Takes the lock, waiting while a live holder has it. Returns without taking
 // it when the holder is this process's parent, or when the holder died.
-export function acquire(
+export async function acquire(
   lockDir: string,
   who: Omit<Holder, "since">,
   parentToken: string | undefined,
   deps: Deps,
-): Acquired {
+): Promise<Acquired> {
   const start = deps.now()
   let reported: string | undefined
   let reportedAt = start
-  let missingSince: number | undefined
+  let watch = FIRST_LOOK
   let busy = 0
   for (;;) {
     let state: LockState
@@ -196,15 +213,18 @@ export function acquire(
       const holder = { ...who, since: deps.now() }
       if (take(lockDir, holder)) return { outcome: "taken", holder, waitedMs: deps.now() - start }
       const lock = snapshot(lockDir, deps.alive)
-      const now = deps.now()
-      if (lock === undefined || lock.owner !== undefined) missingSince = undefined
-      else missingSince ??= now
       if (heldByParent(parentToken, lock?.owner)) return { outcome: "inherited" }
-      state = assessLock(lock, now, missingSince ?? now)
+      watch = observe(watch, lock)
+      state = assessLock(lock, watch)
+      // A holder can finish, release and exit between our reading its record
+      // and checking its pid. Only a lock it still owns was left behind.
+      if (state.kind === "abandoned" && state.holder !== undefined) {
+        if (snapshot(lockDir, deps.alive)?.owner?.token !== state.holder.token) continue
+      }
       busy = 0
     } catch (error) {
       if (!isBusy(error) || ++busy > BUSY_RETRIES) throw error
-      deps.pause(BUSY_PAUSE_MS)
+      await deps.pause(BUSY_PAUSE_MS)
       continue
     }
     if (state.kind === "abandoned") return { outcome: "abandoned", lock: state }
@@ -220,12 +240,12 @@ export function acquire(
         reportedAt = now
       }
     }
-    if (state.kind !== "free") deps.pause(POLL_MS)
+    if (state.kind !== "free") await deps.pause(POLL_MS)
   }
 }
 
 // Removes the lock, but only while it is still the one this process took.
-export function release(lockDir: string, token: string, pause: (ms: number) => void) {
+export function release(lockDir: string, token: string) {
   for (let attempt = 0; ; attempt++) {
     try {
       if (snapshot(lockDir, () => true)?.owner?.token !== token) return
@@ -233,16 +253,54 @@ export function release(lockDir: string, token: string, pause: (ms: number) => v
       return
     } catch (error) {
       if (!isBusy(error) || attempt >= BUSY_RETRIES) throw error
-      pause(BUSY_PAUSE_MS)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, BUSY_PAUSE_MS)
     }
   }
 }
 
+// A build that runs under its parent's lock leaves a file named after its pid
+// in the lock directory while it runs. Ending Playwright alone doesn't end the
+// build its webServer started, so the holder waits for these before releasing.
+function markNested(lockDir: string): () => void {
+  const mark = join(lockDir, `nested-${process.pid}`)
+  try {
+    writeFileSync(mark, "")
+  } catch {
+    // The lock went away; there is nothing to hold open.
+  }
+  return () => rmSync(mark, { force: true })
+}
+
+export function nestedBuilds(lockDir: string, alive: (pid: number) => boolean): number[] {
+  let names: string[]
+  try {
+    names = readdirSync(lockDir)
+  } catch {
+    return []
+  }
+  return names
+    .map((name) => Number(name.match(/^nested-(\d+)$/)?.[1]))
+    .filter((pid) => Number.isInteger(pid) && alive(pid))
+}
+
+// Moves the owner file's mtime every `everyMs`, so waiters can tell this holder
+// is alive. Returns a function that stops it.
+export function startHeartbeat(lockDir: string, everyMs: number): () => void {
+  const file = join(lockDir, OWNER_FILE)
+  const timer = setInterval(() => {
+    try {
+      const now = new Date()
+      utimesSync(file, now, now)
+    } catch {
+      // The next beat tries again.
+    }
+  }, everyMs)
+  return () => clearInterval(timer)
+}
+
 const LIVE: Deps = {
   now: () => Date.now(),
-  pause: (ms) => {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-  },
+  pause: (ms) => sleep(ms),
   alive: (pid) => {
     try {
       process.kill(pid, 0)
@@ -272,28 +330,27 @@ function lockPath(root: string): string | undefined {
   }
 }
 
-function run(args: string[], env: NodeJS.ProcessEnv): Promise<number> {
-  return new Promise((done) => {
-    const child = spawn(process.execPath, args, { stdio: "inherit", env })
-    // Ctrl+C and a closing terminal reach the job too. Stay alive until it
-    // has exited, so the lock is released after the build stops, not before.
-    const wait = () => {}
-    const forward = () => child.kill("SIGTERM")
-    process.on("SIGINT", wait)
-    process.on("SIGHUP", wait)
-    process.on("SIGTERM", forward)
-    const finish = (code: number) => {
-      process.off("SIGINT", wait)
-      process.off("SIGHUP", wait)
-      process.off("SIGTERM", forward)
-      done(code)
-    }
-    child.on("error", (error) => {
-      console.error(error.message)
-      finish(1)
-    })
-    child.on("exit", (code) => finish(code ?? 1))
-  })
+// Installed before anything else, so no signal can stop this process between
+// taking the lock and releasing it. Until the job starts, this process holds
+// nothing it must release, so Ctrl+C stops it. Once the job runs, Ctrl+C,
+// Ctrl+Break and a closing console reach the job directly, and this process
+// waits for it to exit before releasing the lock. A SIGTERM or hangup sent to
+// this process alone is passed on as SIGINT, which Playwright answers by
+// stopping its web server. Windows can't deliver either, and child.kill() there
+// would kill the job outright.
+function guardSignals(job: () => ChildProcess | undefined) {
+  const onInterrupt = () => {
+    if (job() === undefined) process.exit(130)
+  }
+  const onTerminate = () => {
+    const child = job()
+    if (child === undefined) process.exit(143)
+    if (process.platform !== "win32") child.kill("SIGINT")
+  }
+  process.on("SIGINT", onInterrupt)
+  process.on("SIGBREAK", onInterrupt)
+  process.on("SIGHUP", onTerminate)
+  process.on("SIGTERM", onTerminate)
 }
 
 function reportAbandoned(lockDir: string, lock: Abandoned, now: number) {
@@ -314,34 +371,64 @@ async function main(argv: string[]): Promise<number> {
   }
   const root = resolve(import.meta.dirname, "..")
   const args = [join(root, "node_modules", ...job.cli), ...job.args, ...extra]
-  const lockDir = lockPath(root)
-  if (lockDir === undefined) return run(args, process.env)
+  let child: ChildProcess | undefined
+  guardSignals(() => child)
+  const run = (env: NodeJS.ProcessEnv) =>
+    new Promise<number>((done) => {
+      child = spawn(process.execPath, args, { stdio: "inherit", env })
+      child.on("error", (error) => {
+        console.error(error.message)
+        done(1)
+      })
+      child.on("exit", (code) => done(code ?? 1))
+    })
 
+  const lockDir = lockPath(root)
+  // An empty token tells playwright.config.ts this run came through here.
+  if (lockDir === undefined) return run({ ...process.env, [TOKEN_ENV]: process.env[TOKEN_ENV] ?? "" })
   const who = { token: randomUUID(), pid: process.pid, job: `npm run ${name}`, checkout: root }
-  const got = acquire(lockDir, who, process.env[TOKEN_ENV], LIVE)
-  if (got.outcome === "inherited") return run(args, process.env)
+  const got = await acquire(lockDir, who, process.env[TOKEN_ENV], LIVE)
+  if (got.outcome === "inherited") {
+    const unmark = markNested(lockDir)
+    try {
+      return await run(process.env)
+    } finally {
+      unmark()
+    }
+  }
   if (got.outcome === "abandoned") {
     reportAbandoned(lockDir, got.lock, Date.now())
     return 1
   }
-  if (got.waitedMs >= POLL_MS) {
-    console.log(`The build lock is free after ${formatDuration(got.waitedMs)}. Starting ${who.job}.`)
-  }
-  const owner = join(lockDir, OWNER_FILE)
-  const heartbeat = setInterval(() => {
-    try {
-      const now = new Date()
-      utimesSync(owner, now, now)
-    } catch {
-      // The next beat tries again.
-    }
-  }, HEARTBEAT_MS)
+  const stopHeartbeat = startHeartbeat(lockDir, HEARTBEAT_MS)
+  let code = 1
   try {
-    return await run(args, { ...process.env, [TOKEN_ENV]: who.token })
+    if (got.waitedMs >= POLL_MS) {
+      console.log(`The build lock is free after ${formatDuration(got.waitedMs)}. Starting ${who.job}.`)
+    }
+    code = await run({ ...process.env, [TOKEN_ENV]: who.token })
+    for (let told = false; ; told = true) {
+      const nested = nestedBuilds(lockDir, LIVE.alive)
+      if (nested.length === 0) break
+      if (!told) console.log(`Waiting for the build it started (pid ${nested.join(", ")}) before releasing the build lock.`)
+      await sleep(POLL_MS)
+    }
   } finally {
-    clearInterval(heartbeat)
-    release(lockDir, who.token, LIVE.pause)
+    stopHeartbeat()
+    try {
+      release(lockDir, who.token)
+    } catch (error) {
+      // The job's own result still stands; the next run reports the lock.
+      console.error(`Could not remove the build lock (${(error as Error).message}):\n  ${lockDir}`)
+      console.error("Close anything that has that folder open, then delete it.")
+    }
   }
+  return code
 }
 
-if (import.meta.main) process.exit(await main(process.argv.slice(2)))
+// import.meta.main arrived in Node 24.2 and package.json allows any Node 24.
+// Without the fallback, an older one would skip main() and report a build that
+// never ran as passing.
+if (import.meta.main ?? process.argv[1]?.endsWith("build-lock.mts")) {
+  process.exit(await main(process.argv.slice(2)))
+}

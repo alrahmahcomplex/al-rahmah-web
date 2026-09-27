@@ -64,14 +64,15 @@ One Next.js build runs at a time per machine, because two at once ran a 7.7 GB m
 out of memory. `npm run build` and `npm run test:e2e` share a lock with every other
 checkout of the repo. When another checkout holds it, they print what they are waiting
 for and start once it is released. `test:e2e` holds the lock for its whole run, since
-its build happens inside Playwright's five-minute server timeout. Run it through npm:
-`npx playwright test` still waits for the lock, but the wait counts against that
-timeout.
+its build happens inside Playwright's five-minute server timeout, so
+`npm run test:e2e -- --ui` holds it until you close the UI. Playwright run directly
+(`npx playwright test`) refuses to start and asks for `npm run test:e2e`.
 
 A build that is killed mid-run leaves its lock behind, in `.git/build.lock` of the main
-checkout. The next run names that folder and stops instead of waiting. Check that no
-build or e2e run is going on in any checkout, delete the folder, and run the command
-again.
+checkout. The next run names that folder and stops: straight away when the holder's
+process is gone, or after two minutes when Windows has given that process id to another
+program. Check that no build or e2e run is going on in any checkout, delete the folder,
+and run the command again.
 
 ## Staff sign-in
 

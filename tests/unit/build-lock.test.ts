@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -8,14 +8,17 @@ import {
   acquire,
   assessLock,
   type Deps,
+  FIRST_LOOK,
   formatDuration,
   heldByParent,
   type Holder,
   JOBS,
   lockSkipped,
-  OWNER_GRACE_MS,
+  observe,
+  OWNER_GRACE_LOOKS,
   release,
-  STALE_MS,
+  STALE_LOOKS,
+  startHeartbeat,
 } from "@/scripts/build-lock.mjs"
 
 const other: Holder = {
@@ -26,20 +29,42 @@ const other: Holder = {
   since: 0,
 }
 
+describe("observe", () => {
+  const lock = { owner: other, refreshedMs: 1000, alive: true }
+
+  it("counts looks at an owner file that hasn't moved", () => {
+    const once = observe(FIRST_LOOK, lock)
+    expect(once.quietLooks).toBe(0)
+    expect(observe(observe(once, lock), lock).quietLooks).toBe(2)
+  })
+
+  it("starts counting again when the holder checks in or the holder changes", () => {
+    const quiet = observe(observe(FIRST_LOOK, lock), lock)
+    expect(observe(quiet, { ...lock, refreshedMs: 11_000 }).quietLooks).toBe(0)
+    expect(observe(quiet, { ...lock, owner: { ...other, token: "token-next" } }).quietLooks).toBe(0)
+  })
+
+  it("counts looks at a lock without an owner record, and forgets them once the lock is gone", () => {
+    const noOwner = { owner: undefined, refreshedMs: 0, alive: false }
+    expect(observe(observe(FIRST_LOOK, noOwner), noOwner).missingLooks).toBe(2)
+    expect(observe(observe(FIRST_LOOK, noOwner), undefined)).toEqual(FIRST_LOOK)
+  })
+})
+
 describe("assessLock", () => {
-  const now = 60 * 60 * 1000
-  const live = { owner: other, refreshedMs: now - 5000, alive: true }
+  const live = { owner: other, refreshedMs: 1000, alive: true }
+  const noOwner = { owner: undefined, refreshedMs: 0, alive: false }
 
   it("finds no lock free", () => {
-    expect(assessLock(undefined, now, now)).toEqual({ kind: "free" })
+    expect(assessLock(undefined, FIRST_LOOK)).toEqual({ kind: "free" })
   })
 
   it("waits on a live holder that keeps checking in", () => {
-    expect(assessLock(live, now, now)).toEqual({ kind: "held", holder: other })
+    expect(assessLock(live, { ...FIRST_LOOK, quietLooks: STALE_LOOKS - 1 })).toEqual({ kind: "held", holder: other })
   })
 
   it("reports a lock whose holder's process is gone", () => {
-    expect(assessLock({ ...live, alive: false }, now, now)).toEqual({
+    expect(assessLock({ ...live, alive: false }, FIRST_LOOK)).toEqual({
       kind: "abandoned",
       holder: other,
       reason: "process 4242 is gone",
@@ -47,22 +72,19 @@ describe("assessLock", () => {
   })
 
   it("reports a holder that stopped checking in, even when its pid runs again", () => {
-    const state = assessLock({ ...live, refreshedMs: now - STALE_MS - 1000 }, now, now)
-    expect(state).toEqual({
+    expect(assessLock(live, { ...FIRST_LOOK, quietLooks: STALE_LOOKS })).toEqual({
       kind: "abandoned",
       holder: other,
-      reason: "its holder has not checked in for 2m 01s",
+      reason: "its holder has not checked in for 2m 00s",
     })
   })
 
   it("gives a new lock time to record its owner", () => {
-    const noOwner = { owner: undefined, refreshedMs: 0, alive: false }
-    expect(assessLock(noOwner, now, now - OWNER_GRACE_MS + 1)).toEqual({ kind: "starting" })
+    expect(assessLock(noOwner, { ...FIRST_LOOK, missingLooks: OWNER_GRACE_LOOKS - 1 })).toEqual({ kind: "starting" })
   })
 
   it("reports a lock that stays without an owner record", () => {
-    const noOwner = { owner: undefined, refreshedMs: 0, alive: false }
-    expect(assessLock(noOwner, now, now - OWNER_GRACE_MS)).toEqual({
+    expect(assessLock(noOwner, { ...FIRST_LOOK, missingLooks: OWNER_GRACE_LOOKS })).toEqual({
       kind: "abandoned",
       reason: "it has no readable owner record",
     })
@@ -108,7 +130,7 @@ describe("JOBS", () => {
   })
 })
 
-describe("acquire and release", () => {
+describe("acquire, release and the heartbeat", () => {
   const me = { token: "token-me", pid: 1111, job: "npm run test:e2e", checkout: "D:/repo/.claude/worktrees/me" }
   let dir: string
   let lockDir: string
@@ -130,14 +152,15 @@ describe("acquire and release", () => {
     let pauses = 0
     const deps: Deps = {
       now: () => clock.now,
-      pause: (ms) => {
+      pause: async (ms) => {
         clock.now += ms
-        options.afterPause?.(++pauses)
+        pauses++
+        options.afterPause?.(pauses)
       },
       alive: options.alive ?? (() => true),
       log: (line) => lines.push(line),
     }
-    return { deps, lines, clock }
+    return { deps, lines, clock, pauses: () => pauses }
   }
 
   function hold(owner: Holder) {
@@ -145,66 +168,131 @@ describe("acquire and release", () => {
     writeFileSync(join(lockDir, "owner.json"), JSON.stringify(owner))
   }
 
-  it("takes a free lock and records who holds it", () => {
+  function checkIn() {
+    const now = new Date(Date.now() + 1000)
+    utimesSync(join(lockDir, "owner.json"), now, now)
+  }
+
+  it("takes a free lock and records who holds it", async () => {
     const { deps } = fake()
-    expect(acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 0 })
+    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 0 })
     expect(JSON.parse(readFileSync(join(lockDir, "owner.json"), "utf8"))).toMatchObject(me)
   })
 
-  it("waits while another checkout builds, then takes the lock", () => {
+  it("waits while another checkout builds, then takes the lock", async () => {
     hold({ ...other, since: Date.now() - 65_000 })
     const { deps, lines } = fake({ afterPause: (n) => n === 3 && rmSync(lockDir, { recursive: true }) })
-    expect(acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 3000 })
+    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 3000 })
     expect(lines).toEqual([
       "Another build holds the build lock: npm run build in D:/repo/.claude/worktrees/other (pid 4242, running 1m 05s).",
       "Waiting for it to finish before starting npm run test:e2e.",
     ])
   })
 
-  it("says once a minute that it is still waiting", () => {
+  it("says once a minute that it is still waiting", async () => {
     hold(other)
-    const { deps, lines } = fake({ afterPause: (n) => n === 61 && rmSync(lockDir, { recursive: true }) })
-    expect(acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 61_000 })
+    const { deps, lines } = fake({
+      afterPause: (n) => (n === 61 ? rmSync(lockDir, { recursive: true }) : n % 10 === 0 && checkIn()),
+    })
+    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 61_000 })
     expect(lines.slice(2)).toEqual(["Still waiting for the build lock (1m 00s so far)."])
   })
 
-  it("waits on a leftover token that isn't the holder's", () => {
+  it("keeps waiting on a holder that checks in after the machine wakes from sleep", async () => {
+    // Its last check-in was 45 minutes ago by the clock, which jumped ahead
+    // while the machine slept; the holder checks in again soon after waking.
     hold(other)
-    const { deps } = fake({ afterPause: (n) => n === 1 && rmSync(lockDir, { recursive: true }) })
-    expect(acquire(lockDir, me, "token-left-over", deps)).toMatchObject({ outcome: "taken", waitedMs: 1000 })
+    const sleepMs = 45 * 60 * 1000
+    utimesSync(join(lockDir, "owner.json"), new Date(Date.now() - sleepMs), new Date(Date.now() - sleepMs))
+    const { deps, clock } = fake({
+      afterPause: (n) => {
+        if (n === 5) checkIn()
+        if (n === 8) rmSync(lockDir, { recursive: true })
+      },
+    })
+    clock.now += sleepMs
+    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken" })
   })
 
-  it("runs under the lock its parent holds instead of waiting for it", () => {
+  it("reports a holder whose owner file stops moving, and leaves the lock in place", async () => {
+    hold(other)
+    const { deps, pauses } = fake()
+    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({
+      outcome: "abandoned",
+      lock: { reason: "its holder has not checked in for 2m 00s" },
+    })
+    expect(pauses()).toBe(STALE_LOOKS)
+    expect(existsSync(join(lockDir, "owner.json"))).toBe(true)
+  })
+
+  it("waits on a leftover token that isn't the holder's", async () => {
+    hold(other)
+    const { deps } = fake({ afterPause: (n) => n === 1 && rmSync(lockDir, { recursive: true }) })
+    expect(await acquire(lockDir, me, "token-left-over", deps)).toMatchObject({ outcome: "taken", waitedMs: 1000 })
+  })
+
+  it("runs under the lock its parent holds instead of waiting for it", async () => {
     hold(other)
     const { deps } = fake()
-    expect(acquire(lockDir, me, other.token, deps)).toEqual({ outcome: "inherited" })
+    expect(await acquire(lockDir, me, other.token, deps)).toEqual({ outcome: "inherited" })
     expect(existsSync(lockDir)).toBe(true)
   })
 
-  it("reports a lock whose holder died, and leaves it in place", () => {
+  it("reports a lock whose holder died, and leaves it in place", async () => {
     hold(other)
     const { deps } = fake({ alive: () => false })
-    expect(acquire(lockDir, me, undefined, deps)).toEqual({
+    expect(await acquire(lockDir, me, undefined, deps)).toEqual({
       outcome: "abandoned",
       lock: { kind: "abandoned", holder: other, reason: "process 4242 is gone" },
     })
     expect(existsSync(join(lockDir, "owner.json"))).toBe(true)
   })
 
-  it("reports a lock that never got an owner record, after the grace period, and leaves it", () => {
+  it("takes the lock when its holder released it just before its pid was checked", async () => {
+    hold(other)
+    // The holder finishes between the waiter reading its record and checking its pid.
+    const alive = () => {
+      rmSync(lockDir, { recursive: true, force: true })
+      return false
+    }
+    const { deps } = fake({ alive })
+    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 0 })
+  })
+
+  it("reports a lock that never got an owner record, after the grace period, and leaves it", async () => {
     mkdirSync(lockDir)
-    const { deps, clock } = fake()
-    const start = clock.now
-    expect(acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "abandoned" })
-    expect(clock.now - start).toBe(OWNER_GRACE_MS)
+    const { deps, pauses } = fake()
+    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "abandoned" })
+    expect(pauses()).toBe(OWNER_GRACE_LOOKS - 1)
     expect(existsSync(lockDir)).toBe(true)
+  })
+
+  it("treats an unreadable owner record like a missing one", async () => {
+    mkdirSync(lockDir)
+    writeFileSync(join(lockDir, "owner.json"), "{not json")
+    const { deps } = fake()
+    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({
+      outcome: "abandoned",
+      lock: { reason: "it has no readable owner record" },
+    })
+    expect(existsSync(join(lockDir, "owner.json"))).toBe(true)
   })
 
   it("releases only the lock it took", () => {
     hold(other)
-    release(lockDir, me.token, () => {})
+    release(lockDir, me.token)
     expect(existsSync(lockDir)).toBe(true)
-    release(lockDir, other.token, () => {})
+    release(lockDir, other.token)
     expect(existsSync(lockDir)).toBe(false)
+  })
+
+  it("moves the owner file's mtime while the holder runs", async () => {
+    hold(other)
+    const file = join(lockDir, "owner.json")
+    utimesSync(file, new Date(0), new Date(0))
+    const stop = startHeartbeat(lockDir, 20)
+    await new Promise((done) => setTimeout(done, 100))
+    stop()
+    expect(statSync(file).mtimeMs).toBeGreaterThan(Date.now() - 60_000)
   })
 })

@@ -40,6 +40,7 @@ Next.js App Router (TypeScript), Tailwind v4, shadcn (`base-nova`), Supabase (da
 ## Data and evidence
 
 - Schema changes are files in `supabase/migrations/`, tested against local Supabase. Hosted databases change only through the Supabase GitHub integration on merge; agents hold no hosted database credentials.
+- Every checkout shares one local Supabase. `npm run db:reset` and `npm run db:stop` act on it for every worktree, so check that no other session is testing against it first.
 - Real family and student records stay out of git and out of evidence. Screens, recordings and tests use the seeded fixture data and the seeded test account.
 - Upload images with `IMAGE_ADAPTER=gist`. Post videos through the PR comment box in the signed-in browser.
 
@@ -70,7 +71,7 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 1. Keep changes to the assigned task.
 2. Run the checks.
 3. Assemble before/after pairs from the evidence captured along the way.
-4. Commit, rebase onto `origin/main`, rerun the checks.
+4. Commit, rebase onto `origin/main`, rerun the checks. Add the changelog entry under `## Unreleased` (see *Releasing*).
 5. `git push -u origin <branch>` (`--force-with-lease` after rebasing a pushed branch).
 6. Open the PR: what changed, how it was tested (every claim backed by evidence), before/after proof, risks and follow-ups. Run the title and body through `unslop`.
 7. `greploop` to 5/5 with zero unresolved comments.
@@ -78,10 +79,10 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 
 ## Releasing
 
-Every merge to `main` is a release: it carries a SemVer tag and a `CHANGELOG.md` entry. A merge without both is unfinished work. Add the changelog entry to the PR before merging, so the tag contains the entry that describes it.
+Every merge to `main` is a release: it carries a SemVer tag and a `CHANGELOG.md` entry. A merge without both is unfinished work. Parallel PRs would all claim the same version, so a PR carries its entry under an `## Unreleased` heading at the top of `CHANGELOG.md`, and the version is settled only when the PR is about to merge. On a rebase conflict in `## Unreleased`, keep every entry.
 
-1. Pick the version. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
-2. Write the entry, newest at the top, as a date heading carrying the version, then only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
+1. Once the human approves the merge, rebase onto `origin/main` and pick the version from the latest tag. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
+2. Turn this PR's `## Unreleased` entry into a date heading carrying the version (newest at the top), commit, push, and rerun the checks. The entry has only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
 3. Merge the PR with a message that says what the change does.
 4. Tag the merge commit on `main`, annotated, message `<version>: <one line>`, then `git push origin <version>`.
 5. Give the human the tag and the release entry alongside the merged PR URL.

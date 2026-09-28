@@ -36,8 +36,17 @@ The Supabase CLI is a dev dependency, so every command goes through npm scripts 
 `npx supabase` and everyone gets the version pinned in the lockfile. Do not install it
 globally.
 
+Every checkout and worktree shares this one local stack. `npm run db:reset` wipes its
+data and `npm run db:stop` shuts it down for all of them, so check that nothing else is
+using it first.
+
+`npm run db:start` runs only Postgres, Auth, REST, Kong and Mailpit, which is all the app
+uses. For Studio and the other services, run `npm run db:stop` and then
+`npm run db:start:full`.
+
 The local stack listens on 55420–55429 rather than the Supabase defaults, because
-Windows reserves the 543xx range for Hyper-V. Studio is at <http://127.0.0.1:55423>.
+Windows reserves the 543xx range for Hyper-V. Studio (with `db:start:full`) is at
+<http://127.0.0.1:55423>.
 
 ## Checks
 

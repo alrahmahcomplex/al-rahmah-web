@@ -5,13 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
-## September 28, 2026 `v0.1.7`
+## Unreleased
 
 ### IMPROVED
 
 - Nothing in the app changes in this release. The separate local database for each
   copy of the project, added in `v0.1.6`, is gone. It slowed down the developer's
-  machine. Every copy shares one local database again, as it did in `v0.1.5`.
+  machine. Every copy shares one local database again, as it did in `v0.1.5`, and it
+  starts only the parts the app uses.
 
 ## September 26, 2026 `v0.1.6`
 

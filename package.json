@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "db:start": "node scripts/local-db.mts start",
-    "db:stop": "node scripts/local-db.mts stop",
-    "db:reset": "node scripts/local-db.mts reset",
-    "db:status": "node scripts/local-db.mts status"
+    "db:start": "supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
+    "db:start:full": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset"
   },
   "engines": {
     "node": ">=24"

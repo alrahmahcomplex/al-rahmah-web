@@ -127,9 +127,12 @@ test.describe("changing staff members", () => {
     await expect(row).toContainText("Deactivated")
 
     await page.getByRole("button", { name: "History" }).click()
-    const latest = page.getByRole("list", { name: "History" }).getByRole("listitem").first()
-    await expect(latest).toContainText(`${MANAGER.name} changed ${target.name}`)
-    await expect(latest).toContainText("status: Active → Deactivated")
+    // Other tests write history at the same time, so find this change by name.
+    const change = page
+      .getByRole("list", { name: "History" })
+      .getByRole("listitem")
+      .filter({ hasText: `${MANAGER.name} changed ${target.name}` })
+    await expect(change).toContainText("status: Active → Deactivated")
   })
 
   test("moving a fellow administrator off administering asks first", async ({ page }) => {

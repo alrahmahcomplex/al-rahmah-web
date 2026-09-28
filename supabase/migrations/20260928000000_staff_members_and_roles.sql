@@ -388,6 +388,10 @@ create trigger refuse_audit_log_truncate
 
 -- Records an action event. Checks the kind's permission against the caller,
 -- stores the kind's scope, and takes the actor the same way the trigger does.
+-- It is called on the staff member's own session, never with the secret key:
+-- the invite service sends the email with the secret key, then records
+-- invite_sent as the signed-in Manager, so the permission check has someone
+-- to check.
 create function public.record_action(kind text, lead_id uuid default null, details jsonb default '{}')
 returns bigint
 language plpgsql
@@ -564,9 +568,14 @@ begin
     perform set_config('audit.actor_kind', 'system', true);
     perform set_config('audit.actor_staff_id', '', true);
 
+    -- Rechecks the record here, so a deactivation that lands between the
+    -- before-insert check and this link still refuses the account.
     update public.staff_members
     set user_id = new.id
-    where email = lower(new.email) and user_id is null;
+    where email = lower(new.email) and active and user_id is null;
+    if not found then
+        raise exception 'This email does not belong to an active staff member.';
+    end if;
 
     perform set_config('audit.actor_kind', previous_kind, true);
     perform set_config('audit.actor_staff_id', previous_staff_id, true);

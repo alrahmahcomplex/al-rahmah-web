@@ -60,14 +60,14 @@ npm run build
 the checkout's `E2E_PORT` (3100 in the main checkout) and refuses to reuse one already
 there.
 
-One Next.js build runs at a time per machine, because two at once ran a 7.7 GB machine
-out of memory. `npm run build` and `npm run test:e2e` share a lock with every other
-checkout of the repo. When another checkout holds it, they print what they are waiting
-for and start once it is released. `test:e2e` takes the lock before Playwright starts
-and keeps it until Playwright exits, because its build runs inside Playwright's
-five-minute server timeout. So `npm run test:e2e -- --ui` holds the lock until you close
-the UI. Playwright run directly (`npx playwright test`) refuses to start and asks for
-`npm run test:e2e`.
+One Next.js build runs at a time on this machine, because two at once ran a 7.7 GB
+machine out of memory. `npm run build` and `npm run test:e2e` share a lock with every
+worktree of this clone. When another checkout holds it, they print what they are waiting
+for and start once it is released. `test:e2e` builds the app first, then runs Playwright
+against that build, and keeps the lock until Playwright exits: the tests, with a server
+and browsers, use about as much memory as a build. So `npm run test:e2e -- --ui` holds
+the lock until you close the UI. Playwright run directly (`npx playwright test`) refuses
+to start and asks for `npm run test:e2e`.
 
 A build that is killed mid-run leaves its lock behind, in `.git/build.lock` of the main
 checkout. The next run names that folder and stops: straight away when the holder's

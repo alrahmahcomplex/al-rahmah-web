@@ -10,7 +10,6 @@ import {
   type Deps,
   NOTHING_SEEN,
   formatDuration,
-  heldByParent,
   type Holder,
   JOBS,
   lockSkipped,
@@ -107,25 +106,15 @@ describe("lockSkipped", () => {
   })
 })
 
-describe("heldByParent", () => {
-  it("matches only the token of the lock's current holder", () => {
-    expect(heldByParent("token-other", other)).toBe(true)
-    expect(heldByParent("token-left-over", other)).toBe(false)
-    expect(heldByParent(undefined, other)).toBe(false)
-    expect(heldByParent("", { ...other, token: "" })).toBe(false)
-    expect(heldByParent("token-other", undefined)).toBe(false)
-  })
-})
-
 describe("JOBS", () => {
-  it("builds with `next build` and tests with `playwright test`", () => {
-    expect(JOBS.build.args).toEqual(["build"])
-    expect(JOBS["test:e2e"].args).toEqual(["test"])
+  it("builds with `next build`, and tests with `playwright test` only after building", () => {
+    expect(JOBS.build.map((step) => step.args)).toEqual([["build"]])
+    expect(JOBS["test:e2e"].map((step) => step.args)).toEqual([["build"], ["test"]])
   })
 
-  it("points each job at a CLI that is installed", () => {
-    for (const job of Object.values(JOBS)) {
-      expect(existsSync(join("node_modules", ...job.cli))).toBe(true)
+  it("points each step at a CLI that is installed", () => {
+    for (const step of Object.values(JOBS).flat()) {
+      expect(existsSync(join("node_modules", ...step.cli))).toBe(true)
     }
   })
 })
@@ -180,14 +169,14 @@ describe("acquire, release and the heartbeat", () => {
 
   it("takes a free lock and records who holds it", async () => {
     const { deps } = fake()
-    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 0 })
+    expect(await acquire(lockDir, me, deps)).toMatchObject({ outcome: "taken", waitedMs: 0 })
     expect(JSON.parse(readFileSync(join(lockDir, "owner.json"), "utf8"))).toMatchObject(me)
   })
 
   it("waits while another checkout builds, then takes the lock", async () => {
     hold({ ...other, since: Date.now() - 65_000 })
     const { deps, lines } = fake({ afterPause: (n) => freeAfter(n, 3) })
-    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 3000 })
+    expect(await acquire(lockDir, me, deps)).toMatchObject({ outcome: "taken", waitedMs: 3000 })
     expect(lines).toEqual([
       "Another build holds the build lock: npm run build in D:/repo/.claude/worktrees/other (pid 4242, running 1m 05s).",
       "Waiting for it to finish before starting npm run test:e2e.",
@@ -202,7 +191,7 @@ describe("acquire, release and the heartbeat", () => {
         freeAfter(n, 61)
       },
     })
-    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 61_000 })
+    expect(await acquire(lockDir, me, deps)).toMatchObject({ outcome: "taken", waitedMs: 61_000 })
     expect(lines.slice(2)).toEqual(["Still waiting for the build lock (1m 00s so far)."])
   })
 
@@ -219,13 +208,13 @@ describe("acquire, release and the heartbeat", () => {
       },
     })
     clock.now += sleepMs
-    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken" })
+    expect(await acquire(lockDir, me, deps)).toMatchObject({ outcome: "taken" })
   })
 
   it("reports a holder whose owner file stops moving, and leaves the lock in place", async () => {
     hold(other)
     const { deps, pauses } = fake()
-    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({
+    expect(await acquire(lockDir, me, deps)).toMatchObject({
       outcome: "abandoned",
       lock: { reason: "its holder has not checked in for 2m 00s" },
     })
@@ -233,23 +222,10 @@ describe("acquire, release and the heartbeat", () => {
     expect(existsSync(join(lockDir, "owner.json"))).toBe(true)
   })
 
-  it("waits on a leftover token that isn't the holder's", async () => {
-    hold(other)
-    const { deps } = fake({ afterPause: (n) => freeAfter(n, 1) })
-    expect(await acquire(lockDir, me, "token-left-over", deps)).toMatchObject({ outcome: "taken", waitedMs: 1000 })
-  })
-
-  it("runs under the lock its parent holds instead of waiting for it", async () => {
-    hold(other)
-    const { deps } = fake()
-    expect(await acquire(lockDir, me, other.token, deps)).toEqual({ outcome: "inherited" })
-    expect(existsSync(lockDir)).toBe(true)
-  })
-
   it("reports a lock whose holder died, and leaves it in place", async () => {
     hold(other)
     const { deps } = fake({ alive: () => false })
-    expect(await acquire(lockDir, me, undefined, deps)).toEqual({
+    expect(await acquire(lockDir, me, deps)).toEqual({
       outcome: "abandoned",
       lock: { kind: "abandoned", holder: other, reason: "process 4242 is gone" },
     })
@@ -264,13 +240,13 @@ describe("acquire, release and the heartbeat", () => {
       return false
     }
     const { deps } = fake({ alive })
-    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "taken", waitedMs: 0 })
+    expect(await acquire(lockDir, me, deps)).toMatchObject({ outcome: "taken", waitedMs: 0 })
   })
 
   it("reports a lock that never got an owner record, after the grace period, and leaves it", async () => {
     mkdirSync(lockDir)
     const { deps, pauses } = fake()
-    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({ outcome: "abandoned" })
+    expect(await acquire(lockDir, me, deps)).toMatchObject({ outcome: "abandoned" })
     expect(pauses()).toBe(OWNER_GRACE_LOOKS - 1)
     expect(existsSync(lockDir)).toBe(true)
   })
@@ -279,7 +255,7 @@ describe("acquire, release and the heartbeat", () => {
     mkdirSync(lockDir)
     writeFileSync(join(lockDir, "owner.json"), "{not json")
     const { deps } = fake()
-    expect(await acquire(lockDir, me, undefined, deps)).toMatchObject({
+    expect(await acquire(lockDir, me, deps)).toMatchObject({
       outcome: "abandoned",
       lock: { reason: "it has no readable owner record" },
     })

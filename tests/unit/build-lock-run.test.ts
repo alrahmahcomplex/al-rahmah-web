@@ -1,7 +1,7 @@
 // Runs the real script in a throwaway git repo whose `next` and `playwright`
 // CLIs are stubs that log when they start and end. Covers what the unit tests
-// in build-lock.test.ts can't: the child process, the token hand-off, and
-// what a killed holder leaves behind.
+// in build-lock.test.ts can't: the child processes, the order of the e2e
+// steps, and what a killed holder leaves behind.
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
@@ -20,19 +20,18 @@ setTimeout(() => {
 }, Number(process.env.STUB_MS ?? 800))
 `
 
-// Like Playwright's webServer, runs \`npm run build\` through a shell from inside
-// the e2e run, so ending this process alone leaves that build running.
+// Logs whether it was told the app is already built, as playwright.config.ts
+// requires, and the extra arguments it was given.
 const PLAYWRIGHT_STUB = `
-const { spawnSync } = require("node:child_process")
 const fs = require("node:fs")
-const path = require("node:path")
 const log = (event) => fs.appendFileSync(process.env.STUB_LOG, event + " " + process.env.STUB_NAME + " " + Date.now() + " " + process.pid + "\\n")
 log("e2e-start")
-const script = path.join(__dirname, "..", "..", "..", "scripts", "build-lock.mts")
-const env = { ...process.env, STUB_NAME: process.env.STUB_NAME + "/webServer" }
-const build = spawnSync('"' + process.execPath + '" "' + script + '" build', { shell: true, stdio: "inherit", env })
-log("e2e-end")
-process.exit(build.status ?? 1)
+log("prebuilt=" + process.env.E2E_PREBUILT)
+log("args=" + process.argv.slice(2).join(","))
+setTimeout(() => {
+  log("e2e-end")
+  process.exit(0)
+}, Number(process.env.STUB_E2E_MS ?? 800))
 `
 
 type Run = { code: number | null; out: string }
@@ -75,12 +74,12 @@ describe("scripts/build-lock.mts", () => {
     rmSync(repo, { recursive: true, force: true })
   })
 
-  function start(job: string, name: string, env: Record<string, string> = {}): Promise<Run> {
+  function start(job: string, name: string, env: Record<string, string> = {}, extra: string[] = []): Promise<Run> {
     const clean = { ...process.env }
     delete clean.CI
     delete clean.VERCEL
-    delete clean.BUILD_LOCK_TOKEN
-    const child = spawn(process.execPath, [join(repo, "scripts", "build-lock.mts"), job], {
+    delete clean.E2E_PREBUILT
+    const child = spawn(process.execPath, [join(repo, "scripts", "build-lock.mts"), job, ...extra], {
       cwd: repo,
       env: { ...clean, STUB_LOG: log, STUB_NAME: name, ...env },
     })
@@ -122,33 +121,36 @@ describe("scripts/build-lock.mts", () => {
     expect(existsSync(lockDir)).toBe(false)
   }, 30_000)
 
-  it("runs the e2e run's own build under the lock it holds, and makes other builds wait for the whole run", async () => {
-    const e2e = start("test:e2e", "E")
+  it("builds before Playwright starts, and makes other builds wait for the whole e2e run", async () => {
+    const e2e = start("test:e2e", "E", {}, ["e2e/login.spec.ts"])
     await lockTaken()
     const build = start("build", "B")
     const [e, b] = await Promise.all([e2e, build])
     expect(e.code).toBe(0)
     expect(b.code).toBe(0)
     const at = events()
-    expect(at["start E/webServer"]).toBeGreaterThan(at["e2e-start E"])
-    expect(at["end E/webServer"]).toBeLessThanOrEqual(at["e2e-end E"])
+    expect(at["e2e-start E"]).toBeGreaterThanOrEqual(at["end E"])
+    expect(at["prebuilt=1 E"]).toBeDefined()
+    expect(at["args=test,e2e/login.spec.ts E"]).toBeDefined()
     expect(at["start B"]).toBeGreaterThanOrEqual(at["e2e-end E"])
     expect(existsSync(lockDir)).toBe(false)
   }, 30_000)
 
-  it("keeps the lock until the build Playwright started has ended, when Playwright alone is killed", async () => {
-    const e2e = start("test:e2e", "E", { STUB_MS: "2000" })
-    await waitFor(() => logged("start E/webServer"))
-    const lines = readFileSync(log, "utf8").split("\n")
-    const runner = Number(lines.find((entry) => entry.startsWith("e2e-start E"))?.split(" ")[3])
+  it("skips Playwright when the build fails, and releases the lock", async () => {
+    const e2e = await start("test:e2e", "E", { STUB_EXIT: "2" })
+    expect(e2e.code).toBe(2)
+    expect(logged("e2e-start")).toBe(false)
+    expect(existsSync(lockDir)).toBe(false)
+  }, 30_000)
+
+  it("releases the lock once Playwright is killed, with no build left running", async () => {
+    const e2e = start("test:e2e", "E", { STUB_E2E_MS: "20000" })
+    await waitFor(() => logged("e2e-start E"))
+    const runner = Number(readFileSync(log, "utf8").split("\n").find((entry) => entry.startsWith("e2e-start E"))?.split(" ")[3])
     process.kill(runner, "SIGKILL")
-    const build = start("build", "B")
-    const [e, b] = await Promise.all([e2e, build])
-    expect(e.out).toContain("Waiting for the build it started")
-    expect(b.code).toBe(0)
-    const at = events()
-    expect(at["end E/webServer"]).toBeDefined()
-    expect(at["start B"]).toBeGreaterThanOrEqual(at["end E/webServer"])
+    expect((await e2e).code).not.toBe(0)
+    expect(existsSync(lockDir)).toBe(false)
+    expect((await start("build", "B")).code).toBe(0)
   }, 30_000)
 
   it("passes the job's exit code through and still releases the lock", async () => {

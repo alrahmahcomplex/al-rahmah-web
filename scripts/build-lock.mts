@@ -3,8 +3,9 @@
 // out of memory, and both died. `npm run build` and `npm run test:e2e` run
 // their job through this script: it takes a lock that every worktree shares,
 // waits while another checkout holds it, and releases it when the job exits.
-// `test:e2e` holds it for its whole run, because its build happens inside
-// Playwright's webServer, whose timeout would otherwise count the wait.
+// `test:e2e` builds first, then runs Playwright against that build, and holds
+// the lock through both: the tests, with a server and browsers, use about as
+// much memory as a build.
 //
 // The lock is a directory in the git common dir, like the slot locks in
 // local-db.mts: creating a directory either succeeds or fails with EEXIST, so
@@ -16,15 +17,13 @@
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 
-// Set in the job's environment to the holder's token, so a build the job
-// starts itself (Playwright's webServer runs `npm run build`) runs under the
-// lock its parent holds instead of waiting for that parent forever.
-// playwright.config.ts checks for it too.
-export const TOKEN_ENV = "BUILD_LOCK_TOKEN"
+// Set for every step, so playwright.config.ts knows the app was built first
+// and its webServer only has to start it.
+export const PREBUILT_ENV = "E2E_PREBUILT"
 const LOCK_NAME = "build.lock"
 const OWNER_FILE = "owner.json"
 // Waiters look at the lock once a second...
@@ -46,12 +45,15 @@ const BUSY_CODES = ["EPERM", "EACCES", "EBUSY"]
 const BUSY_RETRIES = 100
 const BUSY_PAUSE_MS = 100
 
-// The jobs that build. Each runs its lockfile-pinned CLI through Node itself,
-// never through a shell, so paths with spaces (this repo lives under
-// "01 PROJECTS") reach it intact.
-export const JOBS: Record<string, { cli: string[]; args: string[] }> = {
-  build: { cli: ["next", "dist", "bin", "next"], args: ["build"] },
-  "test:e2e": { cli: ["@playwright", "test", "cli.js"], args: ["test"] },
+// The jobs that build, as steps run one after another under one lock. Each
+// step runs its lockfile-pinned CLI through Node itself, never through a
+// shell, so paths with spaces (this repo lives under "01 PROJECTS") reach it
+// intact. Extra arguments go to the last step.
+export type Step = { cli: string[]; args: string[] }
+const NEXT_BUILD: Step = { cli: ["next", "dist", "bin", "next"], args: ["build"] }
+export const JOBS: Record<string, Step[]> = {
+  build: [NEXT_BUILD],
+  "test:e2e": [NEXT_BUILD, { cli: ["@playwright", "test", "cli.js"], args: ["test"] }],
 }
 
 export type Holder = {
@@ -122,11 +124,6 @@ export function lockSkipped(env: Record<string, string | undefined>): boolean {
   return Boolean(env.VERCEL || env.CI)
 }
 
-// Whether the lock belongs to the process that started this one.
-export function heldByParent(parentToken: string | undefined, owner: Holder | undefined): boolean {
-  return Boolean(parentToken) && parentToken === owner?.token
-}
-
 function isBusy(error: unknown): boolean {
   return BUSY_CODES.includes((error as NodeJS.ErrnoException).code ?? "")
 }
@@ -188,20 +185,11 @@ export type Deps = {
   log: (line: string) => void
 }
 
-export type Acquired =
-  | { outcome: "taken"; holder: Holder; waitedMs: number }
-  // The process that started this one holds the lock.
-  | { outcome: "inherited" }
-  | { outcome: "abandoned"; lock: Abandoned }
+export type Acquired = { outcome: "taken"; holder: Holder; waitedMs: number } | { outcome: "abandoned"; lock: Abandoned }
 
 // Takes the lock, waiting while a live holder has it. Returns without taking
-// it when the holder is this process's parent, or when the holder died.
-export async function acquire(
-  lockDir: string,
-  who: Omit<Holder, "since">,
-  parentToken: string | undefined,
-  deps: Deps,
-): Promise<Acquired> {
+// it when the holder died.
+export async function acquire(lockDir: string, who: Omit<Holder, "since">, deps: Deps): Promise<Acquired> {
   const start = deps.now()
   let reported: string | undefined
   let reportedAt = start
@@ -213,7 +201,6 @@ export async function acquire(
       const holder = { ...who, since: deps.now() }
       if (take(lockDir, holder)) return { outcome: "taken", holder, waitedMs: deps.now() - start }
       const lock = snapshot(lockDir, deps.alive)
-      if (heldByParent(parentToken, lock?.owner)) return { outcome: "inherited" }
       watch = observe(watch, lock)
       state = assessLock(lock, watch)
       // A holder can finish, release and exit between our reading its record
@@ -267,31 +254,6 @@ export function release(lockDir: string, token: string) {
   }
 }
 
-// A build that runs under its parent's lock leaves a file named after its pid
-// in the lock directory while it runs. Ending Playwright alone doesn't end the
-// build its webServer started, so the holder waits for these before releasing.
-function markNested(lockDir: string): () => void {
-  const mark = join(lockDir, `nested-${process.pid}`)
-  try {
-    writeFileSync(mark, "")
-  } catch {
-    // The lock went away; there is nothing to hold open.
-  }
-  return () => rmSync(mark, { force: true })
-}
-
-export function nestedBuilds(lockDir: string, alive: (pid: number) => boolean): number[] {
-  let names: string[]
-  try {
-    names = readdirSync(lockDir)
-  } catch {
-    return []
-  }
-  return names
-    .map((name) => Number(name.match(/^nested-(\d+)$/)?.[1]))
-    .filter((pid) => Number.isInteger(pid) && alive(pid))
-}
-
 // Moves the owner file's mtime every `everyMs`, so waiters can tell this holder
 // is alive. Returns a function that stops it.
 export function startHeartbeat(lockDir: string, everyMs: number): () => void {
@@ -339,27 +301,47 @@ function lockPath(root: string): string | undefined {
   }
 }
 
+type Run = { started: boolean; stopping: boolean; step?: ChildProcess }
+
 // Installed before anything else, so no signal can stop this process between
-// taking the lock and releasing it. Until the job starts, this process holds
-// nothing it must release, so Ctrl+C stops it. Once the job runs, Ctrl+C,
-// Ctrl+Break and a closing console reach the job directly, and this process
-// waits for it to exit before releasing the lock. A SIGTERM or hangup sent to
-// this process alone is passed on as SIGINT, which Playwright answers by
-// stopping its web server. Windows can't deliver either, and child.kill() there
-// would kill the job outright.
-function guardSignals(job: () => ChildProcess | undefined) {
-  const onInterrupt = () => {
-    if (job() === undefined) process.exit(130)
+// taking the lock and releasing it. While it waits for the lock it holds
+// nothing, so a signal stops it at once. Once its steps have started, a signal
+// stops the running step, skips the rest, and the lock is released after the
+// step has exited. Ctrl+C, Ctrl+Break and a closing console reach the step
+// directly. Any signal sent to this process alone is passed on as SIGINT, which
+// Playwright answers by stopping its web server. Windows can't deliver one, and
+// child.kill() there would kill the step outright.
+function guardSignals(run: Run) {
+  const stop = (exitCode: number) => {
+    if (!run.started) process.exit(exitCode)
+    run.stopping = true
+    if (process.platform !== "win32") run.step?.kill("SIGINT")
   }
-  const onTerminate = () => {
-    const child = job()
-    if (child === undefined) process.exit(143)
-    if (process.platform !== "win32") child.kill("SIGINT")
+  process.on("SIGINT", () => stop(130))
+  process.on("SIGBREAK", () => stop(130))
+  process.on("SIGHUP", () => stop(129))
+  process.on("SIGTERM", () => stop(143))
+}
+
+// Runs the steps one after another and stops at the first that fails.
+async function runSteps(steps: Step[], root: string, extra: string[], run: Run): Promise<number> {
+  const env = { ...process.env, [PREBUILT_ENV]: "1" }
+  run.started = true
+  for (const [index, step] of steps.entries()) {
+    if (run.stopping) return 130
+    const args = [join(root, "node_modules", ...step.cli), ...step.args, ...(index === steps.length - 1 ? extra : [])]
+    const code = await new Promise<number>((done) => {
+      run.step = spawn(process.execPath, args, { stdio: "inherit", env })
+      run.step.on("error", (error) => {
+        console.error(error.message)
+        done(1)
+      })
+      run.step.on("exit", (code) => done(code ?? 1))
+    })
+    run.step = undefined
+    if (code !== 0) return code
   }
-  process.on("SIGINT", onInterrupt)
-  process.on("SIGBREAK", onInterrupt)
-  process.on("SIGHUP", onTerminate)
-  process.on("SIGTERM", onTerminate)
+  return 0
 }
 
 function reportAbandoned(lockDir: string, lock: Abandoned, now: number) {
@@ -373,38 +355,19 @@ function reportAbandoned(lockDir: string, lock: Abandoned, now: number) {
 
 async function main(argv: string[]): Promise<number> {
   const [name, ...extra] = argv
-  const job = name === undefined ? undefined : JOBS[name]
-  if (job === undefined) {
+  const steps = name === undefined ? undefined : JOBS[name]
+  if (steps === undefined) {
     console.error(`Usage: node scripts/build-lock.mts <${Object.keys(JOBS).join("|")}> [args]`)
     return 1
   }
   const root = resolve(import.meta.dirname, "..")
-  const args = [join(root, "node_modules", ...job.cli), ...job.args, ...extra]
-  let child: ChildProcess | undefined
-  guardSignals(() => child)
-  const run = (env: NodeJS.ProcessEnv) =>
-    new Promise<number>((done) => {
-      child = spawn(process.execPath, args, { stdio: "inherit", env })
-      child.on("error", (error) => {
-        console.error(error.message)
-        done(1)
-      })
-      child.on("exit", (code) => done(code ?? 1))
-    })
+  const run: Run = { started: false, stopping: false }
+  guardSignals(run)
 
   const lockDir = lockPath(root)
-  // An empty token tells playwright.config.ts this run came through here.
-  if (lockDir === undefined) return run({ ...process.env, [TOKEN_ENV]: process.env[TOKEN_ENV] ?? "" })
+  if (lockDir === undefined) return runSteps(steps, root, extra, run)
   const who = { token: randomUUID(), pid: process.pid, job: `npm run ${name}`, checkout: root }
-  const got = await acquire(lockDir, who, process.env[TOKEN_ENV], LIVE)
-  if (got.outcome === "inherited") {
-    const unmark = markNested(lockDir)
-    try {
-      return await run(process.env)
-    } finally {
-      unmark()
-    }
-  }
+  const got = await acquire(lockDir, who, LIVE)
   if (got.outcome === "abandoned") {
     reportAbandoned(lockDir, got.lock, Date.now())
     return 1
@@ -415,13 +378,7 @@ async function main(argv: string[]): Promise<number> {
     if (got.waitedMs >= POLL_MS) {
       console.log(`The build lock is free after ${formatDuration(got.waitedMs)}. Starting ${who.job}.`)
     }
-    code = await run({ ...process.env, [TOKEN_ENV]: who.token })
-    for (let told = false; ; told = true) {
-      const nested = nestedBuilds(lockDir, LIVE.alive)
-      if (nested.length === 0) break
-      if (!told) console.log(`Waiting for the build it started (pid ${nested.join(", ")}) before releasing the build lock.`)
-      await sleep(POLL_MS)
-    }
+    code = await runSteps(steps, root, extra, run)
   } finally {
     stopHeartbeat()
     try {

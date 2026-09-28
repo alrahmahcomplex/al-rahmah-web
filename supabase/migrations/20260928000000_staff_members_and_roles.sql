@@ -288,6 +288,7 @@ revoke execute on function public.audit_actor() from public, anon, authenticated
 
 -- The one audit trigger. Writes a row per insert (the whole row) or update
 -- (only the changed fields, old and new), and refuses a write with no actor.
+-- An audited table needs a uuid `id` column and a row in audit_scopes.
 create function public.audit_row_change()
 returns trigger
 language plpgsql

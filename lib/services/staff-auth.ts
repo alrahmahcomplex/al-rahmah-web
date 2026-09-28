@@ -1,9 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { Permission } from "@/lib/permissions"
+
 import type { Result } from "./result"
 
-export type StaffSignInError = "invalid-credentials" | "not-on-allowlist" | "unavailable"
-export type StaffUserError = "signed-out" | "not-on-allowlist" | "unavailable"
+export type StaffMember = {
+  id: string
+  name: string
+  email: string
+  roleName: string
+  permissions: Permission[]
+}
+
+// Why someone with a valid session still may not use the staff side.
+export type StaffAccessError = "not-staff" | "deactivated" | "unavailable"
+export type StaffSignInError = "invalid-credentials" | StaffAccessError
+export type StaffUserError = "signed-out" | StaffAccessError
 
 // Auth errors that mean "these credentials will not do", as opposed to a
 // service problem. Anything else is reported as an outage so a staff member
@@ -15,51 +27,79 @@ const CREDENTIAL_ERROR_CODES = new Set([
   "user_banned",
 ])
 
-// Whether the signed-in user's email is on the staff allowlist. Fails closed:
-// if the check cannot run, the answer is no.
-async function isAllowlisted(supabase: SupabaseClient): Promise<Result<boolean, "unavailable">> {
-  const { data, error } = await supabase.rpc("is_admin")
-  if (error) return { ok: false, error: "unavailable" }
-  return { ok: true, data: data === true }
+type StaffMemberRow = {
+  id: string
+  full_name: string
+  email: string
+  active: boolean
+  role_name: string
+  permissions: Permission[]
+}
+
+// The staff record behind the current session, read fresh from the database
+// so a deactivation or a permission change applies on the next request.
+// Fails closed: if the record cannot be read, the answer is no.
+async function loadStaffMember(supabase: SupabaseClient): Promise<Result<StaffMember, StaffAccessError>> {
+  const { data, error } = await supabase.rpc("current_staff_member").maybeSingle<StaffMemberRow>()
+  if (error) {
+    console.error("Could not read the signed-in staff member", error)
+    return { ok: false, error: "unavailable" }
+  }
+  if (!data) return { ok: false, error: "not-staff" }
+  if (!data.active) return { ok: false, error: "deactivated" }
+
+  return {
+    ok: true,
+    data: {
+      id: data.id,
+      name: data.full_name,
+      email: data.email,
+      roleName: data.role_name,
+      permissions: data.permissions,
+    },
+  }
 }
 
 export async function signInStaff(
   supabase: SupabaseClient,
   email: string,
   password: string,
-): Promise<Result<{ email: string }, StaffSignInError>> {
+): Promise<Result<StaffMember, StaffSignInError>> {
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) {
     const code = (error as { code?: string }).code
-    return { ok: false, error: code && CREDENTIAL_ERROR_CODES.has(code) ? "invalid-credentials" : "unavailable" }
+    if (code && CREDENTIAL_ERROR_CODES.has(code)) return { ok: false, error: "invalid-credentials" }
+    console.error("Staff sign-in failed", error)
+    return { ok: false, error: "unavailable" }
   }
 
-  // A valid password is not enough: the email must still be on the allowlist.
-  // Anyone else, or anyone we cannot check, loses the session they were just given.
-  const allowlisted = await isAllowlisted(supabase)
-  if (!allowlisted.ok || !allowlisted.data) {
-    await supabase.auth.signOut()
-    return { ok: false, error: allowlisted.ok ? "not-on-allowlist" : "unavailable" }
-  }
-
-  return { ok: true, data: { email } }
+  // A valid password is not enough: the account must belong to an active
+  // staff member. Anyone else, or anyone we cannot check, loses the session
+  // they were just given.
+  const staff = await loadStaffMember(supabase)
+  if (!staff.ok) await supabase.auth.signOut()
+  return staff
 }
 
-// The staff member behind the current session, checked against the
-// allowlist on every call so removing an email takes effect immediately.
-export async function getStaffUser(
-  supabase: SupabaseClient,
-): Promise<Result<{ email: string }, StaffUserError>> {
+export async function getStaffUser(supabase: SupabaseClient): Promise<Result<StaffMember, StaffUserError>> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user?.email) return { ok: false, error: "signed-out" }
+  if (!user) return { ok: false, error: "signed-out" }
 
-  const allowlisted = await isAllowlisted(supabase)
-  if (!allowlisted.ok) return { ok: false, error: "unavailable" }
-  if (!allowlisted.data) return { ok: false, error: "not-on-allowlist" }
+  return loadStaffMember(supabase)
+}
 
-  return { ok: true, data: { email: user.email } }
+// The gate for staff pages and actions: the signed-in staff member, if their
+// role holds the permission right now.
+export async function requirePermission(
+  supabase: SupabaseClient,
+  permission: Permission,
+): Promise<Result<StaffMember, StaffUserError | "forbidden">> {
+  const staff = await getStaffUser(supabase)
+  if (!staff.ok) return staff
+  if (!staff.data.permissions.includes(permission)) return { ok: false, error: "forbidden" }
+  return staff
 }
 
 export async function exchangeEmailLinkCode(

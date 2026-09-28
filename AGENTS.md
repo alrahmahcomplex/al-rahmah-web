@@ -50,7 +50,17 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 
 - **Migrations** reach the hosted database when their PR merges to `main`, through the Supabase GitHub integration. The human confirms the version under Database → Migrations.
 - **Vercel** needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in both Production and Preview. Next.js bakes `NEXT_PUBLIC_*` values in at build, so a changed value takes effect only after a redeploy. A Preview without them serves 500 on `/staff`, `/login` and `/auth`, and `before-and-after` then captures error pages.
-- **The first staff member**: the `enforce_staff_allowlist` trigger refuses any auth user whose email is missing from `allowed_admin_emails`, so the order is fixed. First insert the lowercase email into `allowed_admin_emails` (SQL editor), then create or invite the user under Authentication → Users. Later staff follow the same two steps; RLS also lets a signed-in staff member insert allowlist rows, but no screen does that yet.
+- **The first staff member** on a fresh database: the sign-up trigger refuses any auth user without an active staff record, and every write to staff members needs an audit actor, so the order is fixed. First run this in the SQL editor, with the person's name and lowercase email:
+
+  ```sql
+  begin;
+  select public.set_audit_actor('system');
+  insert into public.staff_members (full_name, email, role_id)
+  select 'Full Name', 'person@example.com', id from public.roles where name = 'Admissions Manager';
+  commit;
+  ```
+
+  Then invite the user under Authentication → Users. Later staff are invited from the staff side once the Staff and roles screen ships.
 
 ## Checks
 

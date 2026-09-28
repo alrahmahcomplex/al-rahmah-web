@@ -64,16 +64,15 @@ refuses to reuse one already there.
 
 ## Staff sign-in
 
-Only emails in the `allowed_admin_emails` table can sign in. The table is created by
-`supabase/migrations/20260922000000_allowed_admin_emails.sql` with row-level security,
-and a trigger refuses to create an account for any other email.
+A person can use the staff side only while they are an active staff member. Each
+staff member holds one role, and a role is a set of permissions from the fixed list in
+`CONTEXT.md`. The database enforces it: `has_permission(name)` answers for the
+signed-in person, row-level security checks it, and a trigger refuses to create an
+account for any email without an active staff record. Every change to staff and roles
+is written to the append-only `audit_log`. See `docs/adr/0003-editable-rbac-in-the-database.md`
+and `docs/adr/0004-audit-history-is-one-trigger-fed-log.md`.
 
-Adding a staff member takes two steps: insert their email into the allowlist, then
-invite the account from the Supabase dashboard. Public sign-up is off, so an
-allowlisted email with no account behind it grants nothing and cannot be claimed by
-someone else registering it. See `docs/adr/0001-staff-allowlist-lives-in-the-database.md`.
-
-`supabase/seed.sql` creates local-only fixture accounts on the reserved `.test` domain:
-`staff@example.test` (allowlisted) and `former-staff@example.test` (removed from the
-allowlist), both with the password `fixture-password`. Real family and student records
+`supabase/seed.sql` creates local-only fixture staff on the reserved `.test` domain, one
+per role plus two deactivated members, all with the password `fixture-password`.
+`e2e/fixtures.ts` lists them. Real family and student records
 never go into this repo.

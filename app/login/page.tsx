@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Staff sign-in · Al-Rahmah Complex",
 }
 
-const NOTICES: readonly LoginNotice[] = ["invalid-link", "not-on-allowlist"]
+const NOTICES: readonly LoginNotice[] = ["invalid-link", "not-staff", "deactivated", "unavailable"]
 
 export default async function LoginPage({
   searchParams,

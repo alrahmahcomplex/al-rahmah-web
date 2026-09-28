@@ -26,7 +26,8 @@ npm run db:start
 
 `npm run db:start` prints `API_URL` and `PUBLISHABLE_KEY`. Copy `.env.example` to `.env.local`
 and paste them in as `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-Then:
+An `.env.local` written by `v0.1.6` may point at a per-worktree port such as 55521 and
+carry an `E2E_PORT` line; replace the two values and delete that line. Then:
 
 ```bash
 npm run dev

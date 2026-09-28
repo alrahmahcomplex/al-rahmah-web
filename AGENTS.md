@@ -71,7 +71,7 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 1. Keep changes to the assigned task.
 2. Run the checks.
 3. Assemble before/after pairs from the evidence captured along the way.
-4. Commit, rebase onto `origin/main`, rerun the checks. Add the changelog entry under `## Unreleased` (see *Releasing*).
+4. Add the changelog entry under `## Unreleased` (see *Releasing*), commit, rebase onto `origin/main`, rerun the checks.
 5. `git push -u origin <branch>` (`--force-with-lease` after rebasing a pushed branch).
 6. Open the PR: what changed, how it was tested (every claim backed by evidence), before/after proof, risks and follow-ups. Run the title and body through `unslop`.
 7. `greploop` to 5/5 with zero unresolved comments.

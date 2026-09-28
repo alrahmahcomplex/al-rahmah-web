@@ -19,7 +19,8 @@ export async function GET(request: Request) {
   const staff = await getStaffUser(supabase)
   if (!staff.ok) {
     await signOutStaff(supabase)
-    return NextResponse.redirect(`${origin}/login?error=not-on-allowlist`)
+    const reason = staff.error === "signed-out" ? "invalid-link" : staff.error
+    return NextResponse.redirect(`${origin}/login?error=${reason}`)
   }
 
   return NextResponse.redirect(`${origin}${next}`)

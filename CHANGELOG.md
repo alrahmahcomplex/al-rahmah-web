@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 28, 2026 `v0.2.0`
+
+### NEW
+
+- Staff now have roles. Each staff member holds one of Admissions Manager, Admissions
+  Staff or Accountant, and every staff page shows their name and role at the top.
+- Every change to a staff member or a role is kept in a history that nobody can edit
+  or delete, with who made the change and when.
+
+### IMPROVED
+
+- Everyone who could sign in before keeps their access as an Admissions Manager, named
+  after the first part of their email address until someone corrects it.
+- A deactivated staff member who tries to sign in is told their account is
+  deactivated, instead of a general refusal. Someone deactivated while signed in is
+  sent back to sign-in on their next click.
+
 ## September 28, 2026 `v0.1.7`
 
 ### IMPROVED

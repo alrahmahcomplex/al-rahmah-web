@@ -1,28 +1,48 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, it, vi } from "vitest"
 
-import { getStaffUser, signInStaff } from "@/lib/services/staff-auth"
+import { getStaffUser, requirePermission, signInStaff } from "@/lib/services/staff-auth"
+
+const MANAGER_ROW = {
+  id: "a1a1a1a1-0000-4000-8000-000000000001",
+  full_name: "Test Manager",
+  email: "manager@example.test",
+  active: true,
+  role_name: "Admissions Manager",
+  permissions: ["leads.view", "staff.administer"],
+}
+
+const MANAGER = {
+  id: MANAGER_ROW.id,
+  name: "Test Manager",
+  email: "manager@example.test",
+  roleName: "Admissions Manager",
+  permissions: ["leads.view", "staff.administer"],
+}
+
+type StaffRecordResponse = { data: unknown; error: { message: string } | null }
 
 // A stand-in for the Supabase SDK: the only boundary these tests fake.
+// `staffRecord` is what `current_staff_member` answers.
 function fakeSupabase({
   signInError = null as { message: string; code?: string } | null,
-  isAdmin = true,
-  sessionEmail = "staff@example.test" as string | null,
+  staffRecord = { data: MANAGER_ROW, error: null } as StaffRecordResponse,
+  sessionUser = true,
 } = {}) {
   const signOut = vi.fn().mockResolvedValue({ error: null })
   const client = {
     auth: {
       signInWithPassword: vi.fn().mockResolvedValue({
-        data: signInError ? { user: null } : { user: { email: "staff@example.test" } },
+        data: signInError ? { user: null } : { user: { id: "user" } },
         error: signInError,
       }),
       getUser: vi.fn().mockResolvedValue({
-        data: { user: sessionEmail ? { email: sessionEmail } : null },
+        data: { user: sessionUser ? { id: "user" } : null },
         error: null,
       }),
       signOut,
     },
-    rpc: vi.fn().mockResolvedValue({ data: isAdmin, error: null }),
+    rpc: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue(staffRecord) }),
   }
   return { client: client as unknown as SupabaseClient, signOut }
 }
@@ -33,9 +53,10 @@ describe("signInStaff", () => {
       signInError: { message: "Invalid login credentials", code: "invalid_credentials" },
     })
 
-    const result = await signInStaff(client, "staff@example.test", "wrong")
-
-    expect(result).toEqual({ ok: false, error: "invalid-credentials" })
+    expect(await signInStaff(client, "manager@example.test", "wrong")).toEqual({
+      ok: false,
+      error: "invalid-credentials",
+    })
   })
 
   it("reports an outage as unavailable rather than blaming the password", async () => {
@@ -43,59 +64,111 @@ describe("signInStaff", () => {
       signInError: { message: "request failed", code: "over_request_rate_limit" },
     })
 
-    const result = await signInStaff(client, "staff@example.test", "fixture-password")
-
-    expect(result).toEqual({ ok: false, error: "unavailable" })
+    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
+      ok: false,
+      error: "unavailable",
+    })
   })
 
-  it("refuses a correct password for an email missing from the allowlist and ends the session", async () => {
-    const { client, signOut } = fakeSupabase({ isAdmin: false })
+  it("signs in an active staff member with their role and permissions, and keeps the session", async () => {
+    const { client, signOut } = fakeSupabase()
 
-    const result = await signInStaff(client, "former-staff@example.test", "fixture-password")
-
-    expect(result).toEqual({ ok: false, error: "not-on-allowlist" })
-    expect(signOut).toHaveBeenCalled()
-  })
-
-  it("signs in staff on the allowlist and keeps the session", async () => {
-    const { client, signOut } = fakeSupabase({ isAdmin: true })
-
-    const result = await signInStaff(client, "staff@example.test", "fixture-password")
-
-    expect(result).toEqual({ ok: true, data: { email: "staff@example.test" } })
+    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
+      ok: true,
+      data: MANAGER,
+    })
     expect(signOut).not.toHaveBeenCalled()
   })
 
-  it("refuses and ends the session when the allowlist cannot be checked", async () => {
-    const { client, signOut } = fakeSupabase()
-    vi.mocked(client.rpc).mockResolvedValue({
-      data: null,
-      error: { message: "connection refused" },
-    } as never)
+  it("refuses an account with no staff record and ends the session", async () => {
+    const { client, signOut } = fakeSupabase({ staffRecord: { data: null, error: null } })
 
-    const result = await signInStaff(client, "staff@example.test", "fixture-password")
+    expect(await signInStaff(client, "someone@example.test", "fixture-password")).toEqual({
+      ok: false,
+      error: "not-staff",
+    })
+    expect(signOut).toHaveBeenCalled()
+  })
 
-    expect(result).toEqual({ ok: false, error: "unavailable" })
+  it("refuses a deactivated staff member and ends the session", async () => {
+    const { client, signOut } = fakeSupabase({
+      staffRecord: { data: { ...MANAGER_ROW, active: false, permissions: [] }, error: null },
+    })
+
+    expect(await signInStaff(client, "deactivated@example.test", "fixture-password")).toEqual({
+      ok: false,
+      error: "deactivated",
+    })
+    expect(signOut).toHaveBeenCalled()
+  })
+
+  it("refuses and ends the session when the staff record cannot be read", async () => {
+    const { client, signOut } = fakeSupabase({
+      staffRecord: { data: null, error: { message: "connection refused" } },
+    })
+
+    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
+      ok: false,
+      error: "unavailable",
+    })
     expect(signOut).toHaveBeenCalled()
   })
 })
 
 describe("getStaffUser", () => {
   it("returns the signed-in staff member", async () => {
-    const { client } = fakeSupabase({ sessionEmail: "staff@example.test", isAdmin: true })
+    const { client } = fakeSupabase()
 
-    expect(await getStaffUser(client)).toEqual({ ok: true, data: { email: "staff@example.test" } })
+    expect(await getStaffUser(client)).toEqual({ ok: true, data: MANAGER })
   })
 
   it("reports a visitor with no session as signed out", async () => {
-    const { client } = fakeSupabase({ sessionEmail: null })
+    const { client } = fakeSupabase({ sessionUser: false })
 
     expect(await getStaffUser(client)).toEqual({ ok: false, error: "signed-out" })
   })
 
-  it("refuses a session whose email has left the allowlist", async () => {
-    const { client } = fakeSupabase({ sessionEmail: "former-staff@example.test", isAdmin: false })
+  it("refuses a session whose staff member has since been deactivated", async () => {
+    const { client } = fakeSupabase({
+      staffRecord: { data: { ...MANAGER_ROW, active: false, permissions: [] }, error: null },
+    })
 
-    expect(await getStaffUser(client)).toEqual({ ok: false, error: "not-on-allowlist" })
+    expect(await getStaffUser(client)).toEqual({ ok: false, error: "deactivated" })
+  })
+
+  it("fails closed when the staff record cannot be read", async () => {
+    const { client } = fakeSupabase({
+      staffRecord: { data: null, error: { message: "connection refused" } },
+    })
+
+    expect(await getStaffUser(client)).toEqual({ ok: false, error: "unavailable" })
+  })
+})
+
+describe("requirePermission", () => {
+  it("returns the staff member when their role holds the permission", async () => {
+    const { client } = fakeSupabase()
+
+    expect(await requirePermission(client, "staff.administer")).toEqual({ ok: true, data: MANAGER })
+  })
+
+  it("is forbidden when their role does not hold the permission", async () => {
+    const { client } = fakeSupabase()
+
+    expect(await requirePermission(client, "payments.record")).toEqual({ ok: false, error: "forbidden" })
+  })
+
+  it("passes on why a session is not a usable staff member", async () => {
+    const { client } = fakeSupabase({ sessionUser: false })
+
+    expect(await requirePermission(client, "leads.view")).toEqual({ ok: false, error: "signed-out" })
+  })
+
+  it("fails closed when the check cannot run", async () => {
+    const { client } = fakeSupabase({
+      staffRecord: { data: null, error: { message: "connection refused" } },
+    })
+
+    expect(await requirePermission(client, "leads.view")).toEqual({ ok: false, error: "unavailable" })
   })
 })

@@ -6,11 +6,12 @@ import { useActionState, useState } from "react"
 
 import { signIn, type SignInState } from "./actions"
 
-export type LoginNotice = "invalid-link" | "not-on-allowlist"
+export type LoginNotice = "invalid-link" | "not-staff" | "deactivated" | "unavailable"
 
 const MESSAGES: Record<NonNullable<SignInState>["error"] | LoginNotice, string> = {
   "invalid-credentials": "Wrong email or password.",
-  "not-on-allowlist": "This email does not have staff access. Ask an administrator to add it.",
+  "not-staff": "This account is not on the staff list. Ask an Admissions Manager to invite you.",
+  deactivated: "Your staff account is deactivated. Ask an Admissions Manager to reactivate it.",
   unavailable: "Sign-in is unavailable right now. Try again in a moment.",
   "invalid-link": "That sign-in link is invalid or has expired.",
 }

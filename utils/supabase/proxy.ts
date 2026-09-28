@@ -5,7 +5,7 @@ import { supabaseEnv } from "./env"
 
 // Refreshes the Supabase session cookie on the auth-bound routes and sends visitors
 // with no session away from staff pages. The guard here is optimistic only:
-// the staff pages confirm the allowlist themselves through getStaffUser.
+// the staff pages confirm the staff record themselves through getStaffUser.
 export async function refreshSessionAndGuardStaffRoutes(request: NextRequest) {
   let response = NextResponse.next({ request })
   const { url, publishableKey } = supabaseEnv()

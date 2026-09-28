@@ -14,7 +14,7 @@ import {
 // A stand-in for the Supabase SDK: `rpc` answers with the given error, the
 // way PostgREST reports a `raise exception` (message and details).
 function fakeSupabase(error: { message: string; details?: string | null; code?: string } | null = null) {
-  const rpc = vi.fn().mockResolvedValue({ data: null, error })
+  const rpc = vi.fn().mockResolvedValue({ data: error ? null : { name: "Baraka Said", role: "Accountant" }, error })
   return { client: { rpc } as unknown as SupabaseClient, rpc }
 }
 
@@ -26,7 +26,10 @@ describe("the staff-admin writes", () => {
   it("call the guardrailed database function for each change", async () => {
     const { client, rpc } = fakeSupabase()
 
-    expect(await assignRole(client, "staff-1", "role-1")).toEqual({ ok: true, data: null })
+    expect(await assignRole(client, "staff-1", "role-1")).toEqual({
+      ok: true,
+      data: { name: "Baraka Said", role: "Accountant" },
+    })
     await deactivateStaff(client, "staff-1")
     await reactivateStaff(client, "staff-1")
     await correctStaffName(client, "staff-1", "Zawadi Mrisho")

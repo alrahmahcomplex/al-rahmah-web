@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { Client } from "pg"
+
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "./db"
 import { ACCOUNTANT, RETIRED_ROLE } from "./fixtures"
 
@@ -107,9 +109,11 @@ test.describe("assign_staff_role", () => {
     const accountant = await roleId("Accountant")
     const before = (await auditRows(target.id)).length
 
-    const { error } = await client.rpc("assign_staff_role", { staff_id: target.id, role_id: accountant })
+    const { data, error } = await client.rpc("assign_staff_role", { staff_id: target.id, role_id: accountant })
 
     expect(error).toBeNull()
+    // The names as they stand after the change, for the screen's confirmation.
+    expect(data).toEqual({ name: target.name, role: "Accountant" })
     expect((await staffRow(target.id)).role_id).toBe(accountant)
     expect((await auditRows(target.id)).slice(before)).toEqual([
       {
@@ -281,9 +285,13 @@ test.describe("correct_staff_name", () => {
     const { person: manager, client } = await administrator()
     const target = await createThrowawayStaff(["leads.view"])
 
-    const { error } = await client.rpc("correct_staff_name", { staff_id: target.id, full_name: "  Zawadi Mrisho " })
+    const { data, error } = await client.rpc("correct_staff_name", {
+      staff_id: target.id,
+      full_name: "  Zawadi Mrisho ",
+    })
 
     expect(error).toBeNull()
+    expect(data).toEqual({ name: "Zawadi Mrisho", role: target.roleName })
     expect((await staffRow(target.id)).full_name).toBe("Zawadi Mrisho")
     expect((await auditRows(target.id)).at(-1)).toMatchObject({
       old_values: { full_name: target.name },
@@ -340,5 +348,52 @@ test.describe("no_administrator_left", () => {
         rows.slice(1).map((row) => row.id),
       ])
     })
+  })
+
+  // Two removals that each leave an administrator behind must not count at
+  // the same time, or both could pass and leave nobody. The second waits for
+  // the first to finish. Both roll back, so the seeded administrators are
+  // never actually removed while other tests run.
+  test("a second administrator removal waits for the first to finish before counting", async () => {
+    const [{ person: first }, { person: second }] = await Promise.all([administrator(), administrator()])
+    const connect = async () => {
+      const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+      await sql.connect()
+      await sql.query("begin")
+      await sql.query("select public.set_audit_actor('system')")
+      return sql
+    }
+    const one = await connect()
+    const two = await connect()
+    try {
+      await one.query("update public.staff_members set active = false where id = $1", [first.id])
+
+      const { rows } = await two.query<{ pid: number }>("select pg_backend_pid() as pid")
+      let secondDone = false
+      const secondRemoval = two
+        .query("update public.staff_members set active = false where id = $1", [second.id])
+        .then(() => (secondDone = true))
+
+      const waiting = async () => {
+        const probe = await inRolledBackTransaction((sql) =>
+          sql.query<{ waiting: boolean }>(
+            "select exists (select 1 from pg_locks where pid = $1 and locktype = 'advisory' and not granted) as waiting",
+            [rows[0].pid],
+          ),
+        )
+        return probe.rows[0].waiting
+      }
+      await expect.poll(waiting).toBe(true)
+      expect(secondDone).toBe(false)
+
+      await one.query("rollback")
+      await secondRemoval
+      expect(secondDone).toBe(true)
+    } finally {
+      await one.query("rollback").catch(() => {})
+      await two.query("rollback").catch(() => {})
+      await one.end()
+      await two.end()
+    }
   })
 })

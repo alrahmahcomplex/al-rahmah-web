@@ -121,8 +121,26 @@ $$;
 
 revoke execute on function public.require_staff_administrator() from public, anon, authenticated;
 
+-- What each write function returns: the person's name and role as they
+-- stand after the change, so the screen's confirmation never repeats a name
+-- someone else has just corrected.
+create function public.staff_member_names(staff_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select jsonb_build_object('name', s.full_name, 'role', r.name)
+    from public.staff_members s
+    join public.roles r on r.id = s.role_id
+    where s.id = staff_member_names.staff_id;
+$$;
+
+revoke execute on function public.staff_member_names(uuid) from public, anon, authenticated;
+
 create function public.assign_staff_role(staff_id uuid, role_id uuid)
-returns void
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
@@ -154,11 +172,12 @@ begin
     end if;
 
     update public.staff_members set role_id = new_role.id where id = target.id;
+    return public.staff_member_names(target.id);
 end;
 $$;
 
 create function public.deactivate_staff_member(staff_id uuid)
-returns void
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
@@ -180,11 +199,12 @@ begin
     end if;
 
     update public.staff_members set active = false where id = target.id;
+    return public.staff_member_names(target.id);
 end;
 $$;
 
 create function public.reactivate_staff_member(staff_id uuid)
-returns void
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
@@ -210,13 +230,14 @@ begin
     end if;
 
     update public.staff_members set active = true where id = target.id;
+    return public.staff_member_names(target.id);
 end;
 $$;
 
 -- A typo in a name should not stay on the history forever. Anyone who
 -- administers staff may correct any name, their own included.
 create function public.correct_staff_name(staff_id uuid, full_name text)
-returns void
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
@@ -234,6 +255,7 @@ begin
     if not found then
         raise exception 'not_found';
     end if;
+    return public.staff_member_names(correct_staff_name.staff_id);
 end;
 $$;
 

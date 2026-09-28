@@ -72,10 +72,17 @@ export function refusalFromError(error: { message: string; details?: string | nu
   return refusal(error.message as RefusalCode, names)
 }
 
-async function write(supabase: SupabaseClient, fn: string, args: Record<string, unknown>): Promise<Result<null, Refusal>> {
-  const { error } = await supabase.rpc(fn, args)
+// The person's name and role as they stand after a change.
+export type StaffNames = { name: string; role: string }
+
+async function write(
+  supabase: SupabaseClient,
+  fn: string,
+  args: Record<string, unknown>,
+): Promise<Result<StaffNames, Refusal>> {
+  const { data, error } = await supabase.rpc(fn, args)
   if (error) return { ok: false, error: refusalFromError(error) }
-  return { ok: true, data: null }
+  return { ok: true, data: data as StaffNames }
 }
 
 // ---------------------------------------------------------------------------

@@ -174,7 +174,7 @@ function PersonRow({
   const [renaming, setRenaming] = useState(false)
 
   const move = (target: RoleOption) => {
-    const change = () => moveStaffMember(person.id, target.id, { name: person.name, role: target.name })
+    const change = () => moveStaffMember(person.id, target.id)
     if (person.administers && !target.administers) {
       confirm({
         title: `Move ${person.name} to ${target.name}?`,
@@ -188,7 +188,7 @@ function PersonRow({
   }
 
   const deactivate = () => {
-    const change = () => deactivateStaffMember(person.id, person.name)
+    const change = () => deactivateStaffMember(person.id)
     if (person.administers) {
       confirm({
         title: `Deactivate ${person.name}?`,
@@ -252,7 +252,7 @@ function PersonRow({
               size="sm"
               disabled={pending || person.reactivateBlocked !== null}
               aria-describedby={person.reactivateBlocked ? describedBy : undefined}
-              onClick={() => run(() => reactivateStaffMember(person.id, person.name))}
+              onClick={() => run(() => reactivateStaffMember(person.id))}
             >
               Reactivate
             </Button>

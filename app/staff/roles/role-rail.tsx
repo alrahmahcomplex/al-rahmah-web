@@ -39,13 +39,10 @@ export function RoleRail({
                     <span className="text-xs font-normal text-muted-foreground">Your role</span>
                   )}
                 </span>
-                {role.retired ? (
-                  <Badge variant="ghost">Retired</Badge>
-                ) : (
-                  <Badge variant="secondary" aria-label={`${role.activeHolders} active`}>
-                    {role.activeHolders}
-                  </Badge>
-                )}
+                {role.retired && <Badge variant="ghost">Retired</Badge>}
+                <Badge variant="secondary" aria-label={`${role.activeHolders} active`}>
+                  {role.activeHolders}
+                </Badge>
               </Link>
             </li>
           )

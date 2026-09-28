@@ -40,7 +40,6 @@ Next.js App Router (TypeScript), Tailwind v4, shadcn (`base-nova`), Supabase (da
 ## Data and evidence
 
 - Schema changes are files in `supabase/migrations/`, tested against local Supabase. Hosted databases change only through the Supabase GitHub integration on merge; agents hold no hosted database credentials.
-- Every checkout has its own local Supabase, so a `db reset` never touches another agent's data. `npm run db:start` gives the main checkout slot 0 and a worktree one of three slots, with its own ports and only the containers the app uses. It writes the checkout's `.env.local`, including `E2E_PORT`, and prints the dev-server port. `npm run db:reset` re-mirrors the branch's migrations before resetting. `npm run db:status` shows who holds each slot. Run `npm run db:stop` when your session ends. If every slot is taken, wait or ask the human; never stop another worktree's stack. `npm run db:start -- --full` adds Studio and the rest when you need them.
 - Real family and student records stay out of git and out of evidence. Screens, recordings and tests use the seeded fixture data and the seeded test account.
 - Upload images with `IMAGE_ADAPTER=gist`. Post videos through the PR comment box in the signed-in browser.
 
@@ -63,7 +62,7 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 - Before starting, scope-check open PRs (`gh pr list`, `gh pr diff <n> --name-only`). On overlap, stop and ask.
 - Force-push only with `--force-with-lease`, only on your own branch.
 - Regenerate lockfiles on conflict (`npm install`).
-- Confirm a dev-server port answers *your* process before trusting it. Use the port `npm run db:start` printed for your checkout.
+- Confirm a dev-server port answers *your* process before trusting it.
 - If a conflict can't be resolved confidently, stop and report.
 
 ## Completing a task
@@ -71,7 +70,7 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 1. Keep changes to the assigned task.
 2. Run the checks.
 3. Assemble before/after pairs from the evidence captured along the way.
-4. Commit, rebase onto `origin/main`, rerun the checks. Add the changelog entry under `## Unreleased` (see *Releasing*).
+4. Commit, rebase onto `origin/main`, rerun the checks.
 5. `git push -u origin <branch>` (`--force-with-lease` after rebasing a pushed branch).
 6. Open the PR: what changed, how it was tested (every claim backed by evidence), before/after proof, risks and follow-ups. Run the title and body through `unslop`.
 7. `greploop` to 5/5 with zero unresolved comments.
@@ -79,10 +78,10 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 
 ## Releasing
 
-Every merge to `main` is a release: it carries a SemVer tag and a `CHANGELOG.md` entry. A merge without both is unfinished work. Parallel PRs would all claim the same version, so a PR carries its entry under an `## Unreleased` heading at the top of `CHANGELOG.md`, and the version is settled only when the PR is about to merge. On a rebase conflict in `## Unreleased`, keep every entry.
+Every merge to `main` is a release: it carries a SemVer tag and a `CHANGELOG.md` entry. A merge without both is unfinished work. Add the changelog entry to the PR before merging, so the tag contains the entry that describes it.
 
-1. Once the human approves the merge, rebase onto `origin/main` and pick the version from the latest tag. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
-2. Turn this PR's `## Unreleased` entry into a date heading carrying the version (newest at the top), commit, push, and rerun the checks. The entry has only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
+1. Pick the version. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
+2. Write the entry, newest at the top, as a date heading carrying the version, then only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
 3. Merge the PR with a message that says what the change does.
 4. Tag the merge commit on `main`, annotated, message `<version>: <one line>`, then `git push origin <version>`.
 5. Give the human the tag and the release entry alongside the merged PR URL.

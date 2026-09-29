@@ -368,6 +368,13 @@ const ACTOR_KINDS: Record<string, string> = {
 // Bookkeeping columns that say nothing on a newly created row.
 const HIDDEN_ON_INSERT = new Set(["id", "created_at", "notices_seen_at"])
 
+// The school is in Tanzania, so times read in East Africa Time.
+const HISTORY_TIME = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Africa/Dar_es_Salaam",
+})
+
 function raw(value: unknown): string | null {
   if (value === null || value === undefined) return null
   return typeof value === "string" ? value : JSON.stringify(value)
@@ -388,6 +395,8 @@ function describeField(key: string, value: unknown, lookup: HistoryLookup): Hist
       return value ? "Retired" : "Current"
     case "user_id":
       return "Linked"
+    case "notices_seen_at":
+      return HISTORY_TIME.format(new Date(String(value)))
     case "permissions":
       return Array.isArray(value)
         ? value.map((p) => lookup.permissionLabels.get(String(p)) ?? String(p)).join(", ") || "None"
@@ -471,4 +480,68 @@ export async function getStaffAdminHistory(
     permissionLabels: new Map(staffAndRoles.permissions.map((p) => [p.name, p.label])),
   }
   return { ok: true, data: ((data ?? []) as AuditRow[]).map((row) => describeAuditRow(row, lookup)) }
+}
+
+// ---------------------------------------------------------------------------
+// Sign-in notices (ADR 4): changes to the signed-in person's own role or
+// active state that someone else made since they last dismissed them.
+// ---------------------------------------------------------------------------
+
+export type NoticeRow = {
+  id: number
+  created_at: string
+  actor_kind: string
+  actor_name: string | null
+  // Empty when the role didn't change.
+  old_role: string | null
+  new_role: string | null
+  // Empty when the active state didn't change.
+  active: boolean | null
+}
+
+export type Notice = { id: number; at: string; message: string }
+
+const NOTICE_ACTORS: Record<string, string> = {
+  system: "The system",
+  public_form: "The admission form",
+  workbook_import: "The workbook import",
+}
+
+// The school is in Tanzania, so dates read in East Africa Time.
+const NOTICE_DATE = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "Africa/Dar_es_Salaam" })
+
+export function describeNotice(row: NoticeRow): string {
+  const actor =
+    row.actor_name ?? NOTICE_ACTORS[row.actor_kind] ?? (row.actor_kind === "staff" ? "A former staff member" : row.actor_kind)
+
+  const changes: string[] = []
+  if (row.old_role !== null || row.new_role !== null) {
+    changes.push(`changed your role from ${row.old_role ?? "a removed role"} to ${row.new_role ?? "a removed role"}`)
+  }
+  if (row.active !== null) changes.push(row.active ? "reactivated your account" : "deactivated your account")
+
+  return `${actor} ${changes.join(" and ")} on ${NOTICE_DATE.format(new Date(row.created_at))}.`
+}
+
+export async function getMyNotices(supabase: SupabaseClient): Promise<Result<Notice[], "unavailable">> {
+  const { data, error } = await supabase.rpc("my_notices")
+  if (error) {
+    console.error("Could not read the signed-in staff member's notices", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return {
+    ok: true,
+    data: ((data ?? []) as NoticeRow[]).map((row) => ({ id: row.id, at: row.created_at, message: describeNotice(row) })),
+  }
+}
+
+// Dismisses through the newest notice the person was shown, so one that
+// arrived since stays for next time.
+export async function dismissNotices(supabase: SupabaseClient, through: number): Promise<Result<null, "unavailable">> {
+  const { error } = await supabase.rpc("dismiss_notices", { through })
+  if (error) {
+    console.error("Could not dismiss notices", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: null }
 }

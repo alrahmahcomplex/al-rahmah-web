@@ -54,3 +54,7 @@ The permission list in `CONTEXT.md` fixes the names this ADR described in words.
 `actor_kind` gains a fourth value, `system`, for writes that no person or product makes: a migration, and the SQL editor when bootstrapping the first staff member. ADR 3 says the Admissions Manager role changes only through a reviewed migration, and this ADR refuses an audited write with no actor, so those writes need one. They call `set_audit_actor('system')` first, in the same transaction. Linking a new account to its staff record, which the sign-up trigger on `auth.users` does, is also recorded as `system`.
 
 The starting roles are seeded before the audit triggers are attached, so they have no insert rows. Every later change to them is audited.
+
+## Amendment, 2026-09-29: audit rows take the time they are written
+
+`audit_log.created_at` is `clock_timestamp()`, the moment the row is written, rather than the start of its transaction. A write to a record holds that record's row lock until it commits, so the audit rows about one record are timed in the order they commit. Sign-in notices rely on this. Dismissing notices sets `notices_seen_at` to the time of the newest notice the person was shown. With transaction-start times, a change that began before that notice but committed after the dismissal would be timed earlier and never shown.

@@ -300,7 +300,7 @@ test.describe("audit log", () => {
 
       const { rows } = await sql.query(
         `select table_name, row_id, lead_id, action, old_values, new_values, scope, actor_kind, actor_staff_id
-         from public.audit_log where row_id = $1 and created_at = now()`,
+         from public.audit_log where row_id = $1 and created_at >= now()`,
         [ADMISSIONS.id],
       )
       expect(rows).toEqual([
@@ -340,7 +340,7 @@ test.describe("audit log", () => {
       await sql.query("select public.set_audit_actor('system')")
       await sql.query("update public.staff_members set full_name = full_name where id = $1", [ADMISSIONS.id])
 
-      const { rows } = await sql.query("select 1 from public.audit_log where row_id = $1 and created_at = now()", [
+      const { rows } = await sql.query("select 1 from public.audit_log where row_id = $1 and created_at >= now()", [
         ADMISSIONS.id,
       ])
       expect(rows).toEqual([])
@@ -356,7 +356,7 @@ test.describe("audit log", () => {
       await sql.query("update public.staff_members set full_name = 'Corrected Name' where id = $1", [ADMISSIONS.id])
 
       const { rows } = await sql.query(
-        "select actor_kind, actor_staff_id from public.audit_log where row_id = $1 and created_at = now()",
+        "select actor_kind, actor_staff_id from public.audit_log where row_id = $1 and created_at >= now()",
         [ADMISSIONS.id],
       )
       expect(rows).toEqual([{ actor_kind: "staff", actor_staff_id: MANAGER.id }])

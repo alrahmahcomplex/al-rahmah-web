@@ -185,6 +185,19 @@ describe("describeAuditRow", () => {
     ])
   })
 
+  it("shows a dismissal of sign-in notices as a date in East Africa Time", () => {
+    expect(
+      describeAuditRow(
+        row({
+          actor_staff_id: "baraka",
+          old_values: { notices_seen_at: "2026-09-24T09:00:00+00:00" },
+          new_values: { notices_seen_at: "2026-09-29T10:00:00.123456+00:00" },
+        }),
+        lookup,
+      ).changes,
+    ).toEqual([{ field: "notices read", from: "24 Sept 2026, 12:00", to: "29 Sept 2026, 13:00" }])
+  })
+
   it("shows keys it does not know raw instead of dropping them", () => {
     expect(
       describeAuditRow(row({ old_values: { shift: "morning" }, new_values: { shift: { days: 5 } } }), lookup).changes,

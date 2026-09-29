@@ -195,6 +195,7 @@ export function RolePane({
                 roleName={role.name}
                 pending={pending}
                 run={run}
+                report={setOutcome}
                 confirm={setConfirmation}
               />
             ))}
@@ -212,7 +213,8 @@ export function RolePane({
         label="Role name"
         defaultValue={role.name}
         submit="Save name"
-        onSave={(name) => run(() => renameRoleTo(role.id, name))}
+        save={(name) => renameRoleTo(role.id, name)}
+        onSaved={setOutcome}
       />
 
       <AlertDialog open={confirmation !== null} onOpenChange={(open) => !open && setConfirmation(null)}>
@@ -243,12 +245,14 @@ function PersonRow({
   roleName,
   pending,
   run,
+  report,
   confirm,
 }: {
   person: PersonView
   roleName: string
   pending: boolean
   run: Run
+  report: (outcome: ChangeOutcome) => void
   confirm: (confirmation: PendingConfirmation) => void
 }) {
   const reasonsId = useId()
@@ -360,13 +364,17 @@ function PersonRow({
         label="Full name"
         defaultValue={person.name}
         submit="Save name"
-        onSave={(fullName) => run(() => correctStaffMemberName(person.id, fullName))}
+        save={(fullName) => correctStaffMemberName(person.id, fullName)}
+        onSaved={report}
       />
     </li>
   )
 }
 
 // One text field in a dialog: correcting a person's name, renaming a role.
+// It stays open until the save lands. A refusal (a name another role has)
+// shows inside it, so the typed name can be fixed in place; a success
+// closes it and goes to the pane's callout.
 function NameDialog({
   open,
   onOpenChange,
@@ -375,7 +383,8 @@ function NameDialog({
   label,
   defaultValue,
   submit,
-  onSave,
+  save,
+  onSaved,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -384,19 +393,36 @@ function NameDialog({
   label: string
   defaultValue: string
   submit: string
-  onSave: (name: string) => void
+  save: (name: string) => Promise<ChangeOutcome>
+  onSaved: (outcome: ChangeOutcome) => void
 }) {
   const inputId = useId()
+  const errorId = useId()
+  const [error, setError] = useState<string | null>(null)
+  const [saving, startSaving] = useTransition()
+
+  const changeOpen = (next: boolean) => {
+    if (!next) setError(null)
+    onOpenChange(next)
+  }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent>
         <form
           className="grid gap-4"
           onSubmit={(event) => {
             event.preventDefault()
-            onSave(String(new FormData(event.currentTarget).get("name") ?? ""))
-            onOpenChange(false)
+            const name = String(new FormData(event.currentTarget).get("name") ?? "")
+            startSaving(async () => {
+              const outcome = await save(name)
+              if (!outcome.ok) {
+                setError(outcome.message)
+                return
+              }
+              changeOpen(false)
+              onSaved(outcome)
+            })
           }}
         >
           <DialogHeader>
@@ -405,13 +431,28 @@ function NameDialog({
           </DialogHeader>
           <div className="grid gap-2">
             <Label htmlFor={inputId}>{label}</Label>
-            <Input id={inputId} name="name" defaultValue={defaultValue} required autoComplete="off" />
+            <Input
+              id={inputId}
+              name="name"
+              defaultValue={defaultValue}
+              required
+              autoComplete="off"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : undefined}
+            />
+            {error && (
+              <p id={errorId} role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => changeOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">{submit}</Button>
+            <Button type="submit" disabled={saving}>
+              {submit}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

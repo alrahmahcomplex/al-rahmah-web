@@ -159,6 +159,10 @@ begin
     if set_role_permission.permission = 'staff.administer' then
         raise exception 'administer_role_frozen';
     end if;
+    -- A missing answer must never fall through to the removal branch.
+    if set_role_permission.granted is null then
+        raise exception 'granted_required';
+    end if;
 
     update public.roles
     set permissions = case

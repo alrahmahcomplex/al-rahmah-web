@@ -277,6 +277,18 @@ test.describe("set_role_permission", () => {
     expect((await roleRow(role.id)).permissions).toEqual([])
   })
 
+  test("a missing granted value is refused instead of removing the permission", async () => {
+    const { client } = await administrator()
+    const role = await newRole(client)
+    await client.rpc("set_role_permission", { role_id: role.id, permission: "leads.view", granted: true })
+
+    expectRefusal(
+      await client.rpc("set_role_permission", { role_id: role.id, permission: "leads.view", granted: null }),
+      "granted_required",
+    )
+    expect((await roleRow(role.id)).permissions).toEqual(["leads.view"])
+  })
+
   test("administer_role_frozen: Administer staff and roles is never granted on the screen", async () => {
     const { client } = await administrator()
     const role = await newRole(client)

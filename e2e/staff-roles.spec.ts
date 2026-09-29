@@ -296,6 +296,26 @@ test.describe("shaping roles", () => {
     await expect(callout(page)).toHaveAttribute("role", "alert")
   })
 
+  test("a refused rename keeps the dialog open with the typed name, to fix in place", async ({ page }) => {
+    const role = await systemRole()
+    await signIn(page, MANAGER)
+    await page.goto(`/staff/roles?role=${role.id}`)
+
+    await page.getByRole("button", { name: "Rename" }).click()
+    const dialog = page.getByRole("dialog")
+    await dialog.getByLabel("Role name").fill("accountant")
+    await dialog.getByRole("button", { name: "Save name" }).click()
+
+    await expect(dialog.getByRole("alert")).toHaveText('A role called "accountant" already exists.')
+    await expect(dialog.getByLabel("Role name")).toHaveValue("accountant")
+
+    const fixed = uniqueName("Accounts desk")
+    await dialog.getByLabel("Role name").fill(fixed)
+    await dialog.getByRole("button", { name: "Save name" }).click()
+    await expect(dialog).toBeHidden()
+    await expect(callout(page)).toHaveText(`Renamed the role to ${fixed}.`)
+  })
+
   test("a role is renamed, then retired", async ({ page }) => {
     const role = await systemRole()
     const renamed = uniqueName("Renamed")

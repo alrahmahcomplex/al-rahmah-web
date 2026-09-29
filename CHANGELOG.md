@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- On Staff and roles, an Admissions Manager can add a role with **New role** at the
+  bottom of the list. It starts with nothing ticked.
+- A Manager can rename a role and tick or untick what it can do. Changes apply to
+  everyone in the role on their next click.
+- A Manager can retire a role nobody active holds. It drops out of the choices and
+  stays in history. If someone active still holds it, the screen names them.
+- A role's heading says when it can't be changed: it's your own role, it's retired, or
+  it can manage staff and roles. Those roles change only through a reviewed update to
+  the system, and "Administer staff and roles" can't be ticked on any role.
+
 ## September 29, 2026 `v0.3.2`
 
 ### FIXED

@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import type { RoleSummary } from "@/lib/services/staff-admin"
 import { cn } from "@/lib/utils"
 
+import { NewRoleForm } from "./new-role-form"
+
 // Every role, with how many active staff hold it. Selecting one opens it in
 // the pane beside the rail. On a phone the rail is a strip that scrolls
 // sideways, so the selected role's pane stays in view below it.
@@ -48,6 +50,7 @@ export function RoleRail({
           )
         })}
       </ul>
+      <NewRoleForm />
     </nav>
   )
 }

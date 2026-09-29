@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckIcon, ChevronDownIcon, CircleAlertIcon, CircleCheckIcon, MinusIcon } from "lucide-react"
+import { ChevronDownIcon, CircleAlertIcon, CircleCheckIcon } from "lucide-react"
 import { useId, useState, useTransition } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -35,14 +36,17 @@ import {
   deactivateStaffMember,
   moveStaffMember,
   reactivateStaffMember,
+  renameRoleTo,
+  retireRoleNow,
+  setPermission,
   type ChangeOutcome,
 } from "./actions"
 import type { PersonView, RoleOption, RoleView } from "./view"
 
 type Run = (change: () => Promise<ChangeOutcome>) => void
 
-// A change that takes "Administer staff and roles" from a fellow Manager
-// waits here until the person confirms it.
+// A change that takes "Administer staff and roles" from a fellow Manager, or
+// retires a role, waits here until the person confirms it.
 type PendingConfirmation = { title: string; description: string; action: string; change: () => Promise<ChangeOutcome> }
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
@@ -60,7 +64,12 @@ export function RolePane({
 }) {
   const [outcome, setOutcome] = useState<ChangeOutcome | null>(null)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
+  const [renaming, setRenaming] = useState(false)
   const [pending, startTransition] = useTransition()
+  const subtitleId = useId()
+  const retireReasonId = useId()
+  const administerNoteId = useId()
+  const permissionIdPrefix = useId()
 
   const run: Run = (change) => {
     startTransition(async () => {
@@ -80,37 +89,98 @@ export function RolePane({
         </Alert>
       )}
 
-      <header className="flex flex-col gap-1">
-        <h2 id="role-heading" className={cn("text-lg font-semibold", role.retired && "text-muted-foreground")}>
-          {role.name}
-        </h2>
-        <p className="text-sm text-muted-foreground">{role.subtitle}</p>
+      <header className="flex flex-wrap items-start gap-x-4 gap-y-2">
+        <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
+          <h2 id="role-heading" className={cn("text-lg font-semibold break-words", role.retired && "text-muted-foreground")}>
+            {role.name}
+          </h2>
+          <p id={subtitleId} className="text-sm text-muted-foreground">
+            {role.subtitle}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending || !role.editable}
+            aria-describedby={role.editable ? undefined : subtitleId}
+            onClick={() => setRenaming(true)}
+          >
+            Rename
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={pending || !role.editable || role.retireBlocked !== null}
+            aria-describedby={role.editable ? (role.retireBlocked ? retireReasonId : undefined) : subtitleId}
+            onClick={() =>
+              setConfirmation({
+                title: `Retire ${role.name}?`,
+                description: `Nobody can be given ${role.name} once it is retired, and it can't be brought back. It stays in history, with the people who held it.`,
+                action: "Retire role",
+                change: () => retireRoleNow(role.id),
+              })
+            }
+          >
+            Retire role
+          </Button>
+        </div>
+        {role.retireBlocked && (
+          <p id={retireReasonId} className="basis-full text-xs text-muted-foreground">
+            {role.retireBlocked}
+          </p>
+        )}
       </header>
 
-      <div>
-        <SectionHeading>What this role can do</SectionHeading>
+      <fieldset aria-describedby={role.editable ? undefined : subtitleId}>
+        <legend className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          What this role can do
+        </legend>
         <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
           {permissions.map((permission) => {
             const held = role.permissions.includes(permission.name)
+            const administer = permission.name === "staff.administer"
+            const checkboxId = `${permissionIdPrefix}-${permission.name}`
             return (
-              <li
-                key={permission.name}
-                className={cn("flex items-start gap-2 py-0.5 text-sm", !held && "text-muted-foreground")}
-              >
-                {held ? (
-                  <CheckIcon className="mt-0.5 size-4 shrink-0 text-blue-600" aria-hidden />
-                ) : (
-                  <MinusIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-                )}
-                <span>
-                  {permission.label}
-                  <span className="sr-only">{held ? " (included)" : " (not included)"}</span>
+              <li key={permission.name} className="flex items-start gap-2 py-1 text-sm">
+                <Checkbox
+                  id={checkboxId}
+                  // Base UI marks a disabled checkbox with data-disabled, not :disabled.
+                  className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
+                  checked={held}
+                  disabled={pending || !role.editable || administer}
+                  aria-describedby={administer ? administerNoteId : undefined}
+                  onCheckedChange={(granted) =>
+                    run(async () => {
+                      const outcome = await setPermission(role.id, permission.name, granted)
+                      if (!outcome.ok) return outcome
+                      return {
+                        ok: true,
+                        message: granted
+                          ? `${role.name} can now: ${permission.label}.`
+                          : `${role.name} can no longer: ${permission.label}.`,
+                      }
+                    })
+                  }
+                />
+                <span className="flex flex-col gap-0.5">
+                  <Label
+                    htmlFor={checkboxId}
+                    className={cn("font-normal", !held && "text-muted-foreground")}
+                  >
+                    {permission.label}
+                  </Label>
+                  {administer && (
+                    <span id={administerNoteId} className="text-xs text-muted-foreground">
+                      Only a reviewed update to the system can give or take this.
+                    </span>
+                  )}
                 </span>
               </li>
             )
           })}
         </ul>
-      </div>
+      </fieldset>
 
       <div>
         <SectionHeading>People in this role</SectionHeading>
@@ -133,6 +203,17 @@ export function RolePane({
       </div>
 
       {children}
+
+      <NameDialog
+        open={renaming}
+        onOpenChange={setRenaming}
+        title={`Rename ${role.name}`}
+        description="The new name shows everywhere, history included. Everyone in the role keeps what it can do."
+        label="Role name"
+        defaultValue={role.name}
+        submit="Save name"
+        onSave={(name) => run(() => renameRoleTo(role.id, name))}
+      />
 
       <AlertDialog open={confirmation !== null} onOpenChange={(open) => !open && setConfirmation(null)}>
         <AlertDialogContent>
@@ -271,29 +352,39 @@ function PersonRow({
         </ul>
       )}
 
-      <CorrectNameDialog
+      <NameDialog
         open={renaming}
         onOpenChange={setRenaming}
-        person={person}
-        roleName={roleName}
+        title={`Correct ${person.name}'s name`}
+        description={`${person.email} · ${roleName}. The corrected name shows everywhere, history included.`}
+        label="Full name"
+        defaultValue={person.name}
+        submit="Save name"
         onSave={(fullName) => run(() => correctStaffMemberName(person.id, fullName))}
       />
     </li>
   )
 }
 
-function CorrectNameDialog({
+// One text field in a dialog: correcting a person's name, renaming a role.
+function NameDialog({
   open,
   onOpenChange,
-  person,
-  roleName,
+  title,
+  description,
+  label,
+  defaultValue,
+  submit,
   onSave,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  person: PersonView
-  roleName: string
-  onSave: (fullName: string) => void
+  title: string
+  description: string
+  label: string
+  defaultValue: string
+  submit: string
+  onSave: (name: string) => void
 }) {
   const inputId = useId()
 
@@ -304,25 +395,23 @@ function CorrectNameDialog({
           className="grid gap-4"
           onSubmit={(event) => {
             event.preventDefault()
-            onSave(String(new FormData(event.currentTarget).get("full_name") ?? ""))
+            onSave(String(new FormData(event.currentTarget).get("name") ?? ""))
             onOpenChange(false)
           }}
         >
           <DialogHeader>
-            <DialogTitle>Correct {person.name}&apos;s name</DialogTitle>
-            <DialogDescription>
-              {person.email} · {roleName}. The corrected name shows everywhere, history included.
-            </DialogDescription>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            <Label htmlFor={inputId}>Full name</Label>
-            <Input id={inputId} name="full_name" defaultValue={person.name} required autoComplete="off" />
+            <Label htmlFor={inputId}>{label}</Label>
+            <Input id={inputId} name="name" defaultValue={defaultValue} required autoComplete="off" />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit">Save name</Button>
+            <Button type="submit">{submit}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

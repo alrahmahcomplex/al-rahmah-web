@@ -62,6 +62,31 @@ describe("roleView", () => {
     expect(roleView(DATA, "accountant", "me")!.subtitle).toBe("Changes apply to everyone in this role immediately.")
   })
 
+  it("closes to editing the viewer's role, a role that administers staff, and a retired role", () => {
+    expect(roleView(DATA, "manager", "me")).toMatchObject({ editable: false, retireBlocked: null })
+    expect(roleView(DATA, "manager", "neema")).toMatchObject({ editable: false, retireBlocked: null })
+    expect(roleView(DATA, "receptionist", "me")).toMatchObject({ editable: false, retireBlocked: null })
+  })
+
+  it("keeps a role open to editing when nothing closes it", () => {
+    expect(roleView(DATA, "accountant", "me")).toMatchObject({ editable: true })
+  })
+
+  it("blocks retiring a role active staff hold, naming them", () => {
+    expect(roleView(DATA, "accountant", "me")!.retireBlocked).toBe(
+      "Accountant is still held by Neema Mushi. Move them to another role first.",
+    )
+  })
+
+  it("lets a role be retired once only deactivated staff hold it", () => {
+    const data: StaffAndRoles = {
+      ...DATA,
+      staff: DATA.staff.map((s) => (s.id === "neema" ? { ...s, active: false } : s)),
+    }
+
+    expect(roleView(data, "accountant", "me")).toMatchObject({ editable: true, retireBlocked: null })
+  })
+
   it("is empty for a role that does not exist", () => {
     expect(roleView(DATA, "missing", "me")).toBeNull()
   })

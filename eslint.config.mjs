@@ -12,9 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Agent worktrees are full checkouts, each with its own .next build output.
+    // Agent folders. Worktrees under .claude/ and .worktrees/ are full
+    // checkouts, each with its own .next build output.
     ".claude/**",
     ".codex/**",
+    ".worktrees/**",
   ]),
 ]);
 

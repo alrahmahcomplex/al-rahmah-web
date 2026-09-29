@@ -5,6 +5,28 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Staff who can view leads now have **Check-in** in the staff navigation. Admissions
+  Staff and Admissions Managers see **New Student** there and can register a family who
+  walks in: the parent or guardian first, then the child, a review, and a confirmation
+  with the child's Admission Number in large type and a **Copy number** button.
+- The new lead starts at **Visited**. The Visit date starts as today in Tanzania and
+  can be moved earlier, never later.
+- Phone numbers are accepted the way families say them (`0712 345 678`, `712345678`,
+  `+255 712 345 678`, `255712345678`). A number that can't be read sends staff back to
+  the parent step with a message, and nothing is saved.
+- A child who is already on file, with the same name and a matching parent phone or
+  WhatsApp number, is refused with "Already registered", the existing Admission
+  Number and a link to that lead. Capital letters and extra spaces in the name don't
+  matter. If that lead is closed, the link goes to a page that shows it read-only and
+  says reopening isn't available yet.
+- Each lead has a read-only screen showing the student, the parent or guardian, the
+  status, the Visit date and the Admission Number. Accountants can read it too, but
+  see no New Student button.
+
 ## September 29, 2026 `v0.6.0`
 
 ### NEW

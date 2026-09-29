@@ -5,7 +5,7 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
-## Unreleased
+## September 29, 2026 `v0.5.0`
 
 ### NEW
 
@@ -17,7 +17,8 @@ stay in the `0.x` range.
 - If the email can't be sent, the person is still added and the screen says so, so
   the Manager can resend it later.
 - An invite link that has expired or was already used says so and asks for a new one.
-  Someone deactivated before they accept can't use their link.
+  Someone deactivated before they accept is told so, and can sign in with the password
+  they chose once they're reactivated.
 - History shows who sent each invite and who it went to.
 
 ## September 29, 2026 `v0.4.0`

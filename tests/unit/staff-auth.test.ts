@@ -57,7 +57,7 @@ function fakeSupabase({
       signOut,
       verifyOtp: vi.fn(async () => {
         calls.push("verifyOtp")
-        return { data: {}, error: verifyError }
+        return verifyError ? { data: { user: null }, error: verifyError } : { data: { user: { id: "invitee" } }, error: null }
       }),
       updateUser: vi.fn(async () => {
         calls.push("updateUser")
@@ -308,16 +308,28 @@ describe("acceptInvite", () => {
     expect(signOut).toHaveBeenCalled()
   })
 
-  it("keeps the session when the password can't be saved, and names the account for the retry", async () => {
-    const { client, signOut, calls } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
+  it("keeps the session when the password can't be saved, and names the account the token verified", async () => {
+    const { client, signOut, calls, auth } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
 
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({
       ok: false,
       error: "password-not-saved",
-      userId: "user",
+      userId: "invitee",
     })
+    // Taken from the verification itself, so no further call can fail first.
+    expect(auth.getUser).not.toHaveBeenCalled()
     expect(calls).toEqual(["verifyOtp", "updateUser"])
     expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("names the same account again when a retry's password save fails too", async () => {
+    const { client } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
+      ok: false,
+      error: "password-not-saved",
+      userId: "user",
+    })
   })
 
   it("on a retry for a link this browser already used, skips the spent token and sets the password", async () => {

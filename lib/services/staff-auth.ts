@@ -160,31 +160,32 @@ export async function acceptInvite(
 ): Promise<Result<StaffMember, AcceptInviteError> | { ok: false; error: "password-not-saved"; userId: string }> {
   if (password.length < MINIMUM_PASSWORD_LENGTH) return { ok: false, error: "password-too-short" }
 
+  // The account the link signed in: from the retry's cookie once the token
+  // is spent, otherwise from verifying the token.
+  let userId: string
   if (verifiedUserId) {
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user || user.id !== verifiedUserId) return { ok: false, error: "invalid-link" }
+    userId = user.id
   } else {
-    const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" })
-    if (verifyError) {
+    const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" })
+    if (verifyError || !verified.user) {
       // A 4xx means the link itself will not do; anything else is an outage,
       // and the unspent link still works on a retry.
-      const status = verifyError.status ?? 0
+      const status = verifyError?.status ?? 0
       if (status >= 400 && status < 500) return { ok: false, error: "invalid-link" }
       console.error("Could not check an invite link", verifyError)
       return { ok: false, error: "unavailable" }
     }
+    userId = verified.user.id
   }
 
   const { error: updateError } = await supabase.auth.updateUser({ password })
   if (updateError) {
     console.error("Accepted an invite but could not set the password", updateError)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return { ok: false, error: "invalid-link" }
-    return { ok: false, error: "password-not-saved", userId: user.id }
+    return { ok: false, error: "password-not-saved", userId }
   }
 
   const staff = await loadStaffMember(supabase)

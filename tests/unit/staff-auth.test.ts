@@ -308,11 +308,32 @@ describe("acceptInvite", () => {
     expect(signOut).toHaveBeenCalled()
   })
 
-  it("signs the person out when the password can't be saved", async () => {
+  it("keeps the session when the password can't be saved, so the same browser can try again", async () => {
     const { client, signOut, calls } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
 
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "password-not-saved" })
     expect(calls).toEqual(["verifyOtp", "updateUser"])
-    expect(signOut).toHaveBeenCalled()
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("on a retry for a link this browser already used, skips the spent token and sets the password", async () => {
+    const { client, calls, auth } = fakeSupabase()
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { alreadyVerified: true })).toEqual({
+      ok: true,
+      data: MANAGER,
+    })
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
+    expect(calls).toEqual(["updateUser", "current_staff_member"])
+  })
+
+  it("treats a retry with no session left as a spent link", async () => {
+    const { client, calls } = fakeSupabase({ sessionUser: false })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { alreadyVerified: true })).toEqual({
+      ok: false,
+      error: "invalid-link",
+    })
+    expect(calls).toEqual([])
   })
 })

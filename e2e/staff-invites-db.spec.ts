@@ -190,6 +190,36 @@ test.describe("who counts as Invited", () => {
   })
 })
 
+test.describe("an invited Manager and no_administrator_left", () => {
+  // Someone who has not accepted their invite can't sign in, so they can't
+  // administer anyone. Leaving only them would lock the school out.
+  test("removing every administrator who has joined is refused, even with an invited Manager waiting", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("lock table public.staff_members in exclusive mode")
+      await sql.query(
+        `insert into public.staff_members (full_name, email, role_id)
+         select 'Invited Manager', $1, id from public.roles where name = 'Admissions Manager'`,
+        [newEmail()],
+      )
+
+      await expect(
+        sql.query(`update public.staff_members s set active = false
+                   from public.roles r
+                   where r.id = s.role_id and s.active and s.user_id is not null
+                     and 'staff.administer' = any (r.permissions)`),
+      ).rejects.toThrow("no_administrator_left")
+    })
+  })
+
+  test("an invited Manager can still be deactivated while a joined one remains", async () => {
+    const client = await administrator()
+    const { data } = await invite(client, "Invited Manager", newEmail(), "Admissions Manager")
+
+    expect((await client.rpc("deactivate_staff_member", { staff_id: data.id })).error).toBeNull()
+  })
+})
+
 test.describe("resendable_invite", () => {
   test("names the Invited member and the email to send to", async () => {
     const { data, error } = await (await administrator()).rpc("resendable_invite", { staff_id: INVITED.id })

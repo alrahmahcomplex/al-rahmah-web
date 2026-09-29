@@ -147,27 +147,38 @@ export type AcceptInviteError =
 // before accepting is signed out, but keeps a password that works once they
 // are reactivated, rather than being left confirmed with no password they
 // know and no invite that can be resent.
+//
+// If the password can't be saved, the session the token gave is kept, and
+// `alreadyVerified` lets the same browser try again with the same link: the
+// token is spent by then, so the retry sets the password on that session.
 export async function acceptInvite(
   supabase: SupabaseClient,
   tokenHash: string,
   password: string,
+  { alreadyVerified = false }: { alreadyVerified?: boolean } = {},
 ): Promise<Result<StaffMember, AcceptInviteError>> {
   if (password.length < MINIMUM_PASSWORD_LENGTH) return { ok: false, error: "password-too-short" }
 
-  const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" })
-  if (verifyError) {
-    // A 4xx means the link itself will not do; anything else is an outage,
-    // and the unspent link still works on a retry.
-    const status = verifyError.status ?? 0
-    if (status >= 400 && status < 500) return { ok: false, error: "invalid-link" }
-    console.error("Could not check an invite link", verifyError)
-    return { ok: false, error: "unavailable" }
+  if (alreadyVerified) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: "invalid-link" }
+  } else {
+    const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" })
+    if (verifyError) {
+      // A 4xx means the link itself will not do; anything else is an outage,
+      // and the unspent link still works on a retry.
+      const status = verifyError.status ?? 0
+      if (status >= 400 && status < 500) return { ok: false, error: "invalid-link" }
+      console.error("Could not check an invite link", verifyError)
+      return { ok: false, error: "unavailable" }
+    }
   }
 
   const { error: updateError } = await supabase.auth.updateUser({ password })
   if (updateError) {
     console.error("Accepted an invite but could not set the password", updateError)
-    await supabase.auth.signOut()
     return { ok: false, error: "password-not-saved" }
   }
 

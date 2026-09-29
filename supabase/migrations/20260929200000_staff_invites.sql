@@ -84,6 +84,27 @@ $$;
 
 revoke execute on function public.staff_member_invited(uuid) from public, anon, authenticated;
 
+-- The last-administrator guard counts only administrators who have joined.
+-- An invited Manager can't sign in yet, so leaving only them would leave
+-- nobody able to manage staff or resend their invite. The first staff member
+-- on a fresh database is inserted with no account, and nothing changes a
+-- staff row before they join, so setting up still works.
+create or replace function public.administrator_count()
+returns bigint
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select count(*)
+    from public.staff_members s
+    join public.roles r on r.id = s.role_id
+    where s.active
+      and not r.retired
+      and 'staff.administer' = any (r.permissions)
+      and not public.staff_member_invited(s.id);
+$$;
+
 -- Who to send a fresh invite to. Only an active staff member who has not
 -- yet joined can be sent one.
 create function public.resendable_invite(staff_id uuid)

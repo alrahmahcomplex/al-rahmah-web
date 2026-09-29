@@ -407,7 +407,9 @@ function NameDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={changeOpen}>
+    // Held open while a save is in flight, so its answer can never land on a
+    // dialog someone has since closed and reopened.
+    <Dialog open={open} onOpenChange={(next) => (saving ? undefined : changeOpen(next))}>
       <DialogContent>
         <form
           className="grid gap-4"
@@ -447,7 +449,7 @@ function NameDialog({
             )}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => changeOpen(false)}>
+            <Button type="button" variant="outline" disabled={saving} onClick={() => changeOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={saving}>

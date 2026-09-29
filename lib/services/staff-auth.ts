@@ -148,22 +148,23 @@ export type AcceptInviteError =
 // are reactivated, rather than being left confirmed with no password they
 // know and no invite that can be resent.
 //
-// If the password can't be saved, the session the token gave is kept, and
-// `alreadyVerified` lets the same browser try again with the same link: the
-// token is spent by then, so the retry sets the password on that session.
+// If the password can't be saved, the session the token gave is kept and the
+// failure names that account. A retry with the same link passes it back as
+// `verifiedUserId`: the token is spent by then, so the retry sets the password
+// on the session, and only while that same account is the one signed in.
 export async function acceptInvite(
   supabase: SupabaseClient,
   tokenHash: string,
   password: string,
-  { alreadyVerified = false }: { alreadyVerified?: boolean } = {},
-): Promise<Result<StaffMember, AcceptInviteError>> {
+  { verifiedUserId }: { verifiedUserId?: string } = {},
+): Promise<Result<StaffMember, AcceptInviteError> | { ok: false; error: "password-not-saved"; userId: string }> {
   if (password.length < MINIMUM_PASSWORD_LENGTH) return { ok: false, error: "password-too-short" }
 
-  if (alreadyVerified) {
+  if (verifiedUserId) {
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    if (!user) return { ok: false, error: "invalid-link" }
+    if (!user || user.id !== verifiedUserId) return { ok: false, error: "invalid-link" }
   } else {
     const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" })
     if (verifyError) {
@@ -179,7 +180,11 @@ export async function acceptInvite(
   const { error: updateError } = await supabase.auth.updateUser({ password })
   if (updateError) {
     console.error("Accepted an invite but could not set the password", updateError)
-    return { ok: false, error: "password-not-saved" }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: "invalid-link" }
+    return { ok: false, error: "password-not-saved", userId: user.id }
   }
 
   const staff = await loadStaffMember(supabase)

@@ -308,10 +308,14 @@ describe("acceptInvite", () => {
     expect(signOut).toHaveBeenCalled()
   })
 
-  it("keeps the session when the password can't be saved, so the same browser can try again", async () => {
+  it("keeps the session when the password can't be saved, and names the account for the retry", async () => {
     const { client, signOut, calls } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
 
-    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "password-not-saved" })
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({
+      ok: false,
+      error: "password-not-saved",
+      userId: "user",
+    })
     expect(calls).toEqual(["verifyOtp", "updateUser"])
     expect(signOut).not.toHaveBeenCalled()
   })
@@ -319,7 +323,7 @@ describe("acceptInvite", () => {
   it("on a retry for a link this browser already used, skips the spent token and sets the password", async () => {
     const { client, calls, auth } = fakeSupabase()
 
-    expect(await acceptInvite(client, "hash-1", "a-new-password", { alreadyVerified: true })).toEqual({
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
       ok: true,
       data: MANAGER,
     })
@@ -327,10 +331,20 @@ describe("acceptInvite", () => {
     expect(calls).toEqual(["updateUser", "current_staff_member"])
   })
 
+  it("refuses a retry when someone else is signed in, and changes nobody's password", async () => {
+    const { client, calls } = fakeSupabase()
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "the-invitee" })).toEqual({
+      ok: false,
+      error: "invalid-link",
+    })
+    expect(calls).toEqual([])
+  })
+
   it("treats a retry with no session left as a spent link", async () => {
     const { client, calls } = fakeSupabase({ sessionUser: false })
 
-    expect(await acceptInvite(client, "hash-1", "a-new-password", { alreadyVerified: true })).toEqual({
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
       ok: false,
       error: "invalid-link",
     })

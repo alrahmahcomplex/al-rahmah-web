@@ -17,22 +17,24 @@ export async function setInvitePassword(_previous: AcceptInviteState, formData: 
   // Checked here, before the token is used, like the length.
   if (password !== String(formData.get("confirm") ?? "")) return { error: "password-mismatch" }
 
-  // Names the link this browser has already used, when saving the password
-  // failed after that, so a retry with the same link can finish the job.
+  // Names the link this browser has already used and the account it signed
+  // in, when saving the password failed after that, so a retry with the same
+  // link can finish the job for that account and no other.
   const jar = await cookies()
-  const alreadyVerified = jar.get(VERIFIED_COOKIE)?.value === tokenHash
+  const [verifiedToken, verifiedUserId] = (jar.get(VERIFIED_COOKIE)?.value ?? "").split(" ")
+  const retrying = verifiedToken === tokenHash && Boolean(verifiedUserId)
 
   const supabase = await createClient()
-  const result = await acceptInvite(supabase, tokenHash, password, { alreadyVerified })
-  if (!result.ok && result.error === "password-not-saved") {
-    jar.set(VERIFIED_COOKIE, tokenHash, {
+  const result = await acceptInvite(supabase, tokenHash, password, retrying ? { verifiedUserId } : {})
+  if (!result.ok && "userId" in result) {
+    jar.set(VERIFIED_COOKIE, `${tokenHash} ${result.userId}`, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/auth/confirm",
       maxAge: 60 * 60,
     })
-  } else if (alreadyVerified) {
+  } else if (retrying) {
     jar.delete({ name: VERIFIED_COOKIE, path: "/auth/confirm" })
   }
   if (!result.ok) return { error: result.error }

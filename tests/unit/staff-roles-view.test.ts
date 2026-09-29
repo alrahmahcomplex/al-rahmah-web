@@ -11,14 +11,38 @@ const DATA: StaffAndRoles = {
     { id: "receptionist", name: "Receptionist", permissions: ["leads.view"], retired: true, activeHolders: 0 },
   ],
   staff: [
-    { id: "me", name: "Amina Juma", email: "amina@example.test", roleId: "manager", active: true },
-    { id: "other", name: "Baraka Said", email: "baraka@example.test", roleId: "manager", active: true },
-    { id: "neema", name: "Neema Mushi", email: "neema@example.test", roleId: "accountant", active: true },
-    { id: "salma", name: "Salma Kombo", email: "salma@example.test", roleId: "receptionist", active: false },
+    { id: "me", name: "Amina Juma", email: "amina@example.test", roleId: "manager", active: true, invited: false },
+    { id: "other", name: "Baraka Said", email: "baraka@example.test", roleId: "manager", active: true, invited: false },
+    { id: "neema", name: "Neema Mushi", email: "neema@example.test", roleId: "accountant", active: true, invited: false },
+    { id: "salma", name: "Salma Kombo", email: "salma@example.test", roleId: "receptionist", active: false, invited: false },
   ],
 }
 
 describe("roleView", () => {
+  it("shows each person as Active, Invited or Deactivated, and offers a resend only to the Invited", () => {
+    const data: StaffAndRoles = {
+      ...DATA,
+      staff: [
+        ...DATA.staff,
+        { id: "juma", name: "Juma Ali", email: "juma@example.test", roleId: "accountant", active: true, invited: true },
+      ],
+    }
+    const accountants = roleView(data, "accountant", "me")!.people
+    const salma = roleView(DATA, "receptionist", "me")!.people[0]
+
+    expect(accountants.map((p) => [p.name, p.status, p.canResendInvite])).toEqual([
+      ["Juma Ali", "Invited", true],
+      ["Neema Mushi", "Active", false],
+    ])
+    expect([salma.status, salma.canResendInvite]).toEqual(["Deactivated", false])
+  })
+
+  it("takes invites into a current role and blocks them into a retired one, with the reason", () => {
+    expect(roleView(DATA, "accountant", "me")!.inviteBlocked).toBeNull()
+    expect(roleView(DATA, "manager", "me")!.inviteBlocked).toBeNull()
+    expect(roleView(DATA, "receptionist", "me")!.inviteBlocked).toBe('"Receptionist" is retired, so nobody can be given it.')
+  })
+
   it("marks the viewer's own role and blocks changing or deactivating themselves", () => {
     const view = roleView(DATA, "manager", "me")!
 

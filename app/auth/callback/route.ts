@@ -4,7 +4,7 @@ import { safeNextPath } from "@/lib/safe-next-path"
 import { exchangeEmailLinkCode, getStaffUser, signOutStaff } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
-// Landing point for Supabase email links (password reset, invitations).
+// Landing point for password-reset email links. Invites land on /auth/confirm.
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get("code")

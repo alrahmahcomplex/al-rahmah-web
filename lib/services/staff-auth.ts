@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import type { Permission } from "@/lib/permissions"
 
 import type { Result } from "./result"
@@ -128,6 +129,80 @@ export async function exchangeEmailLinkCode(
   const { error } = await supabase.auth.exchangeCodeForSession(code)
   if (error) return { ok: false, error: "invalid-link" }
   return { ok: true, data: null }
+}
+
+export type AcceptInviteError =
+  | "password-too-short"
+  | "invalid-link"
+  | "password-not-saved"
+  | "joined-unavailable"
+  | StaffAccessError
+
+// An auth error whose answer won't change on a retry (a spent link, no
+// session), as opposed to an outage.
+function isDefinitive(error: { status?: number } | null) {
+  const status = error?.status ?? 0
+  return status >= 400 && status < 500
+}
+
+// Accepts an invite from the /auth/confirm form. The page never touches the
+// token on load, so an email link scanner opening the link can't use it up;
+// only this submit does. Using the token confirms the account for good, so
+// the password is set before the staff record is checked: someone deactivated
+// before accepting is signed out, but keeps a password that works once they
+// are reactivated, rather than being left confirmed with no password they
+// know and no invite that can be resent.
+//
+// If the password can't be saved, the session the token gave is kept and the
+// failure names that account. A retry with the same link passes it back as
+// `verifiedUserId`: the token is spent by then, so the retry sets the password
+// on the session, and only while that same account is the one signed in.
+export async function acceptInvite(
+  supabase: SupabaseClient,
+  tokenHash: string,
+  password: string,
+  { verifiedUserId }: { verifiedUserId?: string } = {},
+): Promise<Result<StaffMember, AcceptInviteError> | { ok: false; error: "password-not-saved"; userId: string }> {
+  if (password.length < MINIMUM_PASSWORD_LENGTH) return { ok: false, error: "password-too-short" }
+
+  // The account the link signed in: from the retry's cookie once the token
+  // is spent, otherwise from verifying the token.
+  let userId: string
+  if (verifiedUserId) {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+    if (!user && error && !isDefinitive(error)) {
+      console.error("Could not check the session for an invite retry", error)
+      return { ok: false, error: "unavailable" }
+    }
+    if (!user || user.id !== verifiedUserId) return { ok: false, error: "invalid-link" }
+    userId = user.id
+  } else {
+    const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" })
+    if (verifyError || !verified.user) {
+      // A 4xx means the link itself will not do; anything else is an outage,
+      // and the unspent link still works on a retry.
+      if (isDefinitive(verifyError)) return { ok: false, error: "invalid-link" }
+      console.error("Could not check an invite link", verifyError)
+      return { ok: false, error: "unavailable" }
+    }
+    userId = verified.user.id
+  }
+
+  const { error: updateError } = await supabase.auth.updateUser({ password })
+  if (updateError) {
+    console.error("Accepted an invite but could not set the password", updateError)
+    return { ok: false, error: "password-not-saved", userId }
+  }
+
+  const staff = await loadStaffMember(supabase)
+  if (staff.ok) return staff
+  await supabase.auth.signOut()
+  // The password is saved, so the invite is done: an outage here means
+  // signing in later, not opening the spent link again.
+  return { ok: false, error: staff.error === "unavailable" ? "joined-unavailable" : staff.error }
 }
 
 export async function signOutStaff(supabase: SupabaseClient): Promise<Result<null, "unavailable">> {

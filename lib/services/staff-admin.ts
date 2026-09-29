@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Permission } from "@/lib/permissions"
 
+import { recordAction } from "./audit"
 import type { Result } from "./result"
 
 // ---------------------------------------------------------------------------
@@ -28,11 +29,17 @@ export type RefusalCode =
   | "duplicate_role_name"
   | "role_name_required"
   | "unknown_permission"
+  | "already_staff"
+  | "email_invalid"
+  | "invite_deactivated"
+  | "already_joined"
+  | "invite_rate_limited"
+  | "invite_not_sent"
   | "unavailable"
 
 export type Refusal = { code: RefusalCode; message: string }
 
-type RefusalNames = { name?: string; role?: string; names?: string[] }
+type RefusalNames = { name?: string; role?: string; names?: string[]; email?: string; active?: boolean }
 
 const LIST = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" })
 
@@ -61,6 +68,15 @@ const MESSAGES: Record<RefusalCode, (names: RefusalNames) => string> = {
   duplicate_role_name: ({ role }) => `A role called "${role}" already exists.`,
   role_name_required: () => "Enter a name for the role.",
   unknown_permission: () => "That permission no longer exists. Reload the page and try again.",
+  already_staff: ({ email, name, active }) =>
+    active
+      ? `${email} already belongs to ${name}.`
+      : `${email} already belongs to ${name}. Reactivate them instead of inviting again.`,
+  email_invalid: () => "Enter a valid email address.",
+  invite_deactivated: ({ name }) => `${name} is deactivated. Reactivate them before resending the invite.`,
+  already_joined: ({ name }) => `${name} has already joined and signs in with their own password.`,
+  invite_rate_limited: () => "Too many emails have gone out in the last hour. Try resending the invite later.",
+  invite_not_sent: () => "The invite email could not be sent.",
   unavailable: () => "The change could not be saved. Try again in a moment.",
 }
 
@@ -68,7 +84,12 @@ export function refusal(code: RefusalCode, names: RefusalNames = {}): Refusal {
   return { code, message: MESSAGES[code](names) }
 }
 
-const DATABASE_CODES = new Set<string>(Object.keys(MESSAGES).filter((code) => code !== "unavailable"))
+// Codes that come from the invite email, not the database.
+const SEND_CODES = new Set<RefusalCode>(["invite_rate_limited", "invite_not_sent", "unavailable"])
+
+const DATABASE_CODES = new Set<string>(
+  (Object.keys(MESSAGES) as RefusalCode[]).filter((code) => !SEND_CODES.has(code)),
+)
 
 // Turns a Supabase error from a write function into a refusal. Anything that
 // is not one of the known codes is reported as unavailable, never shown raw.
@@ -144,6 +165,100 @@ export function retireRole(supabase: SupabaseClient, roleId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Invites. The record is written on the caller's session, like every other
+// change; only the email goes out with the secret key, through `send`.
+// ---------------------------------------------------------------------------
+
+// Sends Supabase's invite email to the address, linking back to redirectTo.
+// Built from the secret key on the server: see utils/supabase/admin.ts.
+export type SendInvite = (
+  email: string,
+  redirectTo: string,
+) => Promise<{ error: { message: string; status?: number; code?: string } | null }>
+
+export type InviteDetails = { fullName: string; email: string; roleId: string }
+
+export type InvitedNames = StaffNames & { id: string; email: string }
+
+// The record always exists once the database accepts it. The email may still
+// fail, and then the screen offers Resend invite.
+export type Invitation = InvitedNames & ({ sent: true } | { sent: false; failure: Refusal })
+
+async function requireAdministrator(supabase: SupabaseClient): Promise<Refusal | null> {
+  const { data, error } = await supabase.rpc("has_permission", { permission: "staff.administer" })
+  if (error) {
+    console.error("Could not check the permission to invite staff", error)
+    return refusal("unavailable")
+  }
+  return data === true ? null : refusal("not_permitted")
+}
+
+// What stopped the email. A confirmed account means they joined already.
+function sendFailure(error: { code?: string }, names: RefusalNames): Refusal {
+  if (error.code === "email_exists") return refusal("already_joined", names)
+  if (error.code === "over_email_send_rate_limit") return refusal("invite_rate_limited")
+  console.error("The invite email could not be sent", error)
+  return refusal("invite_not_sent")
+}
+
+async function sendAndRecord(
+  supabase: SupabaseClient,
+  send: SendInvite,
+  invited: InvitedNames,
+  redirectTo: string,
+): Promise<Refusal | null> {
+  const { error } = await send(invited.email, redirectTo)
+  if (error) return sendFailure(error, invited)
+
+  // The email has gone, so a failure to record it is logged, not reported
+  // to the Manager as a failed invite.
+  const recorded = await recordAction(supabase, "invite_sent", null, {
+    staff_member_id: invited.id,
+    email: invited.email,
+  })
+  if (!recorded.ok) console.error("Sent an invite but could not record it", invited.id, recorded.error)
+  return null
+}
+
+export async function inviteStaff(
+  supabase: SupabaseClient,
+  send: SendInvite,
+  details: InviteDetails,
+  redirectTo: string,
+): Promise<Result<Invitation, Refusal>> {
+  const refused = await requireAdministrator(supabase)
+  if (refused) return { ok: false, error: refused }
+
+  const created = await write<InvitedNames>(supabase, "invite_staff_member", {
+    full_name: details.fullName,
+    email: details.email,
+    role_id: details.roleId,
+  })
+  if (!created.ok) return created
+
+  const failure = await sendAndRecord(supabase, send, created.data, redirectTo)
+  return { ok: true, data: failure ? { ...created.data, sent: false, failure } : { ...created.data, sent: true } }
+}
+
+// Sends a fresh invite while the person has not yet joined. It replaces the
+// earlier link.
+export async function resendInvite(
+  supabase: SupabaseClient,
+  send: SendInvite,
+  staffId: string,
+  redirectTo: string,
+): Promise<Result<InvitedNames, Refusal>> {
+  const refused = await requireAdministrator(supabase)
+  if (refused) return { ok: false, error: refused }
+
+  const invited = await write<InvitedNames>(supabase, "resendable_invite", { staff_id: staffId })
+  if (!invited.ok) return invited
+
+  const failure = await sendAndRecord(supabase, send, invited.data, redirectTo)
+  return failure ? { ok: false, error: failure } : invited
+}
+
+// ---------------------------------------------------------------------------
 // Reads for the Staff and roles screen.
 // ---------------------------------------------------------------------------
 
@@ -163,6 +278,8 @@ export type StaffSummary = {
   email: string
   roleId: string
   active: boolean
+  // Has not yet accepted their invite.
+  invited: boolean
 }
 
 export type StaffAndRoles = {
@@ -175,18 +292,20 @@ type RoleRow = { id: string; name: string; permissions: Permission[]; retired: b
 type StaffRow = { id: string; full_name: string; email: string; role_id: string; active: boolean }
 
 export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result<StaffAndRoles, "unavailable">> {
-  const [permissions, roles, staff] = await Promise.all([
+  const [permissions, roles, staff, invited] = await Promise.all([
     supabase.from("permissions").select("name, label").order("position"),
     supabase.from("roles").select("id, name, permissions, retired").order("retired").order("name"),
     supabase.from("staff_members").select("id, full_name, email, role_id, active").order("full_name"),
+    supabase.rpc("invited_staff_members"),
   ])
-  const error = permissions.error ?? roles.error ?? staff.error
+  const error = permissions.error ?? roles.error ?? staff.error ?? invited.error
   if (error) {
     console.error("Could not read staff and roles", error)
     return { ok: false, error: "unavailable" }
   }
 
   const staffRows = (staff.data ?? []) as StaffRow[]
+  const invitedIds = new Set((invited.data ?? []) as string[])
   return {
     ok: true,
     data: {
@@ -201,6 +320,7 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
         email: s.email,
         roleId: s.role_id,
         active: s.active,
+        invited: invitedIds.has(s.id),
       })),
     },
   }
@@ -302,16 +422,23 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
       ? (lookup.roleNames.get(row.row_id ?? "") ?? "a role")
       : null
 
+  const newValues = row.new_values ?? {}
+  const oldValues = row.old_values ?? {}
+  const invitee =
+    row.action === "invite_sent" && newValues.staff_member_id
+      ? (lookup.staffNames.get(String(newValues.staff_member_id)) ?? null)
+      : null
+
   let summary: string
   if (row.action === "insert") summary = isStaff ? `added ${subject} to staff` : isRole ? `created the role ${subject}` : `added a ${row.table_name} row`
   else if (row.action === "update") summary = isRole ? `changed the role ${subject}` : isStaff ? `changed ${subject}` : `changed a ${row.table_name} row`
-  else if (row.action === "invite_sent") summary = "sent an invite"
+  else if (row.action === "invite_sent") summary = invitee ? `sent an invite to ${invitee}` : "sent an invite"
   else summary = row.action
 
-  const newValues = row.new_values ?? {}
-  const oldValues = row.old_values ?? {}
   const changes = Object.keys(newValues)
     .filter((key) => row.action !== "insert" || !HIDDEN_ON_INSERT.has(key))
+    // The summary already names who an invite went to.
+    .filter((key) => !(invitee && key === "staff_member_id"))
     .map((key) => ({
       field: FIELD_NAMES[key] ?? key,
       from: row.action === "update" ? describeField(key, oldValues[key], lookup) : null,

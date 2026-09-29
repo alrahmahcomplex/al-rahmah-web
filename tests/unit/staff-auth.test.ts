@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { getStaffUser, requirePermission, signInStaff } from "@/lib/services/staff-auth"
+import { acceptInvite, getStaffUser, requirePermission, signInStaff } from "@/lib/services/staff-auth"
 
 const MANAGER_ROW = {
   id: "a1a1a1a1-0000-4000-8000-000000000001",
@@ -36,7 +36,11 @@ function fakeSupabase({
   staffRecord = { data: MANAGER_ROW, error: null } as StaffRecordResponse,
   staffRecords = undefined as StaffRecordResponse[] | undefined,
   sessionUser = true,
+  getUserError = null as { message: string; status?: number } | null,
+  verifyError = null as { message: string; code?: string; status?: number } | null,
+  updateError = null as { message: string; code?: string; status?: number } | null,
 } = {}) {
+  const calls: string[] = []
   const maybeSingle = vi.fn()
   for (const response of staffRecords ?? []) maybeSingle.mockResolvedValueOnce(response)
   maybeSingle.mockResolvedValue(staffRecords?.at(-1) ?? staffRecord)
@@ -49,13 +53,24 @@ function fakeSupabase({
       }),
       getUser: vi.fn().mockResolvedValue({
         data: { user: sessionUser ? { id: "user" } : null },
-        error: null,
+        error: getUserError,
       }),
       signOut,
+      verifyOtp: vi.fn(async () => {
+        calls.push("verifyOtp")
+        return verifyError ? { data: { user: null }, error: verifyError } : { data: { user: { id: "invitee" } }, error: null }
+      }),
+      updateUser: vi.fn(async () => {
+        calls.push("updateUser")
+        return { data: {}, error: updateError }
+      }),
     },
-    rpc: vi.fn().mockReturnValue({ maybeSingle }),
+    rpc: vi.fn((fn: string) => {
+      calls.push(fn)
+      return { maybeSingle }
+    }),
   }
-  return { client: client as unknown as SupabaseClient, signOut, rpc: client.rpc }
+  return { client: client as unknown as SupabaseClient, signOut, rpc: client.rpc, auth: client.auth, calls }
 }
 
 describe("signInStaff", () => {
@@ -248,5 +263,130 @@ describe("requirePermission", () => {
     })
 
     expect(await requirePermission(client, "leads.view")).toEqual({ ok: false, error: "unavailable" })
+  })
+})
+
+describe("acceptInvite", () => {
+  it("uses the invite token, sets the password, then checks the staff record", async () => {
+    const { client, auth, calls, signOut } = fakeSupabase()
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: true, data: MANAGER })
+    expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: "hash-1", type: "invite" })
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: "a-new-password" })
+    expect(calls).toEqual(["verifyOtp", "updateUser", "current_staff_member"])
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("refuses a short password without touching the token", async () => {
+    const { client, calls } = fakeSupabase()
+
+    expect(await acceptInvite(client, "hash-1", "short")).toEqual({ ok: false, error: "password-too-short" })
+    expect(calls).toEqual([])
+  })
+
+  it("reports an expired or used link", async () => {
+    const { client, calls } = fakeSupabase({
+      verifyError: { message: "Email link is invalid or has expired", code: "otp_expired", status: 403 },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "invalid-link" })
+    expect(calls).toEqual(["verifyOtp"])
+  })
+
+  it("reports an outage while checking the link as unavailable, so the person can try again", async () => {
+    const { client } = fakeSupabase({ verifyError: { message: "fetch failed", status: 0 } })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "unavailable" })
+  })
+
+  it("signs out someone deactivated before accepting, keeping the password for if they are reactivated", async () => {
+    const { client, calls, signOut } = fakeSupabase({
+      staffRecord: { data: { ...MANAGER_ROW, active: false, permissions: [] }, error: null },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "deactivated" })
+    expect(calls).toEqual(["verifyOtp", "updateUser", "current_staff_member"])
+    expect(signOut).toHaveBeenCalled()
+  })
+
+  it("keeps the session when the password can't be saved, and names the account the token verified", async () => {
+    const { client, signOut, calls, auth } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({
+      ok: false,
+      error: "password-not-saved",
+      userId: "invitee",
+    })
+    // Taken from the verification itself, so no further call can fail first.
+    expect(auth.getUser).not.toHaveBeenCalled()
+    expect(calls).toEqual(["verifyOtp", "updateUser"])
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("names the same account again when a retry's password save fails too", async () => {
+    const { client } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
+      ok: false,
+      error: "password-not-saved",
+      userId: "user",
+    })
+  })
+
+  it("on a retry for a link this browser already used, skips the spent token and sets the password", async () => {
+    const { client, calls, auth } = fakeSupabase()
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
+      ok: true,
+      data: MANAGER,
+    })
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
+    expect(calls).toEqual(["updateUser", "current_staff_member"])
+  })
+
+  it("refuses a retry when someone else is signed in, and changes nobody's password", async () => {
+    const { client, calls } = fakeSupabase()
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "the-invitee" })).toEqual({
+      ok: false,
+      error: "invalid-link",
+    })
+    expect(calls).toEqual([])
+  })
+
+  it("treats a retry with no session left as a spent link", async () => {
+    const { client, calls } = fakeSupabase({
+      sessionUser: false,
+      getUserError: { message: "Auth session missing!", status: 400 },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
+      ok: false,
+      error: "invalid-link",
+    })
+    expect(calls).toEqual([])
+  })
+
+  it("reports a retry whose session check fails for a moment as unavailable, so it can run again", async () => {
+    const { client, calls } = fakeSupabase({
+      sessionUser: false,
+      getUserError: { message: "fetch failed", status: 0 },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
+      ok: false,
+      error: "unavailable",
+    })
+    expect(calls).toEqual([])
+  })
+
+  it("tells someone whose password was saved to sign in when the staff check can't run", async () => {
+    const { client, calls, signOut } = fakeSupabase({
+      staffRecord: { data: null, error: { message: "fetch failed" } },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "joined-unavailable" })
+    expect(calls).toEqual(["verifyOtp", "updateUser", "current_staff_member"])
+    expect(signOut).toHaveBeenCalled()
   })
 })

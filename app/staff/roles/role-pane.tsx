@@ -34,9 +34,11 @@ import { cn } from "@/lib/utils"
 import {
   correctStaffMemberName,
   deactivateStaffMember,
+  inviteStaffMember,
   moveStaffMember,
   reactivateStaffMember,
   renameRoleTo,
+  resendStaffInvite,
   retireRoleNow,
   setPermission,
   type ChangeOutcome,
@@ -220,6 +222,8 @@ export function RolePane({
         )}
       </div>
 
+      <InviteForm role={role} pending={pending} run={run} />
+
       {children}
 
       <NameDialog
@@ -322,7 +326,7 @@ function PersonRow({
           </p>
           <p className="truncate text-xs text-muted-foreground">{person.email}</p>
         </div>
-        <Badge variant={person.active ? "secondary" : "outline"}>{person.active ? "Active" : "Deactivated"}</Badge>
+        <Badge variant={person.status === "Active" ? "secondary" : "outline"}>{person.status}</Badge>
         <div className="flex flex-wrap items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -362,6 +366,11 @@ function PersonRow({
               Reactivate
             </Button>
           )}
+          {person.canResendInvite && (
+            <Button variant="ghost" size="sm" disabled={pending} onClick={() => run(() => resendStaffInvite(person.id))}>
+              Resend invite
+            </Button>
+          )}
           <Button variant="ghost" size="sm" disabled={pending} onClick={() => setRenaming(true)}>
             Correct name
           </Button>
@@ -389,6 +398,61 @@ function PersonRow({
         onSaved={report}
       />
     </li>
+  )
+}
+
+// Invites someone into the role in view. The form clears once the staff
+// record exists, even if the email then failed: the person is in the list
+// above with Resend invite, so typing them again would only be refused.
+function InviteForm({ role, pending, run }: { role: RoleView; pending: boolean; run: Run }) {
+  const nameId = useId()
+  const emailId = useId()
+  const blockedId = useId()
+  const form = useRef<HTMLFormElement>(null)
+  const blocked = role.inviteBlocked !== null
+
+  return (
+    <form
+      ref={form}
+      aria-labelledby={`${nameId}-heading`}
+      onSubmit={(event) => {
+        event.preventDefault()
+        const data = new FormData(event.currentTarget)
+        run(async () => {
+          const outcome = await inviteStaffMember(role.id, String(data.get("fullName") ?? ""), String(data.get("email") ?? ""))
+          if (outcome.created) form.current?.reset()
+          return outcome
+        })
+      }}
+    >
+      <h3 id={`${nameId}-heading`} className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        Invite someone to {role.name}
+      </h3>
+      <fieldset
+        disabled={pending || blocked}
+        aria-describedby={blocked ? blockedId : undefined}
+        className="flex flex-col gap-3 rounded-lg border p-3"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor={nameId}>Full name</Label>
+            <Input id={nameId} name="fullName" required autoComplete="off" />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={emailId}>Email</Label>
+            <Input id={emailId} name="email" type="email" required autoComplete="off" />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Button type="submit" size="sm">
+            Send invite
+          </Button>
+          <p id={blockedId} className="text-xs text-muted-foreground">
+            {role.inviteBlocked ?? "They get an email with a link to set their password."}
+          </p>
+        </div>
+      </fieldset>
+    </form>
   )
 }
 

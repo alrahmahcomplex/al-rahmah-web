@@ -19,7 +19,7 @@ One Next.js app for Al-Rahmah Complex: School Landing Page, Admissions Portal, R
 3. **Build**: `implement` → `tdd`, to the invariants below.
 4. **Prove**: `evidence-driven-testing`. Capture *before* while reproducing, *after* once it works.
 5. **Ship**: `code-review` → cross-review (the human starts the other agent on `code-review` for the PR) → `before-and-after` (production vs PR preview) → PR → `greploop` (`greploop-apps` over the file limit) until **5/5, zero unresolved**. End by presenting the PR URL. **Stop**: merge is the human's.
-6. **Release**: once the human approves the merge, merge, tag and changelog it. See *Releasing*.
+6. **Release**: when the human says "merge", run *Releasing* start to finish: merge, tag and changelog it, then housekeep.
 
 End an unfinished session with `handoff`.
 
@@ -60,7 +60,8 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
   commit;
   ```
 
-  Then invite the user under Authentication → Users. Later staff are invited from the staff side once the Staff and roles screen ships.
+  Then invite the user under Authentication → Users. Their link lands on the site root, which forwards it to `/auth/confirm`. Everyone after them is invited from Staff and roles.
+- **Staff invites** from Staff and roles need, on the hosted project: custom SMTP (Authentication → SMTP Settings, with a verified sending domain; the built-in sender reaches only the project's team), the Site URL set to production, Redirect URLs allowing `/auth/confirm` on production and on `https://*-<vercel-team>.vercel.app/**`, the Invite user template from `supabase/templates/invite.html`, and a named secret key. Vercel needs that key as `SUPABASE_SECRET_KEY`, unprefixed, in Production and Preview. Without the key the Manager's invite still creates the staff record, reports that the email wasn't sent, and offers Resend invite.
 
 ## Checks
 
@@ -69,7 +70,7 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 ## Multi-agent rules
 
 - Work on your own task branch; `main` changes only by merged PR.
-- Leave other agents' worktrees, branches and uncommitted work untouched.
+- Leave other agents' worktrees, branches and uncommitted work untouched. The one exception is housekeeping after a merge (*Releasing*, step 5), and only for work whose PR has merged.
 - Before starting, scope-check open PRs (`gh pr list`, `gh pr diff <n> --name-only`). On overlap, stop and ask.
 - Force-push only with `--force-with-lease`, only on your own branch.
 - Regenerate lockfiles on conflict (`npm install`).
@@ -91,11 +92,20 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 
 Every merge to `main` is a release: it carries a SemVer tag and a `CHANGELOG.md` entry. A merge without both is unfinished work. Parallel PRs would all claim the same version, so a PR carries its entry under an `## Unreleased` heading at the top of `CHANGELOG.md`, and the version is settled only when the PR is about to merge. On a rebase conflict in `## Unreleased`, keep every entry.
 
-1. Once the human approves the merge, rebase onto `origin/main` and pick the version from the latest tag. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
+"Merge" from the human means the whole of this section, housekeeping included, with no further confirmation.
+
+1. When the human says "merge", rebase onto `origin/main` and pick the version from the latest tag. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
 2. Turn this PR's `## Unreleased` entry into a date heading carrying the version (newest at the top), commit, push, and rerun the checks. The entry has only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
 3. Merge the PR with a message that says what the change does.
 4. Tag the merge commit on `main`, annotated, message `<version>: <one line>`, then `git push origin <version>`.
-5. Give the human the tag and the release entry alongside the merged PR URL.
+5. Housekeep, so nothing finished lingers and nothing unfinished is lost. The main checkout ends on `main`, clean, at the new `origin/main` (`git pull --ff-only`). Every worktree and branch, local and remote, whose PR has merged is removed, this task's and any earlier ones. Remove one only after all four checks pass:
+   - its PR shows merged (`gh pr view <branch> --json state,headRefOid`);
+   - the local branch tip equals that PR's `headRefOid`, so every commit reached GitHub (squash merges leave the commits off `main`, so `git branch --merged` can't tell);
+   - `git status --porcelain` in its worktree is empty;
+   - nothing needed lives only in its ignored files. Evidence is uploaded by now, and `.env.local` is recreated from `.env.example`.
+
+   Anything that fails a check stays, and the report names it and why. The main checkout's own uncommitted changes are never discarded: stop and report them. Finish with `git worktree prune` and `git fetch --prune`, and remove any scratch copies the task made outside the repo.
+6. Give the human the tag, the release entry and the merged PR URL. Also list what housekeeping removed and anything it left, with the reason.
 
 ## Writing for humans
 

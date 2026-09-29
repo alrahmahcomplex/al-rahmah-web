@@ -9,6 +9,7 @@
 --   accountant@example.test     Accountant
 --   deactivated@example.test    Admissions Staff, deactivated
 --   retired-role@example.test   Receptionist (a retired role), deactivated
+--   invited@example.test        Admissions Staff, invited, with no account yet
 
 begin;
 
@@ -26,7 +27,8 @@ from (values
     ('a1a1a1a1-0000-4000-8000-000000000003'::uuid, 'Test Admissions', 'admissions@example.test', 'Admissions Staff'),
     ('a1a1a1a1-0000-4000-8000-000000000004'::uuid, 'Test Accountant', 'accountant@example.test', 'Accountant'),
     ('a1a1a1a1-0000-4000-8000-000000000005'::uuid, 'Deactivated Staff', 'deactivated@example.test', 'Admissions Staff'),
-    ('a1a1a1a1-0000-4000-8000-000000000006'::uuid, 'Retired Role Staff', 'retired-role@example.test', 'Receptionist')
+    ('a1a1a1a1-0000-4000-8000-000000000006'::uuid, 'Retired Role Staff', 'retired-role@example.test', 'Receptionist'),
+    ('a1a1a1a1-0000-4000-8000-000000000007'::uuid, 'Invited Staff', 'invited@example.test', 'Admissions Staff')
 ) as s(id, full_name, email, role_name)
 join public.roles r on r.name = s.role_name;
 

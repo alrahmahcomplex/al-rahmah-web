@@ -6,11 +6,16 @@ import { refusal, type RoleSummary, type StaffAndRoles } from "@/lib/services/st
 
 export type RoleOption = { id: string; name: string; administers: boolean }
 
+export type PersonStatus = "Active" | "Invited" | "Deactivated"
+
 export type PersonView = {
   id: string
   name: string
   email: string
   active: boolean
+  // Invited until they accept their invite and set a password.
+  status: PersonStatus
+  canResendInvite: boolean
   isYou: boolean
   // Holds "Administer staff and roles" right now, so moving them off it or
   // deactivating them asks for confirmation first.
@@ -28,6 +33,8 @@ export type RoleView = RoleSummary & {
   // subtitle says why.
   editable: boolean
   retireBlocked: string | null
+  // Why the invite box is closed, when it is.
+  inviteBlocked: string | null
   subtitle: string
   people: PersonView[]
 }
@@ -63,6 +70,8 @@ export function roleView(data: StaffAndRoles, roleId: string, viewerId: string):
         name: s.name,
         email: s.email,
         active: s.active,
+        status: !s.active ? "Deactivated" : s.invited ? "Invited" : "Active",
+        canResendInvite: s.active && s.invited,
         isYou,
         administers: s.active && administers(role),
         moveTargets,
@@ -92,6 +101,7 @@ export function roleView(data: StaffAndRoles, roleId: string, viewerId: string):
     editable,
     retireBlocked:
       editable && holders.length > 0 ? refusal("role_has_active_holders", { role: role.name, names: holders }).message : null,
+    inviteBlocked: role.retired ? refusal("role_retired", { role: role.name }).message : null,
     subtitle: subtitleFor(role, isYours),
     people,
   }

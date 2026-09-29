@@ -24,6 +24,10 @@ export type PersonView = {
 export type RoleView = RoleSummary & {
   isYours: boolean
   administers: boolean
+  // Open to renaming, retiring and ticking permissions. When it is not, the
+  // subtitle says why.
+  editable: boolean
+  retireBlocked: string | null
   subtitle: string
   people: PersonView[]
 }
@@ -76,5 +80,19 @@ export function roleView(data: StaffAndRoles, roleId: string, viewerId: string):
     // Active people first, each group in name order.
     .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
 
-  return { ...role, isYours, administers: administers(role), subtitle: subtitleFor(role, isYours), people }
+  // The same order the database checks in: the role you hold, then retired,
+  // then frozen because it can administer staff (retired or not).
+  const editable = !isYours && !role.retired && !role.permissions.includes("staff.administer")
+  const holders = people.filter((p) => p.active).map((p) => p.name)
+
+  return {
+    ...role,
+    isYours,
+    administers: administers(role),
+    editable,
+    retireBlocked:
+      editable && holders.length > 0 ? refusal("role_has_active_holders", { role: role.name, names: holders }).message : null,
+    subtitle: subtitleFor(role, isYours),
+    people,
+  }
 }

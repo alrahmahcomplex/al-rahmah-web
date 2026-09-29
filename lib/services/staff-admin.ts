@@ -22,11 +22,19 @@ export type RefusalCode =
   | "already_deactivated"
   | "name_required"
   | "not_found"
+  | "role_you_hold"
+  | "administer_role_frozen"
+  | "role_has_active_holders"
+  | "duplicate_role_name"
+  | "role_name_required"
+  | "unknown_permission"
   | "unavailable"
 
 export type Refusal = { code: RefusalCode; message: string }
 
-type RefusalNames = { name?: string; role?: string }
+type RefusalNames = { name?: string; role?: string; names?: string[] }
+
+const LIST = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" })
 
 export const ADMINISTER_LABEL = "Administer staff and roles"
 
@@ -46,6 +54,13 @@ const MESSAGES: Record<RefusalCode, (names: RefusalNames) => string> = {
   already_deactivated: ({ name }) => `${name} is already deactivated.`,
   name_required: () => "Enter the person's full name.",
   not_found: () => "That staff member or role no longer exists. Reload the page and try again.",
+  role_you_hold: () => "You can't edit the role you hold. Another Manager has to do it.",
+  administer_role_frozen: () => "Roles that can administer staff change only through a reviewed update to the system.",
+  role_has_active_holders: ({ role, names = [] }) =>
+    `${role} is still held by ${LIST.format(names)}. Move them to another role first.`,
+  duplicate_role_name: ({ role }) => `A role called "${role}" already exists.`,
+  role_name_required: () => "Enter a name for the role.",
+  unknown_permission: () => "That permission no longer exists. Reload the page and try again.",
   unavailable: () => "The change could not be saved. Try again in a moment.",
 }
 
@@ -75,14 +90,17 @@ export function refusalFromError(error: { message: string; details?: string | nu
 // The person's name and role as they stand after a change.
 export type StaffNames = { name: string; role: string }
 
-async function write(
+// The role's id and name as they stand after a change.
+export type RoleNames = { id: string; role: string }
+
+async function write<T = StaffNames>(
   supabase: SupabaseClient,
   fn: string,
   args: Record<string, unknown>,
-): Promise<Result<StaffNames, Refusal>> {
+): Promise<Result<T, Refusal>> {
   const { data, error } = await supabase.rpc(fn, args)
   if (error) return { ok: false, error: refusalFromError(error) }
-  return { ok: true, data: data as StaffNames }
+  return { ok: true, data: data as T }
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +122,25 @@ export function reactivateStaff(supabase: SupabaseClient, staffId: string) {
 
 export function correctStaffName(supabase: SupabaseClient, staffId: string, fullName: string) {
   return write(supabase, "correct_staff_name", { staff_id: staffId, full_name: fullName })
+}
+
+// A new role starts with no permissions.
+export function createRole(supabase: SupabaseClient, name: string) {
+  return write<RoleNames>(supabase, "create_role", { name })
+}
+
+export function renameRole(supabase: SupabaseClient, roleId: string, name: string) {
+  return write<RoleNames>(supabase, "rename_role", { role_id: roleId, name })
+}
+
+// Ticks or unticks one permission, so two Managers changing different
+// permissions at once never undo each other.
+export function setRolePermission(supabase: SupabaseClient, roleId: string, permission: Permission, granted: boolean) {
+  return write<RoleNames>(supabase, "set_role_permission", { role_id: roleId, permission, granted })
+}
+
+export function retireRole(supabase: SupabaseClient, roleId: string) {
+  return write<RoleNames>(supabase, "retire_role", { role_id: roleId })
 }
 
 // ---------------------------------------------------------------------------

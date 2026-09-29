@@ -4,9 +4,13 @@ import { describe, expect, it, vi } from "vitest"
 import {
   assignRole,
   correctStaffName,
+  createRole,
   deactivateStaff,
   describeAuditRow,
   reactivateStaff,
+  renameRole,
+  retireRole,
+  setRolePermission,
   type AuditRow,
   type HistoryLookup,
 } from "@/lib/services/staff-admin"
@@ -18,7 +22,7 @@ function fakeSupabase(error: { message: string; details?: string | null; code?: 
   return { client: { rpc } as unknown as SupabaseClient, rpc }
 }
 
-function refusedWith(message: string, details: Record<string, string> | null = null) {
+function refusedWith(message: string, details: Record<string, unknown> | null = null) {
   return fakeSupabase({ message, details: details && JSON.stringify(details), code: "P0001" }).client
 }
 
@@ -41,10 +45,26 @@ describe("the staff-admin writes", () => {
       ["correct_staff_name", { staff_id: "staff-1", full_name: "Zawadi Mrisho" }],
     ])
   })
+
+  it("call the guardrailed database function for each role change", async () => {
+    const { client, rpc } = fakeSupabase()
+
+    await createRole(client, "Receptionist")
+    await renameRole(client, "role-1", "Front desk")
+    await setRolePermission(client, "role-1", "leads.view", true)
+    await retireRole(client, "role-1")
+
+    expect(rpc.mock.calls).toEqual([
+      ["create_role", { name: "Receptionist" }],
+      ["rename_role", { role_id: "role-1", name: "Front desk" }],
+      ["set_role_permission", { role_id: "role-1", permission: "leads.view", granted: true }],
+      ["retire_role", { role_id: "role-1" }],
+    ])
+  })
 })
 
 describe("refusal messages", () => {
-  const cases: [string, Record<string, string> | null, string][] = [
+  const cases: [string, Record<string, unknown> | null, string][] = [
     ["not_permitted", { role: "Accountant" }, 'Your role, Accountant, doesn\'t include "Administer staff and roles".'],
     ["not_permitted", null, 'Your role doesn\'t include "Administer staff and roles".'],
     ["own_role", null, "You can't change your own role. Another Manager has to do it."],
@@ -61,6 +81,25 @@ describe("refusal messages", () => {
     ["already_deactivated", { name: "Baraka Said" }, "Baraka Said is already deactivated."],
     ["name_required", null, "Enter the person's full name."],
     ["not_found", null, "That staff member or role no longer exists. Reload the page and try again."],
+    ["role_you_hold", null, "You can't edit the role you hold. Another Manager has to do it."],
+    [
+      "administer_role_frozen",
+      null,
+      "Roles that can administer staff change only through a reviewed update to the system.",
+    ],
+    [
+      "role_has_active_holders",
+      { role: "Receptionist", names: ["Neema Mushi"] },
+      "Receptionist is still held by Neema Mushi. Move them to another role first.",
+    ],
+    [
+      "role_has_active_holders",
+      { role: "Receptionist", names: ["Baraka Said", "Neema Mushi", "Salma Kombo"] },
+      "Receptionist is still held by Baraka Said, Neema Mushi and Salma Kombo. Move them to another role first.",
+    ],
+    ["duplicate_role_name", { role: "Accountant" }, 'A role called "Accountant" already exists.'],
+    ["role_name_required", null, "Enter a name for the role."],
+    ["unknown_permission", null, "That permission no longer exists. Reload the page and try again."],
   ]
 
   for (const [code, details, message] of cases) {

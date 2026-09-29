@@ -36,3 +36,11 @@ The Admissions Manager role's permissions are frozen except through a reviewed m
 The screen greys out actions it can already see are blocked (your own role, your own account, a role with active holders) and says why inline. The database remains the authority, and refusals only it can detect, such as a change that would leave no administrator, are explained after the attempt.
 
 The `enforce_staff_allowlist` trigger on `auth.users` from ADR 1 must be replaced in the same migration that introduces staff members. The replacement consults the staff table instead. Account creation by invitation stays, as does `enable_signup = false`.
+
+## Amendment, 2026-09-29: roles that administer staff are frozen
+
+Guardrail 1 stops a Manager editing the role they hold, but on its own it does not keep the promise above that the Admissions Manager role changes only through a reviewed migration. A Manager could tick "Administer staff and roles" on another role, and that role's holders could then edit the Admissions Manager role, since they don't hold it.
+
+So the database adds a rule, `administer_role_frozen`. Nobody edits, renames or retires a role that holds `staff.administer` through the app, and nobody grants or removes `staff.administer` on any role. The screen shows the "Administer staff and roles" checkbox on every role but never lets it be ticked or unticked. Those roles, and the permission itself, change only through a reviewed migration.
+
+A side effect: a role edit made in the app can never be the change that leaves no administrator, because no role edit there touches a role that administers. Guardrail 2 still covers the SQL editor and the secret key.

@@ -44,6 +44,7 @@ import {
 import type { PersonView, RoleOption, RoleView } from "./view"
 
 type Run = (change: () => Promise<ChangeOutcome>) => void
+type Track = (change: () => Promise<ChangeOutcome>) => Promise<ChangeOutcome>
 
 // A change that takes "Administer staff and roles" from a fellow Manager, or
 // retires a role, waits here until the person confirms it.
@@ -76,6 +77,21 @@ export function RolePane({
       setOutcome(await change())
     })
   }
+
+  // A name dialog's save: part of `pending` like every other change, so the
+  // buttons that open the dialogs stay disabled until it lands and two name
+  // saves never overlap. The dialog decides where the answer shows.
+  const track: Track = (change) =>
+    new Promise((resolve) => {
+      startTransition(async () => {
+        try {
+          resolve(await change())
+        } catch {
+          // A dropped connection gets the same sentence as any other failure.
+          resolve({ ok: false, message: refusal("unavailable").message })
+        }
+      })
+    })
 
   return (
     <section
@@ -195,6 +211,7 @@ export function RolePane({
                 roleName={role.name}
                 pending={pending}
                 run={run}
+                track={track}
                 report={setOutcome}
                 confirm={setConfirmation}
               />
@@ -213,7 +230,8 @@ export function RolePane({
         label="Role name"
         defaultValue={role.name}
         submit="Save name"
-        save={(name) => renameRoleTo(role.id, name)}
+        save={(name) => track(() => renameRoleTo(role.id, name))}
+        saving={pending}
         onSaved={setOutcome}
       />
 
@@ -245,6 +263,7 @@ function PersonRow({
   roleName,
   pending,
   run,
+  track,
   report,
   confirm,
 }: {
@@ -252,6 +271,7 @@ function PersonRow({
   roleName: string
   pending: boolean
   run: Run
+  track: Track
   report: (outcome: ChangeOutcome) => void
   confirm: (confirmation: PendingConfirmation) => void
 }) {
@@ -364,7 +384,8 @@ function PersonRow({
         label="Full name"
         defaultValue={person.name}
         submit="Save name"
-        save={(fullName) => correctStaffMemberName(person.id, fullName)}
+        save={(fullName) => track(() => correctStaffMemberName(person.id, fullName))}
+        saving={pending}
         onSaved={report}
       />
     </li>
@@ -374,9 +395,9 @@ function PersonRow({
 // One text field in a dialog: correcting a person's name, renaming a role.
 // It stays open until the save lands. A refusal (a name another role has)
 // shows inside it, so the typed name can be fixed in place; a success
-// closes it and goes to the pane's callout. Closing it mid-save is allowed:
-// that save's answer then goes to the callout and leaves any reopened
-// dialog alone.
+// closes it and goes to the pane's callout. It can be closed mid-save; that
+// save's answer then goes to the callout. The pane keeps the buttons that
+// open it disabled until the save lands, so it can't be reopened meanwhile.
 function NameDialog({
   open,
   onOpenChange,
@@ -386,6 +407,7 @@ function NameDialog({
   defaultValue,
   submit,
   save,
+  saving,
   onSaved,
 }: {
   open: boolean
@@ -396,25 +418,19 @@ function NameDialog({
   defaultValue: string
   submit: string
   save: (name: string) => Promise<ChangeOutcome>
+  saving: boolean
   onSaved: (outcome: ChangeOutcome) => void
 }) {
   const inputId = useId()
   const errorId = useId()
   const [error, setError] = useState<string | null>(null)
-  // Counts openings, so a save can tell whether its dialog is still the one
-  // on screen when its answer arrives. The ref is read after the await; the
-  // state drives rendering.
-  const openingRef = useRef(0)
-  const [opening, setOpening] = useState(0)
-  // The opening a save is running in. Only that opening shows as saving, so
-  // a stalled save never blocks a dialog reopened after it.
-  const [savingIn, setSavingIn] = useState<number | null>(null)
-  const saving = savingIn === opening
+  // Counts closings, so a save can tell whether its dialog was closed
+  // before its answer arrived.
+  const closings = useRef(0)
 
   const changeOpen = (next: boolean) => {
     if (!next) {
-      openingRef.current += 1
-      setOpening(openingRef.current)
+      closings.current += 1
       setError(null)
     }
     onOpenChange(next)
@@ -428,25 +444,20 @@ function NameDialog({
           onSubmit={(event) => {
             event.preventDefault()
             const name = String(new FormData(event.currentTarget).get("name") ?? "")
-            const mine = openingRef.current
-            setSavingIn(mine)
-            void save(name)
-              // A dropped connection gets the same sentence as any other failure.
-              .catch((): ChangeOutcome => ({ ok: false, message: refusal("unavailable").message }))
-              .then((outcome) => {
-                setSavingIn((current) => (current === mine ? null : current))
-                if (mine !== openingRef.current) {
-                  // Closed while saving: report it in the pane, nowhere else.
-                  onSaved(outcome)
-                  return
-                }
-                if (!outcome.ok) {
-                  setError(outcome.message)
-                  return
-                }
-                changeOpen(false)
+            const mine = closings.current
+            void save(name).then((outcome) => {
+              if (mine !== closings.current) {
+                // Closed while saving: report it in the pane, nowhere else.
                 onSaved(outcome)
-              })
+                return
+              }
+              if (!outcome.ok) {
+                setError(outcome.message)
+                return
+              }
+              changeOpen(false)
+              onSaved(outcome)
+            })
           }}
         >
           <DialogHeader>

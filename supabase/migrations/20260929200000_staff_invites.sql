@@ -34,6 +34,11 @@ begin
         raise exception 'email_invalid';
     end if;
 
+    -- Staff members before roles, the order the other writes lock them in, so
+    -- an invite never deadlocks against them. It is the lock the insert below
+    -- takes anyway, taken early.
+    lock table public.staff_members in row exclusive mode;
+
     -- Held until commit, so the role can't be retired between this check and the insert.
     select * into invited_role from public.roles r where r.id = invite_staff_member.role_id for share;
     if not found then

@@ -220,7 +220,7 @@ test("Resend invite sends a new link, and the earlier one stops working", async 
   await expect(fresh).toHaveURL(/\/staff$/)
 })
 
-test("someone deactivated before accepting is signed out with a message and can't reach the staff side", async ({
+test("someone deactivated before accepting is signed out with a message, and signs in with their password once reactivated", async ({
   page,
   browser,
 }) => {
@@ -239,6 +239,12 @@ test("someone deactivated before accepting is signed out with a message and can'
   )
   await invitedPage.goto("/staff")
   await expect(invitedPage).toHaveURL(/\/login$/)
+
+  await page.reload()
+  await personRow(page, invitee.name).getByRole("button", { name: "Reactivate" }).click()
+  await expect(callout(page)).toHaveText(`Reactivated ${invitee.name}.`)
+  await signIn(invitedPage, { ...invitee, password: "invitee-password" } as FixtureStaff)
+  await expect(invitedPage.getByText(`Welcome, ${invitee.name}.`)).toBeVisible()
 })
 
 test("inviting an email already on staff is refused in the callout, and nothing is sent", async ({ page }) => {

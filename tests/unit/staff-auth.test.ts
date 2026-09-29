@@ -64,7 +64,10 @@ function fakeSupabase({
         return { data: {}, error: updateError }
       }),
     },
-    rpc: vi.fn().mockReturnValue({ maybeSingle }),
+    rpc: vi.fn((fn: string) => {
+      calls.push(fn)
+      return { maybeSingle }
+    }),
   }
   return { client: client as unknown as SupabaseClient, signOut, rpc: client.rpc, auth: client.auth, calls }
 }
@@ -263,13 +266,13 @@ describe("requirePermission", () => {
 })
 
 describe("acceptInvite", () => {
-  it("uses the invite token, checks the staff record, then sets the password", async () => {
+  it("uses the invite token, sets the password, then checks the staff record", async () => {
     const { client, auth, calls, signOut } = fakeSupabase()
 
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: true, data: MANAGER })
     expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: "hash-1", type: "invite" })
     expect(auth.updateUser).toHaveBeenCalledWith({ password: "a-new-password" })
-    expect(calls).toEqual(["verifyOtp", "updateUser"])
+    expect(calls).toEqual(["verifyOtp", "updateUser", "current_staff_member"])
     expect(signOut).not.toHaveBeenCalled()
   })
 
@@ -295,20 +298,21 @@ describe("acceptInvite", () => {
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "unavailable" })
   })
 
-  it("signs out someone deactivated before accepting, and sets no password", async () => {
+  it("signs out someone deactivated before accepting, keeping the password for if they are reactivated", async () => {
     const { client, calls, signOut } = fakeSupabase({
       staffRecord: { data: { ...MANAGER_ROW, active: false, permissions: [] }, error: null },
     })
 
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "deactivated" })
-    expect(calls).toEqual(["verifyOtp"])
+    expect(calls).toEqual(["verifyOtp", "updateUser", "current_staff_member"])
     expect(signOut).toHaveBeenCalled()
   })
 
   it("signs the person out when the password can't be saved", async () => {
-    const { client, signOut } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
+    const { client, signOut, calls } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
 
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "password-not-saved" })
+    expect(calls).toEqual(["verifyOtp", "updateUser"])
     expect(signOut).toHaveBeenCalled()
   })
 })

@@ -82,9 +82,12 @@ export async function retireRoleNow(roleId: string) {
 
 // Where the invite email links back to: /auth/confirm on the site the Manager
 // is using, so a Preview's invites come back to that Preview. Next.js has
-// already checked that a Server Action's Origin matches its Host.
+// already checked that a Server Action's Origin matches its Host. Supabase
+// sends any address missing from its allow-list to the Site URL instead.
 async function confirmUrl() {
-  const origin = (await headers()).get("origin")
+  const request = await headers()
+  const host = request.get("x-forwarded-host") ?? request.get("host")
+  const origin = request.get("origin") ?? `${request.get("x-forwarded-proto") ?? "https"}://${host}`
   return `${origin}/auth/confirm`
 }
 

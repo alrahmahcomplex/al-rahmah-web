@@ -142,8 +142,11 @@ export type AcceptInviteError =
 
 // Accepts an invite from the /auth/confirm form. The page never touches the
 // token on load, so an email link scanner opening the link can't use it up;
-// only this submit does. The staff record is checked before the password is
-// set, so someone deactivated before accepting leaves with no password.
+// only this submit does. Using the token confirms the account for good, so
+// the password is set before the staff record is checked: someone deactivated
+// before accepting is signed out, but keeps a password that works once they
+// are reactivated, rather than being left confirmed with no password they
+// know and no invite that can be resent.
 export async function acceptInvite(
   supabase: SupabaseClient,
   tokenHash: string,
@@ -161,18 +164,15 @@ export async function acceptInvite(
     return { ok: false, error: "unavailable" }
   }
 
-  const staff = await loadStaffMember(supabase)
-  if (!staff.ok) {
-    await supabase.auth.signOut()
-    return staff
-  }
-
   const { error: updateError } = await supabase.auth.updateUser({ password })
   if (updateError) {
     console.error("Accepted an invite but could not set the password", updateError)
     await supabase.auth.signOut()
     return { ok: false, error: "password-not-saved" }
   }
+
+  const staff = await loadStaffMember(supabase)
+  if (!staff.ok) await supabase.auth.signOut()
   return staff
 }
 

@@ -189,6 +189,9 @@ The preserved record of changes to admissions data. Every edit records the previ
 
 The history also records **Action events**: things staff do that change no record, such as sending a staff invite or releasing an interview result. A change is made by a staff member, by the **Admission form**, or by the workbook import, and the history says which. An attempt the system refused is not part of the history, because it changed nothing. How this is stored is in `docs/adr/0004-audit-history-is-one-trigger-fed-log.md`.
 
+**Sign-in notice**:
+A message on the staff home telling a staff member that someone else changed their role, deactivated them or reactivated them, with who did it and on which date. It stays until they dismiss it. Changes they made themselves and corrections to their name produce none.
+
 Admissions records are never deleted. A record may be marked **Inactive** or **Archived** when it is no longer operationally active, while remaining permanently available with its complete audit history.
 
 **Inactive** means temporarily not active and potentially eligible to return to active work. **Archived** means permanently closed for normal operations while remaining available for historical reference. **Inactive** and **Archived** are closure marks, not lifecycle statuses: a lead keeps its status while it carries one.

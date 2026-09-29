@@ -50,12 +50,22 @@ export async function inRolledBackTransaction<T>(work: (sql: Client) => Promise<
 }
 
 // Runs `work` in a transaction that commits, as the system actor.
-export async function asSystem<T>(work: (sql: Client) => Promise<T>): Promise<T> {
+export function asSystem<T>(work: (sql: Client) => Promise<T>): Promise<T> {
+  return committedAs("select public.set_audit_actor('system')", [], work)
+}
+
+// Runs `work` in a transaction that commits, naming a staff member as the
+// actor: a write they made themselves, outside the screen's guardrails.
+export function asStaffActor<T>(staffId: string, work: (sql: Client) => Promise<T>): Promise<T> {
+  return committedAs("select public.set_audit_actor('staff', $1)", [staffId], work)
+}
+
+async function committedAs<T>(setActor: string, params: unknown[], work: (sql: Client) => Promise<T>): Promise<T> {
   const sql = new Client({ connectionString: required("SUPABASE_DB_URL") })
   await sql.connect()
   try {
     await sql.query("begin")
-    await sql.query("select public.set_audit_actor('system')")
+    await sql.query(setActor, params)
     const result = await work(sql)
     await sql.query("commit")
     return result

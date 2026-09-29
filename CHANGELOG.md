@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- When someone else changes your role, deactivates you or reactivates you, the staff
+  home tells you at your next sign-in who did it, what changed and on which date.
+  **Dismiss** clears the message, and it doesn't come back.
+
 ## September 29, 2026 `v0.5.0`
 
 ### NEW

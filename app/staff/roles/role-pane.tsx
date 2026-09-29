@@ -1,7 +1,7 @@
 "use client"
 
 import { ChevronDownIcon, CircleAlertIcon, CircleCheckIcon } from "lucide-react"
-import { useId, useState, useTransition } from "react"
+import { useId, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -374,7 +374,9 @@ function PersonRow({
 // One text field in a dialog: correcting a person's name, renaming a role.
 // It stays open until the save lands. A refusal (a name another role has)
 // shows inside it, so the typed name can be fixed in place; a success
-// closes it and goes to the pane's callout.
+// closes it and goes to the pane's callout. Closing it mid-save is allowed:
+// that save's answer then goes to the callout and leaves any reopened
+// dialog alone.
 function NameDialog({
   open,
   onOpenChange,
@@ -400,24 +402,34 @@ function NameDialog({
   const errorId = useId()
   const [error, setError] = useState<string | null>(null)
   const [saving, startSaving] = useTransition()
+  // Counts openings, so a save can tell whether its dialog is still the one
+  // on screen when its answer arrives.
+  const opening = useRef(0)
 
   const changeOpen = (next: boolean) => {
-    if (!next) setError(null)
+    if (!next) {
+      opening.current += 1
+      setError(null)
+    }
     onOpenChange(next)
   }
 
   return (
-    // Held open while a save is in flight, so its answer can never land on a
-    // dialog someone has since closed and reopened.
-    <Dialog open={open} onOpenChange={(next) => (saving ? undefined : changeOpen(next))}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent>
         <form
           className="grid gap-4"
           onSubmit={(event) => {
             event.preventDefault()
             const name = String(new FormData(event.currentTarget).get("name") ?? "")
+            const mine = opening.current
             startSaving(async () => {
               const outcome = await save(name)
+              if (mine !== opening.current) {
+                // Closed while saving: report it in the pane, nowhere else.
+                onSaved(outcome)
+                return
+              }
               if (!outcome.ok) {
                 setError(outcome.message)
                 return
@@ -449,7 +461,7 @@ function NameDialog({
             )}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={saving} onClick={() => changeOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => changeOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={saving}>

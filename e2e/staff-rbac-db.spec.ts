@@ -61,6 +61,10 @@ const STARTING_GRANTS: Record<string, string[]> = {
   Accountant: ["interview_payments.record", "leads.view", "payments.record", "payments.view"],
 }
 
+// A lead from supabase/seed.sql. audit_log.lead_id references leads, so a lead id
+// in the log must name one that exists.
+const SEEDED_LEAD_ID = "1ead0000-0000-4000-8000-000000000001"
+
 async function hasPermission(person: FixtureStaff, permission: string) {
   const { data, error } = await (await signedIn(person)).rpc("has_permission", { permission })
   expect(error).toBeNull()
@@ -373,7 +377,7 @@ test.describe("audit log", () => {
         "create trigger audit_row_change after insert or update on public.audit_probe for each row execute function public.audit_row_change()",
       )
       await sql.query("select public.set_audit_actor('system')")
-      const leadId = randomUUID()
+      const leadId = SEEDED_LEAD_ID
       const probe = await sql.query("insert into public.audit_probe (lead) values ($1) returning id", [leadId])
 
       const { rows } = await sql.query("select lead_id, scope from public.audit_log where row_id = $1", [
@@ -511,7 +515,8 @@ test.describe("record_action", () => {
 
     expect((await client.rpc("record_action", { kind })).error?.message).toBe("lead_required")
 
-    const leadId = randomUUID()
+    // A lead id must name a real lead: audit_log.lead_id references leads.
+    const leadId = SEEDED_LEAD_ID
     const { data: id, error } = await client.rpc("record_action", { kind, lead_id: leadId })
     expect(error).toBeNull()
     const { data } = await client.from("audit_log").select("lead_id, scope, actor_staff_id").eq("id", id)

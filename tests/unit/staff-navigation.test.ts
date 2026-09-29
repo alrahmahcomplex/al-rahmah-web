@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { navFor, type StaffNavEntry } from "@/app/staff/navigation"
+import { navFor, STAFF_NAV, type StaffNavEntry } from "@/app/staff/navigation"
 
 const ENTRIES: StaffNavEntry[] = [
   { href: "/staff/roles", label: "Staff and roles", permission: "staff.administer" },
@@ -15,5 +15,14 @@ describe("navFor", () => {
 
   it("shows nothing to a role with no matching permission", () => {
     expect(navFor([], ENTRIES)).toEqual([])
+  })
+})
+
+describe("the staff navigation", () => {
+  it("shows Check-in to anyone who may view leads, and to no one else", () => {
+    const checkIn = STAFF_NAV.find((entry) => entry.label === "Check-in")
+    expect(checkIn).toEqual({ href: "/staff/check-in", label: "Check-in", permission: "leads.view" })
+    expect(navFor(["leads.view"])).toContain(checkIn)
+    expect(navFor(["payments.view"])).not.toContain(checkIn)
   })
 })

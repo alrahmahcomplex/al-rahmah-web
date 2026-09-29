@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { Client } from "pg"
 
 import { anonClient, asStaffActor, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "./db"
 
@@ -163,6 +164,56 @@ test.describe("dismiss_notices", () => {
     await ok(client.rpc("dismiss_notices", { through: seen.id }))
 
     expect((await notices(client)).map((row) => row.new_role)).toEqual(["Admissions Staff"])
+  })
+
+  test("keeps a change that started before the notice dismissed through but committed after the dismissal", async () => {
+    const { person: manager, client: managerClient } = await administrator()
+    const target = await createThrowawayStaff(["leads.view"])
+    const accountant = await roleId("Accountant")
+
+    // A slow write opens its transaction first...
+    const slow = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await slow.connect()
+    try {
+      await slow.query("begin")
+      await slow.query("select public.set_audit_actor('staff', $1)", [manager.id])
+
+      // ...a quick one commits, and the person dismisses it...
+      await ok(managerClient.rpc("assign_staff_role", { staff_id: target.id, role_id: accountant }))
+      const client = await signedIn(target)
+      const [seen] = await notices(client)
+      await ok(client.rpc("dismiss_notices", { through: seen.id }))
+
+      // ...then the slow one changes them and commits.
+      await slow.query("update public.staff_members set active = false where id = $1", [target.id])
+      await slow.query("update public.staff_members set active = true where id = $1", [target.id])
+      await slow.query("commit")
+
+      expect((await notices(client)).map((row) => row.active)).toEqual([false, true])
+    } finally {
+      await slow.query("rollback").catch(() => {})
+      await slow.end()
+    }
+  })
+
+  test("refuses to dismiss through an audit row that isn't a notice", async () => {
+    const { client: managerClient } = await administrator()
+    const target = await createThrowawayStaff(["leads.view"])
+    await ok(managerClient.rpc("assign_staff_role", { staff_id: target.id, role_id: await roleId("Accountant") }))
+    await ok(managerClient.rpc("correct_staff_name", { staff_id: target.id, full_name: `${target.name} Corrected` }))
+    const { rows } = await inRolledBackTransaction((sql) =>
+      sql.query<{ id: string }>(
+        `select id from public.audit_log
+         where table_name = 'staff_members' and row_id = $1 and new_values ? 'full_name' and action = 'update'`,
+        [target.id],
+      ),
+    )
+    const client = await signedIn(target)
+
+    const { error } = await client.rpc("dismiss_notices", { through: Number(rows[0].id) })
+
+    expect(error?.message).toBe("not_found")
+    expect(await notices(client)).toEqual([expect.objectContaining({ new_role: "Accountant" })])
   })
 
   test("changes only notices_seen_at, and the audit row it writes is not a notice", async () => {

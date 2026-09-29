@@ -6,6 +6,32 @@
 -- newer than the caller's notices_seen_at. Updating notices_seen_at changes
 -- neither column, so dismissing never counts as a notice.
 
+-- Audit rows take the time they are written, not the time their transaction
+-- started. A write to a staff member holds that row's lock until it commits,
+-- so the audit rows about one person are timed in the order they commit. A
+-- notice timed before the newest one a person was shown was therefore already
+-- committed and on screen, and dismissing through the newest one can't hide a
+-- change that was still in flight.
+alter table public.audit_log alter column created_at set default clock_timestamp();
+
+-- Whether an audit row is a notice for this staff member, apart from being
+-- newer than their notices_seen_at: an update to their row that changed their
+-- role or active state, made by any actor but them.
+create function public.is_notice_for(entry public.audit_log, staff_id uuid)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+    select entry.table_name = 'staff_members'
+        and entry.row_id = is_notice_for.staff_id
+        and entry.action = 'update'
+        and (entry.new_values ? 'role_id' or entry.new_values ? 'active')
+        and entry.actor_staff_id is distinct from is_notice_for.staff_id;
+$$;
+
+revoke execute on function public.is_notice_for(public.audit_log, uuid) from public, anon, authenticated;
+
 -- The caller's notices, oldest first. Names are looked up now, so a role
 -- renamed since shows under its current name, and a deactivated actor still
 -- shows by name. old_role and new_role are empty when the role didn't change;
@@ -35,11 +61,7 @@ as $$
         (a.new_values ->> 'active')::boolean
     from public.staff_members me
     join public.audit_log a
-        on a.table_name = 'staff_members'
-        and a.row_id = me.id
-        and a.action = 'update'
-        and (a.new_values ? 'role_id' or a.new_values ? 'active')
-        and a.actor_staff_id is distinct from me.id
+        on public.is_notice_for(a, me.id)
         and a.created_at > me.notices_seen_at
     left join public.staff_members actor on actor.id = a.actor_staff_id
     left join public.roles old_role on old_role.id = (a.old_values ->> 'role_id')::uuid
@@ -77,8 +99,7 @@ begin
     select a.created_at into seen_through
     from public.audit_log a
     where a.id = dismiss_notices.through
-      and a.table_name = 'staff_members'
-      and a.row_id = me.id;
+      and public.is_notice_for(a, me.id);
     if not found then
         raise exception 'not_found';
     end if;

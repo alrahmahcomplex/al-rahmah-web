@@ -26,18 +26,22 @@ export async function setInvitePassword(_previous: AcceptInviteState, formData: 
 
   const supabase = await createClient()
   const result = await acceptInvite(supabase, tokenHash, password, retrying ? { verifiedUserId } : {})
-  if (!result.ok && "userId" in result) {
-    jar.set(VERIFIED_COOKIE, `${tokenHash} ${result.userId}`, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/auth/confirm",
-      maxAge: 60 * 60,
-    })
-  } else if (retrying) {
-    jar.delete({ name: VERIFIED_COOKIE, path: "/auth/confirm" })
+  if (!result.ok) {
+    if ("userId" in result) {
+      jar.set(VERIFIED_COOKIE, `${tokenHash} ${result.userId}`, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/auth/confirm",
+        maxAge: 60 * 60,
+      })
+    }
+    // Any other failure keeps the cookie, so a retry that hit an outage can
+    // run again. It expires with the hour, and only ever sets the password of
+    // the account it names.
+    return { error: result.error }
   }
-  if (!result.ok) return { error: result.error }
 
+  if (retrying) jar.delete({ name: VERIFIED_COOKIE, path: "/auth/confirm" })
   redirect("/staff")
 }

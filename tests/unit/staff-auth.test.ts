@@ -36,6 +36,7 @@ function fakeSupabase({
   staffRecord = { data: MANAGER_ROW, error: null } as StaffRecordResponse,
   staffRecords = undefined as StaffRecordResponse[] | undefined,
   sessionUser = true,
+  getUserError = null as { message: string; status?: number } | null,
   verifyError = null as { message: string; code?: string; status?: number } | null,
   updateError = null as { message: string; code?: string; status?: number } | null,
 } = {}) {
@@ -52,7 +53,7 @@ function fakeSupabase({
       }),
       getUser: vi.fn().mockResolvedValue({
         data: { user: sessionUser ? { id: "user" } : null },
-        error: null,
+        error: getUserError,
       }),
       signOut,
       verifyOtp: vi.fn(async () => {
@@ -354,12 +355,38 @@ describe("acceptInvite", () => {
   })
 
   it("treats a retry with no session left as a spent link", async () => {
-    const { client, calls } = fakeSupabase({ sessionUser: false })
+    const { client, calls } = fakeSupabase({
+      sessionUser: false,
+      getUserError: { message: "Auth session missing!", status: 400 },
+    })
 
     expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
       ok: false,
       error: "invalid-link",
     })
     expect(calls).toEqual([])
+  })
+
+  it("reports a retry whose session check fails for a moment as unavailable, so it can run again", async () => {
+    const { client, calls } = fakeSupabase({
+      sessionUser: false,
+      getUserError: { message: "fetch failed", status: 0 },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password", { verifiedUserId: "user" })).toEqual({
+      ok: false,
+      error: "unavailable",
+    })
+    expect(calls).toEqual([])
+  })
+
+  it("tells someone whose password was saved to sign in when the staff check can't run", async () => {
+    const { client, calls, signOut } = fakeSupabase({
+      staffRecord: { data: null, error: { message: "fetch failed" } },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "joined-unavailable" })
+    expect(calls).toEqual(["verifyOtp", "updateUser", "current_staff_member"])
+    expect(signOut).toHaveBeenCalled()
   })
 })

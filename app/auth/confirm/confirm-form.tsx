@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useActionState, useState } from "react"
 
-import { MINIMUM_PASSWORD_LENGTH } from "@/lib/services/staff-auth"
+import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 
 import { setInvitePassword, type AcceptInviteState } from "./actions"
 
@@ -18,11 +18,12 @@ const MESSAGES: Record<NonNullable<AcceptInviteState>["error"], string> = {
   deactivated: "Your staff account was deactivated before you accepted the invite. Ask an Admissions Manager to reactivate it.",
   "not-staff": "This account is not on the staff list. Ask an Admissions Manager to invite you.",
   "password-not-saved": "Your password could not be saved. Try again in a moment.",
+  "joined-unavailable": "Your password is set, but the staff side isn't answering right now. Sign in with it in a moment.",
   unavailable: "Something went wrong. Open the link from your email again in a moment.",
 }
 
 // Errors after which the link is spent, so the form goes away.
-const FINAL = new Set<keyof typeof MESSAGES>(["invalid-link", "deactivated", "not-staff"])
+const FINAL = new Set<keyof typeof MESSAGES>(["invalid-link", "deactivated", "not-staff", "joined-unavailable"])
 
 const INPUT =
   "w-full bg-white border border-blue-600/30 rounded-full h-11 pl-10 pr-10 outline-none focus:border-blue-600 transition-colors font-exo font-light italic placeholder:text-slate-400 text-slate-800 text-[12px]"

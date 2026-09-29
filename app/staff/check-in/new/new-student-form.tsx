@@ -24,6 +24,9 @@ import type { RegisterOutcome, Step } from "../outcome"
 const SELECT_CLASS =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
 
+const LOST_REQUEST_MESSAGE =
+  "The registration could not be confirmed. Check your connection and register again. If the student comes back as already registered, the first attempt was saved."
+
 const STEP_NUMBER: Record<Step, number> = { parent: 1, student: 2, review: 3 }
 const STEP_TITLE: Record<Step, string> = {
   parent: "Parent or guardian",
@@ -79,22 +82,31 @@ export function NewStudentForm({ today, years }: { today: string; years: number[
   function submit() {
     setRefusal(null)
     startTransition(async () => {
-      const result = await registerWalkIn({
-        contact: {
-          fullName: details.parentName,
-          relationship: details.relationship,
-          relationshipDescription: details.relationship === "Other" ? details.relationshipDescription : undefined,
-          phone: details.phone,
-          whatsapp: details.whatsapp.trim() === "" ? undefined : details.whatsapp,
-        },
-        student: {
-          fullName: details.studentName,
-          className: details.className as LeadClass,
-          enrollmentYear: Number(details.enrollmentYear),
-          dayOrBoarding: details.dayOrBoarding as DayOrBoarding,
-        },
-        visitDate: details.visitDate,
-      })
+      let result: RegisterOutcome
+      try {
+        result = await registerWalkIn({
+          contact: {
+            fullName: details.parentName,
+            relationship: details.relationship,
+            relationshipDescription: details.relationship === "Other" ? details.relationshipDescription : undefined,
+            phone: details.phone,
+            whatsapp: details.whatsapp.trim() === "" ? undefined : details.whatsapp,
+          },
+          student: {
+            fullName: details.studentName,
+            className: details.className as LeadClass,
+            enrollmentYear: Number(details.enrollmentYear),
+            dayOrBoarding: details.dayOrBoarding as DayOrBoarding,
+          },
+          visitDate: details.visitDate,
+        })
+      } catch {
+        // The request never came back, so it may or may not have been saved.
+        // Trying again is safe: a child who was saved comes back as already
+        // registered, with the number.
+        setRefusal({ status: "refused", step: "review", field: null, message: LOST_REQUEST_MESSAGE })
+        return
+      }
 
       if (result.status === "refused") {
         setRefusal(result)

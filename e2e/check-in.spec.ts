@@ -118,6 +118,32 @@ test.describe("registering a new family", () => {
     await expect(page.getByLabel("Admission Number")).toHaveText(/^ADMSN-\d{5}$/)
   })
 
+  test("a request that never comes back says so, and registering again is safe", async ({ page }) => {
+    const family = newFamily()
+    await signIn(page, ADMISSIONS)
+    await startNewStudent(page)
+    await fillParent(page, family)
+    await fillStudent(page, family.child)
+
+    // The first submit is dropped in flight; the second goes through.
+    let dropped = false
+    await page.route("**/staff/check-in/new", async (route) => {
+      if (route.request().method() === "POST" && !dropped) {
+        dropped = true
+        await route.abort("connectionfailed")
+        return
+      }
+      await route.continue()
+    })
+
+    await page.getByRole("button", { name: "Register student" }).click()
+    await expect(page.locator("[data-slot=alert]")).toContainText("could not be confirmed")
+    await expect(page.getByRole("button", { name: "Register student" })).toBeEnabled()
+
+    await page.getByRole("button", { name: "Register student" }).click()
+    await expect(page.getByLabel("Admission Number")).toHaveText(/^ADMSN-\d{5}$/)
+  })
+
   test("the Visit date cannot be later than today", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await startNewStudent(page)

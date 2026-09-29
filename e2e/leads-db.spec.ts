@@ -123,7 +123,8 @@ test.describe("phone numbers", () => {
 
   test("a number that is not a phone number is refused, and nothing is written", async () => {
     const staff = await signedIn(ADMISSIONS)
-    for (const phone of ["12345", "abc", "+12", "0712 34", "+1234567890123456", ""]) {
+    // Including a Tanzanian number with too few or too many digits after +255.
+    for (const phone of ["12345", "abc", "+12", "0712 34", "+1234567890123456", "", "+25570012345", "+255 712 345 6789"]) {
       const pupil = student()
       const result = await createLead(staff, walkIn({ contact: contact({ phone }), student: pupil }))
       expect(result, phone).toEqual({ ok: false, error: { kind: "invalid", field: "phone" } })

@@ -35,7 +35,8 @@ create type public.contact_origin as enum ('front_desk', 'admission_form');
 -- ---------------------------------------------------------------------------
 
 -- Strips spaces, dashes, dots and brackets. `0` plus nine digits, nine digits
--- alone and `255` plus nine digits become `+255` plus the nine digits. Any
+-- alone and `255` plus nine digits become `+255` plus the nine digits. A
+-- number that starts with `+255` must have exactly nine digits after it. Any
 -- other number must start with `+` and have 8 to 15 digits. Everything else
 -- is not a phone number: null.
 create function public.normalize_phone(phone text)
@@ -50,6 +51,10 @@ as $$
         when s ~ '^0[0-9]{9}$' then '+255' || substr(s, 2)
         when s ~ '^[0-9]{9}$' then '+255' || s
         when s ~ '^255[0-9]{9}$' then '+' || s
+        -- A Tanzanian number is exactly nine digits after +255, so a short or
+        -- long one is a typo, not an international number.
+        when s ~ '^\+255[0-9]{9}$' then s
+        when s ~ '^\+255' then null
         when s ~ '^\+[0-9]{8,15}$' then s
     end
     from (select regexp_replace(normalize_phone.phone, '[\s.()\[\]-]', '', 'g') as s) cleaned;

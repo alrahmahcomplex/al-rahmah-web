@@ -36,11 +36,30 @@ type StaffMemberRow = {
   permissions: Permission[]
 }
 
+// PostgREST caches its clock, and some releases let that cache fall more than
+// its 30 seconds of allowed skew behind, so a token issued a moment ago is
+// refused as "issued at future" (PostgREST issue #5196, fixed in v14.18 and
+// v16.3). The token is fine; PostgREST re-checks it against a fresh clock on
+// the next request, so one more read a second later settles it.
+const CLOCK_CATCH_UP_MS = 1000
+
+function isIssuedAtFuture(error: { code?: string; message?: string }) {
+  return error.code === "PGRST303" && error.message === "JWT issued at future"
+}
+
+function readStaffRecord(supabase: SupabaseClient) {
+  return supabase.rpc("current_staff_member").maybeSingle<StaffMemberRow>()
+}
+
 // The staff record behind the current session, read fresh from the database
 // so a deactivation or a permission change applies on the next request.
 // Fails closed: if the record cannot be read, the answer is no.
 async function loadStaffMember(supabase: SupabaseClient): Promise<Result<StaffMember, StaffAccessError>> {
-  const { data, error } = await supabase.rpc("current_staff_member").maybeSingle<StaffMemberRow>()
+  let { data, error } = await readStaffRecord(supabase)
+  if (error && isIssuedAtFuture(error)) {
+    await new Promise((resolve) => setTimeout(resolve, CLOCK_CATCH_UP_MS))
+    ;({ data, error } = await readStaffRecord(supabase))
+  }
   if (error) {
     console.error("Could not read the signed-in staff member", error)
     return { ok: false, error: "unavailable" }

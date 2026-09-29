@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 29, 2026 `v0.3.1`
+
+### FIXED
+
+- Staff signing in with the right password no longer sometimes see "Sign-in is
+  unavailable right now". This happened when the database service briefly thought a
+  sign-in made a moment ago came from the future. Sign-in now checks once more a
+  second later, and still refuses if the staff record can't be read.
+
 ## September 28, 2026 `v0.3.0`
 
 ### NEW

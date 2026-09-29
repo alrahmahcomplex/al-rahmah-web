@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { getStaffUser, requirePermission, signInStaff } from "@/lib/services/staff-auth"
 
@@ -20,15 +20,26 @@ const MANAGER = {
   permissions: ["leads.view", "staff.administer"],
 }
 
-type StaffRecordResponse = { data: unknown; error: { message: string } | null }
+type StaffRecordResponse = { data: unknown; error: { message: string; code?: string } | null }
+
+// What PostgREST answers when its clock lags behind the token's issue time.
+const ISSUED_AT_FUTURE: StaffRecordResponse = {
+  data: null,
+  error: { code: "PGRST303", message: "JWT issued at future" },
+}
 
 // A stand-in for the Supabase SDK: the only boundary these tests fake.
-// `staffRecord` is what `current_staff_member` answers.
+// `staffRecord` is what `current_staff_member` answers; `staffRecords`, when
+// given, are its answers to successive calls.
 function fakeSupabase({
   signInError = null as { message: string; code?: string } | null,
   staffRecord = { data: MANAGER_ROW, error: null } as StaffRecordResponse,
+  staffRecords = undefined as StaffRecordResponse[] | undefined,
   sessionUser = true,
 } = {}) {
+  const maybeSingle = vi.fn()
+  for (const response of staffRecords ?? []) maybeSingle.mockResolvedValueOnce(response)
+  maybeSingle.mockResolvedValue(staffRecords?.at(-1) ?? staffRecord)
   const signOut = vi.fn().mockResolvedValue({ error: null })
   const client = {
     auth: {
@@ -42,9 +53,9 @@ function fakeSupabase({
       }),
       signOut,
     },
-    rpc: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue(staffRecord) }),
+    rpc: vi.fn().mockReturnValue({ maybeSingle }),
   }
-  return { client: client as unknown as SupabaseClient, signOut }
+  return { client: client as unknown as SupabaseClient, signOut, rpc: client.rpc }
 }
 
 describe("signInStaff", () => {
@@ -112,6 +123,73 @@ describe("signInStaff", () => {
       error: "unavailable",
     })
     expect(signOut).toHaveBeenCalled()
+  })
+})
+
+// PostgREST can briefly judge a token that was just issued as "issued at
+// future" when its cached clock lags. The staff record read tries once more
+// after a second; any other failure, or a second rejection, is still a no.
+describe("reading the staff record when PostgREST's clock lags", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function withTimersRunning<T>(pending: Promise<T>): Promise<T> {
+    await vi.runAllTimersAsync()
+    return pending
+  }
+
+  it("signs in once a second read is accepted", async () => {
+    vi.useFakeTimers()
+    const { client, signOut, rpc } = fakeSupabase({
+      staffRecords: [ISSUED_AT_FUTURE, { data: MANAGER_ROW, error: null }],
+    })
+
+    expect(await withTimersRunning(signInStaff(client, "manager@example.test", "fixture-password"))).toEqual({
+      ok: true,
+      data: MANAGER,
+    })
+    expect(rpc).toHaveBeenCalledTimes(2)
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("waits before reading again, giving PostgREST's clock time to catch up", async () => {
+    vi.useFakeTimers()
+    const { client, rpc } = fakeSupabase({
+      staffRecords: [ISSUED_AT_FUTURE, { data: MANAGER_ROW, error: null }],
+    })
+
+    const pending = getStaffUser(client)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(rpc).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(await pending).toEqual({ ok: true, data: MANAGER })
+    expect(rpc).toHaveBeenCalledTimes(2)
+  })
+
+  it("fails closed and ends the session when the second read is rejected too", async () => {
+    vi.useFakeTimers()
+    const { client, signOut, rpc } = fakeSupabase({ staffRecords: [ISSUED_AT_FUTURE, ISSUED_AT_FUTURE] })
+
+    expect(await withTimersRunning(signInStaff(client, "manager@example.test", "fixture-password"))).toEqual({
+      ok: false,
+      error: "unavailable",
+    })
+    expect(rpc).toHaveBeenCalledTimes(2)
+    expect(signOut).toHaveBeenCalled()
+  })
+
+  it("does not read again after any other failure", async () => {
+    for (const error of [
+      { code: "PGRST303", message: "JWT expired" },
+      { code: "PGRST301", message: "JWT could not be decoded" },
+      { message: "connection refused" },
+    ]) {
+      const { client, rpc } = fakeSupabase({ staffRecord: { data: null, error } })
+
+      expect(await getStaffUser(client)).toEqual({ ok: false, error: "unavailable" })
+      expect(rpc).toHaveBeenCalledTimes(1)
+    }
   })
 })
 

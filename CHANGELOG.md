@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- Nothing in the app changes in this release. The lint check no longer fails on a
+  developer's machine where agents keep extra copies of the project inside it. It
+  was reading the build files in those copies as if they were code to check.
+
 ## September 29, 2026 `v0.3.1`
 
 ### FIXED

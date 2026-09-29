@@ -30,3 +30,6 @@ export const RETIRED_ROLE = staff(
   "retired-role@example.test",
   "Receptionist",
 )
+// Invited, with no account yet: they have not opened their invite. No
+// password works for them.
+export const INVITED = staff("a1a1a1a1-0000-4000-8000-000000000007", "Invited Staff", "invited@example.test", "Admissions Staff")

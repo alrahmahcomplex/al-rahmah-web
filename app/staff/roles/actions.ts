@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { headers } from "next/headers"
 
 import type { Permission } from "@/lib/permissions"
 import type { Result } from "@/lib/services/result"
@@ -9,13 +10,16 @@ import {
   correctStaffName,
   createRole,
   deactivateStaff,
+  inviteStaff,
   reactivateStaff,
+  resendInvite,
   renameRole,
   retireRole,
   setRolePermission,
   type Refusal,
   type RoleNames,
 } from "@/lib/services/staff-admin"
+import { inviteSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
 
 // What the pane shows in its callout after a change.
@@ -74,4 +78,43 @@ export async function setPermission(roleId: string, permission: Permission, gran
 export async function retireRoleNow(roleId: string) {
   const supabase = await createClient()
   return settle<RoleNames>(await retireRole(supabase, roleId), ({ role }) => `Retired ${role}. It stays in history.`)
+}
+
+// Where the invite email links back to: /auth/confirm on the site the Manager
+// is using, so a Preview's invites come back to that Preview. Next.js has
+// already checked that a Server Action's Origin matches its Host.
+async function confirmUrl() {
+  const origin = (await headers()).get("origin")
+  return `${origin}/auth/confirm`
+}
+
+// The record is kept even when the email fails, so the outcome says which
+// happened and the person shows as Invited with Resend invite beside them.
+export async function inviteStaffMember(
+  roleId: string,
+  fullName: string,
+  email: string,
+): Promise<ChangeOutcome & { created: boolean }> {
+  const supabase = await createClient()
+  const result = await inviteStaff(supabase, inviteSender(), { fullName, email, roleId }, await confirmUrl())
+  revalidatePath("/staff/roles")
+  if (!result.ok) return { ok: false, created: false, message: result.error.message }
+
+  const { name, role, email: sentTo, ...invitation } = result.data
+  if (invitation.sent) {
+    return { ok: true, created: true, message: `Invited ${name} to ${role}. The email is on its way to ${sentTo}.` }
+  }
+  return {
+    ok: false,
+    created: true,
+    message: `${name} was added to ${role}, but the invite wasn't sent. ${invitation.failure.message} Use Resend invite to try again.`,
+  }
+}
+
+export async function resendStaffInvite(staffId: string) {
+  const supabase = await createClient()
+  return settle(
+    await resendInvite(supabase, inviteSender(), staffId, await confirmUrl()),
+    ({ name, email }) => `Sent ${name} a new invite at ${email}. The earlier link no longer works.`,
+  )
 }

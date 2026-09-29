@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- On Staff and roles, an Admissions Manager can invite someone into the role in view
+  by name and email. They get an email with a link to set their password, then sign in
+  with that role's powers.
+- People who haven't accepted their invite show as **Invited**, with **Resend invite**
+  beside them. A new invite replaces the earlier link.
+- If the email can't be sent, the person is still added and the screen says so, so
+  the Manager can resend it later.
+- An invite link that has expired or was already used says so and asks for a new one.
+  Someone deactivated before they accept can't use their link.
+- History shows who sent each invite and who it went to.
+
 ## September 29, 2026 `v0.4.0`
 
 ### NEW

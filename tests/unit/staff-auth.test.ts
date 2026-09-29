@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { getStaffUser, requirePermission, signInStaff } from "@/lib/services/staff-auth"
+import { acceptInvite, getStaffUser, requirePermission, signInStaff } from "@/lib/services/staff-auth"
 
 const MANAGER_ROW = {
   id: "a1a1a1a1-0000-4000-8000-000000000001",
@@ -36,7 +36,10 @@ function fakeSupabase({
   staffRecord = { data: MANAGER_ROW, error: null } as StaffRecordResponse,
   staffRecords = undefined as StaffRecordResponse[] | undefined,
   sessionUser = true,
+  verifyError = null as { message: string; code?: string; status?: number } | null,
+  updateError = null as { message: string; code?: string; status?: number } | null,
 } = {}) {
+  const calls: string[] = []
   const maybeSingle = vi.fn()
   for (const response of staffRecords ?? []) maybeSingle.mockResolvedValueOnce(response)
   maybeSingle.mockResolvedValue(staffRecords?.at(-1) ?? staffRecord)
@@ -52,10 +55,18 @@ function fakeSupabase({
         error: null,
       }),
       signOut,
+      verifyOtp: vi.fn(async () => {
+        calls.push("verifyOtp")
+        return { data: {}, error: verifyError }
+      }),
+      updateUser: vi.fn(async () => {
+        calls.push("updateUser")
+        return { data: {}, error: updateError }
+      }),
     },
     rpc: vi.fn().mockReturnValue({ maybeSingle }),
   }
-  return { client: client as unknown as SupabaseClient, signOut, rpc: client.rpc }
+  return { client: client as unknown as SupabaseClient, signOut, rpc: client.rpc, auth: client.auth, calls }
 }
 
 describe("signInStaff", () => {
@@ -248,5 +259,56 @@ describe("requirePermission", () => {
     })
 
     expect(await requirePermission(client, "leads.view")).toEqual({ ok: false, error: "unavailable" })
+  })
+})
+
+describe("acceptInvite", () => {
+  it("uses the invite token, checks the staff record, then sets the password", async () => {
+    const { client, auth, calls, signOut } = fakeSupabase()
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: true, data: MANAGER })
+    expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: "hash-1", type: "invite" })
+    expect(auth.updateUser).toHaveBeenCalledWith({ password: "a-new-password" })
+    expect(calls).toEqual(["verifyOtp", "updateUser"])
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("refuses a short password without touching the token", async () => {
+    const { client, calls } = fakeSupabase()
+
+    expect(await acceptInvite(client, "hash-1", "short")).toEqual({ ok: false, error: "password-too-short" })
+    expect(calls).toEqual([])
+  })
+
+  it("reports an expired or used link", async () => {
+    const { client, calls } = fakeSupabase({
+      verifyError: { message: "Email link is invalid or has expired", code: "otp_expired", status: 403 },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "invalid-link" })
+    expect(calls).toEqual(["verifyOtp"])
+  })
+
+  it("reports an outage while checking the link as unavailable, so the person can try again", async () => {
+    const { client } = fakeSupabase({ verifyError: { message: "fetch failed", status: 0 } })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "unavailable" })
+  })
+
+  it("signs out someone deactivated before accepting, and sets no password", async () => {
+    const { client, calls, signOut } = fakeSupabase({
+      staffRecord: { data: { ...MANAGER_ROW, active: false, permissions: [] }, error: null },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "deactivated" })
+    expect(calls).toEqual(["verifyOtp"])
+    expect(signOut).toHaveBeenCalled()
+  })
+
+  it("signs the person out when the password can't be saved", async () => {
+    const { client, signOut } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "password-not-saved" })
+    expect(signOut).toHaveBeenCalled()
   })
 })

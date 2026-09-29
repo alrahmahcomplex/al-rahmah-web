@@ -231,4 +231,21 @@ describe("describeAuditRow", () => {
       describeAuditRow(row({ table_name: null, row_id: null, action: "invite_sent", new_values: { email: "x@example.test" } }), lookup),
     ).toMatchObject({ summary: "sent an invite", changes: [{ field: "email", from: null, to: "x@example.test" }] })
   })
+
+  it("names who an invite went to", () => {
+    expect(
+      describeAuditRow(
+        row({
+          table_name: null,
+          row_id: null,
+          action: "invite_sent",
+          new_values: { staff_member_id: "baraka", email: "baraka@example.test" },
+        }),
+        lookup,
+      ),
+    ).toMatchObject({
+      summary: "sent an invite to Baraka Said",
+      changes: [{ field: "email", from: null, to: "baraka@example.test" }],
+    })
+  })
 })

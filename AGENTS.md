@@ -60,7 +60,8 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
   commit;
   ```
 
-  Then invite the user under Authentication → Users. Later staff are invited from the staff side once the Staff and roles screen ships.
+  Then invite the user under Authentication → Users. Their link lands on the site root, which forwards it to `/auth/confirm`. Everyone after them is invited from Staff and roles.
+- **Staff invites** from Staff and roles need, on the hosted project: custom SMTP (Authentication → SMTP Settings, with a verified sending domain; the built-in sender reaches only the project's team), the Site URL set to production, Redirect URLs allowing `/auth/confirm` on production and on `https://*-<vercel-team>.vercel.app/**`, the Invite user template from `supabase/templates/invite.html`, and a named secret key. Vercel needs that key as `SUPABASE_SECRET_KEY`, unprefixed, in Production and Preview. Without the key the Manager's invite still creates the staff record, reports that the email wasn't sent, and offers Resend invite.
 
 ## Checks
 

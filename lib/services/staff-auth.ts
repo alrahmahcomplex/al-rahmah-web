@@ -130,6 +130,52 @@ export async function exchangeEmailLinkCode(
   return { ok: true, data: null }
 }
 
+// Supabase's minimum_password_length. Checked before the token is used, so a
+// short password never spends the invite.
+export const MINIMUM_PASSWORD_LENGTH = 6
+
+export type AcceptInviteError =
+  | "password-too-short"
+  | "invalid-link"
+  | "password-not-saved"
+  | StaffAccessError
+
+// Accepts an invite from the /auth/confirm form. The page never touches the
+// token on load, so an email link scanner opening the link can't use it up;
+// only this submit does. The staff record is checked before the password is
+// set, so someone deactivated before accepting leaves with no password.
+export async function acceptInvite(
+  supabase: SupabaseClient,
+  tokenHash: string,
+  password: string,
+): Promise<Result<StaffMember, AcceptInviteError>> {
+  if (password.length < MINIMUM_PASSWORD_LENGTH) return { ok: false, error: "password-too-short" }
+
+  const { error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" })
+  if (verifyError) {
+    // A 4xx means the link itself will not do; anything else is an outage,
+    // and the unspent link still works on a retry.
+    const status = verifyError.status ?? 0
+    if (status >= 400 && status < 500) return { ok: false, error: "invalid-link" }
+    console.error("Could not check an invite link", verifyError)
+    return { ok: false, error: "unavailable" }
+  }
+
+  const staff = await loadStaffMember(supabase)
+  if (!staff.ok) {
+    await supabase.auth.signOut()
+    return staff
+  }
+
+  const { error: updateError } = await supabase.auth.updateUser({ password })
+  if (updateError) {
+    console.error("Accepted an invite but could not set the password", updateError)
+    await supabase.auth.signOut()
+    return { ok: false, error: "password-not-saved" }
+  }
+  return staff
+}
+
 export async function signOutStaff(supabase: SupabaseClient): Promise<Result<null, "unavailable">> {
   const { error } = await supabase.auth.signOut()
   if (error) return { ok: false, error: "unavailable" }

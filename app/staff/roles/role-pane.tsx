@@ -28,7 +28,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ADMINISTER_LABEL, type PermissionOption } from "@/lib/services/staff-admin"
+import { ADMINISTER_LABEL, refusal, type PermissionOption } from "@/lib/services/staff-admin"
 import { cn } from "@/lib/utils"
 
 import {
@@ -401,14 +401,20 @@ function NameDialog({
   const inputId = useId()
   const errorId = useId()
   const [error, setError] = useState<string | null>(null)
-  const [saving, startSaving] = useTransition()
   // Counts openings, so a save can tell whether its dialog is still the one
-  // on screen when its answer arrives.
-  const opening = useRef(0)
+  // on screen when its answer arrives. The ref is read after the await; the
+  // state drives rendering.
+  const openingRef = useRef(0)
+  const [opening, setOpening] = useState(0)
+  // The opening a save is running in. Only that opening shows as saving, so
+  // a stalled save never blocks a dialog reopened after it.
+  const [savingIn, setSavingIn] = useState<number | null>(null)
+  const saving = savingIn === opening
 
   const changeOpen = (next: boolean) => {
     if (!next) {
-      opening.current += 1
+      openingRef.current += 1
+      setOpening(openingRef.current)
       setError(null)
     }
     onOpenChange(next)
@@ -422,21 +428,25 @@ function NameDialog({
           onSubmit={(event) => {
             event.preventDefault()
             const name = String(new FormData(event.currentTarget).get("name") ?? "")
-            const mine = opening.current
-            startSaving(async () => {
-              const outcome = await save(name)
-              if (mine !== opening.current) {
-                // Closed while saving: report it in the pane, nowhere else.
+            const mine = openingRef.current
+            setSavingIn(mine)
+            void save(name)
+              // A dropped connection gets the same sentence as any other failure.
+              .catch((): ChangeOutcome => ({ ok: false, message: refusal("unavailable").message }))
+              .then((outcome) => {
+                setSavingIn((current) => (current === mine ? null : current))
+                if (mine !== openingRef.current) {
+                  // Closed while saving: report it in the pane, nowhere else.
+                  onSaved(outcome)
+                  return
+                }
+                if (!outcome.ok) {
+                  setError(outcome.message)
+                  return
+                }
+                changeOpen(false)
                 onSaved(outcome)
-                return
-              }
-              if (!outcome.ok) {
-                setError(outcome.message)
-                return
-              }
-              changeOpen(false)
-              onSaved(outcome)
-            })
+              })
           }}
         >
           <DialogHeader>

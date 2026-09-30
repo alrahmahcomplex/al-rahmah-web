@@ -49,7 +49,7 @@ async function invitesTo(email: string): Promise<Email[]> {
   return Promise.all(
     ordered.map(async ({ ID }) => {
       const message = (await (await fetch(`${MAILPIT}/api/v1/message/${ID}`)).json()) as { Subject: string; HTML: string }
-      const href = message.HTML.match(/href="([^"]+)"/)?.[1] ?? ""
+      const href = message.HTML.match(/href="([^"]*token_hash[^"]*)"/)?.[1] ?? ""
       return { subject: message.Subject, link: href.replaceAll("&amp;", "&") }
     }),
   )

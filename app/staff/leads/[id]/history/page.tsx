@@ -9,7 +9,7 @@ import { getLead } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../../session"
-import { describeLeadHistoryEntry, type DescribedEntry } from "./describe"
+import { describeLeadHistory, type DescribedEntry } from "./describe"
 
 export const metadata: Metadata = {
   title: "Lead history · Al-Rahmah Complex",
@@ -50,7 +50,7 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
           <AlertDescription>This lead&apos;s history could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : (
-        <Entries entries={history.data.entries.map((entry) => describeLeadHistoryEntry(entry, history.data.contactNames))} />
+        <Entries entries={describeLeadHistory(history.data.entries, history.data.contactNames)} />
       )}
 
       <div>

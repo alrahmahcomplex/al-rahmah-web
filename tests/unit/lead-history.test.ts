@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistoryEntry } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory, describeLeadHistoryEntry } from "@/app/staff/leads/[id]/history/describe"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
 const LEAD = "11111111-1111-4111-8111-111111111111"
@@ -103,6 +103,19 @@ describe("describeLeadHistoryEntry", () => {
       names,
     )
     expect(described.summary).toBe("separated the lead from its Family")
+  })
+
+  it("names a separation of a lead that never joined: moved onto a contact made in the same change", () => {
+    const at = "2026-09-30T09:00:00Z"
+    const [moved] = describeLeadHistory(
+      [
+        entry({ id: 9, at, changes: [change("guardian_contact_id", CONTACT, OTHER_CONTACT)] }),
+        entry({ id: 8, at, record: "contact", recordId: OTHER_CONTACT, action: "insert", changes: [change("full_name", null, "Amina J. Copy")] }),
+        entry({ id: 1, record: "contact", recordId: CONTACT, action: "insert", changes: [change("full_name", null, "Amina Juma")] }),
+      ],
+      names,
+    )
+    expect(moved.summary).toBe("separated the lead from its Family")
   })
 
   it("names any other change to the lead as a change", () => {

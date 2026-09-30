@@ -76,7 +76,15 @@ function article(word: string) {
   return /^[aeiou]/i.test(word) ? "an" : "a"
 }
 
-function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string, string>>): string {
+// When each contact in the history was created, so a lead moved onto a
+// contact made in the same change reads as a separation.
+type ContactsCreated = ReadonlyMap<string, string>
+
+function summarize(
+  entry: LeadHistoryEntry,
+  contactNames: Readonly<Record<string, string>>,
+  contactsCreated: ContactsCreated,
+): string {
   const changed = new Map(entry.changes.map((c) => [c.field, c]))
   const insert = entry.action === "insert"
 
@@ -87,9 +95,15 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     const status = changed.get("status")
     if (status?.from === "Applied" && status.to === "Visited") return "recorded a visit"
     const leftFamily = changed.get("returning_family_joined")?.to === false
-    // Separating gives the lead a contact of its own; confirming moves it onto
-    // the matched Family's contact; rejecting keeps the contact it has.
-    if (changed.has("guardian_contact_id")) return leftFamily ? "separated the lead from its Family" : "confirmed the Family match"
+    // Separating gives the lead a new contact of its own, copied in the same
+    // change (so at the same moment) and clearing the Family cause if it had
+    // one. Confirming moves it onto the matched Family's existing contact.
+    // Rejecting keeps the contact it has.
+    const contact = changed.get("guardian_contact_id")
+    if (contact) {
+      const copiedNow = typeof contact.to === "string" && contactsCreated.get(contact.to) === entry.at
+      return leftFamily || copiedNow ? "separated the lead from its Family" : "confirmed the Family match"
+    }
     if (leftFamily) return "rejected the Family match"
     return "changed the lead"
   }
@@ -124,16 +138,28 @@ function rank(field: string) {
   return at === -1 ? ORDER.length : at
 }
 
+// A whole history, newest first as it came.
+export function describeLeadHistory(
+  entries: readonly LeadHistoryEntry[],
+  contactNames: Readonly<Record<string, string>>,
+): DescribedEntry[] {
+  const contactsCreated = new Map(
+    entries.filter((e) => e.record === "contact" && e.action === "insert" && e.recordId).map((e) => [e.recordId as string, e.at]),
+  )
+  return entries.map((entry) => describeLeadHistoryEntry(entry, contactNames, contactsCreated))
+}
+
 export function describeLeadHistoryEntry(
   entry: LeadHistoryEntry,
   contactNames: Readonly<Record<string, string>>,
+  contactsCreated: ContactsCreated = new Map(),
 ): DescribedEntry {
   const fromOld = entry.record !== null && entry.action === "update"
   return {
     id: entry.id,
     at: entry.at,
     actor: entry.actor,
-    summary: summarize(entry, contactNames),
+    summary: summarize(entry, contactNames, contactsCreated),
     changes: entry.changes
       .filter((c) => fromOld || !isEmpty(c.to))
       .sort((a, b) => rank(a.field) - rank(b.field))

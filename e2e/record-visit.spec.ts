@@ -23,6 +23,10 @@ function dayBefore(date: string, days = 1) {
   return moved.toISOString().slice(0, 10)
 }
 
+function dayAfter(date: string) {
+  return dayBefore(date, -1)
+}
+
 async function signIn(page: Page, person: FixtureStaff) {
   await page.goto("/login")
   await page.getByLabel("Email").fill(person.email)
@@ -127,6 +131,23 @@ test.describe("when Record visit is offered", () => {
     await expect(page.getByRole("form", { name: "Record visit" })).toHaveCount(0)
     await page.reload()
     await expect(detail(page, "Status")).toHaveText("Applied")
+  })
+
+  test("the Visit date is taken when the form opens, so a screen left open past midnight offers the new day", async ({
+    page,
+  }) => {
+    const lead = await appliedLead()
+    await signIn(page, ADMISSIONS)
+    await page.clock.install()
+    await page.goto(`/staff/leads/${lead.id}`)
+    await expect(page.getByRole("button", { name: "Record visit" })).toBeVisible()
+
+    // The screen stays open for a day before the family arrives.
+    await page.clock.fastForward(24 * 60 * 60 * 1000)
+    await page.getByRole("button", { name: "Record visit" }).click()
+    const visitDate = page.getByRole("form", { name: "Record visit" }).getByLabel("Visit date")
+    await expect(visitDate).toHaveValue(dayAfter(today))
+    await expect(visitDate).toHaveAttribute("max", dayAfter(today))
   })
 
   test("the Accountant, who may not record visits, is not offered it", async ({ page }) => {

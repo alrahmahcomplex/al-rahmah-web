@@ -57,7 +57,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           // on, so the confirmation outlasts the refresh that removes the
           // offer once the lead is Visited.
           staff.permissions.includes("visits.record") && (
-            <RecordVisit key={lead.data.id} leadId={lead.data.id} today={tanzaniaToday()} canRecord={canRecordVisit} />
+            <RecordVisit key={lead.data.id} leadId={lead.data.id} canRecord={canRecordVisit} />
           )
         }
         student={(fields) => (

@@ -636,6 +636,9 @@ export async function recordVisit(
   if (error.message === "not_applied") return { ok: false, error: { kind: "not-applied" } }
   if (error.message === "closed") return { ok: false, error: { kind: "closed" } }
   if (error.message === "invalid") return { ok: false, error: { kind: "invalid", field: invalidFieldOf(error.details) } }
+  // 22007 and 22008: a date that isn't on the calendar, such as 31 February,
+  // refused before the function runs.
+  if (error.code === "22007" || error.code === "22008") return { ok: false, error: { kind: "invalid", field: "visit_date" } }
   console.error("Could not record a visit", error)
   return { ok: false, error: { kind: "unavailable" } }
 }

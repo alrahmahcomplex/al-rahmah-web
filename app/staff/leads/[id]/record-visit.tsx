@@ -4,24 +4,28 @@ import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { tanzaniaToday } from "@/lib/school-calendar"
 
 import { recordArrival } from "./actions"
 import { Field, Refusal, Saved, useCorrection } from "./lead-editors"
 
 // Record visit, for an Applied family who has come to campus. The Visit date
-// starts at today. Once saved the lead is Visited and the screen refreshes
-// without this offer, so the confirmation stays in its place.
-export function RecordVisit({ leadId, today, canRecord }: { leadId: string; today: string; canRecord: boolean }) {
-  const [recording, setRecording] = useState(false)
+// starts at today in Tanzania, taken when the form opens, so a screen left
+// open past midnight still offers the right day. Once saved the lead is
+// Visited and the screen refreshes without this offer, so the confirmation
+// stays in its place.
+export function RecordVisit({ leadId, canRecord }: { leadId: string; canRecord: boolean }) {
+  // Today in Tanzania while the form is open, else null.
+  const [recording, setRecording] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
 
   if (recording) {
     return (
       <RecordVisitForm
         leadId={leadId}
-        today={today}
+        today={recording}
         onDone={(message) => {
-          setRecording(false)
+          setRecording(null)
           setSaved(message)
         }}
       />
@@ -40,7 +44,7 @@ export function RecordVisit({ leadId, today, canRecord }: { leadId: string; toda
           type="button"
           onClick={() => {
             setSaved(null)
-            setRecording(true)
+            setRecording(tanzaniaToday())
           }}
         >
           Record visit

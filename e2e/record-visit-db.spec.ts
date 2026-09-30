@@ -72,6 +72,19 @@ test.describe("recording the visit of an Applied family", () => {
     expect(await reread(lead.id)).toEqual(lead)
   })
 
+  test("refuses a date that isn't on the calendar as a Visit date refusal, not an outage", async () => {
+    const lead = await appliedLead()
+    const staff = await signedIn(ADMISSIONS)
+
+    for (const date of [`${thisYear}-02-31`, `${thisYear}-13-01`]) {
+      expect(await recordVisit(staff, lead.id, date), date).toEqual({
+        ok: false,
+        error: { kind: "invalid", field: "visit_date" },
+      })
+    }
+    expect(await reread(lead.id)).toEqual(lead)
+  })
+
   test("refuses every status but Applied, so no lead goes backwards or records a second first visit", async () => {
     const staff = await signedIn(ADMISSIONS)
     const others: LeadStatus[] = ["Visited", "Interviewed", "Enrolled", "Declined"]

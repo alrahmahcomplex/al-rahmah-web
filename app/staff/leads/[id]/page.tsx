@@ -41,7 +41,9 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   // listed, the correction is not offered, so it is never made unwarned.
   const children = canEditDetails ? await listContactChildren(supabase, lead.data.contact.id) : null
   const siblings = children?.ok ? children.data.filter((child) => child.id !== lead.data.id) : []
-  const canEditContact = canEditDetails && children?.ok === true
+  // A contact a closed brother or sister is on is read-only, like their lead.
+  const closedSibling = siblings.find(isClosed) ?? null
+  const canEditContact = canEditDetails && children?.ok === true && !closedSibling
 
   return (
     <div className="flex flex-col gap-6">
@@ -59,7 +61,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           </StudentEditor>
         )}
         parent={(fields) => (
-          <ContactEditor lead={lead.data} siblings={siblings} canEdit={canEditContact}>
+          <ContactEditor lead={lead.data} siblings={siblings} canEdit={canEditContact} closedSibling={closedSibling}>
             {fields}
           </ContactEditor>
         )}

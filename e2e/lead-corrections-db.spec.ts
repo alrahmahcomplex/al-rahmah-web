@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
 import { expect, test } from "@playwright/test"
+import { Client } from "pg"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import {
@@ -288,6 +289,8 @@ test.describe("correcting the parent/guardian contact", () => {
         id: lead.id,
         admissionNumber: lead.admissionNumber,
         studentName: lead.studentName,
+        status: "Visited",
+        closure: null,
       })),
     })
 
@@ -338,6 +341,83 @@ test.describe("correcting the parent/guardian contact", () => {
         lead: { id: existing.id, admissionNumber: existing.admissionNumber, status: "Visited", closure: "Archived" },
       },
     })
+  })
+
+  test("a contact a closed sibling is on is read-only, even from an open sibling", async () => {
+    const open = await walkInLead()
+    const closed = await walkInLead({ contactId: open.contact.id })
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [closed.id]))
+
+    expect(await updateGuardianContact(await signedIn(ADMISSIONS), open.contact.id, { fullName: "Changed" })).toEqual({
+      ok: false,
+      error: { kind: "closed" },
+    })
+    expect((await reread(open.id)).contact).toEqual(open.contact)
+  })
+
+  test("a change is refused when the children on the contact are not the ones the staff member saw", async () => {
+    const first = await walkInLead()
+    const staff = await signedIn(ADMISSIONS)
+    // The form opened with one child; a brother was registered before saving.
+    const second = await walkInLead({ contactId: first.contact.id })
+
+    expect(await updateGuardianContact(staff, first.contact.id, { fullName: "Stale" }, [first.id])).toEqual({
+      ok: false,
+      error: { kind: "children-changed" },
+    })
+    // A child the form listed who is no longer on the contact counts too.
+    expect(
+      await updateGuardianContact(staff, first.contact.id, { fullName: "Stale" }, [first.id, second.id, randomUUID()]),
+    ).toEqual({ ok: false, error: { kind: "children-changed" } })
+    expect((await reread(first.id)).contact.fullName).toBe("Test Parent")
+
+    expect((await updateGuardianContact(staff, first.contact.id, { fullName: "Fresh" }, [second.id, first.id])).ok).toBe(true)
+    expect((await reread(second.id)).contact.fullName).toBe("Fresh")
+  })
+
+  test("a sibling registered while the contact's number changes is checked against the new number", async () => {
+    const takenPhone = `0${nineDigits()}`
+    const existing = await walkInLead({ contact: contact({ phone: takenPhone }) })
+    const family = await walkInLead()
+    const [{ user_id: userId }] = await rows<{ user_id: string }>(
+      "select user_id from public.staff_members where id = $1",
+      [ADMISSIONS.id],
+    )
+
+    // The correction runs in its own transaction, as Admissions Staff, and
+    // stays open while the sibling is registered.
+    const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await sql.connect()
+    try {
+      await sql.query("begin")
+      await sql.query("select set_config('request.jwt.claims', $1, true)", [
+        JSON.stringify({ sub: userId, role: "authenticated" }),
+      ])
+      await sql.query("set local role authenticated")
+      await sql.query("select public.update_guardian_contact($1, $2)", [
+        family.contact.id,
+        JSON.stringify({ phone: takenPhone }),
+      ])
+
+      const sibling = createLead(await signedIn(ADMISSIONS), {
+        guardian: { contactId: family.contact.id },
+        student: student({ fullName: existing.studentName }),
+        start: { kind: "walk-in", visitDate: today },
+      })
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      await sql.query("commit")
+
+      expect(await sibling).toEqual({
+        ok: false,
+        error: {
+          kind: "duplicate",
+          lead: { id: existing.id, admissionNumber: existing.admissionNumber, status: "Visited", closure: null },
+        },
+      })
+    } finally {
+      await sql.query("rollback").catch(() => {})
+      await sql.end()
+    }
   })
 
   test("a contact that does not exist is not found", async () => {

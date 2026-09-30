@@ -43,7 +43,18 @@ export function correctionOutcome(error: CorrectionError): CorrectionOutcome {
     case "not-found":
       return { status: "refused", field: null, message: "This lead could not be found. Reload the page." }
     case "closed":
-      return { status: "refused", field: null, message: "This lead is closed, so it can't be changed." }
+      return {
+        status: "refused",
+        field: null,
+        message: "This lead, or a child who shares this parent or guardian, is closed, so it can't be changed.",
+      }
+    case "children-changed":
+      return {
+        status: "refused",
+        field: null,
+        message:
+          "The children who share this parent or guardian have changed since you opened the form. Nothing was saved. Reload the page to see who the change reaches.",
+      }
     case "not-visited":
       return { status: "refused", field: null, message: "This lead has no visit yet, so there is no Visit date to correct." }
     case "unavailable":

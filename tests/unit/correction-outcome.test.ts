@@ -24,7 +24,7 @@ describe("correctionOutcome", () => {
   })
 
   it("explains every other refusal without naming a field", () => {
-    for (const kind of ["forbidden", "not-found", "closed", "not-visited", "unavailable"] as const) {
+    for (const kind of ["forbidden", "not-found", "closed", "not-visited", "children-changed", "unavailable"] as const) {
       const outcome = correctionOutcome({ kind })
       expect(outcome).toMatchObject({ status: "refused", field: null })
       expect(outcome.status === "refused" && outcome.message.length).toBeGreaterThan(0)

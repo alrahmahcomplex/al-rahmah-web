@@ -55,9 +55,17 @@ export async function correctStudent(leadId: string, changes: LeadDetailsChanges
 }
 
 // Corrects the contact of every child on it, so every lead screen refreshes.
-export async function correctContact(contactId: string, changes: ContactChanges): Promise<CorrectionOutcome> {
+// `children` are the ids of every lead on the contact when the form opened:
+// the ones the staff member was told the change reaches.
+export async function correctContact(
+  contactId: string,
+  changes: ContactChanges,
+  children: string[],
+): Promise<CorrectionOutcome> {
   if (
     !isString(contactId) ||
+    !Array.isArray(children) ||
+    !children.every(isString) ||
     !isString(changes?.fullName) ||
     !(RELATIONSHIPS as readonly unknown[]).includes(changes.relationship) ||
     !(changes.relationshipDescription == null || isString(changes.relationshipDescription)) ||
@@ -77,7 +85,7 @@ export async function correctContact(contactId: string, changes: ContactChanges)
     relationshipDescription: changes.relationshipDescription ?? null,
     phone: changes.phone,
     whatsapp: changes.whatsapp ?? null,
-  })
+  }, children)
   if (!result.ok) return correctionOutcome(result.error)
   revalidatePath("/staff/leads", "layout")
   return { status: "saved" }

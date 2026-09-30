@@ -444,10 +444,13 @@ export type CorrectionError =
   | { kind: "duplicate"; lead: ExistingLead }
   | { kind: "forbidden" }
   | { kind: "not-found" }
-  // Declined, Inactive and Archived leads are read-only.
+  // Declined, Inactive and Archived leads are read-only, and so is a contact
+  // one of them is on.
   | { kind: "closed" }
   // An Applied lead has no visit whose date could be corrected.
   | { kind: "not-visited" }
+  // The children on a contact are no longer the ones the staff member saw.
+  | { kind: "children-changed" }
   | { kind: "invalid"; field: InvalidField | null }
   | { kind: "unavailable" }
 
@@ -465,6 +468,7 @@ async function correction(call: PromiseLike<RpcAnswer>, what: string): Promise<R
     if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
     if (error.message === "closed") return { ok: false, error: { kind: "closed" } }
     if (error.message === "not_visited") return { ok: false, error: { kind: "not-visited" } }
+    if (error.message === "children_changed") return { ok: false, error: { kind: "children-changed" } }
     if (error.message === "invalid") {
       return { ok: false, error: { kind: "invalid", field: invalidFieldOf(error.details) } }
     }
@@ -515,11 +519,15 @@ export async function updateLeadDetails(
 // Corrects a parent/guardian contact, for every child on it. Needs
 // leads.edit. Numbers are normalized as at creation, and a new number that
 // would make any of those children match another lead is refused as
-// `duplicate`, with that lead.
+// `duplicate`, with that lead. A contact a closed lead is on is refused as
+// `closed`. With `expectedChildren`, the ids of the leads the staff member was
+// told the change reaches, a contact whose children differ by then is refused
+// as `children-changed`.
 export async function updateGuardianContact(
   supabase: SupabaseClient,
   contactId: string,
   changes: ContactChanges,
+  expectedChildren?: string[],
 ): Promise<Result<null, CorrectionError>> {
   return correction(
     supabase.rpc("update_guardian_contact", {
@@ -531,6 +539,7 @@ export async function updateGuardianContact(
         phone: changes.phone,
         whatsapp: changes.whatsapp,
       }),
+      expected_lead_ids: expectedChildren ?? null,
     }),
     "correct a contact",
   )
@@ -546,7 +555,21 @@ export async function correctVisitDate(
   return correction(supabase.rpc("correct_visit_date", { lead_id: id, visited_on: visitDate }), "correct a Visit date")
 }
 
-export type ContactChild = { id: string; admissionNumber: string; studentName: string }
+export type ContactChild = {
+  id: string
+  admissionNumber: string
+  studentName: string
+  status: LeadStatus
+  closure: LeadClosure | null
+}
+
+type ContactChildRow = {
+  id: string
+  admission_number: string
+  student_name: string
+  status: LeadStatus
+  closure: LeadClosure | null
+}
 
 // Every lead on a contact, oldest first: the children a change to it reaches.
 export async function listContactChildren(
@@ -555,11 +578,11 @@ export async function listContactChildren(
 ): Promise<Result<ContactChild[], "unavailable">> {
   const { data, error } = await supabase
     .from("leads")
-    .select("id, admission_number, student_name")
+    .select("id, admission_number, student_name, status, closure")
     .eq("guardian_contact_id", contactId)
     .order("created_at")
     .order("id")
-    .overrideTypes<{ id: string; admission_number: string; student_name: string }[], { merge: false }>()
+    .overrideTypes<ContactChildRow[], { merge: false }>()
 
   if (error) {
     console.error("Could not list a contact's children", error)
@@ -567,6 +590,12 @@ export async function listContactChildren(
   }
   return {
     ok: true,
-    data: data.map((row) => ({ id: row.id, admissionNumber: row.admission_number, studentName: row.student_name })),
+    data: data.map((row) => ({
+      id: row.id,
+      admissionNumber: row.admission_number,
+      studentName: row.student_name,
+      status: row.status,
+      closure: row.closure,
+    })),
   }
 }

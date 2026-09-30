@@ -331,17 +331,20 @@ function VisitDateForm({ lead, today, onDone }: { lead: Lead; today: string; onD
 
 // The Parent or guardian section: its details, and in their place the form
 // to correct them, for staff whose role may. A contact shared with siblings
-// names them before the change is saved, because it reaches them all.
+// names them before the change is saved, because it reaches them all. A
+// contact a closed sibling is on is read-only, and says why.
 export function ContactEditor({
   lead,
   siblings,
   canEdit,
+  closedSibling,
   children,
 }: {
   lead: Lead
   // The other children on this contact.
   siblings: ContactChild[]
   canEdit: boolean
+  closedSibling: ContactChild | null
   children: React.ReactNode
 }) {
   const [editing, setEditing] = useState(false)
@@ -378,6 +381,13 @@ export function ContactEditor({
           </Button>
         </div>
       )}
+      {closedSibling && (
+        <p className="max-w-xl text-sm text-muted-foreground">
+          This parent or guardian can&apos;t be changed here, because they are shared with{" "}
+          {closedSibling.studentName} <span className="font-mono">{closedSibling.admissionNumber}</span>, whose lead
+          is closed.
+        </p>
+      )}
       <Saved message={saved} />
     </div>
   )
@@ -411,13 +421,17 @@ function ContactForm({
       onSubmit={(event) => {
         event.preventDefault()
         save(() =>
-          correctContact(contact.id, {
-            fullName,
-            relationship,
-            relationshipDescription: relationship === "Other" ? relationshipDescription : null,
-            phone,
-            whatsapp: whatsapp.trim() === "" ? null : whatsapp,
-          }),
+          correctContact(
+            contact.id,
+            {
+              fullName,
+              relationship,
+              relationshipDescription: relationship === "Other" ? relationshipDescription : null,
+              phone,
+              whatsapp: whatsapp.trim() === "" ? null : whatsapp,
+            },
+            [lead.id, ...siblings.map((child) => child.id)],
+          ),
         )
       }}
     >

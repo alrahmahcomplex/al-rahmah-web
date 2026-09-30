@@ -11,6 +11,7 @@ import { createClient } from "@/utils/supabase/server"
 import { requireStaff } from "../../session"
 import { ContactEditor, StudentEditor } from "./lead-editors"
 import { LeadSummary } from "./lead-summary"
+import { RecordVisit } from "./record-visit"
 
 export const metadata: Metadata = {
   title: "Lead · Al-Rahmah Complex",
@@ -36,6 +37,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const open = !isClosed(lead.data)
   const canEditDetails = open && staff.permissions.includes("leads.edit")
   const canCorrectVisit = open && lead.data.visitDate !== null && staff.permissions.includes("visits.record")
+  // An open Applied lead is waiting for the family's first visit.
+  const canRecordVisit = open && lead.data.status === "Applied" && staff.permissions.includes("visits.record")
 
   // The children a contact correction would also reach. If they can't be
   // listed, the correction is not offered, so it is never made unwarned.
@@ -49,6 +52,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     <div className="flex flex-col gap-6">
       <LeadSummary
         lead={lead.data}
+        nextStep={
+          // Rendered for every lead the staff member could record a visit
+          // on, so the confirmation outlasts the refresh that removes the
+          // offer once the lead is Visited.
+          staff.permissions.includes("visits.record") && (
+            <RecordVisit key={lead.data.id} leadId={lead.data.id} canRecord={canRecordVisit} />
+          )
+        }
         student={(fields) => (
           <StudentEditor
             lead={lead.data}

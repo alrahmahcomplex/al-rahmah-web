@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 30, 2026 `v0.11.0`
+
+### NEW
+
+- When a family who applied through the Admission form arrives, staff who record visits
+  open their lead and use **Record visit**. The Visit date starts at today and can be
+  set to an earlier day, never a later one, and saving moves the lead from Applied to
+  Visited. Only Applied leads offer it, so a lead never goes back a step or gets a
+  second first visit.
+
 ## September 30, 2026 `v0.10.1`
 
 ### IMPROVED

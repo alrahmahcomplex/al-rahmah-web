@@ -6,15 +6,18 @@ import type { Lead } from "@/lib/services/leads"
 
 // The lead as read-only fields: the student, the parent or guardian, and where
 // the lead stands. Used by the lead screen and the reopening hand-off. The
-// lead screen wraps a section's fields to offer corrections to them.
+// lead screen wraps a section's fields to offer corrections to them, and puts
+// the lead's next step, such as Record visit, under its heading.
 export function LeadSummary({
   lead,
   student = (fields) => fields,
   parent = (fields) => fields,
+  nextStep,
 }: {
   lead: Lead
   student?: (fields: ReactNode) => ReactNode
   parent?: (fields: ReactNode) => ReactNode
+  nextStep?: ReactNode
 }) {
   const relationship =
     lead.contact.relationship === "Other" && lead.contact.relationshipDescription
@@ -34,6 +37,8 @@ export function LeadSummary({
           {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
         </div>
       </div>
+
+      {nextStep}
 
       <section aria-labelledby="lead-student" className="flex flex-col gap-2">
         <h2 id="lead-student" className="text-sm font-semibold text-slate-900">

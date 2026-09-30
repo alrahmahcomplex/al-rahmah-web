@@ -17,7 +17,11 @@ export default async function NewStudentPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">New Student</h1>
-      <NewStudentForm today={tanzaniaToday()} years={enrollmentYears()} />
+      <NewStudentForm
+        today={tanzaniaToday()}
+        years={enrollmentYears()}
+        canEditContact={staff.permissions.includes("leads.edit")}
+      />
     </div>
   )
 }

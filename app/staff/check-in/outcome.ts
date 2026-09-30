@@ -1,4 +1,4 @@
-import type { CreateLeadError, InvalidField } from "@/lib/services/leads"
+import type { CreateLeadError, FamilyMatch, FindFamilyError, InvalidField } from "@/lib/services/leads"
 
 export type Step = "parent" | "student" | "review"
 
@@ -82,6 +82,37 @@ export function refusalOutcome(error: CreateLeadError): RegisterOutcome {
         step: "review",
         field: null,
         message: "The registration could not be saved. Nothing was created. Try again in a moment.",
+      }
+  }
+}
+
+// What the parent step is told after looking for a known Family.
+export type FamilyOutcome =
+  | { status: "found"; match: FamilyMatch }
+  // The staff member may not view leads, so no Family is looked for.
+  | { status: "skipped" }
+  // `canSkip` when the check itself failed rather than the numbers: staff may
+  // go on without it, and the duplicate check still runs on register.
+  | { status: "refused"; field: "phone" | "whatsapp" | null; message: string; canSkip?: boolean }
+
+// Turns what the Family lookup refused into what the parent step shows.
+export function familyRefusal(error: FindFamilyError): FamilyOutcome {
+  switch (error.kind) {
+    case "invalid":
+      return {
+        status: "refused",
+        field: error.field,
+        message: error.field ? MESSAGE_OF[error.field] : "Some details could not be read. Check them and try again.",
+      }
+    case "forbidden":
+      return { status: "refused", field: null, message: "Your role can't look up families." }
+    case "unavailable":
+      return {
+        status: "refused",
+        field: null,
+        message:
+          "The check for a known family could not be completed. Try again, or continue without it: a student already on file is still refused when you register.",
+        canSkip: true,
       }
   }
 }

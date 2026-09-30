@@ -148,7 +148,9 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
               phone: details.phone,
               whatsapp: details.whatsapp.trim() === "" ? undefined : details.whatsapp,
             },
-            children: confirmed.children.map((child) => child.id),
+            // Only the children on this contact: an unconfirmed one is on a
+            // contact of its own, which this change does not reach.
+            children: confirmed.children.filter((child) => !child.unconfirmed).map((child) => child.id),
           })
         } catch {
           result = { status: "refused", field: null, message: LOST_UPDATE_MESSAGE }
@@ -585,6 +587,7 @@ function FamilyChildrenStep({
                       <div className="flex flex-wrap gap-1">
                         <Badge variant={child.status === "Declined" ? "destructive" : "secondary"}>{child.status}</Badge>
                         {child.closure && <Badge variant="outline">{child.closure}</Badge>}
+                        {child.unconfirmed && <Badge variant="outline">Unconfirmed</Badge>}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -606,6 +609,12 @@ function FamilyChildrenStep({
       {anyClosed && (
         <p className="text-xs text-muted-foreground">
           A Declined, Inactive or Archived child comes back through a Reopening request, not a new registration.
+        </p>
+      )}
+      {contact.children.some((child) => child.unconfirmed) && (
+        <p className="text-xs text-muted-foreground">
+          An unconfirmed child came through the Admission form with this number. Staff confirm or reject the match on
+          that child&apos;s lead.
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -641,7 +650,7 @@ function CompareStep({
 }) {
   const [refusal, setRefusal] = useState<Exclude<CorrectionOutcome, { status: "saved" }> | null>(null)
   const { rows } = compareContact(typedParent(details, match), contact)
-  const siblings = contact.children.map((child) => child.studentName)
+  const siblings = contact.children.filter((child) => !child.unconfirmed).map((child) => child.studentName)
 
   return (
     <div className="flex flex-col gap-4">

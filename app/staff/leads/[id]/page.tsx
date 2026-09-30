@@ -9,6 +9,7 @@ import { getLead, isClosed, listContactChildren } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../session"
+import { FamilySection } from "./family-section"
 import { ContactEditor, StudentEditor } from "./lead-editors"
 import { LeadSummary } from "./lead-summary"
 import { RecordVisit } from "./record-visit"
@@ -77,6 +78,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           </ContactEditor>
         )}
       />
+      <FamilySection leadId={lead.data.id} studentName={lead.data.studentName} canEdit={canEditDetails} />
       <div>
         <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Back to Check-in</Link>
       </div>

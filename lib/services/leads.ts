@@ -660,6 +660,9 @@ export type FamilyChild = {
   enrollmentYear: number
   status: LeadStatus
   closure: LeadClosure | null
+  // On a contact the Admission form matched to this Family, which staff have
+  // not yet confirmed.
+  unconfirmed: boolean
 }
 
 export type FamilyContact = {
@@ -669,7 +672,8 @@ export type FamilyContact = {
   relationshipDescription: string | null
   phone: string
   whatsapp: string | null
-  // Every lead on this contact, oldest first.
+  // Every lead on this contact, oldest first, then, marked unconfirmed, the
+  // leads the Admission form matched to it that staff have not yet confirmed.
   children: FamilyChild[]
 }
 
@@ -697,16 +701,33 @@ type FamilyMatchRow = {
     relationship_description: string | null
     phone: string
     whatsapp: string | null
-    children: {
-      id: string
-      admission_number: string
-      student_name: string
-      class_name: LeadClass
-      enrollment_year: number
-      status: LeadStatus
-      closure: LeadClosure | null
-    }[]
+    children: FamilyChildRow[]
   }[]
+}
+
+type FamilyChildRow = {
+  id: string
+  admission_number: string
+  student_name: string
+  class_name: LeadClass
+  enrollment_year: number
+  status: LeadStatus
+  closure: LeadClosure | null
+  contact_id: string
+  unconfirmed: boolean
+}
+
+function familyChild(row: FamilyChildRow): FamilyChild {
+  return {
+    id: row.id,
+    admissionNumber: row.admission_number,
+    studentName: row.student_name,
+    className: row.class_name,
+    enrollmentYear: row.enrollment_year,
+    status: row.status,
+    closure: row.closure,
+    unconfirmed: row.unconfirmed,
+  }
 }
 
 // Every contact whose direct or WhatsApp number equals either given number,
@@ -745,16 +766,139 @@ export async function findFamilyByPhone(
         relationshipDescription: contact.relationship_description,
         phone: contact.phone,
         whatsapp: contact.whatsapp,
-        children: contact.children.map((child) => ({
-          id: child.id,
-          admissionNumber: child.admission_number,
-          studentName: child.student_name,
-          className: child.class_name,
-          enrollmentYear: child.enrollment_year,
-          status: child.status,
-          closure: child.closure,
-        })),
+        children: contact.children.map(familyChild),
       })),
     },
   }
+}
+
+// ---------------------------------------------------------------------------
+// The Family link on the lead screen: which Family a lead belongs to, and
+// settling an unconfirmed match the Admission form left. Each write is a
+// database function that checks leads.edit itself.
+// ---------------------------------------------------------------------------
+
+export type LeadFamilyChild = FamilyChild & {
+  // Whether the child is on the same contact as the lead: a brother or sister
+  // a change to that contact reaches, and who moves with the lead when its
+  // match is confirmed.
+  onLeadContact: boolean
+}
+
+export type LeadFamily = {
+  // The contact the Admission form matched this lead's parent to, which staff
+  // have not yet confirmed, or null when there is nothing to settle.
+  pendingMatch: Omit<FamilyContact, "children"> | null
+  // The Family's children, the lead included: those on the Family's contact,
+  // oldest first, then those still unconfirmed. With a pending match, the
+  // Family is the matched one, and the lead is among the unconfirmed.
+  children: LeadFamilyChild[]
+}
+
+type LeadFamilyRow = {
+  contact_id: string
+  pending_match: {
+    id: string
+    full_name: string
+    relationship: Relationship
+    relationship_description: string | null
+    phone: string
+    whatsapp: string | null
+  } | null
+  children: FamilyChildRow[]
+}
+
+// The Family a lead belongs to, for anyone who may view leads.
+export async function getLeadFamily(
+  supabase: SupabaseClient,
+  leadId: string,
+): Promise<Result<LeadFamily, "not-found" | "forbidden" | "unavailable">> {
+  const { data, error } = await supabase.rpc("lead_family", { lead_id: leadId })
+  if (error) {
+    if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
+    // A malformed id is a missing lead, not an outage.
+    if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not-found" }
+    console.error("Could not read a lead's Family", error)
+    return { ok: false, error: "unavailable" }
+  }
+
+  const row = data as LeadFamilyRow
+  const matched = row.pending_match
+  return {
+    ok: true,
+    data: {
+      pendingMatch: matched && {
+        id: matched.id,
+        fullName: matched.full_name,
+        relationship: matched.relationship,
+        relationshipDescription: matched.relationship_description,
+        phone: matched.phone,
+        whatsapp: matched.whatsapp,
+      },
+      children: row.children.map((child) => ({
+        ...familyChild(child),
+        onLeadContact: child.contact_id === row.contact_id,
+      })),
+    },
+  }
+}
+
+export type FamilyLinkError =
+  | CorrectionError
+  // The lead's contact has no unconfirmed match to confirm or reject.
+  | { kind: "no-pending-match" }
+  // The lead is alone on its contact, so there is no Family to leave.
+  | { kind: "not-shared" }
+
+async function familyLink(call: PromiseLike<RpcAnswer>, what: string): Promise<Result<null, FamilyLinkError>> {
+  const answer = await call
+  const code = answer.error?.message
+  if (code === "no_pending_match") return { ok: false, error: { kind: "no-pending-match" } }
+  if (code === "not_shared") return { ok: false, error: { kind: "not-shared" } }
+  // 42501: the function isn't granted to the caller at all, as for someone
+  // signed out.
+  if (answer.error?.code === "42501") return { ok: false, error: { kind: "forbidden" } }
+  return correction(Promise.resolve(answer), what)
+}
+
+// Confirms that the parent the Admission form matched is the same person.
+// Every child on the lead's contact moves into the matched Family. Needs
+// leads.edit. With `expectedChildren`, the ids of the leads the staff member
+// was told move, a contact whose children differ by then is refused as
+// `children-changed`. A child who would then match another lead under the
+// duplicate rule is refused as `duplicate`, with that lead.
+export async function confirmFamilyMatch(
+  supabase: SupabaseClient,
+  leadId: string,
+  expectedChildren?: string[],
+): Promise<Result<null, FamilyLinkError>> {
+  return familyLink(
+    supabase.rpc("confirm_family_match", { lead_id: leadId, expected_lead_ids: expectedChildren ?? null }),
+    "confirm a Family match",
+  )
+}
+
+// Rejects the match: the parent is someone else. The match is cleared for
+// every child on the lead's contact, and so is their Family cause of the
+// Returning family badge. Needs leads.edit; `expectedChildren` as for
+// confirming.
+export async function rejectFamilyMatch(
+  supabase: SupabaseClient,
+  leadId: string,
+  expectedChildren?: string[],
+): Promise<Result<null, FamilyLinkError>> {
+  return familyLink(
+    supabase.rpc("reject_family_match", { lead_id: leadId, expected_lead_ids: expectedChildren ?? null }),
+    "reject a Family match",
+  )
+}
+
+// Separates a lead from the Family it shares a contact with: it gets its own
+// copy of the contact and loses the Family cause of the Returning family
+// badge. Needs leads.edit.
+export async function separateFromFamily(
+  supabase: SupabaseClient,
+  leadId: string,
+): Promise<Result<null, FamilyLinkError>> {
+  return familyLink(supabase.rpc("separate_from_family", { lead_id: leadId }), "separate a lead from its Family")
 }

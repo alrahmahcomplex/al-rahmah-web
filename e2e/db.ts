@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto"
+import { randomInt, randomUUID } from "node:crypto"
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { Client } from "pg"
@@ -50,6 +50,18 @@ export async function inRolledBackTransaction<T>(work: (sql: Client) => Promise<
 }
 
 // Runs `work` in a transaction that commits, as the system actor.
+// An Admission Number no lead holds yet. Numbers are random and the local
+// database keeps every lead the tests make, so no fixed number stays free.
+export async function unusedAdmissionNumber(): Promise<string> {
+  return inRolledBackTransaction(async (sql) => {
+    for (;;) {
+      const number = `ADMSN-${String(randomInt(0, 100_000)).padStart(5, "0")}`
+      const taken = await sql.query("select 1 from public.leads where admission_number = $1", [number])
+      if (taken.rowCount === 0) return number
+    }
+  })
+}
+
 export function asSystem<T>(work: (sql: Client) => Promise<T>): Promise<T> {
   return committedAs("select public.set_audit_actor('system')", [], work)
 }

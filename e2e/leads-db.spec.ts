@@ -3,9 +3,9 @@ import { randomInt, randomUUID } from "node:crypto"
 import { expect, test } from "@playwright/test"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
-import { createLead, getLead, type CreateLeadInput, type NewContact, type NewStudent } from "@/lib/services/leads"
+import { createLead, findLeadByAdmissionNumber, getLead, type CreateLeadInput, type NewContact, type NewStudent } from "@/lib/services/leads"
 
-import { anonClient, inRolledBackTransaction, secretClient, signedIn } from "./db"
+import { anonClient, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber } from "./db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "./fixtures"
 
 // The lead module against local Supabase, signed in as each seeded role. Each
@@ -481,6 +481,49 @@ test.describe("reading, writing around the module, and deleting", () => {
         await sql.query("update public.leads set visit_date = null where admission_number = 'ADMSN-90002'")
       }),
     ).rejects.toThrow(/leads_check/)
+  })
+})
+
+test.describe("finding a lead by its Admission Number", () => {
+  test("finds a new lead however the number is typed", async () => {
+    const staff = await signedIn(ADMISSIONS)
+    const created = await createLead(staff, walkIn())
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    const { leadId, admissionNumber } = created.data
+    const digits = admissionNumber.slice("ADMSN-".length)
+
+    for (const typed of [admissionNumber, admissionNumber.toLowerCase(), digits, `  ${admissionNumber} `, ` ${digits}  `]) {
+      expect(await findLeadByAdmissionNumber(staff, typed), JSON.stringify(typed)).toEqual({ ok: true, data: leadId })
+    }
+  })
+
+  test("finds closed leads too", async () => {
+    const staff = await signedIn(ADMISSIONS)
+    // Hamisi is Archived, Rehema is Declined.
+    expect(await findLeadByAdmissionNumber(staff, "ADMSN-90005")).toEqual({
+      ok: true,
+      data: "1ead0000-0000-4000-8000-000000000005",
+    })
+    expect(await findLeadByAdmissionNumber(staff, "90006")).toEqual({
+      ok: true,
+      data: "1ead0000-0000-4000-8000-000000000006",
+    })
+  })
+
+  test("a number that matches nothing, or is not a number, is not found", async () => {
+    const staff = await signedIn(ADMISSIONS)
+    for (const typed of [await unusedAdmissionNumber(), "", "abc", "ADMSN-9000", "ADMSN-90001; drop table leads"]) {
+      expect(await findLeadByAdmissionNumber(staff, typed), typed).toEqual({ ok: false, error: "not-found" })
+    }
+  })
+
+  test("an Accountant can look a lead up, and someone signed out finds nothing", async () => {
+    expect(await findLeadByAdmissionNumber(await signedIn(ACCOUNTANT), "ADMSN-90002")).toEqual({
+      ok: true,
+      data: "1ead0000-0000-4000-8000-000000000002",
+    })
+    expect(await findLeadByAdmissionNumber(anonClient(), "ADMSN-90002")).toEqual({ ok: false, error: "not-found" })
   })
 })
 

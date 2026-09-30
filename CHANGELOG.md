@@ -5,6 +5,19 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 30, 2026 `v0.8.0`
+
+### NEW
+
+- **Check-in** now starts with the family's Admission Number. Staff type it and press
+  **Continue** to open the lead, whatever its status, including Archived and Declined
+  leads. `ADMSN-40719`, `admsn-40719` and `40719` all work, and extra spaces don't
+  matter.
+- A number that matches no lead says "No lead with this Admission Number", with
+  **Try again**, which clears the field for the next attempt, and **New Student**, which
+  starts registering the family. Accountants can look up and read leads the same way
+  but see only **Try again**.
+
 ## September 30, 2026 `v0.7.0`
 
 ### NEW

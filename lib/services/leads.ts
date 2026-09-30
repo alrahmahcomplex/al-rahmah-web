@@ -205,6 +205,37 @@ export function isClosed(lead: { status: LeadStatus; closure: LeadClosure | null
   return lead.status === "Declined" || lead.closure !== null
 }
 
+// An Admission Number as staff type it: ADMSN- in any case, or the five digits
+// alone, with spaces around. Anything else is not an Admission Number.
+export function parseAdmissionNumber(typed: string): string | null {
+  const match = /^(?:ADMSN-)?(\d{5})$/i.exec(typed.trim())
+  return match ? `ADMSN-${match[1]}` : null
+}
+
+// The id of the lead with this Admission Number, whatever its status or
+// closure mark. Row-level security hides every lead from anyone without
+// leads.view, so for them nothing is found.
+export async function findLeadByAdmissionNumber(
+  supabase: SupabaseClient,
+  typed: string,
+): Promise<Result<string, "not-found" | "unavailable">> {
+  const admissionNumber = parseAdmissionNumber(typed)
+  if (!admissionNumber) return { ok: false, error: "not-found" }
+
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("admission_number", admissionNumber)
+    .maybeSingle<{ id: string }>()
+
+  if (error) {
+    console.error("Could not look up an Admission Number", error)
+    return { ok: false, error: "unavailable" }
+  }
+  if (!data) return { ok: false, error: "not-found" }
+  return { ok: true, data: data.id }
+}
+
 // One lead with its contact, for a signed-in staff member who may view
 // leads. Row-level security returns nothing to anyone else, which reads as
 // not found.

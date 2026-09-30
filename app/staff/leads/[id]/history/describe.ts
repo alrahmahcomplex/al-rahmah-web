@@ -76,35 +76,59 @@ function article(word: string) {
   return /^[aeiou]/i.test(word) ? "an" : "a"
 }
 
-// When each contact in the history was created, so a lead moved onto a
-// contact made in the same change reads as a separation.
-type ContactsCreated = ReadonlyMap<string, string>
+// Each contact's unconfirmed Family match over time, from the contact's own
+// entries in the history, oldest first. Audit ids only grow, so an entry's id
+// places it in that sequence.
+type MatchTimeline = ReadonlyMap<string, readonly { id: number; match: unknown }[]>
 
-function summarize(
-  entry: LeadHistoryEntry,
-  contactNames: Readonly<Record<string, string>>,
-  contactsCreated: ContactsCreated,
-): string {
+function matchTimeline(entries: readonly LeadHistoryEntry[]): MatchTimeline {
+  const timeline = new Map<string, { id: number; match: unknown }[]>()
+  for (const entry of [...entries].sort((a, b) => a.id - b.id)) {
+    if (entry.record !== "contact" || !entry.recordId) continue
+    const match = entry.changes.find((c) => c.field === "pending_family_match_id")
+    if (!match) continue
+    timeline.set(entry.recordId, [...(timeline.get(entry.recordId) ?? []), { id: entry.id, match: match.to }])
+  }
+  return timeline
+}
+
+// The contact's unconfirmed match as it stood just before the given entry.
+function matchBefore(timeline: MatchTimeline, contactId: unknown, entryId: number): unknown {
+  if (typeof contactId !== "string") return null
+  const earlier = (timeline.get(contactId) ?? []).filter((step) => step.id < entryId)
+  return earlier[earlier.length - 1]?.match ?? null
+}
+
+// Every contact the given contact was ever matched to, unconfirmed.
+function everMatchedTo(timeline: MatchTimeline, contactId: unknown): unknown[] {
+  if (typeof contactId !== "string") return []
+  return (timeline.get(contactId) ?? []).map((step) => step.match).filter((match) => match !== null)
+}
+
+function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string, string>>, timeline: MatchTimeline): string {
   const changed = new Map(entry.changes.map((c) => [c.field, c]))
   const insert = entry.action === "insert"
 
   if (entry.record === "lead") {
-    if (insert) return changed.get("returning_family_joined")?.to === true ? "created the lead and joined a Family" : "created the lead"
+    if (insert) {
+      if (changed.get("returning_family_joined")?.to !== true) return "created the lead"
+      // The Admission form joins a Family only unconfirmed: the child's
+      // contact carries a match that staff have yet to confirm.
+      const unconfirmed = matchBefore(timeline, changed.get("guardian_contact_id")?.to, entry.id) !== null
+      return unconfirmed ? "created the lead, matched to a known Family but not yet confirmed" : "created the lead and joined a Family"
+    }
     if (entry.action !== "update") return entry.action
 
     const status = changed.get("status")
     if (status?.from === "Applied" && status.to === "Visited") return "recorded a visit"
-    const leftFamily = changed.get("returning_family_joined")?.to === false
-    // Separating gives the lead a new contact of its own, copied in the same
-    // change (so at the same moment) and clearing the Family cause if it had
-    // one. Confirming moves it onto the matched Family's existing contact.
-    // Rejecting keeps the contact it has.
+    // Confirming moves the lead onto the contact its own contact was matched
+    // to. Any other move is a separation onto a copy of the contact.
+    // Rejecting clears the Family cause and keeps the contact.
     const contact = changed.get("guardian_contact_id")
     if (contact) {
-      const copiedNow = typeof contact.to === "string" && contactsCreated.get(contact.to) === entry.at
-      return leftFamily || copiedNow ? "separated the lead from its Family" : "confirmed the Family match"
+      return everMatchedTo(timeline, contact.from).includes(contact.to) ? "confirmed the Family match" : "separated the lead from its Family"
     }
-    if (leftFamily) return "rejected the Family match"
+    if (changed.get("returning_family_joined")?.to === false) return "rejected the Family match"
     return "changed the lead"
   }
 
@@ -138,28 +162,24 @@ function rank(field: string) {
   return at === -1 ? ORDER.length : at
 }
 
-// A whole history, newest first as it came.
+// A whole history, in the order it came (newest first). The Family entries
+// are read against the contacts' own entries, so the history is described as
+// a whole.
 export function describeLeadHistory(
   entries: readonly LeadHistoryEntry[],
   contactNames: Readonly<Record<string, string>>,
 ): DescribedEntry[] {
-  const contactsCreated = new Map(
-    entries.filter((e) => e.record === "contact" && e.action === "insert" && e.recordId).map((e) => [e.recordId as string, e.at]),
-  )
-  return entries.map((entry) => describeLeadHistoryEntry(entry, contactNames, contactsCreated))
+  const timeline = matchTimeline(entries)
+  return entries.map((entry) => describeEntry(entry, contactNames, timeline))
 }
 
-export function describeLeadHistoryEntry(
-  entry: LeadHistoryEntry,
-  contactNames: Readonly<Record<string, string>>,
-  contactsCreated: ContactsCreated = new Map(),
-): DescribedEntry {
+function describeEntry(entry: LeadHistoryEntry, contactNames: Readonly<Record<string, string>>, timeline: MatchTimeline): DescribedEntry {
   const fromOld = entry.record !== null && entry.action === "update"
   return {
     id: entry.id,
     at: entry.at,
     actor: entry.actor,
-    summary: summarize(entry, contactNames, contactsCreated),
+    summary: summarize(entry, contactNames, timeline),
     changes: entry.changes
       .filter((c) => fromOld || !isEmpty(c.to))
       .sort((a, b) => rank(a.field) - rank(b.field))

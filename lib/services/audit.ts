@@ -122,15 +122,30 @@ export async function getLeadHistory(
     }
   }
 
-  const contactNames: Record<string, string> = {}
-  if (contactIds.size > 0) {
-    const contacts = await supabase.from("guardian_contacts").select("id, full_name").in("id", [...contactIds])
-    if (contacts.error) {
-      console.error("Could not read the contacts a lead's history names", contacts.error)
-      return { ok: false, error: "unavailable" }
-    }
-    for (const contact of contacts.data as { id: string; full_name: string }[]) contactNames[contact.id] = contact.full_name
-  }
+  return { ok: true, data: { entries, contactNames: await readContactNames(supabase, [...contactIds]) } }
+}
 
-  return { ok: true, data: { entries, contactNames } }
+// Ids per request, so a long history never makes one oversized URL.
+const CONTACT_NAMES_PER_REQUEST = 100
+
+// The current name of each contact. The names only decorate the history, so
+// a batch that can't be read leaves those contacts unnamed (the screen shows
+// their ids) rather than hiding the history.
+async function readContactNames(supabase: SupabaseClient, ids: string[]): Promise<Record<string, string>> {
+  const batches: string[][] = []
+  for (let i = 0; i < ids.length; i += CONTACT_NAMES_PER_REQUEST) batches.push(ids.slice(i, i + CONTACT_NAMES_PER_REQUEST))
+
+  const results = await Promise.all(
+    batches.map((batch) => supabase.from("guardian_contacts").select("id, full_name").in("id", batch)),
+  )
+
+  const names: Record<string, string> = {}
+  for (const { data, error } of results) {
+    if (error) {
+      console.error("Could not read the contacts a lead's history names", error)
+      continue
+    }
+    for (const contact of data as { id: string; full_name: string }[]) names[contact.id] = contact.full_name
+  }
+  return names
 }

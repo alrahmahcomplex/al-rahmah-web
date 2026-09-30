@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory, describeLeadHistoryEntry } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
 const LEAD = "11111111-1111-4111-8111-111111111111"
 const CONTACT = "22222222-2222-4222-8222-222222222222"
 const OTHER_CONTACT = "33333333-3333-4333-8333-333333333333"
-const names = { [CONTACT]: "Amina Juma", [OTHER_CONTACT]: "Amina J. Copy" }
+const names: Record<string, string> = { [CONTACT]: "Amina Juma", [OTHER_CONTACT]: "Amina J. Copy" }
 
 function entry(overrides: Partial<LeadHistoryEntry>): LeadHistoryEntry {
   return {
@@ -23,7 +23,23 @@ function entry(overrides: Partial<LeadHistoryEntry>): LeadHistoryEntry {
 
 const change = (field: string, from: unknown, to: unknown) => ({ field, from, to })
 
-describe("describeLeadHistoryEntry", () => {
+// A history of one entry, described.
+function describeLeadHistoryEntry(one: LeadHistoryEntry, contactNames: Record<string, string>) {
+  return describeLeadHistory([one], contactNames)[0]
+}
+
+// A contact's creation, with an unconfirmed match to `match` if given.
+function contactCreated(id: number, contactId: string, match: string | null = null) {
+  return entry({
+    id,
+    record: "contact",
+    recordId: contactId,
+    action: "insert",
+    changes: [change("full_name", null, names[contactId]), change("pending_family_match_id", null, match)],
+  })
+}
+
+describe("describeLeadHistory", () => {
   it("describes a walk-in creation with plain labels in the lead screen's order, leaving out what was left empty", () => {
     const described = describeLeadHistoryEntry(
       entry({
@@ -64,13 +80,40 @@ describe("describeLeadHistoryEntry", () => {
     })
   })
 
-  it("says when a new lead joined a Family", () => {
-    const described = describeLeadHistoryEntry(
-      entry({ action: "insert", changes: [change("returning_family_joined", null, true)] }),
+  it("says when a new lead joined a Family at the front desk", () => {
+    const [described] = describeLeadHistory(
+      [
+        entry({ id: 5, action: "insert", changes: [change("guardian_contact_id", null, CONTACT), change("returning_family_joined", null, true)] }),
+        contactCreated(1, CONTACT),
+      ],
       names,
     )
     expect(described.summary).toBe("created the lead and joined a Family")
-    expect(described.changes).toEqual([{ label: "Returning family: joined a Family", from: null, to: "Yes" }])
+    expect(described.changes).toContainEqual({ label: "Returning family: joined a Family", from: null, to: "Yes" })
+  })
+
+  it("says a lead from the Admission form was matched to a Family, not joined, while the match is unconfirmed", () => {
+    const [described] = describeLeadHistory(
+      [
+        entry({ id: 6, action: "insert", changes: [change("guardian_contact_id", null, OTHER_CONTACT), change("returning_family_joined", null, true)] }),
+        contactCreated(5, OTHER_CONTACT, CONTACT),
+        contactCreated(1, CONTACT),
+      ],
+      names,
+    )
+    expect(described.summary).toBe("created the lead, matched to a known Family but not yet confirmed")
+  })
+
+  it("says a later child joined when the contact's match was confirmed before it was created", () => {
+    const [described] = describeLeadHistory(
+      [
+        entry({ id: 8, action: "insert", changes: [change("guardian_contact_id", null, OTHER_CONTACT), change("returning_family_joined", null, true)] }),
+        entry({ id: 7, record: "contact", recordId: OTHER_CONTACT, changes: [change("pending_family_match_id", CONTACT, null)] }),
+        contactCreated(5, OTHER_CONTACT, CONTACT),
+      ],
+      names,
+    )
+    expect(described.summary).toBe("created the lead and joined a Family")
   })
 
   it("names a recorded visit", () => {
@@ -85,10 +128,23 @@ describe("describeLeadHistoryEntry", () => {
     ])
   })
 
-  it("names a confirmed Family match: the lead moved onto the matched contact", () => {
-    const described = describeLeadHistoryEntry(entry({ changes: [change("guardian_contact_id", OTHER_CONTACT, CONTACT)] }), names)
-    expect(described.summary).toBe("confirmed the Family match")
-    expect(described.changes).toEqual([{ label: "Parent or guardian", from: "Amina J. Copy", to: "Amina Juma" }])
+  it("names a confirmed Family match: the lead moved onto the contact its own was matched to", () => {
+    // Confirming may clear the old contact's match before or after moving the
+    // lead; either way the move reads as a confirmation.
+    for (const clearedFirst of [true, false]) {
+      const leadMove = clearedFirst ? 10 : 9
+      const described = describeLeadHistory(
+        [
+          entry({ id: clearedFirst ? 9 : 10, record: "contact", recordId: OTHER_CONTACT, changes: [change("pending_family_match_id", CONTACT, null)] }),
+          entry({ id: leadMove, changes: [change("guardian_contact_id", OTHER_CONTACT, CONTACT)] }),
+          contactCreated(5, OTHER_CONTACT, CONTACT),
+        ].sort((a, b) => b.id - a.id),
+        names,
+      )
+      const moved = described.find((e) => e.id === leadMove)!
+      expect(moved.summary).toBe("confirmed the Family match")
+      expect(moved.changes).toEqual([{ label: "Parent or guardian", from: "Amina J. Copy", to: "Amina Juma" }])
+    }
   })
 
   it("names a rejected Family match: the Family cause cleared, the contact kept", () => {
@@ -105,13 +161,12 @@ describe("describeLeadHistoryEntry", () => {
     expect(described.summary).toBe("separated the lead from its Family")
   })
 
-  it("names a separation of a lead that never joined: moved onto a contact made in the same change", () => {
-    const at = "2026-09-30T09:00:00Z"
+  it("names a separation of a lead that never joined: moved onto a copy, not onto a matched contact", () => {
     const [moved] = describeLeadHistory(
       [
-        entry({ id: 9, at, changes: [change("guardian_contact_id", CONTACT, OTHER_CONTACT)] }),
-        entry({ id: 8, at, record: "contact", recordId: OTHER_CONTACT, action: "insert", changes: [change("full_name", null, "Amina J. Copy")] }),
-        entry({ id: 1, record: "contact", recordId: CONTACT, action: "insert", changes: [change("full_name", null, "Amina Juma")] }),
+        entry({ id: 9, at: "2026-09-30T09:00:01Z", changes: [change("guardian_contact_id", CONTACT, OTHER_CONTACT)] }),
+        contactCreated(8, OTHER_CONTACT),
+        contactCreated(1, CONTACT),
       ],
       names,
     )

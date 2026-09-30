@@ -33,7 +33,8 @@ const SELECT_CLASS =
 const LOST_REQUEST_MESSAGE =
   "The registration could not be confirmed. Check your connection and register again. If the student comes back as already registered, the first attempt was saved."
 
-const LOST_LOOKUP_MESSAGE = "The check for a known family could not be completed. Check your connection and try again."
+const LOST_LOOKUP_MESSAGE =
+  "The check for a known family could not be completed. Check your connection and try again, or continue without it: a student already on file is still refused when you register."
 
 const LOST_UPDATE_MESSAGE =
   "The update could not be confirmed. Check your connection and try again, or keep the stored details."
@@ -56,7 +57,8 @@ type Details = {
 }
 
 // A refusal shown at the top of a screen, and the field it is about.
-type Notice = { screen: Screen; field: InvalidField | null; message: string }
+// `canSkip` offers going on without the Family check when the check failed.
+type Notice = { screen: Screen; field: InvalidField | null; message: string; canSkip?: boolean }
 
 export function NewStudentForm({ today, years, canEditContact }: { today: string; years: number[]; canEditContact: boolean }) {
   const [screen, setScreen] = useState<Screen>("parent")
@@ -109,11 +111,11 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
           whatsapp: details.whatsapp.trim() === "" ? null : details.whatsapp,
         })
       } catch {
-        setNotice({ screen: "parent", field: null, message: LOST_LOOKUP_MESSAGE })
+        setNotice({ screen: "parent", field: null, message: LOST_LOOKUP_MESSAGE, canSkip: true })
         return
       }
       if (result.status === "refused") {
-        goTo("parent", { screen: "parent", field: result.field, message: result.message })
+        goTo("parent", { screen: "parent", field: result.field, message: result.message, canSkip: result.canSkip })
         return
       }
       if (result.status === "skipped") {
@@ -254,7 +256,14 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
 
       {notice?.screen === screen && (
         <Alert variant="destructive" role="alert">
-          <AlertDescription>{notice.message}</AlertDescription>
+          <AlertDescription className="flex flex-col items-start gap-2">
+            <span>{notice.message}</span>
+            {notice.canSkip && (
+              <Button type="button" variant="outline" size="sm" onClick={() => goTo("student")}>
+                Continue without checking
+              </Button>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 

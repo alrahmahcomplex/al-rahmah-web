@@ -74,7 +74,11 @@ describe("a refused Family lookup", () => {
     expect(familyRefusal({ kind: "invalid", field: "phone" })).toMatchObject({ status: "refused", field: "phone" })
     const whatsapp = familyRefusal({ kind: "invalid", field: "whatsapp" })
     expect(whatsapp.status === "refused" && whatsapp.message).toMatch(/WhatsApp number can't be read/)
-    expect(familyRefusal({ kind: "unavailable" })).toMatchObject({ status: "refused", field: null })
+    expect(familyRefusal({ kind: "invalid", field: "phone" })).not.toHaveProperty("canSkip")
+  })
+
+  it("lets staff go on without the check when the check itself failed", () => {
+    expect(familyRefusal({ kind: "unavailable" })).toMatchObject({ status: "refused", field: null, canSkip: true })
   })
 })
 

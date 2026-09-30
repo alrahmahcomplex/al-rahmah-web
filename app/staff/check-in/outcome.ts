@@ -91,7 +91,9 @@ export type FamilyOutcome =
   | { status: "found"; match: FamilyMatch }
   // The staff member may not view leads, so no Family is looked for.
   | { status: "skipped" }
-  | { status: "refused"; field: "phone" | "whatsapp" | null; message: string }
+  // `canSkip` when the check itself failed rather than the numbers: staff may
+  // go on without it, and the duplicate check still runs on register.
+  | { status: "refused"; field: "phone" | "whatsapp" | null; message: string; canSkip?: boolean }
 
 // Turns what the Family lookup refused into what the parent step shows.
 export function familyRefusal(error: FindFamilyError): FamilyOutcome {
@@ -108,7 +110,9 @@ export function familyRefusal(error: FindFamilyError): FamilyOutcome {
       return {
         status: "refused",
         field: null,
-        message: "The check for a known family could not be completed. Try again in a moment.",
+        message:
+          "The check for a known family could not be completed. Try again, or continue without it: a student already on file is still refused when you register.",
+        canSkip: true,
       }
   }
 }

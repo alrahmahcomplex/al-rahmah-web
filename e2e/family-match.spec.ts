@@ -168,6 +168,31 @@ test.describe("a parent whose number is on file", () => {
     await expect(page.getByText("Returning family", { exact: true })).toHaveCount(0)
   })
 
+  test("a Family check that fails can be skipped, and the duplicate check still runs on register", async ({ page }) => {
+    const family = await knownFamily()
+    await signIn(page, ADMISSIONS)
+
+    // The Family check is dropped in flight; everything after goes through.
+    let dropped = false
+    await page.route("**/staff/check-in/new", async (route) => {
+      if (route.request().method() === "POST" && !dropped) {
+        dropped = true
+        await route.abort("connectionfailed")
+        return
+      }
+      await route.continue()
+    })
+
+    await enterParent(page, { name: family.parent, phone: family.phone })
+    const alert = page.locator("[data-slot=alert]")
+    await expect(alert).toContainText("The check for a known family could not be completed")
+    await alert.getByRole("button", { name: "Continue without checking" }).click()
+
+    await fillStudent(page, family.child)
+    await page.getByRole("button", { name: "Register student" }).click()
+    await expect(page.locator("[data-slot=alert]")).toContainText(family.admissionNumber)
+  })
+
   test("a closed child in the Family leads to the Reopening request hand-off", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await enterParent(page, { name: "Omari Fixture", phone: "0700 000 104", relationship: "Guardian" })

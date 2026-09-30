@@ -77,8 +77,9 @@ test.describe("registering a new family", () => {
     await expect(page.getByText(tanzaniaToday().slice(0, 4)).first()).toBeVisible()
     await expect(page.getByText(family.parent)).toBeVisible()
     await expect(page.getByText(/^\+2557\d{8}$/)).toBeVisible()
-    // The lead screen is read-only: nothing to edit.
-    await expect(page.getByRole("button", { name: /edit|save/i })).toHaveCount(0)
+    // The lead opens to read, with corrections offered but no form open.
+    await expect(page.getByRole("button", { name: "Edit student" })).toBeVisible()
+    await expect(page.getByRole("textbox")).toHaveCount(0)
   })
 
   test("the number can be copied from the confirmation", async ({ page, context }) => {

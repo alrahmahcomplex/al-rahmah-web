@@ -423,3 +423,179 @@ export async function searchLeads(
     },
   }
 }
+
+// ---------------------------------------------------------------------------
+// Corrections. Each is a database function that checks the permission
+// itself and never touches the Admission Number or the status.
+// ---------------------------------------------------------------------------
+
+// The student's details a correction may change. A field left out keeps its
+// value.
+export type LeadDetailsChanges = Partial<NewStudent>
+
+// The parent/guardian details a correction may change. A field left out keeps
+// its value; an empty WhatsApp number means the same as the phone.
+export type ContactChanges = Partial<Omit<NewContact, "relationshipDescription" | "whatsapp">> & {
+  relationshipDescription?: string | null
+  whatsapp?: string | null
+}
+
+export type CorrectionError =
+  | { kind: "duplicate"; lead: ExistingLead }
+  | { kind: "forbidden" }
+  | { kind: "not-found" }
+  // Declined, Inactive and Archived leads are read-only, and so is a contact
+  // one of them is on.
+  | { kind: "closed" }
+  // An Applied lead has no visit whose date could be corrected.
+  | { kind: "not-visited" }
+  // The children on a contact are no longer the ones the staff member saw.
+  | { kind: "children-changed" }
+  | { kind: "invalid"; field: InvalidField | null }
+  | { kind: "unavailable" }
+
+type CorrectionRow =
+  | { result: "updated" }
+  | { result: "duplicate"; lead_id: string; admission_number: string; status: LeadStatus; closure: LeadClosure | null }
+
+type RpcAnswer = { data: unknown; error: { message: string; details?: string | null; code?: string } | null }
+
+async function correction(call: PromiseLike<RpcAnswer>, what: string): Promise<Result<null, CorrectionError>> {
+  const { data, error } = await call
+  if (error) {
+    if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
+    // A malformed id is a missing lead, not an outage.
+    if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
+    if (error.message === "closed") return { ok: false, error: { kind: "closed" } }
+    if (error.message === "not_visited") return { ok: false, error: { kind: "not-visited" } }
+    if (error.message === "children_changed") return { ok: false, error: { kind: "children-changed" } }
+    if (error.message === "invalid") {
+      return { ok: false, error: { kind: "invalid", field: invalidFieldOf(error.details) } }
+    }
+    console.error(`Could not ${what}`, error)
+    return { ok: false, error: { kind: "unavailable" } }
+  }
+
+  const row = data as CorrectionRow | null
+  if (row?.result === "duplicate") {
+    return {
+      ok: false,
+      error: {
+        kind: "duplicate",
+        lead: { id: row.lead_id, admissionNumber: row.admission_number, status: row.status, closure: row.closure },
+      },
+    }
+  }
+  return { ok: true, data: null }
+}
+
+// The entries whose value was given, so a field left out stays out.
+function given(values: Record<string, unknown>) {
+  return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined))
+}
+
+// Corrects the student's name, class, enrollment year or Day or boarding.
+// Needs leads.edit. A new name that would match another lead under the
+// duplicate rule is refused as `duplicate`, with that lead.
+export async function updateLeadDetails(
+  supabase: SupabaseClient,
+  id: string,
+  changes: LeadDetailsChanges,
+): Promise<Result<null, CorrectionError>> {
+  return correction(
+    supabase.rpc("update_lead_details", {
+      lead_id: id,
+      changes: given({
+        full_name: changes.fullName,
+        class_name: changes.className,
+        enrollment_year: changes.enrollmentYear,
+        day_or_boarding: changes.dayOrBoarding,
+      }),
+    }),
+    "correct a lead's details",
+  )
+}
+
+// Corrects a parent/guardian contact, for every child on it. Needs
+// leads.edit. Numbers are normalized as at creation, and a new number that
+// would make any of those children match another lead is refused as
+// `duplicate`, with that lead. A contact a closed lead is on is refused as
+// `closed`. With `expectedChildren`, the ids of the leads the staff member was
+// told the change reaches, a contact whose children differ by then is refused
+// as `children-changed`.
+export async function updateGuardianContact(
+  supabase: SupabaseClient,
+  contactId: string,
+  changes: ContactChanges,
+  expectedChildren?: string[],
+): Promise<Result<null, CorrectionError>> {
+  return correction(
+    supabase.rpc("update_guardian_contact", {
+      contact_id: contactId,
+      changes: given({
+        full_name: changes.fullName,
+        relationship: changes.relationship,
+        relationship_description: changes.relationshipDescription,
+        phone: changes.phone,
+        whatsapp: changes.whatsapp,
+      }),
+      expected_lead_ids: expectedChildren ?? null,
+    }),
+    "correct a contact",
+  )
+}
+
+// Corrects the Visit date of a lead that has one. Needs visits.record, and
+// refuses a date later than today in Tanzania.
+export async function correctVisitDate(
+  supabase: SupabaseClient,
+  id: string,
+  visitDate: string,
+): Promise<Result<null, CorrectionError>> {
+  return correction(supabase.rpc("correct_visit_date", { lead_id: id, visited_on: visitDate }), "correct a Visit date")
+}
+
+export type ContactChild = {
+  id: string
+  admissionNumber: string
+  studentName: string
+  status: LeadStatus
+  closure: LeadClosure | null
+}
+
+type ContactChildRow = {
+  id: string
+  admission_number: string
+  student_name: string
+  status: LeadStatus
+  closure: LeadClosure | null
+}
+
+// Every lead on a contact, oldest first: the children a change to it reaches.
+export async function listContactChildren(
+  supabase: SupabaseClient,
+  contactId: string,
+): Promise<Result<ContactChild[], "unavailable">> {
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id, admission_number, student_name, status, closure")
+    .eq("guardian_contact_id", contactId)
+    .order("created_at")
+    .order("id")
+    .overrideTypes<ContactChildRow[], { merge: false }>()
+
+  if (error) {
+    console.error("Could not list a contact's children", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return {
+    ok: true,
+    data: data.map((row) => ({
+      id: row.id,
+      admissionNumber: row.admission_number,
+      studentName: row.student_name,
+      status: row.status,
+      closure: row.closure,
+    })),
+  }
+}

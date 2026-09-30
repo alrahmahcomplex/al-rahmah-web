@@ -5,7 +5,7 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
-## Unreleased
+## September 30, 2026 `v0.10.0`
 
 ### NEW
 
@@ -20,7 +20,8 @@ stay in the `0.x` range.
 - A correction that would make the student match another lead, by name and parent
   number, is refused and links to that lead. The Admission Number and status can't be
   changed this way. Declined, Inactive and Archived leads, and Accountants, see no edit
-  actions.
+  actions. A parent or guardian shared with a closed lead can't be edited either, and
+  the lead says which child is closed.
 
 ## September 30, 2026 `v0.9.0`
 

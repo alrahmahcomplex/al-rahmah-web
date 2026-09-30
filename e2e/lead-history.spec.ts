@@ -49,7 +49,7 @@ test.describe("a lead's history", () => {
 
     await page.getByRole("link", { name: "History" }).click()
     await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}/history$`))
-    await expect(page.getByText(lead.admissionNumber)).toBeVisible()
+    await expect(page.getByText(`${lead.name} · ${lead.admissionNumber}`)).toBeVisible()
 
     const entries = page.getByRole("list", { name: "History" }).locator(":scope > li")
     await expect(entries).toHaveCount(3)

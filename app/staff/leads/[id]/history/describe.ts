@@ -115,6 +115,15 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
   return `recorded ${entry.action}`
 }
 
+// Known fields in the order the lead screen shows them, then unknown ones as
+// they came.
+const ORDER = Object.keys(LABELS)
+
+function rank(field: string) {
+  const at = ORDER.indexOf(field)
+  return at === -1 ? ORDER.length : at
+}
+
 export function describeLeadHistoryEntry(
   entry: LeadHistoryEntry,
   contactNames: Readonly<Record<string, string>>,
@@ -127,6 +136,7 @@ export function describeLeadHistoryEntry(
     summary: summarize(entry, contactNames),
     changes: entry.changes
       .filter((c) => fromOld || !isEmpty(c.to))
+      .sort((a, b) => rank(a.field) - rank(b.field))
       .map((c) => ({
         label: LABELS[c.field] ?? c.field,
         from: fromOld ? display(c.field, c.from, contactNames) : null,

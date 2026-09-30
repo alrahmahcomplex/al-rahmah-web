@@ -24,19 +24,20 @@ function entry(overrides: Partial<LeadHistoryEntry>): LeadHistoryEntry {
 const change = (field: string, from: unknown, to: unknown) => ({ field, from, to })
 
 describe("describeLeadHistoryEntry", () => {
-  it("describes a walk-in creation with plain labels, leaving out what was left empty", () => {
+  it("describes a walk-in creation with plain labels in the lead screen's order, leaving out what was left empty", () => {
     const described = describeLeadHistoryEntry(
       entry({
         action: "insert",
+        // In the order the database stores them, not the screen's.
         changes: [
-          change("admission_number", null, "ADMSN-40719"),
-          change("student_name", null, "Baraka Juma"),
-          change("class_name", null, "STD 2"),
-          change("enrollment_year", null, 2027),
-          change("day_or_boarding", null, "Day"),
           change("status", null, "Visited"),
           change("closure", null, null),
+          change("class_name", null, "STD 2"),
           change("visit_date", null, "2026-09-29"),
+          change("student_name", null, "Baraka Juma"),
+          change("day_or_boarding", null, "Day"),
+          change("enrollment_year", null, 2027),
+          change("admission_number", null, "ADMSN-40719"),
           change("guardian_contact_id", null, CONTACT),
           change("returning_family_joined", null, false),
           change("returning_family_reapplied", null, false),

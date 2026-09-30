@@ -1,23 +1,37 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { tanzaniaToday } from "@/lib/school-calendar"
 
-import { recordArrival } from "./actions"
+import { recordArrival, visitDateToday } from "./actions"
 import { Field, Refusal, Saved, useCorrection } from "./lead-editors"
 
 // Record visit, for an Applied family who has come to campus. The Visit date
-// starts at today in Tanzania, taken when the form opens, so a screen left
-// open past midnight still offers the right day. Once saved the lead is
-// Visited and the screen refreshes without this offer, so the confirmation
-// stays in its place.
+// starts at today in Tanzania, asked of the server as the form opens: a screen
+// left open past midnight, or a device whose clock is wrong, still offers the
+// day the database accepts. Once saved the lead is Visited and the screen
+// refreshes without this offer, so the confirmation stays in its place.
 export function RecordVisit({ leadId, canRecord }: { leadId: string; canRecord: boolean }) {
   // Today in Tanzania while the form is open, else null.
   const [recording, setRecording] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
+  const [unopened, setUnopened] = useState(false)
+  const [opening, startOpening] = useTransition()
+
+  function open() {
+    setSaved(null)
+    setUnopened(false)
+    startOpening(async () => {
+      try {
+        setRecording(await visitDateToday())
+      } catch {
+        setUnopened(true)
+      }
+    })
+  }
 
   if (recording) {
     return (
@@ -40,16 +54,15 @@ export function RecordVisit({ leadId, canRecord }: { leadId: string; canRecord: 
         This family applied through the Admission form and hasn&apos;t visited yet. When they arrive, record the visit.
       </p>
       <div>
-        <Button
-          type="button"
-          onClick={() => {
-            setSaved(null)
-            setRecording(tanzaniaToday())
-          }}
-        >
-          Record visit
+        <Button type="button" onClick={open} disabled={opening}>
+          {opening ? "Opening…" : "Record visit"}
         </Button>
       </div>
+      {unopened && (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>Record visit could not open. Check your connection and try again.</AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }

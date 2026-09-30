@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
+import { tanzaniaToday } from "@/lib/school-calendar"
 import {
   correctVisitDate,
   DAY_OR_BOARDING,
@@ -106,6 +107,12 @@ export async function correctVisit(leadId: string, visitDate: string): Promise<C
   if (!result.ok) return correctionOutcome(result.error)
   revalidatePath(`/staff/leads/${leadId}`)
   return { status: "saved" }
+}
+
+// Today in Tanzania by the server's clock, which the database's date check
+// shares, for the Record visit form to start from as it opens.
+export async function visitDateToday(): Promise<string> {
+  return tanzaniaToday()
 }
 
 // Records the visit of an Applied family, which moves the lead to Visited.

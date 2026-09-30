@@ -133,21 +133,19 @@ test.describe("when Record visit is offered", () => {
     await expect(detail(page, "Status")).toHaveText("Applied")
   })
 
-  test("the Visit date is taken when the form opens, so a screen left open past midnight offers the new day", async ({
-    page,
-  }) => {
+  test("the Visit date comes from the server, not the device clock", async ({ page }) => {
     const lead = await appliedLead()
     await signIn(page, ADMISSIONS)
-    await page.clock.install()
-    await page.goto(`/staff/leads/${lead.id}`)
-    await expect(page.getByRole("button", { name: "Record visit" })).toBeVisible()
+    // A device whose clock runs a day behind, then a day ahead.
+    for (const deviceDay of [dayBefore(today), dayAfter(today)]) {
+      await page.clock.setFixedTime(new Date(`${deviceDay}T09:00:00Z`))
+      await page.goto(`/staff/leads/${lead.id}`)
 
-    // The screen stays open for a day before the family arrives.
-    await page.clock.fastForward(24 * 60 * 60 * 1000)
-    await page.getByRole("button", { name: "Record visit" }).click()
-    const visitDate = page.getByRole("form", { name: "Record visit" }).getByLabel("Visit date")
-    await expect(visitDate).toHaveValue(dayAfter(today))
-    await expect(visitDate).toHaveAttribute("max", dayAfter(today))
+      await page.getByRole("button", { name: "Record visit" }).click()
+      const visitDate = page.getByRole("form", { name: "Record visit" }).getByLabel("Visit date")
+      await expect(visitDate, deviceDay).toHaveValue(today)
+      await expect(visitDate, deviceDay).toHaveAttribute("max", today)
+    }
   })
 
   test("the Accountant, who may not record visits, is not offered it", async ({ page }) => {

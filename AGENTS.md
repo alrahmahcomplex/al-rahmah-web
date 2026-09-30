@@ -44,6 +44,16 @@ Next.js App Router (TypeScript), Tailwind v4, shadcn (`base-nova`), Supabase (da
 - Real family and student records stay out of git and out of evidence. Screens, recordings and tests use the seeded fixture data and the seeded test account.
 - Upload images with `IMAGE_ADAPTER=gist`. Post videos through the PR comment box in the signed-in browser.
 
+### Checking hosted services
+
+Checking production, a Vercel Preview or a dashboard (GitHub, Supabase, Vercel) is the agent's job. The in-app browser holds the human's sessions and shares them across agent sessions, so:
+
+1. Open the page in the in-app browser and see whether it is signed in.
+2. If it shows a sign-in page, ask the human to sign in to that service or site (`AskUserQuestion` in Claude Code), wait for their answer that they are done, then open it again.
+3. Report what the page shows.
+
+A missing session is a sign-in to ask for, never a reason to hand the check to the human. Their calls are merges and destructive changes.
+
 ### Hosted setup
 
 The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human owns every change below; an agent asks for it and says why.

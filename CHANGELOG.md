@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 30, 2026 `v0.9.0`
+
+### NEW
+
+- Staff who can view leads now have **Leads** in the staff navigation. One search box
+  takes an Admission Number or part of a student's name. A number finds its lead
+  whatever its status. A name finds every match regardless of capitals or extra spaces,
+  with Inactive and Archived leads badged and listed after the rest.
+- With nothing searched, **Leads** lists leads without a closure mark, newest first, 50
+  to a page. Filters show Inactive, Archived or all leads, or one status, and they stay
+  set as you page through. Each row shows the Admission Number, student, class,
+  enrollment year, Day or boarding, status and any Returning family badge, and the
+  student's name opens the lead.
+
 ## September 30, 2026 `v0.8.0`
 
 ### NEW

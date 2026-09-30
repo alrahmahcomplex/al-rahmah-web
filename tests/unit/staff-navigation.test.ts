@@ -25,4 +25,11 @@ describe("the staff navigation", () => {
     expect(navFor(["leads.view"])).toContain(checkIn)
     expect(navFor(["payments.view"])).not.toContain(checkIn)
   })
+
+  it("shows Leads to anyone who may view leads, and to no one else", () => {
+    const leads = STAFF_NAV.find((entry) => entry.label === "Leads")
+    expect(leads).toEqual({ href: "/staff/leads", label: "Leads", permission: "leads.view" })
+    expect(navFor(["leads.view"])).toContain(leads)
+    expect(navFor(["payments.view"])).not.toContain(leads)
+  })
 })

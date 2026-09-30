@@ -6,6 +6,7 @@ export type StaffNavEntry = { href: string; label: string; permission: Permissio
 // it needs. Later slices add their entries here.
 export const STAFF_NAV: readonly StaffNavEntry[] = [
   { href: "/staff/check-in", label: "Check-in", permission: "leads.view" },
+  { href: "/staff/leads", label: "Leads", permission: "leads.view" },
   { href: "/staff/roles", label: "Staff and roles", permission: "staff.administer" },
 ]
 

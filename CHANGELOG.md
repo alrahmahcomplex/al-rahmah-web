@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- On a lead, staff who can edit leads now have **Edit student**, which corrects the
+  student's name, class, enrollment year and Day or boarding, and **Edit parent or
+  guardian**, which corrects the parent's name, relationship, phone and WhatsApp number.
+  Phone numbers are stored the same way as at check-in.
+- When a parent or guardian is shared by brothers and sisters, the edit form lists those
+  children and their Admission Numbers before you save, because the change reaches
+  every one of them.
+- Staff who record visits can **Correct Visit date** to today or an earlier day.
+- A correction that would make the student match another lead, by name and parent
+  number, is refused and links to that lead. The Admission Number and status can't be
+  changed this way. Declined, Inactive and Archived leads, and Accountants, see no edit
+  actions.
+
 ## September 30, 2026 `v0.9.0`
 
 ### NEW

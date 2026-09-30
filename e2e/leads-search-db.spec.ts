@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from "node:crypto"
+import { randomBytes, randomInt } from "node:crypto"
 
 import { expect, test } from "@playwright/test"
 
@@ -24,8 +24,9 @@ const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
 
 function token() {
-  // Letters only, so no Admission Number or other test's name contains it.
-  return `Srch${randomUUID().replace(/[^a-f]/g, "").slice(0, 6)}`
+  // Ten random letters, so no Admission Number, other test's name or earlier
+  // run's lead contains it.
+  return `Srch${Array.from(randomBytes(10), (byte) => String.fromCharCode(97 + (byte % 26))).join("")}`
 }
 
 async function makeLead(fullName: string) {
@@ -122,10 +123,31 @@ test.describe("searching by name", () => {
 
   test("characters that mean something in a pattern are matched as themselves", async () => {
     const t = token()
-    await makeLead(`${t} Juma`)
-    for (const query of [`${t}%`, `${t}_`, `${t.slice(0, 3)}*${t.slice(4)}`, `${t}\\`]) {
+    const juma = await makeLead(`${t} Juma`)
+    for (const query of [
+      `${t}%`,
+      `${t}_`,
+      `${t}*`,
+      `${t.slice(0, 5)}*${t.slice(6)}`,
+      `${t.slice(0, 5)}.${t.slice(6)}`,
+      `${t}\\`,
+      `${t} (Juma`,
+      `${t} [J]uma`,
+    ]) {
       expect((await search({ query, page: 1 })).leads, query).toEqual([])
     }
+
+    // A name that really has them is found by them.
+    const odd = await makeLead(`${t} O'Neil* (Jr.) [2]`)
+    expect((await search({ query: `${t.slice(3)} o'neil* (jr.) [2`, page: 1 })).leads.map((lead) => lead.id)).toEqual([odd.leadId])
+    expect((await search({ query: t, page: 1 })).leads.map((lead) => lead.id)).toEqual([juma.leadId, odd.leadId])
+
+    // An asterisk never turns a number into another lead's number, or a
+    // lone asterisk into a list of everyone.
+    expect((await search({ query: "90*005", page: 1 })).leads).toEqual([])
+    const star = await search({ query: "*", page: 1 })
+    expect(star.mode).toBe("name")
+    expect(star.leads.every((lead) => lead.studentName.includes("*"))).toBe(true)
   })
 
   test("lists leads without a closure mark first, Declined among them by name, then closed leads, badged", async () => {
@@ -175,6 +197,10 @@ test.describe("searching by name", () => {
     // A page past the end is empty, not an error.
     const past = await search({ query: t, page: 3 })
     expect([past.leads, past.total, past.pageCount]).toEqual([[], 51, 2])
+
+    // So is a page far past any real list.
+    const far = await search({ query: t, page: 1e308 })
+    expect([far.leads, far.total, far.pageCount]).toEqual([[], 51, 2])
   })
 })
 
@@ -186,7 +212,7 @@ test.describe("the lead list, with no search term", () => {
     const older = await makeLead(`${t} Older`)
     const newer = await makeLead(`${t} Newer`)
 
-    for (const query of [undefined, "", "   ", " * "]) {
+    for (const query of [undefined, "", "   "]) {
       const list = await search({ query, page: 1 })
       expect(list.mode).toBe("list")
       expect(list.leads.every((lead) => lead.closure === null)).toBe(true)

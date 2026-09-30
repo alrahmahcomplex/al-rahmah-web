@@ -28,23 +28,26 @@ export function LeadSearchBar({ search }: { search: LeadSearch }) {
   const router = useRouter()
   const [typed, setTyped] = useState(search.query ?? "")
 
-  // Read from both selects, not from `search`: a second change made before
-  // the first one's page arrives would otherwise undo the first.
+  // The filters as the selects show them, not as `search` has them: a change
+  // made before the last one's page arrives would otherwise undo it. While a
+  // search is shown the selects are hidden, and `search` has them.
   const statusRef = useRef<HTMLSelectElement>(null)
   const closureRef = useRef<HTMLSelectElement>(null)
+  function currentFilters(): Pick<LeadSearch, "status" | "closure"> {
+    if (!statusRef.current || !closureRef.current) return { status: search.status, closure: search.closure }
+    return {
+      status: (statusRef.current.value || undefined) as LeadStatus | undefined,
+      closure: closureRef.current.value as ClosureFilter,
+    }
+  }
+
   function applyFilters() {
-    router.push(
-      leadsHref({
-        status: (statusRef.current?.value || undefined) as LeadStatus | undefined,
-        closure: (closureRef.current?.value ?? "open") as ClosureFilter,
-        page: 1,
-      }),
-    )
+    router.push(leadsHref({ ...currentFilters(), page: 1 }))
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    router.push(leadsHref(search, { query: typed.trim() || undefined, page: 1 }))
+    router.push(leadsHref({ ...currentFilters(), query: typed.trim() || undefined, page: 1 }))
   }
 
   return (

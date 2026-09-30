@@ -114,6 +114,20 @@ test.describe("the Leads screen", () => {
     await expect(rows.getByText("Declined", { exact: true })).toHaveCount(await rows.count())
   })
 
+  test("a search made straight after a filter change keeps that filter for Clear search", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/leads")
+
+    await page.getByLabel("Closure").selectOption("Inactive")
+    await searchFor(page, "Fixture")
+    await expect(page).toHaveURL(/q=Fixture/)
+    await expect(resultRows(page)).toHaveCount(6)
+
+    await page.getByRole("link", { name: "Clear search" }).click()
+    await expect(page).toHaveURL(/\/staff\/leads\?closure=Inactive$/)
+    await expect(page.getByLabel("Closure")).toHaveValue("Inactive")
+  })
+
   test("someone signed out is sent to sign in", async ({ page }) => {
     await page.goto("/staff/leads?q=Fixture")
     await expect(page).toHaveURL(/\/login/)

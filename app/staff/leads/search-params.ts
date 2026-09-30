@@ -1,4 +1,4 @@
-import { CLOSURE_FILTERS, LEAD_STATUSES, type ClosureFilter, type LeadSearch, type LeadStatus } from "@/lib/services/leads"
+import { CLOSURE_FILTERS, LAST_PAGE, LEAD_STATUSES, type ClosureFilter, type LeadSearch, type LeadStatus } from "@/lib/services/leads"
 
 // The Leads screen keeps its search in the URL (q, status, closure, page), so
 // a search can be bookmarked, shared and paged with the back button working.
@@ -22,7 +22,7 @@ export function parseLeadSearch(params: SearchParams): LeadSearch & { closure: C
     query,
     status: oneOf<LeadStatus>(LEAD_STATUSES, first(params.status)),
     closure: oneOf<ClosureFilter>(CLOSURE_FILTERS, first(params.closure)) ?? "open",
-    page: Number.isInteger(page) && page > 0 ? page : 1,
+    page: Number.isInteger(page) && page > 0 && page <= LAST_PAGE ? page : 1,
   }
 }
 

@@ -338,11 +338,16 @@ type LeadListRow = {
 const LEAD_LIST_COLUMNS =
   "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, created_at"
 
-// Part of a name as the database keys names (lowercase, single spaces), made
-// safe for a LIKE pattern: %, _ and \ match only themselves.
+// A page number past any real list. Larger ones would overflow the offset.
+export const LAST_PAGE = 10_000
+
+// Part of a name as the database keys names (lowercase, single spaces), as a
+// regular expression that matches it anywhere in the key, every character
+// taken literally. Not LIKE: PostgREST turns * into a wildcard there, with
+// no way to escape it.
 function namePattern(query: string) {
   const key = query.replace(/\s+/g, " ").toLowerCase()
-  return `%${key.replace(/[\\%_]/g, (character) => `\\${character}`)}%`
+  return key.replace(/[.*+?^${}()|[\]\\]/g, (character) => `\\${character}`)
 }
 
 // Finds leads for the Leads screen. A query that reads as an Admission Number
@@ -356,9 +361,8 @@ export async function searchLeads(
   supabase: SupabaseClient,
   search: LeadSearch,
 ): Promise<Result<LeadSearchResults, "unavailable">> {
-  const page = Number.isInteger(search.page) && search.page > 0 ? search.page : 1
-  // PostgREST reads * as a wildcard, and no name or number contains one.
-  const query = (search.query ?? "").replace(/\*/g, "").trim()
+  const page = Number.isInteger(search.page) && search.page > 0 ? Math.min(search.page, LAST_PAGE) : 1
+  const query = (search.query ?? "").trim()
   const admissionNumber = parseAdmissionNumber(query)
   const mode = !query ? "list" : admissionNumber ? "number" : "name"
 
@@ -367,7 +371,7 @@ export async function searchLeads(
     if (mode === "number") return select.eq("admission_number", admissionNumber)
     if (mode === "name") {
       return select
-        .ilike("student_name_key", namePattern(query))
+        .filter("student_name_key", "imatch", namePattern(query))
         .order("closure", { ascending: true, nullsFirst: true })
         .order("student_name_key")
         .order("id")

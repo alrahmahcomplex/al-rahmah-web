@@ -19,6 +19,10 @@ describe("parseLeadSearch", () => {
     expect(parseLeadSearch({ page: "-2" }).page).toBe(1)
     expect(parseLeadSearch({ page: "2.5" }).page).toBe(1)
     expect(parseLeadSearch({ page: "abc" }).page).toBe(1)
+    // Past any real list, and large enough to overflow the database offset.
+    expect(parseLeadSearch({ page: "1e308" }).page).toBe(1)
+    expect(parseLeadSearch({ page: "10001" }).page).toBe(1)
+    expect(parseLeadSearch({ page: "10000" }).page).toBe(10_000)
   })
 
   it("takes the first value of a repeated parameter", () => {

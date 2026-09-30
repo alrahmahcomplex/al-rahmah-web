@@ -129,7 +129,9 @@ export async function createLead(
       day_or_boarding: student.dayOrBoarding,
     },
     visited_on: start.kind === "walk-in" ? start.visitDate : null,
-    also_check_phones: "contactId" in guardian ? (guardian.alsoCheckPhones ?? null) : null,
+    // Sent only when given, so every other call still matches the function
+    // signature a database without this argument has.
+    ...("contactId" in guardian && guardian.alsoCheckPhones ? { also_check_phones: guardian.alsoCheckPhones } : {}),
   })
 
   if (error) {

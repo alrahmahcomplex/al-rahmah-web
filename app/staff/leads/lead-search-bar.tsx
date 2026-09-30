@@ -71,7 +71,7 @@ export function LeadSearchBar({ search }: { search: LeadSearch }) {
 
       {search.query ? (
         <div>
-          <Link href="/staff/leads" className="text-sm font-medium text-slate-900 underline underline-offset-4">
+          <Link href={leadsHref(search, { query: undefined, page: 1 })} className="text-sm font-medium text-slate-900 underline underline-offset-4">
             Clear search
           </Link>
         </div>

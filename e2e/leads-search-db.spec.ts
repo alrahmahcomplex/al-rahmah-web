@@ -186,7 +186,7 @@ test.describe("the lead list, with no search term", () => {
     const older = await makeLead(`${t} Older`)
     const newer = await makeLead(`${t} Newer`)
 
-    for (const query of [undefined, "", "   "]) {
+    for (const query of [undefined, "", "   ", " * "]) {
       const list = await search({ query, page: 1 })
       expect(list.mode).toBe("list")
       expect(list.leads.every((lead) => lead.closure === null)).toBe(true)

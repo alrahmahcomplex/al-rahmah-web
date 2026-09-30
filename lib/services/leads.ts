@@ -339,10 +339,9 @@ const LEAD_LIST_COLUMNS =
   "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, created_at"
 
 // Part of a name as the database keys names (lowercase, single spaces), made
-// safe for a LIKE pattern: %, _ and \ match only themselves, and * is dropped
-// because PostgREST reads it as a wildcard.
+// safe for a LIKE pattern: %, _ and \ match only themselves.
 function namePattern(query: string) {
-  const key = query.replace(/\*/g, "").trim().replace(/\s+/g, " ").toLowerCase()
+  const key = query.replace(/\s+/g, " ").toLowerCase()
   return `%${key.replace(/[\\%_]/g, (character) => `\\${character}`)}%`
 }
 
@@ -358,7 +357,8 @@ export async function searchLeads(
   search: LeadSearch,
 ): Promise<Result<LeadSearchResults, "unavailable">> {
   const page = Number.isInteger(search.page) && search.page > 0 ? search.page : 1
-  const query = search.query?.trim() ?? ""
+  // PostgREST reads * as a wildcard, and no name or number contains one.
+  const query = (search.query ?? "").replace(/\*/g, "").trim()
   const admissionNumber = parseAdmissionNumber(query)
   const mode = !query ? "list" : admissionNumber ? "number" : "name"
 

@@ -640,3 +640,26 @@ $$;
 
 revoke execute on function public.separate_from_family(uuid) from public, anon;
 grant execute on function public.separate_from_family(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Matches the earlier create_lead made may point at a contact that itself
+-- waits on staff. Each is pointed at the Family at the end of its chain, so
+-- from here on every match points at a contact with no match of its own, as
+-- the functions above rely on. A match always points at an older contact, so
+-- a chain always ends.
+-- ---------------------------------------------------------------------------
+
+do $$
+begin
+    perform public.set_audit_actor('system');
+    loop
+        update public.guardian_contacts waiting
+        set pending_family_match_id = matched.pending_family_match_id
+        from public.guardian_contacts matched
+        where waiting.pending_family_match_id = matched.id
+          and matched.pending_family_match_id is not null
+          and matched.pending_family_match_id <> waiting.id;
+        exit when not found;
+    end loop;
+end;
+$$;

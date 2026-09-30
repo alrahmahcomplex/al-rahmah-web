@@ -258,6 +258,43 @@ test.describe("a family who gives their Admission Number", () => {
     await expect(page.getByRole("heading", { name: "Parent or guardian", level: 2 })).toBeVisible()
   })
 
+  test("a lookup that never comes back says so, not that there is no lead, and the field stays locked meanwhile", async ({
+    page,
+  }) => {
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/check-in")
+
+    // The first lookup is held, then dropped in flight; the second goes through.
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    let dropped = false
+    await page.route("**/staff/check-in", async (route) => {
+      if (route.request().method() === "POST" && !dropped) {
+        dropped = true
+        await held
+        await route.abort("connectionfailed")
+        return
+      }
+      await route.continue()
+    })
+
+    const field = page.getByLabel("Admission Number")
+    await field.fill("ADMSN-90002")
+    await page.getByRole("button", { name: "Continue" }).click()
+    await expect(field).toHaveAttribute("readonly")
+    await expect(page.getByRole("button", { name: "Continue" })).toBeDisabled()
+    release()
+
+    const refusal = page.locator("[data-slot=alert]")
+    await expect(refusal).toContainText("The lookup could not be completed")
+    await expect(refusal).not.toContainText("No lead")
+    await expect(field).not.toHaveAttribute("readonly")
+    await expect(field).toHaveValue("ADMSN-90002")
+
+    await page.getByRole("button", { name: "Continue" }).click()
+    await expect(page.getByRole("heading", { name: "Baraka Fixture", level: 1 })).toBeVisible()
+  })
+
   test("an Accountant can look a lead up and read it, and is offered only Try again when nothing matches", async ({
     page,
   }) => {

@@ -66,6 +66,9 @@ export function AdmissionNumberLookup({ canRegister }: { canRegister: boolean })
             autoComplete="off"
             spellCheck={false}
             required
+            // Locked while a lookup runs, so its answer is always about the
+            // number the field shows.
+            readOnly={pending}
             aria-describedby="admission-number-hint"
             aria-invalid={outcome?.status === "not-found" || undefined}
           />

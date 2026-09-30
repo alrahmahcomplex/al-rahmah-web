@@ -3,16 +3,19 @@
 import {
   createLead,
   DAY_OR_BOARDING,
+  findFamilyByPhone,
   findLeadByAdmissionNumber,
   LEAD_CLASSES,
   RELATIONSHIPS,
+  updateGuardianContact,
   type NewContact,
   type NewStudent,
 } from "@/lib/services/leads"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
-import { refusalOutcome, type LookupOutcome, type RegisterOutcome } from "./outcome"
+import { correctionOutcome, type CorrectionOutcome } from "../leads/[id]/correction-outcome"
+import { familyRefusal, refusalOutcome, type FamilyOutcome, type LookupOutcome, type RegisterOutcome } from "./outcome"
 
 // Finds the lead a family's Admission Number belongs to, for anyone who may
 // view leads.
@@ -29,8 +32,12 @@ export async function lookUpAdmissionNumber(typed: string): Promise<LookupOutcom
   return { status: "refused", message: "The lookup could not be completed. Try again in a moment." }
 }
 
+// The parent of a walk-in: a contact staff confirmed as the same person, or
+// the details of a new one.
+export type WalkInGuardian = { contactId: string } | { contact: NewContact }
+
 export type WalkInForm = {
-  contact: NewContact
+  guardian: WalkInGuardian
   student: NewStudent
   visitDate: string
 }
@@ -42,14 +49,30 @@ const REFUSED_INPUT: RegisterOutcome = {
   message: "Some details could not be read. Reload the page and try again.",
 }
 
-// Server Actions take input from anyone who can post to them, so the shape is
-// checked before it reaches the database, which then checks the rules.
-function isWalkInForm(form: WalkInForm): boolean {
-  const { contact, student, visitDate } = form ?? {}
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isContact(contact: NewContact | undefined): contact is NewContact {
   return (
     typeof contact?.fullName === "string" &&
     (RELATIONSHIPS as readonly string[]).includes(contact.relationship) &&
     typeof contact.phone === "string" &&
+    (contact.relationshipDescription === undefined || typeof contact.relationshipDescription === "string") &&
+    (contact.whatsapp === undefined || typeof contact.whatsapp === "string")
+  )
+}
+
+function isGuardian(guardian: WalkInGuardian | undefined): guardian is WalkInGuardian {
+  if (!guardian || typeof guardian !== "object") return false
+  if ("contactId" in guardian) return typeof guardian.contactId === "string" && UUID.test(guardian.contactId)
+  return isContact(guardian.contact)
+}
+
+// Server Actions take input from anyone who can post to them, so the shape is
+// checked before it reaches the database, which then checks the rules.
+function isWalkInForm(form: WalkInForm): boolean {
+  const { guardian, student, visitDate } = form ?? {}
+  return (
+    isGuardian(guardian) &&
     typeof student?.fullName === "string" &&
     (LEAD_CLASSES as readonly string[]).includes(student.className) &&
     Number.isInteger(student.enrollmentYear) &&
@@ -59,8 +82,71 @@ function isWalkInForm(form: WalkInForm): boolean {
   )
 }
 
-// Registers a walk-in family: a new contact and a Visited lead. The database
-// checks that the staff member may, and refuses a child who is already on file.
+// Looks for a known Family by the parent's numbers, before any child is
+// typed. Names are never compared. A role that may register but not view
+// leads skips the match and registers a new contact; the duplicate check
+// still runs when the lead is created.
+export async function findFamily(numbers: { phone: string; whatsapp: string | null }): Promise<FamilyOutcome> {
+  if (typeof numbers?.phone !== "string" || (numbers.whatsapp !== null && typeof numbers.whatsapp !== "string")) {
+    return { status: "refused", field: null, message: "Some details could not be read. Reload the page and try again." }
+  }
+
+  const supabase = await createClient()
+  const allowed = await requirePermission(supabase, "leads.view")
+  if (!allowed.ok && allowed.error === "forbidden") return { status: "skipped" }
+  if (!allowed.ok) return familyRefusal({ kind: "unavailable" })
+
+  const result = await findFamilyByPhone(supabase, { phone: numbers.phone, whatsapp: numbers.whatsapp })
+  if (!result.ok) return familyRefusal(result.error)
+  return { status: "found", match: result.data }
+}
+
+export type SharedContactUpdate = {
+  contactId: string
+  contact: NewContact
+  // The children staff were shown, who all share the contact.
+  children: string[]
+}
+
+// Updates the contact a confirmed parent shares with their children to the
+// details staff typed. Needs leads.edit and is audited; a contact whose
+// children changed since staff saw them is refused.
+export async function updateSharedContact(update: SharedContactUpdate): Promise<CorrectionOutcome> {
+  const { contactId, contact, children } = update ?? {}
+  if (
+    typeof contactId !== "string" ||
+    !UUID.test(contactId) ||
+    !isContact(contact) ||
+    !Array.isArray(children) ||
+    !children.every((id) => typeof id === "string" && UUID.test(id))
+  ) {
+    return { status: "refused", field: null, message: "Some details could not be read. Reload the page and try again." }
+  }
+
+  const supabase = await createClient()
+  const allowed = await requirePermission(supabase, "leads.edit")
+  if (!allowed.ok) return correctionOutcome({ kind: "forbidden" })
+
+  const result = await updateGuardianContact(
+    supabase,
+    contactId,
+    {
+      fullName: contact.fullName,
+      relationship: contact.relationship,
+      relationshipDescription: contact.relationship === "Other" ? (contact.relationshipDescription ?? "") : null,
+      phone: contact.phone,
+      whatsapp: contact.whatsapp ?? null,
+    },
+    children,
+  )
+  if (!result.ok) return correctionOutcome(result.error)
+  return { status: "saved" }
+}
+
+// Registers a walk-in: a Visited lead, on a new contact or on one staff
+// confirmed, which joins the child to that Family as Returning family. The
+// database checks that the staff member may, and refuses a child who is
+// already on file.
 export async function registerWalkIn(form: WalkInForm): Promise<RegisterOutcome> {
   if (!isWalkInForm(form)) return REFUSED_INPUT
 
@@ -68,17 +154,20 @@ export async function registerWalkIn(form: WalkInForm): Promise<RegisterOutcome>
   const allowed = await requirePermission(supabase, "leads.create")
   if (!allowed.ok) return refusalOutcome({ kind: "forbidden" })
 
-  const { contact, student, visitDate } = form
+  const { guardian, student, visitDate } = form
   const result = await createLead(supabase, {
-    guardian: {
-      contact: {
-        fullName: contact.fullName,
-        relationship: contact.relationship,
-        relationshipDescription: contact.relationshipDescription,
-        phone: contact.phone,
-        whatsapp: contact.whatsapp,
-      },
-    },
+    guardian:
+      "contactId" in guardian
+        ? { contactId: guardian.contactId }
+        : {
+            contact: {
+              fullName: guardian.contact.fullName,
+              relationship: guardian.contact.relationship,
+              relationshipDescription: guardian.contact.relationshipDescription,
+              phone: guardian.contact.phone,
+              whatsapp: guardian.contact.whatsapp,
+            },
+          },
     student: {
       fullName: student.fullName,
       className: student.className,

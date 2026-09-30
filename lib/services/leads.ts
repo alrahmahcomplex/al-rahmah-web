@@ -642,3 +642,114 @@ export async function recordVisit(
   console.error("Could not record a visit", error)
   return { ok: false, error: { kind: "unavailable" } }
 }
+
+// ---------------------------------------------------------------------------
+// Matching a walk-in parent to a known Family. Phones only, never names.
+// ---------------------------------------------------------------------------
+
+export type FamilyChild = {
+  id: string
+  admissionNumber: string
+  studentName: string
+  className: LeadClass
+  enrollmentYear: number
+  status: LeadStatus
+  closure: LeadClosure | null
+}
+
+export type FamilyContact = {
+  id: string
+  fullName: string
+  relationship: Relationship
+  relationshipDescription: string | null
+  phone: string
+  whatsapp: string | null
+  // Every lead on this contact, oldest first.
+  children: FamilyChild[]
+}
+
+export type FamilyMatch = {
+  // The numbers as given, normalized the way contacts store them. A WhatsApp
+  // number equal to the phone reads as none.
+  phone: string
+  whatsapp: string | null
+  // Oldest first. Empty when nobody holds either number.
+  contacts: FamilyContact[]
+}
+
+export type FindFamilyError =
+  | { kind: "forbidden" }
+  | { kind: "invalid"; field: "phone" | "whatsapp" | null }
+  | { kind: "unavailable" }
+
+type FamilyMatchRow = {
+  phone: string
+  whatsapp: string | null
+  contacts: {
+    id: string
+    full_name: string
+    relationship: Relationship
+    relationship_description: string | null
+    phone: string
+    whatsapp: string | null
+    children: {
+      id: string
+      admission_number: string
+      student_name: string
+      class_name: LeadClass
+      enrollment_year: number
+      status: LeadStatus
+      closure: LeadClosure | null
+    }[]
+  }[]
+}
+
+// Every contact whose direct or WhatsApp number equals either given number,
+// once both are normalized, each with its Family's children. Needs
+// leads.view. A number that is not a phone number is refused as `invalid`,
+// naming the field.
+export async function findFamilyByPhone(
+  supabase: SupabaseClient,
+  numbers: { phone: string; whatsapp?: string | null },
+): Promise<Result<FamilyMatch, FindFamilyError>> {
+  const { data, error } = await supabase.rpc("find_family_by_phone", {
+    phone: numbers.phone,
+    whatsapp: numbers.whatsapp ?? null,
+  })
+
+  if (error) {
+    if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
+    if (error.message === "invalid") {
+      const field = invalidFieldOf(error.details)
+      return { ok: false, error: { kind: "invalid", field: field === "phone" || field === "whatsapp" ? field : null } }
+    }
+    console.error("Could not look for a Family by phone", error)
+    return { ok: false, error: { kind: "unavailable" } }
+  }
+
+  const row = data as FamilyMatchRow
+  return {
+    ok: true,
+    data: {
+      phone: row.phone,
+      whatsapp: row.whatsapp,
+      contacts: row.contacts.map((contact) => ({
+        id: contact.id,
+        fullName: contact.full_name,
+        relationship: contact.relationship,
+        relationshipDescription: contact.relationship_description,
+        phone: contact.phone,
+        whatsapp: contact.whatsapp,
+        children: contact.children.map((child) => ({
+          id: child.id,
+          admissionNumber: child.admission_number,
+          studentName: child.student_name,
+          className: child.class_name,
+          enrollmentYear: child.enrollment_year,
+          status: child.status,
+          closure: child.closure,
+        })),
+      })),
+    },
+  }
+}

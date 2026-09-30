@@ -5,6 +5,22 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## September 30, 2026 `v0.12.0`
+
+### NEW
+
+- New Student now checks the parent's phone and WhatsApp numbers against every parent
+  already on file. When one matches, you see their stored name and relationship and
+  choose **Same person** or **Not the same person**.
+- Once you confirm the parent, you see their children with Admission Number, class,
+  enrollment year and status. **Open** takes you to an active child, and a Declined,
+  Inactive or Archived child goes to the Reopening request page, so nothing is
+  registered twice.
+- **Register a new sibling** adds the child to the same parent and marks the lead
+  **Returning family**. If the details you typed differ from the ones on file, you see
+  both side by side and choose **Keep stored details** or **Update the shared contact**,
+  which changes it for every brother and sister.
+
 ## September 30, 2026 `v0.11.0`
 
 ### NEW

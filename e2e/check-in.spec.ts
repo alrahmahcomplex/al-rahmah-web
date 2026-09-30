@@ -98,16 +98,15 @@ test.describe("registering a new family", () => {
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(number)
   })
 
-  test("a phone number that cannot be read sends staff back to the parent step, and nothing is written", async ({
+  test("a phone number that cannot be read keeps staff on the parent step, and nothing is written", async ({
     page,
   }) => {
     const family = newFamily()
     await signIn(page, ADMISSIONS)
     await startNewStudent(page)
     await fillParent(page, family, "12345")
-    await fillStudent(page, family.child)
-    await page.getByRole("button", { name: "Register student" }).click()
 
+    // The Family check reads the number before any child is typed.
     await expect(page.getByRole("heading", { name: "Parent or guardian", level: 2 })).toBeVisible()
     await expect(page.locator("[data-slot=alert]")).toContainText("That phone number can't be read")
     await expect(page.getByLabel("Full name")).toHaveValue(family.parent)
@@ -115,7 +114,7 @@ test.describe("registering a new family", () => {
     // Correcting it lets the registration through, and only then is a lead made.
     await page.getByLabel("Phone", { exact: true }).fill(family.phone)
     await page.getByRole("button", { name: "Continue" }).click()
-    await page.getByRole("button", { name: "Review" }).click()
+    await fillStudent(page, family.child)
     await page.getByRole("button", { name: "Register student" }).click()
     await expect(page.getByLabel("Admission Number")).toHaveText(/^ADMSN-\d{5}$/)
   })
@@ -167,9 +166,10 @@ test.describe("a child who is already registered", () => {
     const number = (await page.getByLabel("Admission Number").textContent()) ?? ""
 
     // The same child again, with the number written another way and the name
-    // in capitals.
+    // in capitals, and staff skipping the Family match.
     await startNewStudent(page)
     await fillParent(page, family, family.phone.replace(/^0 /, "+255 "))
+    await page.getByRole("button", { name: "Not the same person" }).click()
     await fillStudent(page, family.child.toUpperCase())
     await page.getByRole("button", { name: "Register student" }).click()
 
@@ -185,6 +185,7 @@ test.describe("a child who is already registered", () => {
     await signIn(page, ADMISSIONS)
     await startNewStudent(page)
     await fillParent(page, { parent: "Omari Fixture", phone: "0700 000 104" })
+    await page.getByRole("button", { name: "Not the same person" }).click()
     await fillStudent(page, "Hamisi Fixture")
     await page.getByRole("button", { name: "Register student" }).click()
 

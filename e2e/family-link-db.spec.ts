@@ -214,21 +214,37 @@ test.describe("confirming a match", () => {
     expect(await contactOf(second.leadId)).toBe(formContact)
   })
 
-  test("a later form contact that matched the confirmed one follows it into the Family", async () => {
-    const { first, familyContact, formContact } = await unconfirmedMatch()
-    // Another submission matched to the form's contact, as one does when that
-    // contact holds a number the Family's does not.
-    const other = await created(await createLead(secretClient(), fromForm({ contact: contact() })))
-    await asSystem(async (sql) =>
-      sql.query("update public.guardian_contacts set pending_family_match_id = $2 where id = $1", [
-        await contactOf(other.leadId),
-        formContact,
-      ]),
-    )
-    await confirmFamilyMatch(await signedIn(ADMISSIONS), first.leadId)
+  test("a later submission that matches only an unconfirmed contact is matched to its Family, before and after", async () => {
+    const parent = contact()
+    const whatsapp = `0${nineDigits()}`
+    const staff = await signedIn(ADMISSIONS)
+    const known = await created(await createLead(staff, walkIn({ contact: parent })))
+    const familyContact = await contactOf(known.leadId)
+    // The form gives a WhatsApp number the Family's contact doesn't hold.
+    const first = await created(await createLead(secretClient(), fromForm({ contact: { ...parent, whatsapp } })))
 
-    const family = await getLeadFamily(await signedIn(ADMISSIONS), other.leadId)
-    expect(family.ok && family.data.pendingMatch?.id).toBe(familyContact)
+    // A second submission whose only known number is that WhatsApp number.
+    const second = await created(await createLead(secretClient(), fromForm({ contact: contact({ phone: whatsapp }) })))
+    const beforeConfirming = await getLeadFamily(staff, second.leadId)
+    expect(beforeConfirming.ok && beforeConfirming.data.pendingMatch?.id).toBe(familyContact)
+
+    // Once the first is confirmed, its old contact is empty, and a third
+    // submission on that number still reaches the Family.
+    await confirmFamilyMatch(staff, first.leadId)
+    const third = await created(
+      await createLead(secretClient(), fromForm({ contact: contact({ phone: `0${nineDigits()}`, whatsapp }) })),
+    )
+    const afterConfirming = await getLeadFamily(staff, third.leadId)
+    expect(afterConfirming.ok && afterConfirming.data.pendingMatch?.id).toBe(familyContact)
+
+    // The Family lists every unconfirmed child, with none a step further away.
+    const family = await getLeadFamily(staff, known.leadId)
+    expect(family.ok && family.data.children.map((child) => [child.id, child.unconfirmed])).toEqual([
+      [known.leadId, false],
+      [first.leadId, false],
+      [second.leadId, true],
+      [third.leadId, true],
+    ])
   })
 
   test("a child who would then duplicate a lead in the Family is refused, and nothing moves", async () => {

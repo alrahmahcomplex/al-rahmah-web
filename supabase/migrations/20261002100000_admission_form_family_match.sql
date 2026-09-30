@@ -16,9 +16,11 @@
 
 -- ---------------------------------------------------------------------------
 -- create_lead, as in 20261001200000_find_family_by_phone.sql, but an
--- Admission form child's pending match points only at a contact that still
--- has children: a Family. A contact whose children all moved on when its own
--- match was confirmed is left behind with no one on it, and is never matched.
+-- Admission form child's pending match points only at a Family: a contact
+-- that has children and no pending match of its own. A contact whose children
+-- all moved on when its own match was confirmed is left behind with no one on
+-- it, and is never matched. Pending matches therefore never chain, and a
+-- Family's unconfirmed children are always one step from it.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.create_lead(
@@ -54,6 +56,7 @@ declare
     one_phone text;
     match public.leads;
     pending_match uuid;
+    matched_contact public.guardian_contacts;
     joined boolean := false;
     new_lead_id uuid;
     new_number text;
@@ -229,13 +232,22 @@ begin
         -- The form never joins a Family by itself: a known number leaves a
         -- pending match for staff to confirm.
         -- A contact with children, a settled one before one that is itself
-        -- still waiting on staff, then the oldest.
-        select g.id into pending_match
+        -- still waiting on staff, then the oldest. Held shared, so staff
+        -- settling that contact's own match wait for this, or this reads
+        -- how they settled it.
+        select g.* into matched_contact
         from public.guardian_contacts g
         where (g.phone = any (phones) or g.whatsapp = any (phones))
           and exists (select 1 from public.leads l where l.guardian_contact_id = g.id)
         order by g.pending_family_match_id is not null, g.created_at, g.id
-        limit 1;
+        limit 1
+        for share of g;
+        -- A contact still waiting on staff is not a Family: the match goes to
+        -- the Family it waits on. A match always points at a contact with no
+        -- match of its own, so there is never a chain to follow, and that
+        -- contact keeps its children: confirming only adds to them, and
+        -- separating never takes the last one.
+        pending_match := coalesce(matched_contact.pending_family_match_id, matched_contact.id);
         joined := pending_match is not null;
     end if;
 
@@ -436,10 +448,13 @@ revoke execute on function public.lead_family(uuid) from public, anon;
 grant execute on function public.lead_family(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- The three writes start the same way: leads.edit, then the lead's contact,
--- locked so two staff settling the same contact at once settle it once, and
--- the lead read again under that lock, so a lead that moved off the contact
--- in the meantime is refused as `children_changed`.
+-- The three writes start the same way: leads.edit, then the children on the
+-- lead's contact and the contact itself, locked so two staff settling the
+-- same contact at once settle it once. The children come first, the order a
+-- correction to a child takes the child and its contact in, so the two never
+-- wait on each other. The lead is read again under those locks, so a lead
+-- that moved off the contact in the meantime is refused as
+-- `children_changed`.
 -- ---------------------------------------------------------------------------
 
 create function public.lock_lead_contact(lead_id uuid, out lead public.leads, out contact public.guardian_contacts)
@@ -455,6 +470,7 @@ begin
     if not found then
         raise exception 'not_found';
     end if;
+    perform 1 from public.leads l where l.guardian_contact_id = lead.guardian_contact_id order by l.id for update;
     select * into contact from public.guardian_contacts g where g.id = lead.guardian_contact_id for update;
     select * into lead from public.leads l where l.id = lock_lead_contact.lead_id;
     if lead.guardian_contact_id is distinct from contact.id then
@@ -501,8 +517,8 @@ revoke execute on function public.check_pending_match(public.guardian_contacts, 
 -- confirm_family_match: staff have checked that the parent the Admission form
 -- matched is the same person. Every child on the lead's contact moves onto
 -- the matched contact, keeping the Family cause, and the pending match is
--- cleared. Contacts that were waiting on the lead's contact now wait on the
--- matched one. `expected_lead_ids` are the children staff were told move.
+-- cleared. No contact waits on the lead's contact, because it had a match of
+-- its own. `expected_lead_ids` are the children staff were told move.
 -- ---------------------------------------------------------------------------
 
 create function public.confirm_family_match(lead_id uuid, expected_lead_ids uuid[] default null)
@@ -542,9 +558,6 @@ begin
 
     update public.leads l set guardian_contact_id = family.id where l.guardian_contact_id = contact.id;
     update public.guardian_contacts g set pending_family_match_id = null where g.id = contact.id;
-    update public.guardian_contacts g
-    set pending_family_match_id = nullif(family.id, g.id)
-    where g.pending_family_match_id = contact.id;
 
     return jsonb_build_object('result', 'confirmed');
 end;

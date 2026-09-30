@@ -157,7 +157,8 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
           const typed = typedParent(details, match)
           const updated: FamilyContact = {
             ...confirmed,
-            fullName: typed.fullName,
+            // Trimmed only, as the database stores it.
+            fullName: details.parentName.trim(),
             relationship: typed.relationship,
             relationshipDescription: typed.relationship === "Other" ? typed.relationshipDescription : null,
             phone: typed.phone,
@@ -180,7 +181,12 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
       try {
         result = await registerWalkIn({
           guardian: confirmed
-            ? { contactId: confirmed.id }
+            ? {
+                contactId: confirmed.id,
+                // Checked for duplicates too, in case the stored contact
+                // doesn't hold a number the parent gave today.
+                typedPhones: [details.phone, details.whatsapp].filter((phone) => phone.trim() !== ""),
+              }
             : {
                 contact: {
                   fullName: details.parentName,
@@ -278,6 +284,8 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
             goTo("family")
           }}
           onNotSame={() => {
+            // The declined contacts are done with: Back goes to the parent.
+            setMatch(null)
             setConfirmed(null)
             goTo("student")
           }}

@@ -35,7 +35,8 @@ export function compareContact(typed: TypedParent, stored: FamilyContact): { dif
     ["Phone", typed.phone, stored.phone],
     ["WhatsApp", typed.whatsapp ?? "Same as phone", stored.whatsapp ?? "Same as phone"],
   ]
-  const rows = pairs.map(([label, mine, theirs]) => ({ label, typed: mine, stored: theirs, differs: mine !== theirs }))
+  // Spacing alone is not a difference, on either side.
+  const rows = pairs.map(([label, mine, theirs]) => ({ label, typed: mine, stored: theirs, differs: tidy(mine) !== tidy(theirs) }))
   return { differs: rows.some((row) => row.differs), rows }
 }
 

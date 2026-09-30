@@ -50,7 +50,9 @@ export type NewStudent = {
 }
 
 export type CreateLeadInput = {
-  guardian: { contactId: string } | { contact: NewContact }
+  // An existing contact, optionally with the numbers staff typed for it at the
+  // front desk: the duplicate check covers those as well as the stored ones.
+  guardian: { contactId: string; alsoCheckPhones?: string[] } | { contact: NewContact }
   student: NewStudent
   start: { kind: "walk-in"; visitDate: string } | { kind: "admission-form" }
 }
@@ -127,6 +129,7 @@ export async function createLead(
       day_or_boarding: student.dayOrBoarding,
     },
     visited_on: start.kind === "walk-in" ? start.visitDate : null,
+    also_check_phones: "contactId" in guardian ? (guardian.alsoCheckPhones ?? null) : null,
   })
 
   if (error) {

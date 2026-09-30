@@ -158,6 +158,14 @@ test.describe("a parent whose number is on file", () => {
 
     await page.getByRole("button", { name: "Not the same person" }).click()
     await expect(page.getByRole("heading", { name: "Student", level: 2 })).toBeVisible()
+    await expect(page.getByText("Step 2 of 3")).toBeVisible()
+
+    // Back returns to the parent, not to the contact just declined.
+    await page.getByRole("button", { name: "Back" }).click()
+    await expect(page.getByRole("heading", { name: "Parent or guardian", level: 2 })).toBeVisible()
+    await page.getByRole("button", { name: "Continue" }).click()
+    await page.getByRole("button", { name: "Not the same person" }).click()
+
     await fillStudent(page, child)
     await expect(page.getByRole("region", { name: "Parent or guardian" })).toContainText(stranger)
     await page.getByRole("button", { name: "Register student" }).click()

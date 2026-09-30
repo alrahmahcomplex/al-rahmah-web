@@ -12,7 +12,7 @@ import {
   type NewStudent,
 } from "@/lib/services/leads"
 
-import { anonClient, createThrowawayStaff, signedIn } from "./db"
+import { anonClient, createThrowawayStaff, secretClient, signedIn } from "./db"
 import { ACCOUNTANT, ADMISSIONS } from "./fixtures"
 
 // Matching a walk-in parent to a known Family, against local Supabase. Each
@@ -203,6 +203,44 @@ test.describe("registering a sibling on a confirmed contact", () => {
     const lead = await getLead(staff, created.data.leadId)
     expect(lead.ok && lead.data.returningFamily).toBe(false)
     expect(lead.ok && lead.data.contact.id).not.toBe(known.contactId)
+  })
+
+  test("a child on file under another number staff typed is refused, though the confirmed contact doesn't hold it", async () => {
+    const pupil = student()
+    const confirmed = await family(contact())
+    const otherDigits = nineDigits()
+    const other = await family(contact({ phone: `0${otherDigits}` }), [pupil])
+    const staff = await signedIn(ADMISSIONS)
+    const confirmedLead = await getLead(staff, confirmed.leads[0].id)
+    if (!confirmedLead.ok) throw new Error("lead missing")
+
+    // Staff typed the confirmed contact's phone and the other number as
+    // WhatsApp, then kept the stored details.
+    const again = await createLead(
+      staff,
+      walkIn({ contactId: confirmed.contactId, alsoCheckPhones: [confirmedLead.data.contact.phone, `+255 ${otherDigits}`] }, pupil),
+    )
+    expect(again).toEqual({
+      ok: false,
+      error: {
+        kind: "duplicate",
+        lead: { id: other.leads[0].id, admissionNumber: other.leads[0].admissionNumber, status: "Visited", closure: null },
+      },
+    })
+
+    // Without them, the check covers only the stored numbers.
+    expect((await createLead(staff, walkIn({ contactId: confirmed.contactId, alsoCheckPhones: [] }, pupil))).ok).toBe(true)
+  })
+
+  test("typed numbers are only for a walk-in joining an existing contact", async () => {
+    // The seeded Amani Fixture contact came from the Admission form, so the
+    // form may join it, but not with typed numbers.
+    const result = await createLead(secretClient(), {
+      guardian: { contactId: "c0c0c0c0-0000-4000-8000-000000000001", alsoCheckPhones: [`0${nineDigits()}`] },
+      student: student(),
+      start: { kind: "admission-form" },
+    })
+    expect(result).toEqual({ ok: false, error: { kind: "invalid", field: "contact" } })
   })
 
   test("a child already on that contact is refused as a duplicate, even when the list was skipped", async () => {

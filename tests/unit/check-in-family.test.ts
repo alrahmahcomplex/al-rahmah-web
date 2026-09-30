@@ -57,6 +57,10 @@ describe("comparing the typed parent with the confirmed contact", () => {
     expect(result.rows.filter((row) => row.differs).map((row) => row.label)).toEqual(["Phone", "WhatsApp"])
   })
 
+  it("ignores spacing inside a stored name too", () => {
+    expect(compareContact(typed, { ...stored, fullName: "Amina  Juma" }).differs).toBe(false)
+  })
+
   it("ignores a description typed for a relationship that is not Other", () => {
     expect(compareContact({ ...typed, relationshipDescription: "left over" }, stored).differs).toBe(false)
   })

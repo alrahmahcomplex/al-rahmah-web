@@ -32,9 +32,9 @@ export async function lookUpAdmissionNumber(typed: string): Promise<LookupOutcom
   return { status: "refused", message: "The lookup could not be completed. Try again in a moment." }
 }
 
-// The parent of a walk-in: a contact staff confirmed as the same person, or
-// the details of a new one.
-export type WalkInGuardian = { contactId: string } | { contact: NewContact }
+// The parent of a walk-in: a contact staff confirmed as the same person, with
+// the numbers staff typed for them, or the details of a new one.
+export type WalkInGuardian = { contactId: string; typedPhones: string[] } | { contact: NewContact }
 
 export type WalkInForm = {
   guardian: WalkInGuardian
@@ -63,7 +63,15 @@ function isContact(contact: NewContact | undefined): contact is NewContact {
 
 function isGuardian(guardian: WalkInGuardian | undefined): guardian is WalkInGuardian {
   if (!guardian || typeof guardian !== "object") return false
-  if ("contactId" in guardian) return typeof guardian.contactId === "string" && UUID.test(guardian.contactId)
+  if ("contactId" in guardian) {
+    return (
+      typeof guardian.contactId === "string" &&
+      UUID.test(guardian.contactId) &&
+      Array.isArray(guardian.typedPhones) &&
+      guardian.typedPhones.length <= 2 &&
+      guardian.typedPhones.every((phone) => typeof phone === "string")
+    )
+  }
   return isContact(guardian.contact)
 }
 
@@ -158,7 +166,7 @@ export async function registerWalkIn(form: WalkInForm): Promise<RegisterOutcome>
   const result = await createLead(supabase, {
     guardian:
       "contactId" in guardian
-        ? { contactId: guardian.contactId }
+        ? { contactId: guardian.contactId, alsoCheckPhones: guardian.typedPhones }
         : {
             contact: {
               fullName: guardian.contact.fullName,

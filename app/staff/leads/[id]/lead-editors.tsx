@@ -35,7 +35,7 @@ type Unsaved = Exclude<CorrectionOutcome, { status: "saved" }>
 
 // Saves through a Server Action, keeping the refusal to show in the form.
 // A saved change closes the form and says so.
-function useCorrection(onSaved: () => void) {
+export function useCorrection(onSaved: () => void) {
   const [refusal, setRefusal] = useState<Unsaved | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -56,7 +56,7 @@ function useCorrection(onSaved: () => void) {
   return { refusal, pending, save }
 }
 
-function Saved({ message }: { message: string | null }) {
+export function Saved({ message }: { message: string | null }) {
   return (
     <p role="status" className="text-sm text-emerald-700">
       {message}
@@ -64,7 +64,7 @@ function Saved({ message }: { message: string | null }) {
   )
 }
 
-function Refusal({ refusal }: { refusal: Unsaved | null }) {
+export function Refusal({ refusal }: { refusal: Unsaved | null }) {
   if (!refusal) return null
   if (refusal.status === "duplicate") {
     return (
@@ -86,7 +86,7 @@ function Refusal({ refusal }: { refusal: Unsaved | null }) {
   )
 }
 
-function Field({
+export function Field({
   label,
   hint,
   invalid,

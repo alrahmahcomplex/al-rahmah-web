@@ -6,6 +6,7 @@ import {
   correctVisitDate,
   DAY_OR_BOARDING,
   LEAD_CLASSES,
+  recordVisit,
   RELATIONSHIPS,
   updateGuardianContact,
   updateLeadDetails,
@@ -16,6 +17,7 @@ import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
 import { correctionOutcome, type CorrectionOutcome } from "./correction-outcome"
+import { recordVisitOutcome } from "./record-visit-outcome"
 
 const REFUSED_INPUT: CorrectionOutcome = {
   status: "refused",
@@ -102,6 +104,22 @@ export async function correctVisit(leadId: string, visitDate: string): Promise<C
 
   const result = await correctVisitDate(supabase, leadId, visitDate)
   if (!result.ok) return correctionOutcome(result.error)
+  revalidatePath(`/staff/leads/${leadId}`)
+  return { status: "saved" }
+}
+
+// Records the visit of an Applied family, which moves the lead to Visited.
+export async function recordArrival(leadId: string, visitDate: string): Promise<CorrectionOutcome> {
+  if (!isString(leadId) || !isString(visitDate) || !/^\d{4}-\d{2}-\d{2}$/.test(visitDate)) {
+    return recordVisitOutcome({ kind: "invalid", field: "visit_date" })
+  }
+
+  const supabase = await createClient()
+  const allowed = await requirePermission(supabase, "visits.record")
+  if (!allowed.ok) return recordVisitOutcome({ kind: "forbidden" })
+
+  const result = await recordVisit(supabase, leadId, visitDate)
+  if (!result.ok) return recordVisitOutcome(result.error)
   revalidatePath(`/staff/leads/${leadId}`)
   return { status: "saved" }
 }

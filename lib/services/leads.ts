@@ -599,3 +599,43 @@ export async function listContactChildren(
     })),
   }
 }
+
+// ---------------------------------------------------------------------------
+// Recording the visit of an Applied family: a database function that checks
+// the permission itself and moves a lead from Applied to Visited, and nothing
+// else.
+// ---------------------------------------------------------------------------
+
+export type RecordVisitError =
+  | { kind: "forbidden" }
+  | { kind: "not-found" }
+  // Only an Applied lead has a first visit still to record, so no lead goes
+  // backwards and none records a second one.
+  | { kind: "not-applied" }
+  // An Applied lead marked Inactive or Archived is read-only.
+  | { kind: "closed" }
+  | { kind: "invalid"; field: InvalidField | null }
+  | { kind: "unavailable" }
+
+// Records that an Applied family came to campus on `visitDate`, which moves
+// the lead to Visited. Needs visits.record, and refuses a date later than
+// today in Tanzania.
+export async function recordVisit(
+  supabase: SupabaseClient,
+  id: string,
+  visitDate: string,
+): Promise<Result<null, RecordVisitError>> {
+  const { error } = await supabase.rpc("record_visit", { lead_id: id, visited_on: visitDate })
+  if (!error) return { ok: true, data: null }
+
+  // 42501: the function isn't granted to the caller at all, as for someone
+  // signed out.
+  if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: { kind: "forbidden" } }
+  // A malformed id is a missing lead, not an outage.
+  if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
+  if (error.message === "not_applied") return { ok: false, error: { kind: "not-applied" } }
+  if (error.message === "closed") return { ok: false, error: { kind: "closed" } }
+  if (error.message === "invalid") return { ok: false, error: { kind: "invalid", field: invalidFieldOf(error.details) } }
+  console.error("Could not record a visit", error)
+  return { ok: false, error: { kind: "unavailable" } }
+}

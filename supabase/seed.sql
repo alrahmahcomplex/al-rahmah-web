@@ -109,3 +109,27 @@ insert into public.leads (
         'Declined', null, date '2026-08-21', 'c0c0c0c0-0000-4000-8000-000000000005', false);
 
 commit;
+
+-- Recording a visit: an Applied lead of its own, which the lead screen test
+-- moves to Visited and puts back, so ADMSN-90001 stays Applied for every
+-- other test. Its name leaves out "Fixture", so a name search for the leads
+-- above still finds those six only.
+--
+--   ADMSN-90047 Imani Arrival        Applied, recorded as visited by e2e/record-visit.spec.ts
+
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000047', 'Mwajuma Arrival', 'Mother', null, '+255700000147', null, 'admission_form');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined
+) values
+    ('1ead0000-0000-4000-8000-000000000047', 'ADMSN-90047', 'Imani Arrival', 'STD 2', 2027, 'Day',
+        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000047', false);
+
+commit;

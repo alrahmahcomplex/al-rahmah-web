@@ -280,3 +280,142 @@ export async function getLead(supabase: SupabaseClient, id: string): Promise<Res
     },
   }
 }
+
+export const LEAD_STATUSES = ["Applied", "Visited", "Interviewed", "Enrolled", "Declined"] as const satisfies readonly LeadStatus[]
+
+// Which leads the list shows by closure mark: those without one (the default),
+// one mark, or every lead.
+export const CLOSURE_FILTERS = ["open", "Inactive", "Archived", "all"] as const
+export type ClosureFilter = (typeof CLOSURE_FILTERS)[number]
+
+export const LEADS_PER_PAGE = 50
+
+export type LeadSearch = {
+  query?: string
+  status?: LeadStatus
+  closure?: ClosureFilter
+  // From 1.
+  page: number
+}
+
+export type LeadListItem = {
+  id: string
+  admissionNumber: string
+  studentName: string
+  className: LeadClass
+  enrollmentYear: number
+  dayOrBoarding: DayOrBoarding
+  status: LeadStatus
+  closure: LeadClosure | null
+  returningFamily: boolean
+  createdAt: string
+}
+
+export type LeadSearchResults = {
+  // What the query was read as: an Admission Number, part of a name, or
+  // nothing, which lists leads under the filters.
+  mode: "number" | "name" | "list"
+  leads: LeadListItem[]
+  total: number
+  page: number
+  pageCount: number
+}
+
+type LeadListRow = {
+  id: string
+  admission_number: string
+  student_name: string
+  class_name: LeadClass
+  enrollment_year: number
+  day_or_boarding: DayOrBoarding
+  status: LeadStatus
+  closure: LeadClosure | null
+  returning_family_joined: boolean
+  returning_family_reapplied: boolean
+  created_at: string
+}
+
+const LEAD_LIST_COLUMNS =
+  "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, created_at"
+
+// Part of a name as the database keys names (lowercase, single spaces), made
+// safe for a LIKE pattern: %, _ and \ match only themselves, and * is dropped
+// because PostgREST reads it as a wildcard.
+function namePattern(query: string) {
+  const key = query.replace(/\*/g, "").trim().replace(/\s+/g, " ").toLowerCase()
+  return `%${key.replace(/[\\%_]/g, (character) => `\\${character}`)}%`
+}
+
+// Finds leads for the Leads screen. A query that reads as an Admission Number
+// finds that lead exactly, whatever its status or closure mark. Any other
+// query matches part of the student's name, ignoring case and spacing, and
+// lists leads without a closure mark first (Declined among them by name),
+// then Inactive and Archived ones. With no query, the list shows leads under
+// the filters, newest first; the filters apply only to this list. Row-level
+// security shows nothing to anyone without leads.view.
+export async function searchLeads(
+  supabase: SupabaseClient,
+  search: LeadSearch,
+): Promise<Result<LeadSearchResults, "unavailable">> {
+  const page = Number.isInteger(search.page) && search.page > 0 ? search.page : 1
+  const query = search.query?.trim() ?? ""
+  const admissionNumber = parseAdmissionNumber(query)
+  const mode = !query ? "list" : admissionNumber ? "number" : "name"
+
+  const build = (head = false) => {
+    const select = supabase.from("leads").select(LEAD_LIST_COLUMNS, { count: "exact", head })
+    if (mode === "number") return select.eq("admission_number", admissionNumber)
+    if (mode === "name") {
+      return select
+        .ilike("student_name_key", namePattern(query))
+        .order("closure", { ascending: true, nullsFirst: true })
+        .order("student_name_key")
+        .order("id")
+    }
+    let list = select
+    const closure = search.closure ?? "open"
+    if (closure === "open") list = list.is("closure", null)
+    else if (closure !== "all") list = list.eq("closure", closure)
+    if (search.status) list = list.eq("status", search.status)
+    return list.order("created_at", { ascending: false }).order("id", { ascending: false })
+  }
+
+  const from = (page - 1) * LEADS_PER_PAGE
+  const found = await build().range(from, from + LEADS_PER_PAGE - 1).overrideTypes<LeadListRow[], { merge: false }>()
+  let { data, count, error } = found
+
+  // PostgREST refuses a range past the last row. That page is empty, and a
+  // count alone still says how many pages there are.
+  if (error?.code === "PGRST103") {
+    const counted = await build(true)
+    ;({ count, error } = counted)
+    data = []
+  }
+  if (error) {
+    console.error("Could not search leads", error)
+    return { ok: false, error: "unavailable" }
+  }
+
+  const total = count ?? 0
+  return {
+    ok: true,
+    data: {
+      mode,
+      total,
+      page,
+      pageCount: Math.max(1, Math.ceil(total / LEADS_PER_PAGE)),
+      leads: (data ?? []).map((row) => ({
+        id: row.id,
+        admissionNumber: row.admission_number,
+        studentName: row.student_name,
+        className: row.class_name,
+        enrollmentYear: row.enrollment_year,
+        dayOrBoarding: row.day_or_boarding,
+        status: row.status,
+        closure: row.closure,
+        returningFamily: row.returning_family_joined || row.returning_family_reapplied,
+        createdAt: row.created_at,
+      })),
+    },
+  }
+}

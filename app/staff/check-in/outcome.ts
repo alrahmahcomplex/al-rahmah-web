@@ -10,6 +10,13 @@ export type RegisterOutcome =
   | { status: "duplicate"; admissionNumber: string; href: string }
   | { status: "refused"; step: Step; field: InvalidField | null; message: string }
 
+// What the Admission Number lookup is told. A match opens the lead itself,
+// whatever its status or closure mark.
+export type LookupOutcome =
+  | { status: "found"; href: string }
+  | { status: "not-found" }
+  | { status: "refused"; message: string }
+
 // The step each refused field belongs to, so staff land where they can fix it.
 const STEP_OF: Record<InvalidField, Step> = {
   start: "review",

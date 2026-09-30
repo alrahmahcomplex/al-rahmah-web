@@ -1,10 +1,8 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { forbidden } from "next/navigation"
 
-import { buttonVariants } from "@/components/ui/button"
-
 import { requireStaff } from "../session"
+import { AdmissionNumberLookup } from "./admission-number-lookup"
 
 export const metadata: Metadata = {
   title: "Check-in · Al-Rahmah Complex",
@@ -20,12 +18,11 @@ export default async function CheckInPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Check-in</h1>
-      <p className="max-w-prose text-slate-700">Receive a family who has come to campus.</p>
-      {canRegister ? (
-        <div>
-          <Link href="/staff/check-in/new" className={buttonVariants({ size: "lg" })}>New Student</Link>
-        </div>
-      ) : (
+      <p className="max-w-prose text-slate-700">
+        Receive a family who has come to campus. Ask for their Admission Number first.
+      </p>
+      <AdmissionNumberLookup canRegister={canRegister} />
+      {!canRegister && (
         <p className="text-sm text-muted-foreground">Your role can read leads but not register new students.</p>
       )}
     </div>

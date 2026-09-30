@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 
+import { unusedAdmissionNumber } from "./db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "./fixtures"
 
 // The front desk, as Admissions Staff use it. Every run invents its own
@@ -194,6 +195,82 @@ test.describe("a child who is already registered", () => {
     await expect(page.getByText("Reopening a closed lead isn't available yet")).toBeVisible()
     await expect(page.getByRole("heading", { name: "Hamisi Fixture", level: 1 })).toBeVisible()
     await expect(page.getByText("Archived", { exact: true }).first()).toBeVisible()
+  })
+})
+
+test.describe("a family who gives their Admission Number", () => {
+  async function lookUp(page: Page, typed: string) {
+    await page.goto("/staff/check-in")
+    await page.getByLabel("Admission Number").fill(typed)
+    await page.getByRole("button", { name: "Continue" }).click()
+  }
+
+  test("goes straight to their lead, however the number is typed", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    for (const typed of ["ADMSN-90002", "  admsn-90002 ", "90002"]) {
+      await lookUp(page, typed)
+      await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000002$/)
+      await expect(page.getByRole("heading", { name: "Baraka Fixture", level: 1 })).toBeVisible()
+    }
+  })
+
+  test("goes to an Archived or Declined lead itself, not the reopening hand-off", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+
+    await lookUp(page, "ADMSN-90005")
+    await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000005$/)
+    await expect(page.getByRole("heading", { name: "Hamisi Fixture", level: 1 })).toBeVisible()
+    await expect(page.getByText("Archived", { exact: true }).first()).toBeVisible()
+
+    await lookUp(page, "90006")
+    await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000006$/)
+    await expect(page.getByRole("heading", { name: "Rehema Fixture", level: 1 })).toBeVisible()
+    await expect(page.getByText("Declined", { exact: true }).first()).toBeVisible()
+  })
+
+  test("a number that matches nothing says so, and Try again clears the field and keeps focus on it", async ({
+    page,
+  }) => {
+    await signIn(page, ADMISSIONS)
+    await lookUp(page, await unusedAdmissionNumber())
+
+    const notFound = page.locator("[data-slot=alert]")
+    await expect(notFound).toContainText("No lead with this Admission Number")
+    await expect(page).toHaveURL(/\/staff\/check-in$/)
+
+    await notFound.getByRole("button", { name: "Try again" }).click()
+    await expect(page.locator("[data-slot=alert]")).toHaveCount(0)
+    await expect(page.getByLabel("Admission Number")).toHaveValue("")
+    await expect(page.getByLabel("Admission Number")).toBeFocused()
+
+    // Staff can type the right number straight away.
+    await page.keyboard.type("90001")
+    await page.keyboard.press("Enter")
+    await expect(page.getByRole("heading", { name: "Zawadi Fixture", level: 1 })).toBeVisible()
+  })
+
+  test("a number that matches nothing offers New Student, which starts the registration", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await lookUp(page, (await unusedAdmissionNumber()).slice("ADMSN-".length))
+
+    await page.locator("[data-slot=alert]").getByRole("link", { name: "New Student" }).click()
+    await expect(page.getByRole("heading", { name: "New Student", level: 1 })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Parent or guardian", level: 2 })).toBeVisible()
+  })
+
+  test("an Accountant can look a lead up and read it, and is offered only Try again when nothing matches", async ({
+    page,
+  }) => {
+    await signIn(page, ACCOUNTANT)
+
+    await lookUp(page, "ADMSN-90004")
+    await expect(page.getByRole("heading", { name: "Salma Fixture", level: 1 })).toBeVisible()
+
+    await lookUp(page, await unusedAdmissionNumber())
+    const notFound = page.locator("[data-slot=alert]")
+    await expect(notFound).toContainText("No lead with this Admission Number")
+    await expect(notFound.getByRole("button", { name: "Try again" })).toBeVisible()
+    await expect(notFound.getByRole("link", { name: "New Student" })).toHaveCount(0)
   })
 })
 

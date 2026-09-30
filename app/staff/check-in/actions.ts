@@ -1,10 +1,33 @@
 "use server"
 
-import { createLead, DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, type NewContact, type NewStudent } from "@/lib/services/leads"
+import {
+  createLead,
+  DAY_OR_BOARDING,
+  findLeadByAdmissionNumber,
+  LEAD_CLASSES,
+  RELATIONSHIPS,
+  type NewContact,
+  type NewStudent,
+} from "@/lib/services/leads"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
-import { refusalOutcome, type RegisterOutcome } from "./outcome"
+import { refusalOutcome, type LookupOutcome, type RegisterOutcome } from "./outcome"
+
+// Finds the lead a family's Admission Number belongs to, for anyone who may
+// view leads.
+export async function lookUpAdmissionNumber(typed: string): Promise<LookupOutcome> {
+  if (typeof typed !== "string") return { status: "not-found" }
+
+  const supabase = await createClient()
+  const allowed = await requirePermission(supabase, "leads.view")
+  if (!allowed.ok) return { status: "refused", message: "Your role can't look up leads." }
+
+  const result = await findLeadByAdmissionNumber(supabase, typed)
+  if (result.ok) return { status: "found", href: `/staff/leads/${result.data}` }
+  if (result.error === "not-found") return { status: "not-found" }
+  return { status: "refused", message: "The lookup could not be completed. Try again in a moment." }
+}
 
 export type WalkInForm = {
   contact: NewContact

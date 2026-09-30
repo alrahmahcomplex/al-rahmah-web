@@ -1,9 +1,71 @@
-<h2>You're invited to the Al-Rahmah Complex staff side</h2>
+<!doctype html>
+<html lang="en" dir="ltr" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <title>You're invited to Al-Rahmah Complex</title>
+    <!--[if !mso]><!-->
+    <link href="https://fonts.googleapis.com/css2?family=Exo:ital,wght@1,300;1,400;1,700;1,800&amp;display=swap" rel="stylesheet">
+    <!--<![endif]-->
+    <!--[if mso]>
+    <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+    <![endif]-->
+    <style>
+      html, body { height: 100%; }
+      body { margin: 0; padding: 0; -webkit-text-size-adjust: 100%; }
+      a.cta:hover { background-color: #da6b0d !important; }
+      @media (max-width: 480px) {
+        .card { border-radius: 32px !important; }
+        .card-pad { padding-left: 24px !important; padding-right: 24px !important; }
+      }
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f2f0fc;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
+      Set your password to sign in to the Al-Rahmah Complex staff portal.
+    </div>
 
-<p>An Admissions Manager has added you to the staff of Al-Rahmah Complex.</p>
+    <table role="presentation" width="100%" height="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eceafb" style="width:100%; height:100%; background-color:#eceafb; background-image:linear-gradient(135deg, #e0dcf9 0%, #f2f0fc 55%, #ffffff 100%);">
+      <tr>
+        <td align="center" style="padding:56px 16px;">
+          <table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%; max-width:400px; background-color:#ffffff; border-radius:40px; box-shadow:0 30px 80px -15px rgba(9, 0, 187, 0.25);">
+            <tr>
+              <td class="card-pad" align="center" style="padding:44px 36px 40px;">
+                <img src="{{ .SiteURL }}/email/al-rahmah-logo.png" width="130" height="100" alt="Al-Rahmah Development Complex" style="display:block; width:130px; height:100px; margin:0 auto 24px; border:0; outline:none;">
 
-<p>Open the link below to set your password. You'll use it with this email address to sign in.</p>
+                <h1 style="margin:0 0 14px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:26px; font-style:italic; font-weight:800; line-height:32px; color:#0900bb;">
+                  You're invited!
+                </h1>
 
-<p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=invite">Set your password</a></p>
+                <p style="margin:0 0 28px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:15px; font-style:italic; font-weight:400; line-height:24px; color:#334155;">
+                  An Admissions Manager has added you to the Al-Rahmah Complex staff. Set a password, then sign in with this email address.
+                </p>
 
-<p>The link works once and expires after an hour. If it has expired, ask an Admissions Manager to send a new invite.</p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center">
+                      <!--[if mso]>
+                      <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite" style="height:44px; v-text-anchor:middle; width:328px;" arcsize="50%" stroke="f" fillcolor="#f58220">
+                        <center style="color:#ffffff; font-family:'Trebuchet MS', Arial, sans-serif; font-size:16px; font-style:italic; font-weight:bold;">Set your password</center>
+                      </v:roundrect>
+                      <![endif]-->
+                      <!--[if !mso]><!-->
+                      <a class="cta" href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite" style="display:block; height:44px; background-color:#f58220; border-radius:999px; box-shadow:0 6px 14px -4px rgba(245, 130, 32, 0.35); font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:16px; font-style:italic; font-weight:700; line-height:44px; color:#ffffff; text-align:center; text-decoration:none;">Set your password</a>
+                      <!--<![endif]-->
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:24px 0 0; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:12px; font-style:italic; font-weight:300; line-height:19px; color:#64748b;">
+                  The link works once and expires in an hour. If it has expired, ask an Admissions Manager to send a new invite.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

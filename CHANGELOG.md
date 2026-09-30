@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- The staff invite email now looks like the sign-in page: the Al-Rahmah logo on a white
+  rounded card, an Exo italic "You're invited!" heading and an orange **Set your
+  password** button. It's shorter too, and the link still works once and expires in an
+  hour.
+
 ## September 30, 2026 `v0.10.0`
 
 ### NEW

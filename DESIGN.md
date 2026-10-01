@@ -158,7 +158,7 @@ A two-colour brand (indigo authority, orange warmth) on white and pale lavender,
 
 ## Typography
 
-**Display Font:** Exo (loaded through `next/font`, weights 300 to 800, normal and italic)
+**Display Font:** Exo (self-hosted through `next/font/local` from `@fontsource-variable/exo`, weights 300 to 800, normal and italic)
 **Body Font:** Geist (with system-ui fallback)
 
 **Character:** Exo italic is the flyer's voice: geometric, fast and a little sporty, and it leans toward the reader. Geist is the steady partner that carries paragraphs, tables and forms without asking for attention.

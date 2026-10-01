@@ -1,0 +1,1 @@
+-- Slice 4 (Marketing Agents) fixtures. Seeds load in file-name order, after 00_base.sql.

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 
 import { PERMISSIONS } from "@/lib/permissions"
 
@@ -11,11 +11,11 @@ import {
   inRolledBackTransaction,
   secretClient,
   signedIn,
-} from "./db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, RETIRED_ROLE, type FixtureStaff } from "./fixtures"
+} from "../support/db"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../support/fixtures"
 
 // What staff, roles and the audit log allow, tested through the same doors a
-// user, a server or an operator would use. See e2e/db.ts.
+// user, a server or an operator would use. See tests/support/db.ts.
 
 const SLICE_ONE_TABLES = [
   "permissions",
@@ -61,7 +61,7 @@ const STARTING_GRANTS: Record<string, string[]> = {
   Accountant: ["interview_payments.record", "leads.view", "payments.record", "payments.view"],
 }
 
-// A lead from supabase/seed.sql. audit_log.lead_id references leads, so a lead id
+// A lead from supabase/seeds/00_base.sql. audit_log.lead_id references leads, so a lead id
 // in the log must name one that exists.
 const SEEDED_LEAD_ID = "1ead0000-0000-4000-8000-000000000001"
 
@@ -71,7 +71,7 @@ async function hasPermission(person: FixtureStaff, permission: string) {
   return data
 }
 
-test.describe("permissions and roles", () => {
+describe("permissions and roles", () => {
   for (const table of SLICE_ONE_TABLES) {
     test(`anonymous visitors read nothing from ${table}`, async () => {
       const { data, error } = await anonClient().from(table).select("*")
@@ -213,7 +213,7 @@ test.describe("permissions and roles", () => {
   })
 })
 
-test.describe("accounts", () => {
+describe("accounts", () => {
   test("public sign-up is refused", async () => {
     const { data, error } = await anonClient().auth.signUp({
       email: "stranger@example.test",
@@ -288,7 +288,7 @@ test.describe("accounts", () => {
   })
 })
 
-test.describe("audit log", () => {
+describe("audit log", () => {
   test("an audited write with no actor is refused", async () => {
     await inRolledBackTransaction(async (sql) => {
       await expect(
@@ -463,7 +463,7 @@ test.describe("audit log", () => {
   })
 })
 
-test.describe("record_action", () => {
+describe("record_action", () => {
   test("refuses a caller whose role lacks the kind's permission", async () => {
     const { error } = await (await signedIn(ACCOUNTANT)).rpc("record_action", { kind: "invite_sent" })
 

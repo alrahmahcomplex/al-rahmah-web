@@ -54,13 +54,17 @@ Windows reserves the 543xx range for Hyper-V. Studio (with `db:start:full`) is a
 ```bash
 npm run lint
 npm run typecheck
-npm run test
-npm run test:e2e
+npm run test              # unit
+npm run test:integration  # services and SQL against local Supabase
+npm run test:e2e          # browser
 npm run build
 ```
 
-`test:e2e` needs local Supabase running; it starts its own server on port 3100 and
-refuses to reuse one already there.
+`test:integration` and `test:e2e` need local Supabase running and a `.env.local`
+(`npm run env:local` writes one from it). `test:e2e` builds and serves the app on port
+3100. To rerun without building again, start `npm run e2e:serve` first: the tests reuse
+that server once they've checked it serves this checkout's build. CI
+(`.github/workflows/ci.yml`) runs every check on each PR.
 
 ## Staff sign-in
 
@@ -72,7 +76,8 @@ account for any email without an active staff record. Every change to staff and 
 is written to the append-only `audit_log`. See `docs/adr/0003-editable-rbac-in-the-database.md`
 and `docs/adr/0004-audit-history-is-one-trigger-fed-log.md`.
 
-`supabase/seed.sql` creates local-only fixture staff on the reserved `.test` domain, one
+`supabase/seeds/00_base.sql` creates local-only fixture staff on the reserved `.test` domain, one
 per role plus two deactivated members, all with the password `fixture-password`.
-`e2e/fixtures.ts` lists them. Real family and student records
+`tests/support/fixtures.ts` lists them. Each later slice keeps its own fixtures in its own
+`supabase/seeds/NN_*.sql`; they load in file-name order. Real family and student records
 never go into this repo.

@@ -40,7 +40,7 @@ Next.js App Router (TypeScript), Tailwind v4, shadcn (`base-nova`), Supabase (da
 ## Data and evidence
 
 - Schema changes are files in `supabase/migrations/`, tested against local Supabase. Hosted databases change only through the Supabase GitHub integration on merge; agents hold no hosted database credentials.
-- Every checkout shares one local Supabase. `npm run db:reset` and `npm run db:stop` act on it for every worktree, so check that no other session is testing against it first.
+- Every checkout shares one local Supabase and the e2e port, on a machine with too little memory for two builds. A local `db:reset`, `test:integration`, `test:e2e`, `build` or evidence server runs only while holding the shared lock; `docs/agents/parallel-work.md` holds the lock, the ports, and each slice's migration range and seed file. `npm run db:stop` stops the database for every worktree, so run it only when no other session is using it.
 - Real family and student records stay out of git and out of evidence. Screens, recordings and tests use the seeded fixture data and the seeded test account.
 - Upload images with `IMAGE_ADAPTER=gist`. Post videos through the PR comment box in the signed-in browser.
 
@@ -58,7 +58,7 @@ A missing session is a sign-in to ask for, never a reason to hand the check to t
 
 The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human owns every change below; an agent asks for it and says why.
 
-- **Migrations** reach the hosted database when their PR merges to `main`, through the Supabase GitHub integration. The human confirms the version under Database → Migrations.
+- **Migrations** reach the hosted database when their PR merges to `main`, through the Supabase GitHub integration. The agent confirms each version during *Releasing* (step 5).
 - **Vercel** needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in both Production and Preview. Next.js bakes `NEXT_PUBLIC_*` values in at build, so a changed value takes effect only after a redeploy. A Preview without them serves 500 on `/staff`, `/login` and `/auth`, and `before-and-after` then captures error pages.
 - **The first staff member** on a fresh database: the sign-up trigger refuses any auth user without an active staff record, and every write to staff members needs an audit actor, so the order is fixed. First run this in the SQL editor, with the person's name and lowercase email:
 
@@ -75,12 +75,17 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 
 ## Checks
 
-`npm run lint`, `npm run typecheck`, `npm run test`, `npm run test:e2e`, `npm run build`. Run all of them before opening a PR and again after rebasing.
+`npm run lint`, `npm run typecheck`, `npm run test` (unit), `npm run test:integration` (database, needs local Supabase), `npm run test:e2e` (browser), `npm run build`. CI runs all of them on every PR and on `main`. Locally, run them in tiers:
+
+- **While building:** lint, typecheck, and the tests the change touches (`vitest --changed`, `playwright test --only-changed`).
+- **Before opening the PR:** all of them once, with build and e2e under the lock.
+- **After a rebase:** all of them again if the rebase brought in migrations, `supabase/seeds/`, shared services or config. Otherwise lint, typecheck and the changed-file tests.
+- **At release:** CI green on the final commit, unless the release commit changed code.
 
 ## Multi-agent rules
 
 - Work on your own task branch; `main` changes only by merged PR.
-- Leave other agents' worktrees, branches and uncommitted work untouched. The one exception is housekeeping after a merge (*Releasing*, step 5), and only for work whose PR has merged.
+- Leave other agents' worktrees, branches and uncommitted work untouched. The one exception is housekeeping after a merge (*Releasing*, step 6), and only for work whose PR has merged.
 - Before starting, scope-check open PRs (`gh pr list`, `gh pr diff <n> --name-only`). On overlap, stop and ask.
 - Force-push only with `--force-with-lease`, only on your own branch.
 - Regenerate lockfiles on conflict (`npm install`).
@@ -90,9 +95,9 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 ## Completing a task
 
 1. Keep changes to the assigned task.
-2. Run the checks.
+2. Run the checks (the before-the-PR tier).
 3. Assemble before/after pairs from the evidence captured along the way.
-4. Add the changelog entry under `## Unreleased` (see *Releasing*), commit, rebase onto `origin/main`, rerun the checks.
+4. Add the changelog entry under `## Unreleased` (see *Releasing*), commit, rebase onto `origin/main`, run the after-a-rebase tier.
 5. `git push -u origin <branch>` (`--force-with-lease` after rebasing a pushed branch).
 6. Open the PR: what changed, how it was tested (every claim backed by evidence), before/after proof, risks and follow-ups. Run the title and body through `unslop`.
 7. `greploop` to 5/5 with zero unresolved comments.
@@ -105,17 +110,22 @@ Every merge to `main` is a release: it carries a SemVer tag and a `CHANGELOG.md`
 "Merge" from the human means the whole of this section, housekeeping included, with no further confirmation.
 
 1. When the human says "merge", rebase onto `origin/main` and pick the version from the latest tag. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
-2. Turn this PR's `## Unreleased` entry into a date heading carrying the version (newest at the top), commit, push, and rerun the checks. The entry has only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
+2. Turn this PR's `## Unreleased` entry into a date heading carrying the version (newest at the top), commit, push, and wait for CI to pass on that commit (the release tier). The entry has only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
 3. Merge the PR with a message that says what the change does.
 4. Tag the merge commit on `main`, annotated, message `<version>: <one line>`, then `git push origin <version>`.
-5. Housekeep, so nothing finished lingers and nothing unfinished is lost. The main checkout ends on `main`, clean, at the new `origin/main` (`git pull --ff-only`). Every worktree and branch, local and remote, whose PR has merged is removed, this task's and any earlier ones. Remove one only after all four checks pass:
+5. If the PR added migrations, confirm each reached the hosted database. Look only: hosted changes arrive through merges, never through the dashboard.
+   - Wait for the Supabase integration's check on the merge commit to finish (`gh api repos/alrahmahcomplex/al-rahmah-web/commits/<sha>/check-runs`).
+   - In the in-app browser (see *Checking hosted services*), open project `al-rahmah-web`, Database → Migrations, and read the list with `get_page_text`. Every version the PR added must be there.
+   - Spot-check the new schema under Database → Tables, Functions or Extensions.
+   - A missing version or a failed check is a production decision: hold every merge that carries a migration, and report to the human with a screenshot.
+6. Housekeep, so nothing finished lingers and nothing unfinished is lost. The main checkout ends on `main`, clean, at the new `origin/main` (`git pull --ff-only`). Every worktree and branch, local and remote, whose PR has merged is removed, this task's and any earlier ones. Remove one only after all four checks pass:
    - its PR shows merged (`gh pr view <branch> --json state,headRefOid`);
    - the local branch tip equals that PR's `headRefOid`, so every commit reached GitHub (squash merges leave the commits off `main`, so `git branch --merged` can't tell);
    - `git status --porcelain` in its worktree is empty;
    - nothing needed lives only in its ignored files. Evidence is uploaded by now, and `.env.local` is recreated from `.env.example`.
 
    Anything that fails a check stays, and the report names it and why. The main checkout's own uncommitted changes are never discarded: stop and report them. Finish with `git worktree prune` and `git fetch --prune`, and remove any scratch copies the task made outside the repo.
-6. Give the human the tag, the release entry and the merged PR URL. Also list what housekeeping removed and anything it left, with the reason.
+7. Give the human the tag, the release entry, the merged PR URL, and each hosted migration version confirmed or missing. Also list what housekeeping removed and anything it left, with the reason.
 
 ## Writing for humans
 

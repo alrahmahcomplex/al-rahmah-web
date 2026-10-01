@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import {
@@ -12,8 +12,8 @@ import {
   type NewStudent,
 } from "@/lib/services/leads"
 
-import { anonClient, createThrowawayStaff, secretClient, signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS } from "./fixtures"
+import { anonClient, createThrowawayStaff, secretClient, signedIn } from "../support/db"
+import { ACCOUNTANT, ADMISSIONS } from "../support/fixtures"
 
 // Matching a walk-in parent to a known Family, against local Supabase. Each
 // test invents its own names and numbers, so runs never collide with one
@@ -62,7 +62,7 @@ async function family(parent: NewContact, children: NewStudent[] = [student()]) 
   return { contactId, leads }
 }
 
-test.describe("finding a Family by phone", () => {
+describe("finding a Family by phone", () => {
   test("matches a contact by its direct number, however it is typed, with its children", async () => {
     const digits = nineDigits()
     const parent = contact({ phone: `0${digits}`, relationship: "Father" })
@@ -180,7 +180,7 @@ test.describe("finding a Family by phone", () => {
   })
 })
 
-test.describe("registering a sibling on a confirmed contact", () => {
+describe("registering a sibling on a confirmed contact", () => {
   test("the new lead joins the Family and is flagged Returning family", async () => {
     const known = await family(contact())
     const staff = await signedIn(ADMISSIONS)

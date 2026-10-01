@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import {
@@ -12,8 +12,8 @@ import {
   type LeadStatus,
 } from "@/lib/services/leads"
 
-import { anonClient, asSystem, signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "./fixtures"
+import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
+import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Lead search and the lead list, through the lead module against local
 // Supabase. The local database keeps every lead earlier runs made, so each
@@ -65,7 +65,7 @@ async function search(input: Parameters<typeof searchLeads>[1], person = ADMISSI
 
 const names = (leads: LeadListItem[]) => leads.map((lead) => lead.studentName)
 
-test.describe("searching by Admission Number", () => {
+describe("searching by Admission Number", () => {
   test("finds a closed lead exactly, whatever the filters say", async () => {
     // Hamisi is Archived.
     for (const query of ["ADMSN-90005", "  admsn-90005 ", "90005"]) {
@@ -105,7 +105,7 @@ test.describe("searching by Admission Number", () => {
   })
 })
 
-test.describe("searching by name", () => {
+describe("searching by name", () => {
   test("matches any part of the name, ignoring case and spacing", async () => {
     const t = token()
     const created = await makeLead(`${t} Amina Juma`)
@@ -204,7 +204,7 @@ test.describe("searching by name", () => {
   })
 })
 
-test.describe("the lead list, with no search term", () => {
+describe("the lead list, with no search term", () => {
   test("shows leads without a closure mark, newest first", async () => {
     const t = token()
     const archived = await makeLead(`${t} Archived`)
@@ -275,8 +275,12 @@ test.describe("the lead list, with no search term", () => {
       await Promise.all(Array.from({ length: 10 }, (_, i) => makeLead(`${t} Page ${batch * 10 + i}`)))
     }
 
-    const first = await search({ status: "Visited", page: 1 })
-    const second = await search({ status: "Visited", page: 2 })
+    // Leads other tests add between the two reads would push page one's tail
+    // onto page two, so new leads wait until both pages are read.
+    const [first, second] = await inRolledBackTransaction(async (sql) => {
+      await sql.query("lock table public.leads in share mode")
+      return [await search({ status: "Visited", page: 1 }), await search({ status: "Visited", page: 2 })]
+    })
     expect(first.leads).toHaveLength(50)
     expect(second.page).toBe(2)
     expect(second.leads.length).toBeGreaterThan(0)
@@ -290,7 +294,7 @@ test.describe("the lead list, with no search term", () => {
   })
 })
 
-test.describe("who may search", () => {
+describe("who may search", () => {
   test("an Accountant and an Admissions Manager can search", async () => {
     for (const person of [ACCOUNTANT, MANAGER]) {
       expect(names((await search({ query: "90002", page: 1 }, person)).leads)).toEqual(["Baraka Fixture"])

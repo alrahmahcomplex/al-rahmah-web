@@ -1,13 +1,7 @@
-import { existsSync } from "node:fs"
-
 import { defineConfig, devices } from "@playwright/test"
 
-// The app and these tests both talk to local Supabase (`npm run db:start`).
-if (existsSync(".env.local")) process.loadEnvFile(".env.local")
-
-// A dedicated port, never reused: if something else already listens here the
-// run fails instead of silently testing another worktree's server.
-const PORT = 3100
+import "./tests/support/env"
+import { E2E_PORT } from "./e2e/server"
 
 export default defineConfig({
   testDir: "e2e",
@@ -15,16 +9,20 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: "list",
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: `http://localhost:${PORT}`,
+    baseURL: `http://localhost:${E2E_PORT}`,
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `npm run build && npx next start -p ${PORT}`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: false,
+    // CI builds in its own step first.
+    command: process.env.CI ? `npx next start -p ${E2E_PORT}` : `npm run build && npx next start -p ${E2E_PORT}`,
+    url: `http://localhost:${E2E_PORT}`,
+    // Locally, a server already on the port (`npm run e2e:serve`) is reused so
+    // reruns skip the build. Global setup then refuses it unless it serves this
+    // checkout's own build. CI always builds fresh.
+    reuseExistingServer: !process.env.CI,
     timeout: 300_000,
   },
 })

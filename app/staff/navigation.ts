@@ -1,6 +1,7 @@
 import type { Permission } from "@/lib/permissions"
 
-export type StaffNavEntry = { href: string; label: string; permission: Permission }
+// An entry needs one permission, or any one of several.
+export type StaffNavEntry = { href: string; label: string; permission: Permission | readonly Permission[] }
 
 // Every area of the staff side, each shown only to holders of the permission
 // it needs. Later slices add their entries here.
@@ -14,5 +15,8 @@ export function navFor(
   permissions: readonly Permission[],
   entries: readonly StaffNavEntry[] = STAFF_NAV,
 ): StaffNavEntry[] {
-  return entries.filter((entry) => permissions.includes(entry.permission))
+  return entries.filter((entry) => {
+    const accepted: readonly Permission[] = typeof entry.permission === "string" ? [entry.permission] : entry.permission
+    return accepted.some((permission) => permissions.includes(permission))
+  })
 }

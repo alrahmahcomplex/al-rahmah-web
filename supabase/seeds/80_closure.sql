@@ -1,0 +1,1 @@
+-- Slice 8 (Decline, Inactive/Archive and reopening) fixtures. Seeds load in file-name order, after 00_base.sql.

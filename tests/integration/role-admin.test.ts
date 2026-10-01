@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, createThrowawayStaff, inRolledBackTransaction, signedIn } from "./db"
-import { ACCOUNTANT } from "./fixtures"
+import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { ACCOUNTANT } from "../support/fixtures"
 
 // The guardrailed role functions behind the Staff and roles screen, called
 // the way the screen calls them: as a signed-in administrator with the
@@ -71,7 +71,7 @@ function expectRefusal(
   if (details) expect(JSON.parse(result.error?.details ?? "{}")).toEqual(details)
 }
 
-test.describe("who may call the role functions", () => {
+describe("who may call the role functions", () => {
   const calls: [string, Record<string, unknown>][] = [
     ["create_role", { name: "Anonymous role" }],
     ["rename_role", { role_id: randomUUID(), name: "Anonymous role" }],
@@ -120,7 +120,7 @@ test.describe("who may call the role functions", () => {
   })
 })
 
-test.describe("create_role", () => {
+describe("create_role", () => {
   test("creates a role with a trimmed name and no permissions, with one audit row naming the caller", async () => {
     const { person: manager, client } = await administrator()
     const name = uniqueName("Front office")
@@ -157,7 +157,7 @@ test.describe("create_role", () => {
   })
 })
 
-test.describe("rename_role", () => {
+describe("rename_role", () => {
   test("renames a role, with one audit row showing the old and new name", async () => {
     const { person: manager, client } = await administrator()
     const role = await newRole(client)
@@ -234,7 +234,7 @@ test.describe("rename_role", () => {
   })
 })
 
-test.describe("set_role_permission", () => {
+describe("set_role_permission", () => {
   test("ticks and unticks a permission, each with one audit row showing the old and new sets", async () => {
     const { person: manager, client } = await administrator()
     const role = await newRole(client)
@@ -355,7 +355,7 @@ test.describe("set_role_permission", () => {
   })
 })
 
-test.describe("retire_role", () => {
+describe("retire_role", () => {
   test("retires a role nobody active holds, with one audit row", async () => {
     const { person: manager, client } = await administrator()
     const role = await newRole(client)
@@ -421,13 +421,13 @@ test.describe("retire_role", () => {
   })
 })
 
-test.describe("no_administrator_left on roles", () => {
+describe("no_administrator_left on roles", () => {
   // The app can never reach this, because roles that administer staff are
   // frozen there. The rule still covers the SQL editor and the secret key.
   test("taking Administer staff and roles off every role that holds it is refused, for the database owner too", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query("lock table public.staff_members, public.roles in exclusive mode")
+      await lockExclusively(sql, ["public.staff_members", "public.roles"])
 
       await expect(
         sql.query(`update public.roles set permissions = array_remove(permissions, 'staff.administer')
@@ -439,7 +439,7 @@ test.describe("no_administrator_left on roles", () => {
   test("retiring every role that administers staff is refused too", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query("lock table public.staff_members, public.roles in exclusive mode")
+      await lockExclusively(sql, ["public.staff_members", "public.roles"])
 
       await expect(
         sql.query("update public.roles set retired = true where 'staff.administer' = any (permissions)"),

@@ -1,12 +1,12 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, getLead, recordVisit, type Lead, type LeadStatus } from "@/lib/services/leads"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "./fixtures"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Recording the visit of an Applied family through the lead module, against
 // local Supabase. Each test makes its own Applied lead through the Admission
@@ -45,7 +45,7 @@ async function appliedLead(): Promise<Lead> {
   return reread(created.data.leadId)
 }
 
-test.describe("recording the visit of an Applied family", () => {
+describe("recording the visit of an Applied family", () => {
   test("moves the lead to Visited with the Visit date, and changes nothing else", async () => {
     const lead = await appliedLead()
 
@@ -157,7 +157,7 @@ test.describe("recording the visit of an Applied family", () => {
   })
 })
 
-test.describe("who may record a visit", () => {
+describe("who may record a visit", () => {
   test("the Accountant is refused, and the lead stays Applied", async () => {
     const lead = await appliedLead()
 

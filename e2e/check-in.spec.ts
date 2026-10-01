@@ -4,8 +4,8 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 
-import { unusedAdmissionNumber } from "./db"
-import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "./fixtures"
+import { unusedAdmissionNumber } from "../tests/support/db"
+import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
 // The front desk, as Admissions Staff use it. Every run invents its own
 // child and phone number, so runs never collide with each other or with the

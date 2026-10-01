@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 import { Client } from "pg"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
@@ -16,8 +16,8 @@ import {
   type NewStudent,
 } from "@/lib/services/leads"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "./fixtures"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Correcting a lead through the lead module, against local Supabase. Each test
 // makes its own leads with invented names and numbers, and leaves the seeded
@@ -77,7 +77,7 @@ async function reread(id: string): Promise<Lead> {
   return lead.data
 }
 
-test.describe("correcting the student's details", () => {
+describe("correcting the student's details", () => {
   test("changes the name, class, enrollment year and Day or boarding, and nothing else", async () => {
     const lead = await walkInLead({ visitDate: dayBefore(today, 3) })
     const newName = `Corrected ${randomUUID().slice(0, 8)}`
@@ -210,7 +210,7 @@ test.describe("correcting the student's details", () => {
   })
 })
 
-test.describe("correcting the parent/guardian contact", () => {
+describe("correcting the parent/guardian contact", () => {
   test("changes the contact, with numbers normalized as at creation", async () => {
     const lead = await walkInLead()
     const digits = nineDigits()
@@ -429,7 +429,7 @@ test.describe("correcting the parent/guardian contact", () => {
   })
 })
 
-test.describe("correcting the Visit date", () => {
+describe("correcting the Visit date", () => {
   test("sets an earlier date, or today", async () => {
     const lead = await walkInLead()
     const staff = await signedIn(ADMISSIONS)
@@ -465,7 +465,7 @@ test.describe("correcting the Visit date", () => {
   })
 })
 
-test.describe("what no correction can change", () => {
+describe("what no correction can change", () => {
   test("the Admission Number and the status stay, even when a call asks for them", async () => {
     const lead = await walkInLead()
     const staff = await signedIn(ADMISSIONS)
@@ -490,7 +490,7 @@ test.describe("what no correction can change", () => {
   })
 })
 
-test.describe("who may correct", () => {
+describe("who may correct", () => {
   test("an Accountant is refused every correction, and nothing changes", async () => {
     const lead = await walkInLead({ visitDate: dayBefore(today) })
     const accountant = await signedIn(ACCOUNTANT)
@@ -537,7 +537,7 @@ test.describe("who may correct", () => {
   })
 })
 
-test.describe("history", () => {
+describe("history", () => {
   test("each correction is recorded with the staff member, and the old and new values", async () => {
     const lead = await walkInLead({ visitDate: dayBefore(today) })
     const staff = await signedIn(ADMISSIONS)

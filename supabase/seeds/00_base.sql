@@ -1,6 +1,6 @@
 -- Local fixture data. Applied by `npm run db:reset` only; hosted databases
 -- never run this file. Every address uses the reserved .test domain and every
--- name is made up, so no real person's details appear here. e2e/fixtures.ts
+-- name is made up, so no real person's details appear here. tests/support/fixtures.ts
 -- names the same people. Every account's password is fixture-password.
 --
 --   manager@example.test        Admissions Manager

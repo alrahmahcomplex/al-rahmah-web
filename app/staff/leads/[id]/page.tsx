@@ -9,9 +9,9 @@ import { getLead, isClosed, listContactChildren } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../session"
-import { FamilySection } from "./family-section"
 import { ContactEditor, StudentEditor } from "./lead-editors"
 import { LeadSummary } from "./lead-summary"
+import { LEAD_PANELS } from "./panels"
 import { RecordVisit } from "./record-visit"
 
 export const metadata: Metadata = {
@@ -78,7 +78,9 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           </ContactEditor>
         )}
       />
-      <FamilySection leadId={lead.data.id} studentName={lead.data.studentName} canEdit={canEditDetails} />
+      {LEAD_PANELS.map(({ key, Panel }) => (
+        <Panel key={key} lead={lead.data} staff={staff} open={open} />
+      ))}
       <div className="flex flex-wrap gap-2">
         <Link href={`/staff/leads/${lead.data.id}/history`} className={buttonVariants({ variant: "outline" })}>History</Link>
         <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Back to Check-in</Link>

@@ -1,12 +1,12 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, findLeadByAdmissionNumber, getLead, type CreateLeadInput, type NewContact, type NewStudent } from "@/lib/services/leads"
 
-import { anonClient, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber } from "./db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "./fixtures"
+import { anonClient, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber } from "../support/db"
+import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // The lead module against local Supabase, signed in as each seeded role. Each
 // test invents its own names and numbers, so runs never collide with one
@@ -44,7 +44,7 @@ async function rows<T>(query: string, params: unknown[] = []): Promise<T[]> {
   return inRolledBackTransaction(async (sql) => (await sql.query(query, params)).rows as T[])
 }
 
-test.describe("creating a lead at the front desk", () => {
+describe("creating a lead at the front desk", () => {
   test("creates a Visited lead with its Admission Number and Visit date", async () => {
     const staff = await signedIn(ADMISSIONS)
     const input = walkIn({ visitDate: "2026-01-05" })
@@ -85,7 +85,7 @@ test.describe("creating a lead at the front desk", () => {
   })
 })
 
-test.describe("phone numbers", () => {
+describe("phone numbers", () => {
   const NINE = () => nineDigits()
 
   test("every way families say a number is stored as +255 and nine digits", async () => {
@@ -136,7 +136,7 @@ test.describe("phone numbers", () => {
   })
 })
 
-test.describe("other details", () => {
+describe("other details", () => {
   test("names the field a refusal is about", async () => {
     const staff = await signedIn(ADMISSIONS)
     const tomorrow = tanzaniaToday(new Date(Date.now() + 36 * 60 * 60 * 1000))
@@ -165,7 +165,7 @@ test.describe("other details", () => {
   })
 })
 
-test.describe("duplicates", () => {
+describe("duplicates", () => {
   test("the same child with the same direct number is refused, showing the existing lead", async () => {
     const staff = await signedIn(ADMISSIONS)
     const input = walkIn()
@@ -280,7 +280,7 @@ test.describe("duplicates", () => {
   })
 })
 
-test.describe("Families", () => {
+describe("Families", () => {
   test("a child added to a known contact shares it and is flagged Returning family", async () => {
     const staff = await signedIn(ADMISSIONS)
     const parent = contact()
@@ -305,7 +305,7 @@ test.describe("Families", () => {
   })
 })
 
-test.describe("who may create", () => {
+describe("who may create", () => {
   test("an Accountant is refused, and nothing is written", async () => {
     const pupil = student()
     const result = await createLead(await signedIn(ACCOUNTANT), walkIn({ student: pupil }))
@@ -333,7 +333,7 @@ test.describe("who may create", () => {
   })
 })
 
-test.describe("the Admission form start", () => {
+describe("the Admission form start", () => {
   test("creates an Applied lead with no Visit date, written as the Admission form", async () => {
     const pupil = student()
     const created = await createLead(secretClient(), {
@@ -417,7 +417,7 @@ test.describe("the Admission form start", () => {
   })
 })
 
-test.describe("reading, writing around the module, and deleting", () => {
+describe("reading, writing around the module, and deleting", () => {
   test("visitors who are not signed in read no lead and no contact", async () => {
     const anon = anonClient()
     for (const table of ["leads", "guardian_contacts"]) {
@@ -484,7 +484,7 @@ test.describe("reading, writing around the module, and deleting", () => {
   })
 })
 
-test.describe("finding a lead by its Admission Number", () => {
+describe("finding a lead by its Admission Number", () => {
   test("finds a new lead however the number is typed", async () => {
     const staff = await signedIn(ADMISSIONS)
     const created = await createLead(staff, walkIn())
@@ -527,7 +527,7 @@ test.describe("finding a lead by its Admission Number", () => {
   })
 })
 
-test.describe("audit history", () => {
+describe("audit history", () => {
   test("a new lead's creation is in the history, by the staff member who made it", async () => {
     const staff = await signedIn(ADMISSIONS)
     const created = await createLead(staff, walkIn())

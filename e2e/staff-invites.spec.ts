@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto"
 
 import { expect, test, type Browser, type Page } from "@playwright/test"
 
-import { inRolledBackTransaction } from "./db"
-import { INVITED, MANAGER, RETIRED_ROLE, type FixtureStaff } from "./fixtures"
+import { inRolledBackTransaction } from "../tests/support/db"
+import { INVITED, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../tests/support/fixtures"
 
 // Inviting staff end to end: the Manager invites from Staff and roles, the
 // email lands in local Mailpit, and the invited person sets a password on

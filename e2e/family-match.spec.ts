@@ -5,8 +5,8 @@ import { expect, test, type Page } from "@playwright/test"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
 
-import { signedIn } from "./db"
-import { ADMISSIONS, type FixtureStaff } from "./fixtures"
+import { signedIn } from "../tests/support/db"
+import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
 // The Family step of New Student, as Admissions Staff use it. Each test makes
 // its own Family through the lead module, with a number nobody else holds, so

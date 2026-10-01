@@ -12,7 +12,7 @@ import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
 import { formatShillings } from "./format"
-import { canReadFeeSchedule, parseScheduleYear } from "./years"
+import { canReadFeeSchedule, canSeeFeeAmounts, parseScheduleYear } from "./years"
 
 export const metadata: Metadata = {
   title: "Fee schedule · Al-Rahmah Complex",
@@ -27,6 +27,15 @@ export default async function FeeSchedulesPage({ searchParams }: { searchParams:
   const { year: requested } = await searchParams
   const newYear = requested === undefined ? null : parseScheduleYear(requested)
   if (newYear !== null) redirect(`/staff/fees/${newYear}`)
+
+  if (!canSeeFeeAmounts(staff.permissions)) {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Fee schedule</h1>
+        <p className="text-sm text-slate-700">Fee amounts are shown only to staff who can view payments.</p>
+      </div>
+    )
+  }
 
   const schedules = await listFeeSchedules(await createClient())
   const nextYear = Number(tanzaniaToday().slice(0, 4)) + 1

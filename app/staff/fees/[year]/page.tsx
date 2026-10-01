@@ -9,7 +9,7 @@ import { createClient } from "@/utils/supabase/server"
 import { requireStaff } from "../../session"
 import { ScheduleEditor } from "../schedule-editor"
 import { ScheduleView } from "../schedule-view"
-import { canReadFeeSchedule, parseScheduleYear } from "../years"
+import { canReadFeeSchedule, canSeeFeeAmounts, parseScheduleYear } from "../years"
 
 export const metadata: Metadata = {
   title: "Fee schedule · Al-Rahmah Complex",
@@ -25,7 +25,9 @@ export default async function FeeSchedulePage({ params }: { params: Promise<{ ye
   const year = parseScheduleYear((await params).year)
   if (year === null) notFound()
 
-  const schedule = await getFeeSchedule(await createClient(), year)
+  // Amounts need payments.view; without it the database would return nothing
+  // and the page would wrongly say the year has no schedule.
+  const schedule = canSeeFeeAmounts(staff.permissions) ? await getFeeSchedule(await createClient(), year) : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -36,7 +38,9 @@ export default async function FeeSchedulePage({ params }: { params: Promise<{ ye
         <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Fee schedule {year}</h1>
       </div>
 
-      {!schedule.ok && schedule.error === "unavailable" ? (
+      {schedule === null ? (
+        <p className="text-sm text-slate-700">Fee amounts are shown only to staff who can view payments.</p>
+      ) : !schedule.ok && schedule.error === "unavailable" ? (
         <Alert variant="destructive">
           <AlertDescription>This fee schedule could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>

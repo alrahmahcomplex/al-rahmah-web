@@ -14,3 +14,9 @@ export function parseScheduleYear(typed: string): number | null {
   const year = Number(trimmed)
   return year >= 2000 && year <= 2999 ? year : null
 }
+
+// The amounts sit behind payments.view in the database, so staff who only
+// manage academic years open the screen but don't see them.
+export function canSeeFeeAmounts(permissions: readonly Permission[]): boolean {
+  return permissions.includes("payments.view")
+}

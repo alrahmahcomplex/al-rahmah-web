@@ -55,13 +55,16 @@ async function newLead(start: "walk-in" | "admission-form" = "walk-in"): Promise
 
 // An enrollment year no S/N has been issued in yet, far from any real intake,
 // so a test sees its S/Ns count from 1. The local database keeps every
-// counter the tests make.
-async function freshYear(): Promise<number> {
-  for (;;) {
-    const year = randomInt(2040, 2100)
-    const used = await rows("select 1 from public.interview_serial_counters where enrollment_year = $1", [year])
-    if (used.length === 0) return year
-  }
+// counter the tests make, so after enough runs the pool runs out and a reset
+// is needed.
+async function freshYear(...avoid: number[]): Promise<number> {
+  const used = await rows<{ enrollment_year: number }>(
+    "select enrollment_year from public.interview_serial_counters where enrollment_year >= 2040",
+  )
+  const taken = new Set([...used.map((row) => row.enrollment_year), ...avoid])
+  const free = Array.from({ length: 61 }, (_, i) => 2040 + i).filter((year) => !taken.has(year))
+  if (free.length === 0) throw new Error("No unused enrollment year left between 2040 and 2100; run npm run db:reset")
+  return free[randomInt(0, free.length)]
 }
 
 async function moveToYear(leadIds: string[], year: number) {
@@ -79,8 +82,7 @@ describe("registering a lead for interview", () => {
   test("gives a Visited lead the next S/N for its enrollment year, counting from 1 per year", async () => {
     const [first, second, otherYear] = await Promise.all([newLead(), newLead(), newLead()])
     const year = await freshYear()
-    let another = await freshYear()
-    while (another === year) another = await freshYear()
+    const another = await freshYear(year)
     await moveToYear([first, second], year)
     await moveToYear([otherYear], another)
     const staff = await signedIn(ADMISSIONS)

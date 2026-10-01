@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { Client } from "pg"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
 import { ACCOUNTANT, RETIRED_ROLE } from "../support/fixtures"
 
 // The guardrailed write functions behind the Staff and roles screen, called
@@ -324,7 +324,7 @@ describe("no_administrator_left", () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       // Holds off concurrent tests adding administrators while this counts.
-      await sql.query("lock table public.staff_members in exclusive mode")
+      await lockExclusively(sql, ["public.staff_members"])
 
       await expect(
         sql.query(`update public.staff_members s set active = false
@@ -337,7 +337,7 @@ describe("no_administrator_left", () => {
   test("removing an administrator while another remains is allowed", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query("lock table public.staff_members in exclusive mode")
+      await lockExclusively(sql, ["public.staff_members"])
       const { rows } = await sql.query<{ id: string }>(
         `select s.id from public.staff_members s join public.roles r on r.id = s.role_id
          where s.active and 'staff.administer' = any (r.permissions) order by s.created_at`,

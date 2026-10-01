@@ -1,16 +1,26 @@
 import type { Metadata } from "next"
-import { Exo, Geist } from "next/font/google"
+import localFont from "next/font/local"
 
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
 
 import "./globals.css"
 
-const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
-const exo = Exo({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
-  style: ["normal", "italic"],
+// Self-hosted from Fontsource's variable fonts (latin), so no build depends on
+// fonts.googleapis.com: Google sometimes answers in a shape Turbopack's
+// next/font/google loader cannot resolve, which fails the build
+// (vercel/next.js#99114).
+const geist = localFont({
+  src: "../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2",
+  weight: "100 900",
+  variable: "--font-sans",
+})
+const exo = localFont({
+  src: [
+    { path: "../node_modules/@fontsource-variable/exo/files/exo-latin-wght-normal.woff2", style: "normal" },
+    { path: "../node_modules/@fontsource-variable/exo/files/exo-latin-wght-italic.woff2", style: "italic" },
+  ],
+  weight: "100 900",
   variable: "--font-exo",
 })
 

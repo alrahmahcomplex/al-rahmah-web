@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, DEACTIVATED, INVITED, MANAGER, RETIRED_ROLE } from "../support/fixtures"
 
 // The database side of inviting staff, called the way the invite service
@@ -196,7 +196,7 @@ describe("an invited Manager and no_administrator_left", () => {
   test("removing every administrator who has joined is refused, even with an invited Manager waiting", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query("lock table public.staff_members in exclusive mode")
+      await lockExclusively(sql, ["public.staff_members"])
       await sql.query(
         `insert into public.staff_members (full_name, email, role_id)
          select 'Invited Manager', $1, id from public.roles where name = 'Admissions Manager'`,

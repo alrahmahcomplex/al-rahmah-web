@@ -49,6 +49,27 @@ export async function inRolledBackTransaction<T>(work: (sql: Client) => Promise<
   }
 }
 
+// Takes `tables` in exclusive mode inside `sql`'s transaction, to hold off
+// tests running alongside. Writes lock staff_members and roles in either
+// order, so waiting on one table while holding another can deadlock. This
+// never waits while holding a lock: it tries every table at once with NOWAIT,
+// and on a refusal releases what it took and tries again.
+export async function lockExclusively(sql: Client, tables: string[]): Promise<void> {
+  for (;;) {
+    await sql.query("savepoint lock_exclusively")
+    try {
+      await sql.query(`lock table ${tables.join(", ")} in exclusive mode nowait`)
+      await sql.query("release savepoint lock_exclusively")
+      return
+    } catch (error) {
+      // 55P03: lock_not_available.
+      if ((error as { code?: string }).code !== "55P03") throw error
+      await sql.query("rollback to savepoint lock_exclusively")
+      await new Promise((resolve) => setTimeout(resolve, 20 + Math.random() * 80))
+    }
+  }
+}
+
 // Runs `work` in a transaction that commits, as the system actor.
 // An Admission Number no lead holds yet. Numbers are random and the local
 // database keeps every lead the tests make, so no fixed number stays free.

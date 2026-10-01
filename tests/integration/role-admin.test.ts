@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
+import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
 import { ACCOUNTANT } from "../support/fixtures"
 
 // The guardrailed role functions behind the Staff and roles screen, called
@@ -427,7 +427,7 @@ describe("no_administrator_left on roles", () => {
   test("taking Administer staff and roles off every role that holds it is refused, for the database owner too", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query("lock table public.staff_members, public.roles in exclusive mode")
+      await lockExclusively(sql, ["public.staff_members", "public.roles"])
 
       await expect(
         sql.query(`update public.roles set permissions = array_remove(permissions, 'staff.administer')
@@ -439,7 +439,7 @@ describe("no_administrator_left on roles", () => {
   test("retiring every role that administers staff is refused too", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query("lock table public.staff_members, public.roles in exclusive mode")
+      await lockExclusively(sql, ["public.staff_members", "public.roles"])
 
       await expect(
         sql.query("update public.roles set retired = true where 'staff.administer' = any (permissions)"),

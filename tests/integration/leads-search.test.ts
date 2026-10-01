@@ -12,7 +12,7 @@ import {
   type LeadStatus,
 } from "@/lib/services/leads"
 
-import { anonClient, asSystem, signedIn } from "../support/db"
+import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Lead search and the lead list, through the lead module against local
@@ -275,8 +275,12 @@ describe("the lead list, with no search term", () => {
       await Promise.all(Array.from({ length: 10 }, (_, i) => makeLead(`${t} Page ${batch * 10 + i}`)))
     }
 
-    const first = await search({ status: "Visited", page: 1 })
-    const second = await search({ status: "Visited", page: 2 })
+    // Leads other tests add between the two reads would push page one's tail
+    // onto page two, so new leads wait until both pages are read.
+    const [first, second] = await inRolledBackTransaction(async (sql) => {
+      await sql.query("lock table public.leads in share mode")
+      return [await search({ status: "Visited", page: 1 }), await search({ status: "Visited", page: 2 })]
+    })
     expect(first.leads).toHaveLength(50)
     expect(second.page).toBe(2)
     expect(second.leads.length).toBeGreaterThan(0)

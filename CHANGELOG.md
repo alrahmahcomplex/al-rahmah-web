@@ -14,6 +14,11 @@ stay in the `0.x` range.
 - GitHub now runs every check on each change before it can merge, and the database
   tests finish in under a minute without waiting for a full build.
 
+### FIXED
+
+- A deploy could fail when Google Fonts answered in a form the build couldn't read.
+  The site's two fonts now ship with it, so the build no longer depends on Google.
+
 ## October 1, 2026 `v0.14.0`
 
 ### NEW

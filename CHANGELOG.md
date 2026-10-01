@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- A **Fee schedule** screen holds each enrollment year's fees: a Day and a Boarding
+  annual fee for Nursery, Primary STD 1 to STD 4, Primary STD 5 to STD 7 and
+  Secondary, the three instalments' shares and due dates, the minimum Initial deposit,
+  and the Pre-Form One programme fee for day and for boarding.
+- The Accountant creates a year's schedule and corrects its amounts. A split that
+  doesn't add up to 100%, or a missing, zero or negative amount, is refused with a
+  sentence naming the field, and nothing is saved.
+- Everyone who may see payments reads every year's schedule. The Admissions Manager
+  sees the amounts but can't change them. Every change is kept in history with who
+  made it.
+
 ## October 1, 2026 `v0.15.0`
 
 ### NEW

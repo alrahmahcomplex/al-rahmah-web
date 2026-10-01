@@ -33,6 +33,14 @@ describe("the staff navigation", () => {
     expect(navFor(["payments.view"])).not.toContain(checkIn)
   })
 
+  it("shows Fee schedule to anyone who may view payments or manage academic years", () => {
+    const fees = STAFF_NAV.find((entry) => entry.label === "Fee schedule")
+    expect(fees?.href).toBe("/staff/fees")
+    expect(navFor(["payments.view"])).toContain(fees)
+    expect(navFor(["academic_years.manage"])).toContain(fees)
+    expect(navFor(["leads.view", "payments.record"])).not.toContain(fees)
+  })
+
   it("shows Leads to anyone who may view leads, and to no one else", () => {
     const leads = STAFF_NAV.find((entry) => entry.label === "Leads")
     expect(leads).toEqual({ href: "/staff/leads", label: "Leads", permission: "leads.view" })

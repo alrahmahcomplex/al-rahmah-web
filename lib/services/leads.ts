@@ -450,7 +450,7 @@ export type CorrectionError =
   | { kind: "forbidden" }
   | { kind: "not-found" }
   // Declined, Inactive and Archived leads are read-only, and so is a contact
-  // one of them is on.
+  // whose children are all closed.
   | { kind: "closed" }
   // An Applied lead has no visit whose date could be corrected.
   | { kind: "not-visited" }
@@ -526,8 +526,9 @@ export async function updateLeadDetails(
 // Corrects a parent/guardian contact, for every child on it. Needs
 // leads.edit. Numbers are normalized as at creation, and a new number that
 // would make any of those children match another lead is refused as
-// `duplicate`, with that lead. A contact a closed lead is on is refused as
-// `closed`. With `expectedChildren`, the ids of the leads the staff member was
+// `duplicate`, with that lead. A contact is refused as `closed` only when every
+// child on it is closed: while an open child holds it, it stays editable for
+// them all. With `expectedChildren`, the ids of the leads the staff member was
 // told the change reaches, a contact whose children differ by then is refused
 // as `children-changed`.
 export async function updateGuardianContact(

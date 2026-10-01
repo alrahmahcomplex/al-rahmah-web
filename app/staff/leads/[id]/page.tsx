@@ -9,6 +9,7 @@ import { getLead, isClosed, listContactChildren } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../session"
+import { ClosedLeadBanner } from "./closed-lead-banner"
 import { ContactEditor, StudentEditor } from "./lead-editors"
 import { LeadSummary } from "./lead-summary"
 import { LEAD_PANELS } from "./panels"
@@ -41,24 +42,30 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   // An open Applied lead is waiting for the family's first visit.
   const canRecordVisit = open && lead.data.status === "Applied" && staff.permissions.includes("visits.record")
 
-  // The children a contact correction would also reach. If they can't be
-  // listed, the correction is not offered, so it is never made unwarned.
+  // The children a contact correction would also reach, closed ones included.
+  // If they can't be listed, the correction is not offered, so it is never
+  // made unwarned.
   const children = canEditDetails ? await listContactChildren(supabase, lead.data.contact.id) : null
   const siblings = children?.ok ? children.data.filter((child) => child.id !== lead.data.id) : []
-  // A contact a closed brother or sister is on is read-only, like their lead.
-  const closedSibling = siblings.find(isClosed) ?? null
-  const canEditContact = canEditDetails && children?.ok === true && !closedSibling
+  const canEditContact = canEditDetails && children?.ok === true
 
   return (
     <div className="flex flex-col gap-6">
       <LeadSummary
         lead={lead.data}
         nextStep={
-          // Rendered for every lead the staff member could record a visit
-          // on, so the confirmation outlasts the refresh that removes the
-          // offer once the lead is Visited.
-          staff.permissions.includes("visits.record") && (
-            <RecordVisit key={lead.data.id} leadId={lead.data.id} canRecord={canRecordVisit} />
+          !open ? (
+            <ClosedLeadBanner
+              lead={lead.data}
+              canRequestReopening={staff.permissions.some((p) => p === "leads.create" || p === "leads.edit")}
+            />
+          ) : (
+            // Rendered for every lead the staff member could record a visit
+            // on, so the confirmation outlasts the refresh that removes the
+            // offer once the lead is Visited.
+            staff.permissions.includes("visits.record") && (
+              <RecordVisit key={lead.data.id} leadId={lead.data.id} canRecord={canRecordVisit} />
+            )
           )
         }
         student={(fields) => (
@@ -73,12 +80,12 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           </StudentEditor>
         )}
         parent={(fields) => (
-          <ContactEditor lead={lead.data} siblings={siblings} canEdit={canEditContact} closedSibling={closedSibling}>
+          <ContactEditor lead={lead.data} siblings={siblings} canEdit={canEditContact}>
             {fields}
           </ContactEditor>
         )}
       />
-      {LEAD_PANELS.map(({ key, Panel }) => (
+      {LEAD_PANELS.filter((panel) => open || panel.readOnlyWhenClosed).map(({ key, Panel }) => (
         <Panel key={key} lead={lead.data} staff={staff} open={open} />
       ))}
       <div className="flex flex-wrap gap-2">

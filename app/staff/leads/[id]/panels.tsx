@@ -18,6 +18,10 @@ export type LeadPanelProps = {
 export type LeadPanel = {
   key: string
   Panel: (props: LeadPanelProps) => ReactNode | Promise<ReactNode>
+  // A closed lead is read-only, so the page leaves a panel off it unless the
+  // panel is still worth reading there. Such a panel sets this, and offers no
+  // work action while `open` is false.
+  readOnlyWhenClosed?: true
 }
 
 // The panels below the lead summary, top to bottom. A new panel is its own
@@ -25,6 +29,7 @@ export type LeadPanel = {
 export const LEAD_PANELS: readonly LeadPanel[] = [
   {
     key: "family",
+    readOnlyWhenClosed: true,
     Panel: ({ lead, staff, open }) => (
       <FamilySection
         leadId={lead.id}

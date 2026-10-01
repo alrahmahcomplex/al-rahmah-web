@@ -46,7 +46,7 @@ export function correctionOutcome(error: CorrectionError): CorrectionOutcome {
       return {
         status: "refused",
         field: null,
-        message: "This lead, or a child who shares this parent or guardian, is closed, so it can't be changed.",
+        message: "This lead has been closed, so it can't be changed. Reload the page.",
       }
     case "children-changed":
       return {

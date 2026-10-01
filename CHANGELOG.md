@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- A Declined, Inactive or Archived lead says so at the top of its screen: the lead is
+  read-only, and **Request reopening** leads to the reopening page for staff who may
+  ask. Its edit and Family actions are gone. Open leads look as before.
+- The database refuses every change to a closed lead, whichever screen or call it
+  comes from.
+
+### IMPROVED
+
+- A parent or guardian shared with a closed brother or sister can now be corrected from
+  the open child's screen. Only a contact whose children are all closed stays read-only.
+
 ## October 3, 2026 `v0.20.0`
 
 ### NEW

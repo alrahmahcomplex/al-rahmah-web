@@ -10,7 +10,7 @@ import { BAND_NAMES, FEE_BANDS, type FeeAmounts, type FeeBand, type FeeField } f
 
 import { saveSchedule } from "./actions"
 import type { SaveScheduleOutcome } from "./outcome"
-import { bandClasses } from "./format"
+import { bandClasses, INSTALMENTS } from "./format"
 
 type Refused = Extract<SaveScheduleOutcome, { status: "refused" }>
 
@@ -19,12 +19,6 @@ const LOST_REQUEST: Refused = {
   field: null,
   message: "The change could not be confirmed. Check your connection, reload the page and see whether it was saved.",
 }
-
-const INSTALMENTS = [
-  ["First", "first"],
-  ["Second", "second"],
-  ["Third", "third"],
-] as const
 
 // The form's values, as typed.
 type Draft = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { saveScheduleOutcome } from "@/app/staff/fees/outcome"
+import { academicYearOutcome, saveScheduleOutcome } from "@/app/staff/fees/outcome"
 
 describe("saveScheduleOutcome", () => {
   it("names the band and Day or Boarding of a refused amount", () => {
@@ -49,6 +49,44 @@ describe("saveScheduleOutcome", () => {
     expect(saveScheduleOutcome({ kind: "forbidden" })).toMatchObject({ message: "Your role can't change the fee amounts." })
     expect(saveScheduleOutcome({ kind: "unavailable" })).toMatchObject({
       message: "The schedule could not be saved. Nothing was changed. Try again in a moment.",
+    })
+  })
+})
+
+describe("academicYearOutcome", () => {
+  it("asks for a date in January of the year", () => {
+    expect(academicYearOutcome({ kind: "invalid", field: "academic_year_start" }, 2027)).toEqual({
+      status: "refused",
+      field: "academic_year_start",
+      message: "Choose an Academic-year start in January 2027. Once set, it can be changed but not cleared.",
+    })
+  })
+
+  it("names the class and Day or Boarding of a refused seat count", () => {
+    expect(academicYearOutcome({ kind: "invalid", field: "seats.STD 3.Boarding" }, 2027)).toEqual({
+      status: "refused",
+      field: "seats.STD 3.Boarding",
+      message: "Enter the STD 3 Boarding seats as a whole number, 0 or more. Once set, seats can be changed but not cleared.",
+    })
+  })
+
+  it("falls back to a general sentence for the seat list or a field it doesn't know", () => {
+    for (const field of ["seats", null] as const) {
+      expect(academicYearOutcome({ kind: "invalid", field }, 2027)).toMatchObject({
+        message: "Some seat numbers could not be accepted. Check them and try again.",
+      })
+    }
+  })
+
+  it("says when the year has no schedule, the role can't set it, or nothing could be saved", () => {
+    expect(academicYearOutcome({ kind: "no-schedule" }, 2027)).toMatchObject({
+      message: "The 2027 Fee schedule hasn't been created yet. The Accountant creates it first.",
+    })
+    expect(academicYearOutcome({ kind: "forbidden" }, 2027)).toMatchObject({
+      message: "Your role can't set the Academic-year start or seats.",
+    })
+    expect(academicYearOutcome({ kind: "unavailable" }, 2027)).toMatchObject({
+      message: "The start and seats could not be saved. Try again in a moment.",
     })
   })
 })

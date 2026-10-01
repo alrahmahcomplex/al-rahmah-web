@@ -1,4 +1,11 @@
-import { BAND_NAMES, FEE_BANDS, type FeeField, type SaveFeeAmountsError } from "@/lib/services/fees"
+import {
+  BAND_NAMES,
+  FEE_BANDS,
+  type AcademicYearField,
+  type FeeField,
+  type SaveFeeAmountsError,
+  type SetAcademicYearError,
+} from "@/lib/services/fees"
 
 // What the Fee schedule form is told after it saves.
 export type SaveScheduleOutcome = { status: "saved" } | { status: "refused"; field: FeeField | null; message: string }
@@ -47,5 +54,48 @@ export function saveScheduleOutcome(error: SaveFeeAmountsError): SaveScheduleOut
         field: null,
         message: "The schedule could not be saved. Nothing was changed. Try again in a moment.",
       }
+  }
+}
+
+// What the start and seats form is told after it saves.
+export type AcademicYearOutcome =
+  | { status: "saved" }
+  | { status: "refused"; field: AcademicYearField | null; message: string }
+
+// Turns what the fees module refused into what the start and seats form shows.
+export function academicYearOutcome(error: SetAcademicYearError, year: number): AcademicYearOutcome {
+  switch (error.kind) {
+    case "invalid": {
+      if (error.field === "academic_year_start") {
+        return {
+          status: "refused",
+          field: error.field,
+          message: `Choose an Academic-year start in January ${year}. Once set, it can be changed but not cleared.`,
+        }
+      }
+      if (error.field?.startsWith("seats.")) {
+        const [, className, dayOrBoarding] = error.field.split(".")
+        return {
+          status: "refused",
+          field: error.field,
+          message: `Enter the ${className} ${dayOrBoarding} seats as a whole number, 0 or more. Once set, seats can be changed but not cleared.`,
+        }
+      }
+      return {
+        status: "refused",
+        field: error.field,
+        message: "Some seat numbers could not be accepted. Check them and try again.",
+      }
+    }
+    case "no-schedule":
+      return {
+        status: "refused",
+        field: null,
+        message: `The ${year} Fee schedule hasn't been created yet. The Accountant creates it first.`,
+      }
+    case "forbidden":
+      return { status: "refused", field: null, message: "Your role can't set the Academic-year start or seats." }
+    case "unavailable":
+      return { status: "refused", field: null, message: "The start and seats could not be saved. Try again in a moment." }
   }
 }

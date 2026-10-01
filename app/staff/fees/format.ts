@@ -1,5 +1,12 @@
 import { BAND_CLASSES, type FeeBand } from "@/lib/services/fees"
 
+// The three instalments, as each screen labels and keys them.
+export const INSTALMENTS = [
+  ["First", "first"],
+  ["Second", "second"],
+  ["Third", "third"],
+] as const
+
 // Whole shillings with thousands separators, such as 1,100,000.
 export function formatShillings(amount: number): string {
   return new Intl.NumberFormat("en-US").format(amount)

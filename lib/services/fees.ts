@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { LeadClass } from "./leads"
+import { LEAD_CLASSES, type DayOrBoarding, type LeadClass } from "./leads"
 import type { Result } from "./result"
 
 // The fees module: every read and write of the Fee schedule goes through
@@ -38,10 +38,23 @@ export type FeeAmounts = {
   preFormOne: DayAndBoarding
 }
 
+// The seats the Admissions Manager has set for one class, day or boarding.
+export type SeatSetting = { className: LeadClass; dayOrBoarding: DayOrBoarding; seats: number }
+
 export type FeeSchedule = FeeAmounts & {
   year: number
   // Set by the Admissions Manager; empty until then.
   academicYearStart: string | null
+  // Only the classes whose seats are set, in class order, Day before
+  // Boarding. A class missing here has its seats not set.
+  seats: SeatSetting[]
+}
+
+// What the Admissions Manager sets on a year's schedule. Null leaves a start
+// or a class that isn't set as it is; classes left out keep what they have.
+export type AcademicYearSettings = {
+  start: string | null
+  seats: { className: LeadClass; dayOrBoarding: DayOrBoarding; seats: number | null }[]
 }
 
 // The value a refusal is about.
@@ -61,6 +74,14 @@ export type FeeField =
   | "pre_form_one_day_fee"
   | "pre_form_one_boarding_fee"
 
+export type AcademicYearField = "academic_year_start" | "seats" | `seats.${LeadClass}.${DayOrBoarding}`
+
+export type SetAcademicYearError =
+  | { kind: "forbidden" }
+  | { kind: "no-schedule" }
+  | { kind: "invalid"; field: AcademicYearField | null }
+  | { kind: "unavailable" }
+
 export type SaveFeeAmountsError =
   | { kind: "forbidden" }
   | { kind: "invalid"; field: FeeField | null }
@@ -79,10 +100,13 @@ type ScheduleRow = {
   pre_form_one_boarding_fee: number
   academic_year_start: string | null
   fee_band_amounts: { band: FeeBand; day_fee: number; boarding_fee: number }[]
+  class_seats: { class_name: LeadClass; day_or_boarding: DayOrBoarding; seats: number }[]
 }
 
 const SCHEDULE_COLUMNS =
-  "enrollment_year, first_share, second_share, third_share, first_due, second_due, third_due, minimum_deposit, pre_form_one_day_fee, pre_form_one_boarding_fee, academic_year_start, fee_band_amounts (band, day_fee, boarding_fee)"
+  "enrollment_year, first_share, second_share, third_share, first_due, second_due, third_due, minimum_deposit, pre_form_one_day_fee, pre_form_one_boarding_fee, academic_year_start, fee_band_amounts (band, day_fee, boarding_fee), class_seats (class_name, day_or_boarding, seats)"
+
+const seatOrder = (seat: SeatSetting) => LEAD_CLASSES.indexOf(seat.className) * 2 + (seat.dayOrBoarding === "Day" ? 0 : 1)
 
 function toSchedule(row: ScheduleRow): FeeSchedule {
   const bands = Object.fromEntries(
@@ -96,6 +120,9 @@ function toSchedule(row: ScheduleRow): FeeSchedule {
     minimumDeposit: row.minimum_deposit,
     preFormOne: { day: row.pre_form_one_day_fee, boarding: row.pre_form_one_boarding_fee },
     academicYearStart: row.academic_year_start,
+    seats: row.class_seats
+      .map((seat) => ({ className: seat.class_name, dayOrBoarding: seat.day_or_boarding, seats: seat.seats }))
+      .sort((a, b) => seatOrder(a) - seatOrder(b)),
   }
 }
 
@@ -149,10 +176,11 @@ const FEE_FIELDS = new Set<string>([
   ...FEE_BANDS.flatMap((band) => [`${band}.day_fee`, `${band}.boarding_fee`]),
 ])
 
-function invalidFieldOf(details: string | null | undefined): FeeField | null {
+// The field a refusal names, if `known` holds it.
+function refusedField<F extends string>(details: string | null | undefined, known: Set<string>): F | null {
   try {
     const field = JSON.parse(details ?? "")?.field
-    return FEE_FIELDS.has(field) ? (field as FeeField) : null
+    return typeof field === "string" && known.has(field) ? (field as F) : null
   } catch {
     return null
   }
@@ -187,8 +215,54 @@ export async function saveFeeAmounts(
   })
   if (error) {
     if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
-    if (error.message === "invalid") return { ok: false, error: { kind: "invalid", field: invalidFieldOf(error.details) } }
+    if (error.message === "invalid") return { ok: false, error: { kind: "invalid", field: refusedField<FeeField>(error.details, FEE_FIELDS) } }
     console.error("Could not save a fee schedule", error)
+    return { ok: false, error: { kind: "unavailable" } }
+  }
+  return { ok: true, data: null }
+}
+
+const ACADEMIC_YEAR_FIELDS = new Set<string>([
+  "academic_year_start",
+  "seats",
+  ...LEAD_CLASSES.flatMap((className) => [`seats.${className}.Day`, `seats.${className}.Boarding`]),
+])
+
+// JSON has no NaN or Infinity and would send them as null, which reads as
+// "leave it as it is". Sent as text, the database refuses them by name.
+const asSent = (seats: number | null) => (seats === null || Number.isFinite(seats) ? seats : String(seats))
+
+// Sets the year's Academic-year start, a date in January of that year, and
+// the seats in each class, for day and for boarding. Needs
+// academic_years.manage, and a Fee schedule for the year, which the
+// Accountant creates. A start or a seat count, once set, can be changed but
+// not cleared. When anything is refused, nothing is saved.
+export async function setAcademicYear(
+  supabase: SupabaseClient,
+  year: number,
+  settings: AcademicYearSettings,
+): Promise<Result<null, SetAcademicYearError>> {
+  const { error } = await supabase.rpc("set_academic_year", {
+    schedule_year: year,
+    settings: {
+      academic_year_start: settings.start,
+      seats: settings.seats.map((seat) => ({
+        class_name: seat.className,
+        day_or_boarding: seat.dayOrBoarding,
+        seats: asSent(seat.seats),
+      })),
+    },
+  })
+  if (error) {
+    if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
+    if (error.message === "no_schedule") return { ok: false, error: { kind: "no-schedule" } }
+    if (error.message === "invalid") {
+      return {
+        ok: false,
+        error: { kind: "invalid", field: refusedField<AcademicYearField>(error.details, ACADEMIC_YEAR_FIELDS) },
+      }
+    }
+    console.error("Could not set the academic year", error)
     return { ok: false, error: { kind: "unavailable" } }
   }
   return { ok: true, data: null }

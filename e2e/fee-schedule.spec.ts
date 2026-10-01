@@ -2,7 +2,9 @@ import { randomInt } from "node:crypto"
 
 import { expect, test, type Page } from "@playwright/test"
 
-import { inRolledBackTransaction } from "../tests/support/db"
+import { saveFeeAmounts } from "@/lib/services/fees"
+
+import { inRolledBackTransaction, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
 // The Fee schedule screen, as the Accountant and the Admissions Manager use
@@ -92,5 +94,68 @@ test.describe("the Fee schedule", () => {
 
     await page.goto("/staff/fees")
     await expect(page.getByRole("form", { name: "New schedule" })).toHaveCount(0)
+  })
+
+  test("the Admissions Manager sets the Academic-year start and seats, and a date outside January is refused", async ({
+    page,
+  }) => {
+    // A year of its own, created by the Accountant, so reruns start empty.
+    const year = await unusedYear()
+    const created = await saveFeeAmounts(await signedIn(ACCOUNTANT), year, {
+      bands: {
+        nursery: { day: 1_100_000, boarding: 3_000_000 },
+        primary_lower: { day: 2_000_000, boarding: 3_000_000 },
+        primary_upper: { day: 2_100_000, boarding: 3_300_000 },
+        secondary: { day: 2_800_000, boarding: 4_300_000 },
+      },
+      split: { first: 40, second: 40, third: 20 },
+      dueDates: { first: `${year - 1}-11-01`, second: `${year}-04-01`, third: `${year}-06-01` },
+      minimumDeposit: 300_000,
+      preFormOne: { day: 450_000, boarding: 580_000 },
+    })
+    expect(created.ok).toBe(true)
+
+    await signIn(page, MANAGER)
+    await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Fee schedule" }).click()
+    await expect(page.getByRole("heading", { name: "Fee schedule", exact: true })).toBeVisible()
+    await page.goto(`/staff/fees/${year}`)
+
+    const section = page.getByRole("region", { name: "Academic year and seats" })
+    await expect(section.getByText("Not set yet")).toBeVisible()
+    await expect(section.getByRole("row", { name: /^STD 1/ })).toContainText("Seats not set")
+
+    await section.getByRole("button", { name: "Edit start and seats" }).click()
+    const form = page.getByRole("form", { name: `Academic year ${year}` })
+    await form.getByLabel("STD 1 Day seats").fill("30")
+    await form.getByLabel("STD 1 Boarding seats").fill("15")
+    await form.getByLabel("FORM 1 Day seats").fill("0")
+
+    // February is outside January.
+    await form.getByLabel("Academic-year start").fill(`${year}-02-01`)
+    await form.getByRole("button", { name: "Save" }).click()
+    await expect(form.getByRole("alert")).toContainText(`Choose an Academic-year start in January ${year}.`)
+    await expect(form.getByLabel("Academic-year start")).toHaveAttribute("aria-invalid", "true")
+
+    await form.getByLabel("Academic-year start").fill(`${year}-01-11`)
+    await form.getByRole("button", { name: "Save" }).click()
+    await expect(section.getByRole("status")).toHaveText("Start and seats saved.")
+
+    await expect(section.getByText(`11 Jan ${year}`)).toBeVisible()
+    const std1 = section.getByRole("row", { name: /^STD 1/ })
+    await expect(std1.getByRole("cell").nth(1)).toHaveText("30")
+    await expect(std1.getByRole("cell").nth(2)).toHaveText("15")
+    await expect(section.getByRole("row", { name: /^FORM 1/ }).getByRole("cell").nth(1)).toHaveText("0")
+    await expect(section.getByRole("row", { name: /^FORM 1/ }).getByRole("cell").nth(2)).toHaveText("Seats not set")
+  })
+
+  test("the Accountant reads the 2027 start and seats but can't change them", async ({ page }) => {
+    await signIn(page, ACCOUNTANT)
+    await page.goto("/staff/fees/2027")
+
+    const section = page.getByRole("region", { name: "Academic year and seats" })
+    await expect(section.getByRole("row", { name: /^KG 2/ }).getByRole("cell").nth(2)).toHaveText("2")
+    await expect(section.getByRole("row", { name: /^STD 2/ })).toContainText("Seats not set")
+    await expect(section.getByRole("button", { name: "Edit start and seats" })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Edit amounts" })).toBeVisible()
   })
 })

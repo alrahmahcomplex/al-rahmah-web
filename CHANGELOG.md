@@ -5,6 +5,19 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The Admissions Manager sets each year's **Academic-year start** on its Fee schedule
+  page. It must fall in January of that year; any other date is refused and nothing is
+  saved.
+- The Manager also sets the number of seats in each class, for day and for boarding. A
+  class without a number shows **Seats not set**. Once set, a start date or a seat
+  number can be changed but not cleared.
+- The Accountant and Admissions Staff see the start date and seats but can't change
+  them. Every change is kept in history with who made it.
+
 ## October 3, 2026 `v0.21.0`
 
 ### NEW

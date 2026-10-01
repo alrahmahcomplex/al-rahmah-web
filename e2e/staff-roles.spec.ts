@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto"
 
 import { expect, test, type Page } from "@playwright/test"
 
-import { asSystem, createThrowawayStaff, inRolledBackTransaction } from "./db"
-import { ACCOUNTANT, MANAGER, RETIRED_ROLE, type FixtureStaff } from "./fixtures"
+import { asSystem, createThrowawayStaff, inRolledBackTransaction } from "../tests/support/db"
+import { ACCOUNTANT, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../tests/support/fixtures"
 
 // The Staff and roles screen, as a Manager uses it. Tests that change
 // someone change a throwaway staff member of their own, so parallel tests and

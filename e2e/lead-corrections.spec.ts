@@ -5,8 +5,8 @@ import { expect, test, type Page } from "@playwright/test"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, getLead } from "@/lib/services/leads"
 
-import { signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "./fixtures"
+import { signedIn } from "../tests/support/db"
+import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
 // Correcting a lead on the lead screen, as staff do. Each test registers its
 // own family, so the seeded leads other tests read stay as they are.

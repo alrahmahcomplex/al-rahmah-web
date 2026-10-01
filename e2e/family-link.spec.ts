@@ -5,8 +5,8 @@ import { expect, test, type Page } from "@playwright/test"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, getLead } from "@/lib/services/leads"
 
-import { asSystem, secretClient, signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "./fixtures"
+import { asSystem, secretClient, signedIn } from "../tests/support/db"
+import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
 // Settling an unconfirmed Family match on the lead screen, and seeing
 // unconfirmed children in the Family lists.

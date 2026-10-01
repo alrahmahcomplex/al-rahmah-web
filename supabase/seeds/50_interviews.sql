@@ -1,0 +1,1 @@
+-- Slice 5 (Interviews and interview payment) fixtures. Seeds load in file-name order, after 00_base.sql.

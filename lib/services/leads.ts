@@ -471,7 +471,9 @@ async function correction(call: PromiseLike<RpcAnswer>, what: string): Promise<R
     if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
     // A malformed id is a missing lead, not an outage.
     if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
-    if (error.message === "closed") return { ok: false, error: { kind: "closed" } }
+    // `lead_closed` comes from assert_lead_open; `closed` from the checks on
+    // every child on a contact.
+    if (error.message === "closed" || error.message === "lead_closed") return { ok: false, error: { kind: "closed" } }
     if (error.message === "not_visited") return { ok: false, error: { kind: "not-visited" } }
     if (error.message === "children_changed") return { ok: false, error: { kind: "children-changed" } }
     if (error.message === "invalid") {
@@ -639,7 +641,7 @@ export async function recordVisit(
   // A malformed id is a missing lead, not an outage.
   if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
   if (error.message === "not_applied") return { ok: false, error: { kind: "not-applied" } }
-  if (error.message === "closed") return { ok: false, error: { kind: "closed" } }
+  if (error.message === "lead_closed") return { ok: false, error: { kind: "closed" } }
   if (error.message === "invalid") return { ok: false, error: { kind: "invalid", field: invalidFieldOf(error.details) } }
   // 22007 and 22008: a date that isn't on the calendar, such as 31 February,
   // refused before the function runs.

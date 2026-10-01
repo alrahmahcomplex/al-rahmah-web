@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "./db"
-import { ACCOUNTANT, DEACTIVATED, INVITED, MANAGER, RETIRED_ROLE } from "./fixtures"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { ACCOUNTANT, DEACTIVATED, INVITED, MANAGER, RETIRED_ROLE } from "../support/fixtures"
 
 // The database side of inviting staff, called the way the invite service
 // calls it: as the signed-in Manager with the publishable key. Sending the
@@ -51,7 +51,7 @@ async function invitedIds(client: SupabaseClient): Promise<string[]> {
   return data as string[]
 }
 
-test.describe("invite_staff_member", () => {
+describe("invite_staff_member", () => {
   test("anonymous visitors cannot call it", async () => {
     const { error } = await anonClient().rpc("invite_staff_member", {
       full_name: "Nobody",
@@ -158,7 +158,7 @@ test.describe("invite_staff_member", () => {
   })
 })
 
-test.describe("who counts as Invited", () => {
+describe("who counts as Invited", () => {
   test("a record with no account, and an account whose invite is not yet accepted, are Invited; accepting joins", async () => {
     const client = await administrator()
     const email = newEmail()
@@ -190,7 +190,7 @@ test.describe("who counts as Invited", () => {
   })
 })
 
-test.describe("an invited Manager and no_administrator_left", () => {
+describe("an invited Manager and no_administrator_left", () => {
   // Someone who has not accepted their invite can't sign in, so they can't
   // administer anyone. Leaving only them would lock the school out.
   test("removing every administrator who has joined is refused, even with an invited Manager waiting", async () => {
@@ -220,7 +220,7 @@ test.describe("an invited Manager and no_administrator_left", () => {
   })
 })
 
-test.describe("resendable_invite", () => {
+describe("resendable_invite", () => {
   test("names the Invited member and the email to send to", async () => {
     const { data, error } = await (await administrator()).rpc("resendable_invite", { staff_id: INVITED.id })
 

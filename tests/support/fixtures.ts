@@ -1,4 +1,4 @@
-// The staff members created by supabase/seed.sql. Local fixtures only.
+// The staff members created by supabase/seeds/00_base.sql. Local fixtures only.
 const PASSWORD = "fixture-password"
 
 function staff(id: string, name: string, email: string, roleName: string) {

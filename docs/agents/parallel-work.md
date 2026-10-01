@@ -1,0 +1,85 @@
+# Parallel work
+
+Rules for several agents building tickets at once on this machine. Each agent has its own worktree, but they all share one local Supabase, one e2e port and 7.7 GB of RAM.
+
+## The shared lock
+
+Take the lock before any of these, and release it straight after:
+
+- `npm run db:reset`
+- `npm run test:integration` or `npm run test:e2e`
+- `npm run build`, `npm run e2e:serve`, or an evidence server
+
+```bash
+LOCK="$(git rev-parse --git-common-dir)/local-supabase.lock"
+mkdir "$LOCK" && echo "<ticket> <branch>" > "$LOCK/owner"   # fails while someone else holds it
+# ... work ...
+rm -rf "$LOCK"
+```
+
+If `mkdir` fails, someone holds it: read `owner`, wait, and try again. Never build without the lock; two `next build` runs at once run out of memory here.
+
+- Run `db:reset` from your own worktree, so the database holds your migrations and not another branch's.
+- Never run `npm run db:stop`; it stops the database for everyone.
+- Create `.env.local` with `npm run env:local` while local Supabase runs.
+
+## Ports
+
+- Browser tests use 3100, under the lock. Playwright reuses a server already on 3100 only when it serves this worktree's build, and fails otherwise.
+- Evidence servers use 3200 plus the ticket number's last two digits: #67 uses 3267.
+- Stop every server you start before you report. On Windows, stopping the shell that ran `next start` can leave the server running; check the port and stop the process that owns it:
+
+  ```powershell
+  Get-NetTCPConnection -LocalPort 3267 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess }
+  ```
+
+## Your own files
+
+Each slice owns a migration timestamp range and a seed file. Use only your slice's.
+
+| Slice | Specs | Migrations | Seed file |
+|---|---|---|---|
+| 3, Public Admission form | #30 | `2026101030xxxx` | `supabase/seeds/30_admission_form.sql` |
+| 4, Marketing Agents | #32 | `2026101040xxxx` | `supabase/seeds/40_agents.sql` |
+| 5, Interviews and interview payment | #26 | `2026101050xxxx` | `supabase/seeds/50_interviews.sql` |
+| 6, Result release | #31 | `2026101060xxxx` | `supabase/seeds/60_results.sql` |
+| 7, Follow-ups and the queue | #28 | `2026101070xxxx` | `supabase/seeds/70_followups.sql` |
+| 8, Decline, Inactive/Archive and reopening | #27 | `2026101080xxxx` | `supabase/seeds/80_closure.sql` |
+| 9, Fee schedule, payments and Enrolled | #29 | `2026101090xxxx` | `supabase/seeds/90_fees.sql` |
+| 10, Dashboard | #33 | `2026101095xxxx` | `supabase/seeds/95_dashboard.sql` |
+
+The `xxxx` is yours to number within the range. Within a slice, tickets that run one after another number upwards, so a later ticket's migration sorts after an earlier one's. Seeds load in file-name order, after `00_base.sql`, so a later slice's seed may refer to an earlier slice's rows.
+
+- **Lead screen.** A new panel is a file in `app/staff/leads/[id]/` plus one line in `LEAD_PANELS` (`panels.tsx`). Nothing else in `page.tsx`.
+- **Staff navigation.** One line in `STAFF_NAV` (`app/staff/navigation.ts`). An entry may take a list of permissions, any one of which shows it.
+- **Shared service files.** One owner per file at a time. Put new modules in new files under `lib/services/`.
+
+## Contracts
+
+Functions other slices call already exist, so nobody creates them twice:
+
+- `lead_is_closed(lead_id)` and `assert_lead_open(lead_id)`, raising `lead_closed`. Call `assert_lead_open` first in every write function on a lead. #96 may `create or replace` them.
+- `expected_interview_amount(lead_id)` returning `amount` and `discount_applied`. A stand-in at TZS 50,000 until #80 replaces it with `create or replace`.
+- `OFFICE_PHONE` in `lib/office.ts`, server-only.
+
+When a ticket you build on has not merged, code against the signature its body gives. Use `create or replace` only where a ticket says to.
+
+## Checks while you work
+
+Follow the tiers in `AGENTS.md`. While building, run only what your change touches:
+
+```bash
+npm run lint
+npm run typecheck
+npx vitest run --project unit --changed origin/main
+npx vitest run --project integration --changed origin/main   # under the lock
+npx playwright test --only-changed=origin/main               # under the lock
+```
+
+On `AuthRetryableFetchError` under load, rerun the failed files before treating the failure as real.
+
+## Housekeeping
+
+- Name scratch files with your ticket number first (`67-pr-body.md`), since agents share a scratchpad.
+- Claim a ticket with a comment before you start: `Claimed by claude on claude/<task>`.
+- Stop after the PR is open, CI is green, code review is done and the changelog entry is under `## Unreleased`. Report the PR URL, your worktree path, and any checks the ticket says a human must make. The orchestrator runs greploop; nobody but the human merges.

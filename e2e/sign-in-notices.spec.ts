@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
-import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "./db"
-import type { FixtureStaff } from "./fixtures"
+import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
+import type { FixtureStaff } from "../tests/support/fixtures"
 
 // The notice a staff member sees on the staff home at sign-in when someone
 // else changed their role or account, and dismissing it. Each test changes a

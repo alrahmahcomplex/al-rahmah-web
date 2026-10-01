@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
 
-import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "./fixtures"
+import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
 // The Leads screen, as staff use it, against the seeded leads. No other test
 // makes a lead named "... Fixture", so a search for it finds exactly the six

@@ -5,8 +5,8 @@ import { expect, test, type Page } from "@playwright/test"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
 
-import { signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "./fixtures"
+import { signedIn } from "../tests/support/db"
+import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
 // Reading a lead's history on its own screen, as staff do. Each test registers
 // its own family, so the seeded leads other tests read stay as they are.

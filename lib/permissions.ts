@@ -1,5 +1,5 @@
 // The fixed permission list from CONTEXT.md. The database holds the same
-// names in `public.permissions`; e2e/staff-rbac-db.spec.ts fails if the two
+// names in `public.permissions`; tests/integration/staff-rbac.test.ts fails if the two
 // drift apart.
 export const PERMISSIONS = [
   "leads.view",

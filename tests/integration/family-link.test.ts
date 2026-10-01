@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import {
@@ -16,8 +16,8 @@ import {
   type NewStudent,
 } from "@/lib/services/leads"
 
-import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "./fixtures"
+import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // The Admission form start of createLead, and settling the unconfirmed Family
 // match it leaves, against local Supabase. Each test invents its own names
@@ -92,7 +92,7 @@ async function unconfirmedMatch() {
   return { parent, known, familyContact, first, second, formContact }
 }
 
-test.describe("the Admission form start", () => {
+describe("the Admission form start", () => {
   test("creates an Applied lead with no Visit date, written in history by the Admission form", async () => {
     const lead = await created(await createLead(secretClient(), fromForm({ contact: contact() })))
 
@@ -157,7 +157,7 @@ test.describe("the Admission form start", () => {
   })
 })
 
-test.describe("Family lists show unconfirmed children", () => {
+describe("Family lists show unconfirmed children", () => {
   test("check-in finds the known Family with the form's children marked unconfirmed, not a second parent", async () => {
     const { parent, known, first, second, familyContact } = await unconfirmedMatch()
 
@@ -173,7 +173,7 @@ test.describe("Family lists show unconfirmed children", () => {
   })
 })
 
-test.describe("confirming a match", () => {
+describe("confirming a match", () => {
   test("moves every child on the form's contact into the Family, keeping them Returning family", async () => {
     const { parent, known, first, second, familyContact } = await unconfirmedMatch()
 
@@ -271,7 +271,7 @@ test.describe("confirming a match", () => {
   })
 })
 
-test.describe("rejecting a match", () => {
+describe("rejecting a match", () => {
   test("clears the match and the Returning family badge for every child on the contact", async () => {
     const { first, second, formContact } = await unconfirmedMatch()
 
@@ -311,7 +311,7 @@ test.describe("rejecting a match", () => {
   })
 })
 
-test.describe("separating a lead from its Family", () => {
+describe("separating a lead from its Family", () => {
   test("gives the lead its own copy of the contact and takes its Returning family badge away", async () => {
     const parent = contact({ whatsapp: `0${nineDigits()}` })
     const staff = await signedIn(ADMISSIONS)
@@ -361,7 +361,7 @@ test.describe("separating a lead from its Family", () => {
   })
 })
 
-test.describe("who may settle a match", () => {
+describe("who may settle a match", () => {
   test("the Accountant and someone signed out are refused, and nothing changes", async () => {
     const { first, second, formContact } = await unconfirmedMatch()
 

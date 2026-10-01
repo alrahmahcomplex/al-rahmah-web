@@ -16,6 +16,13 @@ describe("navFor", () => {
   it("shows nothing to a role with no matching permission", () => {
     expect(navFor([], ENTRIES)).toEqual([])
   })
+
+  it("shows an entry that accepts any of several permissions to a holder of any one of them", () => {
+    const either: StaffNavEntry = { href: "/staff/either", label: "Either", permission: ["payments.view", "leads.view"] }
+    expect(navFor(["payments.view"], [either])).toEqual([either])
+    expect(navFor(["leads.view"], [either])).toEqual([either])
+    expect(navFor(["staff.administer"], [either])).toEqual([])
+  })
 })
 
 describe("the staff navigation", () => {

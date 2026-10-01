@@ -1,10 +1,10 @@
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { Client } from "pg"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "./db"
-import { ACCOUNTANT, RETIRED_ROLE } from "./fixtures"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
+import { ACCOUNTANT, RETIRED_ROLE } from "../support/fixtures"
 
 // The guardrailed write functions behind the Staff and roles screen, called
 // the way the screen calls them: as a signed-in staff member with the
@@ -63,7 +63,7 @@ function expectRefusal(
   if (details) expect(JSON.parse(result.error?.details ?? "{}")).toEqual(details)
 }
 
-test.describe("who may call the write functions", () => {
+describe("who may call the write functions", () => {
   for (const fn of ["assign_staff_role", "deactivate_staff_member", "reactivate_staff_member", "correct_staff_name"]) {
     test(`anonymous visitors cannot call ${fn}`, async () => {
       const { error } = await anonClient().rpc(fn, { staff_id: RETIRED_ROLE.id })
@@ -102,7 +102,7 @@ test.describe("who may call the write functions", () => {
   })
 })
 
-test.describe("assign_staff_role", () => {
+describe("assign_staff_role", () => {
   test("moves another staff member and writes one audit row naming the caller", async () => {
     const { person: manager, client } = await administrator()
     const target = await createThrowawayStaff(["leads.view"])
@@ -183,7 +183,7 @@ test.describe("assign_staff_role", () => {
   })
 })
 
-test.describe("deactivate_staff_member", () => {
+describe("deactivate_staff_member", () => {
   test("deactivates another staff member and writes one audit row naming the caller", async () => {
     const { person: manager, client } = await administrator()
     const target = await createThrowawayStaff(["leads.view"])
@@ -233,7 +233,7 @@ test.describe("deactivate_staff_member", () => {
   })
 })
 
-test.describe("reactivate_staff_member", () => {
+describe("reactivate_staff_member", () => {
   test("reactivates a deactivated staff member", async () => {
     const { client } = await administrator()
     const target = await createThrowawayStaff(["leads.view"])
@@ -280,7 +280,7 @@ test.describe("reactivate_staff_member", () => {
   })
 })
 
-test.describe("correct_staff_name", () => {
+describe("correct_staff_name", () => {
   test("corrects a name, trimmed, with one audit row", async () => {
     const { person: manager, client } = await administrator()
     const target = await createThrowawayStaff(["leads.view"])
@@ -316,7 +316,7 @@ test.describe("correct_staff_name", () => {
   })
 })
 
-test.describe("no_administrator_left", () => {
+describe("no_administrator_left", () => {
   // Through the functions an administrator can never remove the last one,
   // because they cannot move or deactivate themselves. The rule also covers
   // the SQL editor and the secret key, where nothing else stops it.

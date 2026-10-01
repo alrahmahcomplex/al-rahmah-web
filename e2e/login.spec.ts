@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
-import { asSystem, createThrowawayStaff } from "./db"
-import { ACCOUNTANT, DEACTIVATED, MANAGER } from "./fixtures"
+import { asSystem, createThrowawayStaff } from "../tests/support/db"
+import { ACCOUNTANT, DEACTIVATED, MANAGER } from "../tests/support/fixtures"
 
 // Al-Rahmah palette values from app/globals.css.
 const AL_RAHMAH_BLUE = "rgb(9, 0, 187)" // --color-blue-600: #0900bb

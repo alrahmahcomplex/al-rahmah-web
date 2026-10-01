@@ -1,13 +1,13 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadHistory, type LeadHistory } from "@/lib/services/audit"
 import { createLead, getLead, updateGuardianContact, updateLeadDetails, type Lead } from "@/lib/services/leads"
 
-import { anonClient, asStaffActor, asSystem, createThrowawayStaff, secretClient, signedIn } from "./db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "./fixtures"
+import { anonClient, asStaffActor, asSystem, createThrowawayStaff, secretClient, signedIn } from "../support/db"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
 
 // A lead's history through the audit module, against local Supabase. Each test
 // registers its own family with invented names and numbers, and leaves the
@@ -42,7 +42,7 @@ async function historyOf(leadId: string, as = ADMISSIONS): Promise<LeadHistory> 
   return history.data
 }
 
-test.describe("a lead's history", () => {
+describe("a lead's history", () => {
   test("starts with the creation of the lead and its contact, by the staff member who registered it", async () => {
     const lead = await walkInLead()
 
@@ -178,7 +178,7 @@ test.describe("a lead's history", () => {
   })
 })
 
-test.describe("who may read a lead's history", () => {
+describe("who may read a lead's history", () => {
   test("the Accountant may, as anyone who may view leads", async () => {
     const lead = await walkInLead()
     expect((await historyOf(lead.id, ACCOUNTANT)).entries).toHaveLength(2)

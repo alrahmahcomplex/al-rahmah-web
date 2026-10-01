@@ -1,8 +1,8 @@
-import { expect, test } from "@playwright/test"
+import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Client } from "pg"
 
-import { anonClient, asStaffActor, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "./db"
+import { anonClient, asStaffActor, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 
 // Sign-in notices (ADR 4): the changes to someone's own role or active state
 // that another actor made since they last dismissed their notices. Read and
@@ -55,7 +55,7 @@ async function ok(result: PromiseLike<{ error: unknown }>) {
   expect(error).toBeNull()
 }
 
-test.describe("which audit rows count as notices", () => {
+describe("which audit rows count as notices", () => {
   test("another Manager changing someone's role gives them one notice naming the actor and both roles", async () => {
     const { person: manager, client: managerClient } = await administrator()
     const target = await createThrowawayStaff(["leads.view"])
@@ -135,7 +135,7 @@ test.describe("which audit rows count as notices", () => {
   })
 })
 
-test.describe("dismiss_notices", () => {
+describe("dismiss_notices", () => {
   test("clears the notices, which stay cleared on the next sign-in, and a later change is a new notice", async () => {
     const { client: managerClient } = await administrator()
     const target = await createThrowawayStaff(["leads.view"])

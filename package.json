@@ -8,12 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --project unit",
+    "test:integration": "vitest run --project integration --max-workers 4",
     "test:e2e": "playwright test",
+    "e2e:serve": "next build && next start -p 3100",
     "db:start": "supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
     "db:start:full": "supabase start",
     "db:stop": "supabase stop",
-    "db:reset": "supabase db reset"
+    "db:reset": "supabase db reset",
+    "env:local": "node scripts/write-env-local.mjs"
   },
   "engines": {
     "node": ">=24"

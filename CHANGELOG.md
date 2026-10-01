@@ -5,6 +5,19 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 1, 2026 `v0.14.0`
+
+### NEW
+
+- Every lead has a **History** screen, newest first. Each entry says when it happened
+  in Tanzania time, who did it (a staff member by name, even one who has since been
+  deactivated, or the Admission form), and each changed field's old and new value.
+- A change to a parent or guardian shows on the history of every child on that contact,
+  and a contact the lead was on before a separation stays in its history.
+- Creations, recorded visits and Family joins, confirmations, rejections and
+  separations each get a plain description. A kind of change the screen doesn't know
+  yet still shows, under its stored name.
+
 ## October 1, 2026 `v0.13.0`
 
 ### NEW

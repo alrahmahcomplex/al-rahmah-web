@@ -79,7 +79,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         )}
       />
       <FamilySection leadId={lead.data.id} studentName={lead.data.studentName} canEdit={canEditDetails} />
-      <div>
+      <div className="flex flex-wrap gap-2">
+        <Link href={`/staff/leads/${lead.data.id}/history`} className={buttonVariants({ variant: "outline" })}>History</Link>
         <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Back to Check-in</Link>
       </div>
     </div>

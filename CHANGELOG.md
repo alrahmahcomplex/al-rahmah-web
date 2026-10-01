@@ -9,10 +9,10 @@ stay in the `0.x` range.
 
 ### IMPROVED
 
-- Nothing changes on screen. Behind it, the checks that keep a closed lead read-only
-  now live in one place, ready for declining, archiving and reopening leads.
-- Every change is now checked automatically before it can be merged, and the
-  database tests run in about a minute instead of waiting for a full build.
+- Nothing changes on screen. The rule that a closed lead is read-only now lives in one
+  place, which declining, archiving and reopening leads will build on.
+- GitHub now runs every check on each change before it can merge, and the database
+  tests finish in under a minute without waiting for a full build.
 
 ## October 1, 2026 `v0.14.0`
 

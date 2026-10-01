@@ -133,3 +133,36 @@ insert into public.leads (
         'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000047', false);
 
 commit;
+
+-- An unconfirmed Family match: two children the Admission form sent on one
+-- contact, whose phone matched a parent already on file with one child. The
+-- lead screen test confirms it and puts it back.
+--
+--   ADMSN-90048 Tumaini Kinship      Visited, the known Family
+--   ADMSN-90049 Upendo Kinship       Applied, unconfirmed (Returning family)
+--   ADMSN-90050 Furaha Kinship       Applied, unconfirmed, same form (Returning family)
+
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (
+    id, full_name, relationship, relationship_description, phone, whatsapp, origin, pending_family_match_id
+) values
+    ('c0c0c0c0-0000-4000-8000-000000000048', 'Khadija Kinship', 'Mother', null, '+255700000148', null,
+        'front_desk', null),
+    ('c0c0c0c0-0000-4000-8000-000000000049', 'Khadija A. Kinship', 'Mother', null, '+255700000148', null,
+        'admission_form', 'c0c0c0c0-0000-4000-8000-000000000048');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined
+) values
+    ('1ead0000-0000-4000-8000-000000000048', 'ADMSN-90048', 'Tumaini Kinship', 'STD 4', 2027, 'Day',
+        'Visited', null, date '2026-09-10', 'c0c0c0c0-0000-4000-8000-000000000048', false),
+    ('1ead0000-0000-4000-8000-000000000049', 'ADMSN-90049', 'Upendo Kinship', 'STD 1', 2027, 'Day',
+        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000049', true),
+    ('1ead0000-0000-4000-8000-000000000050', 'ADMSN-90050', 'Furaha Kinship', 'KG 2', 2027, 'Boarding',
+        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000049', true);
+
+commit;

@@ -93,6 +93,7 @@ test.describe("finding a Family by phone", () => {
                 enrollmentYear: thisYear + 1,
                 status: "Visited",
                 closure: null,
+                unconfirmed: false,
               },
               {
                 id: known.leads[1].id,
@@ -102,6 +103,7 @@ test.describe("finding a Family by phone", () => {
                 enrollmentYear: thisYear + 1,
                 status: "Visited",
                 closure: null,
+                unconfirmed: false,
               },
             ],
           },

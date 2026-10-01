@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 1, 2026 `v0.13.0`
+
+### NEW
+
+- A lead's screen now has a **Family** section listing the brothers and sisters on
+  file. Children the Admission form linked to the Family, and that staff haven't
+  confirmed yet, are marked **Unconfirmed** there and in the New Student Family list.
+- When the Admission form matched a parent's phone to a family already on file, the
+  lead shows the match. **Confirm match** names every child it moves into that Family
+  before it does. **Reject match** clears the match for those children and removes
+  their **Returning family** badge, unless they applied again.
+- **Separate from this Family** gives a lead that was wrongly joined to a Family its own
+  copy of the parent or guardian, so later changes to the shared contact no longer
+  reach it.
+
 ## September 30, 2026 `v0.12.0`
 
 ### NEW

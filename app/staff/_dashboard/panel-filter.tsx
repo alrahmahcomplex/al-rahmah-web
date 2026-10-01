@@ -39,11 +39,12 @@ function fromLocal(date: Date) {
 
 // The years a Month or Year period can be chosen in: this year back to two
 // years before the oldest Enrollment year leads carry (families visit ahead of
-// the year they enroll), and never fewer than the last six. The one already
+// the year they enroll), and never fewer than the last six, nor before 2000,
+// the first year the address accepts. The one already
 // chosen is added if it falls outside.
 function periodYears(today: string, anchor: string | null, enrollmentYears: number[]) {
   const thisYear = Number(today.slice(0, 4))
-  const oldest = Math.min(thisYear - 5, ...enrollmentYears.map((year) => year - 2))
+  const oldest = Math.max(2000, Math.min(thisYear - 5, ...enrollmentYears.map((year) => year - 2)))
   const years = Array.from({ length: thisYear - oldest + 1 }, (_, i) => thisYear - i)
   const chosen = anchor ? Number(anchor.slice(0, 4)) : null
   if (chosen !== null && !years.includes(chosen)) years.push(chosen)

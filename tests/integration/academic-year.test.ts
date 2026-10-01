@@ -192,6 +192,15 @@ describe("permissions", () => {
     expect(await read(year)).toEqual({ start: null, seats: [] })
     const { data } = await anonClient().from("class_seats").select("id")
     expect(data).toEqual([])
+
+    // Not merely refused inside: anon may not execute it at all.
+    const granted = await inRolledBackTransaction(async (sql) => {
+      const result = await sql.query(
+        "select has_function_privilege('anon', 'public.set_academic_year(integer, jsonb)', 'execute') as anon",
+      )
+      return result.rows[0].anon
+    })
+    expect(granted).toBe(false)
   })
 
   test("managing academic years without payments.view may set them, but reads nothing back", async () => {

@@ -215,7 +215,9 @@ export async function saveFeeAmounts(
   })
   if (error) {
     if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
-    if (error.message === "invalid") return { ok: false, error: { kind: "invalid", field: refusedField<FeeField>(error.details, FEE_FIELDS) } }
+    if (error.message === "invalid") {
+      return { ok: false, error: { kind: "invalid", field: refusedField<FeeField>(error.details, FEE_FIELDS) } }
+    }
     console.error("Could not save a fee schedule", error)
     return { ok: false, error: { kind: "unavailable" } }
   }

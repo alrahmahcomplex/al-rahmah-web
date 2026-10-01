@@ -37,11 +37,14 @@ function fromLocal(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-// The years a Month or Year period can be chosen in: this year and the five
-// before it, plus the one already chosen if it is older.
-function periodYears(today: string, anchor: string | null) {
+// The years a Month or Year period can be chosen in: this year back to two
+// years before the oldest Enrollment year leads carry (families visit ahead of
+// the year they enroll), and never fewer than the last six. The one already
+// chosen is added if it falls outside.
+function periodYears(today: string, anchor: string | null, enrollmentYears: number[]) {
   const thisYear = Number(today.slice(0, 4))
-  const years = Array.from({ length: 6 }, (_, i) => thisYear - i)
+  const oldest = Math.min(thisYear - 5, ...enrollmentYears.map((year) => year - 2))
+  const years = Array.from({ length: thisYear - oldest + 1 }, (_, i) => thisYear - i)
   const chosen = anchor ? Number(anchor.slice(0, 4)) : null
   if (chosen !== null && !years.includes(chosen)) years.push(chosen)
   return years.sort((a, b) => b - a)
@@ -66,17 +69,22 @@ export function PanelFilter({
 
   // The filters as the dropdowns show them. A change shows at once, before
   // the page for it arrives, so a second change made meanwhile builds on the
-  // first instead of undoing it. The page's filters take over again when the
-  // page for the latest change arrives, or when the address changes some
-  // other way (back, forward, a link).
+  // first instead of undoing it. `pending` lists every change still on its
+  // way, oldest first. A page for an earlier one is passed over; the page's
+  // filters take over again when the latest one arrives, or when a page
+  // arrives that none of them asked for (back, forward, a link).
   const [shown, setShown] = useState(filters)
-  const [awaiting, setAwaiting] = useState<string | null>(null)
+  const [pending, setPending] = useState<string[]>([])
   const [arrived, setArrived] = useState(filtersKey(filters))
   if (filtersKey(filters) !== arrived) {
-    setArrived(filtersKey(filters))
-    if (awaiting === null || awaiting === filtersKey(filters)) {
+    const key = filtersKey(filters)
+    setArrived(key)
+    const at = pending.indexOf(key)
+    if (at === -1 || at === pending.length - 1) {
       setShown(filters)
-      setAwaiting(null)
+      setPending([])
+    } else {
+      setPending(pending.slice(at + 1))
     }
   }
 
@@ -90,7 +98,7 @@ export function PanelFilter({
     // Nothing to wait for: the page for it would never arrive as a change.
     if (filtersKey(next) === filtersKey(shown)) return
     setShown(next)
-    setAwaiting(filtersKey(next))
+    setPending([...pending, filtersKey(next)])
     router.push(panelHref(new URLSearchParams(searchParams), panelKey, next), { scroll: false })
   }
 
@@ -141,6 +149,9 @@ export function PanelFilter({
 
         {(period.kind === "date" || period.kind === "week") && (
           <Calendar
+            // A new period kind or anchor opens the calendar on its month,
+            // not on whichever month was browsed to before.
+            key={`${period.kind}:${period.anchor}`}
             mode="single"
             weekStartsOn={1}
             selected={toLocal(period.anchor)}
@@ -181,7 +192,7 @@ export function PanelFilter({
               </Select>
             )}
             <Select
-              items={Object.fromEntries(periodYears(today, anchor).map((year) => [String(year), String(year)]))}
+              items={Object.fromEntries(periodYears(today, anchor, enrollmentYears).map((year) => [String(year), String(year)]))}
               value={period.anchor.slice(0, 4)}
               onValueChange={(year) =>
                 year &&
@@ -196,7 +207,7 @@ export function PanelFilter({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {periodYears(today, anchor).map((year) => (
+                {periodYears(today, anchor, enrollmentYears).map((year) => (
                   <SelectItem key={year} value={String(year)}>
                     {year}
                   </SelectItem>

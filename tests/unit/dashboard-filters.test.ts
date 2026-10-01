@@ -12,7 +12,7 @@ describe("parsePanelFilters", () => {
 
   it("falls back to All time and All years for anything missing or unreadable", () => {
     expect(parsePanelFilters({}, "visited")).toEqual(ALL_TIME)
-    for (const visited of ["all", "fortnight:2026-09-21", "week", "week:", "week:2026-02-30", "date:21-09-2026", "date:1999-12-31"]) {
+    for (const visited of ["all", "fortnight:2026-09-21", "week", "week:", "week:2026-02-30", "date:21-09-2026", "date:1999-12-31", "week:2026-09-21:junk"]) {
       expect(parsePanelFilters({ visited }, "visited").period).toEqual({ kind: "all" })
     }
     for (const year of ["", "twenty", "27", "2027.5", "1999", "2101"]) {

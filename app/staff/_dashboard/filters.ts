@@ -25,7 +25,9 @@ export function calendarDate(value: string | undefined): string | null {
 }
 
 function parsePeriod(value: string | undefined): Period {
-  const [kind, anchor] = (value ?? "").split(":")
+  const parts = (value ?? "").split(":")
+  if (parts.length !== 2) return { kind: "all" }
+  const [kind, anchor] = parts
   if (!(PERIOD_KINDS as readonly string[]).includes(kind) || kind === "all") return { kind: "all" }
   const date = calendarDate(anchor)
   return date ? { kind: kind as Exclude<PeriodKind, "all">, anchor: date } : { kind: "all" }

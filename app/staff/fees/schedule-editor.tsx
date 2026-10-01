@@ -89,20 +89,19 @@ export function ScheduleEditor({
   amounts: FeeAmounts | null
   children?: React.ReactNode
 }) {
-  const [editing, setEditing] = useState(amounts === null)
+  const [editing, setEditing] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
 
-  if (editing && amounts === null) {
+  // The form stays until the refresh brings the new schedule in, so the
+  // tables never show empty in between.
+  if (amounts === null) {
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-slate-700">No fee schedule for {year} yet. Enter every amount below to create it.</p>
         <ScheduleForm
           year={year}
           amounts={null}
-          onSaved={() => {
-            setEditing(false)
-            setSaved(`The ${year} Fee schedule is saved.`)
-          }}
+          onSaved={() => setSaved(`The ${year} Fee schedule is saved.`)}
           onCancel={null}
         />
       </div>

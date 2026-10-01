@@ -34,8 +34,9 @@ test.describe("the Fee schedule", () => {
     await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Fee schedule" }).click()
     await expect(page.getByRole("heading", { name: "Fee schedule", exact: true })).toBeVisible()
 
-    await page.getByLabel("Enrollment year").fill(String(year))
-    await page.getByRole("button", { name: "Open year" }).click()
+    const newSchedule = page.getByRole("form", { name: "New schedule" })
+    await newSchedule.getByLabel("Enrollment year").fill(String(year))
+    await newSchedule.getByRole("button", { name: "Open year" }).click()
     await expect(page).toHaveURL(new RegExp(`/staff/fees/${year}$`))
     await expect(page.getByText(`No fee schedule for ${year} yet.`)).toBeVisible()
 

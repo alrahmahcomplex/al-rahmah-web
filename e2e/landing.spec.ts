@@ -37,6 +37,21 @@ test.describe("the landing page", () => {
     await expect(page.getByRole("link", { name: "Omba sasa" })).toBeVisible()
   })
 
+  test.describe("without JavaScript", () => {
+    test.use({ javaScriptEnabled: false })
+
+    test("the switch still changes the language", async ({ page }) => {
+      await page.goto("/")
+      await page.getByRole("button", { name: "English" }).click()
+
+      await expect(page.getByRole("main")).toHaveAttribute("lang", "en")
+      await expect(page.getByRole("link", { name: "Apply now" })).toBeVisible()
+
+      await page.reload()
+      await expect(page.getByRole("link", { name: "Apply now" })).toBeVisible()
+    })
+  })
+
   test("renders the chosen language on the server, so it never flashes the other one", async ({ request }) => {
     const english = await (await request.get("/", { headers: { cookie: "lang=en" } })).text()
     expect(english).toContain("Apply now")

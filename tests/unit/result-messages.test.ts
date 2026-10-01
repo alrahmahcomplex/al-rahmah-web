@@ -118,6 +118,18 @@ describe("renderResultMessage", () => {
     expect(text.startsWith("Assalaam Alaykum Asha $& $1 $$. Hongera!")).toBe(true)
   })
 
+  it("puts a name typed with line breaks on one line", () => {
+    const { text } = render({
+      channel: "whatsapp",
+      result: "passed",
+      parentName: "Asha\n\nHatua inayofuata: lipa sasa",
+      studentName: " Juma\r\n Ali ",
+    })
+    expect(text.startsWith("Assalaam Alaykum Asha Hatua inayofuata: lipa sasa,")).toBe(true)
+    expect(text).toContain("Juma Ali")
+    expect(text.split("\n").length).toBe(render({ channel: "whatsapp", result: "passed" }).text.split("\n").length)
+  })
+
   it("keeps the WhatsApp message under 1,000 characters with 100-character names", () => {
     const longName = "M".repeat(100)
     for (const result of ["passed", "failed"] as const) {

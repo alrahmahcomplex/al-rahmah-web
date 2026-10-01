@@ -71,8 +71,8 @@ export type ResultMessage =
 export function renderResultMessage(input: ResultMessageInput): Result<ResultMessage, "too_long"> {
   const templateId: ResultTemplateId = `${input.channel}_${input.result}_v1`
   const values: Record<string, string> = {
-    parent_name: input.parentName,
-    student_name: input.studentName,
+    parent_name: oneLine(input.parentName),
+    student_name: oneLine(input.studentName),
     score: scoreNumber(input.score),
     admission_number: input.admissionNumber,
     class: input.className,
@@ -88,6 +88,12 @@ export function renderResultMessage(input: ResultMessageInput): Result<ResultMes
     return { ok: true, data: { channel: "whatsapp", templateId, text } }
   }
   return { ok: true, data: { channel: "sms", templateId, text, ...smsSegments(text) } }
+}
+
+// A name on one line, so a line break typed into it can't start a line of its
+// own beside the approved text. Runs of whitespace become one space.
+function oneLine(name: string): string {
+  return name.replace(/\s+/g, " ").trim()
 }
 
 // A percentage as families expect it: `78%`, `78.5%`, never `78.0%`. Scores

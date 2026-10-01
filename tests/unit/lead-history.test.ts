@@ -258,11 +258,11 @@ describe("describeLeadHistory", () => {
 
   it("shows a row from a table it does not know under the table's name", () => {
     const described = describeLeadHistoryEntry(
-      entry({ record: "interviews", recordId: LEAD, action: "insert", changes: [change("score", null, 72)] }),
+      entry({ record: "agent_referrals", recordId: LEAD, action: "insert", changes: [change("weight", null, 72)] }),
       names,
     )
-    expect(described.summary).toBe("added an interviews record")
-    expect(described.changes).toEqual([{ label: "score", from: null, to: "72" }])
+    expect(described.summary).toBe("added an agent_referrals record")
+    expect(described.changes).toEqual([{ label: "weight", from: null, to: "72" }])
   })
 
   it("shows a contact id it cannot name as the id", () => {

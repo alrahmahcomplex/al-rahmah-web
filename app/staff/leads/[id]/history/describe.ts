@@ -38,6 +38,20 @@ const LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
   origin: "Added from",
   pending_family_match_id: "Unconfirmed Family match",
+  // Its interviews.
+  serial_number: "S/N",
+  serial_year: "S/N enrollment year",
+  interview_date: "Interview date",
+  result: "Interview result",
+  score: "Interview score",
+  fee_status: "Interview fee",
+  locked_amount: "Amount paid",
+}
+
+// Kept on an interview row for the database's sake: the lead it belongs to and
+// who registered it when, which the entry itself already shows.
+const HIDDEN: Record<string, ReadonlySet<string>> = {
+  interviews: new Set(["lead", "registered_at", "registered_by"]),
 }
 
 const ORIGINS: Record<string, string> = {
@@ -55,12 +69,15 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
   if (value === null || value === undefined) return field === "whatsapp" ? "Same as phone" : "None"
   switch (field) {
     case "visit_date":
+    case "interview_date":
       return typeof value === "string" ? formatDate(value) : raw(value)
     case "guardian_contact_id":
     case "pending_family_match_id":
       return contactNames[String(value)] ?? raw(value)
     case "origin":
       return ORIGINS[String(value)] ?? raw(value)
+    case "locked_amount":
+      return typeof value === "number" ? `TZS ${value.toLocaleString("en-US")}` : raw(value)
     default:
       return raw(value)
   }
@@ -143,6 +160,12 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     return `changed ${who}`
   }
 
+  if (entry.record === "interviews") {
+    if (insert) return "registered the lead for interview"
+    if (entry.action === "update") return "changed the interview"
+    return entry.action
+  }
+
   if (entry.record !== null) {
     if (insert) return `added ${article(entry.record)} ${entry.record} record`
     if (entry.action === "update") return `changed ${article(entry.record)} ${entry.record} record`
@@ -181,6 +204,7 @@ function describeEntry(entry: LeadHistoryEntry, contactNames: Readonly<Record<st
     actor: entry.actor,
     summary: summarize(entry, contactNames, timeline),
     changes: entry.changes
+      .filter((c) => !HIDDEN[entry.record ?? ""]?.has(c.field))
       .filter((c) => fromOld || !isEmpty(c.to))
       .sort((a, b) => rank(a.field) - rank(b.field))
       .map((c) => ({

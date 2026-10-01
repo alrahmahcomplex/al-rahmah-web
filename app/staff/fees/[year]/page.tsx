@@ -9,7 +9,7 @@ import { createClient } from "@/utils/supabase/server"
 import { requireStaff } from "../../session"
 import { ScheduleEditor } from "../schedule-editor"
 import { ScheduleView } from "../schedule-view"
-import { canReadFeeSchedule, canSeeFeeAmounts, parseScheduleYear } from "../years"
+import { canEditFeeAmounts, canReadFeeSchedule, canSeeFeeAmounts, parseScheduleYear } from "../years"
 
 export const metadata: Metadata = {
   title: "Fee schedule · Al-Rahmah Complex",
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 export default async function FeeSchedulePage({ params }: { params: Promise<{ year: string }> }) {
   const staff = await requireStaff()
   if (!canReadFeeSchedule(staff.permissions)) forbidden()
-  const canEdit = staff.permissions.includes("payments.record")
+  const canEdit = canEditFeeAmounts(staff.permissions)
 
   const year = parseScheduleYear((await params).year)
   if (year === null) notFound()

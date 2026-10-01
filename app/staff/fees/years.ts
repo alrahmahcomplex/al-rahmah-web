@@ -20,3 +20,9 @@ export function parseScheduleYear(typed: string): number | null {
 export function canSeeFeeAmounts(permissions: readonly Permission[]): boolean {
   return permissions.includes("payments.view")
 }
+
+// Editing needs the amounts in view too: a save replaces the whole year, so
+// staff who can't read it would overwrite a schedule they never saw.
+export function canEditFeeAmounts(permissions: readonly Permission[]): boolean {
+  return canSeeFeeAmounts(permissions) && permissions.includes("payments.record")
+}

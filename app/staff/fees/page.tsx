@@ -12,7 +12,7 @@ import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
 import { formatShillings } from "./format"
-import { canReadFeeSchedule, canSeeFeeAmounts, parseScheduleYear } from "./years"
+import { canEditFeeAmounts, canReadFeeSchedule, canSeeFeeAmounts, parseScheduleYear } from "./years"
 
 export const metadata: Metadata = {
   title: "Fee schedule · Al-Rahmah Complex",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 export default async function FeeSchedulesPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
   const staff = await requireStaff()
   if (!canReadFeeSchedule(staff.permissions)) forbidden()
-  const canEdit = staff.permissions.includes("payments.record")
+  const canEdit = canEditFeeAmounts(staff.permissions)
 
   // The New schedule form asks for a year, then opens that year's page.
   const { year: requested } = await searchParams

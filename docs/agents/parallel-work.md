@@ -58,7 +58,8 @@ The `xxxx` is yours to number within the range. Within a slice, tickets that run
 
 Functions other slices call already exist, so nobody creates them twice:
 
-- `lead_is_closed(lead_id)` and `assert_lead_open(lead_id)`, raising `lead_closed`. Call `assert_lead_open` first in every write function on a lead. #96 may `create or replace` them.
+- `assert_lead_open(lead_id)`, raising `lead_closed`. Call it first in every write function on a lead. It is granted to no signed-in role, since write functions run as their owner.
+- `lead_is_closed(lead_id)`, for staff with `leads.view` (`forbidden` otherwise). #96 may `create or replace` both, keeping their condition the same.
 - `expected_interview_amount(lead_id)` returning `amount` and `discount_applied`. A stand-in at TZS 50,000 until #80 replaces it with `create or replace`.
 - `OFFICE_PHONE` in `lib/office.ts`, server-only.
 

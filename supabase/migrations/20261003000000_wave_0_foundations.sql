@@ -15,20 +15,33 @@
 -- The closure guard. A lead is closed when it is Declined or carries an
 -- Inactive or Archived mark; a closed lead is read-only. A lead that does not
 -- exist is not closed: callers report it as `not_found` themselves.
+--
+-- lead_is_closed answers staff who may view leads, and is `forbidden` to
+-- anyone else, so a lead's state never leaks past leads.view. assert_lead_open
+-- is for write functions only: they run as their owner, so it is granted to
+-- no signed-in role, and it answers whatever the caller's permissions, leaving
+-- each write function's own permission check to decide who may write. Both
+-- test the same condition; change them together.
 -- ---------------------------------------------------------------------------
 
 create function public.lead_is_closed(lead_id uuid)
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
-    select exists (
+begin
+    if auth.role() is distinct from 'service_role' and not public.has_permission('leads.view') then
+        raise exception 'forbidden';
+    end if;
+
+    return exists (
         select 1 from public.leads l
         where l.id = lead_is_closed.lead_id
           and (l.status = 'Declined' or l.closure is not null)
     );
+end;
 $$;
 
 revoke execute on function public.lead_is_closed(uuid) from public, anon;
@@ -42,14 +55,18 @@ security definer
 set search_path = ''
 as $$
 begin
-    if public.lead_is_closed(assert_lead_open.lead_id) then
+    if exists (
+        select 1 from public.leads l
+        where l.id = assert_lead_open.lead_id
+          and (l.status = 'Declined' or l.closure is not null)
+    ) then
         raise exception 'lead_closed';
     end if;
 end;
 $$;
 
-revoke execute on function public.assert_lead_open(uuid) from public, anon;
-grant execute on function public.assert_lead_open(uuid) to authenticated, service_role;
+revoke execute on function public.assert_lead_open(uuid) from public, anon, authenticated;
+grant execute on function public.assert_lead_open(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- expected_interview_amount: what the lead's interview costs, in whole TZS,

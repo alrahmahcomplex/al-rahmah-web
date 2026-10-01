@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 import { describe, expect, test } from "vitest"
 
-import { anonClient, createThrowawayStaff, signedIn } from "../support/db"
+import { anonClient, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // The functions Wave 0 (#122) lays down for slices 3–10 to build on, against
@@ -27,21 +27,46 @@ describe("the closure guard", () => {
     }
   })
 
+  test("lead_is_closed is forbidden to staff who may not view leads", async () => {
+    const outsider = await signedIn(await createThrowawayStaff(["staff.administer"]))
+    expect((await outsider.rpc("lead_is_closed", { lead_id: ARCHIVED })).error?.message).toBe("forbidden")
+  })
+
   test("assert_lead_open refuses a closed lead as lead_closed and passes an open one", async () => {
-    const staff = await signedIn(ACCOUNTANT)
-    expect((await staff.rpc("assert_lead_open", { lead_id: OPEN })).error).toBeNull()
-    for (const id of [ARCHIVED, DECLINED]) {
-      const { error } = await staff.rpc("assert_lead_open", { lead_id: id })
-      expect(error?.message).toBe("lead_closed")
+    // As the database owner, the role every write function runs as.
+    const answers = await inRolledBackTransaction(async (sql) => {
+      const out: Record<string, string | null> = {}
+      for (const id of [OPEN, ARCHIVED, DECLINED]) {
+        await sql.query("savepoint each")
+        try {
+          await sql.query("select public.assert_lead_open($1)", [id])
+          out[id] = null
+        } catch (error) {
+          out[id] = (error as Error).message
+          await sql.query("rollback to savepoint each")
+        }
+      }
+      return out
+    })
+    expect(answers).toEqual({ [OPEN]: null, [ARCHIVED]: "lead_closed", [DECLINED]: "lead_closed" })
+  })
+
+  test("assert_lead_open is for write functions only: no signed-in caller or anon may call it", async () => {
+    for (const client of [await signedIn(ADMISSIONS), await signedIn(MANAGER), anonClient()]) {
+      const { error } = await client.rpc("assert_lead_open", { lead_id: ARCHIVED })
+      expect(error?.code).toBe("42501")
     }
   })
 
-  test("anon may call neither", async () => {
-    const anon = anonClient()
-    for (const fn of ["lead_is_closed", "assert_lead_open"]) {
-      const { error } = await anon.rpc(fn, { lead_id: ARCHIVED })
-      expect(error?.code).toBe("42501")
-    }
+  test("anon may not call lead_is_closed", async () => {
+    const { error } = await anonClient().rpc("lead_is_closed", { lead_id: ARCHIVED })
+    expect(error?.code).toBe("42501")
+  })
+
+  test("a write function still refuses a closed lead for a writer who may not view leads", async () => {
+    const writer = await signedIn(await createThrowawayStaff(["leads.edit"]))
+    const { error } = await writer.rpc("update_lead_details", { lead_id: ARCHIVED, changes: { class_name: "STD 1" } })
+    expect(error?.message).toBe("lead_closed")
   })
 })
 

@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Nothing changes on screen yet. The app now holds the four approved Swahili result
+  messages (Passed and Failed, for WhatsApp and for SMS) and fills them in with the
+  parent's name, the child's name, the score and the Admission Number. It can also build
+  the WhatsApp link that opens a chat with the message typed in, for Tanzanian mobile
+  numbers only. Sending results to families will build on this.
+
 ## October 3, 2026 `v0.23.0`
 
 ### NEW

@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Nothing changes on screen yet. The public Admission form and the discount code page
+  will check each submission with Cloudflare's security check before saving anything,
+  and turn it away if the check fails or Cloudflare can't be reached. They will also
+  cap how often one connection can send each form. If the cap itself can't be checked,
+  the form still goes through.
+
 ## October 1, 2026 `v0.14.1`
 
 ### IMPROVED

@@ -59,7 +59,8 @@ async function fillParentAndChild(user: ReturnType<typeof userEvent.setup>, lang
   await user.click(screen.getByRole("button", { name: t.next }))
 }
 
-describe("the Admission form page", () => {
+// Each test types a whole form, which takes seconds on a loaded machine.
+describe("the Admission form page", { timeout: 20_000 }, () => {
   it("renders in Swahili by default, reading no Supabase", async () => {
     render(await ApplyPage())
 

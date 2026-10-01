@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const jar = vi.hoisted(() => ({ values: new Map<string, string>() }))
-const stubs = vi.hoisted(() => ({ submit: vi.fn(), reset: vi.fn(), token: "fake-token" }))
+const stubs = vi.hoisted(() => ({ submit: vi.fn(), reset: vi.fn(), refresh: vi.fn(), token: "fake-token" }))
 
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 vi.mock("next/headers", () => ({
@@ -21,6 +21,7 @@ vi.mock("@/utils/supabase/server", () => ({
 }))
 vi.mock("@/app/apply/actions", () => ({ submitAdmissionForm: stubs.submit }))
 vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: stubs.refresh }) }))
 vi.mock("@/components/turnstile-widget", () => ({
   TurnstileWidget: forwardRef(function FakeTurnstile(_: unknown, ref) {
     useImperativeHandle(ref, () => ({ reset: stubs.reset }))
@@ -38,6 +39,7 @@ beforeEach(() => {
   jar.values.clear()
   stubs.submit.mockReset()
   stubs.reset.mockReset()
+  stubs.refresh.mockReset()
   stubs.token = "fake-token"
 })
 
@@ -225,6 +227,8 @@ describe("the Admission form page", () => {
     await user.click(screen.getByRole("button", { name: "Send application" }))
     expect(await screen.findByRole("heading", { level: 1, name: "Children" })).toBeInTheDocument()
     expect(screen.getByText("That year no longer takes applications. Choose another year.")).toBeInTheDocument()
+    // The page renders again, with the new year chips.
+    expect(stubs.refresh).toHaveBeenCalledTimes(1)
   })
 
   it("makes a new key when the server says the key was used for a different form", async () => {

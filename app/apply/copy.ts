@@ -32,7 +32,7 @@ type Copy = {
   reviewParent: string
   reviewChild: string
   securityNote: string
-  problems: Record<FormField | "phone_unreadable" | "whatsapp_unreadable" | "year_closed", string>
+  problems: Record<FormField | "phone_unreadable" | "year_closed", string>
   checkPending: string
   rateLimited: string
   checkFailed: string
@@ -78,7 +78,6 @@ export const COPY: Record<Language, Copy> = {
       phone: "Andika namba yako ya simu.",
       phone_unreadable: "Hatukuweza kusoma namba hii ya simu. Iandike kama 0712 345 678 au +255 712 345 678.",
       whatsapp: "Hatukuweza kusoma namba hii ya WhatsApp. Iandike kama 0712 345 678, au iache wazi.",
-      whatsapp_unreadable: "Hatukuweza kusoma namba hii ya WhatsApp. Iandike kama 0712 345 678, au iache wazi.",
       student_name: "Andika jina kamili la mtoto.",
       class_name: "Chagua darasa analoomba.",
       enrollment_year: "Chagua mwaka wa kujiunga.",
@@ -132,7 +131,6 @@ export const COPY: Record<Language, Copy> = {
       phone: "Enter your phone number.",
       phone_unreadable: "We couldn't read that phone number. Write it like 0712 345 678 or +255 712 345 678.",
       whatsapp: "We couldn't read that WhatsApp number. Write it like 0712 345 678, or leave it empty.",
-      whatsapp_unreadable: "We couldn't read that WhatsApp number. Write it like 0712 345 678, or leave it empty.",
       student_name: "Enter the child's full name.",
       class_name: "Choose the class the child is applying for.",
       enrollment_year: "Choose the year of enrolment.",

@@ -1,6 +1,7 @@
 "use client"
 
 import { Check, Phone } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react"
 
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
@@ -95,6 +96,7 @@ export function AdmissionFormSteps({
   const [notice, setNotice] = useState<Notice>(null)
   const [confirmed, setConfirmed] = useState<Extract<AdmissionFormState, { status: "confirmed" }>["children"] | null>(null)
   const [sending, startSending] = useTransition()
+  const router = useRouter()
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
@@ -169,6 +171,9 @@ export function AdmissionFormSteps({
       turnstile.current?.reset()
       if (result.status === "invalid") {
         if (result.field === "submission_key") setSubmissionKey(newSubmissionKey())
+        // The year turned since the page loaded: render the new year chips.
+        // The entries are client state, so a refresh keeps them.
+        if (result.field === "enrollment_year") router.refresh()
         if (PARENT_FIELDS.has(result.field)) return go(0, { field: result.field, child: result.child, server: true })
         if (CHILD_FIELDS.has(result.field)) return go(1, { field: result.field, child: result.child, server: true })
         moved.current = true

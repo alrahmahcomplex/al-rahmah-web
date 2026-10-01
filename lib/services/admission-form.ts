@@ -45,7 +45,7 @@ const CHILD_FIELDS = new Set<string>(["student_name", "class_name", "enrollment_
 
 // What the submission key is checked against: the form exactly as validated,
 // in a fixed key order.
-export function payloadHash({ parent, children }: Pick<AdmissionForm, "parent" | "children">): string {
+function payloadHash({ parent, children }: Pick<AdmissionForm, "parent" | "children">): string {
   const canonical = JSON.stringify({
     parent: [
       parent.fullName,

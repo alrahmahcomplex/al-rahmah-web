@@ -121,6 +121,30 @@ describe("TurnstileWidget", () => {
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
   })
 
+  it("loads the script again on a later mount when it loaded without defining turnstile", async () => {
+    delete (window as { turnstile?: unknown }).turnstile
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    const first = render(<TurnstileWidget action="admission" language="sw" />)
+
+    await act(async () => {
+      document.querySelector(`script[src="${SCRIPT_SRC}"]`)!.dispatchEvent(new Event("load"))
+    })
+    expect(document.querySelectorAll(`script[src="${SCRIPT_SRC}"]`)).toHaveLength(0)
+    first.unmount()
+
+    render(<TurnstileWidget action="admission" language="sw" />)
+    const retry = document.querySelectorAll(`script[src="${SCRIPT_SRC}"]`)
+    expect(retry).toHaveLength(1)
+
+    Object.assign(window, { turnstile })
+    act(() => {
+      retry[0].dispatchEvent(new Event("load"))
+    })
+
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+  })
+
   it("renders nothing, and says why, without a site key", async () => {
     vi.stubEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", "")
     const error = vi.spyOn(console, "error").mockImplementation(() => {})

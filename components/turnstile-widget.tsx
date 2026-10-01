@@ -50,16 +50,17 @@ function loadTurnstile(): Promise<Turnstile> {
     const script = document.createElement("script")
     script.src = SCRIPT_SRC
     script.async = true
-    script.addEventListener("load", () => {
-      if (window.turnstile) resolve(window.turnstile)
-      else reject(new Error("Turnstile's script loaded without defining window.turnstile"))
-    })
-    script.addEventListener("error", () => {
-      // Let a later mount try again.
+    // On failure, let a later mount try again.
+    const fail = (message: string) => {
       loading = null
       script.remove()
-      reject(new Error("Turnstile's script failed to load"))
+      reject(new Error(message))
+    }
+    script.addEventListener("load", () => {
+      if (window.turnstile) resolve(window.turnstile)
+      else fail("Turnstile's script loaded without defining window.turnstile")
     })
+    script.addEventListener("error", () => fail("Turnstile's script failed to load"))
     document.head.appendChild(script)
   })
   return loading

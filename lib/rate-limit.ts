@@ -1,6 +1,6 @@
 import "server-only"
 
-import { checkRateLimit } from "@vercel/firewall"
+import { checkFirewallRateLimit } from "@/lib/services/firewall"
 
 // The Vercel WAF rule every public form shares (Hobby allows one). The human
 // creates it in the Vercel Firewall with the `@vercel/firewall` condition and
@@ -11,7 +11,8 @@ const RULE_ID = "public-forms"
 // bucket per form and client IP (`admission:<ip>`, `agent:<ip>`). Pass the
 // form's name as `key`; the IP comes from the request's `x-real-ip`.
 //
-// It fails open: an SDK error, an unknown IP, or any run outside Vercel (local,
+// A request the firewall limits or blocks is `limited`. Otherwise it fails
+// open: an SDK error, an unknown IP, or any run outside Vercel (local,
 // Playwright) is `allowed` and logged, since Turnstile still guards the form.
 export async function checkPublicFormLimit({
   headers,
@@ -33,15 +34,10 @@ export async function checkPublicFormLimit({
     return "allowed"
   }
 
-  try {
-    const { rateLimited, error } = await checkRateLimit(RULE_ID, { headers, rateLimitKey: `${key}:${ip}` })
-    if (error) {
-      console.warn(`Rate limit: the firewall answered ${error} for ${RULE_ID}, letting ${key} through`)
-      return "allowed"
-    }
-    return rateLimited ? "limited" : "allowed"
-  } catch (error) {
-    console.warn(`Rate limit: checking ${RULE_ID} failed, letting ${key} through`, error)
+  const result = await checkFirewallRateLimit(RULE_ID, { headers, rateLimitKey: `${key}:${ip}` })
+  if (!result.ok) {
+    console.warn(`Rate limit: checking ${RULE_ID} failed (${result.error}), letting ${key} through`)
     return "allowed"
   }
+  return result.data
 }

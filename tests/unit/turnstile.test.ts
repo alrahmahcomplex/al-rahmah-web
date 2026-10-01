@@ -161,12 +161,12 @@ describe("verifyTurnstile", () => {
     })
   })
 
-  it("logs an error when Production runs on a test secret", async () => {
+  it("refuses the form and logs an error when Production runs on a test secret", async () => {
     vi.stubEnv("TURNSTILE_SECRET_KEY", TEST_SECRET)
     vi.stubEnv("VERCEL_ENV", "production")
     fetchMock.mockResolvedValueOnce(answer(TEST_KEY_PASSED))
 
-    await verifyTurnstile(INPUT)
+    await expect(verifyTurnstile(INPUT)).resolves.toEqual({ ok: false, error: "unavailable" })
 
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining("test secret"))
   })

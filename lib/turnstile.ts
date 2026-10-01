@@ -90,9 +90,10 @@ export async function verifyTurnstile({
 
   if (TEST_SECRETS.has(secret)) {
     // The always-pass test secret accepts any token, so in Production it
-    // would switch the check off. Say so loudly; the fix is the Vercel env.
+    // would switch the check off. Refuse instead; the fix is the Vercel env.
     if (process.env.VERCEL_ENV === "production") {
-      console.error("Turnstile: Production is using a Cloudflare test secret, so the check lets everything through")
+      console.error("Turnstile: Production is using a Cloudflare test secret, so every public form is refused")
+      return { ok: false, error: "unavailable" }
     }
     return { ok: true, data: null }
   }

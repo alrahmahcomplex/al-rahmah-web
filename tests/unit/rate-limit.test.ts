@@ -54,14 +54,17 @@ describe("checkPublicFormLimit", () => {
     })
   })
 
-  it.each([
-    ["not-found", { rateLimited: false, error: "not-found" }],
-    ["blocked", { rateLimited: true, error: "blocked" }],
-  ])("lets the form through and logs when the SDK reports %s", async (code, answer) => {
-    checkRateLimit.mockResolvedValueOnce(answer)
+  it("lets the form through and logs when the SDK reports an error", async () => {
+    checkRateLimit.mockResolvedValueOnce({ rateLimited: false, error: "not-found" })
 
     await expect(checkPublicFormLimit({ headers: requestHeaders(), key: "admission" })).resolves.toBe("allowed")
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(code))
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("not-found"))
+  })
+
+  it("limits the form when the firewall reports it blocked", async () => {
+    checkRateLimit.mockResolvedValueOnce({ rateLimited: true, error: "blocked" })
+
+    await expect(checkPublicFormLimit({ headers: requestHeaders(), key: "admission" })).resolves.toBe("limited")
   })
 
   it("lets the form through and logs when the SDK throws", async () => {

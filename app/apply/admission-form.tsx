@@ -573,7 +573,7 @@ function Confirmation({
         ))}
       </ul>
 
-      {alreadySent && <p className="mt-5 rounded-3xl bg-orange-50 px-4 py-3 text-base text-slate-800">{copy.alreadySent}</p>}
+      {alreadySent && <p className="mt-5 rounded-3xl bg-orange-50 px-4 py-3 text-base text-orange-950">{copy.alreadySent}</p>}
 
       <p className="mt-5 text-base text-slate-800">{copy.keepNumber}</p>
 

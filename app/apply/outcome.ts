@@ -6,8 +6,9 @@ export type AdmissionFormState =
   | { status: "idle" }
   | { status: "confirmed"; children: { fullName: string; admissionNumber: string }[] }
   // The form was sent before, then edited: the earlier send's children, whose
-  // leads exist. The edits are not saved.
-  | { status: "already-sent"; children: { fullName: string; admissionNumber: string }[] }
+  // leads exist, and whether they were all of that send's children. The edits
+  // are not saved.
+  | { status: "already-sent"; children: { fullName: string; admissionNumber: string }[]; complete: boolean }
   | { status: "rate-limited" }
   | { status: "check-failed" }
   | { status: "invalid"; field: FormField; child: number | null }

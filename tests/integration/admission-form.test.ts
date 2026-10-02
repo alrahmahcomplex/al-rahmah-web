@@ -118,7 +118,7 @@ describe("the Admission form service", () => {
     const changed = { ...sent, children: [child()] }
     expect(await submitAdmissionForm(secretClient(), changed)).toEqual({
       ok: false,
-      error: { kind: "already-sent", children: first.data },
+      error: { kind: "already-sent", children: first.data, complete: true },
     })
     expect(await leadsNamed(changed.children[0].fullName)).toHaveLength(0)
     expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
@@ -139,6 +139,23 @@ describe("the Admission form service", () => {
     }
     expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
     expect(await leadsNamed(edited.children[0].fullName)).toHaveLength(0)
+  })
+
+  test("an edited retry after a send that created only some children says so", async () => {
+    // The second child's year is out of range, so the first send stops after
+    // creating the first child. The parent fixes the year and sends again.
+    const sent = form({ children: [child(), child({ enrollmentYear: 1999 })] })
+    expect((await submitAdmissionForm(secretClient(), sent)).ok).toBe(false)
+    expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
+
+    const edited = { ...sent, children: [sent.children[0], { ...sent.children[1], enrollmentYear: nextYear }] }
+    const again = await submitAdmissionForm(secretClient(), edited)
+    expect(again.ok).toBe(false)
+    if (again.ok || again.error.kind !== "already-sent") throw new Error(`expected already-sent, got ${JSON.stringify(again)}`)
+    expect(again.error.complete).toBe(false)
+    expect(again.error.children.map((c) => c.fullName)).toEqual([sent.children[0].fullName])
+    expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
+    expect(await leadsNamed(sent.children[1].fullName)).toHaveLength(0)
   })
 
   test("a key that created nothing moves to the edited payload", async () => {

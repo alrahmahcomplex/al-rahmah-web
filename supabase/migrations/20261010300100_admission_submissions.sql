@@ -20,6 +20,9 @@ create table public.admission_submissions (
     -- SHA-256, hex, of the normalized payload the form sent (the service
     -- computes it, so the hash covers exactly what it validated).
     payload_hash text not null check (payload_hash ~ '^[0-9a-f]{64}$'),
+    -- How many children the form sent, so an edited retry can tell whether
+    -- every child of the earlier send was created.
+    child_count integer not null check (child_count between 1 and 8),
     -- The contact the form's first created child made. Later children on the
     -- same form are created on it, so siblings share one parent contact.
     contact_id uuid references public.guardian_contacts (id),
@@ -45,8 +48,10 @@ revoke all on table public.admission_submissions from anon, authenticated, servi
 --     are handled one after the other, and the second reads the first's
 --     outcome.
 --   - A key already used with a different payload: if a child was created
---     under it, `submission_key_reused`, with the created children (name and
---     Admission Number, in form order) as the detail, and nothing is written.
+--     under it, `submission_key_reused`, and nothing is written. Its detail
+--     holds the created children (name and Admission Number, in form order)
+--     and `complete`, false when some of that send's children were never
+--     created, so the page doesn't present a part as the whole.
 --     If none was, the key takes the new payload.
 --   - A child already handled under this key: its stored outcome, with
 --     `replayed` true. Nothing is written.
@@ -63,6 +68,7 @@ revoke all on table public.admission_submissions from anon, authenticated, servi
 create function public.submit_admission_form_child(
     submission_key uuid,
     payload_hash text,
+    child_count integer,
     child_index integer,
     new_contact jsonb,
     student_details jsonb
@@ -86,7 +92,8 @@ begin
        or submit_admission_form_child.payload_hash !~ '^[0-9a-f]{64}$' then
         raise exception 'invalid' using detail = jsonb_build_object('field', 'submission_key')::text;
     end if;
-    if child_index is null or child_index not between 0 and 7 then
+    if submit_admission_form_child.child_count is null or submit_admission_form_child.child_count not between 1 and 8
+       or child_index is null or child_index not between 0 and submit_admission_form_child.child_count - 1 then
         raise exception 'invalid' using detail = jsonb_build_object('field', 'children')::text;
     end if;
 
@@ -94,8 +101,12 @@ begin
         hashtextextended('admission-submission:' || submit_admission_form_child.submission_key::text, 0)
     );
 
-    insert into public.admission_submissions (submission_key, payload_hash)
-    values (submit_admission_form_child.submission_key, submit_admission_form_child.payload_hash)
+    insert into public.admission_submissions (submission_key, payload_hash, child_count)
+    values (
+        submit_admission_form_child.submission_key,
+        submit_admission_form_child.payload_hash,
+        submit_admission_form_child.child_count
+    )
     on conflict on constraint admission_submissions_pkey do nothing;
 
     select * into submission
@@ -106,15 +117,19 @@ begin
         if submission.outcomes = '{}'::jsonb then
             update public.admission_submissions s
             set payload_hash = submit_admission_form_child.payload_hash,
+                child_count = submit_admission_form_child.child_count,
                 updated_at = now()
             where s.submission_key = submit_admission_form_child.submission_key;
         else
-            raise exception 'submission_key_reused' using detail = (
-                select jsonb_agg(
-                    jsonb_build_object('full_name', o.value ->> 'full_name', 'admission_number', o.value ->> 'admission_number')
-                    order by o.key::integer
+            raise exception 'submission_key_reused' using detail = jsonb_build_object(
+                'complete', (select count(*) from jsonb_object_keys(submission.outcomes)) = submission.child_count,
+                'children', (
+                    select jsonb_agg(
+                        jsonb_build_object('full_name', o.value ->> 'full_name', 'admission_number', o.value ->> 'admission_number')
+                        order by o.key::integer
+                    )
+                    from jsonb_each(submission.outcomes) o
                 )
-                from jsonb_each(submission.outcomes) o
             )::text;
         end if;
     end if;
@@ -155,6 +170,6 @@ begin
 end;
 $$;
 
-revoke execute on function public.submit_admission_form_child(uuid, text, integer, jsonb, jsonb)
+revoke execute on function public.submit_admission_form_child(uuid, text, integer, integer, jsonb, jsonb)
     from public, anon, authenticated;
-grant execute on function public.submit_admission_form_child(uuid, text, integer, jsonb, jsonb) to service_role;
+grant execute on function public.submit_admission_form_child(uuid, text, integer, integer, jsonb, jsonb) to service_role;

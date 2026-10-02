@@ -117,8 +117,8 @@ describe("sending the Admission form", () => {
 
   it("passes on the earlier send's children when the form was edited after it went through", async () => {
     const children = [{ fullName: "Zawadi Fixture", admissionNumber: "26-0001" }]
-    stubs.save.mockResolvedValue({ ok: false, error: { kind: "already-sent", children } })
-    expect(await send(posted())).toEqual({ status: "already-sent", children })
+    stubs.save.mockResolvedValue({ ok: false, error: { kind: "already-sent", children, complete: true } })
+    expect(await send(posted())).toEqual({ status: "already-sent", children, complete: true })
   })
 
   it("answers unavailable, never a raw error, when saving fails or the secret key is missing", async () => {

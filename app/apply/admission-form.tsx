@@ -95,8 +95,9 @@ export function AdmissionFormSteps({
   const [problem, setProblem] = useState<Shown | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [confirmed, setConfirmed] = useState<Extract<AdmissionFormState, { status: "confirmed" }>["children"] | null>(null)
-  // The confirmation is for an earlier send of this form, before an edit.
-  const [alreadySent, setAlreadySent] = useState(false)
+  // The confirmation is for an earlier send of this form, before an edit:
+  // all of its children, or only some.
+  const [alreadySent, setAlreadySent] = useState<"all" | "some" | null>(null)
   const [sending, startSending] = useTransition()
   const router = useRouter()
   const turnstile = useRef<TurnstileWidgetHandle>(null)
@@ -167,7 +168,7 @@ export function AdmissionFormSteps({
       if (result.status === "confirmed" || result.status === "already-sent") {
         moved.current = true
         setConfirmed(result.children)
-        setAlreadySent(result.status === "already-sent")
+        setAlreadySent(result.status === "already-sent" ? (result.complete ? "all" : "some") : null)
         return
       }
       // The token is spent once checked, so get a fresh one for the next try.
@@ -192,7 +193,7 @@ export function AdmissionFormSteps({
     setChild(EMPTY_CHILD)
     setSubmissionKey(newSubmissionKey())
     setConfirmed(null)
-    setAlreadySent(false)
+    setAlreadySent(null)
     setNotice(null)
     go(0)
   }
@@ -547,7 +548,7 @@ function Confirmation({
 }: {
   copy: (typeof COPY)[Language]
   outcomes: { fullName: string; admissionNumber: string }[]
-  alreadySent: boolean
+  alreadySent: "all" | "some" | null
   officePhone: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
   onAgain: () => void
@@ -573,7 +574,11 @@ function Confirmation({
         ))}
       </ul>
 
-      {alreadySent && <p className="mt-5 rounded-3xl bg-orange-50 px-4 py-3 text-base text-orange-950">{copy.alreadySent}</p>}
+      {alreadySent && (
+        <p className="mt-5 rounded-3xl bg-orange-50 px-4 py-3 text-base text-orange-950">
+          {alreadySent === "all" ? copy.alreadySent : copy.alreadySentInPart}
+        </p>
+      )}
 
       <p className="mt-5 text-base text-slate-800">{copy.keepNumber}</p>
 

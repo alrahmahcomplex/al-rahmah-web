@@ -55,7 +55,7 @@ export async function submitAdmissionForm(
     case "invalid":
       return { status: "invalid", field: saved.error.field, child: saved.error.child }
     case "already-sent":
-      return { status: "already-sent", children: saved.error.children }
+      return { status: "already-sent", children: saved.error.children, complete: saved.error.complete }
     case "unavailable":
       return { status: "unavailable" }
   }

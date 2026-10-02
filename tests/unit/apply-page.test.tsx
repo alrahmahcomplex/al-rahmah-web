@@ -264,7 +264,11 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
   })
 
   it("shows the earlier send's Admission Number, and says the edits weren't saved", async () => {
-    stubs.submit.mockResolvedValue({ status: "already-sent", children: [{ fullName: "Zawadi Fixture", admissionNumber: "26-0042" }] })
+    stubs.submit.mockResolvedValue({
+      status: "already-sent",
+      children: [{ fullName: "Zawadi Fixture", admissionNumber: "26-0042" }],
+      complete: true,
+    })
     const user = userEvent.setup()
     render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
     await fillParentAndChild(user)
@@ -272,7 +276,22 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Send application" }))
     expect(await screen.findByRole("heading", { level: 1, name: "Application received!" })).toBeInTheDocument()
     expect(screen.getByText("26-0042")).toBeInTheDocument()
-    expect(screen.getByText(/changes you made afterwards weren't saved/)).toBeInTheDocument()
+    expect(screen.getByText(/^This form had already been sent, so the changes/)).toBeInTheDocument()
+  })
+
+  it("says plainly when the earlier send reached only some children", async () => {
+    stubs.submit.mockResolvedValue({
+      status: "already-sent",
+      children: [{ fullName: "Zawadi Fixture", admissionNumber: "26-0042" }],
+      complete: false,
+    })
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user)
+
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+    expect(await screen.findByText("26-0042")).toBeInTheDocument()
+    expect(screen.getByText(/not every child on it was received/)).toBeInTheDocument()
   })
 
   it("shows no agent code, fee, 'already in our records' note or Saturday interviews line", async () => {

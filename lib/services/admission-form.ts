@@ -33,8 +33,9 @@ export type AdmissionFormError =
   // field, null for the parent's.
   | { kind: "invalid"; field: ParentField | Exclude<ChildField, "duplicate_child">; child: number | null }
   // This submission key already created children, from an earlier send of
-  // the form before the parent edited it. Those children, in form order.
-  | { kind: "already-sent"; children: ChildOutcome[] }
+  // the form before the parent edited it. Those children, in form order, and
+  // whether they are every child that send carried.
+  | { kind: "already-sent"; children: ChildOutcome[]; complete: boolean }
   | { kind: "unavailable" }
 
 type ChildRow =
@@ -77,13 +78,16 @@ function fieldOf(details: string | null | undefined): string | null {
   }
 }
 
-function earlierChildren(details: string | null | undefined): ChildOutcome[] | null {
+function earlierSend(details: string | null | undefined): { children: ChildOutcome[]; complete: boolean } | null {
   try {
-    const rows = details ? (JSON.parse(details) as { full_name?: unknown; admission_number?: unknown }[]) : null
-    if (!Array.isArray(rows) || rows.length === 0) return null
+    const sent = details
+      ? (JSON.parse(details) as { complete?: unknown; children?: { full_name?: unknown; admission_number?: unknown }[] })
+      : null
+    const rows = sent?.children
+    if (typeof sent?.complete !== "boolean" || !Array.isArray(rows) || rows.length === 0) return null
     const children = rows.map((row) => ({ fullName: row.full_name, admissionNumber: row.admission_number }))
     return children.every((c) => typeof c.fullName === "string" && typeof c.admissionNumber === "string")
-      ? (children as ChildOutcome[])
+      ? { children: children as ChildOutcome[], complete: sent.complete }
       : null
   } catch {
     return null
@@ -109,6 +113,7 @@ export async function submitAdmissionForm(
     const { data, error } = await supabase.rpc("submit_admission_form_child", {
       submission_key: submissionKey,
       payload_hash: hash,
+      child_count: children.length,
       child_index: index,
       new_contact: newContact,
       student_details: studentDetails(child),
@@ -116,8 +121,8 @@ export async function submitAdmissionForm(
 
     if (error) {
       if (error.message === "submission_key_reused") {
-        const sent = earlierChildren(error.details)
-        if (sent) return { ok: false, error: { kind: "already-sent", children: sent } }
+        const sent = earlierSend(error.details)
+        if (sent) return { ok: false, error: { kind: "already-sent", ...sent } }
       }
       if (error.message === "invalid") {
         const field = fieldOf(error.details)

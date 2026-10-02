@@ -32,8 +32,9 @@ export type AdmissionFormError =
   // A field the database refused. `child` is the child card for a child's
   // field, null for the parent's.
   | { kind: "invalid"; field: ParentField | Exclude<ChildField, "duplicate_child">; child: number | null }
-  // This submission key was used before with a different payload.
-  | { kind: "key-reused" }
+  // This submission key already created children, from an earlier send of
+  // the form before the parent edited it. Those children, in form order.
+  | { kind: "already-sent"; children: ChildOutcome[] }
   | { kind: "unavailable" }
 
 type ChildRow =
@@ -76,6 +77,19 @@ function fieldOf(details: string | null | undefined): string | null {
   }
 }
 
+function earlierChildren(details: string | null | undefined): ChildOutcome[] | null {
+  try {
+    const rows = details ? (JSON.parse(details) as { full_name?: unknown; admission_number?: unknown }[]) : null
+    if (!Array.isArray(rows) || rows.length === 0) return null
+    const children = rows.map((row) => ({ fullName: row.full_name, admissionNumber: row.admission_number }))
+    return children.every((c) => typeof c.fullName === "string" && typeof c.admissionNumber === "string")
+      ? (children as ChildOutcome[])
+      : null
+  } catch {
+    return null
+  }
+}
+
 export async function submitAdmissionForm(
   supabase: SupabaseClient,
   form: AdmissionForm,
@@ -101,7 +115,10 @@ export async function submitAdmissionForm(
     })
 
     if (error) {
-      if (error.message === "submission_key_reused") return { ok: false, error: { kind: "key-reused" } }
+      if (error.message === "submission_key_reused") {
+        const sent = earlierChildren(error.details)
+        if (sent) return { ok: false, error: { kind: "already-sent", children: sent } }
+      }
       if (error.message === "invalid") {
         const field = fieldOf(error.details)
         if (field && PARENT_FIELDS.has(field)) {

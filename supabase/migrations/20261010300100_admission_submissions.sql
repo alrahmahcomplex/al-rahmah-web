@@ -4,7 +4,10 @@
 -- random submission key until it shows a confirmation, and this table keeps,
 -- per key, a hash of what was sent and each child's outcome as it is reached.
 -- A repeat with the same key and payload gets the stored outcomes back and
--- creates nothing; the same key with a different payload is refused.
+-- creates nothing. The same key with a different payload, once a child has
+-- been created under it, gets those children back as `submission_key_reused`:
+-- the parent's earlier send went through, and the edits are not saved. Before
+-- any child is created, the key simply moves to the new payload.
 --
 -- Nobody reads or writes the table through the API, the secret key included:
 -- the one way in is submit_admission_form_child, which only the secret key
@@ -41,7 +44,10 @@ revoke all on table public.admission_submissions from anon, authenticated, servi
 --   - Serialized per submission key, so two sends of the same form at once
 --     are handled one after the other, and the second reads the first's
 --     outcome.
---   - A key already used with a different payload: `submission_key_reused`.
+--   - A key already used with a different payload: if a child was created
+--     under it, `submission_key_reused`, with the created children (name and
+--     Admission Number, in form order) as the detail, and nothing is written.
+--     If none was, the key takes the new payload.
 --   - A child already handled under this key: its stored outcome, with
 --     `replayed` true. Nothing is written.
 --   - Otherwise the child is created through slice 2's create_lead with the
@@ -97,7 +103,20 @@ begin
     where s.submission_key = submit_admission_form_child.submission_key;
 
     if submission.payload_hash <> submit_admission_form_child.payload_hash then
-        raise exception 'submission_key_reused';
+        if submission.outcomes = '{}'::jsonb then
+            update public.admission_submissions s
+            set payload_hash = submit_admission_form_child.payload_hash,
+                updated_at = now()
+            where s.submission_key = submit_admission_form_child.submission_key;
+        else
+            raise exception 'submission_key_reused' using detail = (
+                select jsonb_agg(
+                    jsonb_build_object('full_name', o.value ->> 'full_name', 'admission_number', o.value ->> 'admission_number')
+                    order by o.key::integer
+                )
+                from jsonb_each(submission.outcomes) o
+            )::text;
+        end if;
     end if;
 
     stored := submission.outcomes -> child_index::text;
@@ -124,7 +143,10 @@ begin
     end if;
 
     update public.admission_submissions s
-    set outcomes = s.outcomes || jsonb_build_object(child_index::text, created),
+    set outcomes = s.outcomes || jsonb_build_object(
+            child_index::text,
+            created || jsonb_build_object('full_name', student_details ->> 'full_name')
+        ),
         contact_id = coalesce(s.contact_id, created_contact),
         updated_at = now()
     where s.submission_key = submit_admission_form_child.submission_key;

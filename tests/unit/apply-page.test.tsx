@@ -245,6 +245,36 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
     expect(second.submissionKey).not.toBe(first.submissionKey)
   })
 
+  it("keeps the same key when the parent edits after a send with no answer", async () => {
+    stubs.submit.mockRejectedValueOnce(new Error("network dropped")).mockResolvedValue({ status: "unavailable" })
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user)
+
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+    expect(await screen.findByRole("alert")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await user.type(screen.getByLabelText("Child's full name"), " Edited")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+
+    const [first, second] = stubs.submit.mock.calls.map(([, data]) => JSON.parse(String((data as FormData).get("form"))))
+    expect(second.children[0].fullName).toBe("Zawadi Fixture Edited")
+    expect(second.submissionKey).toBe(first.submissionKey)
+  })
+
+  it("shows the earlier send's Admission Number, and says the edits weren't saved", async () => {
+    stubs.submit.mockResolvedValue({ status: "already-sent", children: [{ fullName: "Zawadi Fixture", admissionNumber: "26-0042" }] })
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user)
+
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+    expect(await screen.findByRole("heading", { level: 1, name: "Application received!" })).toBeInTheDocument()
+    expect(screen.getByText("26-0042")).toBeInTheDocument()
+    expect(screen.getByText(/changes you made afterwards weren't saved/)).toBeInTheDocument()
+  })
+
   it("shows no agent code, fee, 'already in our records' note or Saturday interviews line", async () => {
     for (const language of ["sw", "en"] as const) {
       const user = userEvent.setup()

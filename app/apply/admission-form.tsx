@@ -95,6 +95,8 @@ export function AdmissionFormSteps({
   const [problem, setProblem] = useState<Shown | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [confirmed, setConfirmed] = useState<Extract<AdmissionFormState, { status: "confirmed" }>["children"] | null>(null)
+  // The confirmation is for an earlier send of this form, before an edit.
+  const [alreadySent, setAlreadySent] = useState(false)
   const [sending, startSending] = useTransition()
   const router = useRouter()
   const turnstile = useRef<TurnstileWidgetHandle>(null)
@@ -162,9 +164,10 @@ export function AdmissionFormSteps({
       } catch {
         result = { status: "unavailable" }
       }
-      if (result.status === "confirmed") {
+      if (result.status === "confirmed" || result.status === "already-sent") {
         moved.current = true
         setConfirmed(result.children)
+        setAlreadySent(result.status === "already-sent")
         return
       }
       // The token is spent once checked, so get a fresh one for the next try.
@@ -189,6 +192,7 @@ export function AdmissionFormSteps({
     setChild(EMPTY_CHILD)
     setSubmissionKey(newSubmissionKey())
     setConfirmed(null)
+    setAlreadySent(false)
     setNotice(null)
     go(0)
   }
@@ -198,6 +202,7 @@ export function AdmissionFormSteps({
       <Confirmation
         copy={copy}
         outcomes={confirmed}
+        alreadySent={alreadySent}
         officePhone={officePhone}
         headingRef={heading}
         onAgain={startAgain}
@@ -535,12 +540,14 @@ function ChipField({
 function Confirmation({
   copy,
   outcomes,
+  alreadySent,
   officePhone,
   headingRef,
   onAgain,
 }: {
   copy: (typeof COPY)[Language]
   outcomes: { fullName: string; admissionNumber: string }[]
+  alreadySent: boolean
   officePhone: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
   onAgain: () => void
@@ -565,6 +572,8 @@ function Confirmation({
           </li>
         ))}
       </ul>
+
+      {alreadySent && <p className="mt-5 rounded-3xl bg-orange-50 px-4 py-3 text-base text-slate-800">{copy.alreadySent}</p>}
 
       <p className="mt-5 text-base text-slate-800">{copy.keepNumber}</p>
 

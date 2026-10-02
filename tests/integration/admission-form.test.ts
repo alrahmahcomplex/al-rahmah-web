@@ -110,13 +110,45 @@ describe("the Admission form service", () => {
     expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
   })
 
-  test("the same key with a different payload is refused and creates nothing", async () => {
+  test("the same key with a different payload gets the earlier send's children back and creates nothing", async () => {
     const sent = form()
-    expect((await submitAdmissionForm(secretClient(), sent)).ok).toBe(true)
+    const first = await submitAdmissionForm(secretClient(), sent)
+    if (!first.ok) throw new Error("setup failed")
 
     const changed = { ...sent, children: [child()] }
-    expect(await submitAdmissionForm(secretClient(), changed)).toEqual({ ok: false, error: { kind: "key-reused" } })
+    expect(await submitAdmissionForm(secretClient(), changed)).toEqual({
+      ok: false,
+      error: { kind: "already-sent", children: first.data },
+    })
     expect(await leadsNamed(changed.children[0].fullName)).toHaveLength(0)
+    expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
+  })
+
+  test("an edited retry after an unseen confirmation recovers the saved number and never makes a second lead", async () => {
+    // The first send saved the lead, but the parent never saw the answer. They
+    // change the phone and the child's name, then send again with the same key.
+    const sent = form()
+    const first = await submitAdmissionForm(secretClient(), sent)
+    if (!first.ok) throw new Error("setup failed")
+
+    const edited = { ...sent, parent: parent(), children: [child()] }
+    for (const attempt of [edited, edited, sent]) {
+      const again = await submitAdmissionForm(secretClient(), attempt)
+      const recovered = again.ok ? again.data : again.error.kind === "already-sent" ? again.error.children : null
+      expect(recovered).toEqual(first.data)
+    }
+    expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
+    expect(await leadsNamed(edited.children[0].fullName)).toHaveLength(0)
+  })
+
+  test("a key that created nothing moves to the edited payload", async () => {
+    const sent = form({ parent: parent({ phone: "12345" }) })
+    expect((await submitAdmissionForm(secretClient(), sent)).ok).toBe(false)
+
+    const fixed = { ...sent, parent: parent() }
+    const second = await submitAdmissionForm(secretClient(), fixed)
+    expect(second.ok).toBe(true)
+    expect(await leadsNamed(fixed.children[0].fullName)).toHaveLength(1)
   })
 
   test("a phone the database can't read writes nothing, not even the submission", async () => {

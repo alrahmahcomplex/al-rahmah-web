@@ -115,9 +115,10 @@ describe("sending the Admission form", () => {
     expect(await send(posted())).toEqual({ status: "invalid", field: "phone", child: null })
   })
 
-  it("refuses a reused submission key as invalid, so the page makes a new one", async () => {
-    stubs.save.mockResolvedValue({ ok: false, error: { kind: "key-reused" } })
-    expect(await send(posted())).toEqual({ status: "invalid", field: "submission_key", child: null })
+  it("passes on the earlier send's children when the form was edited after it went through", async () => {
+    const children = [{ fullName: "Zawadi Fixture", admissionNumber: "26-0001" }]
+    stubs.save.mockResolvedValue({ ok: false, error: { kind: "already-sent", children } })
+    expect(await send(posted())).toEqual({ status: "already-sent", children })
   })
 
   it("answers unavailable, never a raw error, when saving fails or the secret key is missing", async () => {

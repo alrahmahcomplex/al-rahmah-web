@@ -54,8 +54,8 @@ export async function submitAdmissionForm(
   switch (saved.error.kind) {
     case "invalid":
       return { status: "invalid", field: saved.error.field, child: saved.error.child }
-    case "key-reused":
-      return { status: "invalid", field: "submission_key", child: null }
+    case "already-sent":
+      return { status: "already-sent", children: saved.error.children }
     case "unavailable":
       return { status: "unavailable" }
   }

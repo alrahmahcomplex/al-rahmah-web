@@ -40,6 +40,7 @@ type Copy = {
   doneTitle: string
   admissionNumber: string
   keepNumber: string
+  alreadySent: string
   call: string
   again: string
 }
@@ -95,6 +96,7 @@ export const COPY: Record<Language, Copy> = {
     doneTitle: "Maombi yamepokelewa!",
     admissionNumber: "Namba ya Udahili",
     keepNumber: "Hifadhi namba hii na uje nayo shuleni. Utaulizwa ukifika.",
+    alreadySent: "Fomu hii ilishatumwa kabla, kwa hiyo mabadiliko uliyofanya baadaye hayakuhifadhiwa. Piga simu ofisini kurekebisha taarifa yoyote.",
     call: "Una swali? Piga simu ofisi ya udahili",
     again: "Jaza fomu nyingine",
   },
@@ -148,6 +150,7 @@ export const COPY: Record<Language, Copy> = {
     doneTitle: "Application received!",
     admissionNumber: "Admission Number",
     keepNumber: "Keep this number and bring it when you come to the school. You'll be asked for it.",
+    alreadySent: "This form had already been sent, so the changes you made afterwards weren't saved. Call the office to correct any details.",
     call: "Questions? Call the admissions office",
     again: "Fill in another form",
   },

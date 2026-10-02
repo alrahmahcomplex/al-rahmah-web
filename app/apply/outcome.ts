@@ -5,6 +5,9 @@ import type { FormField } from "@/lib/admission-form"
 export type AdmissionFormState =
   | { status: "idle" }
   | { status: "confirmed"; children: { fullName: string; admissionNumber: string }[] }
+  // The form was sent before, then edited: the earlier send's children, whose
+  // leads exist. The edits are not saved.
+  | { status: "already-sent"; children: { fullName: string; admissionNumber: string }[] }
   | { status: "rate-limited" }
   | { status: "check-failed" }
   | { status: "invalid"; field: FormField; child: number | null }

@@ -18,6 +18,10 @@ export type LeadPanelProps = {
 export type LeadPanel = {
   key: string
   Panel: (props: LeadPanelProps) => ReactNode | Promise<ReactNode>
+  // A closed lead is read-only, so the page leaves a panel off it unless the
+  // panel is still worth reading there. Such a panel sets this, and offers no
+  // work action while `open` is false.
+  readOnlyWhenClosed?: true
 }
 
 // The panels below the lead summary, top to bottom. A new panel is its own
@@ -25,6 +29,7 @@ export type LeadPanel = {
 export const LEAD_PANELS: readonly LeadPanel[] = [
   {
     key: "family",
+    readOnlyWhenClosed: true,
     Panel: ({ lead, staff, open }) => (
       <FamilySection
         leadId={lead.id}
@@ -33,6 +38,19 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
       />
     ),
   },
-  { key: "interview", Panel: ({ lead, staff, open }) => <InterviewSection lead={lead} canRecord={open && staff.permissions.includes("interviews.record")} /> },
-  { key: "school-fee", Panel: ({ lead, staff }) => <SchoolFeeSection leadId={lead.id} staff={staff} /> },
+  {
+    key: "interview",
+    // A closed lead keeps showing its S/N and result, without Register.
+    readOnlyWhenClosed: true,
+    Panel: ({ lead, staff, open }) => (
+      <InterviewSection lead={lead} canRecord={open && staff.permissions.includes("interviews.record")} />
+    ),
+  },
+  {
+    key: "school-fee",
+    // The fee and what was paid stay readable on a closed lead; the panel
+    // has no work actions.
+    readOnlyWhenClosed: true,
+    Panel: ({ lead, staff }) => <SchoolFeeSection leadId={lead.id} staff={staff} />,
+  },
 ]

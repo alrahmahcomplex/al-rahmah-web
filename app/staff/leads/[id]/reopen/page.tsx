@@ -14,13 +14,22 @@ export const metadata: Metadata = {
   title: "Reopen a lead · Al-Rahmah Complex",
 }
 
-// Where a duplicate that matches a closed lead lands. The Reopening request
-// itself arrives with slice 8; until then this shows the lead read-only.
-export default async function ReopenLeadPage({ params }: { params: Promise<{ id: string }> }) {
+// Where a duplicate that matches a closed lead lands, and where Request
+// reopening on a closed lead's screen leads (`?source=lead`). The Reopening
+// request itself arrives with slice 8; until then this shows the lead
+// read-only.
+export default async function ReopenLeadPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
   const staff = await requireStaff()
   if (!staff.permissions.includes("leads.view")) forbidden()
 
   const { id } = await params
+  const fromLead = (await searchParams).source === "lead"
   const lead = await getLead(await createClient(), id)
   if (!lead.ok && lead.error === "not-found") notFound()
   if (!lead.ok) {
@@ -35,13 +44,18 @@ export default async function ReopenLeadPage({ params }: { params: Promise<{ id:
     <div className="flex flex-col gap-6">
       <Alert>
         <AlertDescription>
-          This student is already on file, so no new record was made. Reopening a closed lead isn&apos;t available yet.
-          You can read the record below.
+          {fromLead
+            ? "Reopening a closed lead isn't available yet. You can read the record below."
+            : "This student is already on file, so no new record was made. Reopening a closed lead isn't available yet. You can read the record below."}
         </AlertDescription>
       </Alert>
       <LeadSummary lead={lead.data} />
       <div>
-        <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Back to Check-in</Link>
+        {fromLead ? (
+          <Link href={`/staff/leads/${lead.data.id}`} className={buttonVariants({ variant: "outline" })}>Back to the lead</Link>
+        ) : (
+          <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Back to Check-in</Link>
+        )}
       </div>
     </div>
   )

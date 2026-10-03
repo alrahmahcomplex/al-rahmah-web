@@ -331,20 +331,18 @@ function VisitDateForm({ lead, today, onDone }: { lead: Lead; today: string; onD
 
 // The Parent or guardian section: its details, and in their place the form
 // to correct them, for staff whose role may. A contact shared with siblings
-// names them before the change is saved, because it reaches them all. A
-// contact a closed sibling is on is read-only, and says why.
+// names them before the change is saved, because it reaches them all, a
+// closed sibling's lead included.
 export function ContactEditor({
   lead,
   siblings,
   canEdit,
-  closedSibling,
   children,
 }: {
   lead: Lead
   // The other children on this contact.
   siblings: ContactChild[]
   canEdit: boolean
-  closedSibling: ContactChild | null
   children: React.ReactNode
 }) {
   const [editing, setEditing] = useState(false)
@@ -380,13 +378,6 @@ export function ContactEditor({
             Edit parent or guardian
           </Button>
         </div>
-      )}
-      {closedSibling && (
-        <p className="max-w-xl text-sm text-muted-foreground">
-          This parent or guardian can&apos;t be changed here, because they are shared with{" "}
-          {closedSibling.studentName} <span className="font-mono">{closedSibling.admissionNumber}</span>, whose lead
-          is closed.
-        </p>
       )}
       <Saved message={saved} />
     </div>

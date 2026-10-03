@@ -343,18 +343,6 @@ describe("correcting the parent/guardian contact", () => {
     })
   })
 
-  test("a contact a closed sibling is on is read-only, even from an open sibling", async () => {
-    const open = await walkInLead()
-    const closed = await walkInLead({ contactId: open.contact.id })
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [closed.id]))
-
-    expect(await updateGuardianContact(await signedIn(ADMISSIONS), open.contact.id, { fullName: "Changed" })).toEqual({
-      ok: false,
-      error: { kind: "closed" },
-    })
-    expect((await reread(open.id)).contact).toEqual(open.contact)
-  })
-
   test("a change is refused when the children on the contact are not the ones the staff member saw", async () => {
     const first = await walkInLead()
     const staff = await signedIn(ADMISSIONS)

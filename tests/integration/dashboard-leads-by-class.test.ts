@@ -15,7 +15,10 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 // supabase/seeds/95_dashboard.sql, so no other test's leads shift them.
 
 const YEAR = 2031
-const nextYear = Number(tanzaniaToday().slice(0, 4)) + 1
+const thisYear = Number(tanzaniaToday().slice(0, 4))
+// A year a correction may move a lead into (this year or the next two) that
+// isn't the fixtures' year, whenever the test runs.
+const otherYear = [thisYear + 1, thisYear + 2, thisYear].find((year) => year !== YEAR)!
 
 async function byClass(supabase: SupabaseClient, period: Period, enrollmentYear: number | null = YEAR): Promise<LeadsByClass> {
   const result = await getLeadsByClass(supabase, { period, enrollmentYear })
@@ -140,7 +143,7 @@ describe("Leads by enrollment class", () => {
       guardian: {
         contact: { fullName: "Class Parent", relationship: "Mother", phone: `06${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },
       },
-      student: { fullName: `Class Pupil ${randomUUID().slice(0, 8)}`, className: "FORM 1", enrollmentYear: nextYear, dayOrBoarding: "Day" },
+      student: { fullName: `Class Pupil ${randomUUID().slice(0, 8)}`, className: "FORM 1", enrollmentYear: otherYear, dayOrBoarding: "Day" },
       start: { kind: "admission-form" },
     })
     if (!created.ok) throw new Error(`setup failed: ${JSON.stringify(created.error)}`)
@@ -154,16 +157,15 @@ describe("Leads by enrollment class", () => {
       expect((await updateLeadDetails(staff, lead, { className: "FORM 3" })).ok).toBe(true)
       expect(nonZero(await byClass(staff, may))).toEqual({ "FORM 3": 1 })
 
-      // A correction may move a lead only into this year or the next two, so
-      // it moves to next year, whenever the test runs.
-      const before = (await byClass(staff, may, nextYear)).classes.find((row) => row.className === "FORM 3")!.count
-      expect((await updateLeadDetails(staff, lead, { enrollmentYear: nextYear })).ok).toBe(true)
+      // Out of 2031, into a year a correction allows.
+      const before = (await byClass(staff, may, otherYear)).classes.find((row) => row.className === "FORM 3")!.count
+      expect((await updateLeadDetails(staff, lead, { enrollmentYear: otherYear })).ok).toBe(true)
       expect((await byClass(staff, may)).total).toBe(0)
-      expect((await byClass(staff, may, nextYear)).classes.find((row) => row.className === "FORM 3")!.count).toBe(before + 1)
+      expect((await byClass(staff, may, otherYear)).classes.find((row) => row.className === "FORM 3")!.count).toBe(before + 1)
     } finally {
       // A failed run must not leave its lead in 2031 for the next one to count.
       await asSystem((sql) =>
-        sql.query("update public.leads set enrollment_year = $2 where id = $1 and enrollment_year = $3", [lead, nextYear, YEAR]),
+        sql.query("update public.leads set enrollment_year = $2 where id = $1 and enrollment_year = $3", [lead, otherYear, YEAR]),
       )
     }
   })

@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Each lead has a **Referral code** panel showing the code, whether it is **Approved**,
+  **Pending** or **Unrecognised**, and the Marketing Agent it belongs to. It also shows
+  the expected interview fee: TZS 30,000 with "includes TZS 20,000 discount" for an
+  Approved agent's code, TZS 50,000 otherwise.
+- Admissions Staff and the Admissions Manager can add, change or clear the code. As they
+  type, the agent's name appears under the box, and only a registered agent's code can be
+  saved. Every change shows in the lead's history with the old and new code.
+- When the Manager approves an agent, every lead carrying that agent's code drops to
+  TZS 30,000 straight away.
+- The Marketing Agents screen shows how many leads carry each agent's code.
+- The Accountant sees the panel without Edit or Clear. A Declined, Inactive or Archived
+  lead keeps showing its code and fee, with no actions.
+
 ## October 5, 2026 `v0.36.0`
 
 ### NEW

@@ -139,6 +139,7 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
                 <th scope="col" className="px-3 py-2 font-medium">Status</th>
                 <th scope="col" className="px-3 py-2 font-medium">Registered</th>
                 <th scope="col" className="px-3 py-2 font-medium">Approved</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Leads</th>
                 {canApprove && (
                   <th scope="col" className="px-3 py-2 font-medium">
                     <span className="sr-only">Actions</span>
@@ -183,6 +184,11 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
                     ) : (
                       <span className="text-muted-foreground">Not yet</span>
                     )}
+                  </td>
+                  {/* How many leads carry the code, so families waiting on
+                      the discount can be put first. */}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {agent.leadCount}
                   </td>
                   {canApprove && (
                     <td className="px-3 py-2">

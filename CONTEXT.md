@@ -289,6 +289,7 @@ Approval is one-way: nothing returns an **Approved** agent to **Pending**. Appro
 **Referral code**:
 The code that identifies a Marketing Agent, issued when the agent registers. It is the only referral field on a lead: the agent's name is never entered separately and is resolved from the code. A lead gets its code from a **Referral link**, from the parent or guardian typing it into the **Admission form**, or from staff entering it for a walk-in family. However it arrives, an **Approved** code on the lead is what grants the interview discount. A code typed on the form that matches no Marketing Agent is kept on the lead as **Unrecognised** and grants no discount; staff may correct it to a real code, and the correction is audited.
 A code is the initials of the first three words of the agent's name, a hyphen and three digits, such as `AJM-407` (four digits once the three-digit codes for those initials run short). Codes are matched however they are typed: case and spaces never matter.
+Staff can only enter a registered agent's code, **Pending** or **Approved**; a code that matches no Marketing Agent is refused. Only the **Admission form** can leave an **Unrecognised** code on a lead.
 _Avoid_: External referral code, Marketing Agent code. Parents and agents see it as a **Discount code**.
 
 **Discount code**:

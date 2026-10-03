@@ -261,12 +261,12 @@ describe("describeLeadHistory", () => {
 
   it("shows a field it does not know under its raw name, with its raw value", () => {
     const described = describeLeadHistoryEntry(
-      entry({ changes: [change("referral_code", "AGT-01", "AGT-02"), change("marks", null, { maths: 80 })] }),
+      entry({ changes: [change("agent_note", "AGT-01", "AGT-02"), change("marks", null, { maths: 80 })] }),
       names,
     )
     expect(described.summary).toBe("changed the lead")
     expect(described.changes).toEqual([
-      { label: "referral_code", from: "AGT-01", to: "AGT-02" },
+      { label: "agent_note", from: "AGT-01", to: "AGT-02" },
       { label: "marks", from: "None", to: '{"maths":80}' },
     ])
   })

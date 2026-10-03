@@ -1,10 +1,13 @@
+import { randomInt, randomUUID } from "node:crypto"
+
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, test } from "vitest"
 
 import { getLeadsByClass, listEnrollmentYears, type LeadsByClass, type Period } from "@/lib/services/dashboard"
-import { LEAD_CLASSES, updateLeadDetails } from "@/lib/services/leads"
+import { tanzaniaToday } from "@/lib/school-calendar"
+import { createLead, LEAD_CLASSES, updateLeadDetails } from "@/lib/services/leads"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Leads by enrollment class against local Supabase. Counts are filtered to
@@ -12,6 +15,7 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 // supabase/seeds/95_dashboard.sql, so no other test's leads shift them.
 
 const YEAR = 2031
+const nextYear = Number(tanzaniaToday().slice(0, 4)) + 1
 
 async function byClass(supabase: SupabaseClient, period: Period, enrollmentYear: number | null = YEAR): Promise<LeadsByClass> {
   const result = await getLeadsByClass(supabase, { period, enrollmentYear })
@@ -125,27 +129,43 @@ describe("Leads by enrollment class", () => {
   })
 
   test("a corrected class or Enrollment year moves the lead", async () => {
-    // ADMSN-31014, FORM 1, created 15 July 2026. Put back afterwards.
-    const lead = "1ead2031-0000-4000-8000-000000000014"
+    // A lead of the test's own, from the Admission form so it has no visit and
+    // the Visited leads tests never see it, created in May 2026, a month no
+    // fixture uses. It leaves 2031 at the end and stays out of it, so no
+    // fixture is touched and no run's leftovers reach the 2031 counts.
     const staff = await signedIn(ADMISSIONS)
-    const july = month("2026-07-01")
-    expect(nonZero(await byClass(staff, july))).toEqual({ "FORM 1": 1 })
-
+    const may = month("2026-05-01")
+    expect((await byClass(staff, may)).total).toBe(0)
+    const created = await createLead(secretClient(), {
+      guardian: {
+        contact: { fullName: "Class Parent", relationship: "Mother", phone: `06${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },
+      },
+      student: { fullName: `Class Pupil ${randomUUID().slice(0, 8)}`, className: "FORM 1", enrollmentYear: nextYear, dayOrBoarding: "Day" },
+      start: { kind: "admission-form" },
+    })
+    if (!created.ok) throw new Error(`setup failed: ${JSON.stringify(created.error)}`)
+    const lead = created.data.leadId
+    await asSystem((sql) =>
+      sql.query("update public.leads set enrollment_year = $2, created_at = '2026-05-12T06:00:00Z' where id = $1", [lead, YEAR]),
+    )
     try {
-      expect((await updateLeadDetails(staff, lead, { className: "FORM 3" })).ok).toBe(true)
-      expect(nonZero(await byClass(staff, july))).toEqual({ "FORM 3": 1 })
+      expect(nonZero(await byClass(staff, may))).toEqual({ "FORM 1": 1 })
 
-      // A correction may only move a lead into this year or the next two, so
-      // it moves to 2028, which no fixture uses.
-      expect((await updateLeadDetails(staff, lead, { enrollmentYear: 2028 })).ok).toBe(true)
-      expect((await byClass(staff, july)).total).toBe(0)
-      expect(nonZero(await byClass(staff, july, 2028))).toEqual({ "FORM 3": 1 })
+      expect((await updateLeadDetails(staff, lead, { className: "FORM 3" })).ok).toBe(true)
+      expect(nonZero(await byClass(staff, may))).toEqual({ "FORM 3": 1 })
+
+      // A correction may move a lead only into this year or the next two, so
+      // it moves to next year, whenever the test runs.
+      const before = (await byClass(staff, may, nextYear)).classes.find((row) => row.className === "FORM 3")!.count
+      expect((await updateLeadDetails(staff, lead, { enrollmentYear: nextYear })).ok).toBe(true)
+      expect((await byClass(staff, may)).total).toBe(0)
+      expect((await byClass(staff, may, nextYear)).classes.find((row) => row.className === "FORM 3")!.count).toBe(before + 1)
     } finally {
+      // A failed run must not leave its lead in 2031 for the next one to count.
       await asSystem((sql) =>
-        sql.query("update public.leads set class_name = 'FORM 1', enrollment_year = $2 where id = $1", [lead, YEAR]),
+        sql.query("update public.leads set enrollment_year = $2 where id = $1 and enrollment_year = $3", [lead, nextYear, YEAR]),
       )
     }
-    expect(nonZero(await byClass(staff, july))).toEqual({ "FORM 1": 1 })
   })
 
   test("the Enrollment year combines with each period: the unfiltered count is the sum over every year", async () => {

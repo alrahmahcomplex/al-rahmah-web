@@ -32,9 +32,10 @@
 --   ADMSN-31012 Kassimu Takwimu  Applied, created 23:30 on Sunday 2026-09-27
 --   ADMSN-31013 Neema Takwimu    Applied, created 00:30 on Monday 2026-09-28,
 --                                which is 21:30 on the Sunday in UTC
--- Moved by tests/integration/dashboard-leads-by-class.test.ts, which corrects
--- its class and Enrollment year and puts them back:
 --   ADMSN-31014 Tatu Takwimu     Applied, FORM 1, created 2026-07-15
+-- No fixture is created in May 2026: the class-correction test in
+-- tests/integration/dashboard-leads-by-class.test.ts puts a lead of its own
+-- there for the length of the test.
 --
 -- Slice 8 (#97, #98) adds a reason that Declined leads and closure marks must
 -- carry; whichever of it and this file lands second fills in the reasons here.

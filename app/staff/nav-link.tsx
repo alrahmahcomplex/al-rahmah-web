@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 
-export function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+// `count`, when given, is how many Pending items wait there, such as agents to approve.
+export function NavLink({ href, count, children }: { href: string; count?: number; children: React.ReactNode }) {
   const pathname = usePathname()
   const current = pathname === href || pathname.startsWith(`${href}/`)
 
@@ -19,6 +20,13 @@ export function NavLink({ href, children }: { href: string; children: React.Reac
       )}
     >
       {children}
+      {count !== undefined && count > 0 && (
+        <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-semibold text-white">
+          <span className="sr-only">, </span>
+          {count}
+          <span className="sr-only"> Pending</span>
+        </span>
+      )}
     </Link>
   )
 }

@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button"
 
 import { signOut } from "./actions"
 import { NavLink } from "./nav-link"
+import { navCounts } from "./nav-counts"
 import { navFor } from "./navigation"
 import { requireStaff } from "./session"
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const staff = await requireStaff()
   const nav = navFor(staff.permissions)
+  const counts = await navCounts(staff)
 
   return (
     <div className="min-h-screen bg-white">
@@ -36,7 +38,9 @@ export default async function StaffLayout({ children }: { children: React.ReactN
             <ul className="flex gap-1">
               {nav.map((entry) => (
                 <li key={entry.href}>
-                  <NavLink href={entry.href}>{entry.label}</NavLink>
+                  <NavLink href={entry.href} count={counts[entry.href]}>
+                    {entry.label}
+                  </NavLink>
                 </li>
               ))}
             </ul>

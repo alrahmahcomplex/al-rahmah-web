@@ -275,13 +275,16 @@ The required score assigned to every lead with **Interviewed** status. It is rec
 
 **Marketing Agent**:
 A person outside the school who refers families to Al-Rahmah. Anyone may register as a Marketing Agent. The agent is recorded on a lead through its **Referral code** and is never an internal follow-up owner. Marketing Agents currently have no account and see nothing in the system after registering; agent-facing tracking of referred leads and commission are planned for later.
+An agent registers with their full name, a phone number and, when it differs, a WhatsApp number. One phone number holds one agent: registering again with the same number gives back the same agent and code. The agent list is open to staff who may view leads (`leads.view`).
 _Avoid_: External referral agent, referrer, staff owner, follow-up staff
 
 **Agent approval**:
 A newly registered Marketing Agent's **Referral code** is **Pending** until the Admissions Manager approves it, after which it is **Approved**. Only an **Approved** code grants the interview discount. Staff tell the agent about the approval themselves, outside the system; any message the system sends to agents belongs to the future Marketing Agent Epic.
+Approval is one-way: nothing returns an **Approved** agent to **Pending**. Approving needs only `agents.approve`, with no lead permission.
 
 **Referral code**:
 The code that identifies a Marketing Agent, issued when the agent registers. It is the only referral field on a lead: the agent's name is never entered separately and is resolved from the code. A lead gets its code from a **Referral link**, from the parent or guardian typing it into the **Admission form**, or from staff entering it for a walk-in family. However it arrives, an **Approved** code on the lead is what grants the interview discount. A code typed on the form that matches no Marketing Agent is kept on the lead as **Unrecognised** and grants no discount; staff may correct it to a real code, and the correction is audited.
+A code is the initials of the first three words of the agent's name, a hyphen and three digits, such as `AJM-407` (four digits once the three-digit codes for those initials run short). Codes are matched however they are typed: case and spaces never matter.
 _Avoid_: External referral code, Marketing Agent code. Parents and agents see it as a **Discount code**.
 
 **Discount code**:

@@ -6,11 +6,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { searchLeads, type LeadSearchResults } from "@/lib/services/leads"
+import { listSeatPriorities, type LeadSeatPriority } from "@/lib/services/school-fee-payments"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
 import { LeadSearchBar } from "./lead-search-bar"
 import { leadsHref, parseLeadSearch } from "./search-params"
+import { SeatPriorityBadge } from "./seat-priority-badge"
 
 export const metadata: Metadata = {
   title: "Leads · Al-Rahmah Complex",
@@ -31,7 +33,14 @@ export default async function LeadsPage({
   if (!staff.permissions.includes("leads.view")) forbidden()
 
   const search = parseLeadSearch(await searchParams)
-  const results = await searchLeads(await createClient(), search)
+  const supabase = await createClient()
+  const results = await searchLeads(supabase, search)
+  // Seat priorities need payments.view. They only decorate the rows, so if
+  // they can't be read the list still shows, without the column.
+  const priorities =
+    results.ok && staff.permissions.includes("payments.view")
+      ? await listSeatPriorities(supabase, results.data.leads.map((lead) => lead.id))
+      : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,13 +53,22 @@ export default async function LeadsPage({
           <AlertDescription>Leads could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : (
-        <Results results={results.data} search={search} />
+        <Results results={results.data} search={search} priorities={priorities?.ok ? priorities.data : null} />
       )}
     </div>
   )
 }
 
-function Results({ results, search }: { results: LeadSearchResults; search: ReturnType<typeof parseLeadSearch> }) {
+function Results({
+  results,
+  search,
+  priorities,
+}: {
+  results: LeadSearchResults
+  search: ReturnType<typeof parseLeadSearch>
+  // By lead id; null hides the column.
+  priorities: Record<string, LeadSeatPriority> | null
+}) {
   const { leads, total, page, pageCount, mode } = results
   const summary =
     mode === "list" ? `${total} ${total === 1 ? "lead" : "leads"}` : `${total} ${total === 1 ? "match" : "matches"}`
@@ -72,6 +90,7 @@ function Results({ results, search }: { results: LeadSearchResults; search: Retu
                 <th scope="col" className="px-3 py-2 font-medium">Year</th>
                 <th scope="col" className="px-3 py-2 font-medium">Day or boarding</th>
                 <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                {priorities && <th scope="col" className="px-3 py-2 font-medium">Seat priority</th>}
               </tr>
             </thead>
             <tbody>
@@ -96,6 +115,11 @@ function Results({ results, search }: { results: LeadSearchResults; search: Retu
                       {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
                     </div>
                   </td>
+                  {priorities && (
+                    <td className="px-3 py-2">
+                      {priorities[lead.id] ? <SeatPriorityBadge priority={priorities[lead.id].priority} /> : null}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

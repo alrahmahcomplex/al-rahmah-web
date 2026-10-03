@@ -69,6 +69,8 @@ Functions other slices call already exist, so nobody creates them twice:
 - `enrol_from_academic_year_start(as_of date)` returning how many leads it enrolled. A stand-in that enrols nobody until #109 replaces it with `create or replace`. `set_academic_year` already calls it when a start of today or earlier is set.
 - `reopening_requests`, with at most one `pending` row per lead (a partial unique index). `raise_reopening_request(lead_id, reason, source)` and `withdraw_reopening_request(request_id)` write it; `lead_reopening_requests(lead_id)` reads a lead's requests with names. Slice 7 reads approvals from the table; #100 approves and rejects. The `re_application` source exists for slice 3 to link to.
 - `OFFICE_PHONE` in `lib/office.ts`, server-only.
+- `lead_seat_priority(lead_id)` returning `school_fee`, `total_paid`, `priority` (`seat_priority`: Deposit, First instalment, Full, or null) and `reached_on`: the Seat priority reader for #108, #111 and #118. Granted to no API role; call it from security definer functions.
+- `effective_school_fee_payments(lead_id)`: a lead's payments as they count now. Payments count as recorded until #108 replaces it with `create or replace`, keeping its columns, to apply adjustments and drop voids. Every Total paid reads through it.
 
 When a ticket you build on has not merged, code against the signature its body gives. Use `create or replace` only where a ticket says to.
 

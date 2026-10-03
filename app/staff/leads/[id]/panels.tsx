@@ -61,10 +61,12 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
   },
   {
     key: "school-fee",
-    // The fee and what was paid stay readable on a closed lead; the panel
-    // has no work actions.
+    // The fee and what was paid stay readable on a closed lead, without
+    // Record payment.
     readOnlyWhenClosed: true,
-    Panel: ({ lead, staff }) => <SchoolFeeSection leadId={lead.id} staff={staff} />,
+    Panel: ({ lead, staff, open }) => (
+      <SchoolFeeSection leadId={lead.id} staff={staff} canRecord={open && staff.permissions.includes("payments.record")} />
+    ),
   },
   {
     key: "follow-ups",

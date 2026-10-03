@@ -1,5 +1,6 @@
 import { formatDate } from "@/lib/school-calendar"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
+import { PAYMENT_TYPE_NAMES, type RecordedPaymentType } from "@/lib/services/school-fee-payments"
 
 import { REOPENING_HIDDEN, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
 
@@ -58,6 +59,10 @@ const LABELS: Record<string, string> = {
   due_on: "Follow-up date",
   note: "Note",
   change_reason: "Reason for the change",
+  // Its school-fee payments, shown only to staff who may view payments.
+  payment_type: "Payment type",
+  amount: "Amount",
+  paid_on: "Payment date",
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
@@ -69,6 +74,8 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
   reopening_requests: REOPENING_HIDDEN,
+  // The entry already says who recorded the payment, and when.
+  school_fee_payments: new Set(["lead_id", "recorded_by", "recorded_at"]),
 }
 
 const ORIGINS: Record<string, string> = {
@@ -88,6 +95,7 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
     case "visit_date":
     case "interview_date":
     case "due_on":
+    case "paid_on":
       return typeof value === "string" ? formatDate(value) : raw(value)
     case "guardian_contact_id":
     case "pending_family_match_id":
@@ -97,6 +105,10 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
     case "score":
       return typeof value === "number" ? `${value}%` : raw(value)
     case "locked_amount":
+      return typeof value === "number" ? `TZS ${value.toLocaleString("en-US")}` : raw(value)
+    case "payment_type":
+      return PAYMENT_TYPE_NAMES[value as RecordedPaymentType] ?? raw(value)
+    case "amount":
       return typeof value === "number" ? `TZS ${value.toLocaleString("en-US")}` : raw(value)
     default:
       return raw(value)
@@ -211,6 +223,7 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
   }
 
   if (entry.record === "reopening_requests") return reopeningSummary(entry)
+  if (entry.record === "school_fee_payments" && insert) return "recorded a school-fee payment"
 
   if (entry.record !== null) {
     if (insert) return `added ${article(entry.record)} ${entry.record} record`

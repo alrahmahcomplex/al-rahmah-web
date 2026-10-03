@@ -111,10 +111,13 @@ test.describe("Marketing Agents", () => {
     await expect(approved).toContainText(MANAGER.name)
 
     // Pending agents too, still with nothing to approve them by.
+    const agent = await registerPendingAgent()
     await page.getByRole("link", { name: "Pending", exact: true }).click()
-    await page.getByLabel("Search agents").fill("")
+    await expect(page.getByRole("link", { name: "Pending", exact: true })).toHaveAttribute("aria-current", "page")
+    await page.getByLabel("Search agents").fill(agent.code)
     await page.getByRole("button", { name: "Search" }).click()
-    await expect(page.getByRole("table", { name: "Marketing Agents" }).getByRole("row").nth(1)).toContainText("Pending")
+    const pending = page.getByRole("row", { name: new RegExp(agent.fullName) })
+    await expect(pending).toContainText("Pending")
     await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0)
   })
 })

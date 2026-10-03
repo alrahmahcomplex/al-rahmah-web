@@ -39,6 +39,7 @@
 --
 -- Slice 8 (#97, #98) adds a reason that Declined leads and closure marks must
 -- carry; whichever of it and this file lands second fills in the reasons here.
+-- #97 gave ADMSN-31007 its Declined reason, in its own update below.
 
 begin;
 
@@ -78,7 +79,7 @@ insert into public.leads (
     ('1ead2031-0000-4000-8000-000000000006', 'ADMSN-31006', 'Zuhura Takwimu', 'STD 5', 2031, 'Day',
         'Visited', null, date '2026-01-01', 'c0c02031-0000-4000-8000-000000000006', timestamptz '2026-01-01 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000007', 'ADMSN-31007', 'Rashidi Takwimu', 'STD 2', 2031, 'Day',
-        'Declined', null, date '2026-09-22', 'c0c02031-0000-4000-8000-000000000007', timestamptz '2026-09-22 09:00+03'),
+        'Visited', null, date '2026-09-22', 'c0c02031-0000-4000-8000-000000000007', timestamptz '2026-09-22 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000008', 'ADMSN-31008', 'Halima Takwimu', 'KG 2', 2031, 'Day',
         'Visited', 'Inactive', date '2026-09-23', 'c0c02031-0000-4000-8000-000000000008', timestamptz '2026-09-23 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000009', 'ADMSN-31009', 'Omari Takwimu', 'FORM 2', 2031, 'Boarding',
@@ -93,5 +94,11 @@ insert into public.leads (
         'Applied', null, null, 'c0c02031-0000-4000-8000-000000000013', timestamptz '2026-09-28 00:30+03'),
     ('1ead2031-0000-4000-8000-000000000014', 'ADMSN-31014', 'Tatu Takwimu', 'FORM 1', 2031, 'Boarding',
         'Applied', null, null, 'c0c02031-0000-4000-8000-000000000014', timestamptz '2026-07-15 11:00+03');
+
+-- Declined as decline_lead declines, with its reason, after the insert so the
+-- row list above stays the same shape for every lead.
+update public.leads
+set status = 'Declined', declined_reason = 'Enrolled elsewhere', status_before_decline = 'Visited'
+where id = '1ead2031-0000-4000-8000-000000000007';
 
 commit;

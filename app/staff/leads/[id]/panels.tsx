@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 
+import { DeclineSection } from "./decline-section"
 import { FamilySection } from "./family-section"
 import { InterviewSection } from "./interview-section"
 import { SchoolFeeSection } from "./school-fee-section"
@@ -53,4 +54,6 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
     readOnlyWhenClosed: true,
     Panel: ({ lead, staff }) => <SchoolFeeSection leadId={lead.id} staff={staff} />,
   },
+  // Open leads only, for staff who may decline them.
+  { key: "decline", Panel: DeclineSection },
 ]

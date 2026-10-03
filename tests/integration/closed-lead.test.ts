@@ -61,7 +61,8 @@ async function walkIn(guardian: CreateLeadInput["guardian"]): Promise<Lead> {
 }
 
 async function close(id: string, state: "Declined" | "Inactive" | "Archived") {
-  const change = state === "Declined" ? "status = 'Declined'" : `closure = '${state}'`
+  // A Declined lead carries its reason (#97).
+  const change = state === "Declined" ? "status = 'Declined', declined_reason = 'School decision'" : `closure = '${state}'`
   await asSystem((sql) => sql.query(`update public.leads set ${change} where id = $1`, [id]))
 }
 

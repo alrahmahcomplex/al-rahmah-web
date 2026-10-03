@@ -26,6 +26,9 @@ const LABELS: Record<string, string> = {
   day_or_boarding: "Day or boarding",
   status: "Status",
   closure: "Closure",
+  declined_reason: "Declined reason",
+  declined_explanation: "Decline explanation",
+  status_before_decline: "Status before decline",
   visit_date: "Visit date",
   guardian_contact_id: "Parent or guardian",
   returning_family_joined: "Returning family: joined a Family",
@@ -48,9 +51,11 @@ const LABELS: Record<string, string> = {
   locked_amount: "Amount paid",
 }
 
-// Kept on an interview row for the database's sake: the lead it belongs to and
-// who registered it when, which the entry itself already shows.
+// Kept on a row for the database's sake, and already shown by the entry
+// itself: who declined a lead and when; an interview's lead, and who
+// registered it when.
 const HIDDEN: Record<string, ReadonlySet<string>> = {
+  lead: new Set(["declined_at", "declined_by"]),
   interviews: new Set(["lead", "registered_at", "registered_by"]),
 }
 
@@ -150,6 +155,7 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
       return everMatchedTo(timeline, contact.from).includes(contact.to) ? "confirmed the Family match" : "separated the lead from its Family"
     }
     if (changed.get("returning_family_joined")?.to === false) return "rejected the Family match"
+    if (changed.get("status")?.to === "Declined") return "declined the lead"
     return "changed the lead"
   }
 

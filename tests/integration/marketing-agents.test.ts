@@ -252,7 +252,7 @@ describe("the agent list", () => {
     expect(await codes('znm-401,"*)(')).toEqual([SEEDED_PENDING.code])
   })
 
-  test("pages hold 50 agents, and a page past the end is empty", async () => {
+  test("a page past the end is empty, and says which page it is", async () => {
     const list = await listAgents(await signedIn(MANAGER), { status: "all", page: 1000 })
     expect(list.ok && list.data.agents).toEqual([])
     expect(list.ok && list.data.page).toBe(1000)

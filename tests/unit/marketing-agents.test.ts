@@ -5,7 +5,7 @@ vi.mock("server-only", () => ({}))
 import { approveOutcome } from "@/app/staff/agents/outcome"
 import { agentsHref, parseAgentSearch } from "@/app/staff/agents/search-params"
 import { navFor, STAFF_NAV } from "@/app/staff/navigation"
-import { agentSearchPatterns } from "@/lib/services/marketing-agents"
+import { AGENTS_PER_PAGE, agentSearchPatterns } from "@/lib/services/marketing-agents"
 
 describe("the Marketing Agents navigation entry", () => {
   it("shows to anyone who may view leads, and to no one else", () => {
@@ -44,6 +44,10 @@ describe("the screen's URL", () => {
 })
 
 describe("agent search", () => {
+  it("shows 50 agents a page", () => {
+    expect(AGENTS_PER_PAGE).toBe(50)
+  })
+
   it("matches the text lowercased, with filter characters dropped", () => {
     expect(agentSearchPatterns("  Zawadi   NEEMA ")).toEqual(["zawadi neema"])
     expect(agentSearchPatterns("ZNM-401")).toEqual(["znm-401"])

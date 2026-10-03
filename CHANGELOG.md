@@ -5,6 +5,29 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 3, 2026 `v0.27.0`
+
+### NEW
+
+- After the interview, Admissions Staff and the Admissions Manager record the result on
+  the lead's Interview panel: the interview date (today unless changed), **Passed** or
+  **Failed**, and the score as a percentage. All three are needed. The score runs from 0
+  to 100 with one decimal place at most, and the date can't be later than today or
+  earlier than the day the lead was registered.
+- Recording the first result makes the lead **Interviewed**. If the family applied
+  online and had never visited, their visit is recorded on the interview date at the
+  same time.
+- The panel shows the interview date, result, score and the **Next action** that follows
+  from it: **Complete enrollment** for Passed, **Contact the admissions office** for
+  Failed.
+- **Correct result** fixes a wrong date, result or score. It changes nothing else: the
+  lead's status, the S/N and the interview fee stay as they were. The lead's History
+  shows each result recorded and each correction, with the old and new values, who made
+  it and when.
+- The result can be recorded whether or not the interview fee is paid. Other roles,
+  the Accountant among them, see the result but can't change it, and nobody can change
+  it on a closed lead.
+
 ## October 3, 2026 `v0.26.0`
 
 ### NEW

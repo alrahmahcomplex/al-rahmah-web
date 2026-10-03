@@ -76,6 +76,8 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
       return contactNames[String(value)] ?? raw(value)
     case "origin":
       return ORIGINS[String(value)] ?? raw(value)
+    case "score":
+      return typeof value === "number" ? `${value}%` : raw(value)
     case "locked_amount":
       return typeof value === "number" ? `TZS ${value.toLocaleString("en-US")}` : raw(value)
     default:
@@ -138,6 +140,8 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
 
     const status = changed.get("status")
     if (status?.from === "Applied" && status.to === "Visited") return "recorded a visit"
+    // The first interview result moves the lead on.
+    if (status?.from === "Visited" && status.to === "Interviewed") return "moved the lead to Interviewed"
     // Confirming moves the lead onto the contact its own contact was matched
     // to. Any other move is a separation onto a copy of the contact.
     // Rejecting clears the Family cause and keeps the contact.
@@ -162,8 +166,16 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
 
   if (entry.record === "interviews") {
     if (insert) return "registered the lead for interview"
-    if (entry.action === "update") return "changed the interview"
-    return entry.action
+    if (entry.action !== "update") return entry.action
+    // The date, result and score are set together, so the first recording
+    // sets the result where there was none, and a correction changes any of
+    // the three that were already set.
+    const result = changed.get("result")
+    if (result && result.from === null) return "recorded the interview result"
+    if (["interview_date", "result", "score"].some((field) => changed.get(field) && changed.get(field)?.from !== null)) {
+      return "corrected the interview result"
+    }
+    return "changed the interview"
   }
 
   if (entry.record !== null) {

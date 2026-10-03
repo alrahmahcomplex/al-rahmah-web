@@ -1,4 +1,4 @@
-import type { RegisterError, Registration } from "@/lib/services/interviews"
+import type { RecordedResult, RecordResultError, RegisterError, Registration } from "@/lib/services/interviews"
 
 // What the interview panel is told after Register for interview.
 export type RegisterOutcome =
@@ -30,6 +30,55 @@ export function registerOutcome(error: RegisterError): RegisterOutcome {
       return {
         status: "refused",
         message: "The registration could not be saved. Nothing was changed. Try again in a moment.",
+      }
+  }
+}
+
+// What the result form is told after Save. A refusal names the field it is
+// about, so the form can mark it.
+export type ResultField = "interview_date" | "result" | "score"
+
+export type RecordOutcome =
+  | { status: "saved"; message: string }
+  | { status: "refused"; field: ResultField | null; message: string }
+
+export function recordedOutcome({ firstRecording, changed }: RecordedResult): RecordOutcome {
+  if (firstRecording) return { status: "saved", message: "Result recorded. The lead is Interviewed." }
+  if (!changed) return { status: "saved", message: "Nothing was changed: the result is as it was." }
+  return { status: "saved", message: "Result corrected. The history keeps the earlier values." }
+}
+
+export function recordOutcome(error: RecordResultError): RecordOutcome {
+  switch (error) {
+    case "incomplete":
+      return {
+        status: "refused",
+        field: null,
+        message: "Enter the interview date, choose Passed or Failed, and enter the score. A result is saved only with all three.",
+      }
+    case "score_out_of_range":
+      return { status: "refused", field: "score", message: "Enter a score from 0 to 100." }
+    case "score_too_precise":
+      return { status: "refused", field: "score", message: "Enter the score with one decimal place at most, such as 72.5." }
+    case "date_in_future":
+      return { status: "refused", field: "interview_date", message: "The interview date can't be later than today." }
+    case "date_before_registration":
+      return {
+        status: "refused",
+        field: "interview_date",
+        message: "The interview date can't be before the day the lead was registered for interview.",
+      }
+    case "lead_closed":
+      return { status: "refused", field: null, message: "This lead is closed, so its interview result can't be changed." }
+    case "forbidden":
+      return { status: "refused", field: null, message: "Your role can't record this interview result." }
+    case "not_found":
+      return { status: "refused", field: null, message: "This interview could not be found. Reload the page." }
+    case "unavailable":
+      return {
+        status: "refused",
+        field: null,
+        message: "The result could not be saved. Nothing was changed. Try again in a moment.",
       }
   }
 }

@@ -25,7 +25,7 @@ If `mkdir` fails, someone holds it: read `owner`, wait, and try again. Never bui
 
 ## Ports
 
-- Browser tests use 3100, under the lock. Playwright reuses a server already on 3100 only when it serves this worktree's build, and fails otherwise.
+- Browser tests use 3100, under the lock. Playwright reuses a server already on 3100 only when it serves this worktree's build, and fails otherwise. It also starts the same build on 3101 with a Turnstile secret that always fails, for the public forms' rejection path; stop that one too when a run leaves it behind.
 - Evidence servers use 3200 plus the ticket number's last two digits: #67 uses 3267.
 - Stop every server you start before you report. On Windows, stopping the shell that ran `next start` can leave the server running; check the port and stop the process that owns it:
 

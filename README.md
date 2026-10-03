@@ -62,7 +62,7 @@ npm run build
 
 `test:integration` and `test:e2e` need local Supabase running and a `.env.local`
 (`npm run env:local` writes one from it). `test:e2e` builds and serves the app on port
-3100. To rerun without building again, start `npm run e2e:serve` first: the tests reuse
+3100, and serves the same build on 3101 with a Turnstile secret that always fails. To rerun without building again, start `npm run e2e:serve` first: the tests reuse
 that server once they've checked it serves this checkout's build. CI
 (`.github/workflows/ci.yml`) runs every check on each PR.
 

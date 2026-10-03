@@ -28,9 +28,7 @@ const WORK_ACTIONS = [
 ]
 
 test.describe("a closed lead", () => {
-  // Until #99 adds the request form, the banner says requests can't be sent
-  // yet and links to the reopen page as About reopening.
-  test("shows the banner, hides the work actions and points to reopening", async ({ page }) => {
+  test("shows the banner, hides the work actions and offers Request reopening", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${ARCHIVED}`)
 
@@ -38,11 +36,10 @@ test.describe("a closed lead", () => {
     await expect(banner).toContainText("read-only")
     for (const name of WORK_ACTIONS) await expect(page.getByRole("button", { name })).toHaveCount(0)
 
-    await expect(banner).toContainText("Reopening requests can't be sent yet.")
-    await expect(banner.getByRole("link", { name: "Request reopening" })).toHaveCount(0)
-    await banner.getByRole("link", { name: "About reopening" }).click()
+    await banner.getByRole("link", { name: "Request reopening" }).click()
     await expect(page).toHaveURL(new RegExp(`/staff/leads/${ARCHIVED}/reopen\\?source=lead$`))
     await expect(page.getByRole("heading", { name: "Hamisi Fixture" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Request reopening" })).toBeVisible()
   })
 
   test("names a Declined lead's state", async ({ page }) => {
@@ -57,7 +54,6 @@ test.describe("a closed lead", () => {
     await page.goto(`/staff/leads/${ARCHIVED}`)
     await expect(page.getByRole("region", { name: "This lead is Archived" })).toBeVisible()
     await expect(page.getByRole("link", { name: "Request reopening" })).toHaveCount(0)
-    await expect(page.getByRole("link", { name: "About reopening" })).toHaveCount(0)
   })
 
   test("an open sister keeps her screen as before, with the shared parent editable", async ({ page }) => {

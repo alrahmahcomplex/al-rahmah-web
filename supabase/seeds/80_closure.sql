@@ -61,3 +61,19 @@ insert into public.leads (
         timestamptz '2026-09-30 14:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000001');
 
 commit;
+
+-- A Pending Reopening request (#99) on ADMSN-90080 Asha Kibwana, raised from
+-- the lead screen by Test Admissions. Other staff see "Reopening already
+-- requested" on her reopen page, and Test Admissions sees Withdraw.
+
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.reopening_requests (id, lead_id, source, reason, requested_by, requested_at)
+values
+    ('5e0e0000-0000-4000-8000-000000000080', '1ead0000-0000-4000-8000-000000000080', 'lead',
+        'The family has a new phone number and wants Asha to start in January.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-28 09:15:00+03');
+
+commit;

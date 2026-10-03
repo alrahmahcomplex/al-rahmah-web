@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Admissions Staff and the Admissions Manager can **Request reopening** on a Declined,
+  Inactive or Archived lead. The form asks why the family is back, and the answer is
+  required. It opens from the lead's banner, and from the front desk when a closed child
+  turns up or a registration is refused as a duplicate.
+- A lead holds one waiting request at a time. Anyone else who opens the form sees
+  "Reopening already requested by" the person who asked, and the date.
+- A **Reopening requests** panel on the lead shows the waiting request with its reason.
+  The person who asked can **Withdraw** it, and can send a new one later. Earlier requests
+  stay listed with who withdrew them and when, and the lead's history shows each request
+  and withdrawal.
+
 ## October 4, 2026 `v0.31.0`
 
 ### NEW

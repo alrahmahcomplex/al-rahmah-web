@@ -8,6 +8,7 @@ import { DeclineSection } from "./decline-section"
 import { FamilySection } from "./family-section"
 import { FollowUpSection } from "./follow-up-section"
 import { InterviewSection } from "./interview-section"
+import { ReopeningSection } from "./reopening-section"
 import { SchoolFeeSection } from "./school-fee-section"
 
 // What every panel on the lead screen is given.
@@ -30,6 +31,9 @@ export type LeadPanel = {
 // The panels below the lead summary, top to bottom. A new panel is its own
 // file in this folder plus one line here; the page itself stays unchanged.
 export const LEAD_PANELS: readonly LeadPanel[] = [
+  // First, under a closed lead's banner: the Pending request, with Withdraw
+  // for its requester, and earlier requests.
+  { key: "reopenings", readOnlyWhenClosed: true, Panel: ReopeningSection },
   {
     key: "family",
     readOnlyWhenClosed: true,

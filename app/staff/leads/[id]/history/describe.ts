@@ -1,6 +1,8 @@
 import { formatDate } from "@/lib/school-calendar"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
+import { REOPENING_HIDDEN, REOPENING_LABELS, reopeningSummary, reopeningValue } from "./reopening-history"
+
 // A lead's history entry in plain words: who, what they did, and each field's
 // old and new value. A field, table or action kind this file does not know
 // shows under its raw name with its raw value (ADR 4), so an entry a later
@@ -56,6 +58,8 @@ const LABELS: Record<string, string> = {
   due_on: "Follow-up date",
   note: "Note",
   change_reason: "Reason for the change",
+  // Its reopening requests.
+  ...REOPENING_LABELS,
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
@@ -66,6 +70,7 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   interviews: new Set(["lead", "registered_at", "registered_by"]),
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
+  reopening_requests: REOPENING_HIDDEN,
 }
 
 const ORIGINS: Record<string, string> = {
@@ -96,7 +101,7 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
     case "locked_amount":
       return typeof value === "number" ? `TZS ${value.toLocaleString("en-US")}` : raw(value)
     default:
-      return raw(value)
+      return reopeningValue(field, value) ?? raw(value)
   }
 }
 
@@ -206,6 +211,8 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     if (insert) return changed.get("replaces_id")?.to ? "changed the follow-up date" : "scheduled a follow-up"
     return entry.action
   }
+
+  if (entry.record === "reopening_requests") return reopeningSummary(entry)
 
   if (entry.record !== null) {
     if (insert) return `added ${article(entry.record)} ${entry.record} record`

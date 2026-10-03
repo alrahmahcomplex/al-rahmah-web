@@ -67,6 +67,7 @@ Functions other slices call already exist, so nobody creates them twice:
 - `mark_lead(lead_id, mark text, reason text, note text)` puts an Inactive or Archived mark on a lead (`leads.close`), Declined leads included. A closure mark must carry a `closure_reason` (a check constraint), so a seed or test that sets `closure` directly sets the reason in the same statement; a later update to the marked lead is refused as `lead_closed`.
 - `expected_interview_amount(lead_id)` returning `amount` and `discount_applied`. A stand-in at TZS 50,000 until #80 replaces it with `create or replace`.
 - `enrol_from_academic_year_start(as_of date)` returning how many leads it enrolled. A stand-in that enrols nobody until #109 replaces it with `create or replace`. `set_academic_year` already calls it when a start of today or earlier is set.
+- `reopening_requests`, with at most one `pending` row per lead (a partial unique index). `raise_reopening_request(lead_id, reason, source)` and `withdraw_reopening_request(request_id)` write it; `lead_reopening_requests(lead_id)` reads a lead's requests with names. Slice 7 reads approvals from the table; #100 approves and rejects. The `re_application` source exists for slice 3 to link to.
 - `OFFICE_PHONE` in `lib/office.ts`, server-only.
 
 When a ticket you build on has not merged, code against the signature its body gives. Use `create or replace` only where a ticket says to.

@@ -40,6 +40,30 @@ function contactCreated(id: number, contactId: string, match: string | null = nu
 }
 
 describe("describeLeadHistory", () => {
+  it("reads a follow-up date change from its own earlier date, even when the earlier plan isn't in the history", () => {
+    const described = describeLeadHistoryEntry(
+      entry({
+        record: "follow_ups",
+        recordId: "44444444-4444-4444-8444-444444444444",
+        action: "insert",
+        changes: [
+          change("lead_id", null, LEAD),
+          change("due_on", null, "2026-10-10"),
+          change("replaces_id", null, "55555555-5555-4555-8555-555555555555"),
+          change("replaced_due_on", null, "2026-10-05"),
+          change("change_reason", null, "The parent is travelling."),
+        ],
+      }),
+      names,
+    )
+
+    expect(described.summary).toBe("changed the follow-up date")
+    expect(described.changes).toEqual([
+      { label: "Follow-up date", from: "5 Oct 2026", to: "10 Oct 2026" },
+      { label: "Reason for the change", from: null, to: "The parent is travelling." },
+    ])
+  })
+
   it("describes a walk-in creation with plain labels in the lead screen's order, leaving out what was left empty", () => {
     const described = describeLeadHistoryEntry(
       entry({

@@ -36,9 +36,13 @@ create table public.follow_ups (
     -- is replaced at most once.
     replaces_id uuid unique references public.follow_ups (id),
     change_reason text check (change_reason is null or char_length(btrim(change_reason)) between 3 and 500),
+    -- The replaced follow-up's date, kept on the replacement so its history
+    -- entry reads as a change from one date to another on its own.
+    replaced_due_on date,
     created_at timestamptz not null default now(),
     -- A reason exactly when this follow-up replaces another.
-    constraint follow_ups_reason_with_replacement check ((replaces_id is null) = (change_reason is null))
+    constraint follow_ups_reason_with_replacement check ((replaces_id is null) = (change_reason is null)),
+    constraint follow_ups_earlier_date_with_replacement check ((replaces_id is null) = (replaced_due_on is null))
 );
 
 create index follow_ups_lead_due_idx on public.follow_ups (lead_id, due_on);
@@ -217,9 +221,13 @@ begin
     if (public.open_follow_up(earlier.lead_id)).id is distinct from earlier.id then
         raise exception 'conflict';
     end if;
+    -- A change moves the date; the same date again would record nothing new.
+    if change_follow_up_date.due_on = earlier.due_on then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'due_on')::text;
+    end if;
 
-    insert into public.follow_ups (lead_id, due_on, note, replaces_id, change_reason)
-    values (earlier.lead_id, change_follow_up_date.due_on, plan_note, earlier.id, change_reason)
+    insert into public.follow_ups (lead_id, due_on, note, replaces_id, change_reason, replaced_due_on)
+    values (earlier.lead_id, change_follow_up_date.due_on, plan_note, earlier.id, change_reason, earlier.due_on)
     returning id into new_id;
 
     return new_id;

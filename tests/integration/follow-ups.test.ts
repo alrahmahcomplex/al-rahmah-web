@@ -254,6 +254,19 @@ describe("changing a follow-up's date", () => {
     expect(await followUpsOf(lead)).toHaveLength(1)
   })
 
+  test("a change has to move the date: the same date again is refused and records nothing", async () => {
+    const lead = await newLead()
+    const staff = await signedIn(ADMISSIONS)
+    const first = await scheduleFollowUp(staff, lead, { dueOn: addDays(today, 3) })
+    if (!first.ok) throw new Error("schedule failed")
+
+    expect(await changeFollowUpDate(staff, first.data.followUpId, { dueOn: addDays(today, 3), reason: "No change." })).toEqual({
+      ok: false,
+      error: { kind: "invalid", field: "due_on" },
+    })
+    expect(await followUpsOf(lead)).toHaveLength(1)
+  })
+
   test("a follow-up already replaced is a conflict, so two changes at once make one", async () => {
     const lead = await newLead()
     const [one, other] = await Promise.all([signedIn(ADMISSIONS), signedIn(MANAGER)])
@@ -404,6 +417,7 @@ describe("follow-ups in the lead's history", () => {
       expect.arrayContaining([
         { field: "due_on", from: null, to: addDays(today, 6) },
         { field: "replaces_id", from: null, to: first.data.followUpId },
+        { field: "replaced_due_on", from: null, to: addDays(today, 1) },
         { field: "change_reason", from: null, to: "School holiday." },
       ]),
     )

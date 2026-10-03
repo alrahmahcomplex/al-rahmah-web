@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react"
 
+import { tanzaniaToday } from "@/lib/school-calendar"
+
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
@@ -22,7 +24,7 @@ import { Field, Saved } from "./lead-editors"
 const LOST_REQUEST: FollowUpOutcome = {
   status: "refused",
   field: null,
-  message: "The follow-up could not be sent. Check your connection and try again.",
+  message: "The follow-up could not be confirmed. Check your connection, reload the page and see whether it was saved.",
 }
 
 // Schedule follow-up, or Change date once a follow-up is open. Rendered for
@@ -40,9 +42,13 @@ export function FollowUpActions({
 }) {
   const [dialog, setDialog] = useState<"schedule" | "change" | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
+  // Today as of the dialog opening, so a page left open past midnight in
+  // Tanzania offers the same dates the database accepts.
+  const [openedOn, setOpenedOn] = useState(today)
 
   function openDialog(which: "schedule" | "change") {
     setSaved(null)
+    setOpenedOn(laterOf(today, tanzaniaToday()))
     setDialog(which)
   }
 
@@ -67,16 +73,22 @@ export function FollowUpActions({
       <Saved message={saved} />
       <Dialog open={dialog === "schedule"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
-          {dialog === "schedule" && <ScheduleForm leadId={leadId} today={today} onDone={done} />}
+          {dialog === "schedule" && <ScheduleForm leadId={leadId} today={openedOn} onDone={done} />}
         </DialogContent>
       </Dialog>
       <Dialog open={dialog === "change"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
-          {dialog === "change" && current && <ChangeDateForm leadId={leadId} today={today} current={current} onDone={done} />}
+          {dialog === "change" && current && <ChangeDateForm leadId={leadId} today={openedOn} current={current} onDone={done} />}
         </DialogContent>
       </Dialog>
     </div>
   )
+}
+
+// The later of two YYYY-MM-DD dates: a browser clock running behind never
+// moves the dates offered earlier than the server's today.
+function laterOf(a: string, b: string) {
+  return a > b ? a : b
 }
 
 function useSave(onDone: (message: string) => void) {
@@ -97,7 +109,7 @@ function useSave(onDone: (message: string) => void) {
     })
   }
 
-  return { refusal, pending, save }
+  return { refusal, pending, save, refuse: setRefusal }
 }
 
 function Refused({ refusal }: { refusal: { message: string } | null }) {
@@ -177,11 +189,12 @@ function ChangeDateForm({
   current: { id: string; dueOn: string }
   onDone: (message: string) => void
 }) {
-  // An overdue date can't be kept, so the form starts from tomorrow.
-  const [dueOn, setDueOn] = useState(current.dueOn > today ? current.dueOn : addDays(today, 1))
+  // The form starts from tomorrow: a change has to move the date, and an
+  // overdue date can't be kept anyway.
+  const [dueOn, setDueOn] = useState(addDays(today, 1) === current.dueOn ? addDays(today, 2) : addDays(today, 1))
   const [reason, setReason] = useState("")
   const [note, setNote] = useState("")
-  const { refusal, pending, save } = useSave(onDone)
+  const { refusal, pending, save, refuse } = useSave(onDone)
 
   return (
     <form
@@ -189,6 +202,10 @@ function ChangeDateForm({
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
+        if (dueOn === current.dueOn) {
+          refuse({ status: "refused", field: "due_on", message: "Pick a date different from the current one." })
+          return
+        }
         save(() => changeLeadFollowUpDate(leadId, current.id, dueOn, reason, note))
       }}
     >

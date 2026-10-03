@@ -24,9 +24,9 @@ insert into public.follow_ups (id, lead_id, due_on, note, replaces_id, change_re
         public.tanzania_today() - 20, 'Check whether the family is still interested.', null, null, now() - interval '30 days');
 
 -- Salma's follow-up moved a week out. Inserted after the one it replaces.
-insert into public.follow_ups (id, lead_id, due_on, note, replaces_id, change_reason, created_at) values
+insert into public.follow_ups (id, lead_id, due_on, note, replaces_id, change_reason, replaced_due_on, created_at) values
     ('f0110000-0000-4000-8000-000000000014', '1ead0000-0000-4000-8000-000000000004',
         public.tanzania_today() + 7, 'Confirm the Form 1 interview date.', 'f0110000-0000-4000-8000-000000000004',
-        'The parent is travelling until next week.', now() - interval '1 day');
+        'The parent is travelling until next week.', public.tanzania_today() + 3, now() - interval '1 day');
 
 commit;

@@ -62,7 +62,7 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   lead: new Set(["declined_at", "declined_by"]),
   interviews: new Set(["lead", "registered_at", "registered_by"]),
   // The follow-up a date change replaced shows as the earlier date instead.
-  follow_ups: new Set(["lead_id", "replaces_id"]),
+  follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
 }
 
 const ORIGINS: Record<string, string> = {
@@ -237,18 +237,21 @@ function followUpPlans(entries: readonly LeadHistoryEntry[]): ReadonlyMap<string
   return plans
 }
 
-// A follow-up that replaced another reads as a change from the earlier date.
-// A note carried over unchanged says nothing new, so it is left out.
+// A follow-up that replaced another reads as a change from the earlier date,
+// which the replacement carries itself, so the entry reads right even when the
+// earlier plan's own entry isn't in this page of history. A note carried over
+// unchanged says nothing new, so it is left out when the earlier plan is here.
 function withEarlierPlan(entry: LeadHistoryEntry, plans: ReturnType<typeof followUpPlans>): LeadHistoryEntry {
   if (entry.record !== "follow_ups" || entry.action !== "insert") return entry
   const replaced = entry.changes.find((c) => c.field === "replaces_id")?.to
-  const earlier = typeof replaced === "string" ? plans.get(replaced) : undefined
-  if (!earlier) return entry
+  if (typeof replaced !== "string") return entry
+  const earlier = plans.get(replaced)
+  const earlierDate = entry.changes.find((c) => c.field === "replaced_due_on")?.to ?? earlier?.get("due_on") ?? null
   return {
     ...entry,
     changes: entry.changes
-      .filter((c) => !(c.field === "note" && c.to === earlier.get("note")))
-      .map((c) => (c.field === "due_on" ? { ...c, from: earlier.get("due_on") ?? null } : c)),
+      .filter((c) => !(earlier && c.field === "note" && c.to === earlier.get("note")))
+      .map((c) => (c.field === "due_on" ? { ...c, from: earlierDate } : c)),
   }
 }
 

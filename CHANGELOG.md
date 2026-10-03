@@ -5,6 +5,22 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 3, 2026 `v0.26.0`
+
+### NEW
+
+- Staff who can view leads have a **Marketing Agents** screen in the navigation. It lists
+  each agent's name, phone (tap to call), code, status, when they registered, and who
+  approved them and when. Search finds an agent by name, code or phone number, and the
+  list shows 50 agents a page.
+- The Admissions Manager sees how many agents are Pending next to **Marketing Agents**,
+  and the screen opens on the Pending agents, oldest first. **Approve** asks you to
+  confirm the agent's name and code, then records you as the approver. Approval can't
+  be undone. Admissions Staff and the Accountant see the same list with no Approve.
+- Agents can't register themselves yet; the registration page comes next. Each agent
+  gets a code made of their initials and three digits, such as `AJM-407`, and one phone
+  number can hold only one agent.
+
 ## October 3, 2026 `v0.25.0`
 
 ### NEW

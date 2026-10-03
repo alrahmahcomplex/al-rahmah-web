@@ -18,7 +18,14 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-const WORK_ACTIONS = ["Edit student", "Edit parent or guardian", "Record visit", "Separate from this Family", "Confirm match"]
+const WORK_ACTIONS = [
+  "Edit student",
+  "Edit parent or guardian",
+  "Record visit",
+  "Separate from this Family",
+  "Confirm match",
+  "Register for interview",
+]
 
 test.describe("a closed lead", () => {
   // Until #99 adds the request form, the banner says requests can't be sent

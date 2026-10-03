@@ -38,6 +38,19 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
       />
     ),
   },
-  { key: "interview", Panel: ({ lead, staff, open }) => <InterviewSection lead={lead} canRecord={open && staff.permissions.includes("interviews.record")} /> },
-  { key: "school-fee", Panel: ({ lead, staff }) => <SchoolFeeSection leadId={lead.id} staff={staff} /> },
+  {
+    key: "interview",
+    // A closed lead keeps showing its S/N and result, without Register.
+    readOnlyWhenClosed: true,
+    Panel: ({ lead, staff, open }) => (
+      <InterviewSection lead={lead} canRecord={open && staff.permissions.includes("interviews.record")} />
+    ),
+  },
+  {
+    key: "school-fee",
+    // The fee and what was paid stay readable on a closed lead; the panel
+    // has no work actions.
+    readOnlyWhenClosed: true,
+    Panel: ({ lead, staff }) => <SchoolFeeSection leadId={lead.id} staff={staff} />,
+  },
 ]

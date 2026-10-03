@@ -49,6 +49,10 @@ const LABELS: Record<string, string> = {
   score: "Interview score",
   fee_status: "Interview fee",
   locked_amount: "Amount paid",
+  // Its follow-ups.
+  due_on: "Follow-up date",
+  note: "Note",
+  change_reason: "Reason for the change",
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
@@ -57,6 +61,8 @@ const LABELS: Record<string, string> = {
 const HIDDEN: Record<string, ReadonlySet<string>> = {
   lead: new Set(["declined_at", "declined_by"]),
   interviews: new Set(["lead", "registered_at", "registered_by"]),
+  // The follow-up a date change replaced shows as the earlier date instead.
+  follow_ups: new Set(["lead_id", "replaces_id"]),
 }
 
 const ORIGINS: Record<string, string> = {
@@ -75,6 +81,7 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
   switch (field) {
     case "visit_date":
     case "interview_date":
+    case "due_on":
       return typeof value === "string" ? formatDate(value) : raw(value)
     case "guardian_contact_id":
     case "pending_family_match_id":
@@ -184,6 +191,11 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     return "changed the interview"
   }
 
+  if (entry.record === "follow_ups") {
+    if (insert) return changed.get("replaces_id")?.to ? "changed the follow-up date" : "scheduled a follow-up"
+    return entry.action
+  }
+
   if (entry.record !== null) {
     if (insert) return `added ${article(entry.record)} ${entry.record} record`
     if (entry.action === "update") return `changed ${article(entry.record)} ${entry.record} record`
@@ -211,7 +223,33 @@ export function describeLeadHistory(
   contactNames: Readonly<Record<string, string>>,
 ): DescribedEntry[] {
   const timeline = matchTimeline(entries)
-  return entries.map((entry) => describeEntry(entry, contactNames, timeline))
+  const plans = followUpPlans(entries)
+  return entries.map((entry) => describeEntry(withEarlierPlan(entry, plans), contactNames, timeline))
+}
+
+// Each follow-up's date and note as written, by follow-up id.
+function followUpPlans(entries: readonly LeadHistoryEntry[]): ReadonlyMap<string, ReadonlyMap<string, unknown>> {
+  const plans = new Map<string, ReadonlyMap<string, unknown>>()
+  for (const entry of entries) {
+    if (entry.record !== "follow_ups" || entry.action !== "insert" || !entry.recordId) continue
+    plans.set(entry.recordId, new Map(entry.changes.map((c) => [c.field, c.to])))
+  }
+  return plans
+}
+
+// A follow-up that replaced another reads as a change from the earlier date.
+// A note carried over unchanged says nothing new, so it is left out.
+function withEarlierPlan(entry: LeadHistoryEntry, plans: ReturnType<typeof followUpPlans>): LeadHistoryEntry {
+  if (entry.record !== "follow_ups" || entry.action !== "insert") return entry
+  const replaced = entry.changes.find((c) => c.field === "replaces_id")?.to
+  const earlier = typeof replaced === "string" ? plans.get(replaced) : undefined
+  if (!earlier) return entry
+  return {
+    ...entry,
+    changes: entry.changes
+      .filter((c) => !(c.field === "note" && c.to === earlier.get("note")))
+      .map((c) => (c.field === "due_on" ? { ...c, from: earlier.get("due_on") ?? null } : c)),
+  }
 }
 
 function describeEntry(entry: LeadHistoryEntry, contactNames: Readonly<Record<string, string>>, timeline: MatchTimeline): DescribedEntry {
@@ -227,7 +265,8 @@ function describeEntry(entry: LeadHistoryEntry, contactNames: Readonly<Record<st
       .sort((a, b) => rank(a.field) - rank(b.field))
       .map((c) => ({
         label: LABELS[c.field] ?? c.field,
-        from: fromOld ? display(c.field, c.from, contactNames) : null,
+        // A creation has no old value, except a follow-up's earlier date.
+        from: fromOld || c.from !== null ? display(c.field, c.from, contactNames) : null,
         to: display(c.field, c.to, contactNames),
       })),
   }

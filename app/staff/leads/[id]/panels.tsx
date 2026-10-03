@@ -5,6 +5,7 @@ import type { StaffMember } from "@/lib/services/staff-auth"
 
 import { DeclineSection } from "./decline-section"
 import { FamilySection } from "./family-section"
+import { FollowUpSection } from "./follow-up-section"
 import { InterviewSection } from "./interview-section"
 import { SchoolFeeSection } from "./school-fee-section"
 
@@ -53,6 +54,14 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
     // has no work actions.
     readOnlyWhenClosed: true,
     Panel: ({ lead, staff }) => <SchoolFeeSection leadId={lead.id} staff={staff} />,
+  },
+  {
+    key: "follow-ups",
+    // A closed lead keeps showing its follow-ups, with no actions.
+    readOnlyWhenClosed: true,
+    Panel: ({ lead, staff, open }) => (
+      <FollowUpSection leadId={lead.id} open={open} canRecord={open && staff.permissions.includes("follow_ups.record")} />
+    ),
   },
   // Open leads only, for staff who may decline them.
   { key: "decline", Panel: DeclineSection },

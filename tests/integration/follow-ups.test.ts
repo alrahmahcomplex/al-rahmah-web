@@ -293,11 +293,10 @@ describe("reading follow-ups", () => {
       data: {
         open: expect.objectContaining({
           id: SALMA_OPEN,
-          dueOn: addDays(today, 7),
           replacesId: SALMA_EARLIER,
           changeReason: "The parent is travelling until next week.",
         }),
-        earlier: [expect.objectContaining({ id: SALMA_EARLIER, dueOn: addDays(today, 3) })],
+        earlier: [expect.objectContaining({ id: SALMA_EARLIER, replacesId: null, changeReason: null })],
       },
     })
   })

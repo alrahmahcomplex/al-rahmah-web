@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 3, 2026 `v0.20.0`
+
+### NEW
+
+- A lead's screen has a **School fee** section for everyone who may see payments. It
+  shows the annual fee for the lead's class band and Day or boarding, Total paid, the
+  balance, and the three instalments with their amounts and due dates. The fee comes
+  from the Fee schedule of the lead's own enrollment year. A lead whose year has no
+  schedule yet says so and shows no amount.
+- Correcting a lead's class, enrollment year or Day or boarding changes its fee
+  straight away.
+
 ## October 3, 2026 `v0.19.0`
 
 ### NEW

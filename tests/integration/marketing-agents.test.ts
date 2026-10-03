@@ -126,6 +126,14 @@ describe("registration", () => {
     expect(list.ok && list.data.agents.map((a) => [a.code, a.fullName])).toEqual([[first.code, first.fullName]])
   })
 
+  test("a code typed with spaces finds the agent", async () => {
+    const { code } = await register(agentName(), phone())
+    const spaced = code.replace("-", " - ").toLowerCase()
+
+    const list = await listAgents(await signedIn(MANAGER), { query: spaced, page: 1 })
+    expect(list.ok && list.data.agents.map((a) => a.code)).toEqual([code])
+  })
+
   test("the same phone twice in parallel gives one agent and one code", async () => {
     const number = phone()
     const results = await Promise.all(

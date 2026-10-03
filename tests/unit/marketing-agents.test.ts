@@ -51,6 +51,9 @@ describe("agent search", () => {
   it("matches the text lowercased, with filter characters dropped", () => {
     expect(agentSearchPatterns("  Zawadi   NEEMA ")).toEqual(["zawadi neema"])
     expect(agentSearchPatterns("ZNM-401")).toEqual(["znm-401"])
+    // A code typed with spaces matches as the code normalizer reads it.
+    expect(agentSearchPatterns("ZNM -401")).toEqual(["znm -401", "znm-401"])
+    expect(agentSearchPatterns(" znm - 401 ")).toEqual(["znm - 401", "znm-401"])
     expect(agentSearchPatterns('a,b"c*(d)%')).toEqual(["a b c d"])
     expect(agentSearchPatterns(" ,*() ")).toEqual([])
   })

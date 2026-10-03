@@ -100,7 +100,9 @@ const AGENT_COLUMNS = "id, full_name, phone, whatsapp, code, status, registered_
 // The search box's patterns, matched against the agent's search text: the
 // name in lowercase, the code, and both numbers as digits only. A query that
 // reads as a phone number also matches by its digits, however it was typed:
-// 0700 000 401, +255 700 000 401 and 700000401 all find +255700000401.
+// 0700 000 401, +255 700 000 401 and 700000401 all find +255700000401. A
+// query that reads as a code also matches without its spaces, as the
+// database's code normalizer reads it: ZNM -401 finds ZNM-401.
 export function agentSearchPatterns(query: string): string[] {
   // Only characters a name, code or phone holds, so nothing in the query
   // can act as a pattern or filter character.
@@ -111,6 +113,10 @@ export function agentSearchPatterns(query: string): string[] {
     .trim()
   if (!text) return []
   const patterns = [text]
+  const code = text.replace(/\s/g, "")
+  if (code !== text && code.length <= 20 && /^[\p{L}\d.-]+$/u.test(code) && /\p{L}/u.test(code) && /[\d.-]/.test(code)) {
+    patterns.push(code)
+  }
   if (/^[+\d\s().-]+$/.test(text)) {
     const digits = text.replace(/\D/g, "").replace(/^0+/, "")
     if (digits.length >= 3 && digits !== text) patterns.push(digits)

@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Result } from "./result"
 
-// The interview module (slice 5, #26): registering a lead for interview and
-// reading its interviews. Every write is a database function that checks the
+// The interview module (slice 5, #26): registering a lead for interview,
+// recording and correcting its result, and reading its interviews. Every write is a database function that checks the
 // permission itself and refuses a closed lead, so these calls only translate
 // what the database answers.
 
@@ -56,6 +56,80 @@ export async function registerForInterview(
 
   const row = data as RegistrationRow
   return { ok: true, data: { interviewId: row.interview_id, serialNumber: row.serial_number, enrollmentYear: row.serial_year } }
+}
+
+// ---------------------------------------------------------------------------
+// Recording and correcting an interview result.
+// ---------------------------------------------------------------------------
+
+export type InterviewResultInput = {
+  // YYYY-MM-DD, today in Tanzania or earlier, and not before registration.
+  interviewDate: string
+  result: InterviewResult
+  // A percentage from 0 to 100, to one decimal place at most.
+  score: number
+}
+
+export type RecordedResult = {
+  // True when this set the interview's first result, false for a correction.
+  firstRecording: boolean
+  // False when a correction matched what was already recorded, so nothing
+  // was written.
+  changed: boolean
+}
+
+export type RecordResultError =
+  // The date, result or score is missing.
+  | "incomplete"
+  | "score_out_of_range"
+  | "score_too_precise"
+  // Later than today in Tanzania time.
+  | "date_in_future"
+  | "date_before_registration"
+  | "lead_closed"
+  | "forbidden"
+  | "not_found"
+  | "unavailable"
+
+const RECORD_REFUSALS: ReadonlySet<string> = new Set<RecordResultError>([
+  "incomplete",
+  "score_out_of_range",
+  "score_too_precise",
+  "date_in_future",
+  "date_before_registration",
+  "lead_closed",
+])
+
+type RecordedRow = { first_recording: boolean; changed: boolean }
+
+// Records the interview's date, result and score, or corrects them. The first
+// recording on the lead's current interview moves the lead to Interviewed,
+// recording its visit on the interview date first if it was still Applied.
+// A correction changes only the interview. Needs interviews.record, and
+// visits.record for an Applied lead.
+export async function recordInterviewResult(
+  supabase: SupabaseClient,
+  interviewId: string,
+  { interviewDate, result, score }: InterviewResultInput,
+): Promise<Result<RecordedResult, RecordResultError>> {
+  const { data, error } = await supabase.rpc("record_interview_result", {
+    interview_id: interviewId,
+    interviewed_on: interviewDate,
+    outcome: result,
+    score,
+  })
+  if (error) {
+    if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
+    if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not_found" }
+    if (RECORD_REFUSALS.has(error.message)) return { ok: false, error: error.message as RecordResultError }
+    // 22007/22008: a date the database can't read.
+    if (error.code === "22007" || error.code === "22008") return { ok: false, error: "incomplete" }
+    console.error("Could not record an interview result", error)
+    return { ok: false, error: "unavailable" }
+  }
+
+  const row = data as RecordedRow
+  return { ok: true, data: { firstRecording: row.first_recording, changed: row.changed } }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { getMetricCount, listEnrollmentYears, type DashboardMetric } from "@/lib/services/dashboard"
+import { getLeadsByClass, getMetricCount, listEnrollmentYears, type DashboardMetric } from "@/lib/services/dashboard"
 
 import { parsePanelFilters } from "./filters"
+import { LeadsByClassTable } from "./leads-by-class"
 import { DashboardPanel } from "./panel"
 
 type SearchParams = { [key: string]: string | string[] | undefined }
@@ -13,11 +14,15 @@ export const METRIC_TILES: { metric: DashboardMetric; key: string; title: string
   { metric: "visited_leads", key: "visited", title: "Visited leads", counts: "Counted by Visit date" },
 ]
 
+// The Leads by enrollment class panel's key in the page address.
+const CLASSES_KEY = "classes"
+
 // The dashboard on the staff home, for staff who may view leads. Rendered on
 // every request, so the counts are always current.
 export async function Dashboard({ supabase, searchParams }: { supabase: SupabaseClient; searchParams: SearchParams }) {
   const query = toURLSearchParams(searchParams)
-  const [years, tiles] = await Promise.all([
+  const classFilters = parsePanelFilters(searchParams, CLASSES_KEY)
+  const [years, tiles, byClass] = await Promise.all([
     listEnrollmentYears(supabase),
     Promise.all(
       METRIC_TILES.map(async (tile) => {
@@ -25,6 +30,7 @@ export async function Dashboard({ supabase, searchParams }: { supabase: Supabase
         return { ...tile, filters, count: await getMetricCount(supabase, tile.metric, filters) }
       }),
     ),
+    getLeadsByClass(supabase, classFilters),
   ])
   const enrollmentYears = years.ok ? years.data : []
 
@@ -33,7 +39,7 @@ export async function Dashboard({ supabase, searchParams }: { supabase: Supabase
       <h2 id="dashboard-heading" className="text-sm font-medium text-slate-900">
         Dashboard
       </h2>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tiles.map((tile) => (
           <DashboardPanel
             key={tile.key}
@@ -55,6 +61,21 @@ export async function Dashboard({ supabase, searchParams }: { supabase: Supabase
             )}
           </DashboardPanel>
         ))}
+        {/* On wide screens the table stands in the right-hand column, beside the tiles. */}
+        <DashboardPanel
+          panelKey={CLASSES_KEY}
+          title="Leads by enrollment class"
+          filters={classFilters}
+          enrollmentYears={enrollmentYears}
+          searchParams={query}
+          className="lg:col-start-3 lg:row-span-3 lg:row-start-1"
+        >
+          {byClass.ok ? (
+            <LeadsByClassTable counts={byClass.data} />
+          ) : (
+            <p className="text-sm text-muted-foreground">These counts could not be loaded. Try again in a moment.</p>
+          )}
+        </DashboardPanel>
       </div>
     </section>
   )

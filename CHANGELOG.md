@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The staff home now shows **Leads by enrollment class** beside the Visited leads count:
+  every class from DAY CARE to FORM 4, in school order, with how many leads it has and
+  the total. A class with no leads shows 0. Leads count by the day they were created, in
+  Tanzania time, whatever their status or closure mark, under their current class and
+  Enrollment year. The table has its own period and Enrollment year filters, so you can
+  look at this week's new leads while Visited leads shows something else.
+
 ## October 3, 2026 `v0.24.0`
 
 ### NEW

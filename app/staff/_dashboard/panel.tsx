@@ -15,6 +15,7 @@ export function DashboardPanel({
   filters,
   enrollmentYears,
   searchParams,
+  className,
   children,
 }: {
   panelKey: string
@@ -23,11 +24,13 @@ export function DashboardPanel({
   enrollmentYears: number[]
   // The whole page's query, so clearing this panel leaves the others alone.
   searchParams: URLSearchParams
+  // Where the panel sits in the dashboard's grid.
+  className?: string
   children: React.ReactNode
 }) {
   const headingId = `${panelKey}-heading`
   return (
-    <Card size="sm" role="region" aria-labelledby={headingId}>
+    <Card size="sm" role="region" aria-labelledby={headingId} className={className}>
       <CardHeader>
         <CardTitle id={headingId} role="heading" aria-level={3}>
           {title}

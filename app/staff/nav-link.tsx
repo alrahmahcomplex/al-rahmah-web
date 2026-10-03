@@ -15,7 +15,9 @@ export function NavLink({ href, count, children }: { href: string; count?: numbe
       href={href}
       aria-current={current ? "page" : undefined}
       className={cn(
-        "inline-flex h-8 items-center whitespace-nowrap rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+        // Relative, so the count's screen-reader text stays inside the
+        // scrolling menu instead of widening the page on a phone.
+        "relative inline-flex h-8 items-center whitespace-nowrap rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900",
         current && "text-blue-600",
       )}
     >

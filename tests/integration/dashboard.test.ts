@@ -40,7 +40,7 @@ function withLeadsHeld<T>(work: () => Promise<T>): Promise<T> {
 
 describe("Visited leads", () => {
   test("counts every visited 2031 lead for All time, and leaves the Applied lead with no visit out", async () => {
-    // Eleven 2031 leads, ten of them visited.
+    // Fourteen 2031 leads, ten of them visited.
     expect(await visited(await signedIn(MANAGER), { kind: "all" })).toBe(10)
   })
 

@@ -88,12 +88,60 @@ test("an unreadable address falls back to All time and All years", async ({ page
   await expect(visitedPanel(page).getByTestId("visited-period")).toHaveText("All time · All years")
 })
 
+const classesPanel = (page: Page) => page.getByRole("region", { name: "Leads by enrollment class" })
+
+test("Leads by enrollment class lists every class in school order, zeros included, with the total", async ({ page }) => {
+  await signIn(page, MANAGER)
+  await page.goto("/staff?classes_year=2031")
+
+  const panel = classesPanel(page)
+  await expect(panel.getByTestId("classes-period")).toHaveText("All time · Enrollment year 2031")
+  const classes = await panel.locator("tbody tr td:first-child").allTextContents()
+  expect(classes).toEqual(["DAY CARE", "KG 1", "KG 2", "STD 1", "STD 2", "STD 3", "STD 4", "STD 5", "STD 6", "STD 7", "FORM 1", "FORM 2", "FORM 3", "FORM 4"])
+  await expect(panel.getByTestId("classes-count-STD 1")).toHaveText("3")
+  await expect(panel.getByTestId("classes-count-FORM 4")).toHaveText("0")
+  await expect(panel.getByTestId("classes-total")).toHaveText("14")
+})
+
+test("changing the Leads by enrollment class filters leaves the Visited leads tile alone", async ({ page }) => {
+  await signIn(page, MANAGER)
+  await page.goto("/staff?visited=month:2026-09-01&visited_year=2031")
+  const visited = visitedPanel(page)
+  const classes = classesPanel(page)
+  await expect(visited.getByTestId("visited-count")).toHaveText("6")
+
+  await classes.getByRole("button", { name: "Filter Leads by enrollment class" }).click()
+  await choose(page, "Enrollment year", "2031")
+  await expect(page).toHaveURL(/[?&]classes_year=2031/)
+  await choose(page, "Period", "Year")
+  await choose(page, "Year", "2025")
+  await expect(page).toHaveURL(/[?&]classes=year%3A2025-01-01/)
+  await expect(classes.getByTestId("classes-period")).toHaveText("2025 · Enrollment year 2031")
+  await expect(classes.getByTestId("classes-total")).toHaveText("1")
+  await expect(classes.getByTestId("classes-count-DAY CARE")).toHaveText("1")
+
+  await expect(page).toHaveURL(/[?&]visited=month%3A2026-09-01/)
+  await expect(visited.getByTestId("visited-period")).toHaveText("September 2026 · Enrollment year 2031")
+  await expect(visited.getByTestId("visited-count")).toHaveText("6")
+
+  // A lead created at 00:30 on Monday 28 September counts on that Monday.
+  await page.keyboard.press("Escape")
+  await page.goto("/staff?classes=date:2026-09-28&classes_year=2031")
+  await expect(classes.getByTestId("classes-period")).toHaveText("28 Sept 2026 · Enrollment year 2031")
+  await expect(classes.getByTestId("classes-total")).toHaveText("1")
+
+  await classes.getByRole("link", { name: "Show all time and all years" }).click()
+  await expect(page).toHaveURL(/\/staff$/)
+  await expect(classes.getByTestId("classes-period")).toHaveText("All time · All years")
+})
+
 test("a role without leads.view sees the staff home and no dashboard", async ({ page }) => {
   const person = await createThrowawayStaff(["payments.view"])
   await signIn(page, person)
 
   await expect(page.getByText(`Welcome, ${person.name}.`)).toBeVisible()
   await expect(visitedPanel(page)).toHaveCount(0)
+  await expect(classesPanel(page)).toHaveCount(0)
   await expect(page.getByRole("heading", { name: "Dashboard" })).toHaveCount(0)
 })
 
@@ -115,5 +163,18 @@ test.describe("at phone width", () => {
     await expect(panel.getByTestId("visited-period")).toHaveText(`${tanzaniaToday().slice(0, 4)} · All years`)
     const filter = await page.getByRole("combobox", { name: "Enrollment year" }).boundingBox()
     expect(filter!.x + filter!.width).toBeLessThanOrEqual(375)
+  })
+
+  test("the Leads by enrollment class table fits the screen", async ({ page }) => {
+    await signIn(page, MANAGER)
+    const panel = classesPanel(page)
+    await expect(panel.getByTestId("classes-total")).toBeVisible()
+
+    const box = await panel.boundingBox()
+    expect(box!.x).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(375)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
+    const total = await panel.getByTestId("classes-total").boundingBox()
+    expect(total!.x + total!.width).toBeLessThanOrEqual(box!.x + box!.width)
   })
 })

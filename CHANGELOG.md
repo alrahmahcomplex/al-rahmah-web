@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 3, 2026 `v0.28.0`
+
+### NEW
+
+- Staff who can decline leads get a **Decline** button on an open lead. They pick a
+  reason from the fixed list and can add an explanation, which **Other** requires. Before
+  anything is saved, a confirmation shows the child's name, Admission Number, the reason
+  and what happens next: the lead becomes read-only, and bringing it back needs a
+  Manager's approval. Any open lead can be declined, an Enrolled one included.
+- **No seat available** appears only for staff who can set the seats, so only they can
+  release a seat this way.
+- A Declined lead's banner shows the reason, the explanation, who declined it, when, and
+  the status it held before. The history lists the decline with its reason.
+
 ## October 3, 2026 `v0.27.0`
 
 ### NEW

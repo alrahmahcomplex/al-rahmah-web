@@ -50,7 +50,13 @@ async function makeLead(fullName: string) {
 // way a later slice's function would, as the system.
 async function setState(leadId: string, state: { status?: LeadStatus; closure?: LeadClosure | null }) {
   await asSystem(async (sql) => {
-    if (state.status) await sql.query("update public.leads set status = $2 where id = $1", [leadId, state.status])
+    // A Declined lead carries its reason (#97).
+    if (state.status) {
+      await sql.query(
+        "update public.leads set status = $2::public.lead_status, declined_reason = case when $2::public.lead_status = 'Declined' then 'School decision'::public.declined_reason end where id = $1",
+        [leadId, state.status],
+      )
+    }
     if (state.closure !== undefined) {
       await sql.query("update public.leads set closure = $2 where id = $1", [leadId, state.closure])
     }

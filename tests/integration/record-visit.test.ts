@@ -91,7 +91,11 @@ describe("recording the visit of an Applied family", () => {
     for (const status of others) {
       const lead = await appliedLead()
       await asSystem((sql) =>
-        sql.query("update public.leads set status = $2, visit_date = $3 where id = $1", [lead.id, status, dayBefore(today, 5)]),
+        // A Declined lead carries its reason (#97).
+        sql.query(
+          "update public.leads set status = $2::public.lead_status, visit_date = $3, declined_reason = case when $2::public.lead_status = 'Declined' then 'School decision'::public.declined_reason end where id = $1",
+          [lead.id, status, dayBefore(today, 5)],
+        ),
       )
       const before = await reread(lead.id)
 

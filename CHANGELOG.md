@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 3, 2026 `v0.17.0`
+
+### NEW
+
+- The home page now welcomes parents in Swahili, with a short word on what Al-Rahmah
+  offers, an **Omba sasa** button to the Admission form, and the admissions office phone
+  as a tap-to-call link. **Staff sign-in** stays at the bottom.
+- A switch at the top turns the site to English and back. The site remembers the choice,
+  so the page opens in that language next time.
+
 ## October 1, 2026 `v0.16.0`
 
 ### NEW

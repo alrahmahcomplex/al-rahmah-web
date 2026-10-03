@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -122,6 +123,7 @@ function AcademicYearForm({
   const [draft, setDraft] = useState(() => draftOf(start, seats))
   const [refusal, setRefusal] = useState<Refused | null>(null)
   const [pending, startTransition] = useTransition()
+  const router = useRouter()
   const startId = useId()
   const invalid = (field: AcademicYearField) => refusal?.field === field || undefined
 
@@ -130,12 +132,16 @@ function AcademicYearForm({
     startTransition(async () => {
       let outcome: AcademicYearOutcome
       try {
-        outcome = await saveAcademicYear(year, settingsOf(draft))
+        // What the form opened with, so the save is refused rather than
+        // undoing a change someone else made since.
+        outcome = await saveAcademicYear(year, settingsOf(draft), { start, seats })
       } catch {
         outcome = LOST_REQUEST
       }
       if (outcome.status === "saved") onSaved()
       else setRefusal(outcome)
+      // Brings in the newer values, which show once the form is cancelled.
+      if (outcome.status === "refused" && outcome.stale) router.refresh()
     })
   }
 

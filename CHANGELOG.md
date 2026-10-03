@@ -15,6 +15,9 @@ stay in the `0.x` range.
 - The Manager also sets the number of seats in each class, for day and for boarding. A
   class without a number shows **Seats not set**. Once set, a start date or a seat
   number can be changed but not cleared.
+- If another Manager changed the same start or seat number while the form was open,
+  the save is refused rather than undoing their change. Numbers the Manager didn't
+  touch keep whatever was saved last.
 - The Accountant and Admissions Staff see the start date and seats but can't change
   them. Every change is kept in history with who made it.
 

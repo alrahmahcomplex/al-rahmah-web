@@ -80,6 +80,7 @@ export type SetAcademicYearError =
   | { kind: "forbidden" }
   | { kind: "no-schedule" }
   | { kind: "invalid"; field: AcademicYearField | null }
+  | { kind: "stale"; field: AcademicYearField | null }
   | { kind: "unavailable" }
 
 export type SaveFeeAmountsError =
@@ -234,34 +235,50 @@ const ACADEMIC_YEAR_FIELDS = new Set<string>([
 // "leave it as it is". Sent as text, the database refuses them by name.
 const asSent = (seats: number | null) => (seats === null || Number.isFinite(seats) ? seats : String(seats))
 
+// What the caller read before changing anything: the start, and the seats
+// that were set.
+export type AcademicYearSeen = { start: string | null; seats: SeatSetting[] }
+
 // Sets the year's Academic-year start, a date in January of that year, and
 // the seats in each class, for day and for boarding. Needs
 // academic_years.manage, and a Fee schedule for the year, which the
 // Accountant creates. A start or a seat count, once set, can be changed but
 // not cleared. When anything is refused, nothing is saved.
+//
+// Only what differs from `seen` is sent, each with the value it replaces. If
+// someone else changed one of those values in the meantime, the save is
+// refused as `stale`, so an older view never undoes a newer change. Values
+// left alone are not sent, so they keep whatever is saved now.
 export async function setAcademicYear(
   supabase: SupabaseClient,
   year: number,
   settings: AcademicYearSettings,
+  seen: AcademicYearSeen,
 ): Promise<Result<null, SetAcademicYearError>> {
+  const seenSeats = new Map(seen.seats.map((seat) => [`${seat.className}.${seat.dayOrBoarding}`, seat.seats]))
+  const changedSeats = settings.seats.flatMap((seat) => {
+    const was = seenSeats.get(`${seat.className}.${seat.dayOrBoarding}`) ?? null
+    return Object.is(seat.seats, was)
+      ? []
+      : [{ class_name: seat.className, day_or_boarding: seat.dayOrBoarding, seats: asSent(seat.seats), was }]
+  })
+  const changedStart =
+    settings.start === seen.start ? {} : { academic_year_start: settings.start, academic_year_start_was: seen.start }
+
   const { error } = await supabase.rpc("set_academic_year", {
     schedule_year: year,
-    settings: {
-      academic_year_start: settings.start,
-      seats: settings.seats.map((seat) => ({
-        class_name: seat.className,
-        day_or_boarding: seat.dayOrBoarding,
-        seats: asSent(seat.seats),
-      })),
-    },
+    settings: { ...changedStart, seats: changedSeats },
   })
   if (error) {
     if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
     if (error.message === "no_schedule") return { ok: false, error: { kind: "no-schedule" } }
-    if (error.message === "invalid") {
+    if (error.message === "invalid" || error.message === "stale") {
       return {
         ok: false,
-        error: { kind: "invalid", field: refusedField<AcademicYearField>(error.details, ACADEMIC_YEAR_FIELDS) },
+        error: {
+          kind: error.message,
+          field: refusedField<AcademicYearField>(error.details, ACADEMIC_YEAR_FIELDS),
+        },
       }
     }
     console.error("Could not set the academic year", error)

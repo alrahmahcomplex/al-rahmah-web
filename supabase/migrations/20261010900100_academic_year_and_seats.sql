@@ -9,7 +9,9 @@
 -- academic_years.manage itself.
 --
 -- Refusal codes: `not_permitted`, `no_schedule` when the year has no Fee
--- schedule yet, and `invalid` with the offending field as JSON in the detail.
+-- schedule yet, `invalid` with the offending field as JSON in the detail, and
+-- `stale`, also naming the field, when someone else changed a value since the
+-- caller read it.
 
 create table public.class_seats (
     id uuid primary key default gen_random_uuid(),
@@ -51,15 +53,47 @@ create policy "Staff who may view payments read class seats"
 revoke insert, update, delete, truncate on public.class_seats from anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
+-- enrol_from_academic_year_start(as_of): a stand-in. #109 replaces it with
+-- `create or replace`, keeping this signature: it will enrol every First
+-- instalment lead of every year whose start is on or before `as_of`, and
+-- return how many it enrolled. Until then no lead can reach First instalment,
+-- so there is nobody to enrol. set_academic_year already calls it, so a start
+-- of today or earlier enrols at once (#29) without #109 changing that.
+-- ---------------------------------------------------------------------------
+
+create function public.enrol_from_academic_year_start(as_of date)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    return 0;
+end;
+$$;
+
+revoke execute on function public.enrol_from_academic_year_start(date) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- set_academic_year: sets a year's Academic-year start and seats. Needs
 -- academic_years.manage. The year needs a Fee schedule first, since the start
 -- lives on it; the Accountant creates that.
 --
--- `settings` holds `academic_year_start`, a YYYY-MM-DD date in January of the
--- year, and `seats`, a list of { class_name, day_or_boarding, seats }. A seat
--- count is a whole number, 0 or more. Classes the list leaves out keep what
--- they have. Null leaves a start or a class that isn't set as it is, but a
--- start or a seat count, once set, can be changed and not cleared.
+-- `settings` holds only what the caller changes, each with the value the
+-- caller saw before changing it:
+--   - `academic_year_start`, a YYYY-MM-DD date in January of the year, with
+--     `academic_year_start_was`. Leaving the key out keeps the start as it is.
+--   - `seats`, a list of { class_name, day_or_boarding, seats, was }. A seat
+--     count is a whole number, 0 or more. Classes the list leaves out keep
+--     what they have.
+-- `was` is null for a value that wasn't set. If any value no longer matches
+-- its `was`, someone else changed it first, and the whole save is refused as
+-- `stale`, naming it, so one Manager never undoes another's newer change.
+-- A null start or seat count is an attempt to clear it. That is allowed only
+-- while it is unset; once set, it can be changed but not cleared.
+--
+-- Setting a start of today or earlier (Tanzania time) runs
+-- enrol_from_academic_year_start for today at once (#29).
 --
 -- Everything is checked before anything is written. Refused fields are named
 -- `academic_year_start`, `seats` for a list that can't be read, and
@@ -75,7 +109,10 @@ as $$
 declare
     most constant numeric := 2147483647;
     current_start date;
+    seen_start date;
     new_start date;
+    current_count integer;
+    seen_count integer;
     entry jsonb;
     entry_class public.lead_class;
     entry_choice public.day_or_boarding;
@@ -102,14 +139,25 @@ begin
         raise exception 'no_schedule';
     end if;
 
-    if settings -> 'academic_year_start' is null or jsonb_typeof(settings -> 'academic_year_start') = 'null' then
-        if current_start is not null then
+    if settings ? 'academic_year_start' then
+        if not settings ? 'academic_year_start_was' then
             perform public.fee_input_invalid('academic_year_start');
         end if;
-    else
-        new_start := public.fee_input_date(settings -> 'academic_year_start', 'academic_year_start');
-        if extract(month from new_start) <> 1 or extract(year from new_start) <> schedule_year then
-            perform public.fee_input_invalid('academic_year_start');
+        if jsonb_typeof(settings -> 'academic_year_start') = 'null' then
+            if current_start is not null then
+                perform public.fee_input_invalid('academic_year_start');
+            end if;
+        else
+            new_start := public.fee_input_date(settings -> 'academic_year_start', 'academic_year_start');
+            if extract(month from new_start) <> 1 or extract(year from new_start) <> schedule_year then
+                perform public.fee_input_invalid('academic_year_start');
+            end if;
+        end if;
+        if jsonb_typeof(settings -> 'academic_year_start_was') <> 'null' then
+            seen_start := public.fee_input_date(settings -> 'academic_year_start_was', 'academic_year_start');
+        end if;
+        if current_start is distinct from seen_start then
+            raise exception 'stale' using detail = jsonb_build_object('field', 'academic_year_start')::text;
         end if;
     end if;
 
@@ -120,6 +168,7 @@ begin
 
         for entry in select value from jsonb_array_elements(settings -> 'seats') loop
             if jsonb_typeof(entry) <> 'object'
+                or not entry ? 'was'
                 or jsonb_typeof(entry -> 'class_name') is distinct from 'string'
                 or jsonb_typeof(entry -> 'day_or_boarding') is distinct from 'string'
                 or not (entry ->> 'class_name') = any (enum_range(null::public.lead_class)::text[])
@@ -137,17 +186,27 @@ begin
             end if;
             seen := seen || entry_field;
 
+            current_count := (
+                select c.seats from public.class_seats c
+                where c.enrollment_year = schedule_year and c.class_name = entry_class and c.day_or_boarding = entry_choice
+            );
+            seen_count := null;
+            if jsonb_typeof(entry -> 'was') <> 'null' then
+                seen_count := public.fee_input_whole(entry -> 'was', entry_field, 0, most);
+            end if;
+
             if entry -> 'seats' is null or jsonb_typeof(entry -> 'seats') = 'null' then
-                if exists (
-                    select 1 from public.class_seats c
-                    where c.enrollment_year = schedule_year and c.class_name = entry_class and c.day_or_boarding = entry_choice
-                ) then
+                if current_count is not null then
                     perform public.fee_input_invalid(entry_field);
                 end if;
             else
                 classes := classes || entry_class;
                 choices := choices || entry_choice;
                 counts := counts || public.fee_input_whole(entry -> 'seats', entry_field, 0, most);
+            end if;
+
+            if current_count is distinct from seen_count then
+                raise exception 'stale' using detail = jsonb_build_object('field', entry_field)::text;
             end if;
         end loop;
     end if;
@@ -165,6 +224,10 @@ begin
     on conflict (enrollment_year, class_name, day_or_boarding) do update
     set seats = excluded.seats
     where c.seats is distinct from excluded.seats;
+
+    if new_start is distinct from current_start and new_start <= public.tanzania_today() then
+        perform public.enrol_from_academic_year_start(public.tanzania_today());
+    end if;
 end;
 $$;
 

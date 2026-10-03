@@ -60,7 +60,7 @@ export function saveScheduleOutcome(error: SaveFeeAmountsError): SaveScheduleOut
 // What the start and seats form is told after it saves.
 export type AcademicYearOutcome =
   | { status: "saved" }
-  | { status: "refused"; field: AcademicYearField | null; message: string }
+  | { status: "refused"; field: AcademicYearField | null; message: string; stale?: true }
 
 // Turns what the fees module refused into what the start and seats form shows.
 export function academicYearOutcome(error: SetAcademicYearError, year: number): AcademicYearOutcome {
@@ -87,6 +87,14 @@ export function academicYearOutcome(error: SetAcademicYearError, year: number): 
         message: "Some seat numbers could not be accepted. Check them and try again.",
       }
     }
+    case "stale":
+      return {
+        status: "refused",
+        field: error.field,
+        stale: true,
+        message:
+          "Someone else changed the start or seats while you were editing. Cancel to see their change, then make yours again.",
+      }
     case "no-schedule":
       return {
         status: "refused",

@@ -79,6 +79,13 @@ describe("academicYearOutcome", () => {
   })
 
   it("says when the year has no schedule, the role can't set it, or nothing could be saved", () => {
+    expect(academicYearOutcome({ kind: "stale", field: "seats.STD 1.Day" }, 2027)).toEqual({
+      status: "refused",
+      field: "seats.STD 1.Day",
+      stale: true,
+      message:
+        "Someone else changed the start or seats while you were editing. Cancel to see their change, then make yours again.",
+    })
     expect(academicYearOutcome({ kind: "no-schedule" }, 2027)).toMatchObject({
       message: "The 2027 Fee schedule hasn't been created yet. The Accountant creates it first.",
     })

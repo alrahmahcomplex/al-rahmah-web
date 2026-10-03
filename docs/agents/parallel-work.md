@@ -64,6 +64,7 @@ Functions other slices call already exist, so nobody creates them twice:
 - `lead_is_closed(lead_id)`, for staff with `leads.view` (`forbidden` otherwise). #96 may `create or replace` both, keeping their condition the same.
 - A trigger refuses every update to a closed lead with `lead_closed`. A security definer function that must change one calls `set_lead_lifecycle_override(path)` first, with `close`, `reopen` or `payment_recompute`; it lasts until the transaction ends and is granted to no signed-in role.
 - `expected_interview_amount(lead_id)` returning `amount` and `discount_applied`. A stand-in at TZS 50,000 until #80 replaces it with `create or replace`.
+- `enrol_from_academic_year_start(as_of date)` returning how many leads it enrolled. A stand-in that enrols nobody until #109 replaces it with `create or replace`. `set_academic_year` already calls it when a start of today or earlier is set.
 - `OFFICE_PHONE` in `lib/office.ts`, server-only.
 
 When a ticket you build on has not merged, code against the signature its body gives. Use `create or replace` only where a ticket says to.

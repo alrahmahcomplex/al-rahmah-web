@@ -314,7 +314,9 @@ Student gender is not part of the admissions-lead information model.
 Student date of birth is not part of the admissions-lead information model.
 
 **Interview registration number**:
-An automatically incremented number representing the count of current interviews. The system assigns it whenever a lead is registered for an admission interview. It is not the permanent identifier of the lead.
+An automatically incremented number representing the count of current interviews. The system assigns it whenever a lead is registered for an admission interview. It is not the permanent identifier of the lead. Staff call it the **S/N**.
+
+The S/N counts from 1 within the lead's **Enrollment year**, so each intake's interview list starts fresh. Staff registering at the same moment always get different numbers. Once given, an S/N never changes, not even when the lead's enrollment year is corrected afterwards, and it is never given to another registration, even if the lead it belongs to is later closed.
 
 **Lead ID**:
 A permanent, system-generated identifier for an admissions lead. It is separate from the interview registration number and remains attached to the lead throughout corrections, follow-up, and status changes. Parents and guardians know it as the **Admission Number** (Swahili: **Namba ya Udahili**): **ADMSN-** followed by five random digits (for example **ADMSN-40719**), the same form for walk-in and applied leads. The digits are random so a number reveals nothing about when or whether a lead existed before. The Admission Number is a lookup key, not proof of identity: staff confirm the parent or guardian in person before discussing a lead. It is issued when the lead is created, on submitting the **Admission form** or a **New Student** registration, never earlier, and is shown on the confirmation. Staff find the lead by it, or by the student's name, when the family arrives.

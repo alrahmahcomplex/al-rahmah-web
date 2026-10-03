@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 3, 2026 `v0.19.0`
+
+### NEW
+
+- A lead's screen now has an **Interview** section. Admissions Staff and the Admissions
+  Manager can register an Applied or Visited lead for interview, and the system gives it
+  the next **S/N** for its enrollment year, counting from 1 for each year. The S/N is
+  shown apart from the Admission Number and never changes, even if the lead's
+  enrollment year is corrected later.
+- A lead can be registered only once. A closed or Enrolled lead can't be registered, and
+  staff are told why in a plain sentence. The Accountant and other roles without
+  interview access see the S/N but no register button.
+- The lead's **History** shows each registration with its S/N.
+
 ## October 3, 2026 `v0.18.0`
 
 ### NEW

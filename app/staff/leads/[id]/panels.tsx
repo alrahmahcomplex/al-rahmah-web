@@ -4,6 +4,7 @@ import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 
 import { FamilySection } from "./family-section"
+import { InterviewSection } from "./interview-section"
 
 // What every panel on the lead screen is given.
 export type LeadPanelProps = {
@@ -31,4 +32,5 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
       />
     ),
   },
+  { key: "interview", Panel: ({ lead, staff, open }) => <InterviewSection lead={lead} canRecord={open && staff.permissions.includes("interviews.record")} /> },
 ]

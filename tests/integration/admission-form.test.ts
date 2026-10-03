@@ -193,12 +193,13 @@ describe("the Admission form service", () => {
     expect(a.ok && b.ok && a.data.contact.id === b.data.contact.id).toBe(true)
   })
 
-  test("a child already on file is unavailable until re-applications are recorded, and gets no second lead", async () => {
+  test("a child already on file gets the same confirmation with its existing number, and no second lead", async () => {
     const sent = form()
-    expect((await submitAdmissionForm(secretClient(), sent)).ok).toBe(true)
+    const first = await submitAdmissionForm(secretClient(), sent)
+    expect(first.ok).toBe(true)
 
     const again = { ...sent, submissionKey: randomUUID() }
-    expect(await submitAdmissionForm(secretClient(), again)).toEqual({ ok: false, error: { kind: "unavailable" } })
+    expect(await submitAdmissionForm(secretClient(), again)).toEqual(first)
     expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
   })
 

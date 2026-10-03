@@ -40,6 +40,7 @@ const LABELS: Record<string, string> = {
   returning_family_reapplied: "Returning family: re-applied",
   // Its parent or guardian.
   full_name: "Full name",
+  contact_name: "Parent or guardian name",
   relationship: "Relationship",
   relationship_description: "Relationship details",
   phone: "Phone",
@@ -63,6 +64,8 @@ const LABELS: Record<string, string> = {
   payment_type: "Payment type",
   amount: "Amount",
   paid_on: "Payment date",
+  // Its re-applications, which also use the lead's and contact's labels.
+  differing_fields: "Differs from the lead",
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
@@ -77,6 +80,8 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   // The entry already says who recorded the payment, and when. The request id
   // only stops a retried Confirm recording it twice.
   school_fee_payments: new Set(["lead_id", "recorded_by", "recorded_at", "request_id"]),
+  // The numbers as typed show as stored instead.
+  re_applications: new Set(["lead_id", "submission_key", "received_at", "phone_as_sent", "whatsapp_as_sent"]),
 }
 
 const ORIGINS: Record<string, string> = {
@@ -111,6 +116,9 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
       return PAYMENT_TYPE_NAMES[value as RecordedPaymentType] ?? raw(value)
     case "amount":
       return typeof value === "number" ? `TZS ${value.toLocaleString("en-US")}` : raw(value)
+    case "differing_fields":
+      if (!Array.isArray(value)) return raw(value)
+      return value.length === 0 ? "Nothing" : value.map((f) => LABELS[String(f)] ?? String(f)).join(", ")
     default:
       return raw(value)
   }
@@ -185,6 +193,7 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     const closure = changed.get("closure")
     if (closure?.to === "Inactive") return "marked the lead Inactive"
     if (closure?.to === "Archived") return closure.from === "Inactive" ? "moved the lead from Inactive to Archived" : "archived the lead"
+    if (changed.get("returning_family_reapplied")?.to === true) return "flagged the lead Returning family: re-applied"
     return "changed the lead"
   }
 
@@ -225,6 +234,7 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
 
   if (entry.record === "reopening_requests") return reopeningSummary(entry)
   if (entry.record === "school_fee_payments" && insert) return "recorded a school-fee payment"
+  if (entry.record === "re_applications" && insert) return "recorded a re-application"
 
   if (entry.record !== null) {
     if (insert) return `added ${article(entry.record)} ${entry.record} record`

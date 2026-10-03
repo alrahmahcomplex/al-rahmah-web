@@ -5,6 +5,22 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Each lead has a **Follow-ups** panel showing when the school will next contact the
+  family, with a note on what for, or "No follow-up scheduled". It says whether the date
+  is due today, coming up or overdue.
+- Admissions Staff and the Admissions Manager can **Schedule follow-up** with a date from
+  today to one year ahead (tomorrow to start with) and an optional note. A lead has one
+  follow-up at a time.
+- **Change date** moves a follow-up to a new date and asks why. The panel lists every
+  earlier date with its reason, and the lead's history shows each plan and each change,
+  the old and new date included.
+- The Accountant sees the panel with no actions. A Declined, Inactive or Archived lead
+  keeps showing its last planned follow-up, with no actions.
+
 ## October 3, 2026 `v0.28.0`
 
 ### NEW

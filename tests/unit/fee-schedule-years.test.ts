@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { canEditFeeAmounts, canReadFeeSchedule, canSeeFeeAmounts, parseScheduleYear } from "@/app/staff/fees/years"
+import { canEditAcademicYear, canEditFeeAmounts, canReadFeeSchedule, canSeeFeeAmounts, parseScheduleYear } from "@/app/staff/fees/years"
 
 describe("parseScheduleYear", () => {
   it("reads a four-digit year from 2000 to 2999", () => {
@@ -36,5 +36,13 @@ describe("canEditFeeAmounts", () => {
     expect(canEditFeeAmounts(["payments.view", "payments.record"])).toBe(true)
     expect(canEditFeeAmounts(["payments.record", "academic_years.manage"])).toBe(false)
     expect(canEditFeeAmounts(["payments.view"])).toBe(false)
+  })
+})
+
+describe("canEditAcademicYear", () => {
+  it("needs academic_years.manage and payments.view, so nobody changes a start or seats they can't read", () => {
+    expect(canEditAcademicYear(["payments.view", "academic_years.manage"])).toBe(true)
+    expect(canEditAcademicYear(["academic_years.manage"])).toBe(false)
+    expect(canEditAcademicYear(["payments.view", "payments.record"])).toBe(false)
   })
 })

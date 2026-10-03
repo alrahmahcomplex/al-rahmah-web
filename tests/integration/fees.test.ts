@@ -59,7 +59,7 @@ describe("saving a year's schedule", () => {
     for (const person of [ACCOUNTANT, MANAGER, ADMISSIONS]) {
       expect(await getFeeSchedule(await signedIn(person), year), person.roleName).toEqual({
         ok: true,
-        data: { year, academicYearStart: null, ...amounts() },
+        data: { year, academicYearStart: null, seats: [], ...amounts() },
       })
     }
   })
@@ -77,7 +77,7 @@ describe("saving a year's schedule", () => {
       preFormOne: { day: 460_000, boarding: 590_000 },
     })
     expect(await saveFeeAmounts(accountant, year, corrected)).toEqual({ ok: true, data: null })
-    expect(await getFeeSchedule(accountant, year)).toEqual({ ok: true, data: { year, academicYearStart: null, ...corrected } })
+    expect(await getFeeSchedule(accountant, year)).toEqual({ ok: true, data: { year, academicYearStart: null, seats: [], ...corrected } })
   })
 
   test("lists every year, newest first", async () => {

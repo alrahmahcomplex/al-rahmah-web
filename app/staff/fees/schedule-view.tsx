@@ -2,13 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDate } from "@/lib/school-calendar"
 import { BAND_NAMES, FEE_BANDS, type FeeSchedule } from "@/lib/services/fees"
 
-import { bandClasses, formatShillings } from "./format"
-
-const INSTALMENTS = [
-  ["First", "first"],
-  ["Second", "second"],
-  ["Third", "third"],
-] as const
+import { bandClasses, formatShillings, INSTALMENTS } from "./format"
 
 // A year's schedule as read-only tables, for everyone who may read it.
 export function ScheduleView({ schedule }: { schedule: FeeSchedule }) {
@@ -76,10 +70,6 @@ export function ScheduleView({ schedule }: { schedule: FeeSchedule }) {
           <dd className="text-right tabular-nums">TZS {formatShillings(schedule.preFormOne.day)}</dd>
           <dt className="text-muted-foreground">Pre-Form One programme, Boarding</dt>
           <dd className="text-right tabular-nums">TZS {formatShillings(schedule.preFormOne.boarding)}</dd>
-          <dt className="text-muted-foreground">Academic-year start</dt>
-          <dd className="text-right">
-            {schedule.academicYearStart ? formatDate(schedule.academicYearStart) : "Not set yet"}
-          </dd>
         </dl>
       </section>
     </div>

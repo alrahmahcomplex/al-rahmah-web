@@ -21,8 +21,19 @@ export function canSeeFeeAmounts(permissions: readonly Permission[]): boolean {
   return permissions.includes("payments.view")
 }
 
+// What staff who open the screen without payments.view are told instead.
+export const NOT_SHOWN_WITHOUT_PAYMENTS_VIEW =
+  "The Fee schedule, with its amounts, Academic-year start and seats, is shown only to staff who can view payments."
+
 // Editing needs the amounts in view too: a save replaces the whole year, so
 // staff who can't read it would overwrite a schedule they never saw.
 export function canEditFeeAmounts(permissions: readonly Permission[]): boolean {
   return canSeeFeeAmounts(permissions) && permissions.includes("payments.record")
+}
+
+// The Academic-year start and seats sit behind payments.view in the database
+// too, so setting them from the screen needs it as well as
+// academic_years.manage: nobody changes values they can't read.
+export function canEditAcademicYear(permissions: readonly Permission[]): boolean {
+  return canSeeFeeAmounts(permissions) && permissions.includes("academic_years.manage")
 }

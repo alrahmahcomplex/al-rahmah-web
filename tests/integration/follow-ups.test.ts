@@ -275,6 +275,20 @@ describe("changing a follow-up's date", () => {
     ).toEqual({ ok: false, error: { kind: "read-only" } })
   })
 
+  test("refuses a follow-up whose lead closed after it was scheduled", async () => {
+    const lead = await newLead()
+    const staff = await signedIn(ADMISSIONS)
+    const first = await scheduleFollowUp(staff, lead, { dueOn: addDays(today, 1) })
+    if (!first.ok) throw new Error("schedule failed")
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [lead]))
+
+    expect(await changeFollowUpDate(staff, first.data.followUpId, { dueOn: addDays(today, 2), reason: "Moved on." })).toEqual({
+      ok: false,
+      error: { kind: "read-only" },
+    })
+    expect(await followUpsOf(lead)).toHaveLength(1)
+  })
+
   test("a follow-up that does not exist is not found", async () => {
     const staff = await signedIn(ADMISSIONS)
     for (const id of [randomUUID(), "nope"]) {

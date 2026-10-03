@@ -149,12 +149,14 @@ begin
     if auth.role() is distinct from 'authenticated' or not public.has_permission('follow_ups.record') then
         raise exception 'not_permitted';
     end if;
-    if not exists (select 1 from public.leads l where l.id = schedule_follow_up.lead_id) then
+    -- The lead is held shared first, so a decline or closure running
+    -- alongside finishes before this and is seen. Then two staff scheduling
+    -- the same lead at once schedule it once: whoever comes second finds the
+    -- open follow-up. Always the row first, then the advisory lock.
+    perform 1 from public.leads l where l.id = schedule_follow_up.lead_id for share;
+    if not found then
         raise exception 'not_found';
     end if;
-
-    -- Two staff scheduling the same lead at once schedule it once: whoever
-    -- comes second finds the open follow-up.
     perform pg_advisory_xact_lock(hashtextextended('follow-up-lead:' || schedule_follow_up.lead_id::text, 0));
     perform public.assert_lead_open(schedule_follow_up.lead_id);
     perform public.check_follow_up_plan(schedule_follow_up.due_on, plan_note);
@@ -201,6 +203,7 @@ begin
         raise exception 'not_found';
     end if;
 
+    perform 1 from public.leads l where l.id = earlier.lead_id for share;
     perform pg_advisory_xact_lock(hashtextextended('follow-up-lead:' || earlier.lead_id::text, 0));
     perform public.assert_lead_open(earlier.lead_id);
 

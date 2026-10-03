@@ -21,7 +21,9 @@ async function signIn(page: Page, person: FixtureStaff) {
 const WORK_ACTIONS = ["Edit student", "Edit parent or guardian", "Record visit", "Separate from this Family", "Confirm match"]
 
 test.describe("a closed lead", () => {
-  test("shows the banner, hides the work actions and offers Request reopening", async ({ page }) => {
+  // Until #99 adds the request form, the banner says requests can't be sent
+  // yet and links to the reopen page as About reopening.
+  test("shows the banner, hides the work actions and points to reopening", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${ARCHIVED}`)
 
@@ -29,7 +31,9 @@ test.describe("a closed lead", () => {
     await expect(banner).toContainText("read-only")
     for (const name of WORK_ACTIONS) await expect(page.getByRole("button", { name })).toHaveCount(0)
 
-    await banner.getByRole("link", { name: "Request reopening" }).click()
+    await expect(banner).toContainText("Reopening requests can't be sent yet.")
+    await expect(banner.getByRole("link", { name: "Request reopening" })).toHaveCount(0)
+    await banner.getByRole("link", { name: "About reopening" }).click()
     await expect(page).toHaveURL(new RegExp(`/staff/leads/${ARCHIVED}/reopen\\?source=lead$`))
     await expect(page.getByRole("heading", { name: "Hamisi Fixture" })).toBeVisible()
   })
@@ -41,11 +45,12 @@ test.describe("a closed lead", () => {
     await expect(page.getByRole("button", { name: "Edit student" })).toHaveCount(0)
   })
 
-  test("the Accountant sees the banner without Request reopening", async ({ page }) => {
+  test("the Accountant sees the banner without the way to reopening", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
     await page.goto(`/staff/leads/${ARCHIVED}`)
     await expect(page.getByRole("region", { name: "This lead is Archived" })).toBeVisible()
     await expect(page.getByRole("link", { name: "Request reopening" })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "About reopening" })).toHaveCount(0)
   })
 
   test("an open sister keeps her screen as before, with the shared parent editable", async ({ page }) => {

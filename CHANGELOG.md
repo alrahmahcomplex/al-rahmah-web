@@ -10,8 +10,8 @@ stay in the `0.x` range.
 ### NEW
 
 - A Declined, Inactive or Archived lead says so at the top of its screen and explains
-  that it is read-only. Staff who may ask for it to be reopened get **Request
-  reopening**, which leads to the reopening page. Open leads look as before.
+  that it is read-only. Staff who may ask for it to be reopened are told requests
+  can't be sent yet, with a link to the reopening page. Open leads look as before.
 - The database refuses every change to a closed lead, whichever screen or call it
   comes from.
 

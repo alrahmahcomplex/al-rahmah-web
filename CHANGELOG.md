@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 3, 2026 `v0.18.0`
+
+### NEW
+
+- Parents can apply for a child from their phone. **Omba sasa** opens the Admission form:
+  three short steps for the parent's details, the child's class, year and day or
+  boarding, then a check of everything before sending. The parent gets the child's
+  **Namba ya Udahili** to bring to campus, and the child appears on the Leads screen as
+  Applied, with the Admission form named in its history. Switching language keeps
+  what was typed. If sending fails, the form says so and keeps every entry, and
+  sending the same form twice never creates a second lead.
+
 ## October 3, 2026 `v0.17.0`
 
 ### NEW
@@ -14,13 +26,6 @@ stay in the `0.x` range.
   as a tap-to-call link. **Staff sign-in** stays at the bottom.
 - A switch at the top turns the site to English and back. The site remembers the choice,
   so the page opens in that language next time.
-- Parents can apply for a child from their phone. **Omba sasa** opens the Admission form:
-  three short steps for the parent's details, the child's class, year and day or
-  boarding, then a check of everything before sending. The parent gets the child's
-  **Namba ya Udahili** to bring to campus, and the child appears on the Leads screen as
-  Applied, with the Admission form named in its history. Switching language keeps
-  what was typed. If sending fails, the form says so and keeps every entry, and
-  sending the same form twice never creates a second lead.
 
 ## October 1, 2026 `v0.16.0`
 

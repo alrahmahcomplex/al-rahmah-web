@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 3, 2026 `v0.23.0`
+
+### NEW
+
+- The staff home now shows a **Visited leads** count below your account notices, for
+  anyone whose role can view leads. It counts every lead by its Visit date, including
+  leads since Declined, Inactive or Archived, and leaves out Applied leads that haven't
+  visited yet.
+- The filter icon on the count narrows it to a date, a week (Monday to Sunday), a month
+  or a year in Tanzania time, and to one Enrollment year. The count says which period
+  and year it shows, and **Show all time and all years** clears it.
+- The chosen filters stay in the page address, so a reload keeps them and a copied link
+  opens the same view. The address holds only dates and years.
+
 ## October 3, 2026 `v0.22.0`
 
 ### NEW

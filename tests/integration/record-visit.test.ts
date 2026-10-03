@@ -127,7 +127,7 @@ describe("recording the visit of an Applied family", () => {
 
   test("an Applied lead with a closure mark is read-only", async () => {
     const lead = await appliedLead()
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [lead.id]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive', closure_reason = 'Duplicate record' where id = $1", [lead.id]))
 
     expect(await recordVisit(await signedIn(ADMISSIONS), lead.id, today)).toEqual({ ok: false, error: { kind: "closed" } })
     expect(await reread(lead.id)).toMatchObject({ status: "Applied", visitDate: null, closure: "Inactive" })

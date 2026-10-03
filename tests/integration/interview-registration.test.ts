@@ -163,7 +163,7 @@ describe("registering a lead for interview", () => {
 
   test("refuses an Inactive lead as closed", async () => {
     const lead = await newLead()
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [lead]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive', closure_reason = 'Duplicate record' where id = $1", [lead]))
 
     expect(await registerForInterview(await signedIn(ADMISSIONS), lead)).toEqual({ ok: false, error: "lead_closed" })
   })

@@ -249,7 +249,7 @@ describe("what a result must hold", () => {
 describe("who may record a result", () => {
   test("a closed lead is refused", async () => {
     const { leadId, interviewId } = await registeredLead()
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [leadId]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive', closure_reason = 'Duplicate record' where id = $1", [leadId]))
 
     expect(await recordInterviewResult(await signedIn(ADMISSIONS), interviewId, PASS)).toEqual({ ok: false, error: "lead_closed" })
     expect(await stored(interviewId)).toMatchObject({ result: null })

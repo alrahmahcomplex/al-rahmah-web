@@ -2,13 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Permission } from "@/lib/permissions"
 
-import type { LeadStatus } from "./leads"
+import type { LeadClosure as ClosureMark, LeadStatus } from "./leads"
 import type { Result } from "./result"
 
-// The lead closure module (slice 8, #27): declining a lead, and reading why a
-// lead is closed. Every write is a database function that checks the
-// permission itself and refuses a closed lead, so these calls only translate
-// what the database answers. #98 and #99 add closure marks and reopening
+// The lead closure module (slice 8, #27): declining a lead, marking it
+// Inactive or Archived, and reading why a lead is closed. Every write is a
+// database function that checks the permission and the rules itself, so
+// these calls only translate what the database answers. #99 adds reopening
 // requests here.
 
 // The fixed list, in the order staff pick from.
@@ -86,6 +86,83 @@ export async function declineLead(
 }
 
 // ---------------------------------------------------------------------------
+// Marking a lead Inactive or Archived.
+// ---------------------------------------------------------------------------
+
+// The fixed list, in the order staff pick from.
+export const CLOSURE_REASONS = [
+  "Duplicate record",
+  "Family requested closure",
+  "Enrolled elsewhere",
+  "No longer pursuing admission",
+  "Record created in error",
+  "Admission cycle ended",
+] as const
+export type ClosureReason = (typeof CLOSURE_REASONS)[number]
+
+export function isClosureReason(value: unknown): value is ClosureReason {
+  return typeof value === "string" && (CLOSURE_REASONS as readonly string[]).includes(value)
+}
+
+// The longest note the database keeps.
+export const CLOSURE_NOTE_MAX = 1000
+
+export type MarkMove = "inactive" | "archived"
+
+// The closure mark each move sets.
+export const MARK_OF: Readonly<Record<MarkMove, ClosureMark>> = { inactive: "Inactive", archived: "Archived" }
+
+export function isMarkMove(value: unknown): value is MarkMove {
+  return value === "inactive" || value === "archived"
+}
+
+// The marks a lead may still take, whatever its status: both while it has
+// none, Archived alone once it is Inactive, and none once it is Archived. Only
+// an approved reopening removes a mark.
+export function marksAllowed(closure: ClosureMark | null): MarkMove[] {
+  if (closure === null) return ["inactive", "archived"]
+  return closure === "Inactive" ? ["archived"] : []
+}
+
+export type MarkInput = {
+  mark: MarkMove
+  reason: ClosureReason
+  // Optional. Blank counts as none.
+  note?: string
+}
+
+export type MarkError =
+  // No leads.close.
+  | "forbidden"
+  // No reason from the list, a note too long, or a move the rules don't
+  // allow: any mark on an Archived lead, or Inactive on an Inactive one.
+  | "invalid"
+  | "not-found"
+  | "unavailable"
+
+// Puts a closure mark on a lead, keeping its status. Needs leads.close.
+export async function markLead(
+  supabase: SupabaseClient,
+  leadId: string,
+  { mark, reason, note }: MarkInput,
+): Promise<Result<null, MarkError>> {
+  // A mark that isn't one of the two moves is sent as it came, and refused.
+  const { error } = await supabase.rpc("mark_lead", {
+    lead_id: leadId,
+    mark: isMarkMove(mark) ? MARK_OF[mark] : String(mark),
+    reason,
+    note: note ?? null,
+  })
+  if (!error) return { ok: true, data: null }
+
+  if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
+  if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not-found" }
+  if (error.message === "invalid") return { ok: false, error: "invalid" }
+  console.error("Could not mark a lead", error)
+  return { ok: false, error: "unavailable" }
+}
+
+// ---------------------------------------------------------------------------
 // Why a lead is closed.
 // ---------------------------------------------------------------------------
 
@@ -99,9 +176,21 @@ export type LeadDecline = {
   statusBefore: LeadStatus | null
 }
 
+export type LeadClosureMark = {
+  mark: ClosureMark
+  reason: ClosureReason
+  note: string | null
+  // Empty only on leads marked before marks were recorded.
+  closedAt: string | null
+  // The staff member's name, looked up now.
+  closedBy: string | null
+}
+
 export type LeadClosure = {
   // Set while the lead is Declined.
   decline: LeadDecline | null
+  // Set while the lead carries a closure mark.
+  closure: LeadClosureMark | null
 }
 
 export type LeadClosureError = "forbidden" | "not-found" | "unavailable"
@@ -114,9 +203,16 @@ type ClosureRow = {
     declined_by: string | null
     status_before: LeadStatus | null
   } | null
+  closure: {
+    mark: ClosureMark
+    reason: ClosureReason
+    note: string | null
+    closed_at: string | null
+    closed_by: string | null
+  } | null
 }
 
-// The lead's current decline, for staff who may view leads.
+// The lead's current decline and closure mark, for staff who may view leads.
 export async function getLeadClosure(
   supabase: SupabaseClient,
   leadId: string,
@@ -129,7 +225,7 @@ export async function getLeadClosure(
     return { ok: false, error: "unavailable" }
   }
 
-  const { decline } = data as ClosureRow
+  const { decline, closure } = data as ClosureRow
   return {
     ok: true,
     data: {
@@ -139,6 +235,13 @@ export async function getLeadClosure(
         declinedAt: decline.declined_at,
         declinedBy: decline.declined_by,
         statusBefore: decline.status_before,
+      },
+      closure: closure && {
+        mark: closure.mark,
+        reason: closure.reason,
+        note: closure.note,
+        closedAt: closure.closed_at,
+        closedBy: closure.closed_by,
       },
     },
   }

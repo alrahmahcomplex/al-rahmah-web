@@ -29,6 +29,8 @@ const LABELS: Record<string, string> = {
   declined_reason: "Declined reason",
   declined_explanation: "Decline explanation",
   status_before_decline: "Status before decline",
+  closure_reason: "Closure reason",
+  closure_note: "Closure note",
   visit_date: "Visit date",
   guardian_contact_id: "Parent or guardian",
   returning_family_joined: "Returning family: joined a Family",
@@ -59,7 +61,7 @@ const LABELS: Record<string, string> = {
 // itself: who declined a lead and when; an interview's lead, and who
 // registered it when.
 const HIDDEN: Record<string, ReadonlySet<string>> = {
-  lead: new Set(["declined_at", "declined_by"]),
+  lead: new Set(["declined_at", "declined_by", "closed_at", "closed_by"]),
   interviews: new Set(["lead", "registered_at", "registered_by"]),
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
@@ -163,6 +165,9 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     }
     if (changed.get("returning_family_joined")?.to === false) return "rejected the Family match"
     if (changed.get("status")?.to === "Declined") return "declined the lead"
+    const closure = changed.get("closure")
+    if (closure?.to === "Inactive") return "marked the lead Inactive"
+    if (closure?.to === "Archived") return closure.from === "Inactive" ? "moved the lead from Inactive to Archived" : "archived the lead"
     return "changed the lead"
   }
 

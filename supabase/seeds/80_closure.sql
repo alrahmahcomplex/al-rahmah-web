@@ -2,9 +2,11 @@
 --
 -- 00_base.sql already holds the closed leads slice 8 reads: ADMSN-90005
 -- Hamisi Fixture (Visited, Archived) and ADMSN-90006 Rehema Fixture
--- (Declined from Visited, Family changed plans). Below, a Family with one
--- closed child and one open one, whose shared parent stays editable from the
--- open child's screen (#96), and a lead declined after its interview (#97).
+-- (Declined from Visited, Family changed plans); #98 gave ADMSN-90005 its
+-- closure reason there. Below, a Family with one closed child and one open
+-- one, whose shared parent stays editable from the open child's screen (#96),
+-- a lead declined after its interview (#97), an Inactive lead, and a lead both
+-- Declined and Archived (#98).
 -- Their names leave out "Fixture", so a name search for the base leads still
 -- finds those six only.
 --
@@ -12,6 +14,10 @@
 --   ADMSN-90081 Daudi Kibwana        Visited, the open sibling
 --   ADMSN-90082 Kheri Mwinyi         Declined from Interviewed: Did not pass interview,
 --                                    by Test Admissions, with an explanation
+--   ADMSN-90083 Pendo Lyimo          Visited, Inactive: No longer pursuing admission,
+--                                    by Test Admissions, with a note
+--   ADMSN-90084 Jabiri Lyimo         Declined from Visited: Enrolled elsewhere, then
+--                                    Archived: Admission cycle ended, by Test Manager
 
 begin;
 
@@ -20,22 +26,38 @@ select public.set_audit_actor('system');
 insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
 values
     ('c0c0c0c0-0000-4000-8000-000000000080', 'Mariamu Kibwana', 'Mother', null, '+255700000180', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000082', 'Saidi Mwinyi', 'Father', null, '+255700000182', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000082', 'Saidi Mwinyi', 'Father', null, '+255700000182', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000083', 'Neema Lyimo', 'Mother', null, '+255700000183', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000084', 'Yohana Lyimo', 'Father', null, '+255700000184', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
     status, closure, visit_date, guardian_contact_id, returning_family_joined,
-    declined_reason, declined_explanation, declined_at, declined_by, status_before_decline
+    declined_reason, declined_explanation, declined_at, declined_by, status_before_decline,
+    closure_reason, closure_note, closed_at, closed_by
 ) values
     ('1ead0000-0000-4000-8000-000000000080', 'ADMSN-90080', 'Asha Kibwana', 'STD 6', 2027, 'Day',
         'Declined', null, date '2026-08-24', 'c0c0c0c0-0000-4000-8000-000000000080', false,
-        'Unreachable after follow-up', null, null, null, 'Visited'),
+        'Unreachable after follow-up', null, null, null, 'Visited',
+        null, null, null, null),
     ('1ead0000-0000-4000-8000-000000000081', 'ADMSN-90081', 'Daudi Kibwana', 'STD 2', 2027, 'Day',
         'Visited', null, date '2026-08-24', 'c0c0c0c0-0000-4000-8000-000000000080', true,
-        null, null, null, null, null),
+        null, null, null, null, null,
+        null, null, null, null),
     ('1ead0000-0000-4000-8000-000000000082', 'ADMSN-90082', 'Kheri Mwinyi', 'FORM 1', 2027, 'Day',
         'Declined', null, date '2026-08-25', 'c0c0c0c0-0000-4000-8000-000000000082', false,
         'Did not pass interview', 'Scored below the pass mark; the family will try again next year.',
-        timestamptz '2026-09-15 10:30:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', 'Interviewed');
+        timestamptz '2026-09-15 10:30:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', 'Interviewed',
+        null, null, null, null),
+    ('1ead0000-0000-4000-8000-000000000083', 'ADMSN-90083', 'Pendo Lyimo', 'STD 3', 2027, 'Day',
+        'Visited', 'Inactive', date '2026-08-26', 'c0c0c0c0-0000-4000-8000-000000000083', false,
+        null, null, null, null, null,
+        'No longer pursuing admission', 'The family is waiting to hear about a job transfer.',
+        timestamptz '2026-09-18 11:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003'),
+    ('1ead0000-0000-4000-8000-000000000084', 'ADMSN-90084', 'Jabiri Lyimo', 'STD 7', 2027, 'Day',
+        'Declined', 'Archived', date '2026-08-27', 'c0c0c0c0-0000-4000-8000-000000000084', false,
+        'Enrolled elsewhere', null, timestamptz '2026-09-10 09:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', 'Visited',
+        'Admission cycle ended', null,
+        timestamptz '2026-09-30 14:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000001');
 
 commit;

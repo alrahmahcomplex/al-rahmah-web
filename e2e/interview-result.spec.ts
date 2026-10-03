@@ -95,7 +95,7 @@ test.describe("recording an interview result", () => {
     await form.getByLabel("Score (%)").fill("20")
 
     // The lead is closed while the form is open.
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [lead]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive', closure_reason = 'Duplicate record' where id = $1", [lead]))
     await form.getByRole("button", { name: "Save result" }).click()
 
     await expect(form.getByRole("alert")).toHaveText("This lead is closed, so its interview result can't be changed.")
@@ -115,7 +115,7 @@ test.describe("who is offered Record result", () => {
 
   test("a closed lead keeps its result but offers no correction", async ({ page }) => {
     const lead = await registeredLead()
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Archived' where id = $1", [lead]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Archived', closure_reason = 'Duplicate record' where id = $1", [lead]))
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${lead}`)
 

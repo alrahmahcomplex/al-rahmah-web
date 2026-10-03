@@ -52,7 +52,7 @@ The `xxxx` is yours to number within the range. Within a slice, tickets that run
 
 **Renumber at release.** Slices merge in any order, but the hosted database applies migrations in timestamp order, and one older than its newest may never be applied. So in *Releasing* step 1, after the rebase, compare each migration the PR adds with the newest on `origin/main`. If it sorts before, rename it with `git mv`: change the eight-digit date to the day after the newest migration's date and keep the last six digits. `20261010500100` after `20261010900000` becomes `20261011500100`. Then rerun the integration tests before pushing.
 
-- **Lead screen.** A new panel is a file in `app/staff/leads/[id]/` plus one line in `LEAD_PANELS` (`panels.tsx`). Nothing else in `page.tsx`. A closed lead shows no panel unless it sets `readOnlyWhenClosed: true`, and such a panel offers no work action while its `open` prop is false.
+- **Lead screen.** A new panel is a file in `app/staff/leads/[id]/` plus one line in `LEAD_PANELS` (`panels.tsx`). Nothing else in `page.tsx`. A closed lead shows no panel unless it sets `readOnlyWhenClosed: true`, and such a panel offers no work action while its `open` prop is false. The one exception is slice 8's closure panel: a closure mark is a change a closed lead still takes, so Mark inactive and Archive follow the lead's mark instead.
 - **Staff navigation.** One line in `STAFF_NAV` (`app/staff/navigation.ts`). An entry may take a list of permissions, any one of which shows it.
 - **Shared service files.** One owner per file at a time. Put new modules in new files under `lib/services/`.
 
@@ -64,6 +64,7 @@ Functions other slices call already exist, so nobody creates them twice:
 - `lead_is_closed(lead_id)`, for staff with `leads.view` (`forbidden` otherwise). #96 may `create or replace` both, keeping their condition the same.
 - A trigger refuses every update to a closed lead with `lead_closed`. A security definer function that must change one calls `set_lead_lifecycle_override(path)` first, with `close`, `reopen` or `payment_recompute`; it lasts until the transaction ends and is granted to no signed-in role.
 - `decline_lead(lead_id, reason text, explanation text)` declines an open lead: `leads.decline`, plus `academic_years.manage` for No seat available. It does no transaction control, so slice 7 calls it inside `record_follow_up`. A Declined lead must carry a `declined_reason` (a check constraint), so a seed or test that sets `status = 'Declined'` directly sets the reason too.
+- `mark_lead(lead_id, mark text, reason text, note text)` puts an Inactive or Archived mark on a lead (`leads.close`), Declined leads included. A closure mark must carry a `closure_reason` (a check constraint), so a seed or test that sets `closure` directly sets the reason in the same statement; a later update to the marked lead is refused as `lead_closed`.
 - `expected_interview_amount(lead_id)` returning `amount` and `discount_applied`. A stand-in at TZS 50,000 until #80 replaces it with `create or replace`.
 - `enrol_from_academic_year_start(as_of date)` returning how many leads it enrolled. A stand-in that enrols nobody until #109 replaces it with `create or replace`. `set_academic_year` already calls it when a start of today or earlier is set.
 - `OFFICE_PHONE` in `lib/office.ts`, server-only.

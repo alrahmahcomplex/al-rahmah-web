@@ -5,7 +5,7 @@ import { describe, expect, test } from "vitest"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, findLeadByAdmissionNumber, getLead, type CreateLeadInput, type NewContact, type NewStudent } from "@/lib/services/leads"
 
-import { anonClient, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber } from "../support/db"
+import { anonClient, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber, withoutLockWaits } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // The lead module against local Supabase, signed in as each seeded role. Each
@@ -453,7 +453,11 @@ describe("reading, writing around the module, and deleting", () => {
     // Not even the database owner can delete or empty them.
     for (const table of ["leads", "guardian_contacts"]) {
       await expect(rows(`delete from public.${table}`)).rejects.toThrow(/delete_refused/)
-      await expect(rows(`truncate public.${table} cascade`)).rejects.toThrow(/delete_refused/)
+      // Truncating leads locks audit_log too, which tests running alongside
+      // write to, so the truncate must not wait while holding a lock.
+      await expect(
+        inRolledBackTransaction((sql) => withoutLockWaits(sql, `truncate public.${table} cascade`)),
+      ).rejects.toThrow(/delete_refused/)
     }
   })
 

@@ -70,6 +70,28 @@ export async function lockExclusively(sql: Client, tables: string[]): Promise<vo
   }
 }
 
+// Runs one statement inside `sql`'s transaction without ever waiting on a
+// lock while holding another. A statement that takes several heavy locks in
+// turn, like `truncate ... cascade`, can otherwise deadlock with a test that
+// already holds one of them. It gives up a lock wait well before Postgres
+// checks for deadlocks, releases what it took and tries again.
+export async function withoutLockWaits(sql: Client, query: string): Promise<void> {
+  for (;;) {
+    await sql.query("savepoint without_lock_waits")
+    try {
+      await sql.query("set local lock_timeout = '50ms'")
+      await sql.query(query)
+      await sql.query("release savepoint without_lock_waits")
+      return
+    } catch (error) {
+      // 55P03: lock_not_available, raised when lock_timeout runs out.
+      if ((error as { code?: string }).code !== "55P03") throw error
+      await sql.query("rollback to savepoint without_lock_waits")
+      await new Promise((resolve) => setTimeout(resolve, 20 + Math.random() * 80))
+    }
+  }
+}
+
 // Runs `work` in a transaction that commits, as the system actor.
 // An Admission Number no lead holds yet. Numbers are random and the local
 // database keeps every lead the tests make, so no fixed number stays free.

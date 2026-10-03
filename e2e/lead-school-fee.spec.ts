@@ -6,12 +6,14 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { createLead } from "@/lib/services/leads"
 
-import { asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
+import { asSystem, createThrowawayStaff, signedIn } from "../tests/support/db"
+import { claimFeeYear, noScheduleYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
-// The School fee section on the lead screen. Each test gives its lead an
-// enrollment year of its own, with or without a schedule it saves itself, so
-// no other test's schedule changes what it sees.
+// The School fee section on the lead screen. A test that needs a schedule
+// claims a year of its own and saves one (tests/support/fee-years.ts), so no
+// other test's schedule changes what it sees; "no schedule" cases share the
+// one year no test schedules.
 
 const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
@@ -24,16 +26,20 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-// A year no schedule holds yet, that a lead can still hold (up to 2100).
-async function unusedYear(): Promise<number> {
-  return inRolledBackTransaction(async (sql) => {
-    for (;;) {
-      const year = randomInt(2030, 2100)
-      const taken = await sql.query("select 1 from public.fee_schedules where enrollment_year = $1", [year])
-      if (taken.rowCount === 0) return year
-    }
-  })
+// Years this test claimed, released when it finishes. A claimed year may hold
+// a schedule an earlier run saved, so a test that needs one saves its own.
+let claims: FeeYearClaim[] = []
+
+async function claimedYear(): Promise<number> {
+  const claim = await claimFeeYear()
+  claims.push(claim)
+  return claim.year
 }
+
+test.afterEach(async () => {
+  await Promise.all(claims.map((claim) => claim.release()))
+  claims = []
+})
 
 const AMOUNTS: FeeAmounts = {
   bands: {
@@ -67,7 +73,7 @@ function feeDetail(page: Page, term: string) {
 
 test.describe("a lead's School fee", () => {
   test("Admissions Staff see the fee, Total paid, balance and instalments, and a corrected class changes it", async ({ page }) => {
-    const year = await unusedYear()
+    const year = await claimedYear()
     const saved = await saveFeeAmounts(await signedIn(ACCOUNTANT), year, AMOUNTS)
     if (!saved.ok) throw new Error("setup failed")
     const id = await leadIn(year)
@@ -100,7 +106,7 @@ test.describe("a lead's School fee", () => {
   })
 
   test("a lead whose year has no schedule says so, with no amount", async ({ page }) => {
-    const year = await unusedYear()
+    const year = await noScheduleYear()
     const id = await leadIn(year)
 
     await signIn(page, ADMISSIONS)
@@ -111,7 +117,7 @@ test.describe("a lead's School fee", () => {
   })
 
   test("staff without payments.view see no School fee", async ({ page }) => {
-    const id = await leadIn(await unusedYear())
+    const id = await leadIn(await noScheduleYear())
     const viewer = await createThrowawayStaff(["leads.view"])
 
     await signIn(page, viewer)

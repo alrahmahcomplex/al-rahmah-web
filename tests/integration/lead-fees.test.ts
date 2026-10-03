@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { describe, expect, test } from "vitest"
+import { describe, expect, onTestFinished, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { BAND_CLASSES, FEE_BANDS, getFeeSchedule, saveFeeAmounts, type FeeAmounts, type FeeSchedule } from "@/lib/services/fees"
@@ -8,23 +8,22 @@ import { getLeadFee, type LeadFee } from "@/lib/services/lead-fees"
 import { createLead, updateLeadDetails, type DayOrBoarding, type LeadClass } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { claimFeeYear, noScheduleYear } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // A lead's School fee through the lead fee module, against local Supabase,
-// signed in as each seeded role. Each test gives its leads an enrollment year
-// of their own, with a schedule it saves itself, so no test shares a fee.
+// signed in as each seeded role. A test that needs a schedule claims a year of
+// its own and saves one (tests/support/fee-years.ts), so no test shares a fee;
+// "no schedule" cases share the one year no test schedules.
 
 const thisYear = Number(tanzaniaToday().slice(0, 4))
 
-// A year no schedule holds yet, that a lead can still hold (up to 2100).
-async function unusedYear(): Promise<number> {
-  return inRolledBackTransaction(async (sql) => {
-    for (;;) {
-      const year = randomInt(2030, 2100)
-      const taken = await sql.query("select 1 from public.fee_schedules where enrollment_year = $1", [year])
-      if (taken.rowCount === 0) return year
-    }
-  })
+// A year of the test's own, claimed until the test finishes. It may hold a
+// schedule an earlier run saved, so a test that needs one saves its own.
+async function claimedYear(): Promise<number> {
+  const claim = await claimFeeYear()
+  onTestFinished(claim.release)
+  return claim.year
 }
 
 function amounts(overrides: Partial<FeeAmounts> = {}): FeeAmounts {
@@ -45,7 +44,7 @@ function amounts(overrides: Partial<FeeAmounts> = {}): FeeAmounts {
 
 // A year with a schedule of its own.
 async function yearWithSchedule(overrides: Partial<FeeAmounts> = {}): Promise<number> {
-  const year = await unusedYear()
+  const year = await claimedYear()
   const saved = await saveFeeAmounts(await signedIn(ACCOUNTANT), year, amounts(overrides))
   if (!saved.ok) throw new Error(`setup failed: ${JSON.stringify(saved.error)}`)
   return year
@@ -140,7 +139,7 @@ describe("the School fee", () => {
   })
 
   test("a lead whose year has no schedule gets a no-schedule answer naming the year, and no amount", async () => {
-    const year = await unusedYear()
+    const year = await noScheduleYear()
     expect(await getLeadFee(await signedIn(ADMISSIONS), await lead(year))).toEqual({
       ok: true,
       data: { kind: "no-schedule", year },
@@ -242,7 +241,7 @@ describe("who sees it", () => {
 
 describe("the lead fee profile", () => {
   test("is readable with leads.view, written by nobody through the API, and never deleted", async () => {
-    const id = await lead(await unusedYear())
+    const id = await lead(await noScheduleYear())
     // Later tickets write it through their functions; here the owner stands in.
     await asSystem((sql) =>
       sql.query(
@@ -257,7 +256,7 @@ describe("the lead fee profile", () => {
     expect((await anonClient().from("lead_fee_profiles").select("id").eq("lead_id", id)).data ?? []).toEqual([])
 
     expect((await staff.from("lead_fee_profiles").update({ sibling_kept: true }).eq("lead_id", id)).error).not.toBeNull()
-    expect((await staff.from("lead_fee_profiles").insert({ lead_id: await lead(await unusedYear()) })).error).not.toBeNull()
+    expect((await staff.from("lead_fee_profiles").insert({ lead_id: await lead(await noScheduleYear()) })).error).not.toBeNull()
     expect((await staff.from("lead_fee_profiles").delete().eq("lead_id", id)).error).not.toBeNull()
     await expect(
       asSystem((sql) => sql.query("delete from public.lead_fee_profiles where lead_id = $1", [id])),
@@ -276,13 +275,13 @@ describe("the lead fee profile", () => {
   })
 
   test("holds one row per lead, and a prior sibling only with a name and class", async () => {
-    const id = await lead(await unusedYear())
+    const id = await lead(await noScheduleYear())
     await asSystem((sql) => sql.query("insert into public.lead_fee_profiles (lead_id) values ($1)", [id]))
     await expect(
       asSystem((sql) => sql.query("insert into public.lead_fee_profiles (lead_id) values ($1)", [id])),
     ).rejects.toThrow(/duplicate key/)
 
-    const other = await lead(await unusedYear())
+    const other = await lead(await noScheduleYear())
     await expect(
       asSystem((sql) => sql.query("insert into public.lead_fee_profiles (lead_id, prior_sibling) values ($1, true)", [other])),
     ).rejects.toThrow(/check constraint/)

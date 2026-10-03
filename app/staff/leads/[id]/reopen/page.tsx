@@ -46,7 +46,7 @@ export default async function ReopenLeadPage({
 
   return (
     <div className="flex flex-col gap-6">
-      {source === "duplicate_match" && (
+      {source === "duplicate_match" && isClosed(lead.data) && (
         <Alert>
           <AlertDescription>
             This student is already on file, so no new record was made. To bring the family back, ask for this lead

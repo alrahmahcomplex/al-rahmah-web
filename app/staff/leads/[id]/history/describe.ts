@@ -1,7 +1,7 @@
 import { formatDate } from "@/lib/school-calendar"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
-import { REOPENING_HIDDEN, REOPENING_LABELS, reopeningSummary, reopeningValue } from "./reopening-history"
+import { REOPENING_HIDDEN, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
 
 // A lead's history entry in plain words: who, what they did, and each field's
 // old and new value. A field, table or action kind this file does not know
@@ -58,8 +58,6 @@ const LABELS: Record<string, string> = {
   due_on: "Follow-up date",
   note: "Note",
   change_reason: "Reason for the change",
-  // Its reopening requests.
-  ...REOPENING_LABELS,
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
@@ -101,7 +99,7 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
     case "locked_amount":
       return typeof value === "number" ? `TZS ${value.toLocaleString("en-US")}` : raw(value)
     default:
-      return reopeningValue(field, value) ?? raw(value)
+      return raw(value)
   }
 }
 
@@ -285,10 +283,13 @@ function describeEntry(entry: LeadHistoryEntry, contactNames: Readonly<Record<st
       .filter((c) => fromOld || !isEmpty(c.to))
       .sort((a, b) => rank(a.field) - rank(b.field))
       .map((c) => ({
-        label: LABELS[c.field] ?? c.field,
+        label: reopeningLabel(entry.record, c.field) ?? LABELS[c.field] ?? c.field,
         // A creation has no old value, except a follow-up's earlier date.
-        from: fromOld || c.from !== null ? display(c.field, c.from, contactNames) : null,
-        to: display(c.field, c.to, contactNames),
+        from:
+          fromOld || c.from !== null
+            ? (reopeningValue(entry.record, c.field, c.from) ?? display(c.field, c.from, contactNames))
+            : null,
+        to: reopeningValue(entry.record, c.field, c.to) ?? display(c.field, c.to, contactNames),
       })),
   }
 }

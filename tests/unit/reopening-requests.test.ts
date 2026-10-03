@@ -125,4 +125,12 @@ describe("a reopening request in the history", () => {
     expect(withdrawal).toMatchObject({ summary: "withdrew the reopening request" })
     expect(withdrawal.changes).toEqual([{ label: "Request", from: "Pending", to: "Withdrawn" }])
   })
+
+  it("leaves another table's reason and state in its own words", () => {
+    const [other] = describeLeadHistory(
+      [{ ...raised, record: "some_later_table", changes: [{ field: "state", from: null, to: "pending" }] }],
+      {},
+    )
+    expect(other.changes).toEqual([{ label: "state", from: null, to: "pending" }])
+  })
 })

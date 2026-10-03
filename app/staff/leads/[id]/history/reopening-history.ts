@@ -5,7 +5,11 @@ import { SOURCE_LABELS, STATE_LABELS } from "../reopening-outcome"
 
 // A Reopening request's history entries (#99), for describe.ts.
 
-export const REOPENING_LABELS: Readonly<Record<string, string>> = {
+const RECORD = "reopening_requests"
+
+// Labels for this table's own fields only, so another table's `reason` or
+// `state` keeps its own words.
+const LABELS: Readonly<Record<string, string>> = {
   source: "Raised from",
   reason: "Reason for reopening",
   state: "Request",
@@ -21,8 +25,13 @@ export const REOPENING_HIDDEN: ReadonlySet<string> = new Set([
   "decided_at",
 ])
 
-// A request's source or state in words; null for any other field.
-export function reopeningValue(field: string, value: unknown): string | null {
+export function reopeningLabel(record: string | null, field: string): string | null {
+  return record === RECORD ? (LABELS[field] ?? null) : null
+}
+
+// A request's source or state in words; null for any other field or record.
+export function reopeningValue(record: string | null, field: string, value: unknown): string | null {
+  if (record !== RECORD) return null
   if (field === "source") return SOURCE_LABELS[value as ReopeningSource] ?? null
   if (field === "state") return STATE_LABELS[value as ReopeningState] ?? null
   return null

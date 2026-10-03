@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Result } from "./result"
 
 // The interview module (slice 5, #26): registering a lead for interview,
-// recording and correcting its result, and reading its interviews. Every write is a database function that checks the
+// recording and correcting its result, marking its fee Paid or Not Paid, and
+// reading its interviews. Every write is a database function that checks the
 // permission itself and refuses a closed lead, so these calls only translate
 // what the database answers.
 
@@ -130,6 +131,62 @@ export async function recordInterviewResult(
 
   const row = data as RecordedRow
   return { ok: true, data: { firstRecording: row.first_recording, changed: row.changed } }
+}
+
+// ---------------------------------------------------------------------------
+// Marking the interview fee Paid or Not Paid.
+// ---------------------------------------------------------------------------
+
+export type FeeStatusInput = "paid" | "not_paid"
+
+export type FeeStatusChange = {
+  feeStatus: InterviewFeeStatus
+  // Whole TZS, locked by marking it Paid; null once it is Not Paid again.
+  lockedAmount: number | null
+  // Whether the locked amount includes an Approved Referral code's discount.
+  discountApplied: boolean
+}
+
+export type FeeStatusError =
+  // The fee already has that status.
+  | "no_change"
+  | "lead_closed"
+  | "forbidden"
+  | "not_found"
+  | "unavailable"
+
+const FEE_STATUSES: Readonly<Record<FeeStatusInput, InterviewFeeStatus>> = { paid: "Paid", not_paid: "Not Paid" }
+
+type FeeStatusRow = { fee_status: InterviewFeeStatus; locked_amount: number | null; discount_applied: boolean }
+
+// Marks the interview fee Paid, locking the amount the fee comes to now, or
+// Not Paid, releasing the lock. Nobody gives an amount: the database works it
+// out. Needs interview_payments.record, which only the Accountant holds.
+export async function setInterviewFeeStatus(
+  supabase: SupabaseClient,
+  interviewId: string,
+  status: FeeStatusInput,
+): Promise<Result<FeeStatusChange, FeeStatusError>> {
+  const { data, error } = await supabase.rpc("set_interview_fee_status", {
+    interview_id: interviewId,
+    // Anything but the two statuses reaches the database as null, which it
+    // refuses without changing anything.
+    fee_status: Object.hasOwn(FEE_STATUSES, status) ? FEE_STATUSES[status] : null,
+  })
+  if (error) {
+    // `forbidden`: the amount is read with leads.view, which a role allowed
+    // to mark the fee might lack.
+    if (error.message === "not_permitted" || error.message === "forbidden" || error.code === "42501") {
+      return { ok: false, error: "forbidden" }
+    }
+    if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not_found" }
+    if (error.message === "no_change" || error.message === "lead_closed") return { ok: false, error: error.message }
+    console.error("Could not set an interview fee status", error)
+    return { ok: false, error: "unavailable" }
+  }
+
+  const row = data as FeeStatusRow
+  return { ok: true, data: { feeStatus: row.fee_status, lockedAmount: row.locked_amount, discountApplied: row.discount_applied } }
 }
 
 // ---------------------------------------------------------------------------

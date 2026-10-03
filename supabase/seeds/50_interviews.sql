@@ -6,8 +6,9 @@
 --
 --   ADMSN-90501 Amani Interview      Visited, registered for interview: S/N 1 for 2027, no result yet
 --   ADMSN-90502 Jabari Interview     Visited, not registered: kept for registering by hand on the lead screen
---   ADMSN-90503 Neema Interview      Interviewed: S/N 2 for 2027, Passed with 78.5% on 2026-09-22
---   ADMSN-90504 Baraka Interview     Interviewed: S/N 3 for 2027, Failed with 41% on 2026-09-22
+--   ADMSN-90503 Neema Interview      Interviewed: S/N 2 for 2027, Passed with 78.5% on 2026-09-22,
+--                                    fee Paid with TZS 50,000 locked
+--   ADMSN-90504 Baraka Interview     Interviewed: S/N 3 for 2027, Failed with 41% on 2026-09-22, fee Not Paid
 
 begin;
 
@@ -42,11 +43,17 @@ values
     ('1e7e0000-0000-4000-8000-000000000501', '1ead0000-0000-4000-8000-000000000501', 1, 2027,
         timestamptz '2026-09-15 09:30:00+03', 'a1a1a1a1-0000-4000-8000-000000000003');
 
-insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
+-- 90503's fee was marked Paid by the Accountant, locking the full TZS 50,000.
+insert into public.interviews (
+    id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score,
+    fee_status, locked_amount
+)
 values
     ('1e7e0000-0000-4000-8000-000000000503', '1ead0000-0000-4000-8000-000000000503', 2, 2027,
-        timestamptz '2026-09-15 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Passed', 78.5),
+        timestamptz '2026-09-15 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Passed', 78.5,
+        'Paid', 50000),
     ('1e7e0000-0000-4000-8000-000000000504', '1ead0000-0000-4000-8000-000000000504', 3, 2027,
-        timestamptz '2026-09-15 10:15:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Failed', 41);
+        timestamptz '2026-09-15 10:15:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Failed', 41,
+        'Not Paid', null);
 
 commit;

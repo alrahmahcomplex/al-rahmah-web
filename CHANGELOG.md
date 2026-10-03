@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The interview panel shows the interview fee: **Paid** or **Not Paid**, the amount, and
+  a note when the Referral code discount brings it down. Everyone who can see the lead
+  sees it.
+- The Accountant can **Mark paid**, even before the interview has happened. The amount
+  is locked at that moment and shows as the amount paid, so a later change to the
+  Referral code doesn't change it. Nobody types an amount.
+- **Mark not paid** undoes a wrong click and releases the lock. The lead's history lists
+  each change with the amount, who made it and when.
+- Admissions Staff and the Admissions Manager see the fee but can't change it.
+
 ## October 4, 2026 `v0.30.0`
 
 ### NEW

@@ -52,6 +52,8 @@ The initial choices are: **Enrolled elsewhere**, **Family changed plans**, **Fee
 **Interview payment**:
 The payment status for the admission interview, in Tanzanian shillings (TZS). The standard interview amount is **TZS 50,000**. An **Approved** **Referral code** on the lead grants a **TZS 20,000** discount, making the calculated expected amount **TZS 30,000**. Staff cannot override the calculated fee. The Accountant records only **Paid** or **Not Paid**; payment date, method, and receipt reference are outside the current scope.
 
+The fee belongs to each interview, not to the lead, so a retaken interview after a reopening starts **Not Paid** with its own fee. Marking it **Paid** locks the calculated amount at that moment, and a later change to the **Referral code** or the agent's approval does not change it. Marking it **Not Paid** again, to undo a wrong click, releases the lock; the next **Paid** locks the amount as it is then.
+
 An unpaid interview may still be conducted and its result recorded internally. The interview result must not be released to the parent or guardian until the interview payment status is **Paid**.
 
 Once payment is **Paid**, staff may release the result through a **Send through WhatsApp** action. This action generates a WhatsApp link containing a predefined message with the interview result and next action. It is an intentional staff-triggered release, not an unsolicited automatic message.

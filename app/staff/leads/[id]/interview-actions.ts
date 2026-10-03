@@ -2,15 +2,24 @@
 
 import { revalidatePath } from "next/cache"
 
-import { recordInterviewResult, registerForInterview, type InterviewResultInput } from "@/lib/services/interviews"
+import {
+  recordInterviewResult,
+  registerForInterview,
+  setInterviewFeeStatus,
+  type FeeStatusInput,
+  type InterviewResultInput,
+} from "@/lib/services/interviews"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
 import {
+  feeChangedOutcome,
+  feeOutcome,
   recordedOutcome,
   recordOutcome,
   registeredOutcome,
   registerOutcome,
+  type FeeOutcome,
   type RecordOutcome,
   type RegisterOutcome,
 } from "./interview-outcome"
@@ -61,4 +70,20 @@ export async function recordResult(
   if (!recorded.ok) return recordOutcome(recorded.error)
   revalidatePath(`/staff/leads/${leadId}`)
   return recordedOutcome(recorded.data)
+}
+
+// Marks the interview fee Paid or Not Paid. There is no amount to send: the
+// database locks the fee as it comes to at that moment.
+export async function setFeeStatus(leadId: string, interviewId: string, status: FeeStatusInput): Promise<FeeOutcome> {
+  if (typeof leadId !== "string" || typeof interviewId !== "string") return feeOutcome("not_found")
+  if (status !== "paid" && status !== "not_paid") return feeOutcome("unavailable")
+
+  const supabase = await createClient()
+  const allowed = await requirePermission(supabase, "interview_payments.record")
+  if (!allowed.ok) return feeOutcome("forbidden")
+
+  const changed = await setInterviewFeeStatus(supabase, interviewId, status)
+  if (!changed.ok) return feeOutcome(changed.error)
+  revalidatePath(`/staff/leads/${leadId}`)
+  return feeChangedOutcome(changed.data)
 }

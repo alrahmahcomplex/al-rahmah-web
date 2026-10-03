@@ -167,7 +167,7 @@ export function DeclineLead({ lead, reasons }: DeclineLeadProps) {
               <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
                 <dt className="text-muted-foreground">Lead</dt>
                 <dd className="text-slate-900">
-                  {lead.studentName}, <span className="font-mono">{lead.admissionNumber}</span>
+                  {lead.studentName}, <span className="font-mono whitespace-nowrap">{lead.admissionNumber}</span>
                 </dd>
                 <dt className="text-muted-foreground">Status now</dt>
                 <dd className="text-slate-900">{lead.status}</dd>

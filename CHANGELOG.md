@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- People the school wants to bring in families can get a **Discount code** (*Code ya
+  Punguzo*) at `/discount-code`. They enter their name, phone and an optional WhatsApp
+  number, and the code appears at once with their own link to the Admission form, a
+  **Copy** button and **Share on WhatsApp**. The page is in Swahili unless they switch
+  to English, and it explains that families who use the code get TZS 20,000 off the
+  interview fee once the school confirms it.
+- Registering again with the same phone shows the same code. Each new registration
+  appears as **Pending** on the Marketing Agents screen.
+- The page isn't linked from the home page and asks search engines not to list it, so
+  the school decides who gets the address.
+
 ## October 5, 2026 `v0.38.0`
 
 ### NEW

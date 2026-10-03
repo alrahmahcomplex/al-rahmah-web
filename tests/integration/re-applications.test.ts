@@ -195,7 +195,8 @@ describe("a child already on file", () => {
   test("shows the Returning family badge when the re-application is its only cause", async () => {
     const lead = await onFile()
     const staff = await signedIn(ADMISSIONS)
-    expect((await getLead(staff, lead.id)).ok && ((await getLead(staff, lead.id)) as { data: { returningFamily: boolean } }).data.returningFamily).toBe(false)
+    const before = await getLead(staff, lead.id)
+    expect(before.ok && before.data.returningFamily).toBe(false)
 
     expect((await submitAdmissionForm(secretClient(), form(lead.parent, [sameChild(lead)]))).ok).toBe(true)
 

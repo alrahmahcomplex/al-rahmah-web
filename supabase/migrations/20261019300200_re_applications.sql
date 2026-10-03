@@ -278,17 +278,17 @@ begin
 
     select * into contact from public.guardian_contacts g where g.id = lead.guardian_contact_id for share;
 
-    if pupil_name <> lead.student_name then differing := differing || 'student_name'; end if;
-    if student_class <> lead.class_name then differing := differing || 'class_name'; end if;
-    if student_year <> lead.enrollment_year then differing := differing || 'enrollment_year'; end if;
-    if student_boarding <> lead.day_or_boarding then differing := differing || 'day_or_boarding'; end if;
-    if contact_name <> contact.full_name then differing := differing || 'contact_name'; end if;
-    if contact_relationship <> contact.relationship then differing := differing || 'relationship'; end if;
+    if pupil_name <> lead.student_name then differing := array_append(differing, 'student_name'); end if;
+    if student_class <> lead.class_name then differing := array_append(differing, 'class_name'); end if;
+    if student_year <> lead.enrollment_year then differing := array_append(differing, 'enrollment_year'); end if;
+    if student_boarding <> lead.day_or_boarding then differing := array_append(differing, 'day_or_boarding'); end if;
+    if contact_name <> contact.full_name then differing := array_append(differing, 'contact_name'); end if;
+    if contact_relationship <> contact.relationship then differing := array_append(differing, 'relationship'); end if;
     if contact_description is distinct from contact.relationship_description then
-        differing := differing || 'relationship_description';
+        differing := array_append(differing, 'relationship_description');
     end if;
-    if contact_phone <> contact.phone then differing := differing || 'phone'; end if;
-    if contact_whatsapp is distinct from contact.whatsapp then differing := differing || 'whatsapp'; end if;
+    if contact_phone <> contact.phone then differing := array_append(differing, 'phone'); end if;
+    if contact_whatsapp is distinct from contact.whatsapp then differing := array_append(differing, 'whatsapp'); end if;
 
     insert into public.re_applications (
         lead_id, submission_key, contact_name, relationship, relationship_description,

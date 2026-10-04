@@ -31,12 +31,10 @@ export type LeadPanel = {
 // The panels below the lead summary, top to bottom. A new panel is its own
 // file in this folder plus one line here; the page itself stays unchanged.
 export const LEAD_PANELS: readonly LeadPanel[] = [
-  // First, under a closed lead's banner: the Pending request, with Withdraw
-  // for its requester, and earlier requests.
-  // Shown on closed leads, the only leads a reopening request is for. Its one
-  // action, Withdraw, is the requester taking back their own request, so it
-  // stays while the lead is closed (an exception recorded in
-  // docs/agents/parallel-work.md).
+  // First, under a closed lead's banner: the Pending request and earlier
+  // requests. A request exists only for a closed lead, so its one action,
+  // Withdraw for the requester, stays while the lead is closed (an exception
+  // recorded in docs/agents/parallel-work.md).
   { key: "reopenings", readOnlyWhenClosed: true, Panel: ReopeningSection },
   {
     key: "family",

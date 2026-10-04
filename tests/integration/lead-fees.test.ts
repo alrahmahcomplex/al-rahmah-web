@@ -87,6 +87,8 @@ function expectedFee(schedule: Pick<FeeSchedule, "split" | "dueDates">, year: nu
       { amount: second, due: schedule.dueDates.second },
       { amount: fee - first - second, due: schedule.dueDates.third },
     ],
+    priority: null,
+    priorityReachedOn: null,
   }
 }
 

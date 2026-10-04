@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { FeeBand } from "./fees"
 import type { DayOrBoarding } from "./leads"
 import type { Result } from "./result"
+import type { SeatPriority } from "./school-fee-payments"
 
 // A lead's School fee: what the family owes, has paid, and when each
 // instalment is due. The database calculates it from the Fee schedule of the
@@ -22,6 +23,10 @@ export type LeadFee =
       balance: number
       // First, second and third. They add up to the School fee exactly.
       instalments: [Instalment, Instalment, Instalment]
+      // Derived from Total paid: none below the minimum Initial deposit. The
+      // date is the payment date on which the lead reached it.
+      priority: SeatPriority | null
+      priorityReachedOn: string | null
     }
   // The lead's enrollment year has no Fee schedule yet, so it has no fee.
   | { kind: "no-schedule"; year: number }
@@ -40,6 +45,8 @@ type LeadSchoolFeeRow = {
   second_due: string | null
   third_amount: number | null
   third_due: string | null
+  priority: SeatPriority | null
+  priority_reached_on: string | null
 }
 
 // Needs leads.view and payments.view; anyone else, signed out included, is
@@ -74,6 +81,8 @@ export async function getLeadFee(
         { amount: data.second_amount!, due: data.second_due! },
         { amount: data.third_amount!, due: data.third_due! },
       ],
+      priority: data.priority,
+      priorityReachedOn: data.priority_reached_on,
     },
   }
 }

@@ -5,6 +5,29 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 4, 2026 `v0.33.0`
+
+### NEW
+
+- The Accountant can **Record payment** on a lead whose interview was Passed. They pick
+  the type (Full payment, Initial deposit, First instalment, Second instalment or Third
+  instalment), enter the amount and the payment date, which starts at today and can be
+  earlier but never later. Before anything is saved, a review shows the new Total paid,
+  the balance and the Seat priority, and the payment is recorded only on **Confirm
+  payment**. A recorded payment can't be changed.
+- The School fee panel lists the lead's payments, newest first, each with who recorded it
+  and when. Total paid and the balance now count them.
+- Each lead shows its **Seat priority**: Full when the fee is paid, First instalment from
+  40% of the fee, Deposit from the minimum Initial deposit. It follows the amounts, not the
+  payment types, so a deposit that reaches 40% counts as First instalment. The lead list
+  shows it in a new column.
+- Recording is refused, with a sentence saying why, on a Declined, Inactive or Archived
+  lead, on a lead whose interview wasn't Passed, on a year with no Fee schedule, and for
+  an amount of zero or less. Admissions Staff and the Admissions Manager see the fee and
+  the payments with no Record payment.
+- The lead's history lists each payment for staff who may view payments, and leaves it
+  out for everyone else.
+
 ## October 4, 2026 `v0.32.0`
 
 ### NEW

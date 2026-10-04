@@ -32,3 +32,61 @@ insert into public.class_seats (enrollment_year, class_name, day_or_boarding, se
     (2027, 'FORM 1', 'Boarding', 30);
 
 commit;
+
+-- School-fee payments (#107): Passed leads in 2027 at each Seat priority.
+-- Every parent and child is made up, and every number is +255 700 000 xxx.
+-- Test Accountant recorded the payments. Each lead was interviewed and
+-- Passed on 2026-09-22, with S/Ns after the earlier seeds' ones.
+--
+--   ADMSN-90901 Halima Malipo   STD 2 Day, TZS 2,000,000: no payment, no priority
+--   ADMSN-90902 Juma Malipo     STD 2 Day, TZS 2,000,000: Initial deposit 300,000, Deposit
+--   ADMSN-90903 Rehema Malipo   KG 1 Day, TZS 1,100,000: Initial deposit 500,000, past 40%, so First instalment
+--   ADMSN-90904 Omari Malipo    STD 1 Day, TZS 2,000,000: Full payment 2,000,000, Full
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000901', 'Mwanaidi Malipo', 'Mother', null, '+255700000901', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000902', 'Bakari Malipo', 'Father', null, '+255700000902', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000903', 'Tatu Malipo', 'Mother', null, '+255700000903', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000904', 'Shabani Malipo', 'Father', null, '+255700000904', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined
+) values
+    ('1ead0000-0000-4000-8000-000000000901', 'ADMSN-90901', 'Halima Malipo', 'STD 2', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000901', false),
+    ('1ead0000-0000-4000-8000-000000000902', 'ADMSN-90902', 'Juma Malipo', 'STD 2', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000902', false),
+    ('1ead0000-0000-4000-8000-000000000903', 'ADMSN-90903', 'Rehema Malipo', 'KG 1', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000903', false),
+    ('1ead0000-0000-4000-8000-000000000904', 'ADMSN-90904', 'Omari Malipo', 'STD 1', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000904', false);
+
+-- The next four 2027 S/Ns, after whatever the earlier seeds issued.
+insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
+select i.id, i.lead, c.last_number + i.n, 2027, timestamptz '2026-09-15 11:00:00+03',
+    'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Passed', i.score
+from public.interview_serial_counters c
+cross join (values
+    (1, '1e7e0000-0000-4000-8000-000000000901'::uuid, '1ead0000-0000-4000-8000-000000000901'::uuid, 71.0),
+    (2, '1e7e0000-0000-4000-8000-000000000902'::uuid, '1ead0000-0000-4000-8000-000000000902'::uuid, 68.5),
+    (3, '1e7e0000-0000-4000-8000-000000000903'::uuid, '1ead0000-0000-4000-8000-000000000903'::uuid, 82.0),
+    (4, '1e7e0000-0000-4000-8000-000000000904'::uuid, '1ead0000-0000-4000-8000-000000000904'::uuid, 90.5)
+) as i(n, id, lead, score)
+where c.enrollment_year = 2027;
+
+update public.interview_serial_counters set last_number = last_number + 4 where enrollment_year = 2027;
+
+insert into public.school_fee_payments (id, lead_id, payment_type, amount, paid_on, recorded_by, recorded_at) values
+    ('fee00000-0000-4000-8000-000000000902', '1ead0000-0000-4000-8000-000000000902', 'initial_deposit', 300000,
+        date '2026-09-25', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-25 10:00:00+03'),
+    ('fee00000-0000-4000-8000-000000000903', '1ead0000-0000-4000-8000-000000000903', 'initial_deposit', 500000,
+        date '2026-09-24', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-24 11:30:00+03'),
+    ('fee00000-0000-4000-8000-000000000904', '1ead0000-0000-4000-8000-000000000904', 'full_payment', 2000000,
+        date '2026-09-26', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-26 09:15:00+03');
+
+commit;

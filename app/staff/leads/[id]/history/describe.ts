@@ -74,8 +74,9 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
   reopening_requests: REOPENING_HIDDEN,
-  // The entry already says who recorded the payment, and when.
-  school_fee_payments: new Set(["lead_id", "recorded_by", "recorded_at"]),
+  // The entry already says who recorded the payment, and when. The request id
+  // only stops a retried Confirm recording it twice.
+  school_fee_payments: new Set(["lead_id", "recorded_by", "recorded_at", "request_id"]),
 }
 
 const ORIGINS: Record<string, string> = {

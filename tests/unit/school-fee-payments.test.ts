@@ -89,6 +89,8 @@ describe("a payment in the lead's history", () => {
       { field: "paid_on", from: null, to: "2026-09-25" },
       { field: "recorded_by", from: null, to: "a1a1a1a1-0000-4000-8000-000000000004" },
       { field: "recorded_at", from: null, to: "2026-09-25T07:00:00Z" },
+      // The form's retry id is bookkeeping, never shown.
+      { field: "request_id", from: null, to: "0b5e0000-0000-4000-8000-000000000001" },
     ],
   }
 

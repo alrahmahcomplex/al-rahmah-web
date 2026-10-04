@@ -26,13 +26,35 @@ create type public.closure_reason as enum (
     'Admission cycle ended'
 );
 
--- The mark's details are set together with the mark, and an approved
--- reopening clears them together.
 alter table public.leads
     add column closure_reason public.closure_reason,
     add column closure_note text,
     add column closed_at timestamptz,
-    add column closed_by uuid references public.staff_members (id),
+    add column closed_by uuid references public.staff_members (id);
+
+-- Leads marked before this migration have no reason, and the check below
+-- would refuse them. They get the closest reason on the list and a note
+-- saying so; who marked them and when stay unknown. The closed-lead guard
+-- (#96) refuses changes to a marked lead, so this sets the `close` override,
+-- and the history records the change under the system actor. One block, so
+-- the transaction-local actor and override cover the update.
+do $$
+begin
+    perform public.set_audit_actor('system');
+    perform public.set_lead_lifecycle_override('close');
+
+    update public.leads
+    set closure_reason = 'No longer pursuing admission',
+        closure_note = 'Marked before closure reasons were recorded.'
+    where closure is not null and closure_reason is null;
+
+    perform set_config('app.lead_lifecycle_override', '', true);
+end;
+$$;
+
+-- The mark's details are set together with the mark, and an approved
+-- reopening clears them together.
+alter table public.leads
     add constraint leads_closure_reason_check
         check ((closure is not null) = (closure_reason is not null)),
     add constraint leads_closure_note_check

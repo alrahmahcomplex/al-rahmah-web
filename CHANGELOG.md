@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 4, 2026 `v0.34.0`
+
+### NEW
+
+- Staff who can see leads have a new **Interviews** screen in the staff menu. It lists
+  one enrollment year's interview registrations in S/N order, with each child's Admission
+  Number, name, class, day or boarding, result, score and interview fee. A name opens the
+  lead.
+- It opens on the current year, or the next year that has registrations, and offers
+  every year that has them. Filters narrow the list to **No result yet**, **Passed** or
+  **Failed**, and to **Paid** or **Not Paid**; the Accountant uses **Not Paid** to see
+  who still owes the fee. The filters stay in the address, so a list can be shared.
+- Declined, Inactive and Archived leads stay on the list with a marker, so no S/N goes
+  missing.
+
 ## October 4, 2026 `v0.33.0`
 
 ### NEW

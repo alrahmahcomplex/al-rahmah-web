@@ -17,8 +17,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
-import { changeLeadFollowUpDate, scheduleLeadFollowUp } from "./follow-up-actions"
+import { CONTACT_METHODS, type ContactStaff } from "@/lib/services/follow-ups"
+
+import { changeLeadFollowUpDate, recordLeadFollowUp, scheduleLeadFollowUp } from "./follow-up-actions"
 import { addDays, type FollowUpOutcome } from "./follow-up-outcome"
+import { tanzaniaNowLocal } from "./follow-up-record-format"
 import { Field, Saved } from "./lead-editors"
 
 const LOST_REQUEST: FollowUpOutcome = {
@@ -34,19 +37,30 @@ export function FollowUpActions({
   leadId,
   today,
   current,
+  enrolled,
+  signedIn,
+  contactStaff,
 }: {
   leadId: string
   // Today in Tanzania, as the server rendered the panel.
   today: string
   current: { id: string; dueOn: string } | null
+  // An Enrolled lead may record a contact with no next date.
+  enrolled: boolean
+  // The signed-in staff member, who made the contact unless they say
+  // otherwise.
+  signedIn: ContactStaff
+  // Who may be named as having made a contact; null when the list could not
+  // be loaded, leaving only the signed-in staff member.
+  contactStaff: ContactStaff[] | null
 }) {
-  const [dialog, setDialog] = useState<"schedule" | "change" | null>(null)
+  const [dialog, setDialog] = useState<"schedule" | "change" | "record" | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   // Today as of the dialog opening, so a page left open past midnight in
   // Tanzania offers the same dates the database accepts.
   const [openedOn, setOpenedOn] = useState(today)
 
-  function openDialog(which: "schedule" | "change") {
+  function openDialog(which: "schedule" | "change" | "record") {
     setSaved(null)
     setOpenedOn(laterOf(today, tanzaniaToday()))
     setDialog(which)
@@ -59,15 +73,26 @@ export function FollowUpActions({
 
   return (
     <div className="flex flex-col gap-2">
-      <div>
+      <div className="flex flex-wrap gap-2">
         {current ? (
-          <Button type="button" variant="outline" onClick={() => openDialog("change")}>
-            Change date
-          </Button>
+          <>
+            <Button type="button" onClick={() => openDialog("record")}>
+              Record follow-up
+            </Button>
+            <Button type="button" variant="outline" onClick={() => openDialog("change")}>
+              Change date
+            </Button>
+          </>
         ) : (
-          <Button type="button" onClick={() => openDialog("schedule")}>
-            Schedule follow-up
-          </Button>
+          <>
+            <Button type="button" onClick={() => openDialog("schedule")}>
+              Schedule follow-up
+            </Button>
+            {/* A contact nobody planned, such as the family phoning in. */}
+            <Button type="button" variant="outline" onClick={() => openDialog("record")}>
+              Record follow-up
+            </Button>
+          </>
         )}
       </div>
       <Saved message={saved} />
@@ -79,6 +104,21 @@ export function FollowUpActions({
       <Dialog open={dialog === "change"} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
           {dialog === "change" && current && <ChangeDateForm leadId={leadId} today={openedOn} current={current} onDone={done} />}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={dialog === "record"} onOpenChange={(open) => !open && setDialog(null)}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          {dialog === "record" && (
+            <RecordForm
+              leadId={leadId}
+              today={openedOn}
+              followUpId={current?.id ?? null}
+              enrolled={enrolled}
+              signedIn={signedIn}
+              contactStaff={contactStaff}
+              onDone={done}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -258,6 +298,185 @@ function ChangeDateForm({
       <DialogFooter>
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Change date"}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+const SELECT_CLASS =
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
+
+// Record follow-up: what happened on a call, message or visit, then the next
+// follow-up date. followUpId is the open follow-up the panel showed, or null
+// for a contact nobody planned; if that has changed by the time this is
+// saved, the database refuses and the form offers a reload.
+function RecordForm({
+  leadId,
+  today,
+  followUpId,
+  enrolled,
+  signedIn,
+  contactStaff,
+  onDone,
+}: {
+  leadId: string
+  today: string
+  followUpId: string | null
+  enrolled: boolean
+  signedIn: ContactStaff
+  contactStaff: ContactStaff[] | null
+  onDone: (message: string) => void
+}) {
+  // Now in Tanzania as the dialog opened: the default and the latest time
+  // the form offers.
+  const [now] = useState(() => tanzaniaNowLocal())
+  const [comment, setComment] = useState("")
+  const [method, setMethod] = useState<string>(CONTACT_METHODS[0])
+  const [contactedBy, setContactedBy] = useState(signedIn.id)
+  const [contactedAt, setContactedAt] = useState(now)
+  // An Enrolled lead needs no next date, so none is suggested.
+  const [nextDueOn, setNextDueOn] = useState(enrolled ? "" : addDays(today, 7))
+  const [nextNote, setNextNote] = useState("")
+  const { refusal, pending, save } = useSave(onDone)
+
+  const people = contactStaff ?? [signedIn]
+  const choices = people.some((person) => person.id === signedIn.id) ? people : [signedIn, ...people]
+
+  return (
+    <form
+      aria-label="Record follow-up"
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault()
+        save(() =>
+          recordLeadFollowUp(leadId, { followUpId, comment, method, contactedBy, contactedAt, nextDueOn, nextNote }),
+        )
+      }}
+    >
+      <DialogHeader>
+        <DialogTitle>Record follow-up</DialogTitle>
+        <DialogDescription>
+          {followUpId
+            ? "What happened when the family was contacted. Recording it completes the current follow-up."
+            : "A contact nobody planned, such as the family phoning in."}
+        </DialogDescription>
+      </DialogHeader>
+      {refusal && (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription className="flex flex-col items-start gap-2">
+            {refusal.message}
+            {/* Someone else recorded or changed the follow-up first. */}
+            {refusal.conflict && (
+              <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()}>
+                Reload
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      <Field label="Comment" hint="What was discussed. Keep it to what admissions needs.">
+        {({ id, describedBy }) => (
+          <Textarea
+            id={id}
+            required
+            minLength={3}
+            maxLength={2000}
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            aria-describedby={describedBy}
+            aria-invalid={refusal?.field === "comment" ? true : undefined}
+          />
+        )}
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Contact method">
+          {({ id }) => (
+            <select
+              id={id}
+              className={SELECT_CLASS}
+              value={method}
+              onChange={(event) => setMethod(event.target.value)}
+              aria-invalid={refusal?.field === "method" ? true : undefined}
+            >
+              {CONTACT_METHODS.map((choice) => (
+                <option key={choice} value={choice}>
+                  {choice}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        <Field label="Made the contact">
+          {({ id }) => (
+            <select
+              id={id}
+              className={SELECT_CLASS}
+              value={contactedBy}
+              onChange={(event) => setContactedBy(event.target.value)}
+              aria-invalid={refusal?.field === "contacted_by" ? true : undefined}
+            >
+              {choices.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      </div>
+      <Field label="When" hint="Tanzania time. Not later than now.">
+        {({ id, describedBy }) => (
+          <Input
+            id={id}
+            type="datetime-local"
+            required
+            max={now}
+            value={contactedAt}
+            onChange={(event) => setContactedAt(event.target.value)}
+            aria-describedby={describedBy}
+            aria-invalid={refusal?.field === "contacted_at" ? true : undefined}
+          />
+        )}
+      </Field>
+      <Field
+        label={enrolled ? "Next follow-up date (optional)" : "Next follow-up date"}
+        hint={
+          enrolled
+            ? "The lead is Enrolled, so a next date is optional. Any day after today, up to one year ahead."
+            : "Any day after today, up to one year ahead."
+        }
+      >
+        {({ id, describedBy }) => (
+          <Input
+            id={id}
+            type="date"
+            required={!enrolled}
+            min={addDays(today, 1)}
+            max={addDays(today, 365)}
+            value={nextDueOn}
+            onChange={(event) => setNextDueOn(event.target.value)}
+            aria-describedby={describedBy}
+            aria-invalid={refusal?.field === "next_due_on" || refusal?.field === "outcome" ? true : undefined}
+          />
+        )}
+      </Field>
+      <Field label="Next follow-up note (optional)" hint="What the next contact is for. Up to 500 characters.">
+        {({ id, describedBy }) => (
+          <Textarea
+            id={id}
+            maxLength={500}
+            value={nextNote}
+            disabled={enrolled && nextDueOn === ""}
+            onChange={(event) => setNextNote(event.target.value)}
+            aria-describedby={describedBy}
+            aria-invalid={refusal?.field === "next_note" ? true : undefined}
+          />
+        )}
+      </Field>
+      <DialogFooter>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Recording…" : "Record follow-up"}
         </Button>
       </DialogFooter>
     </form>

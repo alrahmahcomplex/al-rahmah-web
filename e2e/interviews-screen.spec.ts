@@ -4,8 +4,9 @@ import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixt
 
 // The Interviews screen. Slice 5's seeded registrations hold S/N 1 to 3 for
 // 2027, so they head the 2027 list whatever the other tests register after
-// them: ADMSN-90501 with no result yet, ADMSN-90503 Passed and ADMSN-90504
-// Failed, both of those still Not Paid until someone marks them.
+// them: ADMSN-90501 with no result yet and Not Paid, ADMSN-90503 Passed and
+// Paid (the seed marks it Paid as the Accountant), and ADMSN-90504 Failed and
+// Not Paid. Tests only read these three.
 
 // 2001 is before any intake the tests or seeds register interviews for.
 const EMPTY_YEAR = 2001
@@ -36,7 +37,7 @@ test.describe("the Interviews screen", () => {
     await expect(filter(page, "Enrollment year", "2027")).toHaveAttribute("aria-current", "page")
     // In S/N order, each with its details.
     await expect(rows(page).nth(0)).toContainText("1ADMSN-90501Amani InterviewSTD 5DayNo result yet–Not Paid")
-    await expect(rows(page).nth(1)).toContainText("2ADMSN-90503Neema InterviewSTD 1DayPassed78.5%")
+    await expect(rows(page).nth(1)).toContainText("2ADMSN-90503Neema InterviewSTD 1DayPassed78.5%Paid")
     await expect(rows(page).nth(2)).toContainText("3ADMSN-90504Baraka InterviewFORM 1BoardingFailed41%Not Paid")
 
     await filter(page, "Result", "No result yet").click()
@@ -71,15 +72,19 @@ test.describe("the Interviews screen", () => {
     await expect(page).toHaveURL(/year=2027&fee=not-paid$/)
     await expect(rows(page).nth(0)).toContainText("ADMSN-90501")
     await expect(list(page)).toContainText("ADMSN-90504")
+    await expect(list(page).getByText("ADMSN-90503")).toHaveCount(0)
     for (const fee of await rows(page).locator("td:last-child").allTextContents()) expect(fee).toBe("Not Paid")
     // The table scrolls inside its frame; the page itself doesn't.
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
 
+    // Paid lists the seeded Paid lead first, by S/N, and only Paid rows.
     await filter(page, "Interview fee", "Paid").click()
     await expect(page).toHaveURL(/year=2027&fee=paid$/)
-    await expect(page.getByRole("table", { name: "Interviews for 2027" }).or(page.getByText("No interviews match these filters."))).toBeVisible()
-    await expect(page.getByText("ADMSN-90501")).toHaveCount(0)
-    await expect(page.getByText("ADMSN-90504")).toHaveCount(0)
+    await expect(rows(page).nth(0)).toContainText("2ADMSN-90503Neema Interview")
+    await expect(rows(page).nth(0).locator("td:last-child")).toHaveText("Paid")
+    for (const fee of await rows(page).locator("td:last-child").allTextContents()) expect(fee).toBe("Paid")
+    await expect(list(page).getByText("ADMSN-90501")).toHaveCount(0)
+    await expect(list(page).getByText("ADMSN-90504")).toHaveCount(0)
   })
 
   test("says plainly when a year has no registrations, and when nothing matches the filters", async ({ page }) => {

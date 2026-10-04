@@ -72,7 +72,7 @@ beforeAll(async () => {
   }
   // Paid as the Accountant's fee panel leaves it: the amount locked.
   await asSystem((sql) =>
-    sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 50000 where id = $1", [interview.passed]),
+    sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 50000, locked_discount_applied = false where id = $1", [interview.passed]),
   )
 
   const declinedLead = await declineLead(await signedIn(MANAGER), lead.declined, { reason: "Family changed plans" })

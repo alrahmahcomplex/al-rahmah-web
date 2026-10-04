@@ -53,7 +53,15 @@ export default async function LeadsPage({
           <AlertDescription>Leads could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : (
-        <Results results={results.data} search={search} priorities={priorities?.ok ? priorities.data : null} />
+        <>
+          {/* The list still works without the column, but staff are told it's missing. */}
+          {priorities && !priorities.ok && (
+            <Alert variant="destructive">
+              <AlertDescription>Seat priority could not be loaded, so it isn&apos;t shown. Try again in a moment.</AlertDescription>
+            </Alert>
+          )}
+          <Results results={results.data} search={search} priorities={priorities?.ok ? priorities.data : null} />
+        </>
       )}
     </div>
   )

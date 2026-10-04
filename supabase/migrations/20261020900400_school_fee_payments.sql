@@ -50,6 +50,10 @@ create table public.school_fee_payments (
     paid_on date not null,
     recorded_by uuid not null references public.staff_members (id),
     recorded_at timestamptz not null default now(),
+    -- The form's own id for one confirmed payment. A Confirm retried after a
+    -- lost response sends the same id and gets the payment already recorded,
+    -- so a retry never records it twice.
+    request_id uuid unique,
     check ((payment_type = 'fee_waived') = (amount is null))
 );
 
@@ -433,7 +437,8 @@ create function public.record_school_fee_payment(
     lead_id uuid,
     payment_type text,
     amount numeric,
-    paid_on date
+    paid_on date,
+    request_id uuid
 )
 returns jsonb
 language plpgsql
@@ -444,23 +449,50 @@ declare
     staff_id uuid;
     new_id uuid;
     seat record;
+    earlier public.school_fee_payments;
 begin
     if auth.role() is distinct from 'authenticated' or not public.has_permission('payments.record') then
         raise exception 'not_permitted';
     end if;
+    if record_school_fee_payment.request_id is null then
+        raise exception 'request_missing';
+    end if;
     perform 1 from public.leads l where l.id = record_school_fee_payment.lead_id for update;
+
+    -- A retry of a payment already recorded: hand back that payment instead
+    -- of recording it again. The lead's row lock above makes two retries
+    -- take turns, so the second sees the first. The same id with a different
+    -- payment is a caller's mistake, refused rather than guessed at.
+    select * into earlier from public.school_fee_payments p
+    where p.request_id = record_school_fee_payment.request_id;
+    if found then
+        if earlier.lead_id <> record_school_fee_payment.lead_id
+            or earlier.payment_type::text <> record_school_fee_payment.payment_type
+            or earlier.amount is distinct from record_school_fee_payment.amount
+            or earlier.paid_on <> record_school_fee_payment.paid_on
+        then
+            raise exception 'request_reused';
+        end if;
+        select * into seat from public.lead_seat_priority(record_school_fee_payment.lead_id);
+        return jsonb_build_object(
+            'payment_id', earlier.id,
+            'total_paid', seat.total_paid,
+            'priority', seat.priority
+        );
+    end if;
 
     perform public.check_school_fee_payment(lead_id, payment_type, amount, paid_on);
 
     select s.id into staff_id from public.staff_members s where s.user_id = auth.uid();
 
-    insert into public.school_fee_payments (lead_id, payment_type, amount, paid_on, recorded_by)
+    insert into public.school_fee_payments (lead_id, payment_type, amount, paid_on, recorded_by, request_id)
     values (
         record_school_fee_payment.lead_id,
         record_school_fee_payment.payment_type::public.school_fee_payment_type,
         record_school_fee_payment.amount::integer,
         record_school_fee_payment.paid_on,
-        staff_id
+        staff_id,
+        record_school_fee_payment.request_id
     )
     returning id into new_id;
 
@@ -474,8 +506,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.record_school_fee_payment(uuid, text, numeric, date) from public, anon;
-grant execute on function public.record_school_fee_payment(uuid, text, numeric, date) to authenticated;
+revoke execute on function public.record_school_fee_payment(uuid, text, numeric, date, uuid) from public, anon;
+grant execute on function public.record_school_fee_payment(uuid, text, numeric, date, uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- lead_school_fee_payments: a lead's payments, newest payment date first,

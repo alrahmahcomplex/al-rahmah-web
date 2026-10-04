@@ -148,12 +148,20 @@ type RecordedRow = { payment_id: string; total_paid: number; priority: SeatPrior
 // Records the payment under the signed-in staff member, on a lead whose
 // current interview is Passed and whose year has a Fee schedule. The payment
 // is locked once recorded. Needs payments.record.
+//
+// `requestId` names this one payment: the caller makes it once and sends it
+// again on a retry, which then returns the payment already recorded instead
+// of recording a second one.
 export async function recordPayment(
   supabase: SupabaseClient,
   leadId: string,
   payment: PaymentInput,
+  requestId: string,
 ): Promise<Result<RecordedPayment, PaymentError>> {
-  const { data, error } = await supabase.rpc("record_school_fee_payment", rpcArgs(leadId, payment))
+  const { data, error } = await supabase.rpc("record_school_fee_payment", {
+    ...rpcArgs(leadId, payment),
+    request_id: requestId,
+  })
   if (error) return { ok: false, error: paymentError(error, "record a school-fee payment") }
   const row = data as RecordedRow
   return { ok: true, data: { paymentId: row.payment_id, totalPaid: row.total_paid, priority: row.priority } }

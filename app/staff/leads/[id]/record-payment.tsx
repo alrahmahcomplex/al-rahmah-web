@@ -23,7 +23,7 @@ import type { PaymentField, PaymentRefusal } from "./payment-outcome"
 const LOST_REQUEST: PaymentRefusal = {
   status: "refused",
   field: null,
-  message: "The payment could not be confirmed. Check your connection, reload the page and see whether it was recorded.",
+  message: "The payment could not be confirmed. Check your connection and press Confirm payment again; it won't be recorded twice.",
 }
 
 // Typed amounts may carry thousands separators: 1,100,000.
@@ -93,7 +93,11 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
   const [amount, setAmount] = useState("")
   const [paidOn, setPaidOn] = useState(today)
   // What Review answered, for the payment as it was typed then.
-  const [reviewed, setReviewed] = useState<{ input: PaymentInput; preview: PaymentPreview } | null>(null)
+  // One id per reviewed payment, kept while the review shows, so a Confirm
+  // retried after a lost response records it once.
+  const [reviewed, setReviewed] = useState<{ input: PaymentInput; preview: PaymentPreview; requestId: string } | null>(
+    null,
+  )
   const [refusal, setRefusal] = useState<PaymentRefusal | null>(null)
   const [pending, startTransition] = useTransition()
   const invalid = (field: PaymentField) => (refusal?.field === field ? true : undefined)
@@ -106,7 +110,7 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
     startTransition(async () => {
       try {
         const outcome = await previewSchoolFeePayment(leadId, input)
-        if (outcome.status === "preview") setReviewed({ input, preview: outcome.preview })
+        if (outcome.status === "preview") setReviewed({ input, preview: outcome.preview, requestId: crypto.randomUUID() })
         else setRefusal(outcome)
       } catch {
         setRefusal({ ...LOST_REQUEST, message: "The payment could not be checked. Check your connection and try again." })
@@ -114,11 +118,11 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
     })
   }
 
-  function confirm(input: PaymentInput) {
+  function confirm(input: PaymentInput, requestId: string) {
     setRefusal(null)
     startTransition(async () => {
       try {
-        const outcome = await recordSchoolFeePayment(leadId, input)
+        const outcome = await recordSchoolFeePayment(leadId, input, requestId)
         if (outcome.status === "recorded") onDone(outcome.message)
         else {
           // Back to the form, so the Accountant can fix what was refused.
@@ -138,7 +142,7 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
   )
 
   if (reviewed) {
-    const { input, preview } = reviewed
+    const { input, preview, requestId } = reviewed
     return (
       <section aria-label="Review payment" className="flex max-w-xl flex-col gap-4 rounded-lg p-3 ring-1 ring-foreground/10">
         <p className="text-sm font-medium text-slate-900">Check this payment before you confirm it. Once recorded, it can&apos;t be changed.</p>
@@ -165,7 +169,7 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
           </dd>
         </dl>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => confirm(input)} disabled={pending}>
+          <Button type="button" onClick={() => confirm(input, requestId)} disabled={pending}>
             {pending ? "Recording…" : "Confirm payment"}
           </Button>
           <Button type="button" variant="outline" onClick={() => setReviewed(null)} disabled={pending}>

@@ -108,7 +108,7 @@ function payment(amount: number, overrides: Partial<PaymentInput> = {}): Payment
 }
 
 async function pay(supabase: SupabaseClient, leadId: string, input: PaymentInput) {
-  const recorded = await recordPayment(supabase, leadId, input)
+  const recorded = await recordPayment(supabase, leadId, input, randomUUID())
   if (!recorded.ok) throw new Error(`payment failed: ${recorded.error}`)
   return recorded.data
 }
@@ -244,6 +244,22 @@ describe("recording", () => {
     })
   })
 
+  test("a Confirm retried with the same request id records the payment once", async () => {
+    const id = await lead(await yearWithSchedule())
+    const accountant = await signedIn(ACCOUNTANT)
+    const requestId = randomUUID()
+
+    const first = await recordPayment(accountant, id, payment(300_000), requestId)
+    const retried = await recordPayment(accountant, id, payment(300_000), requestId)
+    expect(first.ok).toBe(true)
+    expect(retried).toEqual(first)
+    expect(await storedPayments(id)).toHaveLength(1)
+
+    // The same id with a different payment is refused, and records nothing.
+    expect(await recordPayment(accountant, id, payment(350_000), requestId)).toEqual({ ok: false, error: "unavailable" })
+    expect(await storedPayments(id)).toHaveLength(1)
+  })
+
   test("every precondition is refused, by the preview and the recording alike", async () => {
     const year = await yearWithSchedule()
     const accountant = await signedIn(ACCOUNTANT)
@@ -271,7 +287,7 @@ describe("recording", () => {
     ]
     for (const [name, id, input, error] of cases) {
       expect(await previewPayment(accountant, id, input), `preview: ${name}`).toEqual({ ok: false, error })
-      expect(await recordPayment(accountant, id, input), name).toEqual({ ok: false, error })
+      expect(await recordPayment(accountant, id, input, randomUUID()), name).toEqual({ ok: false, error })
     }
     expect(await storedPayments(passed)).toEqual([])
     expect(await storedPayments(declined)).toEqual([])
@@ -317,7 +333,7 @@ describe("who may do what", () => {
     const id = await lead(await yearWithSchedule())
     for (const person of [ADMISSIONS, MANAGER]) {
       const staff = await signedIn(person)
-      expect(await recordPayment(staff, id, payment(300_000)), person.roleName).toEqual({ ok: false, error: "forbidden" })
+      expect(await recordPayment(staff, id, payment(300_000), randomUUID()), person.roleName).toEqual({ ok: false, error: "forbidden" })
       expect(await previewPayment(staff, id, payment(300_000)), person.roleName).toEqual({ ok: false, error: "forbidden" })
     }
     await pay(await signedIn(ACCOUNTANT), id, payment(300_000))
@@ -338,7 +354,7 @@ describe("who may do what", () => {
     for (const [name, client] of [["leads.view only", viewer], ["signed out", anonClient()], ["secret key", secretClient()]] as const) {
       expect(await listPayments(client, id), name).toEqual({ ok: false, error: "forbidden" })
       expect(await listSeatPriorities(client, [id]), name).toEqual({ ok: false, error: "forbidden" })
-      expect(await recordPayment(client, id, payment(300_000)), name).toEqual({ ok: false, error: "forbidden" })
+      expect(await recordPayment(client, id, payment(300_000), randomUUID()), name).toEqual({ ok: false, error: "forbidden" })
       expect(await previewPayment(client, id, payment(300_000)), name).toEqual({ ok: false, error: "forbidden" })
     }
     // The secret key bypasses RLS, as it does on every table; only the

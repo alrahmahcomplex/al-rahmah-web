@@ -41,16 +41,29 @@ export async function previewSchoolFeePayment(leadId: string, input: PaymentInpu
   return { status: "preview", preview: preview.data }
 }
 
-// Records the payment the Accountant confirmed.
-export async function recordSchoolFeePayment(leadId: string, input: PaymentInput): Promise<RecordPaymentOutcome> {
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Records the payment the Accountant confirmed. `requestId` is the form's id
+// for this payment, the same on every retry.
+export async function recordSchoolFeePayment(
+  leadId: string,
+  input: PaymentInput,
+  requestId: string,
+): Promise<RecordPaymentOutcome> {
   const refused = shapeRefusal(leadId, input)
   if (refused) return refused
+  if (typeof requestId !== "string" || !REQUEST_ID.test(requestId)) return paymentRefusal("unavailable", "recorded")
 
   const supabase = await createClient()
   const allowed = await requirePermission(supabase, "payments.record")
   if (!allowed.ok) return paymentRefusal("forbidden", "recorded")
 
-  const recorded = await recordPayment(supabase, leadId, { type: input.type, amount: input.amount, paidOn: input.paidOn })
+  const recorded = await recordPayment(
+    supabase,
+    leadId,
+    { type: input.type, amount: input.amount, paidOn: input.paidOn },
+    requestId,
+  )
   if (!recorded.ok) return paymentRefusal(recorded.error, "recorded")
   revalidatePath(`/staff/leads/${leadId}`)
   return recordedPaymentOutcome(recorded.data)

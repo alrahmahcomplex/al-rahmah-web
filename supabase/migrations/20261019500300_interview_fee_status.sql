@@ -23,8 +23,21 @@
 -- `not_found`, `lead_closed` (from assert_lead_open), `invalid_status`, or
 -- `no_change` (the fee already has that status).
 
+alter table public.interviews add column locked_discount_applied boolean;
+
+-- A Paid interview from before this function could only have been written
+-- directly, with nothing saying whether its amount was discounted. The full
+-- fee was TZS 50,000 then, so a lower locked amount was the discounted one.
+do $$
+begin
+    perform public.set_audit_actor('system');
+    update public.interviews
+    set locked_discount_applied = locked_amount < 50000
+    where fee_status = 'Paid';
+end;
+$$;
+
 alter table public.interviews
-    add column locked_discount_applied boolean,
     add constraint interviews_discount_locked_while_paid
         check ((fee_status = 'Paid') = (locked_discount_applied is not null));
 

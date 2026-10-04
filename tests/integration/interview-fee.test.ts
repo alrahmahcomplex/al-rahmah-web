@@ -41,13 +41,13 @@ async function registeredLead() {
   return { leadId: created.data.leadId, interviewId: registered.data.interviewId }
 }
 
-type Stored = { fee_status: string; locked_amount: number | null; result: string | null }
+type Stored = { fee_status: string; locked_amount: number | null; locked_discount_applied?: boolean | null; result?: string | null }
 
 async function stored(interviewId: string): Promise<Stored> {
   return inRolledBackTransaction(
     async (sql) =>
       (
-        await sql.query<Stored>("select fee_status::text, locked_amount, result::text from public.interviews where id = $1", [
+        await sql.query<Stored>("select fee_status::text, locked_amount, locked_discount_applied, result::text from public.interviews where id = $1", [
           interviewId,
         ])
       ).rows[0],
@@ -87,7 +87,7 @@ describe("marking the interview fee Paid", () => {
       data: { feeStatus: "Paid", lockedAmount: 50000, discountApplied: false },
     })
 
-    expect(await stored(interviewId)).toEqual({ fee_status: "Paid", locked_amount: 50000, result: null })
+    expect(await stored(interviewId)).toEqual({ fee_status: "Paid", locked_amount: 50000, locked_discount_applied: false, result: null })
     expect(await getLeadInterviews(accountant, leadId)).toMatchObject({
       ok: true,
       data: [{ feeStatus: "Paid", amount: 50000, discountApplied: false, result: null }],
@@ -102,7 +102,7 @@ describe("marking the interview fee Paid", () => {
       await discountedFee(sql)
       await actAs(sql, ACCOUNTANT)
       const fee = async () =>
-        (await sql.query<Stored>("select fee_status::text, locked_amount from public.interviews where id = $1", [interviewId])).rows[0]
+        (await sql.query<Stored>("select fee_status::text, locked_amount, locked_discount_applied from public.interviews where id = $1", [interviewId])).rows[0]
       const set = async (status: string) =>
         (await sql.query<{ answer: Record<string, unknown> }>("select public.set_interview_fee_status($1, $2) as answer", [interviewId, status]))
           .rows[0].answer
@@ -120,25 +120,52 @@ describe("marking the interview fee Paid", () => {
 
     // The fee now comes to TZS 30,000, but what was paid stays at 50,000.
     expect(seen.expected).toEqual({ amount: 30000, discount_applied: true })
-    expect(seen.whilePaid).toEqual({ fee_status: "Paid", locked_amount: 50000 })
+    expect(seen.whilePaid).toEqual({ fee_status: "Paid", locked_amount: 50000, locked_discount_applied: false })
     // Not Paid releases the lock, and the next Paid takes the fee as it is then.
     expect(seen.unlocked).toMatchObject({ fee_status: "Not Paid", locked_amount: null })
-    expect(seen.afterUnlock).toEqual({ fee_status: "Not Paid", locked_amount: null })
+    expect(seen.afterUnlock).toEqual({ fee_status: "Not Paid", locked_amount: null, locked_discount_applied: null })
     expect(seen.relocked).toEqual({ interview_id: interviewId, fee_status: "Paid", locked_amount: 30000, discount_applied: true })
-    expect(seen.afterRelock).toEqual({ fee_status: "Paid", locked_amount: 30000 })
+    expect(seen.afterRelock).toEqual({ fee_status: "Paid", locked_amount: 30000, locked_discount_applied: true })
     // The stand-in went with the rollback.
     expect(await stored(interviewId)).toMatchObject({ fee_status: "Paid", locked_amount: 50000 })
   })
 
-  test("shows a discounted locked amount as including the discount", async () => {
-    const { leadId, interviewId } = await registeredLead()
-    await asSystem((sql) =>
-      sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 30000 where id = $1", [interviewId]),
-    )
-    expect(await getLeadInterviews(await signedIn(ADMISSIONS), leadId)).toMatchObject({
+  test("shows whether a locked amount included the discount from what was stored with it, not from the amount", async () => {
+    const lock = async (amount: number, discounted: boolean) => {
+      const { leadId, interviewId } = await registeredLead()
+      await asSystem((sql) =>
+        sql.query(
+          "update public.interviews set fee_status = 'Paid', locked_amount = $2, locked_discount_applied = $3 where id = $1",
+          [interviewId, amount, discounted],
+        ),
+      )
+      return leadId
+    }
+    const staff = await signedIn(ADMISSIONS)
+    expect(await getLeadInterviews(staff, await lock(30000, true))).toMatchObject({
       ok: true,
       data: [{ feeStatus: "Paid", amount: 30000, discountApplied: true }],
     })
+    // A full fee lower than today's TZS 50,000, under other fee rules, is
+    // still not the discounted fee.
+    expect(await getLeadInterviews(staff, await lock(40000, false))).toMatchObject({
+      ok: true,
+      data: [{ feeStatus: "Paid", amount: 40000, discountApplied: false }],
+    })
+  })
+
+  test("keeps the discount flag only while Paid", async () => {
+    const { interviewId } = await registeredLead()
+    await expect(
+      asSystem((sql) =>
+        sql.query("update public.interviews set locked_discount_applied = false where id = $1", [interviewId]),
+      ),
+    ).rejects.toThrow(/interviews_discount_locked_while_paid/)
+    await expect(
+      asSystem((sql) =>
+        sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 50000 where id = $1", [interviewId]),
+      ),
+    ).rejects.toThrow(/interviews_discount_locked_while_paid/)
   })
 
   test("leaves the result as it was, and a result recorded later leaves the fee", async () => {
@@ -147,7 +174,7 @@ describe("marking the interview fee Paid", () => {
     expect((await recordInterviewResult(await signedIn(ADMISSIONS), interviewId, { interviewDate: today, result: "Passed", score: 70 })).ok).toBe(
       true,
     )
-    expect(await stored(interviewId)).toEqual({ fee_status: "Paid", locked_amount: 50000, result: "Passed" })
+    expect(await stored(interviewId)).toEqual({ fee_status: "Paid", locked_amount: 50000, locked_discount_applied: false, result: "Passed" })
   })
 })
 
@@ -203,6 +230,7 @@ describe("the interview fee in the lead's history", () => {
       expect.arrayContaining([
         { field: "fee_status", from: "Paid", to: "Not Paid" },
         { field: "locked_amount", from: 50000, to: null },
+        { field: "locked_discount_applied", from: false, to: null },
       ]),
     )
     expect(changes[1]).toMatchObject({ actor: ACCOUNTANT.name })
@@ -210,6 +238,7 @@ describe("the interview fee in the lead's history", () => {
       expect.arrayContaining([
         { field: "fee_status", from: "Not Paid", to: "Paid" },
         { field: "locked_amount", from: null, to: 50000 },
+        { field: "locked_discount_applied", from: null, to: false },
       ]),
     )
   })
@@ -272,5 +301,21 @@ describe("the seeded fee", () => {
       ok: true,
       data: [{ feeStatus: "Paid", amount: 50000, discountApplied: false, result: "Passed" }],
     })
+  })
+
+  test("shows in the Paid lead's history as marked Paid by the Accountant", async () => {
+    const history = await getLeadHistory(await signedIn(MANAGER), PAID)
+    if (!history.ok) throw new Error("history failed")
+    const payments = history.data.entries.filter(
+      (e) => e.record === "interviews" && e.action === "update" && e.changes.some((c) => c.field === "fee_status"),
+    )
+    expect(payments).toHaveLength(1)
+    expect(payments[0]).toMatchObject({ actor: ACCOUNTANT.name })
+    expect(payments[0].changes).toEqual(
+      expect.arrayContaining([
+        { field: "fee_status", from: "Not Paid", to: "Paid" },
+        { field: "locked_amount", from: null, to: 50000 },
+      ]),
+    )
   })
 })

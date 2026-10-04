@@ -51,6 +51,7 @@ const LABELS: Record<string, string> = {
   score: "Interview score",
   fee_status: "Interview fee",
   locked_amount: "Amount paid",
+  locked_discount_applied: "Referral code discount",
   // Its follow-ups.
   due_on: "Follow-up date",
   note: "Note",

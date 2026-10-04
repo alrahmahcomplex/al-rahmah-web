@@ -226,10 +226,10 @@ type InterviewRow = {
   score: number | string | null
   fee_status: InterviewFeeStatus
   locked_amount: number | null
+  locked_discount_applied: boolean | null
 }
 
-// The standard fee before any discount. A locked amount below it was the
-// discounted fee.
+// The standard fee before any discount, shown if the fee can't be worked out.
 const FULL_INTERVIEW_FEE = 50_000
 
 export function nextActionOf(result: InterviewResult | null): NextAction | null {
@@ -247,7 +247,7 @@ export async function getLeadInterviews(
 ): Promise<Result<LeadInterview[], LeadInterviewsError>> {
   const { data, error } = await supabase
     .from("interviews")
-    .select("id, serial_number, serial_year, registered_at, interview_date, result, score, fee_status, locked_amount")
+    .select("id, serial_number, serial_year, registered_at, interview_date, result, score, fee_status, locked_amount, locked_discount_applied")
     .eq("lead", leadId)
     .order("registered_at", { ascending: false })
     .order("serial_number", { ascending: false })
@@ -276,11 +276,12 @@ export async function getLeadInterviews(
   return {
     ok: true,
     data: rows.map((row) => {
-      // The database keeps an amount locked exactly while the fee is Paid, so
-      // every other row has the expected amount read above.
+      // The database keeps an amount, and whether it was discounted, locked
+      // exactly while the fee is Paid, so every other row has the expected
+      // amount read above.
       const fee =
         row.locked_amount !== null
-          ? { amount: row.locked_amount, discountApplied: row.locked_amount < FULL_INTERVIEW_FEE }
+          ? { amount: row.locked_amount, discountApplied: row.locked_discount_applied === true }
           : { amount: expected?.amount ?? FULL_INTERVIEW_FEE, discountApplied: expected?.discount_applied ?? false }
       return {
         id: row.id,

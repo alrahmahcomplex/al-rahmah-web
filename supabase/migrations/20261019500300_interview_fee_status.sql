@@ -11,15 +11,22 @@
 -- it in place with `create or replace`; this function locks whatever it
 -- returns.
 --
--- No table changes: the interviews table already keeps an amount exactly
--- while the fee is Paid, and guard_interview_change leaves the fee status and
--- locked amount free to change while keeping the S/N, its year and the
--- registration fixed. The audit trigger on interviews puts every change, with
--- the amount, who and when, in the lead's history.
+-- The interviews table already keeps an amount exactly while the fee is Paid.
+-- Beside it goes whether that amount was the discounted fee, kept by the same
+-- rule, so the panel never has to guess it from the amount after the fee
+-- rules change. guard_interview_change leaves the fee columns free to change
+-- while keeping the S/N, its year and the registration fixed. The audit
+-- trigger on interviews puts every change, with the amount, who and when, in
+-- the lead's history.
 --
 -- Refusals raise a stable code as the error message: `not_permitted`,
 -- `not_found`, `lead_closed` (from assert_lead_open), `invalid_status`, or
 -- `no_change` (the fee already has that status).
+
+alter table public.interviews
+    add column locked_discount_applied boolean,
+    add constraint interviews_discount_locked_while_paid
+        check ((fee_status = 'Paid') = (locked_discount_applied is not null));
 
 create function public.set_interview_fee_status(interview_id uuid, fee_status text)
 returns jsonb
@@ -66,7 +73,8 @@ begin
 
     update public.interviews i
     set fee_status = set_interview_fee_status.fee_status::public.interview_fee_status,
-        locked_amount = new_amount
+        locked_amount = new_amount,
+        locked_discount_applied = case when new_amount is null then null else discounted end
     where i.id = target.id;
 
     return jsonb_build_object(

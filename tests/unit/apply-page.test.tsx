@@ -403,6 +403,7 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
       "Zawadi FixtureAdmission NumberADMSN-40719",
       "Baraka FixtureAdmission NumberADMSN-40720",
     ])
+    expect(screen.getByText(/^Keep these numbers and bring them/)).toBeInTheDocument()
 
     // Fill in another form starts with one empty card.
     await user.click(screen.getByRole("button", { name: "Fill in another form" }))

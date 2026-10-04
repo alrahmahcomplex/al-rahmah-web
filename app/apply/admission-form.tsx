@@ -686,7 +686,7 @@ function Confirmation({
         </p>
       )}
 
-      <p className="mt-5 text-base text-slate-800">{copy.keepNumber}</p>
+      <p className="mt-5 text-base text-slate-800">{outcomes.length > 1 ? copy.keepNumbers : copy.keepNumber}</p>
 
       <p className="mt-6 text-sm text-slate-600">{copy.call}</p>
       <a

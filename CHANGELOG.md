@@ -21,6 +21,12 @@ stay in the `0.x` range.
 - A form with several children handles each one on its own: new children become
   Applied leads, and children already on file are recorded as re-applications. Sending
   the same form twice records nothing twice.
+- A parent can apply for up to eight children on one Admission form and type their own
+  details once. **Add another child** adds a card, and any card can be removed while
+  more than one is left. The review shows every child, and the confirmation gives each
+  child its own Admission Number.
+- The form won't send the same child twice. It names the child and asks the parent to
+  remove one card or correct the name.
 
 ## October 4, 2026 `v0.34.0`
 

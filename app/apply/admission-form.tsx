@@ -1,12 +1,14 @@
 "use client"
 
-import { Check, Phone } from "lucide-react"
+import { Check, Phone, Plus, X } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react"
+import { Fragment, useEffect, useRef, useState, useTransition, type ReactNode } from "react"
 
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import {
+  childNameKey,
   childrenProblem,
+  MAX_CHILDREN,
   parentProblem,
   type AdmissionChild,
   type AdmissionParent,
@@ -21,20 +23,27 @@ import { submitAdmissionForm } from "./actions"
 import { COPY } from "./copy"
 import type { AdmissionFormState } from "./outcome"
 
-// The Admission form, in three steps: the parent, the child, then a review
-// with the security check and Send application. Every entry lives in this
-// component's state, so switching language (which re-renders the page around
-// it) or going Back never loses one.
+// The Admission form, in three steps: the parent, the children (one card
+// each, up to MAX_CHILDREN), then a review with the security check and Send
+// application. Every entry lives in this component's state, so switching
+// language (which re-renders the page around it) or going Back never loses
+// one.
 
 type Step = 0 | 1 | 2
 
 // The form's own draft: chips start unpicked, so a child's details are always
 // chosen, never defaulted.
 type ParentDraft = { fullName: string; relationship: string; relationshipDescription: string; phone: string; whatsapp: string }
-type ChildDraft = { fullName: string; className: string; enrollmentYear: number | null; dayOrBoarding: string }
+// `card` is the card's own id, so a removed card takes its entries with it.
+type ChildDraft = { card: number; fullName: string; className: string; enrollmentYear: number | null; dayOrBoarding: string }
 
 const EMPTY_PARENT: ParentDraft = { fullName: "", relationship: "", relationshipDescription: "", phone: "", whatsapp: "" }
-const EMPTY_CHILD: ChildDraft = { fullName: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
+
+// `card` counts up within one form from 1, the same on the server and in the
+// browser, so the field ids built from it match when the page hydrates.
+function emptyChild(card: number): ChildDraft {
+  return { card, fullName: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
+}
 
 // A random key per form, kept until a confirmation shows, so sending the same
 // form twice creates nothing new. Falls back to getRandomValues where
@@ -67,6 +76,13 @@ function asChild(draft: ChildDraft): AdmissionChild {
   }
 }
 
+// Where focus goes for a problem: a child's field on its own card. The same
+// child twice is fixed in the name.
+function fieldSelector({ field, child }: FieldProblem): string {
+  const target = `[data-field="${field === "duplicate_child" ? "student_name" : field}"]`
+  return child === null ? target : `[data-child="${child}"] ${target}`
+}
+
 const PARENT_FIELDS = new Set<FormField>(["contact_name", "relationship", "relationship_description", "phone", "whatsapp"])
 const CHILD_FIELDS = new Set<FormField>(["student_name", "class_name", "enrollment_year", "day_or_boarding", "duplicate_child"])
 
@@ -89,7 +105,8 @@ export function AdmissionFormSteps({
   const copy = COPY[language]
   const [step, setStep] = useState<Step>(0)
   const [parent, setParent] = useState<ParentDraft>(EMPTY_PARENT)
-  const [child, setChild] = useState<ChildDraft>(EMPTY_CHILD)
+  const lastCard = useRef(1)
+  const [children, setChildren] = useState<ChildDraft[]>(() => [emptyChild(1)])
   // Made per form opened, kept until a confirmation shows.
   const [submissionKey, setSubmissionKey] = useState(newSubmissionKey)
   const [problem, setProblem] = useState<Shown | null>(null)
@@ -103,15 +120,24 @@ export function AdmissionFormSteps({
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
+  // After adding or removing a card: the card to put the reader at, and
+  // whether at its name (a new card) or its title (where a removed card was).
+  const [cardFocus, setCardFocus] = useState<{ index: number; at: "name" | "title" } | null>(null)
 
   // After a step change, put the reader at the new step's heading, or at the
   // field to fix.
   useEffect(() => {
     if (!moved.current) return
     moved.current = false
-    const target = problem ? document.querySelector<HTMLElement>(`[data-field="${problem.field}"]`) : heading.current
+    const target = problem ? document.querySelector<HTMLElement>(fieldSelector(problem)) : heading.current
     target?.focus()
   }, [step, problem, confirmed])
+
+  useEffect(() => {
+    if (!cardFocus) return
+    const inner = cardFocus.at === "name" ? '[data-field="student_name"]' : "[data-card-title]"
+    document.querySelector<HTMLElement>(`[data-child="${cardFocus.index}"] ${inner}`)?.focus()
+  }, [cardFocus])
 
   function go(next: Step, shown: Shown | null = null) {
     moved.current = true
@@ -124,9 +150,25 @@ export function AdmissionFormSteps({
     setProblem(null)
   }
 
-  function updateChild(change: Partial<ChildDraft>) {
-    setChild((current) => ({ ...current, ...change }))
+  function updateChild(index: number, change: Partial<Omit<ChildDraft, "card">>) {
+    setChildren((current) => current.map((draft, i) => (i === index ? { ...draft, ...change } : draft)))
     setProblem(null)
+  }
+
+  function addChild() {
+    if (children.length >= MAX_CHILDREN) return
+    lastCard.current += 1
+    const card = lastCard.current
+    setChildren((current) => [...current, emptyChild(card)])
+    setProblem(null)
+    setCardFocus({ index: children.length, at: "name" })
+  }
+
+  function removeChild(index: number) {
+    if (children.length <= 1) return
+    setChildren((current) => current.filter((_, i) => i !== index))
+    setProblem(null)
+    setCardFocus({ index: Math.min(index, children.length - 2), at: "title" })
   }
 
   function onContinue() {
@@ -136,7 +178,7 @@ export function AdmissionFormSteps({
       if (found) return go(0, { ...found, server: false })
       return go(1)
     }
-    const found = childrenProblem([asChild(child)], years)
+    const found = childrenProblem(children.map(asChild), years)
     if (found) return go(1, { ...found, server: false })
     go(2)
   }
@@ -145,7 +187,7 @@ export function AdmissionFormSteps({
     if (sending) return
     const parentFound = parentProblem(asParent(parent))
     if (parentFound) return go(0, { ...parentFound, server: false })
-    const childFound = childrenProblem([asChild(child)], years)
+    const childFound = childrenProblem(children.map(asChild), years)
     if (childFound) return go(1, { ...childFound, server: false })
 
     const data = new FormData(form)
@@ -155,7 +197,7 @@ export function AdmissionFormSteps({
       setNotice("check-pending")
       return
     }
-    data.set("form", JSON.stringify({ submissionKey, parent: asParent(parent), children: [asChild(child)] }))
+    data.set("form", JSON.stringify({ submissionKey, parent: asParent(parent), children: children.map(asChild) }))
     setNotice(null)
     setProblem(null)
     startSending(async () => {
@@ -190,7 +232,8 @@ export function AdmissionFormSteps({
 
   function startAgain() {
     setParent(EMPTY_PARENT)
-    setChild(EMPTY_CHILD)
+    lastCard.current += 1
+    setChildren([emptyChild(lastCard.current)])
     setSubmissionKey(newSubmissionKey())
     setConfirmed(null)
     setAlreadySent(null)
@@ -217,6 +260,9 @@ export function AdmissionFormSteps({
     }
     if (problem.server && field === "phone") return copy.problems.phone_unreadable
     if (problem.server && field === "enrollment_year") return copy.problems.year_closed
+    if (field === "duplicate_child" && problem.child !== null && children[problem.child]) {
+      return copy.duplicateChild(duplicateName(children, problem.child))
+    }
     return copy.problems[field]
   }
   const formLevel = problem && !PARENT_FIELDS.has(problem.field) && !CHILD_FIELDS.has(problem.field)
@@ -310,44 +356,86 @@ export function AdmissionFormSteps({
         )}
 
         {step === 1 && (
-          <fieldset className="flex flex-col gap-5 rounded-3xl p-4 ring-1 ring-blue-600/15">
-            <legend className="sr-only">{copy.child} 1</legend>
-            <p aria-hidden className="font-exo text-base font-bold italic text-orange-600">
-              {copy.child} 1
-            </p>
-            <TextField
-              id="child-name"
-              field="student_name"
-              label={copy.childName}
-              value={child.fullName}
-              onChange={(fullName) => updateChild({ fullName })}
-              error={message("student_name", 0) ?? message("duplicate_child", 0)}
-            />
-            <ChipField
-              field="class_name"
-              label={copy.className}
-              options={LEAD_CLASSES.map((value) => ({ value, label: value }))}
-              value={child.className}
-              onPick={(className) => updateChild({ className })}
-              error={message("class_name", 0)}
-            />
-            <ChipField
-              field="enrollment_year"
-              label={copy.enrollmentYear}
-              options={years.map((year) => ({ value: String(year), label: String(year) }))}
-              value={child.enrollmentYear === null ? "" : String(child.enrollmentYear)}
-              onPick={(year) => updateChild({ enrollmentYear: Number(year) })}
-              error={message("enrollment_year", 0)}
-            />
-            <ChipField
-              field="day_or_boarding"
-              label={copy.dayOrBoarding}
-              options={DAY_OR_BOARDING.map((value) => ({ value, label: copy.dayOrBoardingOptions[value] }))}
-              value={child.dayOrBoarding}
-              onPick={(dayOrBoarding) => updateChild({ dayOrBoarding })}
-              error={message("day_or_boarding", 0)}
-            />
-          </fieldset>
+          <div className="flex flex-col gap-4">
+            {children.map((draft, index) => (
+              <fieldset
+                key={draft.card}
+                data-child={index}
+                className="flex min-w-0 flex-col gap-5 rounded-3xl p-4 ring-1 ring-blue-600/15"
+              >
+                <legend className="sr-only">
+                  {copy.child} {index + 1}
+                </legend>
+                <div className="flex items-center justify-between gap-3">
+                  <p
+                    aria-hidden
+                    data-card-title
+                    tabIndex={-1}
+                    className="font-exo text-base font-bold italic text-orange-600 outline-none"
+                  >
+                    {copy.child} {index + 1}
+                  </p>
+                  {children.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeChild(index)}
+                      className="-my-1 -mr-2 inline-flex min-h-11 items-center gap-1 rounded-full px-3 text-sm text-blue-800 outline-none transition hover:bg-red-50 hover:text-red-700 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+                    >
+                      <X className="size-4" aria-hidden />
+                      {copy.removeChild(index + 1)}
+                    </button>
+                  )}
+                </div>
+                <TextField
+                  id={`child-name-${draft.card}`}
+                  field="student_name"
+                  label={copy.childName}
+                  value={draft.fullName}
+                  onChange={(fullName) => updateChild(index, { fullName })}
+                  error={message("student_name", index) ?? message("duplicate_child", index)}
+                />
+                <ChipField
+                  id={`class-${draft.card}`}
+                  field="class_name"
+                  label={copy.className}
+                  options={LEAD_CLASSES.map((value) => ({ value, label: value }))}
+                  value={draft.className}
+                  onPick={(className) => updateChild(index, { className })}
+                  error={message("class_name", index)}
+                />
+                <ChipField
+                  id={`year-${draft.card}`}
+                  field="enrollment_year"
+                  label={copy.enrollmentYear}
+                  options={years.map((year) => ({ value: String(year), label: String(year) }))}
+                  value={draft.enrollmentYear === null ? "" : String(draft.enrollmentYear)}
+                  onPick={(year) => updateChild(index, { enrollmentYear: Number(year) })}
+                  error={message("enrollment_year", index)}
+                />
+                <ChipField
+                  id={`boarding-${draft.card}`}
+                  field="day_or_boarding"
+                  label={copy.dayOrBoarding}
+                  options={DAY_OR_BOARDING.map((value) => ({ value, label: copy.dayOrBoardingOptions[value] }))}
+                  value={draft.dayOrBoarding}
+                  onPick={(dayOrBoarding) => updateChild(index, { dayOrBoarding })}
+                  error={message("day_or_boarding", index)}
+                />
+              </fieldset>
+            ))}
+            {children.length < MAX_CHILDREN ? (
+              <button
+                type="button"
+                onClick={addChild}
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-blue-600/30 px-4 font-exo text-base font-bold italic text-blue-600 outline-none transition hover:border-blue-600/60 hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+              >
+                <Plus className="size-5" aria-hidden />
+                {copy.addChild}
+              </button>
+            ) : (
+              <p className="text-center text-sm text-slate-600">{copy.maxChildren(MAX_CHILDREN)}</p>
+            )}
+          </div>
         )}
 
         {step === 2 && (
@@ -367,12 +455,18 @@ export function AdmissionFormSteps({
                   {copy.whatsapp}: {parent.whatsapp.trim()}
                 </dd>
               )}
-              <dt className="mt-4 text-sm font-semibold text-blue-800">{copy.reviewChild} 1</dt>
-              <dd className="mt-1 text-base font-semibold text-blue-900">{child.fullName.trim()}</dd>
-              <dd className="text-base text-blue-900">
-                {child.className} · {child.enrollmentYear} ·{" "}
-                {copy.dayOrBoardingOptions[child.dayOrBoarding as keyof typeof copy.dayOrBoardingOptions]}
-              </dd>
+              {children.map((draft, index) => (
+                <Fragment key={draft.card}>
+                  <dt className="mt-4 text-sm font-semibold text-blue-800">
+                    {copy.reviewChild} {index + 1}
+                  </dt>
+                  <dd className="mt-1 text-base font-semibold text-blue-900">{draft.fullName.trim()}</dd>
+                  <dd className="text-base text-blue-900">
+                    {draft.className} · {draft.enrollmentYear} ·{" "}
+                    {copy.dayOrBoardingOptions[draft.dayOrBoarding as keyof typeof copy.dayOrBoardingOptions]}
+                  </dd>
+                </Fragment>
+              ))}
             </dl>
 
             <div>
@@ -482,6 +576,7 @@ function TextField({
 }
 
 function ChipField({
+  id,
   field,
   label,
   options,
@@ -489,6 +584,8 @@ function ChipField({
   onPick,
   error,
 }: {
+  // Unique on the page; the field's name when the field shows once.
+  id?: string
   field: FormField
   label: string
   options: { value: string; label: string }[]
@@ -496,7 +593,8 @@ function ChipField({
   onPick: (value: string) => void
   error: string | null
 }) {
-  const labelId = `${field}-label`
+  const base = id ?? field
+  const labelId = `${base}-label`
   return (
     <div>
       <p id={labelId} className="text-sm font-semibold text-slate-700">
@@ -505,7 +603,7 @@ function ChipField({
       <div
         role="group"
         aria-labelledby={labelId}
-        aria-describedby={error ? `${field}-error` : undefined}
+        aria-describedby={error ? `${base}-error` : undefined}
         data-field={field}
         tabIndex={-1}
         className="mt-2 flex flex-wrap gap-2 outline-none"
@@ -533,9 +631,17 @@ function ChipField({
           )
         })}
       </div>
-      {error && <FieldError id={`${field}-error`}>{error}</FieldError>}
+      {error && <FieldError id={`${base}-error`}>{error}</FieldError>}
     </div>
   )
+}
+
+// The name to give for the child on card `index`, which repeats an earlier
+// card: as the parent wrote it there, else as on this card.
+function duplicateName(children: ChildDraft[], index: number): string {
+  const key = childNameKey(children[index].fullName)
+  const first = children.slice(0, index).find((draft) => childNameKey(draft.fullName) === key)
+  return (first ?? children[index]).fullName.trim().replace(/\s+/g, " ")
 }
 
 function Confirmation({

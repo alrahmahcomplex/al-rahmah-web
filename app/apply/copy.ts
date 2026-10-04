@@ -25,6 +25,9 @@ type Copy = {
   enrollmentYear: string
   dayOrBoarding: string
   dayOrBoardingOptions: Record<DayOrBoarding, string>
+  addChild: string
+  removeChild: (child: number) => string
+  maxChildren: (max: number) => string
   continue: string
   back: string
   send: string
@@ -33,6 +36,8 @@ type Copy = {
   reviewChild: string
   securityNote: string
   problems: Record<FormField | "phone_unreadable" | "year_closed", string>
+  // The same child on two cards, naming the child.
+  duplicateChild: (name: string) => string
   checkPending: string
   rateLimited: string
   checkFailed: string
@@ -66,6 +71,9 @@ export const COPY: Record<Language, Copy> = {
     enrollmentYear: "Mwaka wa kujiunga",
     dayOrBoarding: "Kutwa au bweni",
     dayOrBoardingOptions: { Day: "Kutwa", Boarding: "Bweni" },
+    addChild: "Ongeza mtoto mwingine",
+    removeChild: (child) => `Ondoa mtoto ${child}`,
+    maxChildren: (max) => `Unaweza kuomba kwa watoto hadi ${max} kwenye fomu moja.`,
     continue: "Endelea",
     back: "Rudi",
     send: "Tuma maombi",
@@ -90,6 +98,7 @@ export const COPY: Record<Language, Copy> = {
       submission_key: "Maombi yamebadilika tangu ulipotuma mara ya kwanza. Bonyeza Tuma maombi tena.",
       payload: "Hatukuweza kusoma fomu. Pakia ukurasa upya kisha ujaribu tena.",
     },
+    duplicateChild: (name) => `${name} yupo mara mbili kwenye fomu hii. Ondoa mojawapo ya kadi hizo mbili, au sahihisha jina.`,
     checkPending: "Subiri ukaguzi wa usalama ukamilike, kisha utume.",
     rateLimited: "Umejaribu mara nyingi mno. Subiri dakika chache kisha ujaribu tena. Majibu yako bado yapo.",
     checkFailed: "Ukaguzi wa usalama haukukamilika. Jaribu kutuma tena. Majibu yako bado yapo.",
@@ -121,6 +130,9 @@ export const COPY: Record<Language, Copy> = {
     enrollmentYear: "Year of enrolment",
     dayOrBoarding: "Day or boarding",
     dayOrBoardingOptions: { Day: "Day", Boarding: "Boarding" },
+    addChild: "Add another child",
+    removeChild: (child) => `Remove child ${child}`,
+    maxChildren: (max) => `You can apply for up to ${max} children on one form.`,
     continue: "Continue",
     back: "Back",
     send: "Send application",
@@ -145,6 +157,7 @@ export const COPY: Record<Language, Copy> = {
       submission_key: "Your application changed since you first sent it. Tap Send application again.",
       payload: "We couldn't read the form. Reload the page and try again.",
     },
+    duplicateChild: (name) => `${name} is on this form twice. Remove one of the two cards, or correct the name.`,
     checkPending: "Wait a moment for the security check to finish, then send.",
     rateLimited: "Too many tries. Wait a few minutes, then try again. Everything you typed is still here.",
     checkFailed: "The security check didn't finish. Try sending again. Everything you typed is still here.",

@@ -24,8 +24,11 @@ describe("the reopen page's source", () => {
     expect(reopeningSourceOf("lead")).toBe("lead")
     expect(reopeningSourceOf("re_application")).toBe("re_application")
     expect(reopeningSourceOf("duplicate_match")).toBe("duplicate_match")
-    expect(reopeningSourceOf(undefined)).toBe("duplicate_match")
-    expect(reopeningSourceOf(["lead", "lead"])).toBe("duplicate_match")
+    // A visit without a recognised source counts as the lead screen, never as
+    // a front-desk duplicate.
+    expect(reopeningSourceOf(undefined)).toBe("lead")
+    expect(reopeningSourceOf("something-else")).toBe("lead")
+    expect(reopeningSourceOf(["duplicate_match", "lead"])).toBe("lead")
   })
 
   it("knows the three sources, and nothing else", () => {

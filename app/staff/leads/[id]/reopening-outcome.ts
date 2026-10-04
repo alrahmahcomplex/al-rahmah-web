@@ -25,10 +25,11 @@ export function canRaiseReopening(permissions: readonly Permission[]): boolean {
   return permissions.includes("leads.create") || permissions.includes("leads.edit")
 }
 
-// Where the reopen page was reached from. Anything else is the duplicate
-// refusal or the front desk's hand-off, the page's first callers.
+// Where the reopen page was reached from. Every link to it names its source;
+// a visit without one, such as a saved or typed address, is someone opening
+// the lead's own reopen page, so it counts as the lead screen.
 export function reopeningSourceOf(value: unknown): ReopeningSource {
-  return value === "lead" || value === "re_application" ? value : "duplicate_match"
+  return value === "duplicate_match" || value === "re_application" ? value : "lead"
 }
 
 // A timestamp as the day it fell on in Tanzania.

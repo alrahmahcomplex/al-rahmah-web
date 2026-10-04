@@ -16,7 +16,8 @@
 -- Refusals raise a stable code as the error message: `not_permitted`,
 -- `not_found`, `lead_open` (nothing to reopen), `already_pending` (with the
 -- requester's name and the date as JSON in the detail), `not_pending`,
--- `not_requester`, and `invalid` with the field in the detail.
+-- `not_requester`, `invalid` with the field in the detail, and `busy` when
+-- requests on the lead kept changing while one was being raised.
 
 create type public.reopening_state as enum ('pending', 'approved', 'rejected', 'withdrawn');
 
@@ -176,20 +177,29 @@ begin
 
     -- Two staff raising at once both pass a check made here, so the unique
     -- index decides: whoever inserts second waits for the first to commit and
-    -- is then refused, naming the request that won.
-    begin
-        insert into public.reopening_requests (lead_id, source, reason, requested_by)
-        values (target.id, chosen, why, staff_id)
-        returning id into new_id;
-    exception when unique_violation then
-        select * into pending from public.reopening_requests r where r.lead_id = target.id and r.state = 'pending';
-        raise exception 'already_pending' using detail = jsonb_build_object(
-            'requested_by', (select s.full_name from public.staff_members s where s.id = pending.requested_by),
-            'requested_at', pending.requested_at
-        )::text;
-    end;
+    -- is then refused, naming the request that won. If that request was
+    -- withdrawn or decided before it could be read, there is no winner to
+    -- name and a new request is allowed again, so the insert is tried again.
+    for attempt in 1..3 loop
+        begin
+            insert into public.reopening_requests (lead_id, source, reason, requested_by)
+            values (target.id, chosen, why, staff_id)
+            returning id into new_id;
+            return new_id;
+        exception when unique_violation then
+            select * into pending from public.reopening_requests r where r.lead_id = target.id and r.state = 'pending';
+            if found then
+                raise exception 'already_pending' using detail = jsonb_build_object(
+                    'requested_by', (select s.full_name from public.staff_members s where s.id = pending.requested_by),
+                    'requested_at', pending.requested_at
+                )::text;
+            end if;
+        end;
+    end loop;
 
-    return new_id;
+    -- Requests kept coming and going faster than this could insert; the
+    -- caller is told to try again.
+    raise exception 'busy';
 end;
 $$;
 

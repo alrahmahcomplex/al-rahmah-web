@@ -314,6 +314,7 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
     await user.type(within(second).getByLabelText("Child's full name"), "Baraka Fixture")
     await user.click(screen.getByRole("button", { name: "Remove child 1" }))
     expect(screen.queryByRole("group", { name: "Child 2" })).not.toBeInTheDocument()
+    expect(screen.getByRole("group", { name: "Child 1" })).toHaveFocus()
     expect(within(screen.getByRole("group", { name: "Child 1" })).getByLabelText("Child's full name")).toHaveValue("Baraka Fixture")
     expect(screen.queryByRole("button", { name: /^Remove child/ })).not.toBeInTheDocument()
 

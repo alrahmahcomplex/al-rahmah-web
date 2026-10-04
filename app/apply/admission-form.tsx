@@ -121,8 +121,9 @@ export function AdmissionFormSteps({
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
   // After adding or removing a card: the card to put the reader at, and
-  // whether at its name (a new card) or its title (where a removed card was).
-  const [cardFocus, setCardFocus] = useState<{ index: number; at: "name" | "title" } | null>(null)
+  // whether at its name (a new card) or on the card itself, which reads out
+  // its legend (where a removed card was).
+  const [cardFocus, setCardFocus] = useState<{ index: number; at: "name" | "card" } | null>(null)
 
   // After a step change, put the reader at the new step's heading, or at the
   // field to fix.
@@ -135,8 +136,8 @@ export function AdmissionFormSteps({
 
   useEffect(() => {
     if (!cardFocus) return
-    const inner = cardFocus.at === "name" ? '[data-field="student_name"]' : "[data-card-title]"
-    document.querySelector<HTMLElement>(`[data-child="${cardFocus.index}"] ${inner}`)?.focus()
+    const card = `[data-child="${cardFocus.index}"]`
+    document.querySelector<HTMLElement>(cardFocus.at === "name" ? `${card} [data-field="student_name"]` : card)?.focus()
   }, [cardFocus])
 
   function go(next: Step, shown: Shown | null = null) {
@@ -168,7 +169,7 @@ export function AdmissionFormSteps({
     if (children.length <= 1) return
     setChildren((current) => current.filter((_, i) => i !== index))
     setProblem(null)
-    setCardFocus({ index: Math.min(index, children.length - 2), at: "title" })
+    setCardFocus({ index: Math.min(index, children.length - 2), at: "card" })
   }
 
   function onContinue() {
@@ -361,18 +362,14 @@ export function AdmissionFormSteps({
               <fieldset
                 key={draft.card}
                 data-child={index}
-                className="flex min-w-0 flex-col gap-5 rounded-3xl p-4 ring-1 ring-blue-600/15"
+                tabIndex={-1}
+                className="flex min-w-0 flex-col gap-5 rounded-3xl p-4 outline-none ring-1 ring-blue-600/15"
               >
                 <legend className="sr-only">
                   {copy.child} {index + 1}
                 </legend>
                 <div className="flex items-center justify-between gap-3">
-                  <p
-                    aria-hidden
-                    data-card-title
-                    tabIndex={-1}
-                    className="font-exo text-base font-bold italic text-orange-600 outline-none"
-                  >
+                  <p aria-hidden className="font-exo text-base font-bold italic text-orange-600">
                     {copy.child} {index + 1}
                   </p>
                   {children.length > 1 && (

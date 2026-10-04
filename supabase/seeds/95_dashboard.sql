@@ -39,7 +39,8 @@
 --
 -- Slice 8 (#97, #98) adds a reason that Declined leads and closure marks must
 -- carry; whichever of it and this file lands second fills in the reasons here.
--- #97 gave ADMSN-31007 its Declined reason, in its own update below.
+-- #97 gave ADMSN-31007 its Declined reason, and #98 gave ADMSN-31008 and
+-- ADMSN-31009 their closure reasons, each in its own update below.
 
 begin;
 
@@ -81,9 +82,9 @@ insert into public.leads (
     ('1ead2031-0000-4000-8000-000000000007', 'ADMSN-31007', 'Rashidi Takwimu', 'STD 2', 2031, 'Day',
         'Visited', null, date '2026-09-22', 'c0c02031-0000-4000-8000-000000000007', timestamptz '2026-09-22 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000008', 'ADMSN-31008', 'Halima Takwimu', 'KG 2', 2031, 'Day',
-        'Visited', 'Inactive', date '2026-09-23', 'c0c02031-0000-4000-8000-000000000008', timestamptz '2026-09-23 09:00+03'),
+        'Visited', null, date '2026-09-23', 'c0c02031-0000-4000-8000-000000000008', timestamptz '2026-09-23 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000009', 'ADMSN-31009', 'Omari Takwimu', 'FORM 2', 2031, 'Boarding',
-        'Visited', 'Archived', date '2026-09-24', 'c0c02031-0000-4000-8000-000000000009', timestamptz '2026-09-24 09:00+03'),
+        'Visited', null, date '2026-09-24', 'c0c02031-0000-4000-8000-000000000009', timestamptz '2026-09-24 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000010', 'ADMSN-31010', 'Saida Takwimu', 'STD 4', 2031, 'Day',
         'Applied', null, null, 'c0c02031-0000-4000-8000-000000000010', timestamptz '2026-09-10 10:00+03'),
     ('1ead2031-0000-4000-8000-000000000011', 'ADMSN-31011', 'Hassani Takwimu', 'STD 6', 2031, 'Day',
@@ -100,5 +101,15 @@ insert into public.leads (
 update public.leads
 set status = 'Declined', declined_reason = 'Enrolled elsewhere', status_before_decline = 'Visited'
 where id = '1ead2031-0000-4000-8000-000000000007';
+
+-- Marked as mark_lead marks, with a reason. The mark and its reason go in one
+-- update: once a lead is marked, it is read-only.
+update public.leads
+set closure = 'Inactive', closure_reason = 'No longer pursuing admission'
+where id = '1ead2031-0000-4000-8000-000000000008';
+
+update public.leads
+set closure = 'Archived', closure_reason = 'Admission cycle ended'
+where id = '1ead2031-0000-4000-8000-000000000009';
 
 commit;

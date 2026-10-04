@@ -80,7 +80,7 @@ update public.roles set retired = true where name = 'Receptionist';
 --   ADMSN-90002 Baraka Fixture       Visited, first of a two-child Family
 --   ADMSN-90003 Neema Fixture        Visited, her brother's Family (Returning family)
 --   ADMSN-90004 Salma Fixture        Visited, WhatsApp differs from the direct phone
---   ADMSN-90005 Hamisi Fixture       Visited, Archived
+--   ADMSN-90005 Hamisi Fixture       Visited, Archived: Family requested closure
 --   ADMSN-90006 Rehema Fixture       Declined from Visited: Family changed plans
 
 insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
@@ -94,21 +94,22 @@ values
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
     status, closure, visit_date, guardian_contact_id, returning_family_joined,
-    declined_reason, status_before_decline
+    declined_reason, status_before_decline, closure_reason
 ) values
     ('1ead0000-0000-4000-8000-000000000001', 'ADMSN-90001', 'Zawadi Fixture', 'STD 1', 2027, 'Day',
-        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000001', false, null, null),
+        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000001', false, null, null, null),
     ('1ead0000-0000-4000-8000-000000000002', 'ADMSN-90002', 'Baraka Fixture', 'STD 3', 2027, 'Boarding',
-        'Visited', null, date '2026-09-01', 'c0c0c0c0-0000-4000-8000-000000000002', false, null, null),
+        'Visited', null, date '2026-09-01', 'c0c0c0c0-0000-4000-8000-000000000002', false, null, null, null),
     ('1ead0000-0000-4000-8000-000000000003', 'ADMSN-90003', 'Neema Fixture', 'KG 2', 2027, 'Day',
-        'Visited', null, date '2026-09-02', 'c0c0c0c0-0000-4000-8000-000000000002', true, null, null),
+        'Visited', null, date '2026-09-02', 'c0c0c0c0-0000-4000-8000-000000000002', true, null, null, null),
     ('1ead0000-0000-4000-8000-000000000004', 'ADMSN-90004', 'Salma Fixture', 'FORM 1', 2027, 'Boarding',
-        'Visited', null, date '2026-09-03', 'c0c0c0c0-0000-4000-8000-000000000003', false, null, null),
+        'Visited', null, date '2026-09-03', 'c0c0c0c0-0000-4000-8000-000000000003', false, null, null, null),
     ('1ead0000-0000-4000-8000-000000000005', 'ADMSN-90005', 'Hamisi Fixture', 'STD 5', 2027, 'Day',
-        'Visited', 'Archived', date '2026-08-20', 'c0c0c0c0-0000-4000-8000-000000000004', false, null, null),
+        'Visited', 'Archived', date '2026-08-20', 'c0c0c0c0-0000-4000-8000-000000000004', false, null, null,
+        'Family requested closure'),
     ('1ead0000-0000-4000-8000-000000000006', 'ADMSN-90006', 'Rehema Fixture', 'STD 2', 2027, 'Day',
         'Declined', null, date '2026-08-21', 'c0c0c0c0-0000-4000-8000-000000000005', false,
-        'Family changed plans', 'Visited');
+        'Family changed plans', 'Visited', null);
 
 commit;
 

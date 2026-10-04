@@ -330,7 +330,7 @@ describe("correcting the parent/guardian contact", () => {
     // count the seeded ones.)
     const whatsapp = `0${nineDigits()}`
     const existing = await walkInLead({ contact: contact({ whatsapp }) })
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Archived' where id = $1", [existing.id]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Archived', closure_reason = 'Duplicate record' where id = $1", [existing.id]))
 
     const lead = await walkInLead({ student: student({ fullName: existing.studentName.toLowerCase() }) })
     const result = await updateGuardianContact(await signedIn(ADMISSIONS), lead.contact.id, { phone: whatsapp })

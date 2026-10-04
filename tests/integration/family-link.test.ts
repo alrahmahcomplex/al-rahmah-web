@@ -384,7 +384,7 @@ describe("who may settle a match", () => {
 
   test("a closed child on the contact holds the match as it is", async () => {
     const { first, second } = await unconfirmedMatch()
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Archived' where id = $1", [second.leadId]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Archived', closure_reason = 'Duplicate record' where id = $1", [second.leadId]))
 
     expect(await confirmFamilyMatch(await signedIn(ADMISSIONS), first.leadId)).toEqual({
       ok: false,

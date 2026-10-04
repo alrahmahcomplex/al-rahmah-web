@@ -1,18 +1,8 @@
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
-import { getLeadClosure, type LeadDecline } from "@/lib/services/lead-closure"
-import { createClient } from "@/utils/supabase/server"
+import type { LeadDecline } from "@/lib/services/lead-closure"
 
 // The decline on a Declined lead's banner: the reason, the explanation, who
 // declined it and when, and the status it held before.
-export async function DeclineDetails({ leadId }: { leadId: string }) {
-  const closure = await getLeadClosure(await createClient(), leadId)
-  if (!closure.ok) {
-    return <p className="text-muted-foreground">The reason for the decline could not be loaded. Reload the page to try again.</p>
-  }
-  if (!closure.data.decline) return null
-  return <DeclineFacts decline={closure.data.decline} />
-}
-
 export function DeclineFacts({ decline }: { decline: LeadDecline }) {
   return (
     <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-4 gap-y-2">

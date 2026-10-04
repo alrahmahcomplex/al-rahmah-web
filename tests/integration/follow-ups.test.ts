@@ -293,7 +293,7 @@ describe("changing a follow-up's date", () => {
     const staff = await signedIn(ADMISSIONS)
     const first = await scheduleFollowUp(staff, lead, { dueOn: addDays(today, 1) })
     if (!first.ok) throw new Error("schedule failed")
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [lead]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive', closure_reason = 'Duplicate record' where id = $1", [lead]))
 
     expect(await changeFollowUpDate(staff, first.data.followUpId, { dueOn: addDays(today, 2), reason: "Moved on." })).toEqual({
       ok: false,

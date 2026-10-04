@@ -58,7 +58,11 @@ async function setState(leadId: string, state: { status?: LeadStatus; closure?: 
       )
     }
     if (state.closure !== undefined) {
-      await sql.query("update public.leads set closure = $2 where id = $1", [leadId, state.closure])
+      // A closure mark carries its reason (#98).
+      await sql.query(
+        "update public.leads set closure = $2::public.lead_closure, closure_reason = case when $2::public.lead_closure is not null then 'Duplicate record'::public.closure_reason end where id = $1",
+        [leadId, state.closure],
+      )
     }
   })
 }

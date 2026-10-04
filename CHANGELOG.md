@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 4, 2026 `v0.30.0`
+
+### NEW
+
+- Admissions Staff and the Admissions Manager can **Mark inactive** a lead that has gone
+  quiet but may come back, or **Archive** one that is finished for good. They pick a
+  reason from the fixed list and can add a note. The lead keeps its status and becomes
+  read-only.
+- A Declined lead can be marked Inactive or Archived too, and an Inactive lead can still
+  be archived. An Archived lead offers neither, and a mark is never taken off except by
+  an approved reopening.
+- The closed-lead banner shows the mark's reason, note, who set it and when. A lead that
+  is both Declined and Archived shows the decline and the mark, each under its own
+  heading. The lead's history records each mark.
+
 ## October 3, 2026 `v0.29.0`
 
 ### NEW

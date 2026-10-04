@@ -4,7 +4,7 @@ import { buttonVariants } from "@/components/ui/button"
 import type { Lead } from "@/lib/services/leads"
 
 import { closedState } from "./closed-state"
-import { DeclineDetails } from "./decline-details"
+import { ClosedLeadDetails } from "./closure-details"
 
 // Whether a Reopening request can be sent yet. #99 adds the request form to
 // the reopen page and turns this on; until then the banner says so plainly
@@ -23,7 +23,7 @@ export function ClosedLeadBanner({ lead, canRequestReopening }: { lead: Lead; ca
       className="flex max-w-xl flex-col gap-3 rounded-lg border bg-card p-4 text-sm"
     >
       <h2 className="font-semibold text-slate-900">{title}</h2>
-      {lead.status === "Declined" && <DeclineDetails leadId={lead.id} />}
+      <ClosedLeadDetails leadId={lead.id} />
       <p className="text-muted-foreground">
         A closed lead is read-only. To work on it again, it has to be reopened, and a Manager approves that.
       </p>

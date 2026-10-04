@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 
+import { ClosureSection } from "./closure-section"
 import { DeclineSection } from "./decline-section"
 import { FamilySection } from "./family-section"
 import { FollowUpSection } from "./follow-up-section"
@@ -65,4 +66,7 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
   },
   // Open leads only, for staff who may decline them.
   { key: "decline", Panel: DeclineSection },
+  // Declined and Inactive leads too: a mark is the one change a closed lead
+  // takes. The panel picks its actions from the lead's mark.
+  { key: "closure", readOnlyWhenClosed: true, Panel: ClosureSection },
 ]

@@ -1,4 +1,11 @@
-import type { RecordedResult, RecordResultError, RegisterError, Registration } from "@/lib/services/interviews"
+import type {
+  FeeStatusChange,
+  FeeStatusError,
+  RecordedResult,
+  RecordResultError,
+  RegisterError,
+  Registration,
+} from "@/lib/services/interviews"
 
 // What the interview panel is told after Register for interview.
 export type RegisterOutcome =
@@ -79,6 +86,38 @@ export function recordOutcome(error: RecordResultError): RecordOutcome {
         status: "refused",
         field: null,
         message: "The result could not be saved. Nothing was changed. Try again in a moment.",
+      }
+  }
+}
+
+// What the fee control is told after Mark paid or Mark not paid.
+export type FeeOutcome = { status: "saved"; message: string } | { status: "refused"; message: string }
+
+export function tzs(amount: number) {
+  return `TZS ${amount.toLocaleString("en-US")}`
+}
+
+export function feeChangedOutcome({ feeStatus, lockedAmount }: FeeStatusChange): FeeOutcome {
+  if (feeStatus === "Paid" && lockedAmount !== null) {
+    return { status: "saved", message: `Marked Paid. ${tzs(lockedAmount)} is locked as the amount paid.` }
+  }
+  return { status: "saved", message: "Marked Not Paid. The amount is no longer locked." }
+}
+
+export function feeOutcome(error: FeeStatusError): FeeOutcome {
+  switch (error) {
+    case "no_change":
+      return { status: "refused", message: "The fee already has that status. Reload the page to see it." }
+    case "lead_closed":
+      return { status: "refused", message: "This lead is closed, so its interview fee can't be changed." }
+    case "forbidden":
+      return { status: "refused", message: "Your role can't mark the interview fee." }
+    case "not_found":
+      return { status: "refused", message: "This interview could not be found. Reload the page." }
+    case "unavailable":
+      return {
+        status: "refused",
+        message: "The fee status could not be saved. Nothing was changed. Try again in a moment.",
       }
   }
 }

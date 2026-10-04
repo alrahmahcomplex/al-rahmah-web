@@ -51,6 +51,7 @@ const LABELS: Record<string, string> = {
   score: "Interview score",
   fee_status: "Interview fee",
   locked_amount: "Amount paid",
+  locked_discount_applied: "Referral code discount",
   // Its follow-ups.
   due_on: "Follow-up date",
   note: "Note",
@@ -193,6 +194,11 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     if (["interview_date", "result", "score"].some((field) => changed.get(field) && changed.get(field)?.from !== null)) {
       return "corrected the interview result"
     }
+    // The amount paid shows as its own change: locked on Paid, released on
+    // Not Paid.
+    const fee = changed.get("fee_status")?.to
+    if (fee === "Paid") return "marked the interview fee Paid"
+    if (fee === "Not Paid") return "marked the interview fee Not Paid"
     return "changed the interview"
   }
 

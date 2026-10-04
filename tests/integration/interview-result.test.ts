@@ -134,7 +134,7 @@ describe("recording an interview result", () => {
   test("is recorded whether or not the fee is paid", async () => {
     const { interviewId } = await registeredLead()
     await asSystem((sql) =>
-      sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 50000 where id = $1", [interviewId]),
+      sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 50000, locked_discount_applied = false where id = $1", [interviewId]),
     )
 
     expect((await recordInterviewResult(await signedIn(ADMISSIONS), interviewId, PASS)).ok).toBe(true)
@@ -163,7 +163,7 @@ describe("correcting an interview result", () => {
     const staff = await signedIn(ADMISSIONS)
     await recordInterviewResult(staff, interviewId, PASS)
     await asSystem((sql) =>
-      sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 30000 where id = $1", [interviewId]),
+      sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 30000, locked_discount_applied = true where id = $1", [interviewId]),
     )
 
     const corrected = await recordInterviewResult(staff, interviewId, { interviewDate: today, result: "Failed", score: 48 })

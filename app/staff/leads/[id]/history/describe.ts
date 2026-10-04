@@ -1,6 +1,8 @@
 import { formatDate } from "@/lib/school-calendar"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
+import { REOPENING_HIDDEN, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
+
 // A lead's history entry in plain words: who, what they did, and each field's
 // old and new value. A field, table or action kind this file does not know
 // shows under its raw name with its raw value (ADR 4), so an entry a later
@@ -66,6 +68,7 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   interviews: new Set(["lead", "registered_at", "registered_by"]),
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
+  reopening_requests: REOPENING_HIDDEN,
 }
 
 const ORIGINS: Record<string, string> = {
@@ -207,6 +210,8 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     return entry.action
   }
 
+  if (entry.record === "reopening_requests") return reopeningSummary(entry)
+
   if (entry.record !== null) {
     if (insert) return `added ${article(entry.record)} ${entry.record} record`
     if (entry.action === "update") return `changed ${article(entry.record)} ${entry.record} record`
@@ -278,10 +283,13 @@ function describeEntry(entry: LeadHistoryEntry, contactNames: Readonly<Record<st
       .filter((c) => fromOld || !isEmpty(c.to))
       .sort((a, b) => rank(a.field) - rank(b.field))
       .map((c) => ({
-        label: LABELS[c.field] ?? c.field,
+        label: reopeningLabel(entry.record, c.field) ?? LABELS[c.field] ?? c.field,
         // A creation has no old value, except a follow-up's earlier date.
-        from: fromOld || c.from !== null ? display(c.field, c.from, contactNames) : null,
-        to: display(c.field, c.to, contactNames),
+        from:
+          fromOld || c.from !== null
+            ? (reopeningValue(entry.record, c.field, c.from) ?? display(c.field, c.from, contactNames))
+            : null,
+        to: reopeningValue(entry.record, c.field, c.to) ?? display(c.field, c.to, contactNames),
       })),
   }
 }

@@ -181,7 +181,7 @@ test.describe("a child who is already registered", () => {
     await expect(page.getByLabel("Admission Number")).toHaveText(number)
   })
 
-  test("that is closed leads to the reopening hand-off, which shows it read-only", async ({ page }) => {
+  test("that is closed leads to the Reopening request form for the existing lead", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await startNewStudent(page)
     await fillParent(page, { parent: "Omari Fixture", phone: "0700 000 104" })
@@ -194,9 +194,10 @@ test.describe("a child who is already registered", () => {
     await refusal.getByRole("link", { name: "Open ADMSN-90005" }).click()
 
     await expect(page).toHaveURL(/\/staff\/leads\/[0-9a-f-]{36}\/reopen\?source=duplicate_match$/)
-    await expect(page.getByText("Reopening a closed lead isn't available yet")).toBeVisible()
+    await expect(page.getByText("This student is already on file, so no new record was made.")).toBeVisible()
     await expect(page.getByRole("heading", { name: "Hamisi Fixture", level: 1 })).toBeVisible()
     await expect(page.getByText("Archived", { exact: true }).first()).toBeVisible()
+    await expect(page.getByLabel("Why is the family back?")).toBeVisible()
   })
 })
 

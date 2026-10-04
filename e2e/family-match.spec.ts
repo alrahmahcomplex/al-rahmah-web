@@ -212,7 +212,7 @@ test.describe("a parent whose number is on file", () => {
 
     await row.getByRole("link", { name: "Reopening request for Hamisi Fixture" }).click()
     await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000005\/reopen\?source=duplicate_match$/)
-    await expect(page.getByText("Reopening a closed lead isn't available yet")).toBeVisible()
     await expect(page.getByRole("heading", { name: "Hamisi Fixture", level: 1 })).toBeVisible()
+    await expect(page.getByLabel("Why is the family back?")).toBeVisible()
   })
 })

@@ -247,7 +247,7 @@ describe("the interview fee in the lead's history", () => {
 describe("who may mark the interview fee", () => {
   test("a closed lead is refused", async () => {
     const { leadId, interviewId } = await registeredLead()
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive' where id = $1", [leadId]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive', closure_reason = 'Duplicate record' where id = $1", [leadId]))
 
     expect(await setInterviewFeeStatus(await signedIn(ACCOUNTANT), interviewId, "paid")).toEqual({ ok: false, error: "lead_closed" })
     expect(await stored(interviewId)).toMatchObject({ fee_status: "Not Paid", locked_amount: null })

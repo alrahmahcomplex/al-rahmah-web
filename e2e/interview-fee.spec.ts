@@ -98,7 +98,7 @@ test.describe("the interview fee", () => {
 
   test("a closed lead keeps showing its fee, with no control for the Accountant", async ({ page }) => {
     const lead = await registeredLead()
-    await asSystem((sql) => sql.query("update public.leads set closure = 'Archived' where id = $1", [lead.id]))
+    await asSystem((sql) => sql.query("update public.leads set closure = 'Archived', closure_reason = 'Duplicate record' where id = $1", [lead.id]))
     await signIn(page, ACCOUNTANT)
     await page.goto(`/staff/leads/${lead.id}`)
 

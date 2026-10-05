@@ -5,6 +5,22 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- A new **Seats** screen, for the Admissions Manager, shows each class in a year, Day
+  and Boarding: the seats set (or "Seats not set"), the seats taken, and how many of
+  them are Full, First instalment and Deposit.
+- A class with more leads than seats is listed under **Over capacity** with its leads
+  ranked: Full first, then First instalment, then Deposit, then by the date each lead
+  reached its priority, oldest first. Leads ranked past the last seat are marked.
+- A lead takes a seat once it has a Seat priority. Declining a lead frees its seat;
+  Inactive and Archived leads keep theirs.
+- When a payment would give a lead a seat in a class that is already full, the
+  payment review warns the Accountant before Confirm. The payment can still be
+  recorded. A class whose seats aren't set never warns.
+
 ## October 6, 2026 `v0.41.0`
 
 ### NEW

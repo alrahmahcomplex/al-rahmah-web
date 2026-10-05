@@ -212,7 +212,9 @@ describe("the preview", () => {
     const accountant = await signedIn(ACCOUNTANT)
     await pay(accountant, id, payment(300_000))
 
-    expect(await previewPayment(accountant, id, payment(500_000, { type: "first_instalment" }))).toEqual({
+    // The lead already holds a seat, so the payment overfills nothing
+    // (seats.test.ts covers the warning).
+    expect(await previewPayment(accountant, id, payment(500_000, { type: "first_instalment" }))).toMatchObject({
       ok: true,
       data: {
         schoolFee: 2_000_000,
@@ -221,6 +223,7 @@ describe("the preview", () => {
         balanceAfter: 1_200_000,
         priority: "Deposit",
         priorityAfter: "First instalment",
+        wouldOverfill: false,
       },
     })
     expect(await storedPayments(id)).toHaveLength(1)

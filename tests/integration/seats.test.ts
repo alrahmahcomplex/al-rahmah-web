@@ -6,7 +6,7 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
 import { declineLead, markLead } from "@/lib/services/lead-closure"
-import { createLead, type DayOrBoarding, type LeadClass } from "@/lib/services/leads"
+import { createLead, LEAD_CLASSES, type DayOrBoarding, type LeadClass } from "@/lib/services/leads"
 import { previewPayment, recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 import { getSeats, seatCheck, type ClassSeats } from "@/lib/services/seats"
 
@@ -186,7 +186,7 @@ describe("counting seats", () => {
     await setSeats(year, 30)
     const seats = await getSeats(await signedIn(MANAGER), year)
     if (!seats.ok) throw new Error(seats.error)
-    expect(seats.data).toHaveLength(26)
+    expect(seats.data).toHaveLength(LEAD_CLASSES.length * 2)
     expect(seats.data.slice(0, 2).map((entry) => [entry.className, entry.dayOrBoarding])).toEqual([
       ["DAY CARE", "Day"],
       ["DAY CARE", "Boarding"],
@@ -378,7 +378,7 @@ describe("who reads the seats", () => {
     const year = await yearWithSchedule()
     for (const person of [ACCOUNTANT, ADMISSIONS, MANAGER]) {
       const seats = await getSeats(await signedIn(person), year)
-      expect(seats.ok && seats.data).toHaveLength(26)
+      expect(seats.ok && seats.data).toHaveLength(LEAD_CLASSES.length * 2)
     }
     expect(await getSeats(anonClient(), year)).toEqual({ ok: false, error: "forbidden" })
     expect(await getSeats(secretClient(), year)).toEqual({ ok: false, error: "forbidden" })

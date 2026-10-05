@@ -37,7 +37,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
 
   const supabase = await createClient()
   const schedules = await listFeeSchedules(supabase)
-  const years = schedules.ok ? schedules.data.map((schedule) => schedule.year) : []
+  const years = schedules.ok ? schedules.data.map((schedule) => schedule.year).toSorted((a, b) => a - b) : []
   const { year: requested } = await searchParams
   const year = requested === undefined ? defaultSeatsYear(years, tanzaniaToday()) : parseScheduleYear(requested)
   const seats = year === null ? null : await getSeats(supabase, year)
@@ -105,15 +105,19 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
                     const split = takenLine(entry)
                     return (
                       <TableRow key={`${entry.className}-${entry.dayOrBoarding}`}>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium whitespace-normal">
                           {entry.className} {entry.dayOrBoarding}
                         </TableCell>
                         <TableCell
-                          className={entry.seats === null ? "text-right text-muted-foreground" : "text-right tabular-nums"}
+                          className={
+                            entry.seats === null
+                              ? "text-right whitespace-normal text-muted-foreground"
+                              : "text-right tabular-nums"
+                          }
                         >
                           {seatsLine(entry)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right whitespace-normal">
                           <span className={over ? "font-semibold tabular-nums text-destructive" : "tabular-nums"}>
                             {entry.taken}
                             {over && " · over capacity"}

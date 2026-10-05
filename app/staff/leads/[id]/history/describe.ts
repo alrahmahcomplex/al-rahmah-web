@@ -38,6 +38,7 @@ const LABELS: Record<string, string> = {
   guardian_contact_id: "Parent or guardian",
   returning_family_joined: "Returning family: joined a Family",
   returning_family_reapplied: "Returning family: re-applied",
+  referral_code: "Referral code",
   // Its parent or guardian.
   full_name: "Full name",
   contact_name: "Parent or guardian name",
@@ -66,6 +67,12 @@ const LABELS: Record<string, string> = {
   paid_on: "Payment date",
   // Its re-applications, which also use the lead's and contact's labels.
   differing_fields: "Differs from the lead",
+  // A Marketing Agent. Agent rows carry no lead id, so they show in no lead's
+  // history; these label them wherever the history is read.
+  code: "Referral code",
+  registered_at: "Registered",
+  approved_at: "Approved at",
+  approved_by: "Approved by",
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
@@ -194,6 +201,11 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     if (closure?.to === "Inactive") return "marked the lead Inactive"
     if (closure?.to === "Archived") return closure.from === "Inactive" ? "moved the lead from Inactive to Archived" : "archived the lead"
     if (changed.get("returning_family_reapplied")?.to === true) return "flagged the lead Returning family: re-applied"
+    const referral = changed.get("referral_code")
+    if (referral && changed.size === 1) {
+      if (referral.to === null) return "cleared the Referral code"
+      return referral.from === null ? "added a Referral code" : "changed the Referral code"
+    }
     return "changed the lead"
   }
 

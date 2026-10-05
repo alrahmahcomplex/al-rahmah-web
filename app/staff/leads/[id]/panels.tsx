@@ -9,6 +9,7 @@ import { FamilySection } from "./family-section"
 import { FollowUpSection } from "./follow-up-section"
 import { InterviewSection } from "./interview-section"
 import { ReopeningSection } from "./reopening-section"
+import { ReferralSection } from "./referral-section"
 import { SchoolFeeSection } from "./school-fee-section"
 
 // What every panel on the lead screen is given.
@@ -45,6 +46,14 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
         studentName={lead.studentName}
         canEdit={open && staff.permissions.includes("leads.edit")}
       />
+    ),
+  },
+  {
+    key: "referral",
+    // The code and the fee stay readable on a closed lead, without Edit or Clear.
+    readOnlyWhenClosed: true,
+    Panel: ({ lead, staff, open }) => (
+      <ReferralSection leadId={lead.id} canEdit={open && staff.permissions.includes("leads.edit")} />
     ),
   },
   {

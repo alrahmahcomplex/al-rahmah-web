@@ -28,6 +28,8 @@ export type MarketingAgent = {
   approvedAt: string | null
   // The approving staff member's name, looked up now. Null while Pending.
   approvedBy: string | null
+  // How many leads carry the agent's code.
+  leadCount: number
 }
 
 export type AgentList = {
@@ -93,9 +95,12 @@ type AgentRow = {
   status: AgentStatus
   registered_at: string
   approved_at: string | null
+  lead_count: number
 }
 
-const AGENT_COLUMNS = "id, full_name, phone, whatsapp, code, status, registered_at, approved_at"
+// lead_count is a computed column: the database counts each code's leads in
+// the list query itself.
+const AGENT_COLUMNS = "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count"
 
 // The search box's patterns, matched against the agent's search text: the
 // name in lowercase, the code, and both numbers as digits only. A query that
@@ -192,6 +197,7 @@ export async function listAgents(
         registeredAt: row.registered_at,
         approvedAt: row.approved_at,
         approvedBy: approvers.get(row.id) ?? null,
+        leadCount: row.lead_count,
       })),
     },
   }

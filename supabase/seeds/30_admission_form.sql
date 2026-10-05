@@ -57,13 +57,13 @@ select public.record_re_application(
 
 commit;
 
--- The Admissions Manager reviewed Mariamu's.
+-- The Admissions Manager reviewed Mariamu's, after it arrived.
 begin;
 
 select public.set_audit_actor('staff', 'a1a1a1a1-0000-4000-8000-000000000001');
 
 update public.re_applications
-set reviewed_at = timestamptz '2026-09-30 10:00+03',
+set reviewed_at = now(),
     reviewed_by = 'a1a1a1a1-0000-4000-8000-000000000001'
 where submission_key = 'f0f0f0f0-0000-4000-8000-000000000302';
 

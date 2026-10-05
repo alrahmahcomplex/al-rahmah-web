@@ -12,7 +12,8 @@
 --
 -- It runs in the same transaction as each change that can move the line:
 -- recording a payment (one lead), saving a Fee schedule's amounts (every
--- lead in that year with a payment), and a correction to the lead's class,
+-- lead in that year with a payment), a change to the year's Academic-year
+-- start (a trigger on fee_schedules), and a correction to the lead's class,
 -- enrollment year or Day or boarding (a trigger on leads). Later slice 9
 -- tickets call it for adjustments, discounts, the Family and reopenings.
 --
@@ -382,6 +383,64 @@ create trigger recompute_lead_fee_on_lead_change
     execute function public.recompute_lead_fee_on_lead_change();
 
 -- ---------------------------------------------------------------------------
+-- recompute_year_fees(year, cause): recomputes every lead in the year that
+-- has a payment. A lead with no payment can't be Enrolled, so the others are
+-- left alone; Declined leads return at once. Leads are taken in id order, so
+-- two runs lock them in the same order. For slice 9's own functions only.
+-- ---------------------------------------------------------------------------
+
+create function public.recompute_year_fees(schedule_year integer, cause text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    each_lead uuid;
+begin
+    for each_lead in
+        select l.id
+        from public.leads l
+        where l.enrollment_year = schedule_year
+          and l.status <> 'Declined'
+          and exists (select 1 from public.school_fee_payments p where p.lead_id = l.id)
+        order by l.id
+    loop
+        perform public.recompute_lead_fee(each_lead, recompute_year_fees.cause);
+    end loop;
+end;
+$$;
+
+revoke execute on function public.recompute_year_fees(integer, text) from public, anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- A change to a year's Academic-year start moves the line for its First
+-- instalment leads, either way: a start brought forward to today or earlier
+-- enrols them, and a start moved later takes back those it enrolled. The
+-- daily job that reaches leads on the start day itself is #109's.
+-- ---------------------------------------------------------------------------
+
+create function public.recompute_on_academic_year_start()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    perform public.recompute_year_fees(new.enrollment_year, 'academic_year_start');
+    return null;
+end;
+$$;
+
+revoke execute on function public.recompute_on_academic_year_start() from public, anon, authenticated, service_role;
+
+create trigger recompute_on_academic_year_start
+    after update of academic_year_start on public.fee_schedules
+    for each row
+    when (old.academic_year_start is distinct from new.academic_year_start)
+    execute function public.recompute_on_academic_year_start();
+
+-- ---------------------------------------------------------------------------
 -- record_school_fee_payment, as #107 made it, now recomputing the lead in
 -- the same transaction, so a payment that reaches Full enrols it.
 -- ---------------------------------------------------------------------------
@@ -466,9 +525,7 @@ grant execute on function public.record_school_fee_payment(uuid, text, numeric, 
 
 -- ---------------------------------------------------------------------------
 -- save_fee_schedule, as #104 made it, now recomputing every lead in the year
--- that has a payment, in the same transaction. A lead with no payment can't
--- be Enrolled, so the others are left alone. Leads are taken in id order, so
--- two saves lock them in the same order.
+-- that has a payment, in the same transaction.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.save_fee_schedule(schedule_year integer, amounts jsonb)
@@ -489,7 +546,6 @@ declare
     band_input jsonb;
     day_fees integer[] := '{}';
     boarding_fees integer[] := '{}';
-    each_lead uuid;
 begin
     if auth.role() is distinct from 'authenticated' or not public.has_permission('payments.record') then
         raise exception 'not_permitted';
@@ -562,16 +618,7 @@ begin
     set day_fee = excluded.day_fee,
         boarding_fee = excluded.boarding_fee;
 
-    for each_lead in
-        select l.id
-        from public.leads l
-        where l.enrollment_year = schedule_year
-          and l.status <> 'Declined'
-          and exists (select 1 from public.school_fee_payments p where p.lead_id = l.id)
-        order by l.id
-    loop
-        perform public.recompute_lead_fee(each_lead, 'fee_schedule');
-    end loop;
+    perform public.recompute_year_fees(schedule_year, 'fee_schedule');
 end;
 $$;
 
@@ -649,8 +696,14 @@ begin
     priority := seat.priority;
     priority_reached_on := seat.reached_on;
 
-    -- The trigger is set exactly while recompute_lead_fee has the lead
-    -- Enrolled.
+    -- The trigger is set while recompute_lead_fee has the lead Enrolled. A
+    -- lead declined while Enrolled keeps its profile, since nothing changes a
+    -- Declined lead, but it is no longer Enrolled, so it says nothing.
+    if not exists (
+        select 1 from public.leads l where l.id = lead_school_fee.lead_id and l.status = 'Enrolled'
+    ) then
+        return;
+    end if;
     select * into profile from public.lead_fee_profiles p where p.lead_id = lead_school_fee.lead_id;
     enrolled_trigger := profile.enrolled_trigger;
     enrolled_on := profile.enrolled_on;

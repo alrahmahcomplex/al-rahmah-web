@@ -178,6 +178,21 @@ describe("Enrolled from the payments", () => {
     await asSystem((sql) => sql.query("select public.recompute_lead_fee($1, 'academic_year_start', $2)", [id, start]))
     expect((await stateOf(id)).status).toBe("Enrolled")
     expect(await enrolmentOf(await signedIn(ACCOUNTANT), id)).toEqual({ on: start, by: { kind: "academic-year-start" } })
+
+    // Moving the start later, still ahead of today, takes it back at once.
+    await setStart(year, `${year}-01-20`)
+    expect((await stateOf(id)).status).toBe("Interviewed")
+    expect(await profileOf(id)).toMatchObject({ enrolled_trigger: null, recompute_cause: "academic_year_start" })
+  })
+
+  test("a lead declined while Enrolled keeps its payments, and its School fee no longer says Enrolled", async () => {
+    const id = await passedLead(await yearWithSchedule())
+    await pay(id, 2_000_000, { type: "full_payment" })
+    expect((await stateOf(id)).status).toBe("Enrolled")
+
+    expect(await declineLead(await signedIn(MANAGER), id, { reason: "Enrolled elsewhere" })).toEqual({ ok: true, data: null })
+    expect((await stateOf(id)).status).toBe("Declined")
+    expect(await enrolmentOf(await signedIn(ACCOUNTANT), id)).toBeNull()
   })
 
   test("a fee increase in the schedule takes the lead back below the line to its earlier status", async () => {

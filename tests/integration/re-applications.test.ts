@@ -64,14 +64,16 @@ async function onFile(status: Status = "Visited", closure: Closure = null): Prom
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (
          admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-         status, closure, visit_date, guardian_contact_id, declined_reason, status_before_decline
-       ) values ($1, $2, 'STD 3', $3, 'Day', $4, $5, $6, $7, $8, $9) returning id`,
+         status, closure, closure_reason, visit_date, guardian_contact_id, declined_reason, status_before_decline
+       ) values ($1, $2, 'STD 3', $3, 'Day', $4, $5, $6, $7, $8, $9, $10) returning id`,
       [
         admissionNumber,
         studentName,
         nextYear,
         status,
         closure,
+        // A closure mark always carries its reason (#98).
+        closure === null ? null : "No longer pursuing admission",
         status === "Applied" ? null : "2026-09-01",
         contact.rows[0].id,
         status === "Declined" ? "Family changed plans" : null,

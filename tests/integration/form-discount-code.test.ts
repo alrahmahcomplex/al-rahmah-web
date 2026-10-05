@@ -59,7 +59,7 @@ async function codeChanges(leadId: string) {
   const history = await getLeadHistory(await signedIn(ADMISSIONS), leadId)
   if (!history.ok) throw new Error("history failed")
   return history.data.entries
-    .filter((e) => e.record === "lead" && e.changes.some((c) => c.field === "referral_code"))
+    .filter((e) => e.record === "lead" && e.action === "update" && e.changes.some((c) => c.field === "referral_code"))
     .map((e) => ({ actor: e.actor, action: e.action, change: e.changes.find((c) => c.field === "referral_code") }))
 }
 

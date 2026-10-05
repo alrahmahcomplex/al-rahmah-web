@@ -40,8 +40,9 @@ async function useEnglish(page: Page) {
 
 test("a Referral link fills in the code, remembers it for 30 days, and the fee drops for a confirmed code", async ({ page }) => {
   await page.goto("/apply?ref=bjn-402")
+  // The page writes the cookie once it has loaded in the browser.
+  await expect.poll(async () => (await rememberedCode(page))?.value).toBe("BJN-402")
   const cookie = await rememberedCode(page)
-  expect(cookie?.value).toBe("BJN-402")
   expect(cookie?.sameSite).toBe("Lax")
   expect(cookie?.httpOnly).toBe(false)
   expect(cookie?.path).toBe("/")

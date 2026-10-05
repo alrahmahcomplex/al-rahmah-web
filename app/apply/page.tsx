@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { cookies } from "next/headers"
 import Image from "next/image"
 import Link from "next/link"
 
@@ -6,6 +7,7 @@ import { LanguageSwitch } from "@/components/language-switch"
 import { admissionYears } from "@/lib/admission-form"
 import { getLanguage } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
+import { DISCOUNT_CODE_COOKIE, initialDiscountCode } from "@/lib/referral-link"
 
 import { AdmissionFormSteps } from "./admission-form"
 import { COPY } from "./copy"
@@ -15,14 +17,27 @@ import { COPY } from "./copy"
 // touches the database. The language switch sits outside the form: switching
 // re-renders this page in place, and the form keeps its entries in client
 // state.
+//
+// A Referral link (`/apply?ref=<code>`) fills in the Discount code, and the
+// form remembers it for 30 days in a cookie, so a parent who comes back
+// without the link still finds it. The code isn't checked here, since that
+// would need Supabase; the review step checks it.
 
 export async function generateMetadata(): Promise<Metadata> {
   const language = await getLanguage()
   return { title: `${COPY[language].title} · Al-Rahmah Complex` }
 }
 
-export default async function ApplyPage() {
+export default async function ApplyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ref?: string | string[] }>
+}) {
   const language = await getLanguage()
+  const discountCode = initialDiscountCode({
+    ref: (await searchParams).ref,
+    cookie: (await cookies()).get(DISCOUNT_CODE_COOKIE)?.value,
+  })
 
   return (
     <main
@@ -38,7 +53,13 @@ export default async function ApplyPage() {
           <LanguageSwitch language={language} className="ml-auto shrink-0" />
         </header>
 
-        <AdmissionFormSteps language={language} years={admissionYears()} officePhone={OFFICE_PHONE} />
+        <AdmissionFormSteps
+          language={language}
+          years={admissionYears()}
+          officePhone={OFFICE_PHONE}
+          discountCode={discountCode.code}
+          rememberDiscountCode={discountCode.remember}
+        />
       </div>
     </main>
   )

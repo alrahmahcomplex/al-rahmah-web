@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const jar = vi.hoisted(() => ({ values: new Map<string, string>() }))
-const stubs = vi.hoisted(() => ({ submit: vi.fn(), reset: vi.fn(), refresh: vi.fn(), token: "fake-token" }))
+const stubs = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), reset: vi.fn(), refresh: vi.fn(), token: "fake-token" }))
 
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 vi.mock("next/headers", () => ({
@@ -19,7 +19,7 @@ vi.mock("@/utils/supabase/server", () => ({
     throw new Error("the Admission form must not read Supabase to render")
   },
 }))
-vi.mock("@/app/apply/actions", () => ({ submitAdmissionForm: stubs.submit }))
+vi.mock("@/app/apply/actions", () => ({ submitAdmissionForm: stubs.submit, checkDiscountCode: stubs.check }))
 vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: stubs.refresh }) }))
 vi.mock("@/components/turnstile-widget", () => ({
@@ -38,6 +38,7 @@ const years = admissionYears()
 beforeEach(() => {
   jar.values.clear()
   stubs.submit.mockReset()
+  stubs.check.mockReset()
   stubs.reset.mockReset()
   stubs.refresh.mockReset()
   stubs.token = "fake-token"
@@ -62,7 +63,7 @@ async function fillParentAndChild(user: ReturnType<typeof userEvent.setup>, lang
 // Each test types a whole form, which takes seconds on a loaded machine.
 describe("the Admission form page", { timeout: 20_000 }, () => {
   it("renders in Swahili by default, reading no Supabase", async () => {
-    render(await ApplyPage())
+    render(await ApplyPage({ searchParams: Promise.resolve({}) }))
 
     expect(screen.getByRole("main")).toHaveAttribute("lang", "sw")
     expect(screen.getByRole("heading", { level: 1, name: "Mzazi au mlezi" })).toBeInTheDocument()
@@ -74,7 +75,7 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
 
   it("renders in English when the language cookie says so", async () => {
     jar.values.set("lang", "en")
-    render(await ApplyPage())
+    render(await ApplyPage({ searchParams: Promise.resolve({}) }))
 
     expect(screen.getByRole("main")).toHaveAttribute("lang", "en")
     expect(screen.getByRole("heading", { level: 1, name: "Parent or guardian" })).toBeInTheDocument()
@@ -439,13 +440,193 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
     ).toBeInTheDocument()
   })
 
-  it("shows no agent code, fee, 'already in our records' note or Saturday interviews line", async () => {
+  it("never mentions agents, referrals or approval, an 'already in our records' note or Saturday interviews", async () => {
+    stubs.check.mockResolvedValue({ status: "pending", amount: 50000 })
     for (const language of ["sw", "en"] as const) {
       const user = userEvent.setup()
-      const { container, unmount } = render(<AdmissionFormSteps language={language} years={years} officePhone="+255 700 000 001" />)
+      const { container, unmount } = render(
+        <AdmissionFormSteps language={language} years={years} officePhone="+255 700 000 001" discountCode="ZNM-401" />,
+      )
       await fillParentAndChild(user, language)
-      expect(container.textContent).not.toMatch(/wakala|agent|ada|fee|TZS|Jumamosi|Saturday|kumbukumbu|records/i)
+      await screen.findByText(language === "en" ? /waiting to be confirmed/ : /inasubiri kuthibitishwa/)
+      expect(container.textContent).not.toMatch(/wakala|agent|referral|approv|idhini|Jumamosi|Saturday|kumbukumbu|records/i)
       unmount()
     }
+  })
+})
+
+describe("the Discount code on the review step", { timeout: 20_000 }, () => {
+  beforeEach(() => {
+    for (const cookie of document.cookie.split("; ")) {
+      const name = cookie.split("=")[0]
+      if (name) document.cookie = `${name}=; Max-Age=0; Path=/`
+    }
+  })
+
+  it.each([
+    ["the link's code over the remembered one", { ref: "bjn-402" }, "ZNM-401", "BJN-402"],
+    ["the remembered code on a visit without a link", {}, "ZNM-401", "ZNM-401"],
+    ["nothing with neither", {}, undefined, ""],
+  ])("the page starts the field from %s, reading no Supabase", async (_, params, remembered, expected) => {
+    jar.values.set("lang", "en")
+    if (remembered) jar.values.set("discount_code", remembered)
+    stubs.check.mockResolvedValue({ status: "unavailable" })
+    const user = userEvent.setup()
+    render(await ApplyPage({ searchParams: Promise.resolve(params) }))
+    await fillParentAndChild(user)
+    expect(screen.getByLabelText("Discount code · optional")).toHaveValue(expected)
+  })
+
+  async function reviewStep(props: { discountCode?: string; rememberDiscountCode?: string | null } = {}, children = 1) {
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" {...props} />)
+    await fillParentAndChild(user)
+    for (let n = 2; n <= children; n++) {
+      await user.click(screen.getByRole("button", { name: "Back" }))
+      await user.click(screen.getByRole("button", { name: "Add another child" }))
+      const card = screen.getByRole("group", { name: `Child ${n}` })
+      await user.type(within(card).getByLabelText("Child's full name"), `Sibling Fixture ${n}`)
+      await user.click(within(card).getByRole("button", { name: "STD 2" }))
+      await user.click(within(card).getByRole("button", { name: String(years[1]) }))
+      await user.click(within(card).getByRole("button", { name: "Day" }))
+      await user.click(screen.getByRole("button", { name: "Continue" }))
+    }
+    return user
+  }
+
+  it("is optional, empty without a link, and shows the standard fee for one child", async () => {
+    await reviewStep()
+    expect(screen.getByLabelText("Discount code · optional")).toHaveValue("")
+    expect(screen.getByText("If someone gave you a discount code, enter it here.")).toBeInTheDocument()
+    expect(screen.getByText("TZS 50,000 per child")).toBeInTheDocument()
+    expect(screen.getByText("Total: TZS 50,000")).toBeInTheDocument()
+    expect(stubs.check).not.toHaveBeenCalled()
+  })
+
+  it("starts from the link's code, remembers it for 30 days, and checks it as the step opens", async () => {
+    stubs.check.mockResolvedValue({ status: "approved", amount: 30000 })
+    await reviewStep({ discountCode: "BJN-402", rememberDiscountCode: "BJN-402" })
+
+    expect(document.cookie).toContain("discount_code=BJN-402")
+    expect(screen.getByLabelText("Discount code · optional")).toHaveValue("BJN-402")
+    expect(await screen.findByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+    expect(stubs.check).toHaveBeenCalledWith("BJN-402")
+    expect(screen.getByText("TZS 30,000 per child")).toBeInTheDocument()
+    expect(screen.getByText("Total: TZS 30,000")).toBeInTheDocument()
+  })
+
+  it("leaves the remembered code alone on a visit without a link", async () => {
+    document.cookie = "discount_code=ZNM-401; Path=/"
+    stubs.check.mockResolvedValue({ status: "pending", amount: 50000 })
+    await reviewStep({ discountCode: "ZNM-401", rememberDiscountCode: null })
+    expect(document.cookie).toContain("discount_code=ZNM-401")
+    expect(screen.getByLabelText("Discount code · optional")).toHaveValue("ZNM-401")
+  })
+
+  it.each([
+    [{ status: "approved", amount: 30000 }, "TZS 20,000 off the interview fee for each child.", "TZS 30,000"],
+    [{ status: "pending", amount: 50000 }, "This code is waiting to be confirmed. The discount applies if it is confirmed before you pay.", "TZS 50,000"],
+    [{ status: "unknown", amount: 50000 }, "We don't recognise this code. Check it, or send the form without it.", "TZS 50,000"],
+    [{ status: "rate-limited" }, "We couldn't check your code just now. It will still be saved with your application.", "TZS 50,000"],
+    [{ status: "unavailable" }, "We couldn't check your code just now. It will still be saved with your application.", "TZS 50,000"],
+  ])("checks a typed code when the field loses focus: %j", async (answer, note, fee) => {
+    stubs.check.mockResolvedValue(answer)
+    const user = await reviewStep({}, 3)
+    await user.type(screen.getByLabelText("Discount code · optional"), " abc 123 ")
+    await user.tab()
+
+    expect(await screen.findByText(note)).toBeInTheDocument()
+    expect(stubs.check).toHaveBeenCalledWith("ABC123")
+    const perChild = Number(fee.replace(/\D/g, ""))
+    expect(screen.getByText(`${fee} per child`)).toBeInTheDocument()
+    expect(screen.getByText(`Total for 3 children: TZS ${(perChild * 3).toLocaleString("en-US")}`)).toBeInTheDocument()
+  })
+
+  it("checks again only when the code changed", async () => {
+    stubs.check.mockResolvedValue({ status: "unknown", amount: 50000 })
+    const user = await reviewStep()
+    const field = screen.getByLabelText("Discount code · optional")
+    await user.type(field, "QQQ-000")
+    await user.tab()
+    await screen.findByText(/We don't recognise this code/)
+    await user.click(field)
+    await user.tab()
+    expect(stubs.check).toHaveBeenCalledTimes(1)
+
+    stubs.check.mockResolvedValue({ status: "approved", amount: 30000 })
+    await user.clear(field)
+    await user.type(field, "BJN-402")
+    await user.tab()
+    expect(await screen.findByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+    expect(stubs.check).toHaveBeenCalledTimes(2)
+  })
+
+  it("asks again on the next blur when a check couldn't run", async () => {
+    stubs.check.mockResolvedValueOnce({ status: "unavailable" }).mockResolvedValueOnce({ status: "approved", amount: 30000 })
+    const user = await reviewStep()
+    const field = screen.getByLabelText("Discount code · optional")
+    await user.type(field, "BJN-402")
+    await user.tab()
+    await screen.findByText(/We couldn't check your code just now/)
+    await user.click(field)
+    await user.tab()
+    expect(await screen.findByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+    expect(stubs.check).toHaveBeenCalledTimes(2)
+  })
+
+  it("keeps each code's answer when a slower check finishes after a newer one", async () => {
+    let finishFirst: (value: unknown) => void = () => {}
+    stubs.check
+      .mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)))
+      .mockResolvedValueOnce({ status: "approved", amount: 30000 })
+    const user = await reviewStep()
+    const field = screen.getByLabelText("Discount code · optional")
+    await user.type(field, "QQQ-000")
+    await user.tab()
+    await user.clear(field)
+    await user.type(field, "BJN-402")
+    await user.tab()
+    expect(await screen.findByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+
+    finishFirst({ status: "unknown", amount: 50000 })
+    await screen.findByText("TZS 30,000 per child")
+    expect(screen.getByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+  })
+
+  it("sends whatever code is in the field, recognised or not, and the confirmation shows no fee", async () => {
+    stubs.check.mockResolvedValue({ status: "unknown", amount: 50000 })
+    stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Fixture", admissionNumber: "ADMSN-40719" }] })
+    const user = await reviewStep({ discountCode: "BJN-402", rememberDiscountCode: "BJN-402" })
+    const field = screen.getByLabelText("Discount code · optional")
+    await user.clear(field)
+    await user.type(field, "qqq-000")
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+
+    const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
+    expect(JSON.parse(String(sent.get("form"))).discountCode).toBe("qqq-000")
+    expect(await screen.findByRole("heading", { name: "Application received!" })).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/TZS|fee/i)
+    // Sending leaves the remembered code in place.
+    expect(document.cookie).toContain("discount_code=BJN-402")
+  })
+
+  it("sends no code when the field is empty", async () => {
+    stubs.submit.mockResolvedValue({ status: "unavailable" })
+    const user = await reviewStep()
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+    const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
+    expect(JSON.parse(String(sent.get("form")))).not.toHaveProperty("discountCode")
+  })
+
+  it("names a value that isn't a code under the field, and won't send it", async () => {
+    const user = await reviewStep()
+    const field = screen.getByLabelText("Discount code · optional")
+    await user.type(field, "ABC_123!")
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+
+    expect(screen.getByText(/A discount code has only letters, numbers/)).toBeInTheDocument()
+    expect(field).toHaveAttribute("aria-invalid", "true")
+    expect(stubs.submit).not.toHaveBeenCalled()
+    expect(stubs.check).not.toHaveBeenCalled()
   })
 })

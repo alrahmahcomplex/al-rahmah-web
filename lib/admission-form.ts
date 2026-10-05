@@ -1,3 +1,4 @@
+import { normalizeDiscountCode } from "@/lib/referral-link"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, type NewContact, type NewStudent } from "@/lib/services/leads"
 
@@ -16,13 +17,16 @@ export type AdmissionForm = {
   submissionKey: string
   parent: AdmissionParent
   children: AdmissionChild[]
+  // One Discount code for every child on the form, normalized as the
+  // database stores it. Absent when the parent left the field empty.
+  discountCode?: string
 }
 
 // The fields a refusal can name. `child` says which child card, for the
 // child's own fields.
 export type ParentField = "contact_name" | "relationship" | "relationship_description" | "phone" | "whatsapp"
 export type ChildField = "student_name" | "class_name" | "enrollment_year" | "day_or_boarding" | "duplicate_child"
-export type FormField = ParentField | ChildField | "children" | "submission_key" | "payload"
+export type FormField = ParentField | ChildField | "discount_code" | "children" | "submission_key" | "payload"
 
 export type FieldProblem = { field: FormField; child: number | null }
 
@@ -93,7 +97,7 @@ export function parseAdmissionForm(
     return { ok: false, error: payload }
   }
   if (!value || typeof value !== "object") return { ok: false, error: payload }
-  const { submissionKey, parent, children } = value as Record<string, unknown>
+  const { submissionKey, parent, children, discountCode } = value as Record<string, unknown>
 
   if (typeof submissionKey !== "string" || !UUID.test(submissionKey)) {
     return { ok: false, error: { field: "submission_key", child: null } }
@@ -138,5 +142,15 @@ export function parseAdmissionForm(
 
   const problem = parentProblem(cleanParent) ?? childrenProblem(cleanChildren, years)
   if (problem) return { ok: false, error: problem }
-  return { ok: true, data: { submissionKey: submissionKey.toLowerCase(), parent: cleanParent, children: cleanChildren } }
+
+  // Optional, and refused only when it isn't a code at all: a code no agent
+  // holds is still kept, for staff to fix.
+  const typedCode = optionalText(discountCode)
+  if (typedCode === null) return { ok: false, error: payload }
+  const code = typedCode?.trim() ? normalizeDiscountCode(typedCode) : undefined
+  if (code === null) return { ok: false, error: { field: "discount_code", child: null } }
+
+  const form: AdmissionForm = { submissionKey: submissionKey.toLowerCase(), parent: cleanParent, children: cleanChildren }
+  if (code) form.discountCode = code
+  return { ok: true, data: form }
 }

@@ -16,18 +16,25 @@ import {
   type FormField,
 } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
+import { discountCodeCookie, normalizeDiscountCode, STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
 import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS } from "@/lib/services/leads"
 import { cn } from "@/lib/utils"
 
-import { submitAdmissionForm } from "./actions"
+import { checkDiscountCode, submitAdmissionForm } from "./actions"
 import { COPY } from "./copy"
-import type { AdmissionFormState } from "./outcome"
+import type { AdmissionFormState, DiscountCodeCheck } from "./outcome"
 
 // The Admission form, in three steps: the parent, the children (one card
 // each, up to MAX_CHILDREN), then a review with the security check and Send
 // application. Every entry lives in this component's state, so switching
 // language (which re-renders the page around it) or going Back never loses
 // one.
+//
+// The review step also holds the optional Discount code, one for every child,
+// and the interview fee. The code is checked when the step opens with one
+// filled in, and again whenever the field loses focus with a different code.
+// Only a confirmed code brings the fee down; any other answer, or none, shows
+// the standard fee. No answer ever stops the form.
 
 type Step = 0 | 1 | 2
 
@@ -93,14 +100,27 @@ type Shown = FieldProblem & { server: boolean }
 
 type Notice = "check-pending" | "rate-limited" | "check-failed" | "unavailable" | null
 
+// "TZS 50,000", the way the school writes amounts.
+function tzs(amount: number): string {
+  return `TZS ${amount.toLocaleString("en-US")}`
+}
+
 export function AdmissionFormSteps({
   language,
   years,
   officePhone,
+  discountCode: startingCode = "",
+  rememberDiscountCode = null,
 }: {
   language: Language
   years: [number, number]
   officePhone: string
+  // Where the Discount code field starts: the Referral link's code, else the
+  // one remembered from an earlier link, else empty.
+  discountCode?: string
+  // The Referral link's code, when the page opened from one: remembered for
+  // 30 days from now, replacing any earlier one.
+  rememberDiscountCode?: string | null
 }) {
   const copy = COPY[language]
   const [step, setStep] = useState<Step>(0)
@@ -124,6 +144,15 @@ export function AdmissionFormSteps({
   // whether at its name (a new card) or on the card itself, which reads out
   // its legend (where a removed card was).
   const [cardFocus, setCardFocus] = useState<{ index: number; at: "name" | "card" } | null>(null)
+  const [discountCode, setDiscountCode] = useState(startingCode)
+  // The answer for each code checked so far, and the codes being checked now.
+  const [answers, setAnswers] = useState<Record<string, DiscountCodeCheck>>({})
+  const [checking, setChecking] = useState<ReadonlySet<string>>(() => new Set())
+
+  useEffect(() => {
+    if (!rememberDiscountCode) return
+    document.cookie = discountCodeCookie(rememberDiscountCode, { secure: window.location.protocol === "https:" })
+  }, [rememberDiscountCode])
 
   // After a step change, put the reader at the new step's heading, or at the
   // field to fix.
@@ -139,6 +168,34 @@ export function AdmissionFormSteps({
     const card = `[data-child="${cardFocus.index}"]`
     document.querySelector<HTMLElement>(cardFocus.at === "name" ? `${card} [data-field="student_name"]` : card)?.focus()
   }, [cardFocus])
+
+  // Asks what the code in the field means, unless it already has an answer
+  // or is being asked about. A check that couldn't run is asked again on the
+  // next blur. A value that isn't a code is named under the field instead.
+  async function checkCode(value: string) {
+    if (!value.trim()) return
+    const code = normalizeDiscountCode(value)
+    if (!code) {
+      setProblem({ field: "discount_code", child: null, server: false })
+      return
+    }
+    if ((answers[code] && "amount" in answers[code]) || checking.has(code)) return
+    setChecking((current) => new Set(current).add(code))
+    let result: DiscountCodeCheck
+    try {
+      result = await checkDiscountCode(code)
+    } catch {
+      result = { status: "unavailable" }
+    }
+    // Kept by code, so an answer that arrives after the parent typed on
+    // still answers for that code if they go back to it.
+    setAnswers((current) => ({ ...current, [code]: result }))
+    setChecking((current) => {
+      const next = new Set(current)
+      next.delete(code)
+      return next
+    })
+  }
 
   function go(next: Step, shown: Shown | null = null) {
     moved.current = true
@@ -182,6 +239,9 @@ export function AdmissionFormSteps({
     const found = childrenProblem(children.map(asChild), years)
     if (found) return go(1, { ...found, server: false })
     go(2)
+    // A code filled in from a Referral link, or kept from before, is checked
+    // as the review step opens; the field's blur checks any edit.
+    void checkCode(discountCode)
   }
 
   function onSend(form: HTMLFormElement) {
@@ -190,6 +250,9 @@ export function AdmissionFormSteps({
     if (parentFound) return go(0, { ...parentFound, server: false })
     const childFound = childrenProblem(children.map(asChild), years)
     if (childFound) return go(1, { ...childFound, server: false })
+    if (discountCode.trim() && !normalizeDiscountCode(discountCode)) {
+      return go(2, { field: "discount_code", child: null, server: false })
+    }
 
     const data = new FormData(form)
     // Turnstile fills its token in a moment after the step opens; sending
@@ -198,7 +261,15 @@ export function AdmissionFormSteps({
       setNotice("check-pending")
       return
     }
-    data.set("form", JSON.stringify({ submissionKey, parent: asParent(parent), children: children.map(asChild) }))
+    data.set(
+      "form",
+      JSON.stringify({
+        submissionKey,
+        parent: asParent(parent),
+        children: children.map(asChild),
+        discountCode: discountCode.trim() || undefined,
+      }),
+    )
     setNotice(null)
     setProblem(null)
     startSending(async () => {
@@ -236,6 +307,9 @@ export function AdmissionFormSteps({
     lastCard.current += 1
     setChildren([emptyChild(lastCard.current)])
     setSubmissionKey(newSubmissionKey())
+    // The remembered code still counts for another form, as the page would
+    // start it.
+    setDiscountCode(startingCode)
     setConfirmed(null)
     setAlreadySent(null)
     setNotice(null)
@@ -266,9 +340,22 @@ export function AdmissionFormSteps({
     }
     return copy.problems[field]
   }
-  const formLevel = problem && !PARENT_FIELDS.has(problem.field) && !CHILD_FIELDS.has(problem.field)
+  const formLevel = problem && !PARENT_FIELDS.has(problem.field) && !CHILD_FIELDS.has(problem.field) && problem.field !== "discount_code"
     ? copy.problems[problem.field]
     : null
+  // The answer for the code in the field now, if it has one.
+  const currentCode = normalizeDiscountCode(discountCode)
+  const answer = currentCode ? (answers[currentCode] ?? null) : null
+  const discountNote =
+    !currentCode || problem?.field === "discount_code"
+      ? null
+      : checking.has(currentCode)
+        ? copy.discountChecking
+        : answer
+          ? copy.discountNotes[answer.status === "rate-limited" || answer.status === "unavailable" ? "unchecked" : answer.status]
+          : null
+  const feePerChild = answer && "amount" in answer ? answer.amount : STANDARD_INTERVIEW_FEE
+
   const noticeText = notice
     ? {
         "check-pending": copy.checkPending,
@@ -466,6 +553,28 @@ export function AdmissionFormSteps({
               ))}
             </dl>
 
+            <DiscountCodeField
+              label={copy.discountCode}
+              hint={copy.discountCodeHint}
+              value={discountCode}
+              onChange={(value) => {
+                setDiscountCode(value)
+                if (problem?.field === "discount_code") setProblem(null)
+              }}
+              onBlur={() => void checkCode(discountCode)}
+              note={discountNote}
+              confirmed={answer?.status === "approved"}
+              error={message("discount_code")}
+            />
+
+            <div className="rounded-3xl bg-orange-50 p-4 ring-1 ring-orange-100">
+              <p className="text-sm font-semibold text-orange-950">{copy.interviewFee}</p>
+              <p className="mt-1 text-base text-orange-950">{copy.feePerChild(tzs(feePerChild))}</p>
+              <p className="mt-0.5 text-base font-semibold text-orange-950">
+                {copy.feeTotal(children.length, tzs(feePerChild * children.length))}
+              </p>
+            </div>
+
             <div>
               <TurnstileWidget ref={turnstile} action="admission" language={language} />
               <p className="mt-1 text-center text-xs text-slate-500">{copy.securityNote}</p>
@@ -629,6 +738,67 @@ function ChipField({
         })}
       </div>
       {error && <FieldError id={`${base}-error`}>{error}</FieldError>}
+    </div>
+  )
+}
+
+// The optional Discount code, with the note that says what the code means.
+// The note is a live region, so a screen reader hears the answer arrive.
+function DiscountCodeField({
+  label,
+  hint,
+  value,
+  onChange,
+  onBlur,
+  note,
+  confirmed,
+  error,
+}: {
+  label: string
+  hint: string
+  value: string
+  onChange: (value: string) => void
+  onBlur: () => void
+  note: string | null
+  confirmed: boolean
+  error: string | null
+}) {
+  const id = "discount-code"
+  const described = [`${id}-hint`, `${id}-note`, error ? `${id}-error` : null].filter(Boolean).join(" ")
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm font-semibold text-slate-700">
+        {label}
+      </label>
+      <p id={`${id}-hint`} className="mt-0.5 text-sm text-slate-500">
+        {hint}
+      </p>
+      <input
+        id={id}
+        data-field="discount_code"
+        type="text"
+        autoCapitalize="characters"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        maxLength={40}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={described}
+        className={cn(
+          "mt-1.5 h-12 w-full rounded-full border bg-white px-5 font-mono text-base uppercase tracking-wide text-slate-800 outline-none transition focus-visible:border-blue-600 focus-visible:ring-3 focus-visible:ring-blue-600/20",
+          error ? "border-red-500" : "border-blue-600/30",
+        )}
+      />
+      <p
+        id={`${id}-note`}
+        aria-live="polite"
+        className={cn("mt-1.5 text-sm empty:hidden", confirmed ? "font-semibold text-green-700" : "text-slate-600")}
+      >
+        {note}
+      </p>
+      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
     </div>
   )
 }

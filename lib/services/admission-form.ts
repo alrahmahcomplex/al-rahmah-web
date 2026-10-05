@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { AdmissionChild, AdmissionForm, ChildField, ParentField } from "@/lib/admission-form"
 
+import { applyFormDiscountCode } from "./referral"
 import type { Result } from "./result"
 
 // The Admission form's writes. Each child becomes an Applied lead through
@@ -24,6 +25,13 @@ import type { Result } from "./result"
 // on that contact, so siblings share it. A failure part way leaves the
 // children already handled stored, and a retry with the same key resumes.
 //
+// A Discount code on the form is one for every child. Each child the form
+// creates gets it on its lead, recognised or not, right after the child is
+// created, and again when a retry replays that child: the code is written only
+// into an empty one, so the replay finishes a step a dropped connection cut
+// off and never overwrites a code staff set since. A child already on file
+// gets nothing on its lead (#84 keeps the code on the Re-application).
+//
 // Takes the secret-key client (utils/supabase/public-form.ts): only the
 // secret key may use the Admission form start.
 
@@ -36,7 +44,7 @@ export type AdmissionFormError =
   // A field the database refused. `child` is the child card for a child's
   // field, null for the parent's. `duplicate_child` is a child the form
   // already named on an earlier card.
-  | { kind: "invalid"; field: ParentField | ChildField; child: number | null }
+  | { kind: "invalid"; field: ParentField | ChildField | "discount_code"; child: number | null }
   // This submission key already created children, from an earlier send of
   // the form before the parent edited it. Those children, in form order, and
   // whether they are every child that send carried.
@@ -51,9 +59,11 @@ const PARENT_FIELDS = new Set<string>(["contact_name", "relationship", "relation
 const CHILD_FIELDS = new Set<string>(["student_name", "class_name", "enrollment_year", "day_or_boarding", "duplicate_child"])
 
 // What the submission key is checked against: the form exactly as validated,
-// in a fixed key order.
-function payloadHash({ parent, children }: Pick<AdmissionForm, "parent" | "children">): string {
+// in a fixed key order. The Discount code joins it only when there is one, so
+// a form without a code hashes as it did before codes existed.
+function payloadHash({ parent, children, discountCode }: Pick<AdmissionForm, "parent" | "children" | "discountCode">): string {
   const canonical = JSON.stringify({
+    ...(discountCode ? { discountCode } : {}),
     parent: [
       parent.fullName,
       parent.relationship,
@@ -103,7 +113,7 @@ export async function submitAdmissionForm(
   supabase: SupabaseClient,
   form: AdmissionForm,
 ): Promise<Result<ChildOutcome[], AdmissionFormError>> {
-  const { submissionKey, parent, children } = form
+  const { submissionKey, parent, children, discountCode } = form
   const hash = payloadHash(form)
   const newContact = {
     full_name: parent.fullName,
@@ -149,6 +159,18 @@ export async function submitAdmissionForm(
     if (row.result !== "created" && row.result !== "re_applied") {
       console.error("Admission form: unexpected outcome for a child", { index, result: row.result })
       return { ok: false, error: { kind: "unavailable" } }
+    }
+    if (row.result === "created" && discountCode) {
+      const applied = await applyFormDiscountCode(supabase, row.lead_id, discountCode)
+      if (!applied.ok) {
+        if (applied.error === "invalid") return { ok: false, error: { kind: "invalid", field: "discount_code", child: null } }
+        // Staff closed the lead before the code reached it: it stays as they
+        // left it, and the parent's application still stands.
+        if (applied.error !== "lead-closed") {
+          console.error("Admission form: could not put the Discount code on a lead", { index, error: applied.error })
+          return { ok: false, error: { kind: "unavailable" } }
+        }
+      }
     }
     outcomes.push({ fullName: child.fullName, admissionNumber: row.admission_number })
   }

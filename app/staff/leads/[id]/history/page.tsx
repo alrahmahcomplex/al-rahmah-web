@@ -57,7 +57,16 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
           <AlertDescription>This lead&apos;s history could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : (
-        <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames })} />
+        <>
+          {!followUps.ok && (
+            <Alert>
+              <AlertDescription>
+                The names of staff who made contacts could not be loaded, so some contact entries show an id. Reload to try again.
+              </AlertDescription>
+            </Alert>
+          )}
+          <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames })} />
+        </>
       )}
 
       <div>

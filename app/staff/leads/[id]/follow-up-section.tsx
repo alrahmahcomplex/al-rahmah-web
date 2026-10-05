@@ -111,6 +111,9 @@ function Records({ records, followUps }: { records: FollowUpRecord[]; followUps:
                   </span>
                   {record.followUpId === null && <Badge variant="outline">Unplanned</Badge>}
                 </p>
+                {record.followUpId && dueOn.get(record.followUpId) && (
+                  <p className="text-xs text-muted-foreground">Planned for {formatDate(dueOn.get(record.followUpId)!)}</p>
+                )}
                 {record.contactedAt && (
                   <p className="text-xs text-muted-foreground">
                     <time dateTime={record.contactedAt}>{formatContactTime(record.contactedAt)}</time>

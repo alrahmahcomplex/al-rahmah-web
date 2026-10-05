@@ -338,7 +338,7 @@ function RecordForm({
   // An Enrolled lead needs no next date, so none is suggested.
   const [nextDueOn, setNextDueOn] = useState(enrolled ? "" : addDays(today, 7))
   const [nextNote, setNextNote] = useState("")
-  const { refusal, pending, save } = useSave(onDone)
+  const { refusal, pending, save, refuse } = useSave(onDone)
 
   const people = contactStaff ?? [signedIn]
   const choices = people.some((person) => person.id === signedIn.id) ? people : [signedIn, ...people]
@@ -349,6 +349,12 @@ function RecordForm({
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
+        // A page left open past midnight in Tanzania would offer a next date the
+        // database now counts as today.
+        if (nextDueOn && nextDueOn <= laterOf(today, tanzaniaToday())) {
+          refuse({ status: "refused", field: "next_due_on", message: "Pick a next date after today. If this page was open overnight, today has moved on." })
+          return
+        }
         save(() =>
           recordLeadFollowUp(leadId, { followUpId, comment, method, contactedBy, contactedAt, nextDueOn, nextNote }),
         )

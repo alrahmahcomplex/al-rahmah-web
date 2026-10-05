@@ -41,7 +41,7 @@ commit;
 --   ADMSN-90901 Halima Malipo   STD 2 Day, TZS 2,000,000: no payment, no priority
 --   ADMSN-90902 Juma Malipo     STD 2 Day, TZS 2,000,000: Initial deposit 300,000, Deposit
 --   ADMSN-90903 Rehema Malipo   KG 1 Day, TZS 1,100,000: Initial deposit 500,000, past 40%, so First instalment
---   ADMSN-90904 Omari Malipo    STD 1 Day, TZS 2,000,000: Full payment 2,000,000, Full
+--   ADMSN-90904 Omari Malipo    STD 1 Day, TZS 2,000,000: Full payment 2,000,000, Full, so Enrolled
 begin;
 
 select public.set_audit_actor('system');
@@ -88,5 +88,17 @@ insert into public.school_fee_payments (id, lead_id, payment_type, amount, paid_
         date '2026-09-24', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-24 11:30:00+03'),
     ('fee00000-0000-4000-8000-000000000904', '1ead0000-0000-4000-8000-000000000904', 'full_payment', 2000000,
         date '2026-09-26', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-26 09:15:00+03');
+
+-- Enrolled from the payments (#108), as recording them would have done:
+-- Omari's Full payment enrols him on 2026-09-26. Rehema's First instalment
+-- waits for the 2027 Academic-year start, and Juma's Deposit never enrols.
+select public.recompute_lead_fee(l.id, 'payment')
+from public.leads l
+where l.id in (
+    '1ead0000-0000-4000-8000-000000000902',
+    '1ead0000-0000-4000-8000-000000000903',
+    '1ead0000-0000-4000-8000-000000000904'
+)
+order by l.id;
 
 commit;

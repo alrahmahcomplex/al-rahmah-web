@@ -9,6 +9,7 @@ import { createClient } from "@/utils/supabase/server"
 
 import { formatShillings } from "../../fees/format"
 import { SeatPriorityBadge } from "../seat-priority-badge"
+import { enrolledBy } from "./enrolment-text"
 import { RecordPayment } from "./record-payment"
 
 const INSTALMENTS = ["First", "Second", "Third"] as const
@@ -65,6 +66,15 @@ export async function SchoolFeeSection({ leadId, staff, canRecord }: { leadId: s
             <dd className="text-right text-slate-900">
               {fee.data.priority ? <SeatPriorityBadge priority={fee.data.priority} /> : <span className="text-muted-foreground">None yet</span>}
             </dd>
+            {fee.data.enrolment && (
+              <>
+                <dt className="text-muted-foreground">
+                  Enrolled
+                  <span className="block text-xs">On {formatDate(fee.data.enrolment.on)}</span>
+                </dt>
+                <dd className="text-right text-slate-900">{enrolledBy(fee.data.enrolment)}</dd>
+              </>
+            )}
           </dl>
 
           <Table>

@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 6, 2026 `v0.40.0`
+
+### NEW
+
+- A lead becomes **Enrolled** from its payments, and nobody sets it by hand. The moment
+  its Seat priority reaches **Full**, its status changes to Enrolled. A Deposit never
+  enrols a lead, and First instalment waits for the Academic-year start.
+- The School fee section on an Enrolled lead says what enrolled it and when, for
+  example "By the Full payment of TZS 2,000,000" on 26 Sept 2026.
+- If a correction takes an Enrolled lead back below the line, such as a higher fee in
+  the Fee schedule or a change of class, year or Day or boarding, it goes back to the
+  status it had before. Lowering a fee can enrol a lead that has already paid enough.
+- The lead's history shows each change into or out of Enrolled and why it happened.
+- A Declined lead keeps its status and its payments. An Inactive or Archived lead can
+  still be enrolled by its payments and keeps its mark.
+- Leads already paid in Full become Enrolled when this release goes live.
+
 ## October 5, 2026 `v0.39.0`
 
 ### NEW

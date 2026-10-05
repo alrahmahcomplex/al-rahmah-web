@@ -73,6 +73,13 @@ const LABELS: Record<string, string> = {
   registered_at: "Registered",
   approved_at: "Approved at",
   approved_by: "Approved by",
+  // Its follow-up records.
+  method: "Contact method",
+  contacted_by: "Made the contact",
+  contacted_at: "Contacted at",
+  comment: "Comment",
+  outcome: "Outcome",
+  cause: "Closed because",
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
@@ -89,7 +96,24 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   school_fee_payments: new Set(["lead_id", "recorded_by", "recorded_at", "request_id"]),
   // The numbers as typed show as stored instead.
   re_applications: new Set(["lead_id", "submission_key", "received_at", "phone_as_sent", "whatsapp_as_sent"]),
+  // A record's follow-ups show as their own entries; its kind and entry time
+  // show in the entry itself.
+  follow_up_records: new Set(["lead_id", "follow_up_id", "next_follow_up_id", "kind", "entered_at"]),
 }
+
+const OUTCOMES: Record<string, string> = {
+  next_date: "Next follow-up planned",
+  lead_enrolled: "No next date: the lead is Enrolled",
+  lead_declined: "The family will not proceed: lead declined",
+}
+
+const CAUSES: Record<string, string> = {
+  declined: "The lead was declined",
+  inactive: "The lead was marked Inactive",
+  archived: "The lead was archived",
+}
+
+const CONTACT_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Dar_es_Salaam" })
 
 const ORIGINS: Record<string, string> = {
   front_desk: "Front desk",
@@ -126,6 +150,16 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
     case "differing_fields":
       if (!Array.isArray(value)) return raw(value)
       return value.length === 0 ? "Nothing" : value.map((f) => LABELS[String(f)] ?? String(f)).join(", ")
+    // The staff member who made a contact, by name: the history page adds
+    // their names to the contacts' names.
+    case "contacted_by":
+      return contactNames[String(value)] ?? raw(value)
+    case "contacted_at":
+      return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? CONTACT_TIME.format(new Date(value)) : raw(value)
+    case "outcome":
+      return OUTCOMES[String(value)] ?? raw(value)
+    case "cause":
+      return CAUSES[String(value)] ?? raw(value)
     default:
       return raw(value)
   }
@@ -247,6 +281,11 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
   if (entry.record === "reopening_requests") return reopeningSummary(entry)
   if (entry.record === "school_fee_payments" && insert) return "recorded a school-fee payment"
   if (entry.record === "re_applications" && insert) return "recorded a re-application"
+  if (entry.record === "follow_up_records") {
+    if (!insert) return entry.action
+    if (changed.get("kind")?.to === "closed_with_lead") return "closed the follow-up with the lead"
+    return changed.get("follow_up_id")?.to ? "recorded a follow-up" : "recorded an unplanned contact"
+  }
 
   if (entry.record !== null) {
     if (insert) return `added ${article(entry.record)} ${entry.record} record`

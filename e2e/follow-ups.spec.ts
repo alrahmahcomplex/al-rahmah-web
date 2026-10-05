@@ -3,13 +3,14 @@ import { randomInt, randomUUID } from "node:crypto"
 import { expect, test, type Page } from "@playwright/test"
 
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { scheduleFollowUp } from "@/lib/services/follow-ups"
 import { createLead } from "@/lib/services/leads"
 
-import { secretClient } from "../tests/support/db"
-import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { asSystem, secretClient, signedIn } from "../tests/support/db"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
-// The Follow-ups panel on the lead screen (#90): scheduling, changing the
-// date with a reason, and who sees the actions.
+// The Follow-ups panel on the lead screen: scheduling, changing the date with
+// a reason (#90), recording a contact (#91), and who sees the actions.
 
 const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
@@ -117,6 +118,92 @@ test.describe("the Follow-ups panel", () => {
     await expect(panel(page).getByLabel("Follow-up date")).toBeVisible()
     await expect(panel(page)).toContainText("Reason: The parent is travelling until next week.")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
+  })
+
+  test("Admissions Staff record a contact, which completes the follow-up and plans the next", async ({ page }) => {
+    const lead = await newLead()
+    const planned = await scheduleFollowUp(await signedIn(MANAGER), lead, { dueOn: today, note: "Ask about the bus." })
+    if (!planned.ok) throw new Error("schedule failed")
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead}`)
+
+    await panel(page).getByRole("button", { name: "Record follow-up" }).click()
+    const record = page.getByRole("dialog", { name: "Record follow-up" })
+    await expect(record).toContainText("What was discussed. Keep it to what admissions needs.")
+    // Who made the contact starts at the signed-in staff member, the next
+    // date at a week ahead.
+    await expect(record.getByLabel("Made the contact")).toHaveValue(ADMISSIONS.id)
+    await expect(record.getByLabel("Next follow-up date")).toHaveValue(addDays(today, 7))
+    await record.getByLabel("Comment").fill("The mother will bring the report card on Monday.")
+    await record.getByLabel("Contact method").selectOption("WhatsApp")
+    await record.getByRole("button", { name: "Record follow-up" }).click()
+
+    await expect(panel(page).getByRole("status")).toHaveText(`Follow-up recorded. Next follow-up on ${formatDate(addDays(today, 7))}.`)
+    await expect(panel(page).getByLabel("Follow-up date")).toHaveText(formatDate(addDays(today, 7)))
+    const contacts = panel(page).getByRole("list", { name: "Contacts" })
+    await expect(contacts).toContainText(`WhatsApp by ${ADMISSIONS.name}`)
+    await expect(contacts).toContainText("The mother will bring the report card on Monday.")
+    await expect(contacts).toContainText(`Next follow-up: ${formatDate(addDays(today, 7))}`)
+    await expect(contacts).not.toContainText("Unplanned")
+
+    await page.goto(`/staff/leads/${lead}/history`)
+    const history = page.getByRole("list", { name: "History" })
+    await expect(history.getByText("recorded a follow-up")).toBeVisible()
+    await expect(history).toContainText(`Made the contact: ${ADMISSIONS.name}`)
+    await expect(history).toContainText("Contact method: WhatsApp")
+    await expect(history).toContainText("Comment: The mother will bring the report card on Monday.")
+  })
+
+  test("a contact nobody planned is recorded too, and an Enrolled lead needs no next date", async ({ page }) => {
+    const lead = await newLead()
+    // A lead past Applied carries a Visit date.
+    await asSystem((sql) =>
+      sql.query("update public.leads set status = 'Enrolled', visit_date = public.tanzania_today() where id = $1", [lead]),
+    )
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead}`)
+
+    await expect(panel(page)).toContainText("No follow-up scheduled.")
+    await panel(page).getByRole("button", { name: "Record follow-up" }).click()
+    const record = page.getByRole("dialog", { name: "Record follow-up" })
+    await expect(record.getByLabel("Next follow-up date (optional)")).toHaveValue("")
+    await record.getByLabel("Comment").fill("The father phoned to thank the office.")
+    await record.getByLabel("Made the contact").selectOption({ label: MANAGER.name })
+    await record.getByRole("button", { name: "Record follow-up" }).click()
+
+    await expect(panel(page).getByRole("status")).toHaveText("Follow-up recorded.")
+    await expect(panel(page)).toContainText("No follow-up scheduled.")
+    const contacts = panel(page).getByRole("list", { name: "Contacts" })
+    await expect(contacts).toContainText(`Phone call by ${MANAGER.name}`)
+    await expect(contacts).toContainText("Unplanned")
+    await expect(contacts).toContainText("No next date: the lead is Enrolled")
+  })
+
+  test("a follow-up planned by someone else while the form was open is refused, with a reload", async ({ page }) => {
+    const lead = await newLead()
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead}`)
+    await panel(page).getByRole("button", { name: "Record follow-up" }).click()
+    const record = page.getByRole("dialog", { name: "Record follow-up" })
+    await record.getByLabel("Comment").fill("Called about the uniform list.")
+
+    // A colleague schedules one meanwhile.
+    await scheduleFollowUp(await signedIn(MANAGER), lead, { dueOn: addDays(today, 2) })
+    await record.getByRole("button", { name: "Record follow-up" }).click()
+
+    await expect(record.getByRole("alert")).toContainText("Someone else has already recorded or changed this follow-up.")
+    await record.getByRole("button", { name: "Reload" }).click()
+    await expect(panel(page).getByLabel("Follow-up date")).toHaveText(formatDate(addDays(today, 2)))
+    await expect(panel(page).getByRole("list", { name: "Contacts" })).toHaveCount(0)
+  })
+
+  test("a deactivated colleague's past contact keeps their name", async ({ page }) => {
+    await signIn(page, ACCOUNTANT)
+    await page.goto(`/staff/leads/${BARAKA}`)
+    const contacts = panel(page).getByRole("list", { name: "Contacts" })
+    await expect(contacts).toContainText("Phone call by Deactivated Staff")
+    // Entered a day after the call.
+    await expect(contacts).toContainText("Entered")
   })
 
   test("a closed lead shows its follow-up with no actions", async ({ page }) => {

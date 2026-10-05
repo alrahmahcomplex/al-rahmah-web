@@ -5,6 +5,7 @@ import { forbidden, notFound } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
 import { getLeadHistory } from "@/lib/services/audit"
+import { getLeadFollowUps } from "@/lib/services/follow-ups"
 import { getLead } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
@@ -31,8 +32,14 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
 
   const { id } = await params
   const supabase = await createClient()
-  const [lead, history] = await Promise.all([getLead(supabase, id), getLeadHistory(supabase, id)])
+  const [lead, history, followUps] = await Promise.all([getLead(supabase, id), getLeadHistory(supabase, id), getLeadFollowUps(supabase, id)])
   if (!lead.ok && lead.error === "not-found") notFound()
+  // Who made each recorded contact, by name alongside the contacts' names.
+  const contactedBy = Object.fromEntries(
+    (followUps.ok ? followUps.data.records : []).flatMap((record) =>
+      record.contactedBy?.name ? [[record.contactedBy.id, record.contactedBy.name]] : [],
+    ),
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -50,7 +57,16 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
           <AlertDescription>This lead&apos;s history could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : (
-        <Entries entries={describeLeadHistory(history.data.entries, history.data.contactNames)} />
+        <>
+          {!followUps.ok && (
+            <Alert>
+              <AlertDescription>
+                The names of staff who made contacts could not be loaded, so some contact entries show an id. Reload to try again.
+              </AlertDescription>
+            </Alert>
+          )}
+          <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames })} />
+        </>
       )}
 
       <div>

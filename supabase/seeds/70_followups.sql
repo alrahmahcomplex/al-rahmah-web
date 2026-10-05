@@ -8,6 +8,14 @@
 --   ADMSN-90003 Neema Fixture    due today
 --   ADMSN-90004 Salma Fixture    due in 7 days, moved there from 3 days ahead
 --   ADMSN-90005 Hamisi Fixture   Archived, with a follow-up planned before it closed
+--
+-- And the contacts recorded on them (#91):
+--
+--   Baraka  a phone call 11 days ago that closed the follow-up due 12 days
+--           ago and planned the overdue one; made by Deactivated Staff and
+--           entered a day later
+--   Neema   an unplanned WhatsApp from the family 5 days ago that planned
+--           today's follow-up
 
 begin;
 
@@ -28,5 +36,24 @@ insert into public.follow_ups (id, lead_id, due_on, note, replaces_id, change_re
     ('f0110000-0000-4000-8000-000000000014', '1ead0000-0000-4000-8000-000000000004',
         public.tanzania_today() + 7, 'Confirm the Form 1 interview date.', 'f0110000-0000-4000-8000-000000000004',
         'The parent is travelling until next week.', public.tanzania_today() + 3, now() - interval '1 day');
+
+-- Baraka's earlier follow-up, closed by the call below.
+insert into public.follow_ups (id, lead_id, due_on, note, created_at) values
+    ('f0110000-0000-4000-8000-000000000012', '1ead0000-0000-4000-8000-000000000002',
+        public.tanzania_today() - 12, 'Introduce the boarding houses.', now() - interval '20 days');
+
+insert into public.follow_up_records (
+    id, lead_id, follow_up_id, kind, outcome, comment, method, contacted_by, contacted_at, entered_at, next_follow_up_id
+) values
+    ('f0120000-0000-4000-8000-000000000002', '1ead0000-0000-4000-8000-000000000002',
+        'f0110000-0000-4000-8000-000000000012', 'contact', 'next_date',
+        'Spoke with the mother. She will visit the boarding houses with her husband first.',
+        'Phone call', 'a1a1a1a1-0000-4000-8000-000000000005', now() - interval '11 days', now() - interval '10 days',
+        'f0110000-0000-4000-8000-000000000002'),
+    ('f0120000-0000-4000-8000-000000000003', '1ead0000-0000-4000-8000-000000000003',
+        null, 'contact', 'next_date',
+        'The father messaged to ask about the interview fee. Told him the amount and the dates.',
+        'WhatsApp', 'a1a1a1a1-0000-4000-8000-000000000003', now() - interval '5 days', now() - interval '5 days',
+        'f0110000-0000-4000-8000-000000000003');
 
 commit;

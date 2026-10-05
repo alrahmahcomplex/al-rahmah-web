@@ -82,7 +82,13 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
     // A closed lead keeps showing its follow-ups, with no actions.
     readOnlyWhenClosed: true,
     Panel: ({ lead, staff, open }) => (
-      <FollowUpSection leadId={lead.id} open={open} canRecord={open && staff.permissions.includes("follow_ups.record")} />
+      <FollowUpSection
+        leadId={lead.id}
+        open={open}
+        canRecord={open && staff.permissions.includes("follow_ups.record")}
+        enrolled={lead.status === "Enrolled"}
+        staff={{ id: staff.id, name: staff.name }}
+      />
     ),
   },
   // Open leads only, for staff who may decline them.

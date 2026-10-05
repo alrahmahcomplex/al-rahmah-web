@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 5, 2026 `v0.38.0`
+
+### NEW
+
+- **Record follow-up** on a lead saves what happened when someone contacted the family:
+  a comment, how they were reached (Phone call, WhatsApp, SMS or In-person), who made the
+  contact (you, unless you pick a colleague) and when (now, unless you change it).
+  Recording completes the current follow-up and plans the next one, a week ahead to start
+  with.
+- A contact nobody planned, such as the family phoning in, can be recorded too.
+- On an Enrolled lead the next follow-up date is optional.
+- The Follow-ups panel lists every contact, newest first, with when it was entered if
+  that was more than an hour after the contact. A colleague who has since left still
+  shows by name. The lead's history shows each contact.
+- If someone else records or changes the follow-up while you have the form open, you're
+  told nothing was saved and offered a reload.
+
 ## October 5, 2026 `v0.37.0`
 
 ### NEW

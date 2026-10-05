@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { AdmissionChild, AdmissionForm, ChildField, ParentField } from "@/lib/admission-form"
 
-import { applyFormDiscountCode, applyFormDiscountCodeToSent } from "./referral"
+import { applyFormDiscountCode } from "./referral"
 import type { Result } from "./result"
 
 // The Admission form's writes. Each child becomes an Applied lead through
@@ -29,9 +29,7 @@ import type { Result } from "./result"
 // creates gets it on its lead, recognised or not, right after the child is
 // created, and again when a retry replays that child: the code is written only
 // into an empty one, so the replay finishes a step a dropped connection cut
-// off and never overwrites a code staff set since. A retry the parent edited
-// creates nothing, so it puts the code it carries on the earlier send's new
-// children the same way, into empty codes only. A child already on file
+// off and never overwrites a code staff set since. A child already on file
 // gets nothing on its lead (#84 keeps the code on the Re-application).
 //
 // Takes the secret-key client (utils/supabase/public-form.ts): only the
@@ -139,19 +137,7 @@ export async function submitAdmissionForm(
     if (error) {
       if (error.message === "submission_key_reused") {
         const sent = earlierSend(error.details)
-        if (sent) {
-          // The earlier send may have stopped before its code step. Its
-          // children get the code the parent sends now, into empty codes
-          // only, so nothing a finished send or staff stored changes.
-          if (discountCode) {
-            const finished = await applyFormDiscountCodeToSent(supabase, submissionKey, discountCode)
-            if (!finished.ok) {
-              if (finished.error === "invalid") return { ok: false, error: { kind: "invalid", field: "discount_code", child: null } }
-              return { ok: false, error: { kind: "unavailable" } }
-            }
-          }
-          return { ok: false, error: { kind: "already-sent", ...sent } }
-        }
+        if (sent) return { ok: false, error: { kind: "already-sent", ...sent } }
       }
       if (error.message === "invalid") {
         const field = fieldOf(error.details)

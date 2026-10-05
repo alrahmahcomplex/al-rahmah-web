@@ -189,39 +189,6 @@ describe("the form's Discount code on the leads it creates", () => {
   })
 })
 
-describe("an edited retry after a send cut off before its code step", () => {
-  test("gives the earlier send's children the code sent now, and still creates nothing", async () => {
-    const sent = form({ children: [child(), child()], discountCode: "QQQ-000" })
-    expect(await submitAdmissionForm(failingCodeStep(), sent)).toEqual({ ok: false, error: { kind: "unavailable" } })
-
-    // The parent fixes the code and sends again; the key is the same.
-    const edited = await submitAdmissionForm(secretClient(), { ...sent, discountCode: "bjn-402" })
-    // The cut-off send created only the first child before it stopped.
-    expect(!edited.ok && edited.error).toMatchObject({ kind: "already-sent", complete: false })
-    expect(await codeOf(sent.children[0].fullName)).toBe(APPROVED)
-    expect(await codeChanges(await leadIdOf(sent.children[0].fullName))).toEqual([
-      { actor: "Admission form", action: "update", change: { field: "referral_code", from: null, to: APPROVED } },
-    ])
-  })
-
-  test("never replaces a code the earlier send or staff already stored", async () => {
-    const sent = form({ discountCode: PENDING })
-    expect((await submitAdmissionForm(secretClient(), sent)).ok).toBe(true)
-
-    const edited = await submitAdmissionForm(secretClient(), { ...sent, discountCode: APPROVED })
-    expect(!edited.ok && edited.error.kind).toBe("already-sent")
-    expect(await codeOf(sent.children[0].fullName)).toBe(PENDING)
-    expect(await codeChanges(await leadIdOf(sent.children[0].fullName))).toHaveLength(1)
-  })
-
-  test("no visitor and no staff member may call it", async () => {
-    for (const client of [anonClient(), await signedIn(MANAGER)]) {
-      const { error } = await client.rpc("apply_form_discount_code_to_sent", { submission_key: randomUUID(), code: APPROVED })
-      expect(error).not.toBeNull()
-    }
-  })
-})
-
 describe("apply_form_discount_code", () => {
   test("refuses a value that isn't a code", async () => {
     const sent = form()

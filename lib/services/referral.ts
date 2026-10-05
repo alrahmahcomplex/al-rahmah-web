@@ -187,3 +187,22 @@ export async function applyFormDiscountCode(
   }
   return { ok: true, data: { code: data as string } }
 }
+
+// The same, for every lead an earlier send of the form created, when the
+// parent edited the form and sent it again with the same submission key: the
+// edited send creates nothing, so this finishes a code step the earlier send
+// never reached. Children already on file get nothing. Secret key only.
+// Returns how many leads got the code.
+export async function applyFormDiscountCodeToSent(
+  supabase: SupabaseClient,
+  submissionKey: string,
+  code: string,
+): Promise<Result<{ applied: number }, "invalid" | "unavailable">> {
+  const { data, error } = await supabase.rpc("apply_form_discount_code_to_sent", { submission_key: submissionKey, code })
+  if (error) {
+    if (error.message === "invalid") return { ok: false, error: "invalid" }
+    console.error("Could not put the form's Discount code on an earlier send's leads", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: { applied: data as number } }
+}

@@ -15,6 +15,10 @@ import type { Result } from "./result"
 // same form twice (a dropped connection, a double tap) gets the same
 // Admission Numbers back and nothing new is created.
 //
+// A child already on file gets no second lead. The same call records it as a
+// Re-application on the lead it matched, and the parent gets that lead's
+// Admission Number, exactly as for a new child.
+//
 // Children are handled one call at a time, in form order. The first created
 // child makes the parent's contact; every later child on the form is created
 // on that contact, so siblings share it. A failure part way leaves the
@@ -39,7 +43,7 @@ export type AdmissionFormError =
   | { kind: "unavailable" }
 
 type ChildRow =
-  | { result: "created"; lead_id: string; admission_number: string; replayed: boolean }
+  | { result: "created" | "re_applied"; lead_id: string; admission_number: string; replayed: boolean }
   | { result: "duplicate"; lead_id: string; admission_number: string }
 
 const PARENT_FIELDS = new Set<string>(["contact_name", "relationship", "relationship_description", "phone", "whatsapp"])
@@ -141,10 +145,8 @@ export async function submitAdmissionForm(
     }
 
     const row = data as ChildRow
-    if (row.result !== "created") {
-      // A child already on file. Recording it as a Re-application is #76's;
-      // until then the parent is asked to try again later.
-      console.error("Admission form: a child is already on file, and re-applications are not recorded yet")
+    if (row.result !== "created" && row.result !== "re_applied") {
+      console.error("Admission form: unexpected outcome for a child", { index, result: row.result })
       return { ok: false, error: { kind: "unavailable" } }
     }
     outcomes.push({ fullName: child.fullName, admissionNumber: row.admission_number })

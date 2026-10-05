@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 5, 2026 `v0.35.0`
+
+### NEW
+
+- When a parent sends the Admission form for a child the school already has on file,
+  they get the same confirmation as for a new child, with that child's existing
+  Admission Number. Nothing on the form says the child was already known, and no second
+  lead is made.
+- Behind the scenes the form is kept on the existing lead as a **Re-application**, with
+  what the parent sent and which details differ from the lead. The lead gets the
+  **Returning family** badge, and its history shows the re-application from the
+  Admission form. The lead's details, status and closure mark stay as they were, even
+  for a Declined, Inactive or Archived lead.
+- A form with several children handles each one on its own: new children become
+  Applied leads, and children already on file are recorded as re-applications. Sending
+  the same form twice records nothing twice.
+
 ## October 4, 2026 `v0.34.0`
 
 ### NEW

@@ -91,7 +91,8 @@ describe("searching by Admission Number", () => {
           dayOrBoarding: "Day",
           status: "Visited",
           closure: "Archived",
-          returningFamily: false,
+          // Re-applied for (supabase/seeds/30_admission_form.sql).
+          returningFamily: true,
           createdAt: expect.any(String),
         },
       ])

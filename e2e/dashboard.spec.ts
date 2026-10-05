@@ -46,7 +46,7 @@ test("filters chosen from the filter icon go into the address, survive a reload 
   await choose(page, "Enrollment year", "2031")
   await expect(page).toHaveURL(/[?&]visited_year=2031/)
   await expect(panel.getByTestId("visited-period")).toHaveText("All time · Enrollment year 2031")
-  await expect(panel.getByTestId("visited-count")).toHaveText("10")
+  await expect(panel.getByTestId("visited-count")).toHaveText("12")
 
   // A new period starts on the one containing today.
   await choose(page, "Period", "Week")
@@ -88,6 +88,40 @@ test("an unreadable address falls back to All time and All years", async ({ page
   await expect(visitedPanel(page).getByTestId("visited-period")).toHaveText("All time · All years")
 })
 
+test("the interview tiles each keep their own filters in the address", async ({ page }) => {
+  await signIn(page, MANAGER)
+  const interviewed = page.getByRole("region", { name: "Interviewed leads" })
+  const passed = page.getByRole("region", { name: "Passed interviews" })
+  const failed = page.getByRole("region", { name: "Failed interviews" })
+  for (const [panel, key] of [
+    [interviewed, "interviewed"],
+    [passed, "passed"],
+    [failed, "failed"],
+  ] as const) {
+    await expect(panel.getByTestId(`${key}-period`)).toHaveText("All time · All years")
+    await expect(panel.getByTestId(`${key}-count`)).toHaveText(/^\d[\d,]*$/)
+  }
+
+  // Three different views side by side, from one shared address.
+  await page.goto("/staff?interviewed=week:2026-09-30&interviewed_year=2031&passed=month:2026-09-01&passed_year=2031&failed_year=2031")
+  await expect(interviewed.getByTestId("interviewed-period")).toHaveText("Week of 28 Sept 2026 · Enrollment year 2031")
+  await expect(interviewed.getByTestId("interviewed-count")).toHaveText("6")
+  await expect(passed.getByTestId("passed-period")).toHaveText("September 2026 · Enrollment year 2031")
+  await expect(passed.getByTestId("passed-count")).toHaveText("3")
+  await expect(failed.getByTestId("failed-period")).toHaveText("All time · Enrollment year 2031")
+  await expect(failed.getByTestId("failed-count")).toHaveText("6")
+
+  // Changing the Failed interviews filter leaves the other two alone.
+  await failed.getByRole("button", { name: "Filter Failed interviews" }).click()
+  await choose(page, "Period", "Year")
+  await choose(page, "Year", "2025")
+  await expect(page).toHaveURL(/[?&]failed=year%3A2025-01-01/)
+  await expect(failed.getByTestId("failed-period")).toHaveText("2025 · Enrollment year 2031")
+  await expect(failed.getByTestId("failed-count")).toHaveText("1")
+  await expect(interviewed.getByTestId("interviewed-count")).toHaveText("6")
+  await expect(passed.getByTestId("passed-count")).toHaveText("3")
+})
+
 const classesPanel = (page: Page) => page.getByRole("region", { name: "Leads by enrollment class" })
 
 test("Leads by enrollment class lists every class in school order, zeros included, with the total", async ({ page }) => {
@@ -100,7 +134,7 @@ test("Leads by enrollment class lists every class in school order, zeros include
   expect(classes).toEqual(["DAY CARE", "KG 1", "KG 2", "STD 1", "STD 2", "STD 3", "STD 4", "STD 5", "STD 6", "STD 7", "FORM 1", "FORM 2", "FORM 3", "FORM 4"])
   await expect(panel.getByTestId("classes-count-STD 1")).toHaveText("3")
   await expect(panel.getByTestId("classes-count-FORM 4")).toHaveText("0")
-  await expect(panel.getByTestId("classes-total")).toHaveText("14")
+  await expect(panel.getByTestId("classes-total")).toHaveText("16")
 })
 
 test("changing the Leads by enrollment class filters leaves the Visited leads tile alone", async ({ page }) => {

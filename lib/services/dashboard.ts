@@ -9,8 +9,9 @@ import type { Result } from "./result"
 // staff member's own permissions.
 
 // The single-number metrics the database counts. Later dashboard tickets add
-// theirs here and as a branch of dashboard_count.
-export const DASHBOARD_METRICS = ["visited_leads"] as const
+// theirs here and as a branch of dashboard_count. Interviewed leads counts
+// children; Passed and Failed interviews count sittings, retakes included.
+export const DASHBOARD_METRICS = ["visited_leads", "interviewed_leads", "passed_interviews", "failed_interviews"] as const
 export type DashboardMetric = (typeof DASHBOARD_METRICS)[number]
 
 export const PERIOD_KINDS = ["all", "date", "week", "month", "year"] as const

@@ -12,6 +12,9 @@ type SearchParams = { [key: string]: string | string[] | undefined }
 // the page address. Later dashboard tickets add a line here.
 export const METRIC_TILES: { metric: DashboardMetric; key: string; title: string; counts: string }[] = [
   { metric: "visited_leads", key: "visited", title: "Visited leads", counts: "Counted by Visit date" },
+  { metric: "interviewed_leads", key: "interviewed", title: "Interviewed leads", counts: "Children, counted by interview date" },
+  { metric: "passed_interviews", key: "passed", title: "Passed interviews", counts: "Counted by interview date" },
+  { metric: "failed_interviews", key: "failed", title: "Failed interviews", counts: "Counted by interview date" },
 ]
 
 // The Leads by enrollment class panel's key in the page address.

@@ -34,8 +34,9 @@ export type ChildOutcome = {
 
 export type AdmissionFormError =
   // A field the database refused. `child` is the child card for a child's
-  // field, null for the parent's.
-  | { kind: "invalid"; field: ParentField | Exclude<ChildField, "duplicate_child">; child: number | null }
+  // field, null for the parent's. `duplicate_child` is a child the form
+  // already named on an earlier card.
+  | { kind: "invalid"; field: ParentField | ChildField; child: number | null }
   // This submission key already created children, from an earlier send of
   // the form before the parent edited it. Those children, in form order, and
   // whether they are every child that send carried.
@@ -47,7 +48,7 @@ type ChildRow =
   | { result: "duplicate"; lead_id: string; admission_number: string }
 
 const PARENT_FIELDS = new Set<string>(["contact_name", "relationship", "relationship_description", "phone", "whatsapp"])
-const CHILD_FIELDS = new Set<string>(["student_name", "class_name", "enrollment_year", "day_or_boarding"])
+const CHILD_FIELDS = new Set<string>(["student_name", "class_name", "enrollment_year", "day_or_boarding", "duplicate_child"])
 
 // What the submission key is checked against: the form exactly as validated,
 // in a fixed key order.
@@ -136,7 +137,7 @@ export async function submitAdmissionForm(
         if (field && CHILD_FIELDS.has(field)) {
           return {
             ok: false,
-            error: { kind: "invalid", field: field as Exclude<ChildField, "duplicate_child">, child: index },
+            error: { kind: "invalid", field: field as ChildField, child: index },
           }
         }
       }

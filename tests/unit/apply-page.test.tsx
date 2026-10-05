@@ -294,6 +294,151 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
     expect(screen.getByText(/not every child on it was received/)).toBeInTheDocument()
   })
 
+  it("adds child cards up to eight, and removes any card while more than one remains", async () => {
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user)
+    await user.click(screen.getByRole("button", { name: "Back" }))
+
+    // One card: nothing to remove.
+    expect(screen.queryByRole("button", { name: /^Remove child/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Add another child" }))
+    const second = screen.getByRole("group", { name: "Child 2" })
+    expect(within(second).getByLabelText("Child's full name")).toHaveFocus()
+    expect(within(second).getByLabelText("Child's full name")).toHaveValue("")
+    expect(screen.getByRole("button", { name: "Remove child 1" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Remove child 2" })).toBeInTheDocument()
+
+    // Removing the first card keeps the second one's entries, now as Child 1.
+    await user.type(within(second).getByLabelText("Child's full name"), "Baraka Fixture")
+    await user.click(screen.getByRole("button", { name: "Remove child 1" }))
+    expect(screen.queryByRole("group", { name: "Child 2" })).not.toBeInTheDocument()
+    expect(screen.getByRole("group", { name: "Child 1" })).toHaveFocus()
+    expect(within(screen.getByRole("group", { name: "Child 1" })).getByLabelText("Child's full name")).toHaveValue("Baraka Fixture")
+    expect(screen.queryByRole("button", { name: /^Remove child/ })).not.toBeInTheDocument()
+
+    for (let count = 2; count <= 8; count++) {
+      await user.click(screen.getByRole("button", { name: "Add another child" }))
+      expect(screen.getByRole("group", { name: `Child ${count}` })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole("button", { name: "Add another child" })).not.toBeInTheDocument()
+    expect(screen.getByText("You can apply for up to 8 children on one form.")).toBeInTheDocument()
+  })
+
+  it("checks every child card before Continue, on the card that needs it", async () => {
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user)
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await user.click(screen.getByRole("button", { name: "Add another child" }))
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+
+    const second = screen.getByRole("group", { name: "Child 2" })
+    expect(within(second).getByText("Enter the child's full name.")).toBeInTheDocument()
+    expect(within(second).getByLabelText("Child's full name")).toHaveFocus()
+    expect(within(screen.getByRole("group", { name: "Child 1" })).queryByText("Enter the child's full name.")).toBeNull()
+  })
+
+  it("refuses the same child twice before Continue, naming the child", async () => {
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user)
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await user.click(screen.getByRole("button", { name: "Add another child" }))
+    const second = screen.getByRole("group", { name: "Child 2" })
+    await user.type(within(second).getByLabelText("Child's full name"), "  zawadi   FIXTURE ")
+    await user.click(within(second).getByRole("button", { name: "STD 2" }))
+    await user.click(within(second).getByRole("button", { name: String(years[1]) }))
+    await user.click(within(second).getByRole("button", { name: "Boarding" }))
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+
+    expect(screen.getByRole("heading", { level: 1, name: "Children" })).toBeInTheDocument()
+    expect(within(second).getByText("Zawadi Fixture is on this form twice. Remove one of the two cards, or correct the name.")).toBeInTheDocument()
+    expect(within(second).getByLabelText("Child's full name")).toHaveFocus()
+
+    // The same name typed exactly alike is caught too.
+    await user.clear(within(second).getByLabelText("Child's full name"))
+    await user.type(within(second).getByLabelText("Child's full name"), "Zawadi Fixture")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+    expect(within(second).getByText(/^Zawadi Fixture is on this form twice/)).toBeInTheDocument()
+  })
+
+  it("sends every child in form order, lists them all on review and confirmation", async () => {
+    stubs.submit.mockResolvedValue({
+      status: "confirmed",
+      children: [
+        { fullName: "Zawadi Fixture", admissionNumber: "ADMSN-40719" },
+        { fullName: "Baraka Fixture", admissionNumber: "ADMSN-40720" },
+      ],
+    })
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user)
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await user.click(screen.getByRole("button", { name: "Add another child" }))
+    const second = screen.getByRole("group", { name: "Child 2" })
+    await user.type(within(second).getByLabelText("Child's full name"), "Baraka Fixture")
+    await user.click(within(second).getByRole("button", { name: "FORM 1" }))
+    await user.click(within(second).getByRole("button", { name: String(years[0]) }))
+    await user.click(within(second).getByRole("button", { name: "Boarding" }))
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+
+    expect(screen.getByRole("heading", { level: 1, name: "Check your application" })).toBeInTheDocument()
+    expect(screen.getByText("Child 1")).toBeInTheDocument()
+    expect(screen.getByText(`STD 2 · ${years[1]} · Day`)).toBeInTheDocument()
+    expect(screen.getByText("Child 2")).toBeInTheDocument()
+    expect(screen.getByText("Baraka Fixture")).toBeInTheDocument()
+    expect(screen.getByText(`FORM 1 · ${years[0]} · Boarding`)).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+    const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
+    expect(JSON.parse(String(sent.get("form"))).children).toEqual([
+      { fullName: "Zawadi Fixture", className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" },
+      { fullName: "Baraka Fixture", className: "FORM 1", enrollmentYear: years[0], dayOrBoarding: "Boarding" },
+    ])
+
+    expect(await screen.findByRole("heading", { name: "Application received!" })).toBeInTheDocument()
+    const listed = within(screen.getByRole("list")).getAllByRole("listitem")
+    expect(listed.map((item) => item.textContent)).toEqual([
+      "Zawadi FixtureAdmission NumberADMSN-40719",
+      "Baraka FixtureAdmission NumberADMSN-40720",
+    ])
+    expect(screen.getByText(/^Keep these numbers and bring them/)).toBeInTheDocument()
+
+    // Fill in another form starts with one empty card.
+    await user.click(screen.getByRole("button", { name: "Fill in another form" }))
+    await user.type(screen.getByLabelText("Parent or guardian's full name"), "Amina Fixture")
+    await user.click(screen.getByRole("button", { name: "Mother" }))
+    await user.type(screen.getByLabelText("Phone number", { exact: false }), "0700 000 900")
+    await user.click(screen.getByRole("button", { name: "Continue" }))
+    expect(screen.getAllByRole("group", { name: /^Child \d$/ })).toHaveLength(1)
+    expect(screen.getByLabelText("Child's full name")).toHaveValue("")
+  })
+
+  it("sends the parent back to the card the server refused as the same child twice", async () => {
+    stubs.submit.mockResolvedValue({ status: "invalid", field: "duplicate_child", child: 1 })
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="sw" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user, "sw")
+    await user.click(screen.getByRole("button", { name: "Rudi" }))
+    await user.click(screen.getByRole("button", { name: "Ongeza mtoto mwingine" }))
+    const second = screen.getByRole("group", { name: "Mtoto 2" })
+    await user.type(within(second).getByLabelText("Jina kamili la mtoto"), "Zawadi Fixtures")
+    await user.click(within(second).getByRole("button", { name: "STD 2" }))
+    await user.click(within(second).getByRole("button", { name: String(years[1]) }))
+    await user.click(within(second).getByRole("button", { name: "Kutwa" }))
+    await user.click(screen.getByRole("button", { name: "Endelea" }))
+    await user.click(screen.getByRole("button", { name: "Tuma maombi" }))
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Watoto" })).toBeInTheDocument()
+    expect(
+      within(screen.getByRole("group", { name: "Mtoto 2" })).getByText(
+        "Zawadi Fixtures yupo mara mbili kwenye fomu hii. Ondoa mojawapo ya kadi hizo mbili, au sahihisha jina.",
+      ),
+    ).toBeInTheDocument()
+  })
+
   it("shows no agent code, fee, 'already in our records' note or Saturday interviews line", async () => {
     for (const language of ["sw", "en"] as const) {
       const user = userEvent.setup()

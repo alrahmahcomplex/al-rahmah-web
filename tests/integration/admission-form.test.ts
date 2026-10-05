@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
@@ -8,7 +9,8 @@ import type { AdmissionChild, AdmissionForm, AdmissionParent } from "@/lib/admis
 import { admissionYears } from "@/lib/admission-form"
 import { getLeadHistory } from "@/lib/services/audit"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
-import { getLead } from "@/lib/services/leads"
+import { createLead, getLead, getLeadFamily } from "@/lib/services/leads"
+import { tanzaniaToday } from "@/lib/school-calendar"
 
 import { anonClient, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ADMISSIONS } from "../support/fixtures"
@@ -193,6 +195,17 @@ describe("the Admission form service", () => {
     expect(a.ok && b.ok && a.data.contact.id === b.data.contact.id).toBe(true)
   })
 
+  test("the same child twice, past the form's own check, is refused on the second card", async () => {
+    const twin = child()
+    const sent = form({ children: [twin, { ...twin, fullName: twin.fullName.toUpperCase() }] })
+
+    expect(await submitAdmissionForm(secretClient(), sent)).toEqual({
+      ok: false,
+      error: { kind: "invalid", field: "duplicate_child", child: 1 },
+    })
+    expect(await leadsNamed(twin.fullName)).toHaveLength(1)
+  })
+
   test("a child already on file gets the same confirmation with its existing number, and no second lead", async () => {
     const sent = form()
     const first = await submitAdmissionForm(secretClient(), sent)
@@ -221,5 +234,115 @@ describe("the Admission form service", () => {
       const refused = await submitAdmissionForm(client, form())
       expect(refused).toEqual({ ok: false, error: { kind: "unavailable" } })
     }
+  })
+})
+
+// The secret-key client, except that the first call for the child at
+// `failAt` fails as a dropped connection would, before reaching the database.
+function failingOnce(failAt: number): SupabaseClient {
+  const client = secretClient()
+  let failed = false
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      if (property !== "rpc") return Reflect.get(target, property, receiver)
+      return (fn: string, args: { child_index?: number }) => {
+        if (!failed && args.child_index === failAt) {
+          failed = true
+          return Promise.resolve({ data: null, error: { message: "fetch failed", details: null, hint: null, code: "" } })
+        }
+        return target.rpc(fn, args)
+      }
+    },
+  })
+}
+
+async function leadOf(name: string) {
+  const [item] = await leadsNamed(name)
+  const lead = await getLead(await signedIn(ADMISSIONS), item.id)
+  if (!lead.ok) throw new Error(`could not read the lead for ${name}`)
+  return lead.data
+}
+
+describe("several children on one form", () => {
+  test("creates each child Applied, in form order, with its own number, on one shared contact", async () => {
+    const sent = form({
+      children: [
+        child({ className: "DAY CARE", dayOrBoarding: "Day" }),
+        child({ className: "STD 4", enrollmentYear: thisYear }),
+        child({ className: "FORM 2" }),
+      ],
+    })
+
+    const result = await submitAdmissionForm(secretClient(), sent)
+    if (!result.ok) throw new Error(`expected a confirmation, got ${JSON.stringify(result.error)}`)
+    expect(result.data.map((c) => c.fullName)).toEqual(sent.children.map((c) => c.fullName))
+    const numbers = result.data.map((c) => c.admissionNumber)
+    expect(new Set(numbers).size).toBe(3)
+
+    const leads = await Promise.all(sent.children.map((c) => leadOf(c.fullName)))
+    expect(leads.map((l) => [l.admissionNumber, l.className, l.status, l.returningFamily])).toEqual([
+      [numbers[0], "DAY CARE", "Applied", false],
+      [numbers[1], "STD 4", "Applied", false],
+      [numbers[2], "FORM 2", "Applied", false],
+    ])
+    expect(new Set(leads.map((l) => l.contact.id)).size).toBe(1)
+  })
+
+  test("a parent phone that matches a Family gives every child the same unconfirmed match and the Family cause", async () => {
+    // A Family the front desk registered earlier, with one child.
+    const known = parent()
+    const desk = await createLead(await signedIn(ADMISSIONS), {
+      guardian: { contact: known },
+      student: child({ fullName: `Desk Pupil ${randomUUID().slice(0, 8)}` }),
+      start: { kind: "walk-in", visitDate: tanzaniaToday() },
+    })
+    if (!desk.ok) throw new Error(`setup failed: ${JSON.stringify(desk.error)}`)
+    const deskLead = await getLead(await signedIn(ADMISSIONS), desk.data.leadId)
+    if (!deskLead.ok) throw new Error("setup failed: the Family's lead could not be read")
+    const familyContact = deskLead.data.contact.id
+
+    // The same parent applies online for two more children.
+    const sent = form({ parent: { ...known, fullName: "Typed On The Form" }, children: [child(), child()] })
+    const result = await submitAdmissionForm(secretClient(), sent)
+    expect(result.ok).toBe(true)
+
+    const staff = await signedIn(ADMISSIONS)
+    const [first, second] = await Promise.all(sent.children.map((c) => leadOf(c.fullName)))
+    expect(first.contact.id).toBe(second.contact.id)
+    expect(first.contact.id).not.toBe(familyContact)
+    expect([first.returningFamily, second.returningFamily]).toEqual([true, true])
+    for (const lead of [first, second]) {
+      const family = await getLeadFamily(staff, lead.id)
+      expect(family.ok && family.data.pendingMatch?.id).toBe(familyContact)
+      expect(family.ok && family.data.children.map((c) => [c.id, c.unconfirmed])).toEqual([
+        [desk.data.leadId, false],
+        [first.id, true],
+        [second.id, true],
+      ])
+    }
+  })
+
+  test("a failure after the first child, then a retry with the same key, creates only the rest and returns every number", async () => {
+    const sent = form({ children: [child(), child(), child()] })
+
+    expect(await submitAdmissionForm(failingOnce(1), sent)).toEqual({ ok: false, error: { kind: "unavailable" } })
+    expect(await leadsNamed(sent.children[0].fullName)).toHaveLength(1)
+    expect(await leadsNamed(sent.children[1].fullName)).toHaveLength(0)
+    expect(await leadsNamed(sent.children[2].fullName)).toHaveLength(0)
+    const firstNumber = (await leadOf(sent.children[0].fullName)).admissionNumber
+
+    const retry = await submitAdmissionForm(secretClient(), sent)
+    if (!retry.ok) throw new Error(`expected a confirmation, got ${JSON.stringify(retry.error)}`)
+    expect(retry.data.map((c) => c.fullName)).toEqual(sent.children.map((c) => c.fullName))
+    expect(retry.data[0].admissionNumber).toBe(firstNumber)
+    expect(new Set(retry.data.map((c) => c.admissionNumber)).size).toBe(3)
+
+    for (const pupil of sent.children) expect(await leadsNamed(pupil.fullName)).toHaveLength(1)
+    const leads = await Promise.all(sent.children.map((c) => leadOf(c.fullName)))
+    expect(leads.map((l) => l.admissionNumber)).toEqual(retry.data.map((c) => c.admissionNumber))
+    // The resumed children joined the contact the first one made, not a new one.
+    expect(new Set(leads.map((l) => l.contact.id)).size).toBe(1)
+    // And none of them became a re-application of itself.
+    expect(leads.map((l) => l.returningFamily)).toEqual([false, false, false])
   })
 })

@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, type Page } from "@playwright/test"
+import { expect, type Locator, type Page } from "@playwright/test"
 
 // Helpers the Admission form specs share. Every run invents its own names
 // (never "Fixture", which the Leads specs count) and numbers (a leading 7 keeps them clear of the seeded 700 000 numbers), since
@@ -57,12 +57,19 @@ export async function fillParent(page: Page, lang: Lang, who: ReturnType<typeof 
   await page.getByLabel(t.phone, { exact: true }).fill(who.phone)
 }
 
-export async function fillChild(page: Page, lang: Lang, who: ReturnType<typeof family>, year: string) {
+// Fills a child card: the page's only card, or the card given as `within`.
+export async function fillChild(
+  page: Page,
+  lang: Lang,
+  who: Pick<ReturnType<typeof family>, "child">,
+  year: string,
+  within: Page | Locator = page,
+) {
   const t = WORDS[lang]
-  await page.getByLabel(t.childName).fill(who.child)
-  await page.getByRole("button", { name: "STD 3", exact: true }).click()
-  await page.getByRole("button", { name: year, exact: true }).click()
-  await page.getByRole("button", { name: t.boarding, exact: true }).click()
+  await within.getByLabel(t.childName).fill(who.child)
+  await within.getByRole("button", { name: "STD 3", exact: true }).click()
+  await within.getByRole("button", { name: year, exact: true }).click()
+  await within.getByRole("button", { name: t.boarding, exact: true }).click()
 }
 
 // Turnstile's test site key passes on its own; wait for its token.

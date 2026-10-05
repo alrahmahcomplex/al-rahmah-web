@@ -110,6 +110,35 @@ describe("sending the Admission form", () => {
     expect(stubs.save).not.toHaveBeenCalled()
   })
 
+  it("refuses a ninth child and the same child twice before saving anything", async () => {
+    const child = (fullName: string) => ({ fullName, className: "STD 2", enrollmentYear: thisYear, dayOrBoarding: "Day" })
+    const nine = Array.from({ length: 9 }, (_, i) => child(`Pupil ${i + 1}`))
+    expect(await send(posted({ children: nine }))).toEqual({ status: "invalid", field: "children", child: null })
+
+    const twice = [child("Zawadi Fixture"), child("Baraka Fixture"), child(" zawadi  fixture ")]
+    expect(await send(posted({ children: twice }))).toEqual({ status: "invalid", field: "duplicate_child", child: 2 })
+    expect(stubs.save).not.toHaveBeenCalled()
+  })
+
+  it("sends eight children in form order and confirms every one", async () => {
+    const eight = Array.from({ length: 8 }, (_, i) => ({
+      fullName: `Pupil ${i + 1}`,
+      className: "STD 2",
+      enrollmentYear: thisYear,
+      dayOrBoarding: "Day",
+    }))
+    const numbers = eight.map((c, i) => ({ fullName: c.fullName, admissionNumber: `ADMSN-4072${i}` }))
+    stubs.save.mockResolvedValue({ ok: true, data: numbers })
+
+    expect(await send(posted({ children: eight }))).toEqual({ status: "confirmed", children: numbers })
+    expect(stubs.save.mock.calls[0][1].children).toEqual(eight)
+  })
+
+  it("passes on the database refusing the same child twice, on its card", async () => {
+    stubs.save.mockResolvedValue({ ok: false, error: { kind: "invalid", field: "duplicate_child", child: 1 } })
+    expect(await send(posted())).toEqual({ status: "invalid", field: "duplicate_child", child: 1 })
+  })
+
   it("passes on a phone the database couldn't read", async () => {
     stubs.save.mockResolvedValue({ ok: false, error: { kind: "invalid", field: "phone", child: null } })
     expect(await send(posted())).toEqual({ status: "invalid", field: "phone", child: null })

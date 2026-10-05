@@ -25,6 +25,9 @@ type Copy = {
   enrollmentYear: string
   dayOrBoarding: string
   dayOrBoardingOptions: Record<DayOrBoarding, string>
+  addChild: string
+  removeChild: (child: number) => string
+  maxChildren: (max: number) => string
   continue: string
   back: string
   send: string
@@ -33,6 +36,8 @@ type Copy = {
   reviewChild: string
   securityNote: string
   problems: Record<FormField | "phone_unreadable" | "year_closed", string>
+  // The same child on two cards, naming the child.
+  duplicateChild: (name: string) => string
   checkPending: string
   rateLimited: string
   checkFailed: string
@@ -40,6 +45,7 @@ type Copy = {
   doneTitle: string
   admissionNumber: string
   keepNumber: string
+  keepNumbers: string
   alreadySent: string
   alreadySentInPart: string
   call: string
@@ -66,6 +72,9 @@ export const COPY: Record<Language, Copy> = {
     enrollmentYear: "Mwaka wa kujiunga",
     dayOrBoarding: "Kutwa au bweni",
     dayOrBoardingOptions: { Day: "Kutwa", Boarding: "Bweni" },
+    addChild: "Ongeza mtoto mwingine",
+    removeChild: (child) => `Ondoa mtoto ${child}`,
+    maxChildren: (max) => `Unaweza kuomba kwa watoto hadi ${max} kwenye fomu moja.`,
     continue: "Endelea",
     back: "Rudi",
     send: "Tuma maombi",
@@ -90,6 +99,7 @@ export const COPY: Record<Language, Copy> = {
       submission_key: "Maombi yamebadilika tangu ulipotuma mara ya kwanza. Bonyeza Tuma maombi tena.",
       payload: "Hatukuweza kusoma fomu. Pakia ukurasa upya kisha ujaribu tena.",
     },
+    duplicateChild: (name) => `${name} yupo mara mbili kwenye fomu hii. Ondoa mojawapo ya kadi hizo mbili, au sahihisha jina.`,
     checkPending: "Subiri ukaguzi wa usalama ukamilike, kisha utume.",
     rateLimited: "Umejaribu mara nyingi mno. Subiri dakika chache kisha ujaribu tena. Majibu yako bado yapo.",
     checkFailed: "Ukaguzi wa usalama haukukamilika. Jaribu kutuma tena. Majibu yako bado yapo.",
@@ -97,6 +107,7 @@ export const COPY: Record<Language, Copy> = {
     doneTitle: "Maombi yamepokelewa!",
     admissionNumber: "Namba ya Udahili",
     keepNumber: "Hifadhi namba hii na uje nayo shuleni. Utaulizwa ukifika.",
+    keepNumbers: "Hifadhi namba hizi na uje nazo shuleni. Utaulizwa ukifika.",
     alreadySent: "Fomu hii ilishatumwa kabla, kwa hiyo mabadiliko uliyofanya baadaye hayakuhifadhiwa. Piga simu ofisini kurekebisha taarifa yoyote.",
     alreadySentInPart: "Fomu hii ilishatumwa kabla, lakini si watoto wote waliokuwa ndani yake walipokelewa, na mabadiliko uliyofanya baadaye hayakuhifadhiwa. Piga simu ofisini ili tukamilishe maombi.",
     call: "Una swali? Piga simu ofisi ya udahili",
@@ -121,6 +132,9 @@ export const COPY: Record<Language, Copy> = {
     enrollmentYear: "Year of enrolment",
     dayOrBoarding: "Day or boarding",
     dayOrBoardingOptions: { Day: "Day", Boarding: "Boarding" },
+    addChild: "Add another child",
+    removeChild: (child) => `Remove child ${child}`,
+    maxChildren: (max) => `You can apply for up to ${max} children on one form.`,
     continue: "Continue",
     back: "Back",
     send: "Send application",
@@ -145,6 +159,7 @@ export const COPY: Record<Language, Copy> = {
       submission_key: "Your application changed since you first sent it. Tap Send application again.",
       payload: "We couldn't read the form. Reload the page and try again.",
     },
+    duplicateChild: (name) => `${name} is on this form twice. Remove one of the two cards, or correct the name.`,
     checkPending: "Wait a moment for the security check to finish, then send.",
     rateLimited: "Too many tries. Wait a few minutes, then try again. Everything you typed is still here.",
     checkFailed: "The security check didn't finish. Try sending again. Everything you typed is still here.",
@@ -152,6 +167,7 @@ export const COPY: Record<Language, Copy> = {
     doneTitle: "Application received!",
     admissionNumber: "Admission Number",
     keepNumber: "Keep this number and bring it when you come to the school. You'll be asked for it.",
+    keepNumbers: "Keep these numbers and bring them when you come to the school. You'll be asked for them.",
     alreadySent: "This form had already been sent, so the changes you made afterwards weren't saved. Call the office to correct any details.",
     alreadySentInPart: "This form had already been sent, but not every child on it was received, and the changes you made afterwards weren't saved. Call the office so we can finish the application.",
     call: "Questions? Call the admissions office",

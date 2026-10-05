@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 5, 2026 `v0.36.0`
+
+### NEW
+
+- A parent can apply for up to eight children on one Admission form and type their own
+  details once. **Add another child** adds a card, and any card can be removed while
+  more than one is left. The review shows every child, and the confirmation gives each
+  child its own Admission Number.
+- The form won't send the same child twice. It names the child and asks the parent to
+  remove one card or correct the name.
+
 ## October 5, 2026 `v0.35.0`
 
 ### NEW

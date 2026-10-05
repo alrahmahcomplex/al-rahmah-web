@@ -19,6 +19,17 @@ export function recordedPaymentOutcome({ totalPaid, priority }: RecordedPayment)
   return { status: "recorded", message: `Payment recorded. Total paid is TZS ${formatShillings(totalPaid)}. ${seat}` }
 }
 
+// The warning on the review when the payment would give the lead a seat in a
+// class already at or over capacity, or null. Recording still goes ahead.
+export function overfillWarning({ wouldOverfill, seats, seatsTaken }: PaymentPreview): string | null {
+  if (!wouldOverfill || seats === null) return null
+  const set = `${seats} ${seats === 1 ? "seat" : "seats"}`
+  return (
+    `This lead's class is full: ${set}, ${seatsTaken} taken. This payment gives the lead a Seat priority, so the ` +
+    "class will have more leads than seats. You can still record it; tell the Admissions Manager."
+  )
+}
+
 // `doing` finishes "The payment could not be …" when the database is out of
 // reach.
 export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded"): PaymentRefusal {

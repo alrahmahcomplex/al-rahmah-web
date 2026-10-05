@@ -102,6 +102,13 @@ export type PaymentPreview = {
   balanceAfter: number
   priority: SeatPriority | null
   priorityAfter: SeatPriority | null
+  // The lead's class: its seats set (null when not set) and the seats taken
+  // by other leads.
+  seats: number | null
+  seatsTaken: number
+  // The payment would give the lead a seat in a class whose seats taken
+  // already reach its seats set. A warning only: recording still goes ahead.
+  wouldOverfill: boolean
 }
 
 type PreviewRow = {
@@ -111,10 +118,13 @@ type PreviewRow = {
   balance_after: number
   priority: SeatPriority | null
   priority_after: SeatPriority | null
+  seats: number | null
+  seats_taken: number
+  would_overfill: boolean
 }
 
 // What recording the payment would do: the new Total paid, balance and Seat
-// priority. Records nothing. Refuses exactly what recordPayment refuses.
+// priority, and whether it would overfill the lead's class. Records nothing. Refuses exactly what recordPayment refuses.
 // Needs payments.record.
 export async function previewPayment(
   supabase: SupabaseClient,
@@ -133,6 +143,9 @@ export async function previewPayment(
       balanceAfter: row.balance_after,
       priority: row.priority,
       priorityAfter: row.priority_after,
+      seats: row.seats,
+      seatsTaken: row.seats_taken,
+      wouldOverfill: row.would_overfill,
     },
   }
 }

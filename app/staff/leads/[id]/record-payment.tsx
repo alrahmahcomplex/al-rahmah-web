@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatDate } from "@/lib/school-calendar"
@@ -18,7 +18,7 @@ import { formatShillings } from "../../fees/format"
 import { visitDateToday } from "./actions"
 import { Field, SELECT_CLASS } from "./lead-editors"
 import { previewSchoolFeePayment, recordSchoolFeePayment } from "./payment-actions"
-import type { PaymentField, PaymentRefusal } from "./payment-outcome"
+import { overfillWarning, type PaymentField, type PaymentRefusal } from "./payment-outcome"
 
 const LOST_REQUEST: PaymentRefusal = {
   status: "refused",
@@ -143,10 +143,17 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
 
   if (reviewed) {
     const { input, preview, requestId } = reviewed
+    const warning = overfillWarning(preview)
     return (
       <section aria-label="Review payment" className="flex max-w-xl flex-col gap-4 rounded-lg p-3 ring-1 ring-foreground/10">
         <p className="text-sm font-medium text-slate-900">Check this payment before you confirm it. Once recorded, it can&apos;t be changed.</p>
         {refusalAlert}
+        {warning && (
+          <Alert aria-label="Class full" className="border-amber-300 bg-amber-50 text-amber-950">
+            <AlertTitle>Class full</AlertTitle>
+            <AlertDescription className="text-amber-950">{warning}</AlertDescription>
+          </Alert>
+        )}
         <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Payment</dt>
           <dd className="text-right text-slate-900">

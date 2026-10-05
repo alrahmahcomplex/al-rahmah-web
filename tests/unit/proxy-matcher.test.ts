@@ -17,7 +17,7 @@ describe("proxy matcher", () => {
     },
   )
 
-  it.each(["/", "/apply", "/admissions", "/about", "/Al-Rahmah_Official_Logo.svg", "/_next/static/chunk.js"])(
+  it.each(["/", "/apply", "/discount-code", "/admissions", "/about", "/Al-Rahmah_Official_Logo.svg", "/_next/static/chunk.js"])(
     "skips the public route %s",
     (url) => {
       expect(runsOn(url)).toBe(false)

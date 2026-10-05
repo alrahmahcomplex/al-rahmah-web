@@ -89,6 +89,7 @@ function expectedFee(schedule: Pick<FeeSchedule, "split" | "dueDates">, year: nu
     ],
     priority: null,
     priorityReachedOn: null,
+    enrolment: null,
   }
 }
 

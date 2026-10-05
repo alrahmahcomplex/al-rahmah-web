@@ -3,13 +3,21 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { FeeBand } from "./fees"
 import type { DayOrBoarding } from "./leads"
 import type { Result } from "./result"
-import type { SeatPriority } from "./school-fee-payments"
+import type { RecordedPaymentType, SeatPriority } from "./school-fee-payments"
 
 // A lead's School fee: what the family owes, has paid, and when each
 // instalment is due. The database calculates it from the Fee schedule of the
 // lead's own enrollment year; this file turns its answer into a Result.
 
 export type Instalment = { amount: number; due: string }
+
+// What made the lead Enrolled, and the calendar date it did: the payment that
+// took it over the line, as that payment counts now, or its year's
+// Academic-year start.
+export type Enrolment = {
+  on: string
+  by: { kind: "payment"; type: RecordedPaymentType; amount: number | null } | { kind: "academic-year-start" }
+}
 
 export type LeadFee =
   | {
@@ -27,6 +35,8 @@ export type LeadFee =
       // date is the payment date on which the lead reached it.
       priority: SeatPriority | null
       priorityReachedOn: string | null
+      // Set exactly while the lead is Enrolled from its payments.
+      enrolment: Enrolment | null
     }
   // The lead's enrollment year has no Fee schedule yet, so it has no fee.
   | { kind: "no-schedule"; year: number }
@@ -47,6 +57,19 @@ type LeadSchoolFeeRow = {
   third_due: string | null
   priority: SeatPriority | null
   priority_reached_on: string | null
+  enrolled_trigger: "payment" | "academic_year_start" | null
+  enrolled_on: string | null
+  enrolled_payment_type: RecordedPaymentType | null
+  enrolled_payment_amount: number | null
+}
+
+function enrolmentOf(row: LeadSchoolFeeRow): Enrolment | null {
+  if (row.enrolled_on === null) return null
+  if (row.enrolled_trigger === "academic_year_start") return { on: row.enrolled_on, by: { kind: "academic-year-start" } }
+  if (row.enrolled_trigger === "payment" && row.enrolled_payment_type !== null) {
+    return { on: row.enrolled_on, by: { kind: "payment", type: row.enrolled_payment_type, amount: row.enrolled_payment_amount } }
+  }
+  return null
 }
 
 // Needs leads.view and payments.view; anyone else, signed out included, is
@@ -83,6 +106,7 @@ export async function getLeadFee(
       ],
       priority: data.priority,
       priorityReachedOn: data.priority_reached_on,
+      enrolment: enrolmentOf(data),
     },
   }
 }

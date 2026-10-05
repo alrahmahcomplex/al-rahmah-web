@@ -2,6 +2,16 @@ import { formatDate } from "@/lib/school-calendar"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { PAYMENT_TYPE_NAMES, type RecordedPaymentType } from "@/lib/services/school-fee-payments"
 
+import {
+  ENROLMENT_FIELDS,
+  ENROLMENT_HIDDEN,
+  enrolmentCauses,
+  enrolmentLabel,
+  enrolmentProfileSummary,
+  enrolmentSummary,
+  enrolmentValue,
+  type EnrolmentCauses,
+} from "./enrolment-history"
 import { REOPENING_HIDDEN, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
 
 // A lead's history entry in plain words: who, what they did, and each field's
@@ -91,6 +101,7 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
   reopening_requests: REOPENING_HIDDEN,
+  lead_fee_profiles: ENROLMENT_HIDDEN,
   // The entry already says who recorded the payment, and when. The request id
   // only stops a retried Confirm recording it twice.
   school_fee_payments: new Set(["lead_id", "recorded_by", "recorded_at", "request_id"]),
@@ -204,7 +215,12 @@ function everMatchedTo(timeline: MatchTimeline, contactId: unknown): unknown[] {
   return (timeline.get(contactId) ?? []).map((step) => step.match).filter((match) => match !== null)
 }
 
-function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string, string>>, timeline: MatchTimeline): string {
+function summarize(
+  entry: LeadHistoryEntry,
+  contactNames: Readonly<Record<string, string>>,
+  timeline: MatchTimeline,
+  causes: EnrolmentCauses,
+): string {
   const changed = new Map(entry.changes.map((c) => [c.field, c]))
   const insert = entry.action === "insert"
 
@@ -222,6 +238,8 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
     if (status?.from === "Applied" && status.to === "Visited") return "recorded a visit"
     // The first interview result moves the lead on.
     if (status?.from === "Visited" && status.to === "Interviewed") return "moved the lead to Interviewed"
+    const enrolment = enrolmentSummary(entry, status, causes)
+    if (enrolment) return enrolment
     // Confirming moves the lead onto the contact its own contact was matched
     // to. Any other move is a separation onto a copy of the contact.
     // Rejecting clears the Family cause and keeps the contact.
@@ -279,6 +297,7 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
   }
 
   if (entry.record === "reopening_requests") return reopeningSummary(entry)
+  if (entry.record === "lead_fee_profiles") return enrolmentProfileSummary(entry)
   if (entry.record === "school_fee_payments" && insert) return "recorded a school-fee payment"
   if (entry.record === "re_applications" && insert) return "recorded a re-application"
   if (entry.record === "follow_up_records") {
@@ -299,7 +318,7 @@ function summarize(entry: LeadHistoryEntry, contactNames: Readonly<Record<string
 
 // Known fields in the order the lead screen shows them, then unknown ones as
 // they came.
-const ORDER = Object.keys(LABELS)
+const ORDER = [...Object.keys(LABELS), ...ENROLMENT_FIELDS]
 
 function rank(field: string) {
   const at = ORDER.indexOf(field)
@@ -315,7 +334,8 @@ export function describeLeadHistory(
 ): DescribedEntry[] {
   const timeline = matchTimeline(entries)
   const plans = followUpPlans(entries)
-  return entries.map((entry) => describeEntry(withEarlierPlan(entry, plans), contactNames, timeline))
+  const causes = enrolmentCauses(entries)
+  return entries.map((entry) => describeEntry(withEarlierPlan(entry, plans), contactNames, timeline, causes))
 }
 
 // Each follow-up's date and note as written, by follow-up id.
@@ -346,25 +366,35 @@ function withEarlierPlan(entry: LeadHistoryEntry, plans: ReturnType<typeof follo
   }
 }
 
-function describeEntry(entry: LeadHistoryEntry, contactNames: Readonly<Record<string, string>>, timeline: MatchTimeline): DescribedEntry {
+function describeEntry(
+  entry: LeadHistoryEntry,
+  contactNames: Readonly<Record<string, string>>,
+  timeline: MatchTimeline,
+  causes: EnrolmentCauses,
+): DescribedEntry {
   const fromOld = entry.record !== null && entry.action === "update"
   return {
     id: entry.id,
     at: entry.at,
     actor: entry.actor,
-    summary: summarize(entry, contactNames, timeline),
+    summary: summarize(entry, contactNames, timeline, causes),
     changes: entry.changes
       .filter((c) => !HIDDEN[entry.record ?? ""]?.has(c.field))
       .filter((c) => fromOld || !isEmpty(c.to))
       .sort((a, b) => rank(a.field) - rank(b.field))
       .map((c) => ({
-        label: reopeningLabel(entry.record, c.field) ?? LABELS[c.field] ?? c.field,
+        label: reopeningLabel(entry.record, c.field) ?? enrolmentLabel(entry.record, c.field) ?? LABELS[c.field] ?? c.field,
         // A creation has no old value, except a follow-up's earlier date.
         from:
           fromOld || c.from !== null
-            ? (reopeningValue(entry.record, c.field, c.from) ?? display(c.field, c.from, contactNames))
+            ? (reopeningValue(entry.record, c.field, c.from) ??
+              enrolmentValue(entry.record, c.field, c.from) ??
+              display(c.field, c.from, contactNames))
             : null,
-        to: reopeningValue(entry.record, c.field, c.to) ?? display(c.field, c.to, contactNames),
+        to:
+          reopeningValue(entry.record, c.field, c.to) ??
+          enrolmentValue(entry.record, c.field, c.to) ??
+          display(c.field, c.to, contactNames),
       })),
   }
 }

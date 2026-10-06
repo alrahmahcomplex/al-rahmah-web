@@ -3,6 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { LEAD_CLASSES, type DayOrBoarding, type LeadClass } from "./leads"
 import type { Result } from "./result"
 
+// Seats belong to the fees module too; they live in their own file.
+export { getSeats, seatCheck, type ClassSeats, type SeatCheck, type SeatHolder } from "./seats"
+
 // The fees module: every read and write of the Fee schedule goes through
 // here. Writes are database functions that check the permission themselves;
 // this file turns their answers into a Result.

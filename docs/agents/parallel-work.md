@@ -72,6 +72,7 @@ Functions other slices call already exist, so nobody creates them twice:
 - `OFFICE_PHONE` in `lib/office.ts`, server-only.
 - `lead_seat_priority(lead_id)` returning `school_fee`, `total_paid`, `priority` (`seat_priority`: Deposit, First instalment, Full, or null) and `reached_on`: the Seat priority reader for #108, #111 and #118. Granted to no API role; call it from security definer functions.
 - `effective_school_fee_payments(lead_id)`: a lead's payments as they count now. Payments count as recorded until #108 replaces it with `create or replace`, keeping its columns, to apply adjustments and drop voids. Every Total paid reads through it.
+- `seat_check(lead_id)` (#111), for signed-in staff with `leads.view`, wrapped by `seatCheck` in `lib/services/seats.ts`: whether a lead holding no seat yet (Declined, or no Seat priority) would take one in a full class, with the class's ranking and the lead marked `this_lead` (the priority and ranking only for `payments.view`). Read-only; #103's approval step shows it. `year_seats(year)` (`getSeats`, `payments.view`) is the per-class seat count slice 10's dashboard reads.
 
 When a ticket you build on has not merged, code against the signature its body gives. Use `create or replace` only where a ticket says to.
 

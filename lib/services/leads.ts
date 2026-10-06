@@ -172,6 +172,8 @@ export type Lead = {
   closure: LeadClosure | null
   visitDate: string | null
   returningFamily: boolean
+  // Kept for good once a reopening brings the lead back from Declined.
+  initiallyDeclined: boolean
   contact: {
     id: string
     fullName: string
@@ -194,6 +196,7 @@ type LeadRow = {
   visit_date: string | null
   returning_family_joined: boolean
   returning_family_reapplied: boolean
+  initially_declined: boolean
   guardian_contacts: {
     id: string
     full_name: string
@@ -248,7 +251,7 @@ export async function getLead(supabase: SupabaseClient, id: string): Promise<Res
   const { data, error } = await supabase
     .from("leads")
     .select(
-      "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, visit_date, returning_family_joined, returning_family_reapplied, guardian_contacts!guardian_contact_id (id, full_name, relationship, relationship_description, phone, whatsapp)",
+      "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, visit_date, returning_family_joined, returning_family_reapplied, initially_declined, guardian_contacts!guardian_contact_id (id, full_name, relationship, relationship_description, phone, whatsapp)",
     )
     .eq("id", id)
     .maybeSingle<LeadRow>()
@@ -274,6 +277,7 @@ export async function getLead(supabase: SupabaseClient, id: string): Promise<Res
       closure: data.closure,
       visitDate: data.visit_date,
       returningFamily: data.returning_family_joined || data.returning_family_reapplied,
+      initiallyDeclined: data.initially_declined,
       contact: {
         id: data.guardian_contacts.id,
         fullName: data.guardian_contacts.full_name,
@@ -313,6 +317,7 @@ export type LeadListItem = {
   status: LeadStatus
   closure: LeadClosure | null
   returningFamily: boolean
+  initiallyDeclined: boolean
   createdAt: string
 }
 
@@ -337,11 +342,12 @@ type LeadListRow = {
   closure: LeadClosure | null
   returning_family_joined: boolean
   returning_family_reapplied: boolean
+  initially_declined: boolean
   created_at: string
 }
 
 const LEAD_LIST_COLUMNS =
-  "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, created_at"
+  "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, initially_declined, created_at"
 
 // A page number past any real list. Larger ones would overflow the offset.
 export const LAST_PAGE = 10_000
@@ -423,6 +429,7 @@ export async function searchLeads(
         status: row.status,
         closure: row.closure,
         returningFamily: row.returning_family_joined || row.returning_family_reapplied,
+        initiallyDeclined: row.initially_declined,
         createdAt: row.created_at,
       })),
     },

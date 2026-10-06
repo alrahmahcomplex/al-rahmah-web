@@ -77,3 +77,42 @@ values
         'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-28 09:15:00+03');
 
 commit;
+
+-- Decided Reopening requests (#101), both raised by Test Admissions and
+-- decided by Test Manager.
+--
+--   ADMSN-90082 Kheri Mwinyi         rejected with a reason; still Declined
+--   ADMSN-90085 Zuhura Mfinanga      Declined from Visited, then approved: Visited
+--                                    again, Initially declined, Reopened after decline
+
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000085', 'Rukia Mfinanga', 'Mother', null, '+255700000185', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined, initially_declined
+) values
+    ('1ead0000-0000-4000-8000-000000000085', 'ADMSN-90085', 'Zuhura Mfinanga', 'STD 4', 2027, 'Day',
+        'Visited', null, date '2026-08-28', 'c0c0c0c0-0000-4000-8000-000000000085', false, true);
+
+insert into public.reopening_requests (
+    id, lead_id, source, reason, requested_by, requested_at,
+    state, decided_by, decided_at, rejection_reason, enrol_without_retake, lead_was_declined, restored_status
+) values
+    ('5e0e0000-0000-4000-8000-000000000082', '1ead0000-0000-4000-8000-000000000082', 'lead',
+        'The family says Kheri has been tutored over the holidays.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-20 10:00:00+03',
+        'rejected', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2026-09-22 15:30:00+03',
+        'He can sit the interview again next year; this year''s places are filled.', null, null, null),
+    ('5e0e0000-0000-4000-8000-000000000085', '1ead0000-0000-4000-8000-000000000085', 'duplicate_match',
+        'The family came back to the front desk after their move fell through.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-24 09:00:00+03',
+        'approved', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2026-09-25 11:45:00+03',
+        null, null, true, 'Visited');
+
+commit;

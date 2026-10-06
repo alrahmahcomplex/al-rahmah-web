@@ -9,6 +9,7 @@ import { FamilySection } from "./family-section"
 import { FollowUpSection } from "./follow-up-section"
 import { InterviewSection } from "./interview-section"
 import { ReApplicationSection } from "./re-application-section"
+import { ReopenedNote } from "./reopened-note"
 import { ReopeningSection } from "./reopening-section"
 import { ReferralSection } from "./referral-section"
 import { SchoolFeeSection } from "./school-fee-section"
@@ -34,10 +35,13 @@ export type LeadPanel = {
 // file in this folder plus one line here; the page itself stays unchanged.
 export const LEAD_PANELS: readonly LeadPanel[] = [
   // First, under a closed lead's banner: the Pending request and earlier
-  // requests. A request exists only for a closed lead, so its one action,
-  // Withdraw for the requester, stays while the lead is closed (an exception
-  // recorded in docs/agents/parallel-work.md).
+  // requests. A request exists only for a closed lead, so its actions,
+  // Withdraw for the requester and Approve and Reject for approvers, stay
+  // while the lead is closed (an exception recorded in
+  // docs/agents/parallel-work.md).
   { key: "reopenings", readOnlyWhenClosed: true, Panel: ReopeningSection },
+  // The Reopened after decline note: when and by whom. No actions.
+  { key: "reopened", readOnlyWhenClosed: true, Panel: ReopenedNote },
   {
     key: "family",
     readOnlyWhenClosed: true,

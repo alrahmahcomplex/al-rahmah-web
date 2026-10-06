@@ -120,6 +120,7 @@ function Results({
                     <div className="flex flex-wrap gap-1">
                       <Badge variant={lead.status === "Declined" ? "destructive" : "secondary"}>{lead.status}</Badge>
                       {lead.closure && <Badge variant="outline">{lead.closure}</Badge>}
+                      {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
                       {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
                     </div>
                   </td>

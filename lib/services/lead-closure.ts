@@ -8,8 +8,10 @@ import type { Result } from "./result"
 // The lead closure module (slice 8, #27): declining a lead, marking it
 // Inactive or Archived, and reading why a lead is closed. Every write is a
 // database function that checks the permission and the rules itself, so
-// these calls only translate what the database answers. #99 adds reopening
-// requests here.
+// these calls only translate what the database answers. Reopening requests,
+// their approval and rejection included, live in reopening-requests.ts.
+
+export { approveReopeningRequest, rejectReopeningRequest } from "./reopening-requests"
 
 // The fixed list, in the order staff pick from.
 export const DECLINED_REASONS = [
@@ -186,11 +188,26 @@ export type LeadClosureMark = {
   closedBy: string | null
 }
 
+// The latest approval that reopened the lead from Declined.
+export type ReopenedAfterDecline = {
+  reopenedAt: string
+  // The approver's name, looked up now.
+  approvedBy: string
+  restoredStatus: LeadStatus
+  // Null when the lead was declined before its interview.
+  enrolWithoutRetake: boolean | null
+}
+
 export type LeadClosure = {
   // Set while the lead is Declined.
   decline: LeadDecline | null
   // Set while the lead carries a closure mark.
   closure: LeadClosureMark | null
+  // Kept for good once an approval reopens the lead from Declined.
+  initiallyDeclined: boolean
+  // The Reopened after decline note; null for a lead never reopened from
+  // Declined.
+  reopenedAfterDecline: ReopenedAfterDecline | null
 }
 
 export type LeadClosureError = "forbidden" | "not-found" | "unavailable"
@@ -210,6 +227,13 @@ type ClosureRow = {
     closed_at: string | null
     closed_by: string | null
   } | null
+  initially_declined: boolean
+  reopened_after_decline: {
+    reopened_at: string
+    approved_by: string
+    restored_status: LeadStatus
+    enrol_without_retake: boolean | null
+  } | null
 }
 
 // The lead's current decline and closure mark, for staff who may view leads.
@@ -225,7 +249,7 @@ export async function getLeadClosure(
     return { ok: false, error: "unavailable" }
   }
 
-  const { decline, closure } = data as ClosureRow
+  const { decline, closure, initially_declined, reopened_after_decline: reopened } = data as ClosureRow
   return {
     ok: true,
     data: {
@@ -242,6 +266,13 @@ export async function getLeadClosure(
         note: closure.note,
         closedAt: closure.closed_at,
         closedBy: closure.closed_by,
+      },
+      initiallyDeclined: initially_declined,
+      reopenedAfterDecline: reopened && {
+        reopenedAt: reopened.reopened_at,
+        approvedBy: reopened.approved_by,
+        restoredStatus: reopened.restored_status,
+        enrolWithoutRetake: reopened.enrol_without_retake,
       },
     },
   }

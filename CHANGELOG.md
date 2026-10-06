@@ -5,6 +5,22 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 6, 2026 `v0.41.0`
+
+### NEW
+
+- A family who opens the Admission form from a Discount code link finds the **Discount
+  code** (*Code ya Punguzo*) already filled in on the last step. The form remembers it
+  for 30 days, so coming back later without the link still fills it in, and a newer link
+  replaces it.
+- Parents can also type a code there themselves. The form says whether the code is
+  confirmed, waiting to be confirmed, or not recognised, and shows the interview fee for
+  each child and the total: TZS 30,000 per child with a confirmed code, TZS 50,000
+  otherwise.
+- A code the school doesn't recognise never stops the form. Every child the form adds
+  carries the code, so staff can see it on the lead's Referral code panel and correct a
+  typo there.
+
 ## October 6, 2026 `v0.40.0`
 
 ### NEW

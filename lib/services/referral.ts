@@ -139,3 +139,51 @@ export async function findReferralAgent(
   if (!data) return { ok: true, data: null }
   return { ok: true, data: { code: data.code, fullName: data.full_name, state: data.status === "Approved" ? "approved" : "pending" } }
 }
+
+// What a code typed on the Admission form means for the interview fee: an
+// Approved agent's code (`approved`), a Pending agent's (`pending`), or no
+// agent's (`unknown`), with the fee per child in whole TZS. Secret key only:
+// the public form's Server Action calls it after the rate limit.
+export type DiscountCodeEstimate = { state: "approved" | "pending" | "unknown"; amount: number }
+
+export async function estimateDiscountCode(
+  supabase: SupabaseClient,
+  code: string,
+): Promise<Result<DiscountCodeEstimate, "unavailable">> {
+  const { data, error } = await supabase
+    .rpc("discount_code_estimate", { code })
+    .single<{ state: DiscountCodeEstimate["state"]; amount: number }>()
+  if (error) {
+    console.error("Could not estimate a Discount code", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: { state: data.state, amount: data.amount } }
+}
+
+export type ApplyFormDiscountCodeError =
+  // The value isn't a code.
+  | "invalid"
+  // The lead closed before the code reached it.
+  | "lead-closed"
+  | "not-found"
+  | "unavailable"
+
+// Puts the code the Admission form sent on a lead the form created, whether or
+// not an agent holds it. Writes only into an empty code, so calling it again,
+// or after staff set a code, changes nothing. Secret key only. Returns the
+// code the lead now carries.
+export async function applyFormDiscountCode(
+  supabase: SupabaseClient,
+  leadId: string,
+  code: string,
+): Promise<Result<{ code: string }, ApplyFormDiscountCodeError>> {
+  const { data, error } = await supabase.rpc("apply_form_discount_code", { lead_id: leadId, code })
+  if (error) {
+    if (error.message === "invalid") return { ok: false, error: "invalid" }
+    if (error.message === "lead_closed") return { ok: false, error: "lead-closed" }
+    if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not-found" }
+    console.error("Could not put the form's Discount code on a lead", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: { code: data as string } }
+}

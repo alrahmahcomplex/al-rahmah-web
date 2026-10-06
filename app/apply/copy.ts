@@ -35,6 +35,14 @@ type Copy = {
   reviewParent: string
   reviewChild: string
   securityNote: string
+  // The Discount code field and its notes. Never "agent" or "referral".
+  discountCode: string
+  discountCodeHint: string
+  discountChecking: string
+  discountNotes: Record<"approved" | "pending" | "unknown" | "unchecked", string>
+  interviewFee: string
+  feePerChild: (amount: string) => string
+  feeTotal: (children: number, amount: string) => string
   problems: Record<FormField | "phone_unreadable" | "year_closed", string>
   // The same child on two cards, naming the child.
   duplicateChild: (name: string) => string
@@ -82,6 +90,18 @@ export const COPY: Record<Language, Copy> = {
     reviewParent: "Mzazi au mlezi",
     reviewChild: "Mtoto",
     securityNote: "Ukaguzi mfupi wa usalama hulinda fomu hii.",
+    discountCode: "Code ya Punguzo · si lazima",
+    discountCodeHint: "Kama kuna mtu aliyekupa code ya punguzo, iandike hapa.",
+    discountChecking: "Tunahakiki code…",
+    discountNotes: {
+      approved: "Punguzo la TZS 20,000 kwenye ada ya usaili kwa kila mtoto.",
+      pending: "Code hii inasubiri kuthibitishwa. Punguzo litatumika ikithibitishwa kabla hujalipa.",
+      unknown: "Hatuitambui code hii. Ihakiki, au tuma fomu bila code.",
+      unchecked: "Hatukuweza kuhakiki code yako kwa sasa. Itahifadhiwa pamoja na maombi yako.",
+    },
+    interviewFee: "Ada ya usaili",
+    feePerChild: (amount) => `${amount} kwa kila mtoto`,
+    feeTotal: (children, amount) => (children === 1 ? `Jumla: ${amount}` : `Jumla kwa watoto ${children}: ${amount}`),
     problems: {
       contact_name: "Andika jina kamili la mzazi au mlezi.",
       relationship: "Chagua uhusiano wako na mtoto.",
@@ -95,6 +115,7 @@ export const COPY: Record<Language, Copy> = {
       year_closed: "Mwaka huo haupokei maombi tena. Chagua mwaka mwingine.",
       day_or_boarding: "Chagua kutwa au bweni.",
       duplicate_child: "Mtoto huyu ameandikwa mara mbili.",
+      discount_code: "Code ya punguzo ina herufi, namba, - na . tu, hadi 20. Ihakiki, au ifute ili utume bila code.",
       children: "Ongeza mtoto mmoja au zaidi.",
       submission_key: "Maombi yamebadilika tangu ulipotuma mara ya kwanza. Bonyeza Tuma maombi tena.",
       payload: "Hatukuweza kusoma fomu. Pakia ukurasa upya kisha ujaribu tena.",
@@ -142,6 +163,18 @@ export const COPY: Record<Language, Copy> = {
     reviewParent: "Parent or guardian",
     reviewChild: "Child",
     securityNote: "A quick security check protects this form.",
+    discountCode: "Discount code · optional",
+    discountCodeHint: "If someone gave you a discount code, enter it here.",
+    discountChecking: "Checking the code…",
+    discountNotes: {
+      approved: "TZS 20,000 off the interview fee for each child.",
+      pending: "This code is waiting to be confirmed. The discount applies if it is confirmed before you pay.",
+      unknown: "We don't recognise this code. Check it, or send the form without it.",
+      unchecked: "We couldn't check your code just now. It will still be saved with your application.",
+    },
+    interviewFee: "Interview fee",
+    feePerChild: (amount) => `${amount} per child`,
+    feeTotal: (children, amount) => (children === 1 ? `Total: ${amount}` : `Total for ${children} children: ${amount}`),
     problems: {
       contact_name: "Enter the parent or guardian's full name.",
       relationship: "Choose your relationship to the child.",
@@ -155,6 +188,7 @@ export const COPY: Record<Language, Copy> = {
       year_closed: "That year no longer takes applications. Choose another year.",
       day_or_boarding: "Choose day or boarding.",
       duplicate_child: "This child is listed twice.",
+      discount_code: "A discount code has only letters, numbers, - and ., up to 20. Check it, or clear it to send without a code.",
       children: "Add at least one child.",
       submission_key: "Your application changed since you first sent it. Tap Send application again.",
       payload: "We couldn't read the form. Reload the page and try again.",

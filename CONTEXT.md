@@ -297,7 +297,7 @@ The name used for a **Referral code** wherever parents, guardians or Marketing A
 _Avoid_ (in text parents or agents see): Referral code, agent, Wakala, Kodi ya punguzo
 
 **Referral link**:
-A shareable link, issued with a Marketing Agent's **Referral code**, that the agent sends to parents. It opens the **Admission form** with the code already filled in. A parent who follows the link and returns to submit the form within 30 days keeps the agent's code.
+A shareable link, issued with a Marketing Agent's **Referral code**, that the agent sends to parents. It opens the **Admission form** with the code already filled in. A parent who follows the link and returns to submit the form within 30 days keeps the agent's code. The 30 days count from the latest link followed, and the latest link wins: following a second agent's link replaces the first code and starts the 30 days again.
 
 **Follow-up record**:
 A record of contact made with an admissions lead, including a required comment describing what happened, contact method, internal staff member who made that contact, and the date. Every follow-up is preserved as part of the lead's complete history. The staff member is selected when the follow-up occurs; staff are not assigned to the lead in advance.

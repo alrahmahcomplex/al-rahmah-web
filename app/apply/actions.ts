@@ -4,11 +4,13 @@ import { headers } from "next/headers"
 
 import { admissionYears, parseAdmissionForm } from "@/lib/admission-form"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
+import { normalizeDiscountCode } from "@/lib/referral-link"
 import { submitAdmissionForm as saveAdmissionForm } from "@/lib/services/admission-form"
+import { estimateDiscountCode } from "@/lib/services/referral"
 import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
-import type { AdmissionFormState } from "./outcome"
+import type { AdmissionFormState, DiscountCodeCheck } from "./outcome"
 
 // Sends the public Admission form. In this order, so nothing is written
 // unless both checks pass: the rate limit, Turnstile, the form's own checks,
@@ -59,4 +61,35 @@ export async function submitAdmissionForm(
     case "unavailable":
       return { status: "unavailable" }
   }
+}
+
+// Checks a Discount code typed on the review step, for the note under the
+// field and the fee. It writes nothing, so it runs without Turnstile, but
+// under the rate limit, so nobody can list every code cheaply. A value that
+// isn't a code is looked up as no code at all, so it comes back `unknown`
+// with the standard fee.
+export async function checkDiscountCode(code: unknown): Promise<DiscountCodeCheck> {
+  if ((await checkPublicFormLimit({ headers: await headers(), key: "code-check" })) === "limited") {
+    return { status: "rate-limited" }
+  }
+
+  const normalized = normalizeDiscountCode(code)
+  let supabase
+  try {
+    supabase = publicFormClient()
+  } catch (error) {
+    console.error("Discount code check: Supabase is not configured", error)
+    return { status: "unavailable" }
+  }
+  if (!supabase) return { status: "unavailable" }
+
+  let estimate
+  try {
+    estimate = await estimateDiscountCode(supabase, normalized ?? "")
+  } catch (error) {
+    console.error("Discount code check failed", error)
+    return { status: "unavailable" }
+  }
+  if (!estimate.ok) return { status: "unavailable" }
+  return { status: estimate.data.state, amount: estimate.data.amount }
 }

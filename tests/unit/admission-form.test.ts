@@ -84,6 +84,25 @@ describe("reading the posted Admission form", () => {
     expect(parse(form({ children: many }))).toEqual({ ok: false, error: { field: "children", child: null } })
   })
 
+  it("keeps one Discount code for the whole form, normalized as the database stores it", () => {
+    const parsed = parse(form({ discountCode: " bjn -402 " }))
+    expect(parsed.ok && parsed.data.discountCode).toBe("BJN-402")
+  })
+
+  it("drops an empty Discount code", () => {
+    for (const discountCode of ["", "   ", undefined, null]) {
+      const parsed = parse(form({ discountCode }))
+      expect(parsed.ok && "discountCode" in parsed.data).toBe(false)
+    }
+  })
+
+  it("keeps a code no agent may hold, but refuses one that isn't a code", () => {
+    const unknown = parse(form({ discountCode: "QQQ-000" }))
+    expect(unknown.ok && unknown.data.discountCode).toBe("QQQ-000")
+    expect(parse(form({ discountCode: "QQQ_000!" }))).toEqual({ ok: false, error: { field: "discount_code", child: null } })
+    expect(parse(form({ discountCode: 402 }))).toEqual({ ok: false, error: { field: "payload", child: null } })
+  })
+
   it("refuses a missing or malformed submission key", () => {
     expect(parse(form({ submissionKey: "not-a-uuid" }))).toEqual({ ok: false, error: { field: "submission_key", child: null } })
   })

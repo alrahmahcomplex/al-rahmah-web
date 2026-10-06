@@ -5,6 +5,7 @@ const stubs = vi.hoisted(() => ({
   limit: vi.fn(),
   turnstile: vi.fn(),
   save: vi.fn(),
+  estimate: vi.fn(),
   client: vi.fn(),
 }))
 
@@ -32,7 +33,14 @@ vi.mock("@/lib/services/admission-form", () => ({
   },
 }))
 
-import { submitAdmissionForm } from "@/app/apply/actions"
+vi.mock("@/lib/services/referral", () => ({
+  estimateDiscountCode: (...args: unknown[]) => {
+    calls.order.push("estimate")
+    return stubs.estimate(...args)
+  },
+}))
+
+import { checkDiscountCode, submitAdmissionForm } from "@/app/apply/actions"
 import { admissionYears } from "@/lib/admission-form"
 
 const [thisYear] = admissionYears()
@@ -159,5 +167,50 @@ describe("sending the Admission form", () => {
 
     stubs.client.mockReturnValue(null)
     expect(await send(posted())).toEqual({ status: "unavailable" })
+  })
+})
+
+describe("checking a Discount code", () => {
+  beforeEach(() => {
+    stubs.estimate.mockReset().mockResolvedValue({ ok: true, data: { state: "approved", amount: 30000 } })
+  })
+
+  it("runs the rate limit with its own key, then the estimate, with no security check", async () => {
+    expect(await checkDiscountCode(" bjn -402 ")).toEqual({ status: "approved", amount: 30000 })
+    expect(calls.order).toEqual(["rate-limit", "estimate"])
+    expect(stubs.limit).toHaveBeenCalledWith(expect.objectContaining({ key: "code-check" }))
+    expect(stubs.estimate).toHaveBeenCalledWith({ secret: "client" }, "BJN-402")
+    expect(stubs.turnstile).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ state: "pending", amount: 50000 }, { status: "pending", amount: 50000 }],
+    [{ state: "unknown", amount: 50000 }, { status: "unknown", amount: 50000 }],
+  ])("passes on the estimate %j", async (data, answer) => {
+    stubs.estimate.mockResolvedValue({ ok: true, data })
+    expect(await checkDiscountCode("ZNM-401")).toEqual(answer)
+  })
+
+  it("looks up a value that isn't a code as no code", async () => {
+    stubs.estimate.mockResolvedValue({ ok: true, data: { state: "unknown", amount: 50000 } })
+    expect(await checkDiscountCode("<b>nope</b>")).toEqual({ status: "unknown", amount: 50000 })
+    expect(stubs.estimate).toHaveBeenCalledWith({ secret: "client" }, "")
+  })
+
+  it("stops at the rate limit before reading anything", async () => {
+    stubs.limit.mockResolvedValue("limited")
+    expect(await checkDiscountCode("BJN-402")).toEqual({ status: "rate-limited" })
+    expect(stubs.estimate).not.toHaveBeenCalled()
+  })
+
+  it("answers unavailable, never a raw error", async () => {
+    stubs.estimate.mockResolvedValue({ ok: false, error: "unavailable" })
+    expect(await checkDiscountCode("BJN-402")).toEqual({ status: "unavailable" })
+
+    stubs.estimate.mockRejectedValue(new Error("connection reset by peer"))
+    expect(await checkDiscountCode("BJN-402")).toEqual({ status: "unavailable" })
+
+    stubs.client.mockReturnValue(null)
+    expect(await checkDiscountCode("BJN-402")).toEqual({ status: "unavailable" })
   })
 })

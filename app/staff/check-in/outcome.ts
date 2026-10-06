@@ -2,9 +2,13 @@ import type { CreateLeadError, FamilyMatch, FindFamilyError, InvalidField } from
 
 export type Step = "parent" | "student" | "review"
 
+// Whether the Referral code staff entered reached the new lead. The code is
+// set after the lead is created, so the lead exists either way.
+export type ReferralCodeResult = "none" | "saved" | "not-saved"
+
 // What the New Student form is told after it submits.
 export type RegisterOutcome =
-  | { status: "created"; leadId: string; admissionNumber: string }
+  | { status: "created"; leadId: string; admissionNumber: string; referralCode: ReferralCodeResult }
   // Where staff go to see the lead that already exists: the lead itself, or
   // the Reopening request hand-off when it is closed.
   | { status: "duplicate"; admissionNumber: string; href: string }

@@ -21,6 +21,7 @@ export default async function NewStudentPage() {
         today={tanzaniaToday()}
         years={enrollmentYears()}
         canEditContact={staff.permissions.includes("leads.edit")}
+        canEnterReferralCode={staff.permissions.includes("leads.edit")}
       />
     </div>
   )

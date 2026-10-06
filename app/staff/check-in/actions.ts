@@ -1,5 +1,7 @@
 "use server"
 
+import type { SupabaseClient } from "@supabase/supabase-js"
+
 import {
   createLead,
   DAY_OR_BOARDING,
@@ -11,11 +13,19 @@ import {
   type NewContact,
   type NewStudent,
 } from "@/lib/services/leads"
+import { setLeadReferralCode } from "@/lib/services/referral"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
 import { correctionOutcome, type CorrectionOutcome } from "../leads/[id]/correction-outcome"
-import { familyRefusal, refusalOutcome, type FamilyOutcome, type LookupOutcome, type RegisterOutcome } from "./outcome"
+import {
+  familyRefusal,
+  refusalOutcome,
+  type FamilyOutcome,
+  type LookupOutcome,
+  type ReferralCodeResult,
+  type RegisterOutcome,
+} from "./outcome"
 
 // Finds the lead a family's Admission Number belongs to, for anyone who may
 // view leads.
@@ -40,6 +50,9 @@ export type WalkInForm = {
   guardian: WalkInGuardian
   student: NewStudent
   visitDate: string
+  // The Marketing Agent's code staff entered. Null or left out for none, so
+  // a page loaded before the field existed still registers.
+  referralCode?: string | null
 }
 
 const REFUSED_INPUT: RegisterOutcome = {
@@ -78,8 +91,10 @@ function isGuardian(guardian: WalkInGuardian | undefined): guardian is WalkInGua
 // Server Actions take input from anyone who can post to them, so the shape is
 // checked before it reaches the database, which then checks the rules.
 function isWalkInForm(form: WalkInForm): boolean {
-  const { guardian, student, visitDate } = form ?? {}
+  const { guardian, student, visitDate, referralCode } = form ?? {}
   return (
+    // No code is longer than 20 characters, spaces aside.
+    (referralCode == null || (typeof referralCode === "string" && referralCode.length <= 60)) &&
     isGuardian(guardian) &&
     typeof student?.fullName === "string" &&
     (LEAD_CLASSES as readonly string[]).includes(student.className) &&
@@ -162,7 +177,7 @@ export async function registerWalkIn(form: WalkInForm): Promise<RegisterOutcome>
   const allowed = await requirePermission(supabase, "leads.create")
   if (!allowed.ok) return refusalOutcome({ kind: "forbidden" })
 
-  const { guardian, student, visitDate } = form
+  const { guardian, student, visitDate, referralCode } = form
   const result = await createLead(supabase, {
     guardian:
       "contactId" in guardian
@@ -186,5 +201,27 @@ export async function registerWalkIn(form: WalkInForm): Promise<RegisterOutcome>
   })
 
   if (!result.ok) return refusalOutcome(result.error)
-  return { status: "created", leadId: result.data.leadId, admissionNumber: result.data.admissionNumber }
+
+  const { leadId, admissionNumber } = result.data
+  return { status: "created", leadId, admissionNumber, referralCode: await putReferralCode(supabase, leadId, referralCode) }
+}
+
+// Puts the Referral code on the lead just created. The lead exists whatever
+// happens here, so a failure is reported, not thrown: staff add the code on
+// the lead's Referral code panel instead. The form only sends a code an agent
+// holds, so a failure is in practice the database not answering.
+async function putReferralCode(
+  supabase: SupabaseClient,
+  leadId: string,
+  code: string | null | undefined,
+): Promise<ReferralCodeResult> {
+  if (code == null || code.trim() === "") return "none"
+  try {
+    const saved = await setLeadReferralCode(supabase, leadId, code)
+    if (saved.ok) return "saved"
+    console.error("A new lead's Referral code was not saved", saved.error)
+  } catch (error) {
+    console.error("A new lead's Referral code was not saved", error)
+  }
+  return "not-saved"
 }

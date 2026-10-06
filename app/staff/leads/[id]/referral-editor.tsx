@@ -202,8 +202,9 @@ function CodeForm({
 }
 
 // Looks the typed code up once typing pauses. A slower answer to an earlier
-// code never replaces the answer to the latest one.
-function useCodeLookup(typed: string): ReferralLookup {
+// code never replaces the answer to the latest one. New Student's Referral
+// code field uses it too.
+export function useCodeLookup(typed: string): ReferralLookup {
   const [lookup, setLookup] = useState<{ typed: string; result: ReferralLookup } | null>(null)
   const latest = useRef(typed)
 

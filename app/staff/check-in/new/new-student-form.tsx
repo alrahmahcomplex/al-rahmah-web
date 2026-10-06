@@ -21,11 +21,15 @@ import {
   type LeadClass,
   type Relationship,
 } from "@/lib/services/leads"
+import type { ReferralAgent } from "@/lib/services/referral"
+import { cn } from "@/lib/utils"
 
 import type { CorrectionOutcome } from "../../leads/[id]/correction-outcome"
+import { useCodeLookup } from "../../leads/[id]/referral-editor"
+import { referralLookupNote, type ReferralLookup } from "../../leads/[id]/referral-outcome"
 import { findFamily, registerWalkIn, updateSharedContact } from "../actions"
 import { childHref, compareContact, relationshipLabel } from "../family"
-import type { RegisterOutcome } from "../outcome"
+import type { ReferralCodeResult, RegisterOutcome } from "../outcome"
 
 const SELECT_CLASS =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
@@ -54,13 +58,26 @@ type Details = {
   enrollmentYear: string
   dayOrBoarding: DayOrBoarding | ""
   visitDate: string
+  // The Referral code as typed; the agent it names is confirmed on Review.
+  referralCode: string
 }
 
 // A refusal shown at the top of a screen, and the field it is about.
 // `canSkip` offers going on without the Family check when the check failed.
 type Notice = { screen: Screen; field: InvalidField | null; message: string; canSkip?: boolean }
 
-export function NewStudentForm({ today, years, canEditContact }: { today: string; years: number[]; canEditContact: boolean }) {
+export function NewStudentForm({
+  today,
+  years,
+  canEditContact,
+  canEnterReferralCode,
+}: {
+  today: string
+  years: number[]
+  canEditContact: boolean
+  // Staff who may set a lead's Referral code (leads.edit) get the field.
+  canEnterReferralCode: boolean
+}) {
   const [screen, setScreen] = useState<Screen>("parent")
   const [details, setDetails] = useState<Details>({
     parentName: "",
@@ -73,7 +90,10 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
     enrollmentYear: "",
     dayOrBoarding: "",
     visitDate: today,
+    referralCode: "",
   })
+  // The Marketing Agent whose code the student step accepted, if any.
+  const [referralAgent, setReferralAgent] = useState<ReferralAgent | null>(null)
   // The contacts that hold the parent's numbers, and the one staff confirmed
   // as the same person, if any.
   const [match, setMatch] = useState<FamilyMatch | null>(null)
@@ -205,6 +225,7 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
             dayOrBoarding: details.dayOrBoarding as DayOrBoarding,
           },
           visitDate: details.visitDate,
+          referralCode: referralAgent?.code ?? null,
         })
       } catch {
         // The request never came back, so it may or may not have been saved.
@@ -232,7 +253,14 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
   }
 
   if (created) {
-    return <Confirmation admissionNumber={created.admissionNumber} leadId={created.leadId} studentName={details.studentName} />
+    return (
+      <Confirmation
+        admissionNumber={created.admissionNumber}
+        leadId={created.leadId}
+        studentName={details.studentName}
+        referralCode={created.referralCode}
+      />
+    )
   }
 
   const steps: Screen[] = known ? ["parent", "family", "student", "review"] : ["parent", "student", "review"]
@@ -323,14 +351,19 @@ export function NewStudentForm({ today, years, canEditContact }: { today: string
           today={today}
           years={years}
           field={field}
+          canEnterReferralCode={canEnterReferralCode}
           onBack={() => goTo(known ? "family" : "parent")}
-          onNext={() => goTo("review")}
+          onNext={(agent) => {
+            setReferralAgent(agent)
+            goTo("review")
+          }}
         />
       )}
       {screen === "review" && (
         <ReviewStep
           details={details}
           contact={confirmed}
+          referralAgent={referralAgent}
           pending={pending}
           duplicate={duplicate}
           onBack={() => {
@@ -740,15 +773,31 @@ function StudentStep({
   today,
   years,
   field,
+  canEnterReferralCode,
   onBack,
   onNext,
-}: StepProps & { today: string; years: number[]; onBack: () => void; onNext: () => void }) {
+}: StepProps & {
+  today: string
+  years: number[]
+  canEnterReferralCode: boolean
+  onBack: () => void
+  onNext: (agent: ReferralAgent | null) => void
+}) {
+  const typedCode = canEnterReferralCode ? details.referralCode : ""
+  const lookup = useCodeLookup(typedCode)
+  const [codeRefusal, setCodeRefusal] = useState<string | null>(null)
+  const codeRef = useRef<HTMLInputElement>(null)
+
   return (
     <form
       className="flex max-w-xl flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
-        onNext()
+        if (typedCode.trim() === "") return onNext(null)
+        // Only a code a Marketing Agent holds goes on to Review.
+        if (lookup.status === "found") return onNext(lookup.agent)
+        setCodeRefusal(codeRefusalMessage(lookup))
+        codeRef.current?.focus()
       }}
     >
       <Field label="Student's full name">
@@ -836,6 +885,18 @@ function StudentStep({
           />
         )}
       </Field>
+      {canEnterReferralCode && (
+        <ReferralCodeField
+          ref={codeRef}
+          value={details.referralCode}
+          lookup={lookup}
+          refusal={codeRefusal}
+          onChange={(value) => {
+            setCodeRefusal(null)
+            set("referralCode", value)
+          }}
+        />
+      )}
       <div className="flex gap-2">
         <Button type="submit">Review</Button>
         <Button type="button" variant="outline" onClick={onBack}>
@@ -843,6 +904,67 @@ function StudentStep({
         </Button>
       </div>
     </form>
+  )
+}
+
+// Why Review didn't go on with the typed code.
+function codeRefusalMessage(lookup: ReferralLookup): string {
+  switch (lookup.status) {
+    case "checking":
+      return "The code is still being checked. Wait a moment, then choose Review again."
+    case "unavailable":
+      return "The code could not be checked just now. Try again, or clear the field and add the code on the lead later."
+    default:
+      return "No Marketing Agent has this code. Correct it, or clear the field to register without one."
+  }
+}
+
+// The optional Referral code, naming the agent as it is typed.
+function ReferralCodeField({
+  ref,
+  value,
+  lookup,
+  refusal,
+  onChange,
+}: {
+  ref: React.Ref<HTMLInputElement>
+  value: string
+  lookup: ReferralLookup
+  refusal: string | null
+  onChange: (value: string) => void
+}) {
+  const id = useId()
+  const note =
+    refusal ?? (lookup.status === "empty" ? "Only if the family has a Marketing Agent's code, such as ABC-123." : referralLookupNote(lookup))
+  const invalid = refusal !== null || lookup.status === "none"
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>Referral code (optional)</Label>
+      <Input
+        ref={ref}
+        id={id}
+        name="referral_code"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        maxLength={40}
+        aria-describedby={`${id}-agent`}
+        aria-invalid={invalid || undefined}
+        className="max-w-48 font-mono uppercase"
+      />
+      <p
+        id={`${id}-agent`}
+        role="status"
+        className={cn(
+          "text-xs",
+          invalid ? "text-destructive" : lookup.status === "found" ? "text-slate-900" : "text-muted-foreground",
+        )}
+      >
+        {note}
+      </p>
+    </div>
   )
 }
 
@@ -862,6 +984,7 @@ function Summary({ rows }: { rows: [string, string][] }) {
 function ReviewStep({
   details,
   contact,
+  referralAgent,
   pending,
   duplicate,
   onBack,
@@ -870,6 +993,7 @@ function ReviewStep({
   details: Details
   // The confirmed contact the student joins, or null for a new one.
   contact: FamilyContact | null
+  referralAgent: ReferralAgent | null
   pending: boolean
   duplicate: Extract<RegisterOutcome, { status: "duplicate" }> | null
   onBack: () => void
@@ -922,6 +1046,12 @@ function ReviewStep({
             ["Enrollment year", details.enrollmentYear],
             ["Day or boarding", details.dayOrBoarding],
             ["Visit date", formatDate(details.visitDate)],
+            ...(referralAgent
+              ? ([
+                  ["Referral code", referralAgent.code],
+                  ["Marketing Agent", referralAgent.fullName],
+                ] as [string, string][])
+              : []),
           ]}
         />
       </section>
@@ -941,10 +1071,12 @@ function Confirmation({
   admissionNumber,
   leadId,
   studentName,
+  referralCode,
 }: {
   admissionNumber: string
   leadId: string
   studentName: string
+  referralCode: ReferralCodeResult
 }) {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
 
@@ -975,6 +1107,16 @@ function Confirmation({
           {copied === "failed" && "Could not copy. Select the number and copy it by hand."}
         </p>
       </div>
+      {referralCode === "not-saved" && (
+        <Alert role="alert" className="border-amber-300 bg-amber-50 text-amber-950">
+          <AlertDescription className="flex flex-col items-start gap-2 text-amber-950">
+            <span>The lead was created, but the referral code wasn&apos;t saved.</span>
+            <Link href={`/staff/leads/${leadId}#lead-referral`} className="font-medium underline underline-offset-4">
+              Add the referral code
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex flex-wrap gap-2">
         <Link href={`/staff/leads/${leadId}`} className={buttonVariants()}>Open lead</Link>
         <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Back to Check-in</Link>

@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The dashboard on the staff home shows three more tiles: **Interviewed leads**, the
+  number of children who sat an interview, and **Passed interviews** and **Failed
+  interviews**, the number of interviews with each result. All three count by interview
+  date, and each has its own period and Enrollment year filters.
+- An interview counts once its result is recorded, whether or not its fee is paid, and it
+  still counts after the lead is Declined, Inactive or Archived. A child who retakes the
+  interview in the same period counts once in Interviewed leads, and each sitting counts
+  in Passed or Failed. Correcting a result or an interview date moves the interview to
+  the right count.
+
 ## October 8, 2026 `v0.47.0`
 
 ### IMPROVED

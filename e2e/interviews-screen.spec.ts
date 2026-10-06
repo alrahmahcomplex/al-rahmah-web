@@ -29,7 +29,7 @@ test.describe("the Interviews screen", () => {
   test("Admissions Staff open it from the navigation, walk the result filters and open a lead", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Interviews" }).click()
-    await expect(page.getByRole("heading", { name: "Interviews" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Interviews", exact: true })).toBeVisible()
     await expect(page).toHaveURL(/\/staff\/interviews$/)
 
     await filter(page, "Enrollment year", "2027").click()

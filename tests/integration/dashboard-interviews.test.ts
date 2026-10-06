@@ -10,7 +10,7 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
-import { claimInterviewYear } from "../support/interview-years"
+import { claimInterviewYear, type InterviewYearClaim } from "../support/interview-years"
 
 // Interviewed leads, Passed interviews and Failed interviews against local
 // Supabase. Counts are filtered to Enrollment year 2031, the dashboard's own
@@ -189,8 +189,11 @@ describe("corrections move the counts", () => {
     // A lead of the test's own in a year claimed for the test, so no fixture
     // is touched. The years keep earlier runs' interviews, so the test
     // compares counts before and after each change rather than totals.
-    const [home, moved] = [await claimInterviewYear(), await claimInterviewYear()]
+    const home = await claimInterviewYear()
+    let moved: InterviewYearClaim | undefined
     try {
+      const other = await claimInterviewYear()
+      moved = other
       const staff = await signedIn(ADMISSIONS)
       const created = await createLead(staff, {
         guardian: {
@@ -234,7 +237,7 @@ describe("corrections move the counts", () => {
         later: await counts(staff, later, home.year),
         march: await counts(staff, march, home.year),
         all: await counts(staff, ALL, home.year),
-        movedLater: await counts(staff, later, moved.year),
+        movedLater: await counts(staff, later, other.year),
       }
       const plus = (base: Counts, change: Partial<Counts>): Counts => ({
         interviewed: base.interviewed + (change.interviewed ?? 0),
@@ -258,17 +261,17 @@ describe("corrections move the counts", () => {
 
       // The lead's Enrollment year corrected: the interview follows the lead,
       // although its S/N stays in the year it was issued in.
-      await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [lead, moved.year]))
+      await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [lead, other.year]))
       const serialYear = await asSystem(
         async (sql) => (await sql.query<{ serial_year: number }>("select serial_year from public.interviews where id = $1", [interview])).rows[0].serial_year,
       )
       expect(serialYear).toBe(home.year)
       expect(await counts(staff, later, home.year)).toEqual(before.later)
       expect(await counts(staff, ALL, home.year)).toEqual(before.all)
-      expect(await counts(staff, later, moved.year)).toEqual(plus(before.movedLater, { interviewed: 1, failed: 1 }))
+      expect(await counts(staff, later, other.year)).toEqual(plus(before.movedLater, { interviewed: 1, failed: 1 }))
     } finally {
       await home.release()
-      await moved.release()
+      await moved?.release()
     }
   })
 })

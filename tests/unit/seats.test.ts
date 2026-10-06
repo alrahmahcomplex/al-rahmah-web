@@ -66,10 +66,12 @@ describe("defaultSeatsYear", () => {
 })
 
 describe("the Seats nav entry", () => {
-  it("shows Seats to staff who manage academic years, and to no one else", () => {
+  it("shows Seats to staff who manage academic years and may view payments, and to no one else", () => {
     const seats = STAFF_NAV.find((entry) => entry.label === "Seats")
-    expect(seats).toEqual({ href: "/staff/seats", label: "Seats", permission: "academic_years.manage" })
-    expect(navFor(["academic_years.manage"])).toContain(seats)
+    expect(seats?.href).toBe("/staff/seats")
+    expect(navFor(["academic_years.manage", "payments.view"])).toContain(seats)
+    // The counts sit behind payments.view, so the page would show nothing.
+    expect(navFor(["academic_years.manage"])).not.toContain(seats)
     expect(navFor(["payments.view", "payments.record", "leads.view"])).not.toContain(seats)
   })
 })

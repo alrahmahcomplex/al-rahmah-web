@@ -112,14 +112,15 @@ export type SeatCheck = {
   seats: number | null
   // Not counting this lead.
   seatsTaken: number
-  // The priority the lead's payments give it, Declined or not.
+  // The priority the lead's payments give it, Declined or not. Null too
+  // for staff who may not view payments.
   priority: SeatPriority | null
   holdsSeat: boolean
   // The lead holds no seat yet, would take one with its priority, and the
   // seats taken already reach the seats set.
   wouldOverfill: boolean
-  // Only when it would overfill: the class's holders with this lead among
-  // them, marked.
+  // Only when it would overfill, and only for staff who may view payments:
+  // the class's holders with this lead among them, marked.
   ranked: (SeatHolder & { thisLead: boolean })[] | null
 }
 
@@ -137,7 +138,8 @@ type SeatCheckRow = {
 
 // Whether this lead, holding no seat yet, would take one in a full class,
 // with the ranking it would join. For slice 8's reopening approval. Reads
-// only. Needs a signed-in staff member with leads.view.
+// only. Needs a signed-in staff member with leads.view; the priority and the
+// ranking also need payments.view.
 export async function seatCheck(
   supabase: SupabaseClient,
   leadId: string,

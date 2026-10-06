@@ -10,7 +10,7 @@ import { createLead, LEAD_CLASSES, type DayOrBoarding, type LeadClass } from "@/
 import { previewPayment, recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 import { getSeats, seatCheck, type ClassSeats } from "@/lib/services/seats"
 
-import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -325,6 +325,21 @@ describe("seat_check", () => {
     const holderAt = ranked.findIndex((entry) => entry.leadId === holder.id)
     const declinedAt = ranked.findIndex((entry) => entry.leadId === declined.id)
     expect(declinedAt).toBeLessThan(holderAt)
+  })
+
+  test("tells staff who can't view payments only whether it would overfill, without priorities or the ranking", async () => {
+    const year = await yearWithSchedule()
+    const holder = await passedLead(year)
+    await pay(holder.id, DEPOSIT)
+    const declined = await passedLead(year)
+    await pay(declined.id, FULL, { type: "full_payment" })
+    expect((await declineLead(await signedIn(MANAGER), declined.id, { reason: "Fee payment not completed" })).ok).toBe(true)
+    const { taken } = await classIn(year)
+    await setSeats(year, taken)
+
+    const viewer = await signedIn(await createThrowawayStaff(["leads.view"]))
+    const check = await seatCheck(viewer, declined.id)
+    expect(check.ok && check.data).toMatchObject({ seats: taken, wouldOverfill: true, priority: null, ranked: null })
   })
 
   test("says nothing to warn about for a lead holding its seat, a lead with no priority, or a class with room", async () => {

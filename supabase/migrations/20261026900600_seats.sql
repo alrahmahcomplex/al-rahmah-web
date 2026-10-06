@@ -13,7 +13,8 @@
 --     screen and slice 10's dashboard read it.
 --   - seat_check(lead_id), for signed-in staff with leads.view: whether this
 --     lead, holding no seat yet, would take one in a full class, with the
---     ranking. Slice 8's reopening approval (#103) shows it.
+--     ranking for staff who may also view payments. Slice 8's reopening
+--     approval (#103) shows it.
 --   - preview_school_fee_payment, as #107 made it, now also answering
 --     `would_overfill`.
 --
@@ -222,8 +223,11 @@ revoke execute on function public.class_seat_occupancy(integer, public.lead_clas
 -- holders with this lead among them, marked `this_lead`; otherwise it is
 -- null.
 --
--- Read-only and security definer, so it reads payments for staff who may
--- not. Needs a signed-in, active staff member with leads.view.
+-- Read-only and security definer. Needs a signed-in, active staff member
+-- with leads.view. The yes-or-no answer and the class's counts are for all
+-- of them; the lead's priority and the ranking, which show what each family
+-- has paid towards, only for staff who may also view payments (null
+-- otherwise).
 -- ---------------------------------------------------------------------------
 
 create function public.seat_check(lead_id uuid)
@@ -240,12 +244,15 @@ declare
     holds_seat boolean;
     would_overfill boolean;
     ranked jsonb;
+    sees_payments boolean;
 begin
     if auth.role() is distinct from 'authenticated'
        or not public.is_active_staff()
        or not public.has_permission('leads.view') then
         raise exception 'forbidden';
     end if;
+
+    sees_payments := public.has_permission('payments.view');
 
     select * into target from public.leads l where l.id = seat_check.lead_id;
     if not found then
@@ -262,7 +269,7 @@ begin
         and occupancy.seats is not null
         and occupancy.taken >= occupancy.seats;
 
-    if would_overfill then
+    if would_overfill and sees_payments then
         select public.ranked_seats(
             coalesce(jsonb_agg(
                 public.seat_holder_entry(h.lead_id, h.admission_number, h.student_name, h.closure, h.priority, h.reached_on)
@@ -287,7 +294,7 @@ begin
         'day_or_boarding', target.day_or_boarding,
         'seats', occupancy.seats,
         'seats_taken', occupancy.taken,
-        'priority', seat.priority,
+        'priority', case when sees_payments then seat.priority end,
         'holds_seat', holds_seat,
         'would_overfill', would_overfill,
         'ranked', ranked

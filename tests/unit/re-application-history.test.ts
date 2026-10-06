@@ -69,6 +69,27 @@ describe("a re-application in the lead's history", () => {
     expect(described.changes).toEqual([{ label: "Differs from the lead", from: null, to: "Nothing" }])
   })
 
+  it("reads a review as the staff member marking it reviewed, with no raw ids or times", () => {
+    const [described] = describeLeadHistory(
+      [
+        entry({
+          actor: "Test Admissions",
+          record: "re_applications",
+          recordId: RE_APPLICATION,
+          action: "update",
+          changes: [
+            change("reviewed_at", null, "2026-10-04T09:30:00Z"),
+            change("reviewed_by", null, "a1a1a1a1-0000-4000-8000-000000000003"),
+          ],
+        }),
+      ],
+      {},
+    )
+    expect(described.actor).toBe("Test Admissions")
+    expect(described.summary).toBe("marked the re-application reviewed")
+    expect(described.changes).toEqual([])
+  })
+
   it("reads the lead's new re-applied cause as a Returning family flag", () => {
     const [described] = describeLeadHistory([entry({ changes: [change("returning_family_reapplied", false, true)] })], {})
     expect(described.summary).toBe("flagged the lead Returning family: re-applied")

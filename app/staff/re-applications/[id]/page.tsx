@@ -86,15 +86,23 @@ function Submitted({ entry }: { entry: ReApplication }) {
   const differs = new Set(entry.differingFields)
   const relationship = sent.relationshipDescription ? `${sent.relationship}: ${sent.relationshipDescription}` : sent.relationship
 
-  const rows: { field: ReApplicationField; value: string }[] = [
+  // A number shows as stored, with what the family typed beneath it when
+  // that reads differently.
+  const typed = (asSent: string | null, shown: string) => (asSent && asSent !== shown ? asSent : null)
+
+  const rows: { field: ReApplicationField; value: string; typedAs?: string | null }[] = [
     { field: "student_name", value: sent.studentName },
     { field: "class_name", value: sent.className },
     { field: "enrollment_year", value: String(sent.enrollmentYear) },
     { field: "day_or_boarding", value: sent.dayOrBoarding },
     { field: "contact_name", value: sent.contactName },
     { field: "relationship", value: relationship },
-    { field: "phone", value: displayPhone(sent.phone) },
-    { field: "whatsapp", value: sent.whatsapp ? displayPhone(sent.whatsapp) : "Same as phone" },
+    { field: "phone", value: displayPhone(sent.phone), typedAs: typed(sent.phoneAsSent, displayPhone(sent.phone)) },
+    {
+      field: "whatsapp",
+      value: sent.whatsapp ? displayPhone(sent.whatsapp) : "Same as phone",
+      typedAs: typed(sent.whatsappAsSent, sent.whatsapp ? displayPhone(sent.whatsapp) : ""),
+    },
   ]
 
   return (
@@ -103,7 +111,7 @@ function Submitted({ entry }: { entry: ReApplication }) {
         What the family sent
       </h2>
       <dl className="grid max-w-xl grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-xl p-4 text-sm ring-1 ring-foreground/10">
-        {rows.map(({ field, value }) => {
+        {rows.map(({ field, value, typedAs }) => {
           // The description shows with the relationship, so either differing
           // marks the one row.
           const different = differs.has(field) || (field === "relationship" && differs.has("relationship_description"))
@@ -117,6 +125,7 @@ function Submitted({ entry }: { entry: ReApplication }) {
                     Differs
                   </Badge>
                 )}
+                {typedAs && <span className="w-full text-xs text-muted-foreground">Typed as {typedAs}</span>}
               </dd>
             </div>
           )

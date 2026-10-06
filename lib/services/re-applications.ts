@@ -45,14 +45,18 @@ export type ReApplicationSummary = {
   reviewedBy: string | null
 }
 
-// What the family sent, with the numbers as the database normalized them.
+// What the family sent. The numbers as the database normalized them, and as
+// the family typed them.
 export type SubmittedDetails = {
   contactName: string
   relationship: Relationship
   relationshipDescription: string | null
   phone: string
+  phoneAsSent: string
   // Null when none was sent, or it was the same as the phone.
   whatsapp: string | null
+  // Null when none was sent.
+  whatsappAsSent: string | null
   studentName: string
   className: LeadClass
   enrollmentYear: number
@@ -84,7 +88,9 @@ type DetailRow = Row & {
   relationship: Relationship
   relationship_description: string | null
   phone: string
+  phone_as_sent: string
   whatsapp: string | null
+  whatsapp_as_sent: string | null
   student_name: string
   class_name: LeadClass
   enrollment_year: number
@@ -93,7 +99,7 @@ type DetailRow = Row & {
 
 const COLUMNS =
   "id, lead_id, received_at, differing_fields, reviewed_at, lead:leads!inner(admission_number, student_name, status, closure)"
-const DETAIL_COLUMNS = `${COLUMNS}, contact_name, relationship, relationship_description, phone, whatsapp, student_name, class_name, enrollment_year, day_or_boarding`
+const DETAIL_COLUMNS = `${COLUMNS}, contact_name, relationship, relationship_description, phone, phone_as_sent, whatsapp, whatsapp_as_sent, student_name, class_name, enrollment_year, day_or_boarding`
 
 // The reviewers' names, by re-application id.
 async function reviewers(supabase: SupabaseClient, rows: Row[]): Promise<Result<Map<string, string>, "unavailable">> {
@@ -240,7 +246,9 @@ export async function getReApplication(
         relationship: data.relationship,
         relationshipDescription: data.relationship_description,
         phone: data.phone,
+        phoneAsSent: data.phone_as_sent,
         whatsapp: data.whatsapp,
+        whatsappAsSent: data.whatsapp_as_sent,
         studentName: data.student_name,
         className: data.class_name,
         enrollmentYear: data.enrollment_year,

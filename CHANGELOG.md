@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- **New Student** has an optional **Referral code** field on the student step. It names
+  the Marketing Agent as the code is typed, and Review won't go on with a code no agent
+  holds. The review shows the code and the agent's name, and the new lead carries the
+  code, with the staff member who entered it in its history.
+- If the lead is created but its referral code can't be saved, the confirmation still
+  shows the Admission Number, says the code wasn't saved, and links to the lead's
+  Referral code panel to add it.
+
 ## October 6, 2026 `v0.43.0`
 
 ### NEW

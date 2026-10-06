@@ -466,6 +466,9 @@ describe("the seeded re-applications", () => {
           `select l.admission_number, l.closure, l.returning_family_reapplied, r.reviewed_at is not null as reviewed
            from public.re_applications r join public.leads l on l.id = r.lead_id
            where l.admission_number in ('ADMSN-90301', 'ADMSN-90302', 'ADMSN-90005')
+             -- The seed's own, by their submission keys: the review tests
+             -- (#77) add more on the Archived lead.
+             and r.submission_key::text like 'f0f0f0f0-%'
            order by l.admission_number`,
         )
       ).rows,

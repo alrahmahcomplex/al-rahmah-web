@@ -47,4 +47,11 @@ describe("the staff navigation", () => {
     expect(navFor(["leads.view"])).toContain(leads)
     expect(navFor(["payments.view"])).not.toContain(leads)
   })
+
+  it("shows Re-applications to anyone who may view leads, and to no one else", () => {
+    const reApplications = STAFF_NAV.find((entry) => entry.label === "Re-applications")
+    expect(reApplications).toEqual({ href: "/staff/re-applications", label: "Re-applications", permission: "leads.view" })
+    expect(navFor(["leads.view"])).toContain(reApplications)
+    expect(navFor(["payments.view"])).not.toContain(reApplications)
+  })
 })

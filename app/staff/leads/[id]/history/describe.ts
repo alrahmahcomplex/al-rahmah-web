@@ -105,8 +105,17 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   // The entry already says who recorded the payment, and when. The request id
   // only stops a retried Confirm recording it twice.
   school_fee_payments: new Set(["lead_id", "recorded_by", "recorded_at", "request_id"]),
-  // The numbers as typed show as stored instead.
-  re_applications: new Set(["lead_id", "submission_key", "received_at", "phone_as_sent", "whatsapp_as_sent"]),
+  // The numbers as typed show as stored instead. The entry itself says who
+  // reviewed it, and when.
+  re_applications: new Set([
+    "lead_id",
+    "submission_key",
+    "received_at",
+    "phone_as_sent",
+    "whatsapp_as_sent",
+    "reviewed_at",
+    "reviewed_by",
+  ]),
   // A record's follow-ups show as their own entries; its kind and entry time
   // show in the entry itself.
   follow_up_records: new Set(["lead_id", "follow_up_id", "next_follow_up_id", "kind", "entered_at"]),
@@ -300,6 +309,7 @@ function summarize(
   if (entry.record === "lead_fee_profiles") return enrolmentProfileSummary(entry)
   if (entry.record === "school_fee_payments" && insert) return "recorded a school-fee payment"
   if (entry.record === "re_applications" && insert) return "recorded a re-application"
+  if (entry.record === "re_applications" && changed.get("reviewed_at")?.to) return "marked the re-application reviewed"
   if (entry.record === "follow_up_records") {
     if (!insert) return entry.action
     if (changed.get("kind")?.to === "closed_with_lead") return "closed the follow-up with the lead"

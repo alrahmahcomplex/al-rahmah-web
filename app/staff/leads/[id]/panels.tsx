@@ -8,6 +8,7 @@ import { DeclineSection } from "./decline-section"
 import { FamilySection } from "./family-section"
 import { FollowUpSection } from "./follow-up-section"
 import { InterviewSection } from "./interview-section"
+import { ReApplicationSection } from "./re-application-section"
 import { ReopeningSection } from "./reopening-section"
 import { ReferralSection } from "./referral-section"
 import { SchoolFeeSection } from "./school-fee-section"
@@ -48,6 +49,9 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
       />
     ),
   },
+  // Shown on a closed lead too: a re-application may arrive for one, and its
+  // review is the re-application's, not the lead's.
+  { key: "re-applications", readOnlyWhenClosed: true, Panel: ReApplicationSection },
   {
     key: "referral",
     // The code and the fee stay readable on a closed lead, without Edit or Clear.

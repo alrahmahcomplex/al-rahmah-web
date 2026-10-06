@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 6, 2026 `v0.43.0`
+
+### NEW
+
+- Staff have a **Re-applications** screen for Admission forms that named a child already
+  on file. It lists the ones nobody has reviewed yet, oldest first, with the Admission
+  Number, the student, the lead's status, when the form arrived and how many fields
+  differ from the lead. **Show reviewed** lists the ones already dealt with and who
+  reviewed each.
+- The staff menu shows how many re-applications wait for review.
+- A lead's screen lists every re-application the family has sent for that child, newest
+  first, reviewed or not.
+- Staff who may edit leads open a re-application, see what the family sent, and
+  **Mark reviewed**. It takes the re-application off the list, also works on a Declined,
+  Inactive or Archived lead, and shows in the lead's history with their name. Accountants
+  can read re-applications but not mark them.
+
 ## October 6, 2026 `v0.42.0`
 
 ### NEW

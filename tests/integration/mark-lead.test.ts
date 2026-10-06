@@ -281,6 +281,8 @@ describe("reading a lead's closure mark", () => {
           closedAt: expect.any(String),
           closedBy: ADMISSIONS.name,
         },
+        initiallyDeclined: false,
+        reopenedAfterDecline: null,
       },
     })
   })
@@ -304,7 +306,10 @@ describe("reading a lead's closure mark", () => {
       },
     })
     expect(await getLeadClosure(staff, DECLINED)).toMatchObject({ ok: true, data: { closure: null } })
-    expect(await getLeadClosure(staff, await newLead())).toEqual({ ok: true, data: { decline: null, closure: null } })
+    expect(await getLeadClosure(staff, await newLead())).toEqual({
+      ok: true,
+      data: { decline: null, closure: null, initiallyDeclined: false, reopenedAfterDecline: null },
+    })
   })
 })
 

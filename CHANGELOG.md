@@ -5,6 +5,24 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The Admissions Manager can **Approve** or **Reject** a Pending Reopening request on
+  the lead screen, with the lead's full record and history in front of them. A Manager
+  may approve a request they raised themselves.
+- Approving reopens the lead in one step. A Declined lead goes back to the status it
+  had before; a lead declined while Enrolled comes back as Interviewed. Any Inactive or
+  Archived mark is cleared, so a lead both Declined and Archived needs only one approval.
+- When the lead was declined after its interview, the Manager chooses **Retake the
+  interview** or **Enrol without a retaken interview** before approving.
+- Rejecting needs a written reason. The staff member who asked reads it on the lead,
+  with who rejected it and when.
+- A lead reopened after a decline shows **Reopened after decline** with the date and
+  the approver, and keeps an **Initially declined** tag for good, on the lead and in
+  the lead list and search results. The lead's history names each decision.
+
 ## October 6, 2026 `v0.45.0`
 
 ### NEW

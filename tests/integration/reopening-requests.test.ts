@@ -253,6 +253,9 @@ describe("withdrawing a reopening request", () => {
           decidedAt: null,
           decidedBy: null,
           rejectionReason: null,
+          enrolWithoutRetake: null,
+          leadWasDeclined: null,
+          restoredStatus: null,
         },
         decided: [
           {
@@ -266,6 +269,9 @@ describe("withdrawing a reopening request", () => {
             decidedAt: expect.any(String),
             decidedBy: ADMISSIONS.name,
             rejectionReason: null,
+            enrolWithoutRetake: null,
+            leadWasDeclined: null,
+            restoredStatus: null,
           },
         ],
       },

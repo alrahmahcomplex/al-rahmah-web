@@ -26,10 +26,13 @@ export function approvalConsequence(lead: {
   status: LeadStatus
   closure: string | null
   statusBefore: LeadStatus | null
+  visitDate: string | null
 }): string {
   const parts: string[] = []
   if (lead.status === "Declined") {
-    const before = lead.statusBefore ?? "its earlier status"
+    // A lead declined before declines recorded the earlier status goes back
+    // to the earliest status its Visit date allows, as the database decides.
+    const before = lead.statusBefore ?? (lead.visitDate ? "Visited" : "Applied")
     parts.push(
       lead.statusBefore === "Enrolled"
         ? "The lead comes back as Interviewed, and Enrolled is worked out again from its payments."

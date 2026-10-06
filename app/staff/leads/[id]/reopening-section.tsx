@@ -37,9 +37,9 @@ export async function RequestReopeningLink({ leadId }: { leadId: string }) {
 // The lead's Reopening requests: the Pending one, with Withdraw for the staff
 // member who raised it and Approve and Reject for approvers (#101, an
 // exception recorded in docs/agents/parallel-work.md), and every earlier one
-// with its outcome. Shown on a
-// closed lead, and on an open one that was reopened before. A lead that was
-// never asked about shows nothing; its banner offers Request reopening.
+// with its outcome. Shown on a closed lead, and on an open one that was
+// reopened before. A lead that was never asked about shows nothing; its
+// banner offers Request reopening.
 export async function ReopeningSection({ lead, staff }: LeadPanelProps) {
   const reopenings = await readReopenings(lead.id)
   if (reopenings.ok && !reopenings.data.pending && reopenings.data.decided.length === 0) return null
@@ -128,7 +128,7 @@ async function Decide({ lead, requestId }: { lead: Lead; requestId: string }) {
       requestId={requestId}
       studentName={lead.studentName}
       admissionNumber={lead.admissionNumber}
-      consequence={approvalConsequence({ status: lead.status, closure: lead.closure, statusBefore })}
+      consequence={approvalConsequence({ status: lead.status, closure: lead.closure, statusBefore, visitDate: lead.visitDate })}
       askRetake={lead.status === "Declined" && needsRetakeChoice(statusBefore)}
     />
   )

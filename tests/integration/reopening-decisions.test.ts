@@ -150,6 +150,18 @@ describe("approving a reopening request", () => {
     expect(await requestRow(request)).toMatchObject({ lead_was_declined: true, restored_status: "Interviewed", enrol_without_retake: true })
   })
 
+  test("a lead declined before declines recorded the earlier status goes back to Visited", async () => {
+    const lead = await openLead()
+    await asSystem((sql) =>
+      sql.query("update public.leads set status = 'Declined', declined_reason = 'Fees or cost' where id = $1", [lead]),
+    )
+    const request = await requested(lead)
+
+    expect(await approveReopeningRequest(await signedIn(MANAGER), request)).toEqual({ ok: true, data: null })
+    expect(await leadRow(lead)).toMatchObject({ status: "Visited", initially_declined: true, ...CLEARED_DECLINE })
+    expect(await requestRow(request)).toMatchObject({ lead_was_declined: true, restored_status: "Visited" })
+  })
+
   test("an Inactive or Archived lead loses its mark and keeps its status, without the tag", async () => {
     const manager = await signedIn(MANAGER)
     for (const mark of ["inactive", "archived"] as const) {

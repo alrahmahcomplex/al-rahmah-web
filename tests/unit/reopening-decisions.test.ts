@@ -36,19 +36,28 @@ describe("the retake choice", () => {
 
 describe("what approving does", () => {
   it("says where a Declined lead goes back to, Enrolled as Interviewed", () => {
-    expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: "Visited" })).toBe(
+    expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: "Visited", visitDate: "2026-09-01" })).toBe(
       "The lead goes back to Visited. Staff can work on it again.",
     )
-    expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: "Enrolled" })).toBe(
+    expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: "Enrolled", visitDate: "2026-09-01" })).toBe(
       "The lead comes back as Interviewed, and Enrolled is worked out again from its payments. Staff can work on it again.",
     )
   })
 
+  it("names the status the database falls back to when the earlier one wasn't recorded", () => {
+    expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: null, visitDate: "2026-09-01" })).toBe(
+      "The lead goes back to Visited. Staff can work on it again.",
+    )
+    expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: null, visitDate: null })).toBe(
+      "The lead goes back to Applied. Staff can work on it again.",
+    )
+  })
+
   it("says a mark is cleared, and that the status stays when the lead wasn't Declined", () => {
-    expect(approvalConsequence({ status: "Visited", closure: "Inactive", statusBefore: null })).toBe(
+    expect(approvalConsequence({ status: "Visited", closure: "Inactive", statusBefore: null, visitDate: "2026-09-01" })).toBe(
       "Its Inactive mark is cleared and its status stays. Staff can work on it again.",
     )
-    expect(approvalConsequence({ status: "Declined", closure: "Archived", statusBefore: "Applied" })).toBe(
+    expect(approvalConsequence({ status: "Declined", closure: "Archived", statusBefore: "Applied", visitDate: null })).toBe(
       "The lead goes back to Applied. Its Archived mark is cleared. Staff can work on it again.",
     )
   })

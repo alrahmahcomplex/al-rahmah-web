@@ -194,14 +194,30 @@ describe("the overdue count and paging", () => {
 
   test("a section pages 50 rows at a time, and a page past the end is empty", async () => {
     // Older than anything else in the queue, so these fill the first page.
-    const leads: string[] = []
-    for (let batch = 0; batch < 6; batch++) {
-      leads.push(...(await Promise.all(Array.from({ length: 9 }, () => newLead()))).map((lead) => lead.id))
-    }
+    // Planted in one transaction on one family, as the owner: 54 leads made
+    // through the API at once would load the database the other tests share.
     const oldest = addDays(today, -3000)
-    await asSystem((sql) =>
-      sql.query("insert into public.follow_ups (lead_id, due_on) select unnest($1::uuid[]), $2::date", [leads, oldest]),
-    )
+    const guardian = await newLead()
+    const leads = await asSystem(async (sql) => {
+      const numbers = await sql.query<{ admission_number: string }>(
+        `select format('ADMSN-%s', lpad(n::text, 5, '0')) as admission_number
+           from generate_series(0, 99999) n
+          where not exists (select 1 from public.leads l where l.admission_number = format('ADMSN-%s', lpad(n::text, 5, '0')))
+          order by random() limit 54`,
+      )
+      const planted = await sql.query<{ id: string }>(
+        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id)
+         select number, 'Paged ' || number, 'STD 4', $2, 'Day', 'Visited', $3::date,
+                (select guardian_contact_id from public.leads where id = $4)
+           from unnest($1::text[]) as number
+         returning id`,
+        [numbers.rows.map((row) => row.admission_number), thisYear + 1, today, guardian.id],
+      )
+      const ids = planted.rows.map((row) => row.id)
+      await sql.query("insert into public.follow_ups (lead_id, due_on) select unnest($1::uuid[]), $2::date", [ids, oldest])
+      return ids
+    })
+    made.push(...leads)
     const staff = await signedIn(ADMISSIONS)
 
     const first = await getFollowUpQueue(staff, { section: "overdue", page: 1 })

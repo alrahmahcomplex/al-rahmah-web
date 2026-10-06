@@ -14,6 +14,7 @@ export type StaffNavEntry = {
 export const STAFF_NAV: readonly StaffNavEntry[] = [
   { href: "/staff/check-in", label: "Check-in", permission: "leads.view" },
   { href: "/staff/leads", label: "Leads", permission: "leads.view" },
+  { href: "/staff/follow-ups", label: "Follow-ups", permission: "leads.view" },
   { href: "/staff/interviews", label: "Interviews", permission: "leads.view" },
   { href: "/staff/agents", label: "Marketing Agents", permission: "leads.view" },
   { href: "/staff/re-applications", label: "Re-applications", permission: "leads.view" },

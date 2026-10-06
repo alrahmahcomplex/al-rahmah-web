@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js"
 
+import type { LeadClass, LeadStatus } from "./leads"
 import type { Result } from "./result"
 
 // The follow-up module (slice 7, #28). A follow-up is a planned contact with
@@ -320,4 +321,146 @@ export async function listContactStaff(
     return { ok: false, error: { kind: "unavailable" } }
   }
   return { ok: true, data: ((data ?? []) as { id: string; full_name: string }[]).map((row) => ({ id: row.id, name: row.full_name })) }
+}
+
+// The Follow-ups queue (#92). Overdue holds open follow-ups whose date has
+// passed in Tanzania, oldest first; Upcoming holds those due today or later,
+// nearest first. Both leave out Declined, Enrolled and closed leads. The
+// database works out "today", the order and the paging; row-level security
+// shows the queue only to staff who may view leads.
+
+export const FOLLOW_UP_QUEUE_SECTIONS = ["overdue", "upcoming"] as const
+export type FollowUpQueueSection = (typeof FOLLOW_UP_QUEUE_SECTIONS)[number]
+
+export const FOLLOW_UP_QUEUE_PAGE_SIZE = 50
+
+// A page number past any real queue. The database refuses larger ones.
+export const LAST_FOLLOW_UP_QUEUE_PAGE = 10_000
+
+export type FollowUpQueueItem = {
+  // Every item is an open follow-up for now. #95 adds reopened leads that
+  // need a follow-up date to Overdue as a kind of their own.
+  kind: "follow_up"
+  followUpId: string
+  // YYYY-MM-DD, a calendar date in Tanzania.
+  dueOn: string
+  // How many days the date has passed; 0 in Upcoming.
+  daysOverdue: number
+  note: string | null
+  lead: {
+    id: string
+    admissionNumber: string
+    studentName: string
+    className: LeadClass
+    enrollmentYear: number
+    status: LeadStatus
+  }
+  guardian: { name: string; phone: string }
+  // The lead's latest recorded contact, if it has one.
+  lastContact: { method: ContactMethod; contactedAt: string } | null
+}
+
+export type FollowUpQueuePage = {
+  section: FollowUpQueueSection
+  items: FollowUpQueueItem[]
+  // Every item in the section, across all pages.
+  total: number
+  page: number
+  pageCount: number
+}
+
+type QueueRow = {
+  kind: "follow_up"
+  lead_id: string
+  follow_up_id: string
+  due_on: string
+  days_overdue: number
+  note: string | null
+  admission_number: string
+  student_name: string
+  class_name: LeadClass
+  enrollment_year: number
+  status: LeadStatus
+  guardian_name: string
+  guardian_phone: string
+  last_contact_method: ContactMethod | null
+  last_contacted_at: string | null
+  total: number | string
+}
+
+function toQueueItem(row: QueueRow): FollowUpQueueItem {
+  return {
+    kind: row.kind,
+    followUpId: row.follow_up_id,
+    dueOn: row.due_on,
+    daysOverdue: row.days_overdue,
+    note: row.note,
+    lead: {
+      id: row.lead_id,
+      admissionNumber: row.admission_number,
+      studentName: row.student_name,
+      className: row.class_name,
+      enrollmentYear: row.enrollment_year,
+      status: row.status,
+    },
+    guardian: { name: row.guardian_name, phone: row.guardian_phone },
+    lastContact:
+      row.last_contact_method && row.last_contacted_at
+        ? { method: row.last_contact_method, contactedAt: row.last_contacted_at }
+        : null,
+  }
+}
+
+async function readQueuePage(supabase: SupabaseClient, section: FollowUpQueueSection, page: number) {
+  const { data, error } = await supabase.rpc("follow_up_queue", { section, page })
+  return { data: (data ?? null) as QueueRow[] | null, error }
+}
+
+// One page of 50 in a section. A page past the end is empty and still says
+// how many pages there are. Anyone signed out reads an empty queue.
+export async function getFollowUpQueue(
+  supabase: SupabaseClient,
+  search: { section: FollowUpQueueSection; page: number },
+): Promise<Result<FollowUpQueuePage, "unavailable">> {
+  const page = Number.isInteger(search.page) && search.page > 0 ? Math.min(search.page, LAST_FOLLOW_UP_QUEUE_PAGE) : 1
+  const empty = { section: search.section, items: [], total: 0, page, pageCount: 1 }
+
+  let { data, error } = await readQueuePage(supabase, search.section, page)
+  // 42501: not granted, as for someone signed out.
+  if (error?.code === "42501") return { ok: true, data: empty }
+  let rows = data ?? []
+  let total = rows.length > 0 ? Number(rows[0].total) : 0
+  // Past the last page no row carries the total, so the first page tells it.
+  if (!error && rows.length === 0 && page > 1) {
+    ;({ data, error } = await readQueuePage(supabase, search.section, 1))
+    rows = []
+    total = data && data.length > 0 ? Number(data[0].total) : 0
+  }
+  if (error) {
+    console.error("Could not read the follow-up queue", error)
+    return { ok: false, error: "unavailable" }
+  }
+
+  return {
+    ok: true,
+    data: {
+      section: search.section,
+      items: rows.map(toQueueItem),
+      total,
+      page,
+      pageCount: Math.max(1, Math.ceil(total / FOLLOW_UP_QUEUE_PAGE_SIZE)),
+    },
+  }
+}
+
+// How many items Overdue holds, for the nav badge. Zero for anyone signed
+// out or without leads.view.
+export async function getOverdueCount(supabase: SupabaseClient): Promise<Result<number, "unavailable">> {
+  const { data, error } = await supabase.rpc("follow_up_overdue_count")
+  if (error?.code === "42501") return { ok: true, data: 0 }
+  if (error) {
+    console.error("Could not count the overdue follow-ups", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: Number(data ?? 0) }
 }

@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Staff have a **Follow-ups** screen with every planned contact in two lists.
+  **Overdue** holds follow-ups whose date has passed, oldest first. **Upcoming** shows
+  today's follow-ups under **Today**, then later ones, nearest first. Each row shows the
+  student, class, enrollment year, status, the date and how many days it is overdue, the
+  note, the last contact, and the parent or guardian with a phone number you can tap to
+  call. A row opens the lead at its Follow-ups panel.
+- The queue leaves out Declined, Inactive, Archived and Enrolled leads. A lead that
+  drops back out of Enrolled comes back with its old follow-up.
+- The staff menu shows how many follow-ups are overdue.
+
 ## October 6, 2026 `v0.44.0`
 
 ### NEW

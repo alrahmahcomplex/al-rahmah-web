@@ -128,9 +128,16 @@ function Records({ records, followUps }: { records: FollowUpRecord[]; followUps:
                 <p className="break-words whitespace-pre-line text-slate-900">{record.comment}</p>
               </>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                <time dateTime={record.enteredAt}>{formatContactTime(record.enteredAt)}</time>
-              </p>
+              // A follow-up that closed with its lead: the date it was planned
+              // for, and when the lead closed.
+              <>
+                {record.followUpId && dueOn.get(record.followUpId) && (
+                  <p className="font-medium text-slate-900">Planned for {formatDate(dueOn.get(record.followUpId)!)}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  <time dateTime={record.enteredAt}>{formatContactTime(record.enteredAt)}</time>
+                </p>
+              </>
             )}
             <p className="text-xs text-slate-700">
               {recordOutcomeText(record, record.nextFollowUpId ? (dueOn.get(record.nextFollowUpId) ?? null) : null)}

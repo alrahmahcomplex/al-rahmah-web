@@ -7,7 +7,8 @@
 --   ADMSN-90002 Baraka Fixture   due 4 days ago (overdue)
 --   ADMSN-90003 Neema Fixture    due today
 --   ADMSN-90004 Salma Fixture    due in 7 days, moved there from 3 days ahead
---   ADMSN-90005 Hamisi Fixture   Archived, with a follow-up planned before it closed
+--   ADMSN-90005 Hamisi Fixture   Archived, with a follow-up planned before it
+--                                closed and closed with the lead (#93)
 --
 -- And the contacts recorded on them (#91):
 --
@@ -55,5 +56,12 @@ insert into public.follow_up_records (
         'The father messaged to ask about the interview fee. Told him the amount and the dates.',
         'WhatsApp', 'a1a1a1a1-0000-4000-8000-000000000003', now() - interval '5 days', now() - interval '5 days',
         'f0110000-0000-4000-8000-000000000003');
+
+-- Hamisi's follow-up, closed when the lead was archived. 00_base.sql closes
+-- the lead before this file plants the follow-up, so the trigger that closes
+-- a follow-up with its lead never saw it: the record is planted too.
+insert into public.follow_up_records (id, lead_id, follow_up_id, kind, cause, entered_at) values
+    ('f0120000-0000-4000-8000-000000000005', '1ead0000-0000-4000-8000-000000000005',
+        'f0110000-0000-4000-8000-000000000005', 'closed_with_lead', 'archived', now() - interval '25 days');
 
 commit;

@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 8, 2026 `v0.47.0`
+
+### IMPROVED
+
+- When a lead is declined, or marked Inactive or Archived, its planned follow-up now
+  closes with it. The lead's Follow-ups panel shows the date it was planned for as
+  **Closed with the lead**, with the reason, and the lead's history says who closed it.
+  Leads that closed before this change have their follow-ups closed the same way.
+
 ## October 8, 2026 `v0.46.0`
 
 ### NEW

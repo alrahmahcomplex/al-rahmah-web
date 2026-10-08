@@ -90,7 +90,7 @@ const LABELS: Record<string, string> = {
   contacted_at: "Contacted at",
   comment: "Comment",
   outcome: "Outcome",
-  cause: "Closed because",
+  cause: "Closed with the lead",
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
@@ -128,10 +128,11 @@ const OUTCOMES: Record<string, string> = {
   lead_declined: "The family will not proceed: lead declined",
 }
 
+// Why a follow-up closed with its lead, as the Follow-ups panel says it.
 const CAUSES: Record<string, string> = {
-  declined: "The lead was declined",
-  inactive: "The lead was marked Inactive",
-  archived: "The lead was archived",
+  declined: "Declined",
+  inactive: "Inactive",
+  archived: "Archived",
 }
 
 const CONTACT_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Dar_es_Salaam" })

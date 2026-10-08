@@ -43,11 +43,11 @@ describe("Leads by enrollment class", () => {
     expect(counts.classes.map((row) => row.className)).toEqual([...LEAD_CLASSES])
     expect(counts.classes.map((row) => row.count)).toEqual([
       1, // DAY CARE
-      1, // KG 1
+      2, // KG 1
       1, // KG 2
       3, // STD 1
       1, // STD 2
-      1, // STD 3
+      2, // STD 3
       1, // STD 4
       1, // STD 5
       1, // STD 6
@@ -57,7 +57,7 @@ describe("Leads by enrollment class", () => {
       0, // FORM 3
       0, // FORM 4
     ])
-    expect(counts.total).toBe(14)
+    expect(counts.total).toBe(16)
   })
 
   test("the database lists the class enum in its declared order, so the module's class list matches it", async () => {
@@ -119,14 +119,14 @@ describe("Leads by enrollment class", () => {
   test("Year is the calendar year", async () => {
     const manager = await signedIn(MANAGER)
     expect(nonZero(await byClass(manager, year("2025-12-31")))).toEqual({ "DAY CARE": 1 })
-    expect((await byClass(manager, year("2026-01-01"))).total).toBe(13)
+    expect((await byClass(manager, year("2026-01-01"))).total).toBe(15)
     expect((await byClass(manager, year("2024-06-15"))).total).toBe(0)
   })
 
   test("every role that may view leads sees the same counts", async () => {
     for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT]) {
       const supabase = await signedIn(person)
-      expect((await byClass(supabase, { kind: "all" })).total).toBe(14)
+      expect((await byClass(supabase, { kind: "all" })).total).toBe(16)
       expect((await byClass(supabase, week("2026-09-21"))).total).toBe(5)
     }
   })
@@ -222,7 +222,7 @@ describe("who may read Leads by enrollment class", () => {
 
   test("reading it writes nothing to the audit history", async () => {
     const reader = await createThrowawayStaff(["leads.view"])
-    expect((await byClass(await signedIn(reader), { kind: "all" })).total).toBe(14)
+    expect((await byClass(await signedIn(reader), { kind: "all" })).total).toBe(16)
 
     const rows = await asSystem(async (sql) =>
       (await sql.query("select 1 from public.audit_log where actor_staff_id = $1", [reader.id])).rowCount,

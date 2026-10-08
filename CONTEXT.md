@@ -241,6 +241,8 @@ All dashboard metrics show overall totals by default. Each metric provides a fil
 
 The reporting period says when something happened, in calendar terms and Tanzania time; a week starts on Monday. Each metric counts by its own date: **Visited leads** by **Visit date**, **Interviewed leads**, **Passed interviews** and **Failed interviews** by interview date, **Enrolled students** by the date **Enrolled** was triggered, and **Leads by enrollment class** by the date the lead was created. A separate **Enrollment year** filter on every metric says which intake is counted, because one intake's visits run into the next's.
 
+**Interviewed leads** counts children: a child who sat a retaken interview in the same period counts once. **Passed interviews** and **Failed interviews** count sittings, so a retake counts as an interview of its own. An interview counts only once its result is recorded, and whether its fee is paid makes no difference.
+
 Every panel opens on **All time** and **All years**, and each panel keeps its own filters, so two panels can show different periods side by side. The **Enrollment year** filter always uses the lead's current enrollment year, so one child counts in one intake on every panel.
 
 Only **Enrolled students** depends on a lead's current status. The other metrics count what happened, whatever the lead's status or closure mark is now: a lead that visited and was later **Declined** or marked **Archived** still counts in **Visited leads**.

@@ -64,6 +64,11 @@ export function releaseRefusal(error: ReleaseError): ReleaseOutcome {
         status: "refused",
         message: "None of the parent's numbers can take a WhatsApp link, so nothing was sent. Reload the page.",
       }
+    case "too_long":
+      return {
+        status: "refused",
+        message: "The names on this lead make the message too long for WhatsApp, so nothing was sent. Check the names.",
+      }
     case "unavailable":
       return { status: "refused", message: "The result could not be sent. Try again in a moment." }
   }

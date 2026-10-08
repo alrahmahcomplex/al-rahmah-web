@@ -23,8 +23,9 @@
 --
 -- Refusal codes, in the order release_result checks them: `forbidden`,
 -- `not-found`, `lead_closed` (from assert_lead_open), `not_current`,
--- `no_result`, `not_paid`, `no_whatsapp_number`; and `invalid_channel` for a
--- channel that is neither whatsapp nor sms.
+-- `no_result`, `not_paid`, `no_whatsapp_number`; then `invalid_channel` for a
+-- channel that is neither whatsapp nor sms, and `too_long` for names that
+-- would take a WhatsApp message past its length budget.
 
 insert into public.audit_action_kinds (kind, permission, scope) values
     ('result_released', 'results.send', 'lead');
@@ -79,7 +80,7 @@ declare
     offered record;
     used text;
     lead_row public.leads;
-    parent_name text;
+    contact public.guardian_contacts;
 begin
     if auth.role() is distinct from 'authenticated' or not public.has_permission('results.send') then
         raise exception 'forbidden';
@@ -90,7 +91,9 @@ begin
         raise exception 'not-found';
     end if;
 
-    perform 1 from public.leads l where l.id = target.lead for share;
+    -- Held to the end, so the lead, and below its contact, read here are the
+    -- ones the release is recorded and the message built from.
+    select * into lead_row from public.leads l where l.id = target.lead for share;
     perform public.assert_lead_open(target.lead);
 
     select i.id into current_id
@@ -111,6 +114,7 @@ begin
         raise exception 'not_paid';
     end if;
 
+    select * into contact from public.guardian_contacts c where c.id = lead_row.guardian_contact_id for share;
     select * into offered from public.result_release_channel(target.lead);
     if release_result.channel = 'whatsapp' then
         if offered.channel is distinct from 'whatsapp' then
@@ -123,8 +127,17 @@ begin
         raise exception 'invalid_channel';
     end if;
 
-    select * into lead_row from public.leads l where l.id = target.lead;
-    select c.full_name into parent_name from public.guardian_contacts c where c.id = lead_row.guardian_contact_id;
+    -- The WhatsApp message must stay within 1,000 characters (the research
+    -- budget the message module enforces), and it can't be built until this
+    -- transaction has recorded the release. So the names are bounded here,
+    -- before the record: the fixed text and the other values come to at most
+    -- 430 UTF-16 units, the student's name appears at most three times, and a
+    -- name's UTF-8 bytes are never fewer than its UTF-16 units. Realistic
+    -- names never come near it.
+    if release_result.channel = 'whatsapp'
+       and 430 + octet_length(contact.full_name) + 3 * octet_length(lead_row.student_name) > 1000 then
+        raise exception 'too_long';
+    end if;
 
     perform public.record_action('result_released', target.lead, jsonb_build_object(
         'interview_id', target.id,
@@ -139,11 +152,10 @@ begin
     return jsonb_build_object(
         'channel', release_result.channel,
         -- The number the message goes to, for the wa.me link or the SMS.
-        'phone', case when used = 'whatsapp' then offered.phone
-                      else (select c.phone from public.guardian_contacts c where c.id = lead_row.guardian_contact_id) end,
+        'phone', case when used = 'whatsapp' then contact.whatsapp else contact.phone end,
         'result', target.result,
         'score', target.score,
-        'parent_name', parent_name,
+        'parent_name', contact.full_name,
         'student_name', lead_row.student_name,
         'admission_number', lead_row.admission_number,
         'class_name', lead_row.class_name,

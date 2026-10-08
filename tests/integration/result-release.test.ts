@@ -300,6 +300,39 @@ describe("the message and the channel", () => {
   })
 })
 
+describe("the message length", () => {
+  async function renamed(parentName: string, studentName: string) {
+    const lead = await interviewedLead()
+    await asSystem(async (sql) => {
+      await sql.query("update public.leads set student_name = $2 where id = $1", [lead.leadId, studentName])
+      await sql.query(
+        "update public.guardian_contacts set full_name = $2 where id = (select guardian_contact_id from public.leads where id = $1)",
+        [lead.leadId, parentName],
+      )
+    })
+    return lead
+  }
+
+  test("100-character names still go by WhatsApp", async () => {
+    const { leadId, interviewId } = await renamed("P".repeat(100), `S${randomUUID().slice(0, 8)}`.padEnd(100, "s"))
+    const staff = await signedIn(ADMISSIONS)
+    const view = await getResultRelease(staff, leadId, OFFICE)
+    expect(view.ok && view.data.offer?.whatsappMessage?.length).toBeLessThanOrEqual(1000)
+    expect(await releaseResult(staff, interviewId, "whatsapp", OFFICE)).toMatchObject({ ok: true, data: { channel: "whatsapp" } })
+  })
+
+  test("names that would take the WhatsApp message past 1,000 characters are refused as too_long before anything is recorded", async () => {
+    const { leadId, interviewId } = await renamed("P".repeat(600), `Candidate ${randomUUID().slice(0, 8)}`)
+    const staff = await signedIn(ADMISSIONS)
+    expect(await getResultRelease(staff, leadId, OFFICE)).toMatchObject({
+      ok: true,
+      data: { blocked: null, offer: { channel: "whatsapp", whatsappMessage: null } },
+    })
+    expect(await releaseResult(staff, interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "too_long" })
+    expect(await releaseCount(interviewId)).toBe(0)
+  })
+})
+
 describe("the record", () => {
   test("the lead's history shows who sent it, by which channel, the result, score and template, and no phone number", async () => {
     const phone = mobile()

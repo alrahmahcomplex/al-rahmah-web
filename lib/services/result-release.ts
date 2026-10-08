@@ -44,7 +44,8 @@ export type ReleaseOffer = {
   whatsappPhone: string | null
   // The direct phone, for SMS.
   directPhone: string
-  // The WhatsApp message, when WhatsApp is offered.
+  // The WhatsApp message, when WhatsApp is offered. Null when the names would
+  // take it past the length budget, so it can't go by WhatsApp.
   whatsappMessage: string | null
   smsMessage: { text: string; gsm7: boolean; segments: number }
 }
@@ -174,7 +175,7 @@ export async function getResultRelease(
     const values = row as StateRow & MessageValues
     const sms = renderResultMessage(messageInput(values, "sms", officePhone))
     const whatsapp = row.channel === "whatsapp" ? renderResultMessage(messageInput(values, "whatsapp", officePhone)) : null
-    if (!sms.ok || sms.data.channel !== "sms" || (whatsapp && !whatsapp.ok)) {
+    if (!sms.ok || sms.data.channel !== "sms") {
       console.error("Could not prepare a result message")
       return { ok: false, error: "unavailable" }
     }
@@ -207,6 +208,8 @@ export type ReleaseError =
   | "no_result"
   | "not_paid"
   | "no_whatsapp_number"
+  // The names would take the WhatsApp message past its length budget.
+  | "too_long"
 
 const RELEASE_REFUSALS: ReadonlySet<string> = new Set<ReleaseError>([
   "lead_closed",
@@ -214,6 +217,7 @@ const RELEASE_REFUSALS: ReadonlySet<string> = new Set<ReleaseError>([
   "no_result",
   "not_paid",
   "no_whatsapp_number",
+  "too_long",
 ])
 
 export type ReleasedResult =

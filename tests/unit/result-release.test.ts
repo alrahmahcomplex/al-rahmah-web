@@ -102,6 +102,7 @@ describe("the Result release section's words", () => {
       "no_result",
       "not_paid",
       "no_whatsapp_number",
+      "too_long",
     ]
     for (const error of errors) {
       const outcome = releaseRefusal(error)

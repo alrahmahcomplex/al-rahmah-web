@@ -79,10 +79,16 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
   {
     key: "school-fee",
     // The fee and what was paid stay readable on a closed lead, without
-    // Record payment.
+    // Record payment. Adjust stays: it corrects history rather than
+    // continuing work (an exception recorded in docs/agents/parallel-work.md).
     readOnlyWhenClosed: true,
     Panel: ({ lead, staff, open }) => (
-      <SchoolFeeSection leadId={lead.id} staff={staff} canRecord={open && staff.permissions.includes("payments.record")} />
+      <SchoolFeeSection
+        leadId={lead.id}
+        staff={staff}
+        canRecord={open && staff.permissions.includes("payments.record")}
+        canAdjust={staff.permissions.includes("payments.record")}
+      />
     ),
   },
   {

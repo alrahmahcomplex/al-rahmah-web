@@ -1,4 +1,4 @@
-import type { LeadHistoryEntry } from "@/lib/services/audit"
+import type { LeadHistoryChange, LeadHistoryEntry } from "@/lib/services/audit"
 import type { ReopeningSource, ReopeningState } from "@/lib/services/reopening-requests"
 
 import { SOURCE_LABELS, STATE_LABELS } from "../reopening-outcome"
@@ -14,6 +14,9 @@ const LABELS: Readonly<Record<string, string>> = {
   reason: "Reason for reopening",
   state: "Request",
   rejection_reason: "Reason for rejecting",
+  enrol_without_retake: "Enrol without a retaken interview",
+  lead_was_declined: "Lead was Declined",
+  restored_status: "Status restored to",
 }
 
 // Shown by the entry itself: its lead, who acted and when.
@@ -50,4 +53,17 @@ export function reopeningSummary(entry: LeadHistoryEntry): string {
     default:
       return "changed the reopening request"
   }
+}
+
+// The lead's own entry when an approval reopens it (#101): the decline
+// cleared, the closure mark cleared, or both. Null for any other change.
+export function reopenedLeadSummary(changed: ReadonlyMap<string, LeadHistoryChange>): string | null {
+  const status = changed.get("status")
+  const fromDeclined = status?.from === "Declined" && status.to !== "Declined"
+  const closure = changed.get("closure")
+  const mark = closure && closure.from !== null && closure.to === null ? String(closure.from) : null
+  if (fromDeclined && mark) return `reopened the lead from Declined and ${mark}`
+  if (fromDeclined) return "reopened the lead from Declined"
+  if (mark) return `reopened the lead from ${mark}`
+  return null
 }

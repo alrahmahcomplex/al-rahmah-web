@@ -12,7 +12,7 @@ import {
   enrolmentValue,
   type EnrolmentCauses,
 } from "./enrolment-history"
-import { REOPENING_HIDDEN, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
+import { REOPENING_HIDDEN, reopenedLeadSummary, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
 
 // A lead's history entry in plain words: who, what they did, and each field's
 // old and new value. A field, table or action kind this file does not know
@@ -44,6 +44,7 @@ const LABELS: Record<string, string> = {
   status_before_decline: "Status before decline",
   closure_reason: "Closure reason",
   closure_note: "Closure note",
+  initially_declined: "Initially declined",
   visit_date: "Visit date",
   guardian_contact_id: "Parent or guardian",
   returning_family_joined: "Returning family: joined a Family",
@@ -244,6 +245,8 @@ function summarize(
     if (entry.action !== "update") return entry.action
 
     const status = changed.get("status")
+    const reopened = reopenedLeadSummary(changed)
+    if (reopened) return reopened
     if (status?.from === "Applied" && status.to === "Visited") return "recorded a visit"
     // The first interview result moves the lead on.
     if (status?.from === "Visited" && status.to === "Interviewed") return "moved the lead to Interviewed"

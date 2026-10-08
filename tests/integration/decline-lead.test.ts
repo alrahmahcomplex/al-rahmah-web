@@ -250,6 +250,8 @@ describe("reading a lead's decline", () => {
           statusBefore: "Visited",
         },
         closure: null,
+        initiallyDeclined: false,
+        reopenedAfterDecline: null,
       },
     })
   })
@@ -266,7 +268,10 @@ describe("reading a lead's decline", () => {
       data: { decline: { reason: "Family changed plans", declinedAt: null, declinedBy: null } },
     })
     expect(await getLeadClosure(staff, ARCHIVED)).toMatchObject({ ok: true, data: { decline: null } })
-    expect(await getLeadClosure(staff, await newLead())).toEqual({ ok: true, data: { decline: null, closure: null } })
+    expect(await getLeadClosure(staff, await newLead())).toEqual({
+      ok: true,
+      data: { decline: null, closure: null, initiallyDeclined: false, reopenedAfterDecline: null },
+    })
   })
 
   test("is refused to visitors who are not signed in, and a missing lead is not found", async () => {

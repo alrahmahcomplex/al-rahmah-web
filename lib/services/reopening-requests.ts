@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { LeadStatus } from "./leads"
 import type { Result } from "./result"
 
 // Reopening requests (slice 8, #27): part of the lead closure module, kept in
 // its own file. Staff raise a request on a Declined, Inactive or Archived
-// lead, and the requester may withdraw it while it is Pending. #100 adds the
-// approver's decisions. Every write is a database function that checks the
+// lead, the requester may withdraw it while it is Pending, and an approver
+// approves or rejects it (#101). Every write is a database function that checks the
 // permission and the rules itself, so these calls only translate what the
 // database answers.
 
@@ -110,6 +111,80 @@ export async function withdrawReopeningRequest(
 }
 
 // ---------------------------------------------------------------------------
+// Approving and rejecting a request (#101).
+// ---------------------------------------------------------------------------
+
+// The statuses before a decline that ask the approver whether the lead
+// retakes its interview or enrols without one.
+export const RETAKE_CHOICE_STATUSES = ["Interviewed", "Enrolled"] as const satisfies readonly LeadStatus[]
+
+// Whether approving a lead declined from `statusBefore` needs the retake
+// choice. Null means the lead is not Declined.
+export function needsRetakeChoice(statusBefore: LeadStatus | null): boolean {
+  return statusBefore !== null && (RETAKE_CHOICE_STATUSES as readonly LeadStatus[]).includes(statusBefore)
+}
+
+export type DecisionError =
+  | CommonError
+  // A missing or unwanted retake choice, or a rejection without a reason or
+  // with one too long.
+  | "invalid"
+  // The request was already withdrawn or decided.
+  | "not-pending"
+
+function decisionError(error: { message: string; code?: string }, doing: string): DecisionError {
+  if (error.message === "not_permitted" || error.code === "42501") return "forbidden"
+  if (error.message === "not_found" || error.code === "22P02") return "not-found"
+  if (error.message === "invalid") return "invalid"
+  if (error.message === "not_pending") return "not-pending"
+  console.error(`Could not ${doing} a reopening request`, error)
+  return "unavailable"
+}
+
+export type ApproveInput = {
+  // Required when the lead was declined from Interviewed or Enrolled: true
+  // to enrol without a retaken interview, false to retake it. Left out
+  // otherwise.
+  enrolWithoutRetake?: boolean
+}
+
+// Approves a Pending request and reopens its lead: a Declined lead back to
+// its status before the decline (Interviewed in place of Enrolled), any
+// closure mark cleared. Needs reopenings.approve. The same approval sent
+// again by the same approver succeeds without changing anything.
+export async function approveReopeningRequest(
+  supabase: SupabaseClient,
+  requestId: string,
+  { enrolWithoutRetake }: ApproveInput = {},
+): Promise<Result<null, DecisionError>> {
+  const { error } = await supabase.rpc("approve_reopening_request", {
+    request_id: requestId,
+    enrol_without_retake: enrolWithoutRetake ?? null,
+  })
+  if (!error) return { ok: true, data: null }
+  return { ok: false, error: decisionError(error, "approve") }
+}
+
+export type RejectInput = {
+  // Why, for the requester to read on the lead. Required; blank counts as
+  // none.
+  reason: string
+}
+
+// Rejects a Pending request with a written reason; the lead stays closed.
+// Needs reopenings.approve. The same rejection sent again by the same
+// approver succeeds without changing anything.
+export async function rejectReopeningRequest(
+  supabase: SupabaseClient,
+  requestId: string,
+  { reason }: RejectInput,
+): Promise<Result<null, DecisionError>> {
+  const { error } = await supabase.rpc("reject_reopening_request", { request_id: requestId, reason })
+  if (!error) return { ok: true, data: null }
+  return { ok: false, error: decisionError(error, "reject") }
+}
+
+// ---------------------------------------------------------------------------
 // A lead's requests.
 // ---------------------------------------------------------------------------
 
@@ -128,6 +203,11 @@ export type ReopeningRequest = {
   decidedAt: string | null
   decidedBy: string | null
   rejectionReason: string | null
+  // Set on approval: the retake choice (null when it didn't apply), whether
+  // the lead was Declined, and the status it came back with.
+  enrolWithoutRetake: boolean | null
+  leadWasDeclined: boolean | null
+  restoredStatus: LeadStatus | null
 }
 
 export type LeadReopenings = {
@@ -151,6 +231,9 @@ type RequestRow = {
   decided_at: string | null
   decided_by: string | null
   rejection_reason: string | null
+  enrol_without_retake: boolean | null
+  lead_was_declined: boolean | null
+  restored_status: LeadStatus | null
 }
 
 // The lead's Pending request and every earlier one, for staff who may view
@@ -179,6 +262,9 @@ export async function getLeadReopenings(
       decidedAt: row.decided_at,
       decidedBy: row.decided_by,
       rejectionReason: row.rejection_reason,
+      enrolWithoutRetake: row.enrol_without_retake ?? null,
+      leadWasDeclined: row.lead_was_declined ?? null,
+      restoredStatus: row.restored_status ?? null,
     }),
   )
   // Requests leave Pending in the order they were raised, so newest raised is

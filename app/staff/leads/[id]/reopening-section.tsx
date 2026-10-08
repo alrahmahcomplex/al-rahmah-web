@@ -1,13 +1,17 @@
 import Link from "next/link"
-import { cache } from "react"
+import { cache, type ReactNode } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
-import { getLeadReopenings, type ReopeningRequest } from "@/lib/services/reopening-requests"
+import { getLeadClosure } from "@/lib/services/lead-closure"
+import type { Lead } from "@/lib/services/leads"
+import { getLeadReopenings, needsRetakeChoice, type ReopeningRequest } from "@/lib/services/reopening-requests"
 import { createClient } from "@/utils/supabase/server"
 
+import { DecideReopening } from "./decide-reopening"
 import type { LeadPanelProps } from "./panels"
+import { approvalConsequence, canDecideReopening, retakeChoiceText } from "./reopening-decision-outcome"
 import { canRaiseReopening, dayOf, SOURCE_LABELS, STATE_LABELS } from "./reopening-outcome"
 import { WithdrawReopening } from "./withdraw-reopening"
 
@@ -31,9 +35,11 @@ export async function RequestReopeningLink({ leadId }: { leadId: string }) {
 }
 
 // The lead's Reopening requests: the Pending one, with Withdraw for the staff
-// member who raised it, and every earlier one with its outcome. Shown on a
-// closed lead, and on an open one that was reopened before. A lead that was
-// never asked about shows nothing; its banner offers Request reopening.
+// member who raised it and Approve and Reject for approvers (#101, an
+// exception recorded in docs/agents/parallel-work.md), and every earlier one
+// with its outcome. Shown on a closed lead, and on an open one that was
+// reopened before. A lead that was never asked about shows nothing; its
+// banner offers Request reopening.
 export async function ReopeningSection({ lead, staff }: LeadPanelProps) {
   const reopenings = await readReopenings(lead.id)
   if (reopenings.ok && !reopenings.data.pending && reopenings.data.decided.length === 0) return null
@@ -55,6 +61,7 @@ export async function ReopeningSection({ lead, staff }: LeadPanelProps) {
               mine={reopenings.data.pending.requestedById === staff.id}
               canWithdraw={canRaiseReopening(staff.permissions)}
               leadId={lead.id}
+              decide={canDecideReopening(staff.permissions) ? <Decide lead={lead} requestId={reopenings.data.pending.id} /> : null}
             />
           )}
           {reopenings.data.decided.length > 0 && (
@@ -78,11 +85,14 @@ function PendingRequest({
   mine,
   canWithdraw,
   leadId,
+  decide,
 }: {
   request: ReopeningRequest
   mine: boolean
   canWithdraw: boolean
   leadId: string
+  // Approve and Reject, for approvers.
+  decide: ReactNode
 }) {
   return (
     <div role="group" className="flex flex-col gap-2" aria-label="Pending reopening request">
@@ -99,7 +109,28 @@ function PendingRequest({
           <WithdrawReopening leadId={leadId} requestId={request.id} />
         </div>
       )}
+      {decide}
     </div>
+  )
+}
+
+// Approve and Reject, with what approving does to this lead. The retake
+// choice is asked when the lead was declined from Interviewed or Enrolled.
+async function Decide({ lead, requestId }: { lead: Lead; requestId: string }) {
+  const closure = await getLeadClosure(await createClient(), lead.id)
+  if (!closure.ok) {
+    return <p className="text-sm text-destructive">Approve and Reject could not be loaded. Reload the page to try again.</p>
+  }
+  const statusBefore = closure.data.decline?.statusBefore ?? null
+  return (
+    <DecideReopening
+      leadId={lead.id}
+      requestId={requestId}
+      studentName={lead.studentName}
+      admissionNumber={lead.admissionNumber}
+      consequence={approvalConsequence({ status: lead.status, closure: lead.closure, statusBefore, visitDate: lead.visitDate })}
+      askRetake={lead.status === "Declined" && needsRetakeChoice(statusBefore)}
+    />
   )
 }
 
@@ -113,6 +144,7 @@ function EarlierRequest({ request }: { request: ReopeningRequest }) {
   return (
     <li className="flex flex-col gap-0.5">
       <span className="text-slate-900">{outcome}</span>
+      {request.state === "approved" && <ApprovedEffect request={request} />}
       <span className="text-xs text-muted-foreground">
         Requested by {request.requestedBy} on {dayOf(request.requestedAt)}
       </span>
@@ -123,5 +155,20 @@ function EarlierRequest({ request }: { request: ReopeningRequest }) {
         </span>
       )}
     </li>
+  )
+}
+
+// What an approval did: the status the lead came back with, and the retake
+// choice when it applied.
+function ApprovedEffect({ request }: { request: ReopeningRequest }) {
+  const retake = retakeChoiceText(request.enrolWithoutRetake)
+  const restored = request.leadWasDeclined
+    ? `Reopened from Declined as ${request.restoredStatus}`
+    : `Reopened as ${request.restoredStatus}`
+  return (
+    <span className="text-xs text-muted-foreground">
+      {restored}
+      {retake ? `. ${retake}.` : "."}
+    </span>
   )
 }

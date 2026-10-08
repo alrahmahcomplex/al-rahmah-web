@@ -93,6 +93,7 @@ describe("searching by Admission Number", () => {
           closure: "Archived",
           // Re-applied for (supabase/seeds/30_admission_form.sql).
           returningFamily: true,
+          initiallyDeclined: false,
           createdAt: expect.any(String),
         },
       ])

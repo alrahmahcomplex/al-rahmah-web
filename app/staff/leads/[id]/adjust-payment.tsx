@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition, type RefObject } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -70,6 +70,11 @@ export function AdjustPayment({
   const [open, setOpen] = useState(false)
   const [openedOn, setOpenedOn] = useState(today)
   const [saved, setSaved] = useState<string | null>(null)
+  // Kept here rather than in the form, so closing and reopening the dialog
+  // after a lost response still retries with the same id, and the dialog
+  // can't be closed while a Save is on its way.
+  const sentRef = useRef<SentAdjustment | null>(null)
+  const [saving, setSaving] = useState(false)
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -87,7 +92,7 @@ export function AdjustPayment({
       </Button>
       {/* Only once there is something to say: every payment has its own. */}
       {saved && <Saved message={saved} />}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(next) => (next || !saving) && setOpen(next)}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
           {open && (
             <AdjustForm
@@ -96,7 +101,10 @@ export function AdjustPayment({
               original={original}
               effective={effective}
               today={openedOn}
+              sentRef={sentRef}
+              onSaving={setSaving}
               onDone={(message) => {
+                sentRef.current = null
                 setOpen(false)
                 setSaved(message)
               }}
@@ -109,12 +117,18 @@ export function AdjustPayment({
   )
 }
 
+// One id per adjustment as typed, so a Save retried after a lost response
+// saves it once, and a changed adjustment gets an id of its own.
+type SentAdjustment = { key: string; requestId: string }
+
 function AdjustForm({
   leadId,
   paymentId,
   original,
   effective,
   today,
+  sentRef,
+  onSaving,
   onDone,
   onCancel,
 }: {
@@ -123,6 +137,8 @@ function AdjustForm({
   original: PaymentValues
   effective: PaymentValues | null
   today: string
+  sentRef: RefObject<SentAdjustment | null>
+  onSaving: (saving: boolean) => void
   onDone: (message: string) => void
   onCancel: () => void
 }) {
@@ -137,9 +153,7 @@ function AdjustForm({
   const [note, setNote] = useState("")
   const [refusal, setRefusal] = useState<AdjustmentRefusal | null>(null)
   const [pending, startTransition] = useTransition()
-  // One id per adjustment as typed, so a Save retried after a lost response
-  // saves it once, and a changed adjustment gets an id of its own.
-  const sent = useRef<{ key: string; requestId: string } | null>(null)
+  useEffect(() => onSaving(pending), [pending, onSaving])
   const invalid = (field: AdjustmentField) => (refusal?.field === field ? true : undefined)
   const voiding = reason === VOID_REASON
   const waived = type === "fee_waived"
@@ -159,8 +173,8 @@ function AdjustForm({
           note: note.trim() || null,
         }
     const key = JSON.stringify(input)
-    if (sent.current?.key !== key) sent.current = { key, requestId: crypto.randomUUID() }
-    const { requestId } = sent.current
+    if (sentRef.current?.key !== key) sentRef.current = { key, requestId: crypto.randomUUID() }
+    const { requestId } = sentRef.current
     startTransition(async () => {
       try {
         const outcome = await adjustSchoolFeePayment(leadId, paymentId, input, requestId)

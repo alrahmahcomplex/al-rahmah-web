@@ -44,8 +44,8 @@ export type ReleaseOffer = {
   whatsappPhone: string | null
   // The direct phone, for SMS.
   directPhone: string
-  // The WhatsApp message, when WhatsApp is offered. Null when the names would
-  // take it past the length budget, so it can't go by WhatsApp.
+  // The WhatsApp message, when WhatsApp is offered. Null when the names could
+  // take it past the length budget, which release_result refuses as too_long.
   whatsappMessage: string | null
   smsMessage: { text: string; gsm7: boolean; segments: number }
 }
@@ -83,6 +83,9 @@ type StateRow = Partial<MessageValues> & {
   can_send: boolean
   channel?: ResultChannel
   whatsapp_phone?: string | null
+  // Whether the names keep the WhatsApp message within its length budget, as
+  // release_result will judge it.
+  whatsapp_fits?: boolean
   direct_phone?: string
 }
 
@@ -174,7 +177,8 @@ export async function getResultRelease(
   if (row.blocked === null && row.can_send && row.channel && row.direct_phone) {
     const values = row as StateRow & MessageValues
     const sms = renderResultMessage(messageInput(values, "sms", officePhone))
-    const whatsapp = row.channel === "whatsapp" ? renderResultMessage(messageInput(values, "whatsapp", officePhone)) : null
+    const whatsapp =
+      row.channel === "whatsapp" && row.whatsapp_fits ? renderResultMessage(messageInput(values, "whatsapp", officePhone)) : null
     if (!sms.ok || sms.data.channel !== "sms") {
       console.error("Could not prepare a result message")
       return { ok: false, error: "unavailable" }

@@ -210,7 +210,8 @@ describe("who may send", () => {
           `select f as fn, has_function_privilege('anon', f, 'execute') as anon,
                   has_function_privilege('authenticated', f, 'execute') as authenticated
            from unnest(array['public.release_result(uuid, text)', 'public.result_releases(uuid)',
-                             'public.result_release_state(uuid)', 'public.result_release_channel(uuid)']) f`,
+                             'public.result_release_state(uuid)', 'public.result_release_channel(uuid)',
+                             'public.result_message_fits(text, text)']) f`,
         )
       ).rows,
     )
@@ -219,6 +220,7 @@ describe("who may send", () => {
       { fn: "public.result_releases(uuid)", anon: false, authenticated: true },
       { fn: "public.result_release_state(uuid)", anon: false, authenticated: true },
       { fn: "public.result_release_channel(uuid)", anon: false, authenticated: false },
+      { fn: "public.result_message_fits(text, text)", anon: false, authenticated: false },
     ])
   })
 })
@@ -330,6 +332,18 @@ describe("the message length", () => {
     })
     expect(await releaseResult(staff, interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "too_long" })
     expect(await releaseCount(interviewId)).toBe(0)
+  })
+
+  test("the preview never offers a message the release would refuse", async () => {
+    // Close to the bound: within 1,000 characters once rendered, but past the
+    // conservative check, so neither the preview nor the release offers it.
+    const { leadId, interviewId } = await renamed("P".repeat(250), `S${randomUUID().slice(0, 8)}`.padEnd(110, "s"))
+    const staff = await signedIn(ADMISSIONS)
+    expect(await getResultRelease(staff, leadId, OFFICE)).toMatchObject({
+      ok: true,
+      data: { offer: { channel: "whatsapp", whatsappMessage: null } },
+    })
+    expect(await releaseResult(staff, interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "too_long" })
   })
 })
 

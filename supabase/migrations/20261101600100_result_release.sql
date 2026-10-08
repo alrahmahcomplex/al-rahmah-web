@@ -60,6 +60,29 @@ $$;
 revoke execute on function public.result_release_channel(uuid) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
+-- result_message_fits: whether a WhatsApp message with these names stays
+-- within 1,000 characters (the research budget the message module enforces).
+-- release_result must decide before it records the release, and the message
+-- is built only afterwards, so this bounds it from the names: the fixed text
+-- and the other values come to at most 430 UTF-16 units, the student's name
+-- appears at most three times, and a name's UTF-8 bytes are never fewer than
+-- its UTF-16 units. Names that pass always render; realistic names never come
+-- near the limit. The preview asks the same question, so it never offers a
+-- message the release would refuse.
+-- ---------------------------------------------------------------------------
+
+create function public.result_message_fits(parent_name text, student_name text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+    select 430 + octet_length(parent_name) + 3 * octet_length(student_name) <= 1000;
+$$;
+
+revoke execute on function public.result_message_fits(text, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- release_result: needs results.send, which only active staff on a current
 -- role hold. Only the lead's current interview (its newest registration) is
 -- sendable, so after a retake the earlier result never goes out. The lead is
@@ -127,15 +150,8 @@ begin
         raise exception 'invalid_channel';
     end if;
 
-    -- The WhatsApp message must stay within 1,000 characters (the research
-    -- budget the message module enforces), and it can't be built until this
-    -- transaction has recorded the release. So the names are bounded here,
-    -- before the record: the fixed text and the other values come to at most
-    -- 430 UTF-16 units, the student's name appears at most three times, and a
-    -- name's UTF-8 bytes are never fewer than its UTF-16 units. Realistic
-    -- names never come near it.
     if release_result.channel = 'whatsapp'
-       and 430 + octet_length(contact.full_name) + 3 * octet_length(lead_row.student_name) > 1000 then
+       and not public.result_message_fits(contact.full_name, lead_row.student_name) then
         raise exception 'too_long';
     end if;
 
@@ -289,6 +305,7 @@ begin
         'channel', offered.channel,
         'number_used', offered.number_used,
         'whatsapp_phone', case when offered.channel = 'whatsapp' then offered.phone end,
+        'whatsapp_fits', public.result_message_fits(contact.full_name, lead_row.student_name),
         'direct_phone', contact.phone,
         'result', current_row.result,
         'score', current_row.score,

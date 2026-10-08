@@ -199,7 +199,7 @@ describe("follow-ups in the lead's history", () => {
     expect(described[0].changes).toContainEqual({ label: "Made the contact", from: null, to: "gone" })
     expect(described[1]).toMatchObject({
       summary: "closed the follow-up with the lead",
-      changes: [{ label: "Closed because", from: null, to: "The lead was archived" }],
+      changes: [{ label: "Closed with the lead", from: null, to: "Archived" }],
     })
   })
 })
@@ -246,5 +246,7 @@ describe("recording a contact", () => {
     expect(recordOutcomeText({ kind: "contact", outcome: "next_date", cause: null }, "2026-10-11")).toBe("Next follow-up: 11 Oct 2026")
     expect(recordOutcomeText({ kind: "contact", outcome: "lead_enrolled", cause: null }, null)).toBe("No next date: the lead is Enrolled")
     expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "declined" }, null)).toBe("Closed with the lead (Declined)")
+    expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "inactive" }, null)).toBe("Closed with the lead (Inactive)")
+    expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "archived" }, null)).toBe("Closed with the lead (Archived)")
   })
 })

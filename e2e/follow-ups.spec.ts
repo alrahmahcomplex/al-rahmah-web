@@ -206,12 +206,36 @@ test.describe("the Follow-ups panel", () => {
     await expect(contacts).toContainText("Entered")
   })
 
-  test("a closed lead shows its follow-up with no actions", async ({ page }) => {
+  test("a closed lead's follow-up shows as Closed with the lead, with no actions", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${ARCHIVED}`)
-    await expect(panel(page)).toContainText("Last planned follow-up")
-    await expect(panel(page).getByLabel("Follow-up date")).toBeVisible()
+    await expect(panel(page)).toContainText("No follow-up scheduled.")
+    const contacts = panel(page).getByRole("list", { name: "Contacts" })
+    // Planned 20 days before the seed ran.
+    await expect(contacts).toContainText(/Planned for \d{1,2} \w+ \d{4}/)
+    await expect(contacts).toContainText("Closed with the lead (Archived)")
     await expect(panel(page)).not.toContainText(/Overdue|Due/)
     await expect(panel(page).getByRole("button")).toHaveCount(0)
+  })
+
+  test("a lead declined from outside the panel closes its follow-up there and in history", async ({ page }) => {
+    const lead = await newLead()
+    const planned = await scheduleFollowUp(await signedIn(ADMISSIONS), lead, { dueOn: addDays(today, 3) })
+    if (!planned.ok) throw new Error("schedule failed")
+    await asSystem((sql) =>
+      sql.query("update public.leads set status_before_decline = status, status = 'Declined', declined_reason = 'Family changed plans' where id = $1", [lead]),
+    )
+
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead}`)
+    const contacts = panel(page).getByRole("list", { name: "Contacts" })
+    await expect(contacts).toContainText(`Planned for ${formatDate(addDays(today, 3))}`)
+    await expect(contacts).toContainText("Closed with the lead (Declined)")
+    await expect(panel(page).getByRole("button")).toHaveCount(0)
+
+    await page.goto(`/staff/leads/${lead}/history`)
+    const history = page.getByRole("list", { name: "History" })
+    await expect(history.getByText("closed the follow-up with the lead")).toBeVisible()
+    await expect(history).toContainText("Closed with the lead: Declined")
   })
 })

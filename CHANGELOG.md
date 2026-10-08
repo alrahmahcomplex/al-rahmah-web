@@ -5,6 +5,24 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The interview panel on the lead screen has a **Result release** section. Once the
+  current interview has a result and its fee is **Paid**, Admissions Staff and Managers
+  see the prepared Swahili message for that result, with the parent's name, the child's
+  name, the score and the Admission Number filled in, and press **Send through
+  WhatsApp**. WhatsApp opens in a new tab addressed to the parent's WhatsApp number, or
+  their phone if they have no separate WhatsApp number, with the whole message typed in,
+  ready to send. The wording is fixed and can't be edited.
+- Until then the section says why the result can't go yet: no interview, no result, the
+  lead is closed, or the fee isn't paid, with the amount the family owes. A result from
+  an earlier interview is never sent after a retake.
+- The section shows when the result was last sent, how and by whom, such as "Sent by
+  WhatsApp on 3 Oct 2026 by Amina", and the lead's history records each release with the
+  result and score it carried. The Accountant sees this too, with no send button.
+
 ## October 8, 2026 `v0.48.0`
 
 ### NEW

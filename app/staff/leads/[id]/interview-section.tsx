@@ -8,12 +8,14 @@ import { InterviewFeeControl } from "./interview-fee"
 import { tzs } from "./interview-outcome"
 import { InterviewResultEditor } from "./interview-result"
 import { RegisterInterview } from "./register-interview"
+import { ResultReleaseSection } from "./result-release-section"
 
 // The lead's interview on the lead screen: its S/N once registered, its fee
 // and whether it is paid, its result, score and Next action once recorded.
 // Staff who record interviews on an open lead get Register for interview,
 // Record result and Correct result; the Accountant gets Mark paid and Mark
-// not paid. Everyone who may view the lead sees the panel.
+// not paid. Everyone who may view the lead sees the panel, with its Result
+// release section.
 export async function InterviewSection({
   lead,
   canRecord,
@@ -49,6 +51,8 @@ export async function InterviewSection({
         !canRegister && <p className="text-sm text-muted-foreground">Not registered for interview.</p>
       )}
       {canRecord && <RegisterInterview key={lead.id} leadId={lead.id} canRegister={canRegister} />}
+      {/* Slice 6: whether the current result can go to the family, and sending it. */}
+      {interviews.ok && <ResultReleaseSection leadId={lead.id} />}
     </section>
   )
 }

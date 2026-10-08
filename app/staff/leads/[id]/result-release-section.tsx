@@ -46,6 +46,11 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
               </div>
               <SendResultByWhatsApp key={view.data.interviewId} leadId={leadId} interviewId={view.data.interviewId} />
             </>
+          ) : view.data.offer?.channel === "whatsapp" ? (
+            <p className="text-sm text-muted-foreground">
+              The names on this lead make the message too long for WhatsApp. Check the student&apos;s and the
+              parent&apos;s names.
+            </p>
           ) : view.data.offer?.channel === "sms" ? (
             <p className="text-sm text-muted-foreground">
               None of the parent&apos;s numbers can take a WhatsApp link, so this result can&apos;t be sent by WhatsApp.

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 
+import { declinedReasonsFor } from "@/lib/services/lead-closure"
 import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 
@@ -87,13 +88,14 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
   },
   {
     key: "follow-ups",
-    // A closed lead keeps showing its follow-ups, with no actions.
+    // A closed lead keeps showing its follow-ups, with no actions. The panel
+    // also asks the database whether the lead is closed (lead_is_closed).
     readOnlyWhenClosed: true,
     Panel: ({ lead, staff, open }) => (
       <FollowUpSection
         leadId={lead.id}
-        open={open}
         canRecord={open && staff.permissions.includes("follow_ups.record")}
+        declineReasons={staff.permissions.includes("leads.decline") ? declinedReasonsFor(staff.permissions) : null}
         enrolled={lead.status === "Enrolled"}
         staff={{ id: staff.id, name: staff.name }}
       />

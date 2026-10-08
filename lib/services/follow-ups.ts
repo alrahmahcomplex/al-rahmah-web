@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js"
 
+import type { DeclinedReason } from "./lead-closure"
 import type { LeadClass, LeadStatus } from "./leads"
 import type { Result } from "./result"
 
@@ -69,6 +70,10 @@ export type FollowUpField =
   | "outcome"
   | "next_due_on"
   | "next_note"
+  // The decline outcome's reason and explanation, which slice 8's
+  // decline_lead calls `reason` and `explanation`.
+  | "decline_reason"
+  | "decline_note"
 
 export type FollowUpWriteError =
   | { kind: "forbidden" }
@@ -94,12 +99,24 @@ const FIELDS = new Set<string>([
   "outcome",
   "next_due_on",
   "next_note",
+  "decline_reason",
+  "decline_note",
 ])
 
 function invalidField(details: string | null | undefined): FollowUpField | null {
   try {
     const field = JSON.parse(details ?? "")?.field
     return typeof field === "string" && FIELDS.has(field) ? (field as FollowUpField) : null
+  } catch {
+    return null
+  }
+}
+
+// The field decline_lead refused, as this module names it.
+function declineField(details: string | null | undefined): FollowUpField | null {
+  try {
+    const field = JSON.parse(details ?? "")?.field
+    return field === "reason" ? "decline_reason" : field === "explanation" ? "decline_note" : null
   } catch {
     return null
   }
@@ -262,9 +279,14 @@ export async function changeFollowUpDate(
   return { ok: true, data: { followUpId: data as string } }
 }
 
-// What happened after a contact: the next follow-up planned, or, on an
-// Enrolled lead, no next date.
-export type RecordOutcome = { kind: "next_date"; dueOn: string; note?: string | null } | { kind: "lead_enrolled" }
+// What happened after a contact: the next follow-up planned, the lead
+// declined because the family will not proceed, or, on an Enrolled lead, no
+// next date. A decline takes a Declined reason and an explanation, required
+// for Other.
+export type RecordOutcome =
+  | { kind: "next_date"; dueOn: string; note?: string | null }
+  | { kind: "lead_declined"; reason: DeclinedReason; note?: string | null }
+  | { kind: "lead_enrolled" }
 
 export type ContactRecord = {
   // The open follow-up the contact completes, or null when none was planned.
@@ -280,15 +302,19 @@ export type ContactRecord = {
 
 // Records a contact with the family and closes the lead's open follow-up. The
 // comment is 3 to 2,000 characters; the next date is after today and at most
-// 365 days ahead, and may be left out only on an Enrolled lead. If the open
-// follow-up is no longer the one given, someone else recorded or changed it
-// first, and nothing is recorded (`conflict`). Needs follow_ups.record.
+// 365 days ahead, and may be left out only on an Enrolled lead or when the
+// lead is declined. If the open follow-up is no longer the one given, someone
+// else recorded or changed it first, and nothing is recorded (`conflict`).
+// Needs follow_ups.record. The decline outcome also needs leads.decline, and
+// academic_years.manage for No seat available; when the decline is refused,
+// the contact is not recorded either.
 export async function recordFollowUp(
   supabase: SupabaseClient,
   leadId: string,
   contact: ContactRecord,
 ): Promise<Result<{ recordId: string }, FollowUpWriteError>> {
   const next = contact.outcome.kind === "next_date" ? contact.outcome : null
+  const decline = contact.outcome.kind === "lead_declined" ? contact.outcome : null
   const { data, error } = await supabase.rpc("record_follow_up", {
     lead_id: leadId,
     follow_up_id: contact.followUpId,
@@ -299,8 +325,13 @@ export async function recordFollowUp(
     outcome: contact.outcome.kind,
     next_due_on: next?.dueOn ?? null,
     next_note: next?.note ?? null,
+    decline_reason: decline?.reason ?? null,
+    decline_note: decline?.note ?? null,
   })
   if (error) {
+    // decline_lead names its own fields; on this form they are the decline's.
+    const field = decline && error.message === "invalid" ? declineField(error.details) : null
+    if (field) return { ok: false, error: { kind: "invalid", field } }
     // A date or time Postgres can't read: the next date when one was given.
     return { ok: false, error: writeError(error, "record a follow-up", next ? "next_due_on" : "contacted_at") }
   }

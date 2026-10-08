@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest"
 
-import { addDays, dueLabel, followUpOutcome, recordedOutcome, scheduledOutcome } from "@/app/staff/leads/[id]/follow-up-outcome"
+import {
+  addDays,
+  declinedOutcome,
+  dueLabel,
+  followUpOutcome,
+  recordedOutcome,
+  scheduledOutcome,
+} from "@/app/staff/leads/[id]/follow-up-outcome"
 import {
   enteredLate,
   formatContactTime,
@@ -220,6 +227,22 @@ describe("recording a contact", () => {
     })
     expect(followUpOutcome({ kind: "forbidden" }, "record").message).toBe("Your role can't record follow-ups.")
     expect(followUpOutcome({ kind: "not-found" }, "record").message).toBe("This lead could not be found. Reload the page.")
+  })
+
+  test("a refused decline outcome says nothing was saved, in a plain sentence", () => {
+    for (const field of ["decline_reason", "decline_note"] as const) {
+      const outcome = followUpOutcome({ kind: "invalid", field }, "decline")
+      expect(outcome.message, field).toMatch(/^[A-Z].*\.$/)
+      expect(outcome.message, field).not.toMatch(/_/)
+    }
+    expect(followUpOutcome({ kind: "invalid", field: "decline_note" }, "decline").message).toBe(
+      "Write an explanation for Other, of at most 1,000 characters.",
+    )
+    expect(followUpOutcome({ kind: "forbidden" }, "decline").message).toBe(
+      "Your role can't decline this lead with that reason. Nothing was saved.",
+    )
+    expect(followUpOutcome({ kind: "conflict" }, "decline")).toMatchObject({ conflict: true })
+    expect(declinedOutcome()).toEqual({ status: "saved", message: "Follow-up recorded. The lead is declined." })
   })
 
   test("confirms the next date in words, or just the record", () => {

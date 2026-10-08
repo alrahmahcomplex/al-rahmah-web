@@ -184,14 +184,24 @@ describe("recording a contact", () => {
     expect(await getLeadFollowUps(staff, other)).toMatchObject({ ok: true, data: { open: { dueOn: addDays(today, 7) } } })
   })
 
-  test("the decline outcome is refused until the decline flow is built", async () => {
+  test("the decline outcome needs a Declined reason (follow-up-decline.test.ts covers the rest)", async () => {
     const lead = await newLead()
     const staff = await signedIn(MANAGER)
     const declined = await recordFollowUp(staff, lead, {
       ...contact(null),
       outcome: { kind: "lead_declined" } as unknown as ContactRecord["outcome"],
     })
-    expect(declined).toEqual({ ok: false, error: { kind: "invalid", field: "outcome" } })
+    expect(declined).toEqual({ ok: false, error: { kind: "invalid", field: "decline_reason" } })
+  })
+
+  test("an outcome that is none of the three is refused", async () => {
+    const lead = await newLead()
+    const staff = await signedIn(MANAGER)
+    const refused = await recordFollowUp(staff, lead, {
+      ...contact(null),
+      outcome: { kind: "lead_lost" } as unknown as ContactRecord["outcome"],
+    })
+    expect(refused).toEqual({ ok: false, error: { kind: "invalid", field: "outcome" } })
   })
 
   test("a contact time later than now is refused; an old one is kept", async () => {

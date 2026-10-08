@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useId, useState, useTransition } from "react"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 
@@ -15,10 +15,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
 import { CONTACT_METHODS, type ContactStaff } from "@/lib/services/follow-ups"
+import { DECLINE_EXPLANATION_MAX, type DeclinedReason } from "@/lib/services/lead-closure"
 
+import { DECLINE_CONSEQUENCE } from "./decline-lead"
 import { changeLeadFollowUpDate, recordLeadFollowUp, scheduleLeadFollowUp } from "./follow-up-actions"
 import { addDays, type FollowUpOutcome } from "./follow-up-outcome"
 import { tanzaniaNowLocal } from "./follow-up-record-format"
@@ -38,6 +41,7 @@ export function FollowUpActions({
   today,
   current,
   enrolled,
+  declineReasons = null,
   signedIn,
   contactStaff,
 }: {
@@ -47,6 +51,9 @@ export function FollowUpActions({
   current: { id: string; dueOn: string } | null
   // An Enrolled lead may record a contact with no next date.
   enrolled: boolean
+  // The Declined reasons this staff member may pick, offered when the family
+  // will not proceed; null leaves that outcome off.
+  declineReasons?: readonly DeclinedReason[] | null
   // The signed-in staff member, who made the contact unless they say
   // otherwise.
   signedIn: ContactStaff
@@ -114,6 +121,7 @@ export function FollowUpActions({
               today={openedOn}
               followUpId={current?.id ?? null}
               enrolled={enrolled}
+              declineReasons={declineReasons}
               signedIn={signedIn}
               contactStaff={contactStaff}
               onDone={done}
@@ -307,15 +315,19 @@ function ChangeDateForm({
 const SELECT_CLASS =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
 
+const DECLINE_OUTCOME = "The family will not proceed: decline the lead"
+
 // Record follow-up: what happened on a call, message or visit, then the next
-// follow-up date. followUpId is the open follow-up the panel showed, or null
-// for a contact nobody planned; if that has changed by the time this is
-// saved, the database refuses and the form offers a reload.
+// follow-up date, or, for staff who may decline leads, a Declined reason when
+// the family will not proceed. followUpId is the open follow-up the panel
+// showed, or null for a contact nobody planned; if that has changed by the
+// time this is saved, the database refuses and the form offers a reload.
 function RecordForm({
   leadId,
   today,
   followUpId,
   enrolled,
+  declineReasons,
   signedIn,
   contactStaff,
   onDone,
@@ -324,6 +336,7 @@ function RecordForm({
   today: string
   followUpId: string | null
   enrolled: boolean
+  declineReasons: readonly DeclinedReason[] | null
   signedIn: ContactStaff
   contactStaff: ContactStaff[] | null
   onDone: (message: string) => void
@@ -338,7 +351,11 @@ function RecordForm({
   // An Enrolled lead needs no next date, so none is suggested.
   const [nextDueOn, setNextDueOn] = useState(enrolled ? "" : addDays(today, 7))
   const [nextNote, setNextNote] = useState("")
+  const [declining, setDeclining] = useState(false)
+  const [declineReason, setDeclineReason] = useState<DeclinedReason | "">("")
+  const [declineNote, setDeclineNote] = useState("")
   const { refusal, pending, save, refuse } = useSave(onDone)
+  const outcomeName = useId()
 
   const people = contactStaff ?? [signedIn]
   const choices = people.some((person) => person.id === signedIn.id) ? people : [signedIn, ...people]
@@ -349,6 +366,21 @@ function RecordForm({
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
+        if (declining) {
+          if (declineReason === "") {
+            refuse({ status: "refused", field: "decline_reason", message: "Choose a Declined reason." })
+            return
+          }
+          if (declineReason === "Other" && declineNote.trim() === "") {
+            refuse({ status: "refused", field: "decline_note", message: "Write an explanation for Other." })
+            return
+          }
+          const decline = { reason: declineReason, note: declineNote }
+          save(() =>
+            recordLeadFollowUp(leadId, { followUpId, comment, method, contactedBy, contactedAt, nextDueOn: "", nextNote: "", decline }),
+          )
+          return
+        }
         // A page left open past midnight in Tanzania would offer a next date the
         // database now counts as today.
         if (nextDueOn && nextDueOn <= laterOf(today, tanzaniaToday())) {
@@ -445,44 +477,102 @@ function RecordForm({
           />
         )}
       </Field>
-      <Field
-        label={enrolled ? "Next follow-up date (optional)" : "Next follow-up date"}
-        hint={
-          enrolled
-            ? "The lead is Enrolled, so a next date is optional. Any day after today, up to one year ahead."
-            : "Any day after today, up to one year ahead."
-        }
-      >
-        {({ id, describedBy }) => (
-          <Input
-            id={id}
-            type="date"
-            required={!enrolled}
-            min={addDays(today, 1)}
-            max={addDays(today, 365)}
-            value={nextDueOn}
-            onChange={(event) => setNextDueOn(event.target.value)}
-            aria-describedby={describedBy}
-            aria-invalid={refusal?.field === "next_due_on" || refusal?.field === "outcome" ? true : undefined}
-          />
-        )}
-      </Field>
-      <Field label="Next follow-up note (optional)" hint="What the next contact is for. Up to 500 characters.">
-        {({ id, describedBy }) => (
-          <Textarea
-            id={id}
-            maxLength={500}
-            value={nextNote}
-            disabled={enrolled && nextDueOn === ""}
-            onChange={(event) => setNextNote(event.target.value)}
-            aria-describedby={describedBy}
-            aria-invalid={refusal?.field === "next_note" ? true : undefined}
-          />
-        )}
-      </Field>
+      {declineReasons && (
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-sm font-medium text-slate-900">Outcome</legend>
+          {([false, true] as const).map((value) => (
+            <Label key={String(value)} className="flex items-center gap-2 font-normal">
+              <input
+                type="radio"
+                name={outcomeName}
+                checked={declining === value}
+                onChange={() => setDeclining(value)}
+                className="size-4 shrink-0 accent-primary"
+              />
+              {value ? DECLINE_OUTCOME : "Plan the next follow-up"}
+            </Label>
+          ))}
+        </fieldset>
+      )}
+      {declining && declineReasons ? (
+        <>
+          <Field label="Declined reason">
+            {({ id }) => (
+              <select
+                id={id}
+                className={SELECT_CLASS}
+                value={declineReason}
+                onChange={(event) => setDeclineReason(event.target.value as DeclinedReason | "")}
+                aria-invalid={refusal?.field === "decline_reason" ? true : undefined}
+              >
+                <option value="" disabled>
+                  Choose a reason
+                </option>
+                {declineReasons.map((choice) => (
+                  <option key={choice}>{choice}</option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <Field
+            label="Explanation"
+            hint={declineReason === "Other" ? "Required for Other." : "Optional. Anything the reason alone doesn't say."}
+          >
+            {({ id, describedBy }) => (
+              <Textarea
+                id={id}
+                maxLength={DECLINE_EXPLANATION_MAX}
+                value={declineNote}
+                onChange={(event) => setDeclineNote(event.target.value)}
+                aria-describedby={describedBy}
+                aria-invalid={refusal?.field === "decline_note" ? true : undefined}
+              />
+            )}
+          </Field>
+          <p className="text-sm text-muted-foreground">{DECLINE_CONSEQUENCE}</p>
+        </>
+      ) : (
+        <>
+          <Field
+            label={enrolled ? "Next follow-up date (optional)" : "Next follow-up date"}
+            hint={
+              enrolled
+                ? "The lead is Enrolled, so a next date is optional. Any day after today, up to one year ahead."
+                : "Any day after today, up to one year ahead."
+            }
+          >
+            {({ id, describedBy }) => (
+              <Input
+                id={id}
+                type="date"
+                required={!enrolled}
+                min={addDays(today, 1)}
+                max={addDays(today, 365)}
+                value={nextDueOn}
+                onChange={(event) => setNextDueOn(event.target.value)}
+                aria-describedby={describedBy}
+                aria-invalid={refusal?.field === "next_due_on" || refusal?.field === "outcome" ? true : undefined}
+              />
+            )}
+          </Field>
+          <Field label="Next follow-up note (optional)" hint="What the next contact is for. Up to 500 characters.">
+            {({ id, describedBy }) => (
+              <Textarea
+                id={id}
+                maxLength={500}
+                value={nextNote}
+                disabled={enrolled && nextDueOn === ""}
+                onChange={(event) => setNextNote(event.target.value)}
+                aria-describedby={describedBy}
+                aria-invalid={refusal?.field === "next_note" ? true : undefined}
+              />
+            )}
+          </Field>
+        </>
+      )}
       <DialogFooter>
         <Button type="submit" disabled={pending}>
-          {pending ? "Recording…" : "Record follow-up"}
+          {pending ? "Recording…" : declining ? "Record and decline" : "Record follow-up"}
         </Button>
       </DialogFooter>
     </form>

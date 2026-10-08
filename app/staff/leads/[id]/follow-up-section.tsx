@@ -2,6 +2,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadFollowUps, listContactStaff, type FollowUp, type FollowUpRecord } from "@/lib/services/follow-ups"
+import { isLeadClosed, type DeclinedReason } from "@/lib/services/lead-closure"
 import { createClient } from "@/utils/supabase/server"
 
 import { FollowUpActions } from "./follow-up-dialogs"
@@ -12,26 +13,33 @@ import { enteredLate, formatContactTime, recordOutcomeText } from "./follow-up-r
 // follow-up scheduled", every recorded contact newest first, and every
 // earlier date with the reason it moved. Staff who hold follow_ups.record get
 // Schedule follow-up, Record follow-up and Change date on an open lead. A
-// closed lead shows its follow-ups with no actions.
+// closed lead shows its follow-ups with no actions. Whether the lead is
+// closed is the database's answer (lead_is_closed), the check its follow-up
+// writes make too; if that can't be read, the panel offers no actions.
 export async function FollowUpSection({
   leadId,
-  open,
   canRecord,
+  declineReasons = null,
   enrolled = false,
   staff,
 }: {
   leadId: string
-  open: boolean
+  // Holds follow_ups.record.
   canRecord: boolean
+  // The Declined reasons this staff member may pick when the family will not
+  // proceed; null without leads.decline, which leaves that outcome off.
+  declineReasons?: readonly DeclinedReason[] | null
   enrolled?: boolean
   // The signed-in staff member, the default for who made a contact.
   staff?: { id: string; name: string }
 }) {
   const supabase = await createClient()
-  const [followUps, contactStaff] = await Promise.all([
+  const [followUps, closed, contactStaff] = await Promise.all([
     getLeadFollowUps(supabase, leadId),
+    isLeadClosed(supabase, leadId),
     canRecord ? listContactStaff(supabase) : null,
   ])
+  const open = closed.ok && !closed.data
   const today = tanzaniaToday()
 
   return (
@@ -50,13 +58,14 @@ export async function FollowUpSection({
           ) : (
             <p className="text-sm text-muted-foreground">No follow-up scheduled.</p>
           )}
-          {canRecord && staff && (
+          {open && canRecord && staff && (
             <FollowUpActions
               key={leadId}
               leadId={leadId}
               today={today}
               current={followUps.data.open ? { id: followUps.data.open.id, dueOn: followUps.data.open.dueOn } : null}
               enrolled={enrolled}
+              declineReasons={declineReasons}
               signedIn={staff}
               contactStaff={contactStaff?.ok ? contactStaff.data : null}
             />

@@ -23,6 +23,12 @@ export function recordedOutcome(nextDueOn: string | null): FollowUpOutcome {
   }
 }
 
+// After a contact that declined the lead. The refreshed page shows the
+// closed-lead banner with the decline.
+export function declinedOutcome(): FollowUpOutcome {
+  return { status: "saved", message: "Follow-up recorded. The lead is declined." }
+}
+
 const INVALID: Record<FollowUpField, string> = {
   due_on: "Pick a date from today to one year ahead.",
   note: "Keep the note to 500 characters.",
@@ -34,11 +40,17 @@ const INVALID: Record<FollowUpField, string> = {
   outcome: "Pick the next follow-up date.",
   next_due_on: "Pick a next follow-up date after today and up to one year ahead.",
   next_note: "Keep the note to 500 characters.",
+  decline_reason: "Choose a Declined reason from the list.",
+  decline_note: "Write an explanation for Other, of at most 1,000 characters.",
 }
 
 // Turns what the follow-up module refused into a plain sentence. The codes
-// never reach the screen.
-export function followUpOutcome(error: FollowUpWriteError, action: "schedule" | "change" | "record"): FollowUpOutcome {
+// never reach the screen. `decline` is Record follow-up with the decline
+// outcome: refused, it saved neither the contact nor the decline.
+export function followUpOutcome(
+  error: FollowUpWriteError,
+  action: "schedule" | "change" | "record" | "decline",
+): FollowUpOutcome {
   switch (error.kind) {
     case "invalid":
       return {
@@ -54,7 +66,7 @@ export function followUpOutcome(error: FollowUpWriteError, action: "schedule" | 
         message:
           action === "schedule"
             ? "This lead already has a follow-up scheduled. Reload the page to see it."
-            : action === "record"
+            : action === "record" || action === "decline"
               ? "Someone else has already recorded or changed this follow-up. Nothing was saved. Reload the page to see it."
               : "This follow-up has already been changed or completed. Reload the page to see the current one.",
       }
@@ -64,7 +76,12 @@ export function followUpOutcome(error: FollowUpWriteError, action: "schedule" | 
       return {
         status: "refused",
         field: null,
-        message: action === "record" ? "Your role can't record follow-ups." : "Your role can't schedule or change follow-ups.",
+        message:
+          action === "decline"
+            ? "Your role can't decline this lead with that reason. Nothing was saved."
+            : action === "record"
+              ? "Your role can't record follow-ups."
+              : "Your role can't schedule or change follow-ups.",
       }
     case "not-found":
       return {

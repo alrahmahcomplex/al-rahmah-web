@@ -178,13 +178,13 @@ security definer
 set search_path = ''
 as $$
 declare
-    lead_id uuid;
+    interview_lead uuid;
 begin
     if not public.has_permission('leads.view') then
         raise exception 'forbidden';
     end if;
 
-    select i.lead into lead_id from public.interviews i where i.id = result_releases.interview_id;
+    select i.lead into interview_lead from public.interviews i where i.id = result_releases.interview_id;
     if not found then
         raise exception 'not-found';
     end if;
@@ -195,7 +195,7 @@ begin
            s.full_name
     from public.audit_log a
     left join public.staff_members s on s.id = a.actor_staff_id
-    where a.lead_id = result_releases.lead_id
+    where a.lead_id = interview_lead
       and a.scope = 'lead'
       and a.action = 'result_released'
       and a.new_values ->> 'interview_id' = result_releases.interview_id::text

@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- When a family says they won't go ahead, staff recording the contact can choose
+  **The family will not proceed: decline the lead** and pick a Declined reason instead
+  of a next date. The contact and the decline are saved together, or neither is. The
+  choice shows only to staff who may decline leads, and **No seat available** only to
+  staff who may set the seats. Other still needs an explanation.
+
 ## October 8, 2026 `v0.48.0`
 
 ### NEW

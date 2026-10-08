@@ -87,6 +87,20 @@ export async function declineLead(
   return { ok: false, error: "unavailable" }
 }
 
+// Whether a lead is closed (Declined, Inactive or Archived), as the database
+// answers it: the condition every lead write function checks before it
+// writes. A lead that does not exist is not closed. Needs leads.view.
+export async function isLeadClosed(
+  supabase: SupabaseClient,
+  leadId: string,
+): Promise<Result<boolean, "forbidden" | "unavailable">> {
+  const { data, error } = await supabase.rpc("lead_is_closed", { lead_id: leadId })
+  if (!error) return { ok: true, data: data === true }
+  if (error.message === "forbidden" || error.code === "42501") return { ok: false, error: "forbidden" }
+  console.error("Could not read whether a lead is closed", error)
+  return { ok: false, error: "unavailable" }
+}
+
 // ---------------------------------------------------------------------------
 // Marking a lead Inactive or Archived.
 // ---------------------------------------------------------------------------

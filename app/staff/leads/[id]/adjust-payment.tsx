@@ -85,7 +85,8 @@ export function AdjustPayment({
       >
         Adjust
       </Button>
-      <Saved message={saved} />
+      {/* Only once there is something to say: every payment has its own. */}
+      {saved && <Saved message={saved} />}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
           {open && (

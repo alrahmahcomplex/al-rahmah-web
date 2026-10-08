@@ -107,7 +107,7 @@ insert into public.leads (
     ('1ead2031-0000-4000-8000-000000000006', 'ADMSN-31006', 'Zuhura Takwimu', 'STD 5', 2031, 'Day',
         'Interviewed', null, date '2026-01-01', 'c0c02031-0000-4000-8000-000000000006', timestamptz '2026-01-01 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000007', 'ADMSN-31007', 'Rashidi Takwimu', 'STD 2', 2031, 'Day',
-        'Visited', null, date '2026-09-22', 'c0c02031-0000-4000-8000-000000000007', timestamptz '2026-09-22 09:00+03'),
+        'Interviewed', null, date '2026-09-22', 'c0c02031-0000-4000-8000-000000000007', timestamptz '2026-09-22 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000008', 'ADMSN-31008', 'Halima Takwimu', 'KG 2', 2031, 'Day',
         'Interviewed', null, date '2026-09-23', 'c0c02031-0000-4000-8000-000000000008', timestamptz '2026-09-23 09:00+03'),
     ('1ead2031-0000-4000-8000-000000000009', 'ADMSN-31009', 'Omari Takwimu', 'FORM 2', 2031, 'Boarding',

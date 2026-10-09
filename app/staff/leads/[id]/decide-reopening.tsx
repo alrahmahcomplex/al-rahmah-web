@@ -16,8 +16,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { REOPENING_REASON_MAX } from "@/lib/services/reopening-requests"
 
-import { approveReopeningAction, rejectReopeningAction } from "./reopening-decision-actions"
 import { SeatPriorityBadge } from "../seat-priority-badge"
+import { approveReopeningAction, rejectReopeningAction } from "./reopening-decision-actions"
 import { RETAKE_LABELS, type ApprovalSeats, type DecisionOutcome } from "./reopening-decision-outcome"
 
 const LOST_REQUEST: DecisionOutcome = {

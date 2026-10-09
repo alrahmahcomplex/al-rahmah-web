@@ -122,7 +122,11 @@ function PendingRequest({
 // never holds back Approve.
 async function Decide({ lead, requestId }: { lead: Lead; requestId: string }) {
   const supabase = await createClient()
-  const [closure, seats] = await Promise.all([getLeadClosure(supabase, lead.id), seatCheck(supabase, lead.id)])
+  const [closure, seats] = await Promise.all([
+    getLeadClosure(supabase, lead.id),
+    // A thrown request counts as a failed check, never as a broken panel.
+    seatCheck(supabase, lead.id).catch(() => ({ ok: false, error: "unavailable" }) as const),
+  ])
   if (!closure.ok) {
     return <p className="text-sm text-destructive">Approve and Reject could not be loaded. Reload the page to try again.</p>
   }

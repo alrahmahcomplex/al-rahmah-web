@@ -5,6 +5,22 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The Accountant can record school-fee payments on a lead the Admissions Manager
+  reopened with **Enrol without a retaken interview**, even though its interview was
+  not Passed. A lead reopened to retake the interview still can't take payments.
+- On the Seats screen, each ranked lead in an over-full class has a **Decline: No seat
+  available** link. It opens the lead's Decline with that reason already chosen.
+
+### IMPROVED
+
+- A lead declined while Enrolled and then reopened comes back as Interviewed and is
+  Enrolled again straight away if its payments still qualify. Before, it waited for the
+  next payment or fee change. The lead's history says the reopening enrolled it.
+
 ## October 9, 2026 `v0.51.0`
 
 ### NEW

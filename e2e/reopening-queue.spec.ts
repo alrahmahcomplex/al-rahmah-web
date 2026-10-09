@@ -27,11 +27,10 @@ test("the Manager sees the Pending count in the navigation and the seeded reques
   await expect(page).toHaveURL(/\/staff\/reopenings$/)
   await expect(page.getByRole("heading", { name: "Reopening requests", level: 1 })).toBeVisible()
 
-  const row = page.getByRole("table", { name: "Pending reopening requests" }).getByRole("row", { name: /ADMSN-90080/ })
-  await expect(row).toContainText("Asha Kibwana")
+  const row = page.getByRole("list", { name: "Pending reopening requests" }).getByRole("listitem", { name: "ADMSN-90080 Asha Kibwana" })
   await expect(row).toContainText("Declined")
-  await expect(row).toContainText(ADMISSIONS.name)
-  await expect(row).toContainText("Lead screen")
+  await expect(row).toContainText(new RegExp(`Requested by ${ADMISSIONS.name} on 28 Sept? 2026, 09:15\\.`))
+  await expect(row).toContainText("From the lead screen.")
   await expect(row).toContainText("The family has a new phone number and wants Asha to start in January.")
 
   await row.getByRole("link", { name: "ADMSN-90080" }).click()
@@ -46,5 +45,5 @@ test("Admissions Staff get no entry, and the page is forbidden to them", async (
 
   await page.goto("/staff/reopenings")
   await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
-  await expect(page.getByRole("table", { name: "Pending reopening requests" })).toHaveCount(0)
+  await expect(page.getByRole("list", { name: "Pending reopening requests" })).toHaveCount(0)
 })

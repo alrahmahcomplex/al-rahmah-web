@@ -16,6 +16,7 @@ import { recordInterviewResult, registerForInterview } from "@/lib/services/inte
 import { declineLead, markLead } from "@/lib/services/lead-closure"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import { createLead, getLead, type LeadClass } from "@/lib/services/leads"
+import { adjustPayment } from "@/lib/services/payment-adjustments"
 import { previewPayment, recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 
 import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
@@ -338,6 +339,31 @@ describe("Fee waived", () => {
     })
 
     expect(await pay(id, { type: "fee_waived", amount: null })).toEqual({ ok: false, error: "already_waived" })
+  })
+})
+
+describe("Fee waived, adjusted", () => {
+  test("a voided waiver can't be restored while another one counts", async () => {
+    const id = await passedLead(await yearWithSchedule())
+    await granted(id, "qualified_orphan")
+    const accountant = await signedIn(ACCOUNTANT)
+
+    const first = await pay(id, { type: "fee_waived", amount: null })
+    if (!first.ok) throw new Error(first.error)
+    const voided = await adjustPayment(accountant, first.data.paymentId, { reason: "Duplicate entry", void: true, note: null }, randomUUID())
+    expect(voided).toMatchObject({ ok: true, data: { priority: null } })
+    expect((await pay(id, { type: "fee_waived", amount: null })).ok).toBe(true)
+
+    const restore = {
+      reason: "Data-entry correction",
+      void: false,
+      type: "fee_waived",
+      amount: null,
+      paidOn: today,
+      note: null,
+    } as const
+    expect(await adjustPayment(accountant, first.data.paymentId, restore, randomUUID())).toEqual({ ok: false, error: "already_waived" })
+    expect(await feeOf(id)).toMatchObject({ priority: "Full" })
   })
 })
 

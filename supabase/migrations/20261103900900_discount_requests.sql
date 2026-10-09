@@ -392,6 +392,38 @@ $$;
 revoke execute on function public.check_school_fee_payment(uuid, text, numeric, date) from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
+-- A lead counts at most one Fee waived payment. Recording checks it above;
+-- this trigger checks the other way one could come back: restoring a voided
+-- Fee waived payment (Data-entry correction) while another one counts. It
+-- runs after guard_payment_adjustment, which has set the adjustment's lead.
+-- ---------------------------------------------------------------------------
+
+create function public.refuse_second_fee_waiver()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+    if not new.voided
+       and new.payment_type = 'fee_waived'
+       and exists (
+           select 1 from public.effective_school_fee_payments(new.lead_id) e
+           where e.payment_type = 'fee_waived' and e.payment_id <> new.payment_id
+       ) then
+        raise exception 'already_waived';
+    end if;
+    return new;
+end;
+$$;
+
+revoke execute on function public.refuse_second_fee_waiver() from public, anon, authenticated;
+
+create trigger refuse_second_fee_waiver
+    before insert on public.payment_adjustments
+    for each row
+    execute function public.refuse_second_fee_waiver();
+
+-- ---------------------------------------------------------------------------
 -- request_discount(lead_id, kind, note, request_id): asks for a Staff child
 -- or Qualified orphan discount on an open lead. Needs leads.edit. Refuses a
 -- lead with a Pending request as `already_pending`, and a kind the lead

@@ -41,6 +41,12 @@ export function adjustmentRefusal(error: AdjustmentError): AdjustmentRefusal {
       return { status: "refused", field: "type", message: "A payment can't be changed to Fee waived." }
     case "type_from_fee_waived":
       return { status: "refused", field: "type", message: "A Fee waived payment keeps its type." }
+    case "already_waived":
+      return {
+        status: "refused",
+        field: "reason",
+        message: "This lead already has a Fee waived payment that counts, so this one can't be restored.",
+      }
     case "type_pre_form_one":
       return {
         status: "refused",

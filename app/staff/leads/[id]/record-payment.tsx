@@ -11,7 +11,7 @@ import {
   PAYMENT_TYPES,
   type PaymentInput,
   type PaymentPreview,
-  type PaymentType,
+  type RecordablePaymentType,
 } from "@/lib/services/school-fee-payments"
 
 import { formatShillings } from "../../fees/format"
@@ -35,8 +35,9 @@ function parseAmount(typed: string): number {
 // Record payment on the School fee panel. The form opens in place of the
 // button, its date starting at today in Tanzania as the server sees it.
 // Review shows what the payment would do; nothing is recorded until Confirm.
-// The confirmation outlasts the refresh that follows.
-export function RecordPayment({ leadId }: { leadId: string }) {
+// The confirmation outlasts the refresh that follows. `canWaive` offers Fee
+// waived, for a lead with a granted Qualified orphan discount.
+export function RecordPayment({ leadId, canWaive = false }: { leadId: string; canWaive?: boolean }) {
   const [today, setToday] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   const [unopened, setUnopened] = useState(false)
@@ -59,6 +60,7 @@ export function RecordPayment({ leadId }: { leadId: string }) {
       <PaymentForm
         leadId={leadId}
         today={today}
+        canWaive={canWaive}
         onDone={(message) => {
           setToday(null)
           setSaved(message)
@@ -88,8 +90,20 @@ export function RecordPayment({ leadId }: { leadId: string }) {
   )
 }
 
-function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string; onDone: (saved: string | null) => void }) {
-  const [type, setType] = useState<PaymentType | "">("")
+function PaymentForm({
+  leadId,
+  today,
+  canWaive,
+  onDone,
+}: {
+  leadId: string
+  today: string
+  canWaive: boolean
+  onDone: (saved: string | null) => void
+}) {
+  const [type, setType] = useState<RecordablePaymentType | "">("")
+  const waived = type === "fee_waived"
+  const choices: readonly RecordablePaymentType[] = canWaive ? [...PAYMENT_TYPES, "fee_waived"] : PAYMENT_TYPES
   const [amount, setAmount] = useState("")
   const [paidOn, setPaidOn] = useState(today)
   // What Review answered, for the payment as it was typed then.
@@ -106,7 +120,7 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
     setRefusal(null)
     // The browser asks for a type before submitting; an empty one reaches the
     // action as something it refuses.
-    const input: PaymentInput = { type: type as PaymentType, amount: parseAmount(amount), paidOn }
+    const input: PaymentInput = { type: type as RecordablePaymentType, amount: waived ? null : parseAmount(amount), paidOn }
     startTransition(async () => {
       try {
         const outcome = await previewSchoolFeePayment(leadId, input)
@@ -157,7 +171,7 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
         <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Payment</dt>
           <dd className="text-right text-slate-900">
-            {PAYMENT_TYPE_NAMES[input.type]}, TZS {formatShillings(input.amount)}
+            {input.amount === null ? PAYMENT_TYPE_NAMES[input.type] : `${PAYMENT_TYPE_NAMES[input.type]}, TZS ${formatShillings(input.amount)}`}
             <span className="block text-xs text-muted-foreground">Paid {formatDate(input.paidOn)}</span>
           </dd>
           <dt className="text-muted-foreground">Total paid after</dt>
@@ -204,13 +218,13 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
             className={SELECT_CLASS}
             required
             value={type}
-            onChange={(event) => setType(event.target.value as PaymentType)}
+            onChange={(event) => setType(event.target.value as RecordablePaymentType)}
             aria-invalid={invalid("type")}
           >
             <option value="" disabled>
               Choose a type
             </option>
-            {PAYMENT_TYPES.map((choice) => (
+            {choices.map((choice) => (
               <option key={choice} value={choice}>
                 {PAYMENT_TYPE_NAMES[choice]}
               </option>
@@ -218,21 +232,27 @@ function PaymentForm({ leadId, today, onDone }: { leadId: string; today: string;
           </select>
         )}
       </Field>
-      <Field label="Amount (TZS)" hint="Whole shillings, above zero.">
-        {({ id, describedBy }) => (
-          <Input
-            id={id}
-            inputMode="numeric"
-            required
-            autoComplete="off"
-            className="max-w-48"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            aria-describedby={describedBy}
-            aria-invalid={invalid("amount")}
-          />
-        )}
-      </Field>
+      {waived ? (
+        <p className="text-sm text-muted-foreground">
+          Fee waived has no amount. The Qualified orphan discount covers the whole School fee, and recording it makes the lead Full.
+        </p>
+      ) : (
+        <Field label="Amount (TZS)" hint="Whole shillings, above zero.">
+          {({ id, describedBy }) => (
+            <Input
+              id={id}
+              inputMode="numeric"
+              required
+              autoComplete="off"
+              className="max-w-48"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              aria-describedby={describedBy}
+              aria-invalid={invalid("amount")}
+            />
+          )}
+        </Field>
+      )}
       <Field label="Payment date" hint="The day the family paid: today or earlier.">
         {({ id, describedBy }) => (
           <Input

@@ -155,3 +155,67 @@ insert into public.school_fee_payments (id, lead_id, payment_type, amount, paid_
         date '2026-09-24', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-24 10:00:00+03');
 
 commit;
+
+-- Staff child and Qualified orphan discounts (#112): three Passed 2027 leads,
+-- one for each state a request can be in. Test Admissions raised each
+-- request and Test Manager decided the two decided ones.
+--
+--   ADMSN-90907 Neema Ruzuku    KG 1 Day: a Pending Staff child request
+--   ADMSN-90908 Baraka Ruzuku   STD 1 Day: a granted Qualified orphan
+--                               discount, so a School fee of 0 and no
+--                               payment yet: the Accountant may record Fee
+--                               waived
+--   ADMSN-90909 Upendo Ruzuku   STD 2 Day: a refused Staff child request
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000907', 'Zuhura Ruzuku', 'Mother', null, '+255700000907', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000908', 'Mariamu Ruzuku', 'Guardian', null, '+255700000908', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000909', 'Selemani Ruzuku', 'Father', null, '+255700000909', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined
+) values
+    ('1ead0000-0000-4000-8000-000000000907', 'ADMSN-90907', 'Neema Ruzuku', 'KG 1', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000907', false),
+    ('1ead0000-0000-4000-8000-000000000908', 'ADMSN-90908', 'Baraka Ruzuku', 'STD 1', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000908', false),
+    ('1ead0000-0000-4000-8000-000000000909', 'ADMSN-90909', 'Upendo Ruzuku', 'STD 2', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000909', false);
+
+-- The next three 2027 S/Ns.
+insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
+select i.id, i.lead, c.last_number + i.n, 2027, timestamptz '2026-09-15 11:00:00+03',
+    'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Passed', i.score
+from public.interview_serial_counters c
+cross join (values
+    (1, '1e7e0000-0000-4000-8000-000000000907'::uuid, '1ead0000-0000-4000-8000-000000000907'::uuid, 79.0),
+    (2, '1e7e0000-0000-4000-8000-000000000908'::uuid, '1ead0000-0000-4000-8000-000000000908'::uuid, 85.5),
+    (3, '1e7e0000-0000-4000-8000-000000000909'::uuid, '1ead0000-0000-4000-8000-000000000909'::uuid, 72.0)
+) as i(n, id, lead, score)
+where c.enrollment_year = 2027;
+
+update public.interview_serial_counters set last_number = last_number + 3 where enrollment_year = 2027;
+
+insert into public.discount_requests (
+    id, lead_id, kind, note, requested_by, requested_at, state, decided_by, decided_at, refusal_reason
+) values
+    ('d15c0000-0000-4000-8000-000000000907', '1ead0000-0000-4000-8000-000000000907', 'staff_child',
+        'Mother teaches Year 3 at the primary school.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-28 09:00:00+03',
+        'pending', null, null, null),
+    ('d15c0000-0000-4000-8000-000000000908', '1ead0000-0000-4000-8000-000000000908', 'qualified_orphan',
+        'Both parents have died; the aunt is the guardian. Letter from the ward office seen.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-23 10:00:00+03',
+        'granted', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2026-09-24 14:00:00+03', null),
+    ('d15c0000-0000-4000-8000-000000000909', '1ead0000-0000-4000-8000-000000000909', 'staff_child',
+        'Father drives the school bus.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-23 11:00:00+03',
+        'refused', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2026-09-24 14:10:00+03',
+        'The bus is run by a contractor, so he is not school staff.');
+
+commit;

@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDate } from "@/lib/school-calendar"
+import { DISCOUNT_NAMES } from "@/lib/services/discounts"
 import { BAND_NAMES } from "@/lib/services/fees"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import { listPayments } from "@/lib/services/school-fee-payments"
@@ -19,9 +20,10 @@ const INSTALMENTS = ["First", "Second", "Third"] as const
 // the annual fee for its class band and Day or boarding, Total paid, the
 // balance, the Seat priority, the three instalments with their due dates,
 // and the payments, newest first. It follows the Fee schedule of the lead's
-// own enrollment year. Record payment shows only when `canRecord`: on an open
-// lead, for staff who may record payments. Adjust shows when `canAdjust`, on
-// a closed lead too, since an adjustment corrects history.
+// own enrollment year, less the discount it names. Record payment shows only
+// when `canRecord`: on an open lead, for staff who may record payments, and
+// offers Fee waived under a Qualified orphan discount. Adjust shows when
+// `canAdjust`, on a closed lead too, since an adjustment corrects history.
 export async function SchoolFeeSection({
   leadId,
   staff,
@@ -57,6 +59,12 @@ export async function SchoolFeeSection({
               <span className="block text-xs">
                 {BAND_NAMES[fee.data.band]}, {fee.data.dayOrBoarding}
               </span>
+              {fee.data.discount && (
+                <span className="block text-xs">
+                  {DISCOUNT_NAMES[fee.data.discount.kind]} discount, {fee.data.discount.percent}% off TZS{" "}
+                  {formatShillings(fee.data.bandFee)}
+                </span>
+              )}
             </dt>
             <dd className="text-right font-medium tabular-nums text-slate-900">TZS {formatShillings(fee.data.schoolFee)}</dd>
             <dt className="text-muted-foreground">Total paid</dt>
@@ -100,7 +108,7 @@ export async function SchoolFeeSection({
             </TableBody>
           </Table>
 
-          {canRecord && <RecordPayment leadId={leadId} />}
+          {canRecord && <RecordPayment leadId={leadId} canWaive={fee.data.discount?.kind === "qualified_orphan"} />}
         </div>
       )}
 

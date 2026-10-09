@@ -79,7 +79,9 @@ function expectedFee(schedule: Pick<FeeSchedule, "split" | "dueDates">, year: nu
     year,
     band,
     dayOrBoarding,
+    bandFee: fee,
     schoolFee: fee,
+    discount: null,
     totalPaid: 0,
     balance: fee,
     instalments: [

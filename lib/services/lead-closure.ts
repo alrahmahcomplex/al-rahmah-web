@@ -9,9 +9,15 @@ import type { Result } from "./result"
 // Inactive or Archived, and reading why a lead is closed. Every write is a
 // database function that checks the permission and the rules itself, so
 // these calls only translate what the database answers. Reopening requests,
-// their approval and rejection included, live in reopening-requests.ts.
+// their approval and rejection and the approvers' queue included, live in
+// reopening-requests.ts.
 
-export { approveReopeningRequest, rejectReopeningRequest } from "./reopening-requests"
+export {
+  approveReopeningRequest,
+  countPendingReopeningRequests,
+  listPendingReopeningRequests,
+  rejectReopeningRequest,
+} from "./reopening-requests"
 
 // The fixed list, in the order staff pick from.
 export const DECLINED_REASONS = [

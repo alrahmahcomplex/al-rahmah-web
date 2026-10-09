@@ -20,6 +20,7 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
   { href: "/staff/re-applications", label: "Re-applications", permission: "leads.view" },
   { href: "/staff/fees", label: "Fee schedule", permission: ["payments.view", "academic_years.manage"] },
   { href: "/staff/discounts", label: "Discount requests", permission: "discounts.approve" },
+  { href: "/staff/reopenings", label: "Reopening requests", permission: "reopenings.approve" },
   { href: "/staff/seats", label: "Seats", permission: "academic_years.manage", alsoNeeds: "payments.view" },
   { href: "/staff/roles", label: "Staff and roles", permission: "staff.administer" },
 ]

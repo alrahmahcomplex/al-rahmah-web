@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Leads at **First instalment** become **Enrolled** on their year's Academic-year start
+  without anyone acting. A daily check runs just after midnight Tanzania time and
+  enrols every First instalment lead whose year has started.
+- The School fee section on such a lead says "By the Academic-year start", with the
+  start date as the Enrolled date. The lead's history shows the change made by the
+  System.
+
 ## October 8, 2026 `v0.49.0`
 
 ### NEW

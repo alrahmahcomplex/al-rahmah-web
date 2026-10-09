@@ -17,19 +17,18 @@ export type NavCount = { count: number; label: string }
 // rather than holding up every staff page.
 export async function navCounts(staff: Pick<StaffMember, "permissions">): Promise<Partial<Record<string, NavCount>>> {
   const counts: Partial<Record<string, NavCount>> = {}
-  const may = (permission: StaffMember["permissions"][number]) => staff.permissions.includes(permission)
-  if (!may("leads.view") && !may("reopenings.approve")) return counts
+  if (!staff.permissions.includes("leads.view")) return counts
   const supabase = await createClient()
   const [pending, unreviewed, overdue, discounts, reopenings] = await Promise.all([
-    may("leads.view") && may("agents.approve") ? getPendingAgentCount(supabase) : null,
-    may("leads.view") ? countUnreviewedReApplications(supabase) : null,
-    may("leads.view") ? getOverdueCount(supabase) : null,
-    may("leads.view") && may("discounts.approve") ? countPendingDiscountRequests(supabase) : null,
-    may("reopenings.approve") ? countPendingReopeningRequests(supabase) : null,
+    staff.permissions.includes("agents.approve") ? getPendingAgentCount(supabase) : null,
+    countUnreviewedReApplications(supabase),
+    getOverdueCount(supabase),
+    staff.permissions.includes("discounts.approve") ? countPendingDiscountRequests(supabase) : null,
+    staff.permissions.includes("reopenings.approve") ? countPendingReopeningRequests(supabase) : null,
   ])
   if (pending?.ok) counts["/staff/agents"] = { count: pending.data, label: "Pending" }
-  if (unreviewed?.ok) counts["/staff/re-applications"] = { count: unreviewed.data, label: "unreviewed" }
-  if (overdue?.ok) counts["/staff/follow-ups"] = { count: overdue.data, label: "overdue" }
+  if (unreviewed.ok) counts["/staff/re-applications"] = { count: unreviewed.data, label: "unreviewed" }
+  if (overdue.ok) counts["/staff/follow-ups"] = { count: overdue.data, label: "overdue" }
   if (discounts?.ok) counts["/staff/discounts"] = { count: discounts.data, label: "Pending" }
   if (reopenings?.ok) counts["/staff/reopenings"] = { count: reopenings.data, label: "Pending" }
   return counts

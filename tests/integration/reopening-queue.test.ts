@@ -14,7 +14,7 @@ import {
 import { createLead } from "@/lib/services/leads"
 import { raiseReopeningRequest, withdrawReopeningRequest, type PendingReopeningRequest } from "@/lib/services/reopening-requests"
 
-import { anonClient, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // The Reopening requests queue and its count (#100), against local Supabase.
@@ -133,12 +133,17 @@ describe("the Reopening requests queue", () => {
     await pendingNow()
   })
 
-  test("is refused to Admissions Staff, the Accountant and anyone signed out", async () => {
+  test("is refused to Admissions Staff, the Accountant, an approver without leads.view and anyone signed out", async () => {
     for (const person of [ADMISSIONS, ACCOUNTANT]) {
       const client = await signedIn(person)
       expect(await listPendingReopeningRequests(client), person.name).toEqual({ ok: false, error: "forbidden" })
       expect(await countPendingReopeningRequests(client), person.name).toEqual({ ok: false, error: "forbidden" })
     }
+    // An approver who may not view leads couldn't open any of them to decide.
+    const approverOnly = await signedIn(await createThrowawayStaff(["reopenings.approve"]))
+    expect(await listPendingReopeningRequests(approverOnly)).toEqual({ ok: false, error: "forbidden" })
+    expect(await countPendingReopeningRequests(approverOnly)).toEqual({ ok: false, error: "forbidden" })
+
     const anon = anonClient()
     expect(await listPendingReopeningRequests(anon)).toEqual({ ok: false, error: "forbidden" })
     expect(await countPendingReopeningRequests(anon)).toEqual({ ok: false, error: "forbidden" })

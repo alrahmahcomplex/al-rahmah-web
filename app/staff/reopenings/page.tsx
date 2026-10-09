@@ -18,10 +18,11 @@ export const metadata: Metadata = {
 
 // Every Pending Reopening request, oldest first, for approvers (#100). Each
 // request links to its lead, where the approver reads the history and
-// decides.
+// decides, so the page also needs leads.view: without it the lead screen is
+// forbidden and nothing here could be decided.
 export default async function ReopeningRequestsPage() {
   const staff = await requireStaff()
-  if (!canDecideReopening(staff.permissions)) forbidden()
+  if (!canDecideReopening(staff.permissions) || !staff.permissions.includes("leads.view")) forbidden()
 
   const requests = await listPendingReopeningRequests(await createClient())
 

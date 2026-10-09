@@ -5,7 +5,9 @@
 -- The table stays readable under leads.view, which a lead's own requests
 -- need. The queue and its count are approvers' work, so they are read
 -- through these two functions, which need reopenings.approve and refuse
--- anyone else with `not_permitted`. Neither is executable by `anon`.
+-- anyone else with `not_permitted`. They also need leads.view: an approver
+-- decides on the lead screen, which needs it, and the queue names leads.
+-- Neither is executable by `anon`.
 
 -- ---------------------------------------------------------------------------
 -- pending_reopening_requests(): every Pending request with its lead and its
@@ -20,7 +22,9 @@ security definer
 set search_path = ''
 as $$
 begin
-    if auth.role() is distinct from 'authenticated' or not public.has_permission('reopenings.approve') then
+    if auth.role() is distinct from 'authenticated'
+       or not public.has_permission('reopenings.approve')
+       or not public.has_permission('leads.view') then
         raise exception 'not_permitted';
     end if;
 
@@ -60,7 +64,9 @@ security definer
 set search_path = ''
 as $$
 begin
-    if auth.role() is distinct from 'authenticated' or not public.has_permission('reopenings.approve') then
+    if auth.role() is distinct from 'authenticated'
+       or not public.has_permission('reopenings.approve')
+       or not public.has_permission('leads.view') then
         raise exception 'not_permitted';
     end if;
 

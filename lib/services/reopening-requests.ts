@@ -321,7 +321,7 @@ function queueError(error: { message: string; code?: string }, doing: string): Q
 }
 
 // Every Pending request, oldest first, for the Reopening requests page.
-// Needs reopenings.approve.
+// Needs reopenings.approve, and leads.view to open the leads it names.
 export async function listPendingReopeningRequests(
   supabase: SupabaseClient,
 ): Promise<Result<PendingReopeningRequest[], QueueError>> {
@@ -345,7 +345,7 @@ export async function listPendingReopeningRequests(
 }
 
 // How many requests are Pending, for the count beside the navigation entry.
-// Needs reopenings.approve.
+// Needs reopenings.approve and leads.view, as the list does.
 export async function countPendingReopeningRequests(supabase: SupabaseClient): Promise<Result<number, QueueError>> {
   const { data, error } = await supabase.rpc("pending_reopening_request_count")
   if (error) return { ok: false, error: queueError(error, "count pending reopening requests") }

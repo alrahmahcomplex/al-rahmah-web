@@ -3,6 +3,14 @@ import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { PAYMENT_TYPE_NAMES, type RecordedPaymentType } from "@/lib/services/school-fee-payments"
 
 import {
+  ADJUSTMENT_HIDDEN,
+  adjustmentLabel,
+  adjustmentSummary,
+  adjustmentValue,
+  isPriorityChange,
+  PRIORITY_CHANGE_HIDDEN,
+} from "./adjustment-history"
+import {
   ENROLMENT_FIELDS,
   ENROLMENT_HIDDEN,
   enrolmentCauses,
@@ -106,6 +114,7 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   // The entry already says who recorded the payment, and when. The request id
   // only stops a retried Confirm recording it twice.
   school_fee_payments: new Set(["lead_id", "recorded_by", "recorded_at", "request_id"]),
+  payment_adjustments: ADJUSTMENT_HIDDEN,
   // The numbers as typed show as stored instead. The entry itself says who
   // reviewed it, and when.
   re_applications: new Set([
@@ -312,6 +321,8 @@ function summarize(
   if (entry.record === "reopening_requests") return reopeningSummary(entry)
   if (entry.record === "lead_fee_profiles") return enrolmentProfileSummary(entry)
   if (entry.record === "school_fee_payments" && insert) return "recorded a school-fee payment"
+  const adjustment = adjustmentSummary(entry)
+  if (adjustment) return adjustment
   if (entry.record === "re_applications" && insert) return "recorded a re-application"
   if (entry.record === "re_applications" && changed.get("reviewed_at")?.to) return "marked the re-application reviewed"
   if (entry.record === "follow_up_records") {
@@ -386,7 +397,8 @@ function describeEntry(
   timeline: MatchTimeline,
   causes: EnrolmentCauses,
 ): DescribedEntry {
-  const fromOld = entry.record !== null && entry.action === "update"
+  // A Seat priority change reads from the old priority, even from none.
+  const fromOld = (entry.record !== null && entry.action === "update") || isPriorityChange(entry)
   return {
     id: entry.id,
     at: entry.at,
@@ -394,20 +406,28 @@ function describeEntry(
     summary: summarize(entry, contactNames, timeline, causes),
     changes: entry.changes
       .filter((c) => !HIDDEN[entry.record ?? ""]?.has(c.field))
+      .filter((c) => !(isPriorityChange(entry) && PRIORITY_CHANGE_HIDDEN.has(c.field)))
       .filter((c) => fromOld || !isEmpty(c.to))
       .sort((a, b) => rank(a.field) - rank(b.field))
       .map((c) => ({
-        label: reopeningLabel(entry.record, c.field) ?? enrolmentLabel(entry.record, c.field) ?? LABELS[c.field] ?? c.field,
+        label:
+          reopeningLabel(entry.record, c.field) ??
+          enrolmentLabel(entry.record, c.field) ??
+          adjustmentLabel(entry, c.field) ??
+          LABELS[c.field] ??
+          c.field,
         // A creation has no old value, except a follow-up's earlier date.
         from:
           fromOld || c.from !== null
             ? (reopeningValue(entry.record, c.field, c.from) ??
               enrolmentValue(entry.record, c.field, c.from) ??
+              adjustmentValue(entry, c.field, c.from) ??
               display(c.field, c.from, contactNames))
             : null,
         to:
           reopeningValue(entry.record, c.field, c.to) ??
           enrolmentValue(entry.record, c.field, c.to) ??
+          adjustmentValue(entry, c.field, c.to) ??
           display(c.field, c.to, contactNames),
       })),
   }

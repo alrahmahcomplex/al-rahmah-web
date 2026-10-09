@@ -241,8 +241,26 @@ describe("recording", () => {
     expect(listed).toEqual({
       ok: true,
       data: [
-        { id: expect.any(String), type: "first_instalment", amount: 400_000, paidOn: today, recordedAt: expect.any(String), recordedBy: ACCOUNTANT.name },
-        { id: expect.any(String), type: "initial_deposit", amount: 300_000, paidOn: "2026-02-01", recordedAt: expect.any(String), recordedBy: ACCOUNTANT.name },
+        {
+          id: expect.any(String),
+          type: "first_instalment",
+          amount: 400_000,
+          paidOn: today,
+          recordedAt: expect.any(String),
+          recordedBy: ACCOUNTANT.name,
+          effective: { type: "first_instalment", amount: 400_000, paidOn: today },
+          adjustments: [],
+        },
+        {
+          id: expect.any(String),
+          type: "initial_deposit",
+          amount: 300_000,
+          paidOn: "2026-02-01",
+          recordedAt: expect.any(String),
+          recordedBy: ACCOUNTANT.name,
+          effective: { type: "initial_deposit", amount: 300_000, paidOn: "2026-02-01" },
+          adjustments: [],
+        },
       ],
     })
   })

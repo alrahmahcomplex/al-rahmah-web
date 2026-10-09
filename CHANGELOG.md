@@ -5,6 +5,24 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 8, 2026 `v0.49.0`
+
+### NEW
+
+- The Accountant can **Adjust** a school-fee payment on the lead screen: pick a reason
+  (Wrong amount, Wrong payment type, Wrong payment date, Duplicate entry or Data-entry
+  correction), state the corrected type, amount and date, and add a note if needed.
+  The recorded payment never changes. If an adjustment is wrong, adjust the payment
+  again; the newest one counts.
+- **Duplicate entry** voids a payment, so it stops counting toward Total paid. A
+  voided payment comes back with **Data-entry correction**.
+- Each payment shows its original entry with every adjustment beneath it, and who made
+  each and when. Adjust works on Declined, Inactive and Archived leads too, since it
+  corrects history.
+- Total paid, the Seat priority, Enrolled and the seat counts follow adjustments. When
+  an adjustment changes the Seat priority or takes a lead in or out of Enrolled, the
+  lead's history says so.
+
 ## October 8, 2026 `v0.48.0`
 
 ### NEW

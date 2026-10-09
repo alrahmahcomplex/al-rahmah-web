@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { toAdjustment, type AdjustmentRow, type PaymentAdjustment } from "./payment-adjustments"
 import type { Result } from "./result"
 
 // School-fee payments: what the Accountant records against a lead's School
@@ -184,15 +185,25 @@ export async function recordPayment(
 // Reading.
 // ---------------------------------------------------------------------------
 
-export type SchoolFeePayment = {
-  id: string
+// What a payment says: as recorded, or as its newest adjustment corrected it.
+export type PaymentValues = {
   type: RecordedPaymentType
   // Empty only for Fee waived.
   amount: number | null
   paidOn: string
+}
+
+// A payment's original entry, how it counts now, and every adjustment made
+// to it.
+export type SchoolFeePayment = PaymentValues & {
+  id: string
   recordedAt: string
   // Looked up when read, so a deactivated staff member still shows by name.
   recordedBy: string | null
+  // The newest adjustment's values, or the original's; null once voided.
+  effective: PaymentValues | null
+  // Oldest first.
+  adjustments: PaymentAdjustment[]
 }
 
 type PaymentRow = {
@@ -202,10 +213,15 @@ type PaymentRow = {
   paid_on: string
   recorded_at: string
   recorded_by_name: string | null
+  voided: boolean
+  effective_type: RecordedPaymentType | null
+  effective_amount: number | null
+  effective_paid_on: string | null
+  adjustments: AdjustmentRow[]
 }
 
-// A lead's payments, newest payment date first. Needs leads.view and
-// payments.view.
+// A lead's payments, newest effective payment date first, each with its
+// adjustments. Needs leads.view and payments.view.
 export async function listPayments(
   supabase: SupabaseClient,
   leadId: string,
@@ -226,6 +242,11 @@ export async function listPayments(
       paidOn: row.paid_on,
       recordedAt: row.recorded_at,
       recordedBy: row.recorded_by_name,
+      effective:
+        row.voided || row.effective_type === null || row.effective_paid_on === null
+          ? null
+          : { type: row.effective_type, amount: row.effective_amount, paidOn: row.effective_paid_on },
+      adjustments: (row.adjustments ?? []).map(toAdjustment),
     })),
   }
 }

@@ -3,32 +3,36 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDate } from "@/lib/school-calendar"
 import { BAND_NAMES } from "@/lib/services/fees"
 import { getLeadFee } from "@/lib/services/lead-fees"
-import { listPayments, PAYMENT_TYPE_NAMES } from "@/lib/services/school-fee-payments"
+import { listPayments } from "@/lib/services/school-fee-payments"
 import type { StaffMember } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
 import { formatShillings } from "../../fees/format"
 import { SeatPriorityBadge } from "../seat-priority-badge"
 import { enrolledBy } from "./enrolment-text"
+import { PaymentList } from "./payment-list"
 import { RecordPayment } from "./record-payment"
 
 const INSTALMENTS = ["First", "Second", "Third"] as const
-
-// The school is in Tanzania, so times read in East Africa Time whatever the
-// server's own zone is.
-const WHEN = new Intl.DateTimeFormat("en-GB", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "Africa/Dar_es_Salaam",
-})
 
 // The lead's School fee on the lead screen, for staff who may view payments:
 // the annual fee for its class band and Day or boarding, Total paid, the
 // balance, the Seat priority, the three instalments with their due dates,
 // and the payments, newest first. It follows the Fee schedule of the lead's
 // own enrollment year. Record payment shows only when `canRecord`: on an open
-// lead, for staff who may record payments.
-export async function SchoolFeeSection({ leadId, staff, canRecord }: { leadId: string; staff: StaffMember; canRecord: boolean }) {
+// lead, for staff who may record payments. Adjust shows when `canAdjust`, on
+// a closed lead too, since an adjustment corrects history.
+export async function SchoolFeeSection({
+  leadId,
+  staff,
+  canRecord,
+  canAdjust,
+}: {
+  leadId: string
+  staff: StaffMember
+  canRecord: boolean
+  canAdjust: boolean
+}) {
   if (!staff.permissions.includes("payments.view")) return null
 
   const supabase = await createClient()
@@ -111,22 +115,7 @@ export async function SchoolFeeSection({ leadId, staff, canRecord }: { leadId: s
         ) : payments.data.length === 0 ? (
           <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
         ) : (
-          <ul aria-label="Payments" className="flex flex-col divide-y rounded-lg text-sm ring-1 ring-foreground/10">
-            {payments.data.map((payment) => (
-              <li key={payment.id} className="flex items-start justify-between gap-4 px-3 py-2">
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-900">{PAYMENT_TYPE_NAMES[payment.type]}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Paid {formatDate(payment.paidOn)}. Recorded by {payment.recordedBy ?? "a former staff member"},{" "}
-                    {WHEN.format(new Date(payment.recordedAt))}.
-                  </p>
-                </div>
-                <p className="shrink-0 text-right tabular-nums text-slate-900">
-                  {payment.amount === null ? "Waived" : `TZS ${formatShillings(payment.amount)}`}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <PaymentList leadId={leadId} payments={payments.data} canAdjust={canAdjust} />
         )}
       </section>
     </section>

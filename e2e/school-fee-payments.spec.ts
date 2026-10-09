@@ -155,7 +155,7 @@ test.describe("recording a school-fee payment", () => {
     await form.getByLabel("Amount (TZS)").fill("2000000")
     await form.getByRole("button", { name: "Review payment" }).click()
     await expect(form.getByRole("alert")).toHaveText(
-      "Payments can be recorded only once the lead's current interview result is Passed.",
+      "Payments can be recorded only once the lead's current interview result is Passed, or a reopening approved it to enrol without a retaken interview.",
     )
     await expect(page.getByRole("region", { name: "Review payment" })).toHaveCount(0)
     await expect(section.getByText("No payments recorded yet.")).toBeVisible()

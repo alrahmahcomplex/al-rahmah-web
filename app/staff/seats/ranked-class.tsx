@@ -1,14 +1,18 @@
 import Link from "next/link"
 
 import { formatDate } from "@/lib/school-calendar"
+import { SEAT_RELEASE_REASON } from "@/lib/services/lead-closure"
 import type { ClassSeats } from "@/lib/services/seats"
 
+import { declineHref } from "../leads/decline-link"
 import { SeatPriorityBadge } from "../leads/seat-priority-badge"
 
 // One over-full class's leads, ranked: Full, then First instalment, then
 // Deposit; then the date each reached its priority, oldest first; then
-// Admission Number. Leads ranked past the last seat are marked.
-export function RankedClass({ entry }: { entry: ClassSeats }) {
+// Admission Number. Leads ranked past the last seat are marked. For staff who
+// may decline, each lead without a closure mark links straight into its
+// Decline with No seat available chosen; a marked lead can't be declined.
+export function RankedClass({ entry, canDecline }: { entry: ClassSeats; canDecline: boolean }) {
   const name = `${entry.className} ${entry.dayOrBoarding}`
   const seats = entry.seats ?? 0
   return (
@@ -33,6 +37,14 @@ export function RankedClass({ entry }: { entry: ClassSeats }) {
               <SeatPriorityBadge priority={holder.priority} />
               {holder.rank > seats && <span className="text-xs font-medium text-destructive">Past the last seat</span>}
             </span>
+            {canDecline && !holder.closure && (
+              <Link
+                href={declineHref(holder.leadId, SEAT_RELEASE_REASON)}
+                className="w-full text-xs font-medium text-destructive underline-offset-4 hover:underline sm:w-auto"
+              >
+                Decline<span className="sr-only"> {holder.studentName}</span>: {SEAT_RELEASE_REASON}
+              </Link>
+            )}
           </li>
         ))}
       </ol>

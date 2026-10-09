@@ -35,7 +35,7 @@ export function approvalConsequence(lead: {
     const before = lead.statusBefore ?? (lead.visitDate ? "Visited" : "Applied")
     parts.push(
       lead.statusBefore === "Enrolled"
-        ? "The lead comes back as Interviewed. Enrolled is worked out again from its payments after a later payment or fee change."
+        ? "The lead comes back as Interviewed, and is Enrolled again at once if its payments still qualify."
         : `The lead goes back to ${before}.`,
     )
   }

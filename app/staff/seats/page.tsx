@@ -79,7 +79,11 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
                   Over capacity
                 </h2>
                 {overFull.map((entry) => (
-                  <RankedClass key={`${entry.className}-${entry.dayOrBoarding}`} entry={entry} />
+                  <RankedClass
+                    key={`${entry.className}-${entry.dayOrBoarding}`}
+                    entry={entry}
+                    canDecline={staff.permissions.includes("leads.decline")}
+                  />
                 ))}
               </section>
             )}

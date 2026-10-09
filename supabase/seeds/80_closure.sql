@@ -116,3 +116,61 @@ insert into public.reopening_requests (
         null, null, true, 'Visited');
 
 commit;
+
+-- Reopened after an interview that was not Passed (#115). Each was declined
+-- from Interviewed for Did not pass interview, then approved by Test Manager
+-- with a retake choice. Both Failed on 2026-09-22, in STD 5 Day 2027, and
+-- hold no payment yet.
+--
+--   ADMSN-90086 Salma Kisanga    Enrol without a retaken interview: the
+--                                Accountant may record school-fee payments
+--   ADMSN-90087 Musa Kisanga     Retake the interview: payments are refused
+--                                until a retaken interview is Passed
+
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000086', 'Amina Kisanga', 'Mother', null, '+255700000186', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000087', 'Ali Kisanga', 'Father', null, '+255700000187', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined, initially_declined
+) values
+    ('1ead0000-0000-4000-8000-000000000086', 'ADMSN-90086', 'Salma Kisanga', 'STD 5', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000086', false, true),
+    ('1ead0000-0000-4000-8000-000000000087', 'ADMSN-90087', 'Musa Kisanga', 'STD 5', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000087', false, true);
+
+-- The next two 2027 S/Ns, after whatever the earlier seeds issued.
+insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
+select i.id, i.lead, c.last_number + i.n, 2027, timestamptz '2026-09-15 11:00:00+03',
+    'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Failed', i.score
+from public.interview_serial_counters c
+cross join (values
+    (1, '1e7e0000-0000-4000-8000-000000000086'::uuid, '1ead0000-0000-4000-8000-000000000086'::uuid, 47.5),
+    (2, '1e7e0000-0000-4000-8000-000000000087'::uuid, '1ead0000-0000-4000-8000-000000000087'::uuid, 39.0)
+) as i(n, id, lead, score)
+where c.enrollment_year = 2027;
+
+update public.interview_serial_counters set last_number = last_number + 2 where enrollment_year = 2027;
+
+insert into public.reopening_requests (
+    id, lead_id, source, reason, requested_by, requested_at,
+    state, decided_by, decided_at, rejection_reason, enrol_without_retake, lead_was_declined, restored_status
+) values
+    ('5e0e0000-0000-4000-8000-000000000086', '1ead0000-0000-4000-8000-000000000086', 'lead',
+        'Salma missed the pass mark by a few points and her term report is strong.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-29 09:00:00+03',
+        'approved', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2026-09-30 10:00:00+03',
+        null, true, true, 'Interviewed'),
+    ('5e0e0000-0000-4000-8000-000000000087', '1ead0000-0000-4000-8000-000000000087', 'lead',
+        'Musa was unwell on the interview day and the family asks for another sitting.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-29 09:30:00+03',
+        'approved', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2026-09-30 10:15:00+03',
+        null, false, true, 'Interviewed');
+
+commit;

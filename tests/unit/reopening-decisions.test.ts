@@ -40,7 +40,7 @@ describe("what approving does", () => {
       "The lead goes back to Visited. Staff can work on it again.",
     )
     expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: "Enrolled", visitDate: "2026-09-01" })).toBe(
-      "The lead comes back as Interviewed. Enrolled is worked out again from its payments after a later payment or fee change. Staff can work on it again.",
+      "The lead comes back as Interviewed, and is Enrolled again at once if its payments still qualify. Staff can work on it again.",
     )
   })
 

@@ -58,7 +58,8 @@ export type PaymentInput = {
 
 export type PaymentError =
   | "lead_closed"
-  // The lead's current interview isn't Passed.
+  // The lead's current interview isn't Passed, and no reopening approved it
+  // to enrol without a retaken interview.
   | "not_passed"
   // The lead's enrollment year has no Fee schedule.
   | "no_schedule"
@@ -178,7 +179,8 @@ export type RecordedPayment = { paymentId: string; totalPaid: number; priority: 
 type RecordedRow = { payment_id: string; total_paid: number; priority: SeatPriority | null }
 
 // Records the payment under the signed-in staff member, on a lead whose
-// current interview is Passed and whose year has a Fee schedule. The payment
+// current interview is Passed (or whose latest approved reopening chose Enrol
+// without a retaken interview) and whose year has a Fee schedule. The payment
 // is locked once recorded. Fee waived, with no amount, is taken only while
 // the lead holds a granted Qualified orphan discount, and makes it Full.
 // Needs payments.record.

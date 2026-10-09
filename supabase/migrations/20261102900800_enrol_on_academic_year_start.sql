@@ -120,3 +120,7 @@ begin
     );
 end;
 $$;
+
+-- One run now, as the job would run tonight, so a lead whose start has
+-- already passed doesn't wait for the first night.
+select public.enrol_on_academic_year_start_daily();

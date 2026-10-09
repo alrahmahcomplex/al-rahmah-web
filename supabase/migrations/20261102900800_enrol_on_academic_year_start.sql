@@ -53,6 +53,14 @@ begin
           and (public.lead_seat_priority(l.id)).priority = 'First instalment'
         order by l.id
     loop
+        -- Locked before it is counted: a lead something else enrolled or
+        -- declined since the list was read is skipped, not counted.
+        perform 1 from public.leads l
+        where l.id = each_lead and l.status not in ('Enrolled', 'Declined')
+        for update;
+        if not found then
+            continue;
+        end if;
         perform public.recompute_lead_fee(each_lead, 'academic_year_start', enrol_from_academic_year_start.as_of);
         if exists (select 1 from public.leads l where l.id = each_lead and l.status = 'Enrolled') then
             enrolled := enrolled + 1;

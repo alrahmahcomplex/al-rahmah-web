@@ -30,7 +30,7 @@ const TRIGGERS: Readonly<Record<string, string>> = {
 const CAUSES: Readonly<Record<string, string>> = {
   payment: "a school-fee payment was recorded",
   payment_adjustment: "a payment was adjusted",
-  discount: "a discount changed",
+  discount: "a discount was granted",
   fee_schedule: "the Fee schedule changed",
   lead_details: "the lead's class, enrollment year or Day or boarding changed",
   family: "the lead's Family changed",

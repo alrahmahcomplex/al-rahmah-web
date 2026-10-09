@@ -104,7 +104,9 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
         Approve
       </Button>
       <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent className={seats.kind === "full" ? "sm:max-w-lg" : "sm:max-w-md"}>
+        <DialogContent
+          className={`max-h-[calc(100dvh-2rem)] overflow-y-auto ${seats.kind === "full" ? "sm:max-w-lg" : "sm:max-w-md"}`}
+        >
           <form className="grid gap-4" onSubmit={approve} noValidate>
             <DialogHeader>
               <DialogTitle>Approve reopening {studentName}?</DialogTitle>

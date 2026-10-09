@@ -5,6 +5,24 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Admissions Staff can request a **Staff child** or **Qualified orphan** discount on a
+  lead, with a note for the Admissions Manager. The lead's new Discounts panel shows
+  the pending request, who raised it and when. A lead has one pending request at a
+  time.
+- The Admissions Manager has a **Discount requests** screen, oldest first, with a count
+  of waiting requests in the navigation. They grant each request, or refuse it with a
+  reason that the person who asked reads on the lead.
+- A granted discount lowers the School fee at once: 25% for Staff child, 100% for
+  Qualified orphan. A lead with both gets the larger one. The School fee section names
+  the discount, and a lead whose payments now cover the lower fee becomes Enrolled.
+- With a granted Qualified orphan discount, the Accountant can record **Fee waived**,
+  with no amount. It makes the lead Full and Enrolled.
+- The lead history shows each discount request, grant and refusal.
+
 ## October 9, 2026 `v0.50.0`
 
 ### NEW

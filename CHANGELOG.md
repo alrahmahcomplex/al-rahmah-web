@@ -11,7 +11,8 @@ stay in the `0.x` range.
 
 - The Accountant can record school-fee payments on a lead the Admissions Manager
   reopened with **Enrol without a retaken interview**, even though its interview was
-  not Passed. A lead reopened to retake the interview still can't take payments.
+  not Passed. A lead reopened to retake the interview still takes payments only once
+  its interview result is Passed.
 - On the Seats screen, each ranked lead in an over-full class has a **Decline: No seat
   available** link. It opens the lead's Decline with that reason already chosen.
 

@@ -120,6 +120,9 @@ test("the Manager declines a ranked lead from Seats with No seat available", asy
   const banner = page.getByRole("region", { name: "This lead is Declined" })
   await expect(banner).toContainText("No seat available")
   await expect(banner).toContainText(MANAGER.name)
+  // The link's reason leaves the address, so a reload after a later
+  // reopening doesn't open Decline again.
+  await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
 
   // The seat is released: the class holds one lead fewer, and the lead is
   // ranked no more.

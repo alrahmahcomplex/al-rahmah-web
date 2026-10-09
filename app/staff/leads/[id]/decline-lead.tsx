@@ -70,10 +70,14 @@ export function DeclineLead({ lead, reasons }: DeclineLeadProps) {
       setStep("choose")
       setMissing(null)
       setRefusal(null)
-      // Closing drops the link's reason from the address, so a reload
-      // doesn't open Decline again.
-      if (searchParams.has(DECLINE_PARAM)) router.replace(pathname, { scroll: false })
+      dropLinkedReason()
     }
+  }
+
+  // Closing or declining drops the link's reason from the address, so a
+  // reload, even after a later reopening, doesn't open Decline again.
+  function dropLinkedReason() {
+    if (searchParams.has(DECLINE_PARAM)) router.replace(pathname, { scroll: false })
   }
 
   function review(event: React.FormEvent<HTMLFormElement>) {
@@ -95,8 +99,9 @@ export function DeclineLead({ lead, reasons }: DeclineLeadProps) {
       } catch {
         outcome = LOST_REQUEST
       }
-      if (outcome.status === "refused") setRefusal(outcome.message)
-      else setOpen(false)
+      if (outcome.status === "refused") return setRefusal(outcome.message)
+      setOpen(false)
+      dropLinkedReason()
     })
   }
 

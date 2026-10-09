@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- When approving a Reopening request would give the lead back a seat in a full class,
+  the approval step now says the class is full and lists its leads ranked for the
+  seats, with this lead marked. The Admissions Manager can still approve. If the seats
+  can't be checked, a short note says so and Approve still works.
+
 ## October 9, 2026 `v0.52.0`
 
 ### NEW

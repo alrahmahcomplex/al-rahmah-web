@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
 import {
   approvalConsequence,
+  approvalSeats,
   approveOutcome,
   canDecideReopening,
   rejectOutcome,
@@ -10,6 +11,7 @@ import {
 } from "@/app/staff/leads/[id]/reopening-decision-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { needsRetakeChoice, type DecisionError } from "@/lib/services/reopening-requests"
+import type { SeatCheck } from "@/lib/services/seats"
 
 describe("who may decide a reopening request", () => {
   it("needs reopenings.approve", () => {
@@ -60,6 +62,78 @@ describe("what approving does", () => {
     expect(approvalConsequence({ status: "Declined", closure: "Archived", statusBefore: "Applied", visitDate: null })).toBe(
       "The lead goes back to Applied. Its Archived mark is cleared. Staff can work on it again.",
     )
+  })
+})
+
+describe("the seat warning on approval", () => {
+  const holder = (rank: number, thisLead: boolean, studentName: string, priority: "Full" | "First instalment" | "Deposit") => ({
+    leadId: `1ead0000-0000-4000-8000-00000000000${rank}`,
+    admissionNumber: `ADMSN-9000${rank}`,
+    studentName,
+    closure: null,
+    priority,
+    reachedOn: "2026-09-25",
+    rank,
+    thisLead,
+  })
+
+  const full: SeatCheck = {
+    enrollmentYear: 2027,
+    className: "KG 2",
+    dayOrBoarding: "Boarding",
+    seats: 2,
+    seatsTaken: 2,
+    priority: "First instalment",
+    holdsSeat: false,
+    wouldOverfill: true,
+    ranked: [
+      holder(1, false, "Amani Kiwelu", "Full"),
+      holder(2, true, "Faraji Kiwelu", "First instalment"),
+      holder(3, false, "Imani Kiwelu", "Deposit"),
+    ],
+  }
+
+  it("warns when approving would give the lead a seat in a full class, with the ranking and this lead marked", () => {
+    const seats = approvalSeats({ ok: true, data: full })
+    expect(seats).toEqual({
+      kind: "full",
+      message:
+        "KG 2 Boarding 2027 is full: 2 seats, 2 taken. Approving gives this lead its seat back with its Seat priority, " +
+        "First instalment, so the class will have more leads than seats. You can still approve.",
+      seats: 2,
+      ranked: [
+        expect.objectContaining({ rank: 1, studentName: "Amani Kiwelu", thisLead: false, pastLastSeat: false }),
+        expect.objectContaining({ rank: 2, studentName: "Faraji Kiwelu", thisLead: true, pastLastSeat: false }),
+        expect.objectContaining({ rank: 3, studentName: "Imani Kiwelu", priority: "Deposit", thisLead: false, pastLastSeat: true }),
+      ],
+    })
+  })
+
+  it("warns without the priority or the ranking for staff who may not view payments", () => {
+    const seats = approvalSeats({ ok: true, data: { ...full, seats: 1, seatsTaken: 1, priority: null, ranked: null } })
+    expect(seats).toEqual({
+      kind: "full",
+      message:
+        "KG 2 Boarding 2027 is full: 1 seat, 1 taken. Approving gives this lead its seat back, " +
+        "so the class will have more leads than seats. You can still approve.",
+      seats: 1,
+      ranked: null,
+    })
+  })
+
+  it("says nothing when the class has room, its seats aren't set, or the lead holds its seat already", () => {
+    expect(approvalSeats({ ok: true, data: { ...full, seats: 3, wouldOverfill: false, ranked: null } })).toEqual({ kind: "room" })
+    expect(approvalSeats({ ok: true, data: { ...full, seats: null, wouldOverfill: false, ranked: null } })).toEqual({ kind: "room" })
+    expect(approvalSeats({ ok: true, data: { ...full, holdsSeat: true, wouldOverfill: false, ranked: null } })).toEqual({ kind: "room" })
+  })
+
+  it("only notes quietly that the seats couldn't be checked when seat_check fails, so approval still goes ahead", () => {
+    for (const error of ["unavailable", "forbidden", "not_found"] as const) {
+      expect(approvalSeats({ ok: false, error })).toEqual({
+        kind: "unchecked",
+        message: "The seats couldn't be checked, so this can't say whether the class is full. You can still approve.",
+      })
+    }
   })
 })
 

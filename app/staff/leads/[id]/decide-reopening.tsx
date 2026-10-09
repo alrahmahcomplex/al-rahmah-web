@@ -2,7 +2,7 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,8 +16,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { REOPENING_REASON_MAX } from "@/lib/services/reopening-requests"
 
+import { SeatPriorityBadge } from "../seat-priority-badge"
 import { approveReopeningAction, rejectReopeningAction } from "./reopening-decision-actions"
-import { RETAKE_LABELS, type DecisionOutcome } from "./reopening-decision-outcome"
+import { RETAKE_LABELS, type ApprovalSeats, type DecisionOutcome } from "./reopening-decision-outcome"
 
 const LOST_REQUEST: DecisionOutcome = {
   status: "refused",
@@ -34,6 +35,8 @@ type DecideReopeningProps = {
   // The lead was declined from Interviewed or Enrolled: the approver chooses
   // between a retaken interview and enrolling without one.
   askRetake: boolean
+  // Whether approving would give the lead a seat in a full class (#103).
+  seats: ApprovalSeats
 }
 
 // Approve and Reject, for approvers, on a Pending request. Each asks in a
@@ -70,7 +73,7 @@ function useDecision() {
   return { refusal, setRefusal, pending, send }
 }
 
-function ApproveReopening({ leadId, requestId, studentName, admissionNumber, consequence, askRetake }: DecideReopeningProps) {
+function ApproveReopening({ leadId, requestId, studentName, admissionNumber, consequence, askRetake, seats }: DecideReopeningProps) {
   const [open, setOpen] = useState(false)
   const [choice, setChoice] = useState<"retake" | "enrol" | null>(null)
   const [missing, setMissing] = useState(false)
@@ -101,7 +104,9 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
         Approve
       </Button>
       <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+          className={`max-h-[calc(100dvh-2rem)] overflow-y-auto ${seats.kind === "full" ? "sm:max-w-lg" : "sm:max-w-md"}`}
+        >
           <form className="grid gap-4" onSubmit={approve} noValidate>
             <DialogHeader>
               <DialogTitle>Approve reopening {studentName}?</DialogTitle>
@@ -109,6 +114,7 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
                 {admissionNumber}. {consequence}
               </DialogDescription>
             </DialogHeader>
+            <SeatWarning seats={seats} />
             {askRetake && (
               <fieldset
                 className="grid gap-2"
@@ -159,6 +165,46 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+// Slice 9's seat warning, as the Accountant sees it before a payment, with
+// the class's ranking for staff who may view payments. Advice only: the
+// approver can still approve, and a failed check is a quiet note.
+function SeatWarning({ seats }: { seats: ApprovalSeats }) {
+  if (seats.kind === "room") return null
+  if (seats.kind === "unchecked") return <p className="text-xs text-muted-foreground">{seats.message}</p>
+  return (
+    <Alert aria-label="Class full" className="border-amber-300 bg-amber-50 text-amber-950">
+      <AlertTitle>Class full</AlertTitle>
+      <AlertDescription className="grid gap-2 text-amber-950">
+        <p>{seats.message}</p>
+        {seats.ranked && (
+          <ol aria-label="Leads ranked for the seats" className="flex max-h-56 flex-col divide-y divide-amber-200 overflow-y-auto">
+            {seats.ranked.map((holder) => (
+              <li
+                key={holder.leadId}
+                aria-current={holder.thisLead || undefined}
+                className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 aria-[current=true]:font-semibold"
+              >
+                <span className="w-6 shrink-0 tabular-nums">{holder.rank}.</span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span>
+                    {holder.studentName}
+                    {holder.thisLead && " (this lead)"}
+                  </span>
+                  <span className="text-xs font-normal">{holder.admissionNumber}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <SeatPriorityBadge priority={holder.priority} />
+                  {holder.pastLastSeat && <span className="text-xs font-medium text-destructive">Past the last seat</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </AlertDescription>
+    </Alert>
   )
 }
 

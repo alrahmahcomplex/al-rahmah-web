@@ -22,11 +22,18 @@
 -- enrolled. Declined leads are never changed; Inactive and Archived leads
 -- move through recompute_lead_fee's lifecycle override, as with a payment.
 --
--- Leads are taken in id order, as recompute_year_fees takes them, so two
--- runs, or a run and a Fee schedule save, lock them in the same order.
+-- Leads are taken in id order, as recompute_year_fees takes them, so a run
+-- and a Fee schedule save lock them in the same order.
 --
 -- set_academic_year (#105) calls it with today when a start of today or
--- earlier is set. Granted to no API role.
+-- earlier is set, after its trigger has already locked that year's leads.
+-- Those locks are out of the sweep's order, so a run holding a lead of
+-- another year could deadlock with the save. Both therefore take one
+-- transaction-level advisory lock before locking any lead: the sweep here,
+-- the save in its trigger below. A save and a run take turns; the lock is
+-- held until each transaction ends.
+--
+-- Granted to no API role.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.enrol_from_academic_year_start(as_of date)
@@ -42,6 +49,8 @@ begin
     if as_of is null then
         raise exception 'invalid' using detail = jsonb_build_object('field', 'as_of')::text;
     end if;
+
+    perform pg_advisory_xact_lock(hashtext('enrol_from_academic_year_start'));
 
     for each_lead in
         select l.id
@@ -72,6 +81,27 @@ end;
 $$;
 
 revoke execute on function public.enrol_from_academic_year_start(date) from public, anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- recompute_on_academic_year_start, as #108 made it, now taking the sweep's
+-- advisory lock before it recomputes the year's leads, so a start save and
+-- the daily run never hold leads the other is waiting for.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.recompute_on_academic_year_start()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+    perform pg_advisory_xact_lock(hashtext('enrol_from_academic_year_start'));
+    perform public.recompute_year_fees(new.enrollment_year, 'academic_year_start');
+    return null;
+end;
+$$;
+
+revoke execute on function public.recompute_on_academic_year_start() from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- enrol_on_academic_year_start_daily(as_of): the daily job's one call. It

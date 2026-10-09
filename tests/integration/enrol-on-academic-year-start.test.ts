@@ -290,6 +290,49 @@ describe("setting a start of today or earlier", () => {
   })
 })
 
+describe("a start saved while the enrolment runs", () => {
+  // A start save locks its year's leads, then runs the enrolment across every
+  // year. If the daily run could hold a lead of another year meanwhile, the
+  // two would deadlock. Instead the save takes the enrolment's lock first, so
+  // a run started alongside waits for the save rather than locking any lead.
+  test("the enrolment waits for a start save in progress, and the save for a run in progress", async () => {
+    const { year } = await yearStartingJanuary10()
+
+    const blocked = (error: unknown) => (error as { code?: string }).code
+    await inRolledBackTransaction(async (save) => {
+      await save.query("select public.set_audit_actor('system')")
+      await save.query("update public.fee_schedules set academic_year_start = $2 where enrollment_year = $1", [
+        year,
+        `${year}-01-12`,
+      ])
+      const caught = await inRolledBackTransaction(async (run) => {
+        await run.query("set local lock_timeout = '200ms'")
+        return enrol(run, today).then(
+          () => null,
+          (error) => blocked(error),
+        )
+      })
+      // 55P03: lock_not_available, when lock_timeout runs out.
+      expect(caught).toBe("55P03")
+    })
+
+    await inRolledBackTransaction(async (run) => {
+      await enrol(run, today)
+      const caught = await inRolledBackTransaction(async (save) => {
+        await save.query("set local lock_timeout = '200ms'")
+        await save.query("select public.set_audit_actor('system')")
+        return save
+          .query("update public.fee_schedules set academic_year_start = $2 where enrollment_year = $1", [year, `${year}-01-12`])
+          .then(
+            () => null,
+            (error) => blocked(error),
+          )
+      })
+      expect(caught).toBe("55P03")
+    })
+  })
+})
+
 describe("the daily job", () => {
   test("runs just after midnight Tanzania time, 21:05 UTC, calling the enrolment as the system", async () => {
     const jobs = await inRolledBackTransaction(async (sql) => {

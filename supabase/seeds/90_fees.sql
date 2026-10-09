@@ -219,3 +219,81 @@ insert into public.discount_requests (
         'The bus is run by a contractor, so he is not school staff.');
 
 commit;
+
+-- The seat warning on approving a reopening (#103): two Declined 2027 leads
+-- with a payment and a Pending Reopening request raised by Test Admissions,
+-- one in a full class and one in a class with room, and the lead holding the
+-- full class's one seat. Each Passed on 2026-09-22 and paid before any
+-- decline. STD 6 Boarding has 1 seat for this.
+--
+--   ADMSN-90910 Amani Kiwelu    STD 6 Boarding: Initial deposit 300,000,
+--                               Deposit, holding the class's one seat
+--   ADMSN-90911 Faraji Kiwelu   STD 6 Boarding: Initial deposit 1,320,000,
+--                               First instalment, then Declined from
+--                               Interviewed (Fees or cost): approving warns
+--                               that the class is full and ranks him first
+--   ADMSN-90912 Imani Kiwelu    STD 1 Boarding (15 seats): Initial deposit
+--                               300,000, then Declined from Interviewed (Fees
+--                               or cost): approving shows no warning
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.class_seats (enrollment_year, class_name, day_or_boarding, seats) values
+    (2027, 'STD 6', 'Boarding', 1);
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000910', 'Zainabu Kiwelu', 'Mother', null, '+255700000910', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000911', 'Hamza Kiwelu', 'Father', null, '+255700000911', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000912', 'Subira Kiwelu', 'Mother', null, '+255700000912', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined,
+    declined_reason, declined_explanation, declined_at, declined_by, status_before_decline
+) values
+    ('1ead0000-0000-4000-8000-000000000910', 'ADMSN-90910', 'Amani Kiwelu', 'STD 6', 2027, 'Boarding',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000910', false,
+        null, null, null, null, null),
+    ('1ead0000-0000-4000-8000-000000000911', 'ADMSN-90911', 'Faraji Kiwelu', 'STD 6', 2027, 'Boarding',
+        'Declined', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000911', false,
+        'Fees or cost', null, timestamptz '2026-09-30 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000001', 'Interviewed'),
+    ('1ead0000-0000-4000-8000-000000000912', 'ADMSN-90912', 'Imani Kiwelu', 'STD 1', 2027, 'Boarding',
+        'Declined', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000912', false,
+        'Fees or cost', null, timestamptz '2026-09-30 10:30:00+03', 'a1a1a1a1-0000-4000-8000-000000000001', 'Interviewed');
+
+-- The next three 2027 S/Ns.
+insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
+select i.id, i.lead, c.last_number + i.n, 2027, timestamptz '2026-09-15 11:00:00+03',
+    'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Passed', i.score
+from public.interview_serial_counters c
+cross join (values
+    (1, '1e7e0000-0000-4000-8000-000000000910'::uuid, '1ead0000-0000-4000-8000-000000000910'::uuid, 76.0),
+    (2, '1e7e0000-0000-4000-8000-000000000911'::uuid, '1ead0000-0000-4000-8000-000000000911'::uuid, 81.5),
+    (3, '1e7e0000-0000-4000-8000-000000000912'::uuid, '1ead0000-0000-4000-8000-000000000912'::uuid, 73.0)
+) as i(n, id, lead, score)
+where c.enrollment_year = 2027;
+
+update public.interview_serial_counters set last_number = last_number + 3 where enrollment_year = 2027;
+
+insert into public.school_fee_payments (id, lead_id, payment_type, amount, paid_on, recorded_by, recorded_at) values
+    ('fee00000-0000-4000-8000-000000000910', '1ead0000-0000-4000-8000-000000000910', 'initial_deposit', 300000,
+        date '2026-09-25', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-25 12:00:00+03'),
+    ('fee00000-0000-4000-8000-000000000911', '1ead0000-0000-4000-8000-000000000911', 'initial_deposit', 1320000,
+        date '2026-09-23', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-23 12:00:00+03'),
+    ('fee00000-0000-4000-8000-000000000912', '1ead0000-0000-4000-8000-000000000912', 'initial_deposit', 300000,
+        date '2026-09-24', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-24 12:00:00+03');
+
+select public.recompute_lead_fee('1ead0000-0000-4000-8000-000000000910', 'payment');
+
+insert into public.reopening_requests (id, lead_id, source, reason, requested_by, requested_at)
+values
+    ('5e0e0000-0000-4000-8000-000000000911', '1ead0000-0000-4000-8000-000000000911', 'lead',
+        'An uncle has offered to pay the rest of the fee.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-10-01 09:00:00+03'),
+    ('5e0e0000-0000-4000-8000-000000000912', '1ead0000-0000-4000-8000-000000000912', 'lead',
+        'The family has sold land and can now pay the fee.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-10-01 09:30:00+03');
+
+commit;

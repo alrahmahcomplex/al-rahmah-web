@@ -67,6 +67,8 @@ export type AdjustmentError =
   | "type_to_fee_waived"
   | "type_from_fee_waived"
   | "type_pre_form_one"
+  // Restoring a Fee waived payment while another one counts.
+  | "already_waived"
   | "amount_not_positive"
   | "amount_not_whole"
   | "amount_too_large"
@@ -88,6 +90,7 @@ const REFUSALS: ReadonlySet<string> = new Set<AdjustmentError>([
   "type_to_fee_waived",
   "type_from_fee_waived",
   "type_pre_form_one",
+  "already_waived",
   "amount_not_positive",
   "amount_not_whole",
   "amount_too_large",

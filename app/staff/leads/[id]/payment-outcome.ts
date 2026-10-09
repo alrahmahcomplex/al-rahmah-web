@@ -54,6 +54,16 @@ export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded
       }
     case "invalid_type":
       return { status: "refused", field: "type", message: "Choose the payment type." }
+    case "not_waivable":
+      return {
+        status: "refused",
+        field: "type",
+        message: "Fee waived can be recorded only while the lead has a granted Qualified orphan discount.",
+      }
+    case "amount_not_allowed":
+      return { status: "refused", field: "amount", message: "Fee waived has no amount. Leave the amount empty." }
+    case "already_waived":
+      return { status: "refused", field: "type", message: "This lead's fee is already waived." }
     case "amount_not_positive":
       return { status: "refused", field: "amount", message: "Enter an amount above zero." }
     case "amount_not_whole":

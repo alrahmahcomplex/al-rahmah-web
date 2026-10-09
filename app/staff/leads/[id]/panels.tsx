@@ -5,6 +5,7 @@ import type { StaffMember } from "@/lib/services/staff-auth"
 
 import { ClosureSection } from "./closure-section"
 import { DeclineSection } from "./decline-section"
+import { DiscountSection } from "./discount-section"
 import { FamilySection } from "./family-section"
 import { FollowUpSection } from "./follow-up-section"
 import { InterviewSection } from "./interview-section"
@@ -91,6 +92,9 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
       />
     ),
   },
+  // Staff child and Qualified orphan requests; readable on a closed lead,
+  // without actions.
+  { key: "discounts", readOnlyWhenClosed: true, Panel: DiscountSection },
   {
     key: "follow-ups",
     // A closed lead keeps showing its follow-ups, with no actions.

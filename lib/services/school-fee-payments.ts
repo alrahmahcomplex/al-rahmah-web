@@ -7,8 +7,8 @@ import type { Result } from "./result"
 // fee, and the Seat priority the database derives from them. Every rule lives
 // in the database; this file turns its answers into a Result.
 
-// The types a payment can be recorded with now. Fee waived and the Pre-Form
-// One fee arrive with their own tickets.
+// The types a payment of money can be recorded with, and an adjustment can
+// correct a payment to. The Pre-Form One fee arrives with its own ticket.
 export const PAYMENT_TYPES = [
   "full_payment",
   "initial_deposit",
@@ -17,6 +17,11 @@ export const PAYMENT_TYPES = [
   "third_instalment",
 ] as const
 export type PaymentType = (typeof PAYMENT_TYPES)[number]
+
+// What a payment can be recorded as: the payments of money, and Fee waived,
+// which has no amount and needs a granted Qualified orphan discount.
+export const RECORDABLE_PAYMENT_TYPES = [...PAYMENT_TYPES, "fee_waived"] as const
+export type RecordablePaymentType = (typeof RECORDABLE_PAYMENT_TYPES)[number]
 
 // Every type a recorded payment may carry.
 export type RecordedPaymentType = PaymentType | "fee_waived" | "pre_form_one_fee"
@@ -35,14 +40,18 @@ export function isPaymentType(value: unknown): value is PaymentType {
   return typeof value === "string" && (PAYMENT_TYPES as readonly string[]).includes(value)
 }
 
+export function isRecordablePaymentType(value: unknown): value is RecordablePaymentType {
+  return typeof value === "string" && (RECORDABLE_PAYMENT_TYPES as readonly string[]).includes(value)
+}
+
 // Lowest first. A lead with less than the minimum Initial deposit has none.
 export const SEAT_PRIORITIES = ["Deposit", "First instalment", "Full"] as const
 export type SeatPriority = (typeof SEAT_PRIORITIES)[number]
 
 export type PaymentInput = {
-  type: PaymentType
-  // Whole TZS above zero.
-  amount: number
+  type: RecordablePaymentType
+  // Whole TZS above zero; empty exactly for Fee waived.
+  amount: number | null
   // YYYY-MM-DD, today in Tanzania or earlier.
   paidOn: string
 }
@@ -54,6 +63,12 @@ export type PaymentError =
   // The lead's enrollment year has no Fee schedule.
   | "no_schedule"
   | "invalid_type"
+  // Fee waived without a granted Qualified orphan discount.
+  | "not_waivable"
+  // Fee waived with an amount.
+  | "amount_not_allowed"
+  // Fee waived when the lead already has it.
+  | "already_waived"
   | "amount_not_positive"
   | "amount_not_whole"
   | "amount_too_large"
@@ -68,6 +83,9 @@ const REFUSALS: ReadonlySet<string> = new Set<PaymentError>([
   "not_passed",
   "no_schedule",
   "invalid_type",
+  "not_waivable",
+  "amount_not_allowed",
+  "already_waived",
   "amount_not_positive",
   "amount_not_whole",
   "amount_too_large",
@@ -161,7 +179,9 @@ type RecordedRow = { payment_id: string; total_paid: number; priority: SeatPrior
 
 // Records the payment under the signed-in staff member, on a lead whose
 // current interview is Passed and whose year has a Fee schedule. The payment
-// is locked once recorded. Needs payments.record.
+// is locked once recorded. Fee waived, with no amount, is taken only while
+// the lead holds a granted Qualified orphan discount, and makes it Full.
+// Needs payments.record.
 //
 // `requestId` names this one payment: the caller makes it once and sends it
 // again on a retry, which then returns the payment already recorded instead

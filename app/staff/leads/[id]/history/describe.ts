@@ -10,6 +10,7 @@ import {
   isPriorityChange,
   PRIORITY_CHANGE_HIDDEN,
 } from "./adjustment-history"
+import { DISCOUNT_HIDDEN, discountLabel, discountSummary, discountValue } from "./discount-history"
 import {
   ENROLMENT_FIELDS,
   ENROLMENT_HIDDEN,
@@ -110,6 +111,7 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
   reopening_requests: REOPENING_HIDDEN,
+  discount_requests: DISCOUNT_HIDDEN,
   lead_fee_profiles: ENROLMENT_HIDDEN,
   // The entry already says who recorded the payment, and when. The request id
   // only stops a retried Confirm recording it twice.
@@ -319,6 +321,8 @@ function summarize(
   }
 
   if (entry.record === "reopening_requests") return reopeningSummary(entry)
+  const discount = discountSummary(entry)
+  if (discount) return discount
   if (entry.record === "lead_fee_profiles") return enrolmentProfileSummary(entry)
   if (entry.record === "school_fee_payments" && insert) return "recorded a school-fee payment"
   const adjustment = adjustmentSummary(entry)
@@ -412,6 +416,7 @@ function describeEntry(
       .map((c) => ({
         label:
           reopeningLabel(entry.record, c.field) ??
+          discountLabel(entry.record, c.field) ??
           enrolmentLabel(entry.record, c.field) ??
           adjustmentLabel(entry, c.field) ??
           LABELS[c.field] ??
@@ -420,12 +425,14 @@ function describeEntry(
         from:
           fromOld || c.from !== null
             ? (reopeningValue(entry.record, c.field, c.from) ??
+              discountValue(entry.record, c.field, c.from) ??
               enrolmentValue(entry.record, c.field, c.from) ??
               adjustmentValue(entry, c.field, c.from) ??
               display(c.field, c.from, contactNames))
             : null,
         to:
           reopeningValue(entry.record, c.field, c.to) ??
+          discountValue(entry.record, c.field, c.to) ??
           enrolmentValue(entry.record, c.field, c.to) ??
           adjustmentValue(entry, c.field, c.to) ??
           display(c.field, c.to, contactNames),

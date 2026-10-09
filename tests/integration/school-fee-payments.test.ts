@@ -301,7 +301,8 @@ describe("recording", () => {
       ["a fraction", passed, payment(1000.5), "amount_not_whole"],
       ["too large", passed, payment(3_000_000_000), "amount_too_large"],
       ["tomorrow", passed, payment(300_000, { paidOn: tomorrow }), "date_in_future"],
-      ["Fee waived", passed, payment(300_000, { type: "fee_waived" as PaymentInput["type"] }), "invalid_type"],
+      // Fee waived needs a granted Qualified orphan discount (#112).
+      ["Fee waived", passed, payment(300_000, { type: "fee_waived" }), "not_waivable"],
       ["Pre-Form One", passed, payment(300_000, { type: "pre_form_one_fee" as PaymentInput["type"] }), "invalid_type"],
       ["missing lead", randomUUID(), payment(300_000), "not_found"],
       ["malformed lead", "not-a-lead", payment(300_000), "not_found"],

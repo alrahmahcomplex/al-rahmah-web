@@ -1,5 +1,6 @@
 import "server-only"
 
+import { countPendingDiscountRequests } from "@/lib/services/discounts"
 import { getOverdueCount } from "@/lib/services/follow-ups"
 import { getPendingAgentCount } from "@/lib/services/marketing-agents"
 import { countUnreviewedReApplications } from "@/lib/services/re-applications"
@@ -17,13 +18,15 @@ export async function navCounts(staff: Pick<StaffMember, "permissions">): Promis
   const counts: Partial<Record<string, NavCount>> = {}
   if (!staff.permissions.includes("leads.view")) return counts
   const supabase = await createClient()
-  const [pending, unreviewed, overdue] = await Promise.all([
+  const [pending, unreviewed, overdue, discounts] = await Promise.all([
     staff.permissions.includes("agents.approve") ? getPendingAgentCount(supabase) : null,
     countUnreviewedReApplications(supabase),
     getOverdueCount(supabase),
+    staff.permissions.includes("discounts.approve") ? countPendingDiscountRequests(supabase) : null,
   ])
   if (pending?.ok) counts["/staff/agents"] = { count: pending.data, label: "Pending" }
   if (unreviewed.ok) counts["/staff/re-applications"] = { count: unreviewed.data, label: "unreviewed" }
   if (overdue.ok) counts["/staff/follow-ups"] = { count: overdue.data, label: "overdue" }
+  if (discounts?.ok) counts["/staff/discounts"] = { count: discounts.data, label: "Pending" }
   return counts
 }

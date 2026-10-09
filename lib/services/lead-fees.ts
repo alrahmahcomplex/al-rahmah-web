@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { DiscountKind } from "./discounts"
 import type { FeeBand } from "./fees"
 import type { DayOrBoarding } from "./leads"
 import type { Result } from "./result"
@@ -25,8 +26,12 @@ export type LeadFee =
       year: number
       band: FeeBand
       dayOrBoarding: DayOrBoarding
-      // Whole TZS.
+      // Whole TZS. The band fee for the class and Day or boarding, and the
+      // School fee: the band fee less the discount, if any.
+      bandFee: number
       schoolFee: number
+      // The one discount the School fee carries, the largest the lead holds.
+      discount: { kind: DiscountKind; percent: number } | null
       totalPaid: number
       balance: number
       // First, second and third. They add up to the School fee exactly.
@@ -61,6 +66,9 @@ type LeadSchoolFeeRow = {
   enrolled_on: string | null
   enrolled_payment_type: RecordedPaymentType | null
   enrolled_payment_amount: number | null
+  band_fee: number | null
+  discount: DiscountKind | null
+  discount_percent: number | null
 }
 
 function enrolmentOf(row: LeadSchoolFeeRow): Enrolment | null {
@@ -96,7 +104,9 @@ export async function getLeadFee(
       year: data.enrollment_year,
       band: data.band,
       dayOrBoarding: data.day_or_boarding,
+      bandFee: data.band_fee!,
       schoolFee: data.school_fee!,
+      discount: data.discount === null ? null : { kind: data.discount, percent: data.discount_percent! },
       totalPaid: data.total_paid!,
       balance: data.balance!,
       instalments: [

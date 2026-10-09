@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
-import { isPaymentType, previewPayment, recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
+import { isRecordablePaymentType, previewPayment, recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
@@ -19,8 +19,13 @@ import {
 
 function shapeRefusal(leadId: unknown, input: Partial<PaymentInput> | undefined): PaymentRefusal | null {
   if (typeof leadId !== "string") return paymentRefusal("not_found", "checked")
-  if (!isPaymentType(input?.type)) return paymentRefusal("invalid_type", "checked")
-  if (typeof input.amount !== "number" || !Number.isFinite(input.amount)) return paymentRefusal("amount_not_positive", "checked")
+  if (!isRecordablePaymentType(input?.type)) return paymentRefusal("invalid_type", "checked")
+  // Fee waived has no amount; every other type has a number.
+  if (input.type === "fee_waived") {
+    if (input.amount !== null) return paymentRefusal("amount_not_allowed", "checked")
+  } else if (typeof input.amount !== "number" || !Number.isFinite(input.amount)) {
+    return paymentRefusal("amount_not_positive", "checked")
+  }
   if (typeof input.paidOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(input.paidOn)) {
     return paymentRefusal("date_missing", "checked")
   }
@@ -36,7 +41,7 @@ export async function previewSchoolFeePayment(leadId: string, input: PaymentInpu
   const allowed = await requirePermission(supabase, "payments.record")
   if (!allowed.ok) return paymentRefusal("forbidden", "checked")
 
-  const preview = await previewPayment(supabase, leadId, { type: input.type, amount: input.amount, paidOn: input.paidOn })
+  const preview = await previewPayment(supabase, leadId, { type: input.type, amount: input.amount ?? null, paidOn: input.paidOn })
   if (!preview.ok) return paymentRefusal(preview.error, "checked")
   return { status: "preview", preview: preview.data }
 }
@@ -61,7 +66,7 @@ export async function recordSchoolFeePayment(
   const recorded = await recordPayment(
     supabase,
     leadId,
-    { type: input.type, amount: input.amount, paidOn: input.paidOn },
+    { type: input.type, amount: input.amount ?? null, paidOn: input.paidOn },
     requestId,
   )
   if (!recorded.ok) return paymentRefusal(recorded.error, "recorded")

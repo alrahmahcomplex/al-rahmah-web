@@ -1,5 +1,6 @@
 "use client"
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -17,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { DECLINE_EXPLANATION_MAX, type DeclinedReason } from "@/lib/services/lead-closure"
 import type { LeadStatus } from "@/lib/services/leads"
 
+import { DECLINE_PARAM, linkedDeclineReason } from "../decline-link"
 import { declineLeadAction } from "./decline-actions"
 import type { DeclineOutcome } from "./decline-outcome"
 
@@ -40,11 +42,17 @@ type DeclineLeadProps = {
 
 // Decline, in two steps: choose the reason (and explain it, for Other), then
 // confirm against the lead's name and number. A decline that lands refreshes
-// the page into the closed-lead banner, which replaces this panel.
+// the page into the closed-lead banner, which replaces this panel. A link
+// with a reason (from Seats, for No seat available) opens it with that reason
+// chosen.
 export function DeclineLead({ lead, reasons }: DeclineLeadProps) {
-  const [open, setOpen] = useState(false)
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const linked = linkedDeclineReason(searchParams.get(DECLINE_PARAM), reasons)
+  const [open, setOpen] = useState(linked !== null)
   const [step, setStep] = useState<"choose" | "confirm">("choose")
-  const [reason, setReason] = useState<DeclinedReason | "">("")
+  const [reason, setReason] = useState<DeclinedReason | "">(linked ?? "")
   const [explanation, setExplanation] = useState("")
   const [missing, setMissing] = useState<"reason" | "explanation" | null>(null)
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -62,7 +70,14 @@ export function DeclineLead({ lead, reasons }: DeclineLeadProps) {
       setStep("choose")
       setMissing(null)
       setRefusal(null)
+      dropLinkedReason()
     }
+  }
+
+  // Closing or declining drops the link's reason from the address, so a
+  // reload, even after a later reopening, doesn't open Decline again.
+  function dropLinkedReason() {
+    if (searchParams.has(DECLINE_PARAM)) router.replace(pathname, { scroll: false })
   }
 
   function review(event: React.FormEvent<HTMLFormElement>) {
@@ -84,8 +99,9 @@ export function DeclineLead({ lead, reasons }: DeclineLeadProps) {
       } catch {
         outcome = LOST_REQUEST
       }
-      if (outcome.status === "refused") setRefusal(outcome.message)
-      else setOpen(false)
+      if (outcome.status === "refused") return setRefusal(outcome.message)
+      setOpen(false)
+      dropLinkedReason()
     })
   }
 

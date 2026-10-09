@@ -44,7 +44,8 @@ export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded
       return {
         status: "refused",
         field: null,
-        message: "Payments can be recorded only once the lead's current interview result is Passed.",
+        message:
+          "Payments can be recorded only once the lead's current interview result is Passed, or a reopening approved it to enrol without a retaken interview.",
       }
     case "no_schedule":
       return {

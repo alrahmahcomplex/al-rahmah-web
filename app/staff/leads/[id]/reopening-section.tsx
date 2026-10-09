@@ -7,11 +7,12 @@ import { buttonVariants } from "@/components/ui/button"
 import { getLeadClosure } from "@/lib/services/lead-closure"
 import type { Lead } from "@/lib/services/leads"
 import { getLeadReopenings, needsRetakeChoice, type ReopeningRequest } from "@/lib/services/reopening-requests"
+import { seatCheck } from "@/lib/services/seats"
 import { createClient } from "@/utils/supabase/server"
 
 import { DecideReopening } from "./decide-reopening"
 import type { LeadPanelProps } from "./panels"
-import { approvalConsequence, canDecideReopening, retakeChoiceText } from "./reopening-decision-outcome"
+import { approvalConsequence, approvalSeats, canDecideReopening, retakeChoiceText } from "./reopening-decision-outcome"
 import { canRaiseReopening, dayOf, SOURCE_LABELS, STATE_LABELS } from "./reopening-outcome"
 import { WithdrawReopening } from "./withdraw-reopening"
 
@@ -114,10 +115,14 @@ function PendingRequest({
   )
 }
 
-// Approve and Reject, with what approving does to this lead. The retake
-// choice is asked when the lead was declined from Interviewed or Enrolled.
+// Approve and Reject, with what approving does to this lead and, when it
+// would take a seat in a full class, slice 9's seat warning and ranking
+// (#103). The retake choice is asked when the lead was declined from
+// Interviewed or Enrolled. The seat check only advises, so a failed one
+// never holds back Approve.
 async function Decide({ lead, requestId }: { lead: Lead; requestId: string }) {
-  const closure = await getLeadClosure(await createClient(), lead.id)
+  const supabase = await createClient()
+  const [closure, seats] = await Promise.all([getLeadClosure(supabase, lead.id), seatCheck(supabase, lead.id)])
   if (!closure.ok) {
     return <p className="text-sm text-destructive">Approve and Reject could not be loaded. Reload the page to try again.</p>
   }
@@ -130,6 +135,7 @@ async function Decide({ lead, requestId }: { lead: Lead; requestId: string }) {
       admissionNumber={lead.admissionNumber}
       consequence={approvalConsequence({ status: lead.status, closure: lead.closure, statusBefore, visitDate: lead.visitDate })}
       askRetake={lead.status === "Declined" && needsRetakeChoice(statusBefore)}
+      seats={approvalSeats(seats)}
     />
   )
 }

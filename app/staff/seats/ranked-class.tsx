@@ -40,9 +40,10 @@ export function RankedClass({ entry, canDecline }: { entry: ClassSeats; canDecli
             {canDecline && !holder.closure && (
               <Link
                 href={declineHref(holder.leadId, SEAT_RELEASE_REASON)}
+                aria-label={`Decline ${holder.studentName}: ${SEAT_RELEASE_REASON}`}
                 className="w-full text-xs font-medium text-destructive underline-offset-4 hover:underline sm:w-auto"
               >
-                Decline<span className="sr-only"> {holder.studentName}</span>: {SEAT_RELEASE_REASON}
+                Decline: {SEAT_RELEASE_REASON}
               </Link>
             )}
           </li>

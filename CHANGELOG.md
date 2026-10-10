@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- A child now gets the **Sibling** discount, 10% off the School fee, by itself once
+  another child in its confirmed Family is Enrolled. It counts toward the child's Seat
+  priority straight away, so it can enrol a child whose payments now reach the line.
+  The child who enrolled first keeps paying the full fee, and a child that enrols
+  holding the discount keeps it even if the sibling later stops being Enrolled. A
+  Family the Admission form joined but staff haven't confirmed gives no discount;
+  confirming, rejecting or separating a Family updates the fees at once. When a child
+  also holds Staff child or Qualified orphan, the largest discount applies.
+- Staff who can edit leads can tick **Has a sibling already at Al-Rahmah** on the lead's
+  Discounts panel, with the sibling's name and class, for a family whose older child
+  enrolled before the system. The tick gives the Sibling discount, and everyone who
+  can view the lead sees it. Ticking and clearing it show in the lead history.
+
 ## October 10, 2026 `v0.54.0`
 
 ### NEW

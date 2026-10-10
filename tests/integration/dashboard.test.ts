@@ -40,8 +40,8 @@ function withLeadsHeld<T>(work: () => Promise<T>): Promise<T> {
 
 describe("Visited leads", () => {
   test("counts every visited 2031 lead for All time, and leaves the Applied lead with no visit out", async () => {
-    // Twenty-six 2031 leads, twenty-two of them visited.
-    expect(await visited(await signedIn(MANAGER), { kind: "all" })).toBe(22)
+    // Twenty-seven 2031 leads, twenty-three of them visited.
+    expect(await visited(await signedIn(MANAGER), { kind: "all" })).toBe(23)
   })
 
   test("counts a lead whatever its status or closure mark now", async () => {
@@ -82,9 +82,9 @@ describe("Visited leads", () => {
 
   test("Year is the calendar year", async () => {
     const manager = await signedIn(MANAGER)
-    // ADMSN-31005 on the last day of 2025, and the ten Enrolled students
-    // fixtures in November.
-    expect(await visited(manager, year("2025-12-31"))).toBe(11)
+    // ADMSN-31005 on the last day of 2025, the retaken ADMSN-31027 in
+    // October, and the ten Enrolled students fixtures in November.
+    expect(await visited(manager, year("2025-12-31"))).toBe(12)
     expect(await visited(manager, year("2026-01-01"))).toBe(11)
     expect(await visited(manager, year("2024-06-15"))).toBe(0)
   })
@@ -92,7 +92,7 @@ describe("Visited leads", () => {
   test("every role that may view leads sees the same counts", async () => {
     for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT]) {
       const supabase = await signedIn(person)
-      expect(await visited(supabase, { kind: "all" })).toBe(22)
+      expect(await visited(supabase, { kind: "all" })).toBe(23)
       expect(await visited(supabase, week("2026-09-21"))).toBe(4)
     }
   })
@@ -185,7 +185,7 @@ describe("who may read the dashboard", () => {
   test("reading the dashboard writes nothing to the audit history", async () => {
     const reader = await createThrowawayStaff(["leads.view"])
     const supabase = await signedIn(reader)
-    expect(await visited(supabase, { kind: "all" })).toBe(22)
+    expect(await visited(supabase, { kind: "all" })).toBe(23)
     expect((await listEnrollmentYears(supabase)).ok).toBe(true)
 
     const rows = await asSystem(async (sql) =>

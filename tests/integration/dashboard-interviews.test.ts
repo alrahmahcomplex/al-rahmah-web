@@ -50,10 +50,11 @@ const year = (anchor: string): Period => ({ kind: "year", anchor })
 
 describe("the interview counts", () => {
   test("All time: Interviewed leads counts children, Passed and Failed count sittings", async () => {
-    // Twenty-two 2031 sittings with a result, on twenty-one children:
-    // ADMSN-31015 sat twice. One registration has no result yet. Ten of the
-    // passes are the Enrolled students fixtures', on 19 November 2025.
-    expect(await counts(await signedIn(MANAGER), ALL)).toEqual({ interviewed: 21, passed: 16, failed: 6 })
+    // Twenty-four 2031 sittings with a result, on twenty-two children:
+    // ADMSN-31015 and ADMSN-31027 sat twice. One registration has no result
+    // yet. Ten of the passes are the Enrolled students fixtures', on
+    // 19 November 2025.
+    expect(await counts(await signedIn(MANAGER), ALL)).toEqual({ interviewed: 22, passed: 17, failed: 7 })
   })
 
   test("Date counts one day", async () => {
@@ -86,8 +87,9 @@ describe("the interview counts", () => {
 
   test("Year is the calendar year", async () => {
     const manager = await signedIn(MANAGER)
-    // 31 December 2025 ends 2025; 1 January 2026 starts 2026.
-    expect(await counts(manager, year("2025-12-31"))).toEqual({ interviewed: 11, passed: 10, failed: 1 })
+    // 31 December 2025 ends 2025; 1 January 2026 starts 2026. ADMSN-31027
+    // sat both its interviews in 2025, so it counts once there.
+    expect(await counts(manager, year("2025-12-31"))).toEqual({ interviewed: 12, passed: 11, failed: 2 })
     expect(await counts(manager, year("2026-01-01"))).toEqual({ interviewed: 10, passed: 6, failed: 5 })
     expect(await counts(manager, year("2024-06-15"))).toEqual({ interviewed: 0, passed: 0, failed: 0 })
   })
@@ -98,6 +100,62 @@ describe("the interview counts", () => {
     expect(await counts(manager, month("2026-06-01"))).toEqual({ interviewed: 1, passed: 1, failed: 1 })
     expect(await counts(manager, week("2026-06-08"))).toEqual({ interviewed: 1, passed: 0, failed: 1 })
     expect(await counts(manager, week("2026-06-22"))).toEqual({ interviewed: 1, passed: 1, failed: 0 })
+    // The week between holds the approval and the retake's registration, and
+    // neither is a sitting.
+    expect(await counts(manager, week("2026-06-15"))).toEqual({ interviewed: 0, passed: 0, failed: 0 })
+  })
+
+  test("a retake in another period counts each sitting in the period it was dated in", async () => {
+    // ADMSN-31027 failed on Thursday 30 October 2025 and passed a retake on
+    // Wednesday 5 November, beside the ten passes on 19 November.
+    const manager = await signedIn(MANAGER)
+    expect(await counts(manager, month("2025-10-01"))).toEqual({ interviewed: 1, passed: 0, failed: 1 })
+    expect(await counts(manager, month("2025-11-01"))).toEqual({ interviewed: 11, passed: 11, failed: 0 })
+    expect(await counts(manager, date("2025-10-30"))).toEqual({ interviewed: 1, passed: 0, failed: 1 })
+    expect(await counts(manager, date("2025-11-05"))).toEqual({ interviewed: 1, passed: 1, failed: 0 })
+    expect(await counts(manager, week("2025-10-27"))).toEqual({ interviewed: 1, passed: 0, failed: 1 })
+    expect(await counts(manager, week("2025-11-03"))).toEqual({ interviewed: 1, passed: 1, failed: 0 })
+  })
+
+  test("each retaken lead failed, was reopened with Retake, and passed a retake registered after the approval", async () => {
+    // Seeded the way #71's retake rule reads them, so the lead screen offers
+    // neither lead another retake.
+    const leads = await asSystem(async (sql) =>
+      (
+        await sql.query<{ admission_number: string; sittings: string; initially_declined: boolean; registration: string | null }>(
+          `select l.admission_number,
+                  string_agg(
+                    to_char(i.interview_date, 'YYYY-MM-DD') || ' ' || i.result
+                      || case when i.registered_at >= r.decided_at then ' after approval' else ' before approval' end,
+                    ', ' order by i.serial_number
+                  ) as sittings,
+                  l.initially_declined,
+                  public.interview_registration_kind(l.id) as registration
+             from public.leads l
+             join public.reopening_requests r
+               on r.lead_id = l.id and r.state = 'approved' and r.enrol_without_retake is false
+              and r.lead_was_declined and r.restored_status = 'Interviewed'
+             join public.interviews i on i.lead = l.id
+            where l.admission_number in ('ADMSN-31015', 'ADMSN-31027')
+            group by l.id
+            order by l.admission_number`,
+        )
+      ).rows,
+    )
+    expect(leads).toEqual([
+      {
+        admission_number: "ADMSN-31015",
+        sittings: "2026-06-10 Failed before approval, 2026-06-24 Passed after approval",
+        initially_declined: true,
+        registration: null,
+      },
+      {
+        admission_number: "ADMSN-31027",
+        sittings: "2025-10-30 Failed before approval, 2025-11-05 Passed after approval",
+        initially_declined: true,
+        registration: null,
+      },
+    ])
   })
 
   test("a registered interview with no result is counted nowhere", async () => {
@@ -156,7 +214,7 @@ describe("the interview counts", () => {
   test("every role that may view leads sees the same counts", async () => {
     for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT]) {
       const supabase = await signedIn(person)
-      expect(await counts(supabase, ALL)).toEqual({ interviewed: 21, passed: 16, failed: 6 })
+      expect(await counts(supabase, ALL)).toEqual({ interviewed: 22, passed: 17, failed: 7 })
       expect(await counts(supabase, week("2026-09-28"))).toEqual({ interviewed: 6, passed: 3, failed: 3 })
     }
   })
@@ -298,7 +356,7 @@ describe("who may read the interview counts", () => {
 
   test("reading the counts writes nothing to the audit history", async () => {
     const reader = await createThrowawayStaff(["leads.view"])
-    expect(await counts(await signedIn(reader), ALL)).toEqual({ interviewed: 21, passed: 16, failed: 6 })
+    expect(await counts(await signedIn(reader), ALL)).toEqual({ interviewed: 22, passed: 17, failed: 7 })
 
     const rows = await asSystem(async (sql) =>
       (await sql.query("select 1 from public.audit_log where actor_staff_id = $1", [reader.id])).rowCount,

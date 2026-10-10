@@ -71,5 +71,5 @@ export async function recordSchoolFeePayment(
   )
   if (!recorded.ok) return paymentRefusal(recorded.error, "recorded")
   revalidatePath(`/staff/leads/${leadId}`)
-  return recordedPaymentOutcome(recorded.data)
+  return recordedPaymentOutcome(recorded.data, input.type)
 }

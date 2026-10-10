@@ -15,6 +15,7 @@ const PREVIEW = {
   seats: 2,
   seatsTaken: 2,
   wouldOverfill: true,
+  preFormOne: { fee: 580_000, paid: 0, paidAfter: 0, balanceAfter: 580_000 },
 }
 
 describe("overfillWarning", () => {

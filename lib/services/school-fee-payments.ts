@@ -7,8 +7,8 @@ import type { Result } from "./result"
 // fee, and the Seat priority the database derives from them. Every rule lives
 // in the database; this file turns its answers into a Result.
 
-// The types a payment of money can be recorded with, and an adjustment can
-// correct a payment to. The Pre-Form One fee arrives with its own ticket.
+// The school-fee types a payment of money can be recorded with, and an
+// adjustment can correct a school-fee payment to.
 export const PAYMENT_TYPES = [
   "full_payment",
   "initial_deposit",
@@ -18,13 +18,15 @@ export const PAYMENT_TYPES = [
 ] as const
 export type PaymentType = (typeof PAYMENT_TYPES)[number]
 
-// What a payment can be recorded as: the payments of money, and Fee waived,
-// which has no amount and needs a granted Qualified orphan discount.
-export const RECORDABLE_PAYMENT_TYPES = [...PAYMENT_TYPES, "fee_waived"] as const
+// What a payment can be recorded as: the school-fee payments of money; Fee
+// waived, which has no amount and needs a granted Qualified orphan discount;
+// and the Pre-Form One fee, which needs the Pre-Form One tick on a FORM 1
+// lead and counts toward neither Total paid, Seat priority nor Enrolled.
+export const RECORDABLE_PAYMENT_TYPES = [...PAYMENT_TYPES, "fee_waived", "pre_form_one_fee"] as const
 export type RecordablePaymentType = (typeof RECORDABLE_PAYMENT_TYPES)[number]
 
 // Every type a recorded payment may carry.
-export type RecordedPaymentType = PaymentType | "fee_waived" | "pre_form_one_fee"
+export type RecordedPaymentType = RecordablePaymentType
 
 export const PAYMENT_TYPE_NAMES: Record<RecordedPaymentType, string> = {
   full_payment: "Full payment",
@@ -70,6 +72,9 @@ export type PaymentError =
   | "amount_not_allowed"
   // Fee waived when the lead already has it.
   | "already_waived"
+  // The Pre-Form One fee while the tick is unset, or set on a lead no longer
+  // in FORM 1.
+  | "not_pre_form_one"
   | "amount_not_positive"
   | "amount_not_whole"
   | "amount_too_large"
@@ -87,6 +92,7 @@ const REFUSALS: ReadonlySet<string> = new Set<PaymentError>([
   "not_waivable",
   "amount_not_allowed",
   "already_waived",
+  "not_pre_form_one",
   "amount_not_positive",
   "amount_not_whole",
   "amount_too_large",
@@ -129,6 +135,10 @@ export type PaymentPreview = {
   // The payment would give the lead a seat in a class whose seats taken
   // already reach its seats set. A warning only: recording still goes ahead.
   wouldOverfill: boolean
+  // The Pre-Form One fee (null with no Fee schedule), what is paid toward it
+  // now and after this payment, and the balance after. A Pre-Form One fee
+  // payment moves only these; any other payment leaves them as they are.
+  preFormOne: { fee: number | null; paid: number; paidAfter: number; balanceAfter: number | null }
 }
 
 type PreviewRow = {
@@ -141,6 +151,10 @@ type PreviewRow = {
   seats: number | null
   seats_taken: number
   would_overfill: boolean
+  pre_form_one_fee: number | null
+  pre_form_one_paid: number
+  pre_form_one_paid_after: number
+  pre_form_one_balance_after: number | null
 }
 
 // What recording the payment would do: the new Total paid, balance and Seat
@@ -166,6 +180,12 @@ export async function previewPayment(
       seats: row.seats,
       seatsTaken: row.seats_taken,
       wouldOverfill: row.would_overfill,
+      preFormOne: {
+        fee: row.pre_form_one_fee,
+        paid: row.pre_form_one_paid,
+        paidAfter: row.pre_form_one_paid_after,
+        balanceAfter: row.pre_form_one_balance_after,
+      },
     },
   }
 }
@@ -182,8 +202,10 @@ type RecordedRow = { payment_id: string; total_paid: number; priority: SeatPrior
 // current interview is Passed (or whose latest approved reopening chose Enrol
 // without a retaken interview) and whose year has a Fee schedule. The payment
 // is locked once recorded. Fee waived, with no amount, is taken only while
-// the lead holds a granted Qualified orphan discount, and makes it Full.
-// Needs payments.record.
+// the lead holds a granted Qualified orphan discount, and makes it Full. The
+// Pre-Form One fee is taken only while the Pre-Form One tick applies, and
+// leaves Total paid and the Seat priority as they were. Needs
+// payments.record.
 //
 // `requestId` names this one payment: the caller makes it once and sends it
 // again on a retry, which then returns the payment already recorded instead

@@ -20,6 +20,22 @@ export type Enrolment = {
   by: { kind: "payment"; type: RecordedPaymentType; amount: number | null } | { kind: "academic-year-start" }
 }
 
+// The Pre-Form One programme (#114): its fee for the lead's Day or boarding,
+// with no discount, and what has been paid toward it. Pre-Form One fee
+// payments count toward neither Total paid, Seat priority nor Enrolled.
+export type PreFormOne = {
+  // Staff ticked the programme. A class correction off FORM 1 keeps the tick.
+  ticked: boolean
+  // The lead's class is FORM 1, so the tick may be set.
+  offered: boolean
+  // Ticked on a FORM 1 lead: only then may a Pre-Form One fee be recorded.
+  applies: boolean
+  // Whole TZS. Null while the lead's year has no Fee schedule.
+  fee: number | null
+  paid: number
+  balance: number | null
+}
+
 export type LeadFee =
   | {
       kind: "fee"
@@ -42,9 +58,10 @@ export type LeadFee =
       priorityReachedOn: string | null
       // Set exactly while the lead is Enrolled from its payments.
       enrolment: Enrolment | null
+      preFormOne: PreFormOne
     }
   // The lead's enrollment year has no Fee schedule yet, so it has no fee.
-  | { kind: "no-schedule"; year: number }
+  | { kind: "no-schedule"; year: number; preFormOne: PreFormOne }
 
 type LeadSchoolFeeRow = {
   enrollment_year: number
@@ -69,6 +86,23 @@ type LeadSchoolFeeRow = {
   band_fee: number | null
   discount: FeeDiscountKind | null
   discount_percent: number | null
+  pre_form_one: boolean
+  pre_form_one_offered: boolean
+  pre_form_one_applies: boolean
+  pre_form_one_fee: number | null
+  pre_form_one_paid: number
+  pre_form_one_balance: number | null
+}
+
+function preFormOneOf(row: LeadSchoolFeeRow): PreFormOne {
+  return {
+    ticked: row.pre_form_one,
+    offered: row.pre_form_one_offered,
+    applies: row.pre_form_one_applies,
+    fee: row.pre_form_one_fee,
+    paid: row.pre_form_one_paid,
+    balance: row.pre_form_one_balance,
+  }
 }
 
 function enrolmentOf(row: LeadSchoolFeeRow): Enrolment | null {
@@ -96,7 +130,7 @@ export async function getLeadFee(
     return { ok: false, error: "unavailable" }
   }
 
-  if (!data.has_schedule) return { ok: true, data: { kind: "no-schedule", year: data.enrollment_year } }
+  if (!data.has_schedule) return { ok: true, data: { kind: "no-schedule", year: data.enrollment_year, preFormOne: preFormOneOf(data) } }
   return {
     ok: true,
     data: {
@@ -117,6 +151,7 @@ export async function getLeadFee(
       priority: data.priority,
       priorityReachedOn: data.priority_reached_on,
       enrolment: enrolmentOf(data),
+      preFormOne: preFormOneOf(data),
     },
   }
 }

@@ -46,7 +46,9 @@ export function PaymentList({ leadId, payments, canAdjust }: { leadId: string; p
                 </p>
                 {adjusted ? (
                   <p className="text-xs text-muted-foreground">
-                    {payment.effective === null ? "No longer counts toward Total paid." : `Paid ${formatDate(shown.paidOn)}.`}
+                    {payment.effective === null
+                      ? `No longer counts toward ${payment.type === "pre_form_one_fee" ? "the Pre-Form One fee" : "Total paid"}.`
+                      : `Paid ${formatDate(shown.paidOn)}.`}
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">

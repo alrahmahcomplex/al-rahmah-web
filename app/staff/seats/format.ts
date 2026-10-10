@@ -7,7 +7,7 @@ export function seatsLine({ seats }: ClassSeats): string {
 
 // The seats taken split by Seat priority, leaving out priorities nobody
 // holds: "Full 1 · Deposit 2".
-export function takenLine({ full, firstInstalment, deposit }: ClassSeats): string {
+export function takenLine<T extends Pick<ClassSeats, "full" | "firstInstalment" | "deposit">>({ full, firstInstalment, deposit }: T): string {
   return (
     [
       ["Full", full],

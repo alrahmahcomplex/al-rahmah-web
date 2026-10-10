@@ -5,6 +5,19 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 10, 2026 `v0.58.0`
+
+### NEW
+
+- Staff who can view payments now see **Seats by class** on the staff home: for one
+  Enrollment year, each class's Day and Boarding seats set, seats taken split into Full,
+  First instalment and Deposit, and seats left. A class with more seats taken than set
+  shows "Over by" how many, and a class with no seat number shows "Seats not set" with
+  its taken seats still counted. The panel shows the seats as they stand now, opens on
+  the latest year with a Fee schedule, and keeps a chosen year in the page address. It
+  shows counts only, never the families holding the seats. The Admissions Manager also
+  gets a link to the Seats screen.
+
 ## October 10, 2026 `v0.57.0`
 
 ### NEW

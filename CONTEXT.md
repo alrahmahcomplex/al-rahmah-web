@@ -253,6 +253,8 @@ Counts follow corrected values. A corrected **Visit date**, interview date, resu
 
 **Seats by class** shows, for each class and **Enrollment year**, the seats taken against the seats available, split by **Seat priority** and by day and boarding.
 
+**Seats by class** is a snapshot of the seats as they stand now, so it has only an **Enrollment year** filter and no period. It opens on the latest year with a Fee schedule and offers the other years that have one. It shows counts, never the leads holding the seats, and only to staff who may view payments.
+
 The system provides a dedicated follow-up queue containing leads with upcoming or overdue follow-ups.
 
 The queue is divided into **Overdue** and **Upcoming** sections. Overdue follow-ups are ordered oldest first; upcoming follow-ups are ordered by the nearest scheduled date.

@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { getLeadsByClass, getMetricCount, listEnrollmentYears, type DashboardMetric } from "@/lib/services/dashboard"
+import { getLeadsByClass, getMetricCount, getSeatsByClass, listEnrollmentYears, type DashboardMetric } from "@/lib/services/dashboard"
 
-import { parsePanelFilters } from "./filters"
+import { parsePanelFilters, parseSeatsYear } from "./filters"
 import { LeadsByClassTable } from "./leads-by-class"
 import { DashboardPanel } from "./panel"
+import { SeatsByClassPanel } from "./seats-by-class"
 
 type SearchParams = { [key: string]: string | string[] | undefined }
 
@@ -22,11 +23,21 @@ export const METRIC_TILES: { metric: DashboardMetric; key: string; title: string
 const CLASSES_KEY = "classes"
 
 // The dashboard on the staff home, for staff who may view leads. Rendered on
-// every request, so the counts are always current.
-export async function Dashboard({ supabase, searchParams }: { supabase: SupabaseClient; searchParams: SearchParams }) {
+// every request, so the counts are always current. Seats by class shows only
+// for staff who may view payments; `canOpenSeats` adds its link to the Seats
+// screen.
+export async function Dashboard({
+  supabase,
+  searchParams,
+  canOpenSeats,
+}: {
+  supabase: SupabaseClient
+  searchParams: SearchParams
+  canOpenSeats: boolean
+}) {
   const query = toURLSearchParams(searchParams)
   const classFilters = parsePanelFilters(searchParams, CLASSES_KEY)
-  const [years, tiles, byClass] = await Promise.all([
+  const [years, tiles, byClass, seats] = await Promise.all([
     listEnrollmentYears(supabase),
     Promise.all(
       METRIC_TILES.map(async (tile) => {
@@ -35,6 +46,7 @@ export async function Dashboard({ supabase, searchParams }: { supabase: Supabase
       }),
     ),
     getLeadsByClass(supabase, classFilters),
+    getSeatsByClass(supabase, parseSeatsYear(searchParams)),
   ])
   const enrollmentYears = years.ok ? years.data : []
 
@@ -80,6 +92,14 @@ export async function Dashboard({ supabase, searchParams }: { supabase: Supabase
             <p className="text-sm text-muted-foreground">These counts could not be loaded. Try again in a moment.</p>
           )}
         </DashboardPanel>
+        {/* Left out for staff who may not view payments. */}
+        {(seats.ok || seats.error !== "forbidden") && (
+          <SeatsByClassPanel
+            seats={seats}
+            canOpenSeats={canOpenSeats}
+            className="sm:col-span-2 lg:col-span-3"
+          />
+        )}
       </div>
     </section>
   )

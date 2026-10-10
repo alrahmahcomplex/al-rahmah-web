@@ -33,7 +33,13 @@ export default async function StaffHomePage({
           Recent changes to your account could not be loaded. Try again in a moment.
         </p>
       )}
-      {staff.permissions.includes("leads.view") && <Dashboard supabase={supabase} searchParams={await searchParams} />}
+      {staff.permissions.includes("leads.view") && (
+        <Dashboard
+          supabase={supabase}
+          searchParams={await searchParams}
+          canOpenSeats={staff.permissions.includes("academic_years.manage")}
+        />
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { ALL_TIME, anchorFor, panelHref, parsePanelFilters, periodLabel } from "@/app/staff/_dashboard/filters"
+import { ALL_TIME, anchorFor, panelHref, parsePanelFilters, parseSeatsYear, periodLabel, seatsHref } from "@/app/staff/_dashboard/filters"
 
 describe("parsePanelFilters", () => {
   it("reads one panel's period and Enrollment year from its own keys", () => {
@@ -64,5 +64,21 @@ describe("periodLabel", () => {
     expect(periodLabel({ kind: "week", anchor: "2026-01-01" })).toBe("Week of 29 Dec 2025")
     expect(periodLabel({ kind: "month", anchor: "2026-09-15" })).toBe("September 2026")
     expect(periodLabel({ kind: "year", anchor: "2026-01-01" })).toBe("2026")
+  })
+})
+
+describe("the Seats by class year", () => {
+  it("reads only its own key, and nothing unreadable", () => {
+    expect(parseSeatsYear({ seats_year: "2031", visited_year: "2027" })).toBe(2031)
+    expect(parseSeatsYear({ seats_year: ["2027", "2031"] })).toBe(2027)
+    for (const seats_year of [undefined, "", "next", "31", "1999", "2101"]) {
+      expect(parseSeatsYear({ seats_year })).toBeNull()
+    }
+  })
+
+  it("changes the year and keeps every other panel's filters", () => {
+    expect(seatsHref(new URLSearchParams("visited=month:2026-09-01&seats_year=2027"), 2031)).toBe(
+      "/staff?visited=month%3A2026-09-01&seats_year=2031",
+    )
   })
 })

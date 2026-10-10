@@ -57,6 +57,23 @@ export function panelHref(current: URLSearchParams, key: string, filters: Dashbo
   return encoded ? `/staff?${encoded}` : "/staff"
 }
 
+// Seats by class takes only an Enrollment year, under its own key. Null when
+// it is missing or unreadable, which opens the latest year with a Fee
+// schedule.
+export const SEATS_YEAR_KEY = "seats_year"
+
+export function parseSeatsYear(params: SearchParams): number | null {
+  return parseYear(first(params[SEATS_YEAR_KEY]))
+}
+
+// The staff home's address with the Seats by class year changed and every
+// other panel's filters left as they are.
+export function seatsHref(current: URLSearchParams, year: number): string {
+  const params = new URLSearchParams(current)
+  params.set(SEATS_YEAR_KEY, String(year))
+  return `/staff?${params.toString()}`
+}
+
 // Arithmetic on YYYY-MM-DD dates, in UTC so the server's and the browser's
 // time zones never shift a day.
 function utc(date: string) {

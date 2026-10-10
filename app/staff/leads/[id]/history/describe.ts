@@ -21,7 +21,8 @@ import {
   enrolmentValue,
   type EnrolmentCauses,
 } from "./enrolment-history"
-import { REOPENING_HIDDEN, reopenedLeadSummary, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
+import { interviewSerials, withInterviewSerial } from "./interview-history"
+import { REOPENING_HIDDEN,reopenedLeadSummary, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
 
 // A lead's history entry in plain words: who, what they did, and each field's
 // old and new value. A field, table or action kind this file does not know
@@ -366,7 +367,10 @@ export function describeLeadHistory(
   const timeline = matchTimeline(entries)
   const plans = followUpPlans(entries)
   const causes = enrolmentCauses(entries)
-  return entries.map((entry) => describeEntry(withEarlierPlan(entry, plans), contactNames, timeline, causes))
+  const serials = interviewSerials(entries)
+  return entries.map((entry) =>
+    withInterviewSerial(entry, describeEntry(withEarlierPlan(entry, plans), contactNames, timeline, causes), serials),
+  )
 }
 
 // Each follow-up's date and note as written, by follow-up id.

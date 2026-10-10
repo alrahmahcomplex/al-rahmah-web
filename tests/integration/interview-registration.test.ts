@@ -91,7 +91,7 @@ describe("registering a lead for interview", () => {
     const two = await registerForInterview(staff, second)
     const fresh = await registerForInterview(staff, otherYear)
 
-    expect(one).toEqual({ ok: true, data: { interviewId: expect.any(String), serialNumber: 1, enrollmentYear: year } })
+    expect(one).toEqual({ ok: true, data: { interviewId: expect.any(String), serialNumber: 1, enrollmentYear: year, retake: false } })
     expect(two).toMatchObject({ ok: true, data: { serialNumber: 2, enrollmentYear: year } })
     expect(fresh).toMatchObject({ ok: true, data: { serialNumber: 1, enrollmentYear: another } })
   })

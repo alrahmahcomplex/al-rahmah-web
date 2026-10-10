@@ -54,4 +54,19 @@ describe("the staff navigation", () => {
     expect(navFor(["leads.view"])).toContain(reApplications)
     expect(navFor(["payments.view"])).not.toContain(reApplications)
   })
+
+  it("shows Reopening requests to approvers who may view leads, where they decide", () => {
+    const reopenings = STAFF_NAV.find((entry) => entry.label === "Reopening requests")
+    expect(reopenings).toEqual({
+      href: "/staff/reopenings",
+      label: "Reopening requests",
+      permission: "reopenings.approve",
+      alsoNeeds: "leads.view",
+    })
+    expect(navFor(["leads.view", "reopenings.approve"])).toContain(reopenings)
+    expect(navFor(["reopenings.approve"])).not.toContain(reopenings)
+    // Admissions Staff and the Accountant.
+    expect(navFor(["leads.view", "leads.create", "leads.edit", "leads.decline", "leads.close"])).not.toContain(reopenings)
+    expect(navFor(["leads.view", "payments.view", "payments.record"])).not.toContain(reopenings)
+  })
 })

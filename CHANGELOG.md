@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 10, 2026 `v0.54.0`
+
+### NEW
+
+- The Admissions Manager has a **Reopening requests** page listing every Pending
+  request, oldest first. Each shows the Admission Number, the student, whether the lead
+  is Declined, Inactive or Archived, who asked and when, where the request came from,
+  and the reason. The Admission Number opens the lead, where the Manager approves or
+  rejects it. The page's link in the staff navigation carries a count of Pending
+  requests. Staff who can't approve requests don't see the link or the page.
+
 ## October 10, 2026 `v0.53.0`
 
 ### NEW

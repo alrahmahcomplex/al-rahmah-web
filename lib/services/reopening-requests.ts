@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { LeadStatus } from "./leads"
+import type { LeadClosure, LeadStatus } from "./leads"
 import type { Result } from "./result"
 
 // Reopening requests (slice 8, #27): part of the lead closure module, kept in
@@ -276,4 +276,78 @@ export async function getLeadReopenings(
       decided: requests.filter((request) => request.state !== "pending"),
     },
   }
+}
+
+// ---------------------------------------------------------------------------
+// The approvers' queue (#100).
+// ---------------------------------------------------------------------------
+
+export type PendingReopeningRequest = {
+  id: string
+  leadId: string
+  admissionNumber: string
+  studentName: string
+  // The lead as it stands now: Declined, a closure mark, or both.
+  status: LeadStatus
+  closure: LeadClosure | null
+  source: ReopeningSource
+  reason: string
+  requestedAt: string
+  // Looked up now; null if the requester's staff record is gone.
+  requestedBy: string | null
+}
+
+type PendingRow = {
+  id: string
+  lead_id: string
+  admission_number: string
+  student_name: string
+  status: LeadStatus
+  closure: LeadClosure | null
+  source: ReopeningSource
+  reason: string
+  requested_at: string
+  requested_by: string | null
+}
+
+export type QueueError = "forbidden" | "unavailable"
+
+function queueError(error: { message: string; code?: string }, doing: string): QueueError {
+  // 42501: the function isn't granted to the caller at all, as for someone
+  // signed out.
+  if (error.message === "not_permitted" || error.code === "42501") return "forbidden"
+  console.error(`Could not ${doing}`, error)
+  return "unavailable"
+}
+
+// Every Pending request, oldest first, for the Reopening requests page.
+// Needs reopenings.approve, and leads.view to open the leads it names.
+export async function listPendingReopeningRequests(
+  supabase: SupabaseClient,
+): Promise<Result<PendingReopeningRequest[], QueueError>> {
+  const { data, error } = await supabase.rpc("pending_reopening_requests")
+  if (error) return { ok: false, error: queueError(error, "list pending reopening requests") }
+  return {
+    ok: true,
+    data: ((data ?? []) as PendingRow[]).map((row) => ({
+      id: row.id,
+      leadId: row.lead_id,
+      admissionNumber: row.admission_number,
+      studentName: row.student_name,
+      status: row.status,
+      closure: row.closure,
+      source: row.source,
+      reason: row.reason,
+      requestedAt: row.requested_at,
+      requestedBy: row.requested_by,
+    })),
+  }
+}
+
+// How many requests are Pending, for the count beside the navigation entry.
+// Needs reopenings.approve and leads.view, as the list does.
+export async function countPendingReopeningRequests(supabase: SupabaseClient): Promise<Result<number, QueueError>> {
+  const { data, error } = await supabase.rpc("pending_reopening_request_count")
+  if (error) return { ok: false, error: queueError(error, "count pending reopening requests") }
+  return { ok: true, data: data as number }
 }

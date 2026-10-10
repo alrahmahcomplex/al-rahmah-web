@@ -104,8 +104,9 @@ export function enrolmentSummary(entry: LeadHistoryEntry, status: LeadHistoryCha
 
 export function enrolmentProfileSummary(entry: LeadHistoryEntry): string {
   const trigger = entry.changes.find((c) => c.field === "enrolled_trigger")
+  // A new profile lists every column, so an empty trigger is no enrolment.
   const tick = priorSiblingSummary(entry)
-  if (tick && !trigger) return tick
+  if (tick && !trigger?.to && !trigger?.from) return tick
   if (entry.action === "insert") return trigger?.to ? "recorded what enrolled the lead" : "recorded the lead's fee details"
   if (entry.action !== "update") return entry.action
   if (trigger?.to === null) return "cleared what enrolled the lead"

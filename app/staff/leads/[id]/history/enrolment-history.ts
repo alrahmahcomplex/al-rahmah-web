@@ -19,6 +19,8 @@ const LABELS: Readonly<Record<string, string>> = {
   prior_sibling_name: "Sibling's name",
   prior_sibling_class: "Sibling's class",
   sibling_kept: "Keeps the Sibling discount",
+  // The Pre-Form One tick (#114).
+  pre_form_one: "Pre-Form One programme",
 }
 
 export const ENROLMENT_FIELDS: readonly string[] = Object.keys(LABELS)
@@ -105,13 +107,22 @@ export function enrolmentSummary(entry: LeadHistoryEntry, status: LeadHistoryCha
 export function enrolmentProfileSummary(entry: LeadHistoryEntry): string {
   const trigger = entry.changes.find((c) => c.field === "enrolled_trigger")
   // A new profile lists every column, so an empty trigger is no enrolment.
-  const tick = priorSiblingSummary(entry)
+  const tick = priorSiblingSummary(entry) ?? preFormOneSummary(entry)
   if (tick && !trigger?.to && !trigger?.from) return tick
   if (entry.action === "insert") return trigger?.to ? "recorded what enrolled the lead" : "recorded the lead's fee details"
   if (entry.action !== "update") return entry.action
   if (trigger?.to === null) return "cleared what enrolled the lead"
   if (trigger?.from === null) return "recorded what enrolled the lead"
   return "updated what enrolled the lead"
+}
+
+// Staff ticking or clearing the Pre-Form One programme; null when the entry
+// doesn't touch it.
+function preFormOneSummary(entry: LeadHistoryEntry): string | null {
+  const tick = entry.changes.find((c) => c.field === "pre_form_one")
+  if (tick?.to === true) return "ticked the Pre-Form One programme"
+  if (tick?.to === false && entry.action === "update") return "cleared the Pre-Form One programme"
+  return null
 }
 
 // Staff ticking, clearing or changing Has a sibling already at Al-Rahmah;

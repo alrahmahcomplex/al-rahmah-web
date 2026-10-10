@@ -12,6 +12,8 @@ import { formatShillings } from "../../fees/format"
 import { SeatPriorityBadge } from "../seat-priority-badge"
 import { enrolledBy } from "./enrolment-text"
 import { PaymentList } from "./payment-list"
+import { PreFormOneProgramme } from "./pre-form-one-programme"
+import { PreFormOneTickSection } from "./pre-form-one-tick-section"
 import { RecordPayment } from "./record-payment"
 
 const INSTALMENTS = ["First", "Second", "Third"] as const
@@ -24,18 +26,30 @@ const INSTALMENTS = ["First", "Second", "Third"] as const
 // when `canRecord`: on an open lead, for staff who may record payments, and
 // offers Fee waived under a Qualified orphan discount. Adjust shows when
 // `canAdjust`, on a closed lead too, since an adjustment corrects history.
+// The Pre-Form One programme (#114) shows apart from the School fee, its tick
+// editable when `canEditPreFormOne`, and Record payment offers its fee while
+// the tick applies.
 export async function SchoolFeeSection({
   leadId,
   staff,
   canRecord,
   canAdjust,
+  canEditPreFormOne = false,
+  formOne = false,
 }: {
   leadId: string
   staff: StaffMember
   canRecord: boolean
   canAdjust: boolean
+  canEditPreFormOne?: boolean
+  // The lead's class is FORM 1.
+  formOne?: boolean
 }) {
-  if (!staff.permissions.includes("payments.view")) return null
+  // Without payments.view, only the Pre-Form One tick shows, for staff who
+  // may still edit leads.
+  if (!staff.permissions.includes("payments.view")) {
+    return <PreFormOneTickSection leadId={leadId} formOne={formOne} canEdit={canEditPreFormOne} />
+  }
 
   const supabase = await createClient()
   const [fee, payments] = await Promise.all([getLeadFee(supabase, leadId), listPayments(supabase, leadId)])
@@ -50,7 +64,10 @@ export async function SchoolFeeSection({
           <AlertDescription>The School fee could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : fee.data.kind === "no-schedule" ? (
-        <p className="text-sm text-muted-foreground">No fee schedule for {fee.data.year} yet.</p>
+        <div className="flex max-w-xl flex-col gap-4">
+          <p className="text-sm text-muted-foreground">No fee schedule for {fee.data.year} yet.</p>
+          <PreFormOneProgramme leadId={leadId} programme={fee.data.preFormOne} dayOrBoarding={null} canEdit={canEditPreFormOne} />
+        </div>
       ) : (
         <div className="flex max-w-xl flex-col gap-4">
           <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
@@ -108,7 +125,20 @@ export async function SchoolFeeSection({
             </TableBody>
           </Table>
 
-          {canRecord && <RecordPayment leadId={leadId} canWaive={fee.data.discount?.kind === "qualified_orphan"} />}
+          <PreFormOneProgramme
+            leadId={leadId}
+            programme={fee.data.preFormOne}
+            dayOrBoarding={fee.data.dayOrBoarding}
+            canEdit={canEditPreFormOne}
+          />
+
+          {canRecord && (
+            <RecordPayment
+              leadId={leadId}
+              canWaive={fee.data.discount?.kind === "qualified_orphan"}
+              canPayPreFormOne={fee.data.preFormOne.applies}
+            />
+          )}
         </div>
       )}
 

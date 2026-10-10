@@ -303,7 +303,8 @@ describe("recording", () => {
       ["tomorrow", passed, payment(300_000, { paidOn: tomorrow }), "date_in_future"],
       // Fee waived needs a granted Qualified orphan discount (#112).
       ["Fee waived", passed, payment(300_000, { type: "fee_waived" }), "not_waivable"],
-      ["Pre-Form One", passed, payment(300_000, { type: "pre_form_one_fee" as PaymentInput["type"] }), "invalid_type"],
+      // The Pre-Form One fee needs the Pre-Form One tick on a FORM 1 lead (#114).
+      ["Pre-Form One", passed, payment(300_000, { type: "pre_form_one_fee" }), "not_pre_form_one"],
       ["missing lead", randomUUID(), payment(300_000), "not_found"],
       ["malformed lead", "not-a-lead", payment(300_000), "not_found"],
     ]

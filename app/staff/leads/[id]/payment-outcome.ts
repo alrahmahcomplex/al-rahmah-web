@@ -1,4 +1,4 @@
-import type { PaymentError, PaymentPreview, RecordedPayment } from "@/lib/services/school-fee-payments"
+import type { PaymentError, PaymentPreview, RecordablePaymentType, RecordedPayment } from "@/lib/services/school-fee-payments"
 
 import { formatShillings } from "../../fees/format"
 
@@ -14,7 +14,12 @@ export type PreviewOutcome = { status: "preview"; preview: PaymentPreview } | Pa
 
 export type RecordPaymentOutcome = { status: "recorded"; message: string } | PaymentRefusal
 
-export function recordedPaymentOutcome({ totalPaid, priority }: RecordedPayment): RecordPaymentOutcome {
+// A Pre-Form One fee leaves Total paid and the Seat priority alone, so its
+// confirmation says so instead of repeating them.
+export function recordedPaymentOutcome({ totalPaid, priority }: RecordedPayment, type?: RecordablePaymentType): RecordPaymentOutcome {
+  if (type === "pre_form_one_fee") {
+    return { status: "recorded", message: "Pre-Form One fee recorded. It doesn't count toward the School fee or Seat priority." }
+  }
   const seat = priority === null ? "No Seat priority yet." : `Seat priority: ${priority}.`
   return { status: "recorded", message: `Payment recorded. Total paid is TZS ${formatShillings(totalPaid)}. ${seat}` }
 }
@@ -65,6 +70,12 @@ export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded
       return { status: "refused", field: "amount", message: "Fee waived has no amount. Leave the amount empty." }
     case "already_waived":
       return { status: "refused", field: "type", message: "This lead's fee is already waived." }
+    case "not_pre_form_one":
+      return {
+        status: "refused",
+        field: "type",
+        message: "A Pre-Form One fee can be recorded only while the Pre-Form One programme is ticked on a FORM 1 lead.",
+      }
     case "amount_not_positive":
       return { status: "refused", field: "amount", message: "Enter an amount above zero." }
     case "amount_not_whole":

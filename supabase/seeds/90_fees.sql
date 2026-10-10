@@ -379,3 +379,62 @@ where l.id in (
 order by l.id;
 
 commit;
+
+-- The Pre-Form One programme (#114): three Passed 2027 leads, each with a
+-- parent of their own.
+--
+--   ADMSN-90918 Rukia Maandalizi   FORM 1 Day, on the programme: Initial
+--                                  deposit 300,000 (Deposit) and a Pre-Form
+--                                  One fee of 200,000, so 250,000 of the
+--                                  450,000 programme fee is left
+--   ADMSN-90919 Khamisi Maandalizi FORM 1 Boarding, not on the programme yet:
+--                                  staff may tick it
+--   ADMSN-90920 Sabra Maandalizi   FORM 2 Day, ticked while in FORM 1 and then
+--                                  corrected to FORM 2: the tick stays but
+--                                  doesn't apply
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000918', 'Mwanamisi Maandalizi', 'Mother', null, '+255700000918', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000919', 'Abdallah Maandalizi', 'Father', null, '+255700000919', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000920', 'Asha Maandalizi', 'Guardian', null, '+255700000920', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined
+) values
+    ('1ead0000-0000-4000-8000-000000000918', 'ADMSN-90918', 'Rukia Maandalizi', 'FORM 1', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000918', false),
+    ('1ead0000-0000-4000-8000-000000000919', 'ADMSN-90919', 'Khamisi Maandalizi', 'FORM 1', 2027, 'Boarding',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000919', false),
+    ('1ead0000-0000-4000-8000-000000000920', 'ADMSN-90920', 'Sabra Maandalizi', 'FORM 2', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000920', false);
+
+-- The next three 2027 S/Ns.
+insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
+select i.id, i.lead, c.last_number + i.n, 2027, timestamptz '2026-09-15 11:00:00+03',
+    'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Passed', i.score
+from public.interview_serial_counters c
+cross join (values
+    (1, '1e7e0000-0000-4000-8000-000000000918'::uuid, '1ead0000-0000-4000-8000-000000000918'::uuid, 83.0),
+    (2, '1e7e0000-0000-4000-8000-000000000919'::uuid, '1ead0000-0000-4000-8000-000000000919'::uuid, 79.5),
+    (3, '1e7e0000-0000-4000-8000-000000000920'::uuid, '1ead0000-0000-4000-8000-000000000920'::uuid, 76.0)
+) as i(n, id, lead, score)
+where c.enrollment_year = 2027;
+
+update public.interview_serial_counters set last_number = last_number + 3 where enrollment_year = 2027;
+
+insert into public.lead_fee_profiles (lead_id, pre_form_one) values
+    ('1ead0000-0000-4000-8000-000000000918', true),
+    ('1ead0000-0000-4000-8000-000000000920', true);
+
+insert into public.school_fee_payments (id, lead_id, payment_type, amount, paid_on, recorded_by, recorded_at) values
+    ('fee00000-0000-4000-8000-000000000918', '1ead0000-0000-4000-8000-000000000918', 'initial_deposit', 300000,
+        date '2026-09-27', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-27 10:00:00+03'),
+    ('fee00000-0000-4000-8000-000000000919', '1ead0000-0000-4000-8000-000000000918', 'pre_form_one_fee', 200000,
+        date '2026-09-28', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-28 10:00:00+03');
+
+commit;

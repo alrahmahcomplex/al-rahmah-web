@@ -71,9 +71,16 @@ async function lead(year: number, className: LeadClass = "STD 2", dayOrBoarding:
 }
 
 // What the lead fee module should answer for a fee, its schedule and its 40/40/20-style split.
-function expectedFee(schedule: Pick<FeeSchedule, "split" | "dueDates">, year: number, band: (typeof FEE_BANDS)[number], dayOrBoarding: DayOrBoarding, fee: number): LeadFee {
+function expectedFee(
+  schedule: Pick<FeeSchedule, "split" | "dueDates" | "preFormOne">,
+  year: number,
+  band: (typeof FEE_BANDS)[number],
+  dayOrBoarding: DayOrBoarding,
+  fee: number,
+): LeadFee {
   const first = Math.round((fee * schedule.split.first) / 100)
   const second = Math.round((fee * schedule.split.second) / 100)
+  const programmeFee = dayOrBoarding === "Day" ? schedule.preFormOne.day : schedule.preFormOne.boarding
   return {
     kind: "fee",
     year,
@@ -92,8 +99,13 @@ function expectedFee(schedule: Pick<FeeSchedule, "split" | "dueDates">, year: nu
     priority: null,
     priorityReachedOn: null,
     enrolment: null,
+    // None of these leads is in FORM 1 or ticked.
+    preFormOne: { ticked: false, offered: false, applies: false, fee: programmeFee, paid: 0, balance: programmeFee },
   }
 }
+
+// A lead with no Fee schedule still has the Pre-Form One tick and payments.
+const NO_PROGRAMME = { ticked: false, offered: false, applies: false, fee: null, paid: 0, balance: null }
 
 describe("the School fee", () => {
   test("is the band fee for the lead's class and Day or boarding, in every band", async () => {
@@ -147,7 +159,7 @@ describe("the School fee", () => {
     const year = await noScheduleYear()
     expect(await getLeadFee(await signedIn(ADMISSIONS), await lead(year))).toEqual({
       ok: true,
-      data: { kind: "no-schedule", year },
+      data: { kind: "no-schedule", year, preFormOne: NO_PROGRAMME },
     })
   })
 
@@ -201,7 +213,7 @@ describe("correcting the lead", () => {
         ok: true,
         data: schedule.ok
           ? expectedFee(schedule.data, year, "primary_upper", "Boarding", schedule.data.bands.primary_upper.boarding)
-          : { kind: "no-schedule", year },
+          : { kind: "no-schedule", year, preFormOne: NO_PROGRAMME },
       })
     }
   })

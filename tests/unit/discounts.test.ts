@@ -39,9 +39,10 @@ describe("the discount kinds", () => {
     expect(isDiscountKind(undefined)).toBe(false)
   })
 
-  it("let Fee waived be recorded, but not the Pre-Form One fee yet", () => {
+  it("let Fee waived and the Pre-Form One fee be recorded", () => {
     expect(isRecordablePaymentType("fee_waived")).toBe(true)
-    expect(isRecordablePaymentType("pre_form_one_fee")).toBe(false)
+    expect(isRecordablePaymentType("pre_form_one_fee")).toBe(true)
+    expect(isRecordablePaymentType("pre_form_one")).toBe(false)
   })
 })
 

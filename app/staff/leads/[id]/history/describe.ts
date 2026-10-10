@@ -324,7 +324,9 @@ function summarize(
   const discount = discountSummary(entry)
   if (discount) return discount
   if (entry.record === "lead_fee_profiles") return enrolmentProfileSummary(entry)
-  if (entry.record === "school_fee_payments" && insert) return "recorded a school-fee payment"
+  if (entry.record === "school_fee_payments" && insert) {
+    return changed.get("payment_type")?.to === "pre_form_one_fee" ? "recorded a Pre-Form One fee payment" : "recorded a school-fee payment"
+  }
   const adjustment = adjustmentSummary(entry)
   if (adjustment) return adjustment
   if (entry.record === "re_applications" && insert) return "recorded a re-application"

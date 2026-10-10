@@ -36,8 +36,18 @@ function parseAmount(typed: string): number {
 // button, its date starting at today in Tanzania as the server sees it.
 // Review shows what the payment would do; nothing is recorded until Confirm.
 // The confirmation outlasts the refresh that follows. `canWaive` offers Fee
-// waived, for a lead with a granted Qualified orphan discount.
-export function RecordPayment({ leadId, canWaive = false }: { leadId: string; canWaive?: boolean }) {
+// waived, for a lead with a granted Qualified orphan discount, and
+// `canPayPreFormOne` the Pre-Form One fee, for a lead whose Pre-Form One tick
+// applies.
+export function RecordPayment({
+  leadId,
+  canWaive = false,
+  canPayPreFormOne = false,
+}: {
+  leadId: string
+  canWaive?: boolean
+  canPayPreFormOne?: boolean
+}) {
   const [today, setToday] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   const [unopened, setUnopened] = useState(false)
@@ -61,6 +71,7 @@ export function RecordPayment({ leadId, canWaive = false }: { leadId: string; ca
         leadId={leadId}
         today={today}
         canWaive={canWaive}
+        canPayPreFormOne={canPayPreFormOne}
         onDone={(message) => {
           setToday(null)
           setSaved(message)
@@ -94,16 +105,22 @@ function PaymentForm({
   leadId,
   today,
   canWaive,
+  canPayPreFormOne,
   onDone,
 }: {
   leadId: string
   today: string
   canWaive: boolean
+  canPayPreFormOne: boolean
   onDone: (saved: string | null) => void
 }) {
   const [type, setType] = useState<RecordablePaymentType | "">("")
   const waived = type === "fee_waived"
-  const choices: readonly RecordablePaymentType[] = canWaive ? [...PAYMENT_TYPES, "fee_waived"] : PAYMENT_TYPES
+  const choices: readonly RecordablePaymentType[] = [
+    ...PAYMENT_TYPES,
+    ...(canWaive ? (["fee_waived"] as const) : []),
+    ...(canPayPreFormOne ? (["pre_form_one_fee"] as const) : []),
+  ]
   const [amount, setAmount] = useState("")
   const [paidOn, setPaidOn] = useState(today)
   // What Review answered, for the payment as it was typed then.
@@ -174,20 +191,47 @@ function PaymentForm({
             {input.amount === null ? PAYMENT_TYPE_NAMES[input.type] : `${PAYMENT_TYPE_NAMES[input.type]}, TZS ${formatShillings(input.amount)}`}
             <span className="block text-xs text-muted-foreground">Paid {formatDate(input.paidOn)}</span>
           </dd>
-          <dt className="text-muted-foreground">Total paid after</dt>
-          <dd className="text-right tabular-nums text-slate-900">
-            TZS {formatShillings(preview.totalPaidAfter)}
-            <span className="block text-xs text-muted-foreground">now TZS {formatShillings(preview.totalPaid)}</span>
-          </dd>
-          <dt className="text-muted-foreground">Balance after</dt>
-          <dd className="text-right font-medium tabular-nums text-slate-900">TZS {formatShillings(preview.balanceAfter)}</dd>
-          <dt className="text-muted-foreground">Seat priority after</dt>
-          <dd className="text-right font-medium text-slate-900">
-            {preview.priorityAfter ?? "None"}
-            <span className="block text-xs font-normal text-muted-foreground">
-              {preview.priorityAfter === preview.priority ? "unchanged" : `now ${preview.priority ?? "none"}`}
-            </span>
-          </dd>
+          {input.type === "pre_form_one_fee" ? (
+            <>
+              <dt className="text-muted-foreground">Pre-Form One paid after</dt>
+              <dd className="text-right tabular-nums text-slate-900">
+                TZS {formatShillings(preview.preFormOne.paidAfter)}
+                <span className="block text-xs text-muted-foreground">now TZS {formatShillings(preview.preFormOne.paid)}</span>
+              </dd>
+              {preview.preFormOne.balanceAfter !== null && (
+                <>
+                  <dt className="text-muted-foreground">Pre-Form One balance after</dt>
+                  <dd className="text-right font-medium tabular-nums text-slate-900">
+                    TZS {formatShillings(preview.preFormOne.balanceAfter)}
+                  </dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">School fee</dt>
+              <dd className="text-right text-slate-900">
+                Unchanged
+                <span className="block text-xs text-muted-foreground">
+                  Total paid TZS {formatShillings(preview.totalPaid)}, Seat priority {preview.priority ?? "none"}
+                </span>
+              </dd>
+            </>
+          ) : (
+            <>
+              <dt className="text-muted-foreground">Total paid after</dt>
+              <dd className="text-right tabular-nums text-slate-900">
+                TZS {formatShillings(preview.totalPaidAfter)}
+                <span className="block text-xs text-muted-foreground">now TZS {formatShillings(preview.totalPaid)}</span>
+              </dd>
+              <dt className="text-muted-foreground">Balance after</dt>
+              <dd className="text-right font-medium tabular-nums text-slate-900">TZS {formatShillings(preview.balanceAfter)}</dd>
+              <dt className="text-muted-foreground">Seat priority after</dt>
+              <dd className="text-right font-medium text-slate-900">
+                {preview.priorityAfter ?? "None"}
+                <span className="block text-xs font-normal text-muted-foreground">
+                  {preview.priorityAfter === preview.priority ? "unchanged" : `now ${preview.priority ?? "none"}`}
+                </span>
+              </dd>
+            </>
+          )}
         </dl>
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => confirm(input, requestId)} disabled={pending}>

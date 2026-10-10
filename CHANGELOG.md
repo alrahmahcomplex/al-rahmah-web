@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- A re-application now shows what the lead holds beside what the family sent, field by
+  field, with the fields that differed when it arrived highlighted: as many as the
+  Re-applications queue counts. Staff who can edit leads press **Apply** on a highlighted
+  field to put the family's value on the lead or its parent or guardian. It saves as
+  their own correction, shows in the lead's history under their name, and the row then
+  reads **Matches now**. A parent or guardian change says which other children share
+  the contact.
+- On a Declined, Inactive or Archived lead, the re-application offers no Apply, since
+  a closed lead is read-only, and offers **Request reopening** instead. It opens the
+  lead's reopening request form.
+
 ## October 10, 2026 `v0.59.1`
 
 ### IMPROVED

@@ -297,3 +297,85 @@ values
         'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-10-01 09:30:00+03');
 
 commit;
+
+-- The Sibling discount (#113): a confirmed two-child Family and an
+-- unconfirmed one, all Passed on 2026-09-22.
+--
+--   Confirmed Family, Mwanahawa Ndugu (+255 700 000 913):
+--   ADMSN-90913 Bahati Ndugu    STD 5 Day: Full payment 2,100,000, Enrolled
+--                               first, so she pays the full fee
+--   ADMSN-90914 Furaha Ndugu    STD 3 Day: Initial deposit 300,000; her
+--                               sister is Enrolled, so a School fee of
+--                               2,000,000 less 10%: 1,800,000
+--
+--   Unconfirmed Family: the Admission form matched Rashidi Pendo's number,
+--   and staff haven't confirmed the match yet.
+--   ADMSN-90916 Tumaini Pendo   STD 4 Day: Full payment 2,000,000, Enrolled
+--   ADMSN-90917 Zuberi Pendo    KG 2 Day: Initial deposit 300,000, on the
+--                               Admission form's contact with a pending
+--                               match to Tumaini's: no Sibling discount, a
+--                               School fee of 1,100,000
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000913', 'Mwanahawa Ndugu', 'Mother', null, '+255700000913', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000916', 'Rashidi Pendo', 'Father', null, '+255700000916', null, 'front_desk');
+
+insert into public.guardian_contacts (
+    id, full_name, relationship, relationship_description, phone, whatsapp, origin, pending_family_match_id
+) values
+    ('c0c0c0c0-0000-4000-8000-000000000917', 'Rashidi Pendo', 'Father', null, '+255700000916', null, 'admission_form',
+        'c0c0c0c0-0000-4000-8000-000000000916');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined
+) values
+    ('1ead0000-0000-4000-8000-000000000913', 'ADMSN-90913', 'Bahati Ndugu', 'STD 5', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000913', false),
+    ('1ead0000-0000-4000-8000-000000000914', 'ADMSN-90914', 'Furaha Ndugu', 'STD 3', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000913', true),
+    ('1ead0000-0000-4000-8000-000000000916', 'ADMSN-90916', 'Tumaini Pendo', 'STD 4', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000916', false),
+    ('1ead0000-0000-4000-8000-000000000917', 'ADMSN-90917', 'Zuberi Pendo', 'KG 2', 2027, 'Day',
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000917', true);
+
+-- The next four 2027 S/Ns.
+insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
+select i.id, i.lead, c.last_number + i.n, 2027, timestamptz '2026-09-15 11:00:00+03',
+    'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-22', 'Passed', i.score
+from public.interview_serial_counters c
+cross join (values
+    (1, '1e7e0000-0000-4000-8000-000000000913'::uuid, '1ead0000-0000-4000-8000-000000000913'::uuid, 84.0),
+    (2, '1e7e0000-0000-4000-8000-000000000914'::uuid, '1ead0000-0000-4000-8000-000000000914'::uuid, 78.5),
+    (3, '1e7e0000-0000-4000-8000-000000000916'::uuid, '1ead0000-0000-4000-8000-000000000916'::uuid, 80.0),
+    (4, '1e7e0000-0000-4000-8000-000000000917'::uuid, '1ead0000-0000-4000-8000-000000000917'::uuid, 75.5)
+) as i(n, id, lead, score)
+where c.enrollment_year = 2027;
+
+update public.interview_serial_counters set last_number = last_number + 4 where enrollment_year = 2027;
+
+insert into public.school_fee_payments (id, lead_id, payment_type, amount, paid_on, recorded_by, recorded_at) values
+    ('fee00000-0000-4000-8000-000000000913', '1ead0000-0000-4000-8000-000000000913', 'full_payment', 2100000,
+        date '2026-09-25', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-25 14:00:00+03'),
+    ('fee00000-0000-4000-8000-000000000914', '1ead0000-0000-4000-8000-000000000914', 'initial_deposit', 300000,
+        date '2026-09-26', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-26 14:00:00+03'),
+    ('fee00000-0000-4000-8000-000000000916', '1ead0000-0000-4000-8000-000000000916', 'full_payment', 2000000,
+        date '2026-09-25', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-25 15:00:00+03'),
+    ('fee00000-0000-4000-8000-000000000917', '1ead0000-0000-4000-8000-000000000917', 'initial_deposit', 300000,
+        date '2026-09-26', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-26 15:00:00+03');
+
+-- As recording the payments would have done: Bahati's and Tumaini's Full
+-- payments enrol them, and Bahati's enrolment gives Furaha the discount.
+select public.recompute_lead_fee(l.id, 'payment')
+from public.leads l
+where l.id in (
+    '1ead0000-0000-4000-8000-000000000913',
+    '1ead0000-0000-4000-8000-000000000916'
+)
+order by l.id;
+
+commit;

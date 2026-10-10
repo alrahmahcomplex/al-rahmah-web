@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { DiscountKind } from "./discounts"
+import type { FeeDiscountKind } from "./discounts"
 import type { FeeBand } from "./fees"
 import type { DayOrBoarding } from "./leads"
 import type { Result } from "./result"
@@ -31,7 +31,7 @@ export type LeadFee =
       bandFee: number
       schoolFee: number
       // The one discount the School fee carries, the largest the lead holds.
-      discount: { kind: DiscountKind; percent: number } | null
+      discount: { kind: FeeDiscountKind; percent: number } | null
       totalPaid: number
       balance: number
       // First, second and third. They add up to the School fee exactly.
@@ -67,7 +67,7 @@ type LeadSchoolFeeRow = {
   enrolled_payment_type: RecordedPaymentType | null
   enrolled_payment_amount: number | null
   band_fee: number | null
-  discount: DiscountKind | null
+  discount: FeeDiscountKind | null
   discount_percent: number | null
 }
 

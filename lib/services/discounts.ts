@@ -23,6 +23,12 @@ export const DISCOUNT_PERCENTS: Record<DiscountKind, number> = {
   qualified_orphan: 100,
 }
 
+// The discounts a School fee can carry: the two above, and Sibling, which
+// applies by itself within a confirmed Family (#113, sibling-discount.ts).
+export type FeeDiscountKind = DiscountKind | "sibling"
+
+export const FEE_DISCOUNT_NAMES: Record<FeeDiscountKind, string> = { ...DISCOUNT_NAMES, sibling: "Sibling" }
+
 export function isDiscountKind(value: unknown): value is DiscountKind {
   return typeof value === "string" && (DISCOUNT_KINDS as readonly string[]).includes(value)
 }

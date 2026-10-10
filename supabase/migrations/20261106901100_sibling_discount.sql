@@ -114,6 +114,10 @@ revoke execute on function public.lock_families(uuid[]) from public, anon, authe
 -- transaction ends. A move that committed between the read and the lock is
 -- seen on the fresh read, and the new contact is locked in turn, all before
 -- the caller locks the lead's row.
+--
+-- Each try runs in a subtransaction. A try that finds the lead moved rolls
+-- it back, which releases the stale contact's lock, so the next try waits
+-- holding nothing it took out of order.
 create function public.lock_lead_family(lead_id uuid)
 returns uuid
 language plpgsql
@@ -129,12 +133,16 @@ begin
         if contact_id is null then
             return null;
         end if;
-        perform public.lock_families(array[contact_id]);
-        select l.guardian_contact_id into read_again from public.leads l where l.id = lock_lead_family.lead_id;
-        if read_again is not distinct from contact_id then
-            return contact_id;
-        end if;
-        contact_id := read_again;
+        begin
+            perform public.lock_families(array[contact_id]);
+            select l.guardian_contact_id into read_again from public.leads l where l.id = lock_lead_family.lead_id;
+            if read_again is not distinct from contact_id then
+                return contact_id;
+            end if;
+            raise exception using errcode = 'P0113', message = 'family_moved';
+        exception when sqlstate 'P0113' then
+            contact_id := read_again;
+        end;
     end loop;
 end;
 $$;

@@ -112,7 +112,7 @@ test("Admissions Staff tick the programme on a FORM 1 lead, and the Accountant r
   await expect(review).toContainText("TZS 200,000")
   await expect(review).toContainText("Total paid TZS 0, Seat priority none")
   await review.getByRole("button", { name: "Confirm payment" }).click()
-  await expect(page.getByRole("status")).toHaveText("Pre-Form One fee recorded. It doesn't count toward the School fee or Seat priority.")
+  await expect(page.getByRole("region", { name: "School fee" }).getByRole("status")).toHaveText("Pre-Form One fee recorded. It doesn't count toward the School fee or Seat priority.")
 
   await expect(detail(page, "Pre-Form One programme", "Pre-Form One paid")).toHaveText("TZS 200,000")
   await expect(detail(page, "Pre-Form One programme", "Pre-Form One balance")).toHaveText("TZS 250,000")

@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Staff who can edit leads can tick the **Pre-Form One programme** on a FORM 1 lead
+  when the family takes it up. The tick isn't offered on any other class. The lead's
+  School fee panel then shows the Pre-Form One fee for its Day or boarding, with no
+  discount, and its own paid amount and balance. Ticking and clearing it show in the
+  lead history.
+- The Accountant can record a **Pre-Form One fee** payment while the tick applies, and
+  adjust or void it like any other payment. It never counts toward Total paid, Seat
+  priority or Enrolled, and an adjustment can't move a payment between the School fee
+  and the Pre-Form One fee.
+- If a correction moves a ticked lead off FORM 1, the tick stays recorded but shows as
+  not applying, and no Pre-Form One fee can be recorded until the class is FORM 1
+  again.
+
 ## October 10, 2026 `v0.55.0`
 
 ### NEW

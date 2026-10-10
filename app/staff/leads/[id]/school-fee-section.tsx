@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatDate } from "@/lib/school-calendar"
-import { DISCOUNT_NAMES } from "@/lib/services/discounts"
+import { FEE_DISCOUNT_NAMES } from "@/lib/services/discounts"
 import { BAND_NAMES } from "@/lib/services/fees"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import { listPayments } from "@/lib/services/school-fee-payments"
@@ -61,7 +61,7 @@ export async function SchoolFeeSection({
               </span>
               {fee.data.discount && (
                 <span className="block text-xs">
-                  {DISCOUNT_NAMES[fee.data.discount.kind]} discount, {fee.data.discount.percent}% off TZS{" "}
+                  {FEE_DISCOUNT_NAMES[fee.data.discount.kind]} discount, {fee.data.discount.percent}% off TZS{" "}
                   {formatShillings(fee.data.bandFee)}
                 </span>
               )}

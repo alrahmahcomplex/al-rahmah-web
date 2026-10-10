@@ -243,6 +243,8 @@ The reporting period says when something happened, in calendar terms and Tanzani
 
 **Interviewed leads** counts children: a child who sat a retaken interview in the same period counts once. **Passed interviews** and **Failed interviews** count sittings, so a retake counts as an interview of its own. An interview counts only once its result is recorded, and whether its fee is paid makes no difference.
 
+**Enrolled students** counts the leads that are **Enrolled** now, by the date **Enrolled** was triggered as the lead's School fee records it. A lead that went back below the line through a payment adjustment or a fee change, or was **Declined** after it was Enrolled, is left out. An Enrolled lead marked **Inactive** or **Archived** still counts, since a closure mark isn't a status. A lead enrolled on the **Academic-year start** counts on the start date, and an adjustment that moves the trigger date moves the lead to that date's period.
+
 Every panel opens on **All time** and **All years**, and each panel keeps its own filters, so two panels can show different periods side by side. The **Enrollment year** filter always uses the lead's current enrollment year, so one child counts in one intake on every panel.
 
 Only **Enrolled students** depends on a lead's current status. The other metrics count what happened, whatever the lead's status or closure mark is now: a lead that visited and was later **Declined** or marked **Archived** still counts in **Visited leads**.

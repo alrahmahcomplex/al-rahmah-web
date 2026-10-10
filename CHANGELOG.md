@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The staff home now shows **Enrolled students**: the children who are Enrolled now,
+  counted by the date they became Enrolled. A child Enrolled on the Academic-year start
+  counts on the start date. A child who went back below the line after a payment
+  adjustment or a fee change, or was Declined after enrolling, isn't counted; an
+  Enrolled child marked Inactive or Archived still is. The tile has its own period and
+  Enrollment year filters, kept in the page address like the other counts.
+
 ## October 10, 2026 `v0.56.0`
 
 ### NEW

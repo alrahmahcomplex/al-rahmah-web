@@ -660,10 +660,18 @@ begin
         select l.guardian_contact_id from public.leads l where l.id = any(candidates)
     ));
 
+    -- A lead something else enrolled or declined since the list was read is
+    -- dropped, so it isn't counted. Every recompute takes the Family lock,
+    -- and this run now holds them, so no other run moves these leads into
+    -- Enrolled from here on.
+    select coalesce(array_agg(l.id order by l.id), '{}')
+    into candidates
+    from public.leads l
+    where l.id = any(candidates) and l.status not in ('Enrolled', 'Declined');
+
     foreach each_lead in array candidates loop
-        -- Locked before it is counted: a lead something else enrolled or
-        -- declined since the list was read is skipped, not counted. So is
-        -- one an earlier sibling's enrolment already enrolled.
+        -- An earlier sibling's enrolment may have enrolled it already, and
+        -- a decline may have reached it while this run waited.
         perform 1 from public.leads l
         where l.id = each_lead and l.status not in ('Enrolled', 'Declined')
         for update;
@@ -671,10 +679,13 @@ begin
             continue;
         end if;
         perform public.recompute_lead_fee(each_lead, 'academic_year_start', enrol_from_academic_year_start.as_of);
-        if exists (select 1 from public.leads l where l.id = each_lead and l.status = 'Enrolled') then
-            enrolled := enrolled + 1;
-        end if;
     end loop;
+
+    -- Counted at the end, so a lead its sibling's enrolment enrolled in this
+    -- run counts too.
+    select count(*)::integer into enrolled
+    from public.leads l
+    where l.id = any(candidates) and l.status = 'Enrolled';
 
     return enrolled;
 end;

@@ -46,7 +46,7 @@ test("filters chosen from the filter icon go into the address, survive a reload 
   await choose(page, "Enrollment year", "2031")
   await expect(page).toHaveURL(/[?&]visited_year=2031/)
   await expect(panel.getByTestId("visited-period")).toHaveText("All time · Enrollment year 2031")
-  await expect(panel.getByTestId("visited-count")).toHaveText("22")
+  await expect(panel.getByTestId("visited-count")).toHaveText("23")
 
   // A new period starts on the one containing today.
   await choose(page, "Period", "Week")
@@ -109,7 +109,7 @@ test("the interview tiles each keep their own filters in the address", async ({ 
   await expect(passed.getByTestId("passed-period")).toHaveText("September 2026 · Enrollment year 2031")
   await expect(passed.getByTestId("passed-count")).toHaveText("3")
   await expect(failed.getByTestId("failed-period")).toHaveText("All time · Enrollment year 2031")
-  await expect(failed.getByTestId("failed-count")).toHaveText("6")
+  await expect(failed.getByTestId("failed-count")).toHaveText("7")
 
   // Changing the Failed interviews filter leaves the other two alone.
   await failed.getByRole("button", { name: "Filter Failed interviews" }).click()
@@ -117,7 +117,7 @@ test("the interview tiles each keep their own filters in the address", async ({ 
   await choose(page, "Year", "2025")
   await expect(page).toHaveURL(/[?&]failed=year%3A2025-01-01/)
   await expect(failed.getByTestId("failed-period")).toHaveText("2025 · Enrollment year 2031")
-  await expect(failed.getByTestId("failed-count")).toHaveText("1")
+  await expect(failed.getByTestId("failed-count")).toHaveText("2")
   await expect(interviewed.getByTestId("interviewed-count")).toHaveText("6")
   await expect(passed.getByTestId("passed-count")).toHaveText("3")
 })
@@ -144,7 +144,7 @@ test("the Enrolled students tile keeps its own filters in the address", async ({
   await expect(enrolled.getByTestId("enrolled-period")).toHaveText("2025 · Enrollment year 2031")
   await expect(enrolled.getByTestId("enrolled-count")).toHaveText("1")
   await expect(page).toHaveURL(/[?&]visited_year=2031/)
-  await expect(visitedPanel(page).getByTestId("visited-count")).toHaveText("22")
+  await expect(visitedPanel(page).getByTestId("visited-count")).toHaveText("23")
 
   // A lead enrolled on the Academic-year start counts on the start date.
   await page.keyboard.press("Escape")
@@ -165,7 +165,7 @@ test("Leads by enrollment class lists every class in school order, zeros include
   expect(classes).toEqual(["DAY CARE", "KG 1", "KG 2", "STD 1", "STD 2", "STD 3", "STD 4", "STD 5", "STD 6", "STD 7", "FORM 1", "FORM 2", "FORM 3", "FORM 4"])
   await expect(panel.getByTestId("classes-count-STD 1")).toHaveText("3")
   await expect(panel.getByTestId("classes-count-FORM 4")).toHaveText("0")
-  await expect(panel.getByTestId("classes-total")).toHaveText("26")
+  await expect(panel.getByTestId("classes-total")).toHaveText("27")
 })
 
 test("changing the Leads by enrollment class filters leaves the Visited leads tile alone", async ({ page }) => {
@@ -182,7 +182,7 @@ test("changing the Leads by enrollment class filters leaves the Visited leads ti
   await choose(page, "Year", "2025")
   await expect(page).toHaveURL(/[?&]classes=year%3A2025-01-01/)
   await expect(classes.getByTestId("classes-period")).toHaveText("2025 · Enrollment year 2031")
-  await expect(classes.getByTestId("classes-total")).toHaveText("11")
+  await expect(classes.getByTestId("classes-total")).toHaveText("12")
   await expect(classes.getByTestId("classes-count-DAY CARE")).toHaveText("1")
 
   await expect(page).toHaveURL(/[?&]visited=month%3A2026-09-01/)

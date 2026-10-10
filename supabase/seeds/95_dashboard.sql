@@ -61,6 +61,9 @@
 --   12   ADMSN-31010  registered 2026-09-29, no result yet: counted nowhere
 --   13   ADMSN-31016  Thu 2026-10-01   Failed  Paid
 -- No interview is dated 2026-09-29, the day ADMSN-31010 was registered.
+-- ADMSN-31015's retake follows an approved Retake reopening, and a second
+-- retaken lead, ADMSN-31027, sits its two interviews in different months
+-- (S/Ns 24 and 25); both are written out at the end of this file.
 --
 -- Slice 8 (#97, #98) adds a reason that Declined leads and closure marks must
 -- carry; whichever of it and this file lands second fills in the reasons here.
@@ -433,5 +436,78 @@ select public.set_academic_year(2031, '{"seats": [
     {"class_name": "STD 2", "day_or_boarding": "Boarding", "seats": 5, "was": null},
     {"class_name": "STD 3", "day_or_boarding": "Day", "seats": 3, "was": null}
 ]}'::jsonb);
+
+commit;
+
+-- Retaken interviews (#119). Interviewed leads counts a child once in a
+-- period; Passed and Failed interviews count each sitting by its own date.
+-- Each lead below failed its first interview, was declined from Interviewed
+-- for Did not pass interview, raised a Reopening request that Test Manager
+-- approved with Retake the interview, and passed a retaken interview
+-- registered after that approval, with its own S/N. Written the way
+-- 50_interviews.sql and 80_closure.sql seed theirs, as rows with explicit
+-- times: the functions stamp the time they run, so a retake registered
+-- through register_for_interview could never hold a sitting in June.
+-- Each lead stands as it is now, Interviewed and Initially declined, with
+-- the approval on record, so #71's retake rule finds its retake used.
+--
+--   ADMSN-31015 Rehema Takwimu   STD 3 Day, both sittings in June 2026
+--     S/N 3   Failed Wed 2026-06-10, Not Paid
+--             Reopening raised Thu 2026-06-11, approved Mon 2026-06-15
+--     S/N 4   registered Wed 2026-06-17, Passed Wed 2026-06-24, Paid
+--   ADMSN-31027 Kibwana Takwimu  STD 5 Day, created and visited Mon
+--                                2025-10-20, the sittings in different months
+--     S/N 24  Failed Thu 2025-10-30, Not Paid
+--             Reopening raised Fri 2025-10-31, approved Mon 2025-11-03
+--     S/N 25  registered Mon 2025-11-03, Passed Wed 2025-11-05, Not Paid
+
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c02031-0000-4000-8000-000000000027', 'Hamida Takwimu', 'Mother', null, '+255700000977', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, created_at, initially_declined
+) values
+    ('1ead2031-0000-4000-8000-000000000027', 'ADMSN-31027', 'Kibwana Takwimu', 'STD 5', 2031, 'Day',
+        'Interviewed', null, date '2025-10-20', 'c0c02031-0000-4000-8000-000000000027', timestamptz '2025-10-20 09:00+03', true);
+
+-- ADMSN-31015 was inserted above as it stands, bar the mark its decline and
+-- reopening left.
+update public.leads set initially_declined = true where id = '1ead2031-0000-4000-8000-000000000015';
+
+-- Registered by Test Admissions: the first interview on the day of the
+-- visit, the retake after the approval.
+insert into public.interviews (
+    id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score
+)
+values
+    ('1e7e2031-0000-4000-8000-000000000024', '1ead2031-0000-4000-8000-000000000027', 24, 2031,
+        timestamptz '2025-10-20 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2025-10-30', 'Failed', 41),
+    ('1e7e2031-0000-4000-8000-000000000025', '1ead2031-0000-4000-8000-000000000027', 25, 2031,
+        timestamptz '2025-11-03 14:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2025-11-05', 'Passed', 68);
+
+update public.interview_serial_counters set last_number = 25 where enrollment_year = 2031;
+
+-- Raised by Test Admissions and approved by Test Manager with Retake the
+-- interview, between the failed sitting and the retake's registration.
+insert into public.reopening_requests (
+    id, lead_id, source, reason, requested_by, requested_at,
+    state, decided_by, decided_at, rejection_reason, enrol_without_retake, lead_was_declined, restored_status
+) values
+    ('5e0e2031-0000-4000-8000-000000000015', '1ead2031-0000-4000-8000-000000000015', 'lead',
+        'Rehema had a fever on the interview day; the family asks for another sitting.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-06-11 10:00:00+03',
+        'approved', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2026-06-15 11:00:00+03',
+        null, false, true, 'Interviewed'),
+    ('5e0e2031-0000-4000-8000-000000000027', '1ead2031-0000-4000-8000-000000000027', 'lead',
+        'Kibwana joined from another school mid-year and missed the topics tested.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2025-10-31 10:00:00+03',
+        'approved', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2025-11-03 11:00:00+03',
+        null, false, true, 'Interviewed');
 
 commit;

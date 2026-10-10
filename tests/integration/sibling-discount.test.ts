@@ -421,6 +421,43 @@ describe("the largest discount wins", () => {
   })
 })
 
+describe("the Academic-year start", () => {
+  test("enrolling a First instalment child enrols a sibling the discount brings over the line, on the same date, and counts it", async () => {
+    const year = await yearWithSchedule()
+    const start = `${year}-01-10`
+    await asSystem((sql) => sql.query("update public.fee_schedules set academic_year_start = $2 where enrollment_year = $1", [year, start]))
+    const [first, second] = await family(year)
+    await pay(first, 800_000, "first_instalment")
+    // 36% of 2,000,000, a Deposit; 40% of 1,800,000.
+    await pay(second, 720_000)
+
+    // The sweep reaches every year whose start has passed, so it runs in a
+    // transaction that is rolled back.
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      const { rows } = await sql.query<{ enrolled: number }>("select public.enrol_from_academic_year_start($1) as enrolled", [start])
+      const statuses = await sql.query<{ id: string; status: string }>("select id, status::text from public.leads where id = any($1)", [
+        [first, second],
+      ])
+      expect(Object.fromEntries(statuses.rows.map((row) => [row.id, row.status]))).toEqual({ [first]: "Enrolled", [second]: "Enrolled" })
+      const profile = await sql.query(
+        "select enrolled_trigger, enrolled_on::text, recompute_cause, sibling_kept from public.lead_fee_profiles where lead_id = $1",
+        [second],
+      )
+      expect(profile.rows[0]).toEqual({
+        enrolled_trigger: "academic_year_start",
+        enrolled_on: start,
+        recompute_cause: "sibling",
+        sibling_kept: true,
+      })
+      expect(rows[0].enrolled).toBeGreaterThanOrEqual(2)
+      // Nothing of the run's date is left behind for the rest of the transaction.
+      const left = await sql.query("select current_setting('app.recompute_as_of', true) as as_of")
+      expect(left.rows[0].as_of ?? "").toBe("")
+    })
+  })
+})
+
 describe("concurrency", () => {
   test("two payments in one Family recorded at once end consistent", async () => {
     const year = await yearWithSchedule()

@@ -26,7 +26,9 @@ export async function DiscountSection({ lead, staff, open }: LeadPanelProps) {
   const mayRequest = open && canRequestDiscount(staff.permissions)
   const mayDecide = canDecideDiscount(staff.permissions)
   const sibling = priorSibling.ok ? priorSibling.data : null
-  if (discounts.ok && !discounts.data.pending && discounts.data.decided.length === 0 && !mayRequest && !sibling) return null
+  if (discounts.ok && priorSibling.ok && !discounts.data.pending && discounts.data.decided.length === 0 && !mayRequest && !sibling) {
+    return null
+  }
 
   const granted = discounts.ok ? discounts.data.decided.filter((request) => request.state === "granted").map((r) => r.kind) : []
   const requestable = DISCOUNT_KINDS.filter((kind) => !granted.includes(kind))
@@ -42,10 +44,18 @@ export async function DiscountSection({ lead, staff, open }: LeadPanelProps) {
         </Alert>
       ) : (
         <div className="flex max-w-xl flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
-          {(sibling || mayRequest) && (
-            <div className="border-b pb-4">
-              <PriorSiblingTick leadId={lead.id} sibling={sibling} canEdit={mayRequest} />
-            </div>
+          {!priorSibling.ok ? (
+            // Unread, the tick could show unticked over a saved sibling, so
+            // nothing about it shows until it loads.
+            <Alert variant="destructive">
+              <AlertDescription>Has a sibling already at Al-Rahmah could not be loaded. Try again in a moment.</AlertDescription>
+            </Alert>
+          ) : (
+            (sibling || mayRequest) && (
+              <div className="border-b pb-4">
+                <PriorSiblingTick leadId={lead.id} sibling={sibling} canEdit={mayRequest} />
+              </div>
+            )
           )}
           {discounts.data.pending ? (
             <PendingRequest

@@ -107,17 +107,35 @@ revoke execute on function public.lock_families(uuid[]) from public, anon, authe
 -- lock_lead_family(lead_id): the Family lock of the lead's guardian contact,
 -- read without locking the lead. Returns the contact it locked, or null for
 -- a lead that doesn't exist.
+--
+-- A lead moves to another contact only under the Family lock of the contact
+-- it leaves (lock_lead_contact below), so once the lock of the contact read
+-- is held and a fresh read still names it, the lead stays there until this
+-- transaction ends. A move that committed between the read and the lock is
+-- seen on the fresh read, and the new contact is locked in turn, all before
+-- the caller locks the lead's row.
 create function public.lock_lead_family(lead_id uuid)
 returns uuid
 language plpgsql
+volatile
 set search_path = ''
 as $$
 declare
     contact_id uuid;
+    read_again uuid;
 begin
     select l.guardian_contact_id into contact_id from public.leads l where l.id = lock_lead_family.lead_id;
-    perform public.lock_families(array[contact_id]);
-    return contact_id;
+    loop
+        if contact_id is null then
+            return null;
+        end if;
+        perform public.lock_families(array[contact_id]);
+        select l.guardian_contact_id into read_again from public.leads l where l.id = lock_lead_family.lead_id;
+        if read_again is not distinct from contact_id then
+            return contact_id;
+        end if;
+        contact_id := read_again;
+    end loop;
 end;
 $$;
 
@@ -191,7 +209,10 @@ revoke execute on function public.lead_discount(uuid) from public, anon, authent
 --   - taking the Family lock before the lead's row lock;
 --   - accepting the causes `sibling` and `prior_sibling`;
 --   - setting `sibling_kept` when the lead becomes Enrolled while the
---     Sibling discount applies.
+--     Sibling discount applies;
+--   - with no `as_of`, judging on the date the Academic-year sweep set for
+--     the transaction (`app.recompute_as_of`), if any, so the sweep's
+--     cascade uses the sweep's date.
 -- Everything else is unchanged.
 -- ---------------------------------------------------------------------------
 
@@ -206,7 +227,9 @@ declare
     profile public.lead_fee_profiles;
     lines record;
     start_on date;
-    on_date date := coalesce(as_of, public.tanzania_today());
+    -- The Academic-year sweep sets its date for the transaction, so a sibling
+    -- its cascade recomputes is judged on the same day.
+    on_date date := coalesce(as_of, nullif(current_setting('app.recompute_as_of', true), '')::date, public.tanzania_today());
     from_start date;
     qualifies boolean := false;
     trigger_kind text;
@@ -627,7 +650,8 @@ revoke execute on function public.recompute_year_fees(integer, text) from public
 -- enrol_from_academic_year_start, as
 -- 20261102900800_enrol_on_academic_year_start.sql made it, now taking the
 -- Family locks of every lead it may enrol, in key order, after its own
--- advisory lock and before it locks any lead.
+-- advisory lock and before it locks any lead. A sibling its enrolments
+-- enrol through the cascade is judged on the run's date and counted.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.enrol_from_academic_year_start(as_of date)
@@ -639,6 +663,8 @@ as $$
 declare
     each_lead uuid;
     candidates uuid[];
+    waiting uuid[];
+    earlier_as_of text;
     enrolled integer := 0;
 begin
     if as_of is null then
@@ -669,6 +695,19 @@ begin
     from public.leads l
     where l.id = any(candidates) and l.status not in ('Enrolled', 'Declined');
 
+    -- Every lead in these Families not yet Enrolled: a candidate's enrolment
+    -- may enrol a sibling below the First instalment line, through the
+    -- cascade, and the count includes it.
+    select coalesce(array_agg(w.id), '{}')
+    into waiting
+    from public.leads w
+    where w.guardian_contact_id in (select l.guardian_contact_id from public.leads l where l.id = any(candidates))
+      and w.status not in ('Enrolled', 'Declined');
+
+    -- The cascade's recomputes are judged on this run's date too.
+    earlier_as_of := coalesce(current_setting('app.recompute_as_of', true), '');
+    perform set_config('app.recompute_as_of', enrol_from_academic_year_start.as_of::text, true);
+
     foreach each_lead in array candidates loop
         -- An earlier sibling's enrolment may have enrolled it already, and
         -- a decline may have reached it while this run waited.
@@ -681,11 +720,13 @@ begin
         perform public.recompute_lead_fee(each_lead, 'academic_year_start', enrol_from_academic_year_start.as_of);
     end loop;
 
+    perform set_config('app.recompute_as_of', earlier_as_of, true);
+
     -- Counted at the end, so a lead its sibling's enrolment enrolled in this
     -- run counts too.
     select count(*)::integer into enrolled
     from public.leads l
-    where l.id = any(candidates) and l.status = 'Enrolled';
+    where l.id = any(waiting) and l.status = 'Enrolled';
 
     return enrolled;
 end;
@@ -1047,3 +1088,38 @@ $$;
 
 revoke execute on function public.decide_discount(uuid, text, text) from public, anon;
 grant execute on function public.decide_discount(uuid, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Families already on record: a child that has paid, in a confirmed Family
+-- with another child already Enrolled, gains the discount now, and may reach
+-- the line with it. Each is recomputed with the cause `sibling`, as the
+-- system, under its Family's lock. One block, since the actor is
+-- transaction-local.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+    each_lead uuid;
+    reached uuid[];
+begin
+    perform public.set_audit_actor('system');
+
+    select coalesce(array_agg(w.id order by w.id), '{}')
+    into reached
+    from public.leads w
+    join public.guardian_contacts g on g.id = w.guardian_contact_id
+    where g.pending_family_match_id is null
+      and w.status not in ('Enrolled', 'Declined')
+      and exists (select 1 from public.school_fee_payments p where p.lead_id = w.id)
+      and exists (
+          select 1 from public.leads s
+          where s.guardian_contact_id = w.guardian_contact_id and s.id <> w.id and s.status = 'Enrolled'
+      );
+
+    perform public.lock_families(array(select l.guardian_contact_id from public.leads l where l.id = any(reached)));
+
+    foreach each_lead in array reached loop
+        perform public.recompute_lead_fee(each_lead, 'sibling');
+    end loop;
+end;
+$$;

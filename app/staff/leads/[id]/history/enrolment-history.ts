@@ -14,6 +14,11 @@ const LABELS: Readonly<Record<string, string>> = {
   enrolled_on: "Enrolled on",
   status_before_enrolled: "Status before Enrolled",
   recompute_cause: "Because",
+  // The prior-sibling tick, and the Sibling discount kept for good (#113).
+  prior_sibling: "Has a sibling already at Al-Rahmah",
+  prior_sibling_name: "Sibling's name",
+  prior_sibling_class: "Sibling's class",
+  sibling_kept: "Keeps the Sibling discount",
 }
 
 export const ENROLMENT_FIELDS: readonly string[] = Object.keys(LABELS)
@@ -36,6 +41,8 @@ const CAUSES: Readonly<Record<string, string>> = {
   family: "the lead's Family changed",
   academic_year_start: "the Academic-year start was reached",
   reopening: "the lead was reopened",
+  sibling: "the lead's Sibling discount changed",
+  prior_sibling: "Has a sibling already at Al-Rahmah was ticked or cleared",
 }
 
 function causeText(cause: unknown): string | null {
@@ -97,9 +104,23 @@ export function enrolmentSummary(entry: LeadHistoryEntry, status: LeadHistoryCha
 
 export function enrolmentProfileSummary(entry: LeadHistoryEntry): string {
   const trigger = entry.changes.find((c) => c.field === "enrolled_trigger")
+  const tick = priorSiblingSummary(entry)
+  if (tick && !trigger) return tick
   if (entry.action === "insert") return trigger?.to ? "recorded what enrolled the lead" : "recorded the lead's fee details"
   if (entry.action !== "update") return entry.action
   if (trigger?.to === null) return "cleared what enrolled the lead"
   if (trigger?.from === null) return "recorded what enrolled the lead"
   return "updated what enrolled the lead"
+}
+
+// Staff ticking, clearing or changing Has a sibling already at Al-Rahmah;
+// null when the entry doesn't touch it.
+function priorSiblingSummary(entry: LeadHistoryEntry): string | null {
+  const tick = entry.changes.find((c) => c.field === "prior_sibling")
+  if (tick?.to === true) return "ticked Has a sibling already at Al-Rahmah"
+  if (tick?.to === false && entry.action === "update") return "cleared Has a sibling already at Al-Rahmah"
+  if (entry.action === "update" && entry.changes.some((c) => c.field === "prior_sibling_name" || c.field === "prior_sibling_class")) {
+    return "changed the sibling already at Al-Rahmah"
+  }
+  return null
 }

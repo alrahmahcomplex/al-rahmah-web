@@ -1,11 +1,13 @@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { DISCOUNT_KINDS, getLeadDiscounts, type DiscountRequest } from "@/lib/services/discounts"
+import { getPriorSibling } from "@/lib/services/sibling-discount"
 import { createClient } from "@/utils/supabase/server"
 
 import { DecideDiscount } from "./decide-discount"
 import { canDecideDiscount, canRequestDiscount, DISCOUNT_STATE_LABELS, discountLabel } from "./discount-outcome"
 import type { LeadPanelProps } from "./panels"
+import { PriorSiblingTick } from "./prior-sibling"
 import { RequestDiscount } from "./request-discount"
 import { dayOf } from "./reopening-outcome"
 
@@ -15,11 +17,16 @@ import { dayOf } from "./reopening-outcome"
 // Pending, and every decided request, a refusal with its reason. A closed
 // lead keeps showing them, with no actions. A lead with no request shows
 // nothing to staff who can't request one.
+//
+// The prior-sibling tick (#113) sits at the top, for staff who may edit
+// leads, and for everyone once it is ticked.
 export async function DiscountSection({ lead, staff, open }: LeadPanelProps) {
-  const discounts = await getLeadDiscounts(await createClient(), lead.id)
+  const supabase = await createClient()
+  const [discounts, priorSibling] = await Promise.all([getLeadDiscounts(supabase, lead.id), getPriorSibling(supabase, lead.id)])
   const mayRequest = open && canRequestDiscount(staff.permissions)
   const mayDecide = canDecideDiscount(staff.permissions)
-  if (discounts.ok && !discounts.data.pending && discounts.data.decided.length === 0 && !mayRequest) return null
+  const sibling = priorSibling.ok ? priorSibling.data : null
+  if (discounts.ok && !discounts.data.pending && discounts.data.decided.length === 0 && !mayRequest && !sibling) return null
 
   const granted = discounts.ok ? discounts.data.decided.filter((request) => request.state === "granted").map((r) => r.kind) : []
   const requestable = DISCOUNT_KINDS.filter((kind) => !granted.includes(kind))
@@ -35,6 +42,11 @@ export async function DiscountSection({ lead, staff, open }: LeadPanelProps) {
         </Alert>
       ) : (
         <div className="flex max-w-xl flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
+          {(sibling || mayRequest) && (
+            <div className="border-b pb-4">
+              <PriorSiblingTick leadId={lead.id} sibling={sibling} canEdit={mayRequest} />
+            </div>
+          )}
           {discounts.data.pending ? (
             <PendingRequest
               request={discounts.data.pending}

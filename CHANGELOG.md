@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- The dashboard's tests now cover a child who failed an interview and sat a retaken
+  one after a **Retake the interview** reopening. **Interviewed leads** counts that
+  child once when both sittings fall in the period, and **Passed interviews** and
+  **Failed interviews** each count the sitting dated in the period. The counts already
+  worked this way, so no number on the dashboard changes.
+
 ## October 10, 2026 `v0.59.0`
 
 ### NEW

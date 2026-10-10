@@ -481,14 +481,15 @@ insert into public.leads (
 update public.leads set initially_declined = true where id = '1ead2031-0000-4000-8000-000000000015';
 
 -- Registered by Test Admissions: the first interview on the day of the
--- visit, the retake after the approval.
+-- visit, the retake after the approval. The interview ids end in 27 and 28,
+-- since the Enrolled students fixtures' interviews above take 17 to 26.
 insert into public.interviews (
     id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score
 )
 values
-    ('1e7e2031-0000-4000-8000-000000000024', '1ead2031-0000-4000-8000-000000000027', 24, 2031,
+    ('1e7e2031-0000-4000-8000-000000000027', '1ead2031-0000-4000-8000-000000000027', 24, 2031,
         timestamptz '2025-10-20 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2025-10-30', 'Failed', 41),
-    ('1e7e2031-0000-4000-8000-000000000025', '1ead2031-0000-4000-8000-000000000027', 25, 2031,
+    ('1e7e2031-0000-4000-8000-000000000028', '1ead2031-0000-4000-8000-000000000027', 25, 2031,
         timestamptz '2025-11-03 14:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2025-11-05', 'Passed', 68);
 
 update public.interview_serial_counters set last_number = 25 where enrollment_year = 2031;

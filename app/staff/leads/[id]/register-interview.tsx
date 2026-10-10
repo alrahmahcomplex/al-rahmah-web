@@ -15,8 +15,17 @@ const LOST_REQUEST: RegisterOutcome = {
 
 // Register for interview. Rendered for every lead the staff member could
 // register, so the confirmation outlasts the refresh that replaces the button
-// with the S/N.
-export function RegisterInterview({ leadId, canRegister }: { leadId: string; canRegister: boolean }) {
+// with the S/N. A lead reopened with Retake the interview is offered its one
+// retaken interview.
+export function RegisterInterview({
+  leadId,
+  canRegister,
+  retake = false,
+}: {
+  leadId: string
+  canRegister: boolean
+  retake?: boolean
+}) {
   const [outcome, setOutcome] = useState<RegisterOutcome | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -35,13 +44,20 @@ export function RegisterInterview({ leadId, canRegister }: { leadId: string; can
     <>
       {canRegister && (
         <div className="flex max-w-xl flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
-          <p className="text-sm text-slate-900">
-            Not registered for interview yet. Registering puts the child on the interview list for their enrollment
-            year and gives them the next S/N.
-          </p>
+          {retake ? (
+            <p className="text-sm text-slate-900">
+              This lead was reopened to retake the interview. Registering the retaken interview gives it the next S/N
+              for the enrollment year and its own fee, Not Paid. The earlier interview and its result stay on record.
+            </p>
+          ) : (
+            <p className="text-sm text-slate-900">
+              Not registered for interview yet. Registering puts the child on the interview list for their enrollment
+              year and gives them the next S/N.
+            </p>
+          )}
           <div>
             <Button type="button" onClick={register} disabled={pending}>
-              {pending ? "Registering…" : "Register for interview"}
+              {pending ? "Registering…" : retake ? "Register retaken interview" : "Register for interview"}
             </Button>
           </div>
         </div>

@@ -7,9 +7,16 @@ import { nextActionOf, type RegisterError } from "@/lib/services/interviews"
 
 describe("registerOutcome", () => {
   it("confirms a registration with its S/N and year", () => {
-    expect(registeredOutcome({ interviewId: "x", serialNumber: 12, enrollmentYear: 2027 })).toEqual({
+    expect(registeredOutcome({ interviewId: "x", serialNumber: 12, enrollmentYear: 2027, retake: false })).toEqual({
       status: "registered",
       message: "Registered for interview. The S/N is 12 for 2027.",
+    })
+  })
+
+  it("says when it registered a retaken interview", () => {
+    expect(registeredOutcome({ interviewId: "x", serialNumber: 31, enrollmentYear: 2027, retake: true })).toEqual({
+      status: "registered",
+      message: "Registered for a retaken interview. The S/N is 31 for 2027.",
     })
   })
 
@@ -96,5 +103,39 @@ describe("an interview registration in the lead's history", () => {
       { label: "Interview date", from: "None", to: "30 Sept 2026" },
       { label: "Amount paid", from: "None", to: "TZS 30,000" },
     ])
+  })
+})
+
+describe("a retaken interview in the lead's history", () => {
+  const FIRST = "44444444-4444-4444-8444-444444444441"
+  const RETAKE = "44444444-4444-4444-8444-444444444442"
+  const entry = (id: number, recordId: string, action: string, changes: LeadHistoryEntry["changes"]): LeadHistoryEntry => ({
+    id,
+    at: "2026-10-01T07:15:00Z",
+    actor: "Test Admissions",
+    record: "interviews",
+    recordId,
+    action,
+    changes,
+  })
+  const firstRegistration = entry(1, FIRST, "insert", [{ field: "serial_number", from: null, to: 12 }])
+  const firstResult = entry(2, FIRST, "update", [{ field: "result", from: null, to: "Failed" }])
+  const retakeRegistration = entry(3, RETAKE, "insert", [{ field: "serial_number", from: null, to: 31 }])
+  const retakeResult = entry(4, RETAKE, "update", [{ field: "result", from: null, to: "Passed" }])
+
+  it("names each interview's S/N, and reads the later registration as the retaken interview", () => {
+    // Newest first, as the history comes.
+    const described = describeLeadHistory([retakeResult, retakeRegistration, firstResult, firstRegistration], {})
+    expect(described.map((e) => e.summary)).toEqual([
+      "recorded the interview result (S/N 31)",
+      "registered the lead for a retaken interview (S/N 31)",
+      "recorded the interview result (S/N 12)",
+      "registered the lead for interview (S/N 12)",
+    ])
+  })
+
+  it("reads as before for a lead with one interview", () => {
+    const described = describeLeadHistory([firstResult, firstRegistration], {})
+    expect(described.map((e) => e.summary)).toEqual(["recorded the interview result", "registered the lead for interview"])
   })
 })

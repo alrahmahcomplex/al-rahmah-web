@@ -1,9 +1,10 @@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
-import { getLeadInterviews, type LeadInterview } from "@/lib/services/interviews"
+import { getInterviewRegistration, getLeadInterviews, type LeadInterview } from "@/lib/services/interviews"
 import type { Lead } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
+import { EarlierInterviews } from "./earlier-interviews"
 import { InterviewFeeControl } from "./interview-fee"
 import { tzs } from "./interview-outcome"
 import { InterviewResultEditor } from "./interview-result"
@@ -13,7 +14,8 @@ import { RegisterInterview } from "./register-interview"
 // and whether it is paid, its result, score and Next action once recorded.
 // Staff who record interviews on an open lead get Register for interview,
 // Record result and Correct result; the Accountant gets Mark paid and Mark
-// not paid. Everyone who may view the lead sees the panel.
+// not paid. Everyone who may view the lead sees the panel. After a retaken
+// interview the current one comes first and earlier ones below it.
 export async function InterviewSection({
   lead,
   canRecord,
@@ -23,10 +25,15 @@ export async function InterviewSection({
   canRecord: boolean
   canMarkFee: boolean
 }) {
-  const interviews = await getLeadInterviews(await createClient(), lead.id)
+  const supabase = await createClient()
+  const [interviews, registration] = await Promise.all([
+    getLeadInterviews(supabase, lead.id),
+    // The database says which registration the lead takes: first, retake, or none.
+    canRecord ? getInterviewRegistration(supabase, lead.id) : null,
+  ])
   const current = interviews.ok ? (interviews.data[0] ?? null) : null
-  const canRegister =
-    canRecord && interviews.ok && current === null && (lead.status === "Applied" || lead.status === "Visited")
+  const kind = registration?.ok ? registration.data : null
+  const canRegister = canRecord && interviews.ok && kind !== null
 
   return (
     <section aria-labelledby="lead-interview" className="flex flex-col gap-3">
@@ -48,7 +55,8 @@ export async function InterviewSection({
       ) : (
         !canRegister && <p className="text-sm text-muted-foreground">Not registered for interview.</p>
       )}
-      {canRecord && <RegisterInterview key={lead.id} leadId={lead.id} canRegister={canRegister} />}
+      {interviews.ok && <EarlierInterviews interviews={interviews.data.slice(1)} />}
+      {canRecord && <RegisterInterview key={lead.id} leadId={lead.id} canRegister={canRegister} retake={kind === "retake"} />}
     </section>
   )
 }
@@ -69,7 +77,7 @@ function CurrentInterview({
   const registeredOn = tanzaniaToday(new Date(interview.registeredAt))
   const paid = interview.feeStatus === "Paid"
   return (
-    <div className="flex max-w-xl flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
+    <div role="group" aria-label="Current interview" className="flex max-w-xl flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <p className="text-sm text-muted-foreground">Interview S/N</p>
         <p className="font-mono text-2xl font-semibold text-slate-900" aria-label="Interview S/N">

@@ -21,6 +21,8 @@ export type Registration = {
   // The S/N and the enrollment year it was issued in. Neither changes later.
   serialNumber: number
   enrollmentYear: number
+  // True for a retaken interview after a Retake reopening.
+  retake: boolean
 }
 
 export type RegisterError =
@@ -33,10 +35,11 @@ export type RegisterError =
   | "not_found"
   | "unavailable"
 
-type RegistrationRow = { interview_id: string; serial_number: number; serial_year: number }
+type RegistrationRow = { interview_id: string; serial_number: number; serial_year: number; retake: boolean }
 
-// Registers an Applied or Visited lead for its first interview and gives it
-// the next S/N for its enrollment year. Needs interviews.record.
+// Registers an Applied or Visited lead for its first interview, or a lead
+// reopened with Retake the interview for its one retaken interview, and gives
+// it the next S/N for its enrollment year. Needs interviews.record.
 export async function registerForInterview(
   supabase: SupabaseClient,
   leadId: string,
@@ -56,7 +59,34 @@ export async function registerForInterview(
   }
 
   const row = data as RegistrationRow
-  return { ok: true, data: { interviewId: row.interview_id, serialNumber: row.serial_number, enrollmentYear: row.serial_year } }
+  return {
+    ok: true,
+    data: {
+      interviewId: row.interview_id,
+      serialNumber: row.serial_number,
+      enrollmentYear: row.serial_year,
+      retake: row.retake === true,
+    },
+  }
+}
+
+// Which registration the lead takes now: its first interview, its one
+// retaken interview after a Retake reopening, or none (null). Needs
+// leads.view; registering still needs interviews.record.
+export type RegistrationKind = "first" | "retake"
+
+export async function getInterviewRegistration(
+  supabase: SupabaseClient,
+  leadId: string,
+): Promise<Result<RegistrationKind | null, "forbidden" | "not_found" | "unavailable">> {
+  const { data, error } = await supabase.rpc("interview_registration_open", { lead_id: leadId })
+  if (error) {
+    if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
+    if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not_found" }
+    console.error("Could not read whether a lead can be registered for interview", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: data === "first" || data === "retake" ? data : null }
 }
 
 // ---------------------------------------------------------------------------

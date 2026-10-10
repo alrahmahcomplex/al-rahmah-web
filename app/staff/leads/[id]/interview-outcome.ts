@@ -12,8 +12,9 @@ export type RegisterOutcome =
   | { status: "registered"; message: string }
   | { status: "refused"; message: string }
 
-export function registeredOutcome({ serialNumber, enrollmentYear }: Registration): RegisterOutcome {
-  return { status: "registered", message: `Registered for interview. The S/N is ${serialNumber} for ${enrollmentYear}.` }
+export function registeredOutcome({ serialNumber, enrollmentYear, retake }: Registration): RegisterOutcome {
+  const registered = retake ? "Registered for a retaken interview." : "Registered for interview."
+  return { status: "registered", message: `${registered} The S/N is ${serialNumber} for ${enrollmentYear}.` }
 }
 
 // Turns what the interview module refused into a plain sentence. The codes

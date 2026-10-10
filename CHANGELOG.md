@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- A lead reopened with **Retake the interview** can now be registered for one retaken
+  interview from its lead screen, with **Register retaken interview**. The retake gets
+  the next S/N for the lead's enrollment year and its own interview fee, starting Not
+  Paid, and becomes the current interview. Recording its result keeps the lead
+  Interviewed. A lead reopened to enrol without a retaken interview, a lead never
+  declined, and a lead that has already had its retake are not offered it.
+- The interview panel shows the current interview first and earlier ones below it,
+  each with its own S/N, result, score and fee. In the history, each interview's
+  entries name its S/N, and the second registration reads as the retaken interview.
+
 ## October 10, 2026 `v0.58.0`
 
 ### NEW

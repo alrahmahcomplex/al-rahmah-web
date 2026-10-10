@@ -130,8 +130,12 @@ begin
     on conflict (enrollment_year) do update set last_number = c.last_number + 1
     returning c.last_number into issued;
 
-    insert into public.interviews (lead, serial_number, serial_year, registered_by)
-    values (target.id, issued, target.enrollment_year, staff_id)
+    -- Stamped with the time of the insert, not the start of the transaction.
+    -- A registration that began before an approval and waited on the lead's
+    -- lock until it committed would otherwise carry a time before that
+    -- approval's, and the retake rule would not count it as the retake.
+    insert into public.interviews (lead, serial_number, serial_year, registered_by, registered_at)
+    values (target.id, issued, target.enrollment_year, staff_id, clock_timestamp())
     returning id into new_id;
 
     return jsonb_build_object(

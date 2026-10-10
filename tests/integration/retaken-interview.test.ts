@@ -15,7 +15,7 @@ import { approveReopeningRequest, declineLead, markLead } from "@/lib/services/l
 import { createLead, getLead } from "@/lib/services/leads"
 import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 
-import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
+import { anonClient, asStaffActor, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // A retaken interview after a Retake reopening (#71), through the interview,
@@ -148,6 +148,31 @@ describe("registering a retaken interview", () => {
     const results = await Promise.all([registerForInterview(one, lead), registerForInterview(other, lead)])
     expect(results.filter((result) => result.ok)).toHaveLength(1)
     expect(results.filter((result) => !result.ok)).toEqual([{ ok: false, error: "already_registered" }])
+    expect(await interviewsOf(lead)).toHaveLength(2)
+  })
+
+  test("a registration whose transaction began before the approval still counts as the retake", async () => {
+    const { lead } = await interviewedLead()
+    const declined = await declineLead(await signedIn(MANAGER), lead, { reason: "Did not pass interview" })
+    if (!declined.ok) throw new Error(`decline failed: ${declined.error}`)
+    const raised = await raiseReopeningRequest(await signedIn(ADMISSIONS), lead, { reason: "Another sitting, please.", source: "lead" })
+    if (!raised.ok) throw new Error(`raise failed: ${JSON.stringify(raised.error)}`)
+
+    // Test Admissions' transaction starts, the approval commits meanwhile,
+    // and only then does that transaction register the retake.
+    await asStaffActor(ADMISSIONS.id, async (sql) => {
+      const { rows } = await sql.query("select user_id from public.staff_members where id = $1", [ADMISSIONS.id])
+      await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: rows[0].user_id, role: "authenticated" })])
+      await sql.query("set local role authenticated")
+      await sql.query("select now()")
+
+      const approved = await approveReopeningRequest(await signedIn(MANAGER), raised.data, { enrolWithoutRetake: false })
+      if (!approved.ok) throw new Error(`approve failed: ${approved.error}`)
+
+      await sql.query("select public.register_for_interview($1)", [lead])
+    })
+
+    expect(await registerForInterview(await signedIn(ADMISSIONS), lead)).toEqual({ ok: false, error: "already_registered" })
     expect(await interviewsOf(lead)).toHaveLength(2)
   })
 

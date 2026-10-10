@@ -209,3 +209,201 @@ set closure = 'Archived', closure_reason = 'Admission cycle ended'
 where id = '1ead2031-0000-4000-8000-000000000009';
 
 commit;
+
+-- Enrolled students (#120) counts leads that are Enrolled now by the date
+-- slice 9 says Enrolled was triggered. These ten 2031 leads are written the
+-- way slice 9 and slice 8 write them, through their own functions, each
+-- called in the signed-in session of the seeded staff member who would make
+-- the change, so every rule those functions hold applies here too:
+--
+--   Test Accountant saves the 2031 Fee schedule (save_fee_schedule) with the
+--   2027 amounts, so a STD 2 to STD 4 Day place is TZS 2,000,000 and First
+--   instalment is 40% of it, TZS 800,000. Test Manager sets its Academic-year
+--   start to Wednesday 8 January 2031 (set_academic_year). Test Accountant
+--   records every payment (record_school_fee_payment) and the adjustment
+--   (adjust_school_fee_payment); Test Admissions declines and archives
+--   (decline_lead, mark_lead).
+--
+-- Every lead visited in November 2025 and Passed its interview on Wednesday
+-- 19 November 2025, so they add to the 2025 visits, interviews and new leads
+-- and leave every 2026 count alone. All are Day.
+--
+--   ADMSN-31017 Kheri Takwimu     STD 2  Full payment Wed 2025-12-31, the last day of 2025
+--   ADMSN-31018 Pili Takwimu      STD 3  Full payment Thu 2026-01-01, the first day of 2026
+--   ADMSN-31019 Faki Takwimu      STD 4  Full payment Sun 2026-05-31, the last day of May
+--   ADMSN-31020 Mosi Takwimu      STD 2  Full payment Mon 2026-06-01, the first of June
+--   ADMSN-31021 Tabu Takwimu      STD 3  Initial deposit 800,000 on 2026-07-06, First
+--                                        instalment: enrolled on the Academic-year
+--                                        start, 2031-01-08
+--   ADMSN-31022 Sharifa Takwimu   STD 4  Initial deposit 800,000 on 2026-07-07, First
+--                                        instalment, then the second and third
+--                                        instalments on 2026-08-11: Full before the
+--                                        start, so enrolled on 2026-08-11
+--   ADMSN-31023 Zawadi Takwimu    STD 2  Full payment 2026-08-12, then adjusted (Wrong
+--                                        amount) to an Initial deposit of 300,000:
+--                                        back to Interviewed, not counted
+--   ADMSN-31024 Kombo Takwimu     STD 3  Full payment 2026-08-13, then Declined (Family
+--                                        changed plans): not counted
+--   ADMSN-31025 Mwanahamisi Takwimu STD 4 Full payment 2026-08-14, then Archived
+--                                        (Admission cycle ended): still counted
+--   ADMSN-31026 Nasra Takwimu     STD 2  Initial deposit 800,000 on 2026-07-08, First
+--                                        instalment, not yet Enrolled: the test
+--                                        enrols it through
+--                                        enrol_from_academic_year_start in a
+--                                        rolled-back transaction
+--
+-- Seven count: one on each of 2025-12-31, 2026-01-01, 2026-05-31,
+-- 2026-06-01, 2026-08-11, 2026-08-14 and 2031-01-08.
+--
+-- ADMSN-31021 is enrolled the way enrol_from_academic_year_start enrols each
+-- lead (its lock, its date for the run, recompute_lead_fee with the cause
+-- academic_year_start), but for this lead alone. The function itself sweeps
+-- every year whose start has come by the date given, so calling it as of
+-- January 2031 here would also enrol the 2027 fixtures' First instalment
+-- leads. Since the start is still to come, a recompute dated today, such as
+-- one a correction to this lead causes, would put it back to Interviewed;
+-- no test does that.
+
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c02031-0000-4000-8000-000000000017', 'Khadija Takwimu', 'Mother', null, '+255700000967', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000018', 'Hamadi Takwimu', 'Father', null, '+255700000968', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000019', 'Mwanaidi Takwimu', 'Mother', null, '+255700000969', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000020', 'Said Takwimu', 'Father', null, '+255700000970', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000021', 'Tatu Mwinyi Takwimu', 'Guardian', null, '+255700000971', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000022', 'Bakari Hemedi Takwimu', 'Father', null, '+255700000972', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000023', 'Asha Juma Takwimu', 'Mother', null, '+255700000973', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000024', 'Rajabu Takwimu', 'Father', null, '+255700000974', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000025', 'Zuena Takwimu', 'Mother', null, '+255700000975', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000026', 'Hija Takwimu', 'Mother', null, '+255700000976', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, created_at
+) values
+    ('1ead2031-0000-4000-8000-000000000017', 'ADMSN-31017', 'Kheri Takwimu', 'STD 2', 2031, 'Day',
+        'Interviewed', null, date '2025-11-03', 'c0c02031-0000-4000-8000-000000000017', timestamptz '2025-11-03 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000018', 'ADMSN-31018', 'Pili Takwimu', 'STD 3', 2031, 'Day',
+        'Interviewed', null, date '2025-11-04', 'c0c02031-0000-4000-8000-000000000018', timestamptz '2025-11-04 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000019', 'ADMSN-31019', 'Faki Takwimu', 'STD 4', 2031, 'Day',
+        'Interviewed', null, date '2025-11-05', 'c0c02031-0000-4000-8000-000000000019', timestamptz '2025-11-05 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000020', 'ADMSN-31020', 'Mosi Takwimu', 'STD 2', 2031, 'Day',
+        'Interviewed', null, date '2025-11-06', 'c0c02031-0000-4000-8000-000000000020', timestamptz '2025-11-06 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000021', 'ADMSN-31021', 'Tabu Takwimu', 'STD 3', 2031, 'Day',
+        'Interviewed', null, date '2025-11-07', 'c0c02031-0000-4000-8000-000000000021', timestamptz '2025-11-07 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000022', 'ADMSN-31022', 'Sharifa Takwimu', 'STD 4', 2031, 'Day',
+        'Interviewed', null, date '2025-11-10', 'c0c02031-0000-4000-8000-000000000022', timestamptz '2025-11-10 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000023', 'ADMSN-31023', 'Zawadi Takwimu', 'STD 2', 2031, 'Day',
+        'Interviewed', null, date '2025-11-11', 'c0c02031-0000-4000-8000-000000000023', timestamptz '2025-11-11 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000024', 'ADMSN-31024', 'Kombo Takwimu', 'STD 3', 2031, 'Day',
+        'Interviewed', null, date '2025-11-12', 'c0c02031-0000-4000-8000-000000000024', timestamptz '2025-11-12 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000025', 'ADMSN-31025', 'Mwanahamisi Takwimu', 'STD 4', 2031, 'Day',
+        'Interviewed', null, date '2025-11-13', 'c0c02031-0000-4000-8000-000000000025', timestamptz '2025-11-13 09:00+03'),
+    ('1ead2031-0000-4000-8000-000000000026', 'ADMSN-31026', 'Nasra Takwimu', 'STD 2', 2031, 'Day',
+        'Interviewed', null, date '2025-11-14', 'c0c02031-0000-4000-8000-000000000026', timestamptz '2025-11-14 09:00+03');
+
+-- Registered by Test Admissions on the day of the visit and Passed on
+-- 19 November 2025, S/Ns 14 to 23.
+insert into public.interviews (
+    id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score
+)
+select
+    ('1e7e2031-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'))::uuid,
+    ('1ead2031-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'))::uuid,
+    n - 3, 2031, l.created_at + interval '1 hour', 'a1a1a1a1-0000-4000-8000-000000000003',
+    date '2025-11-19', 'Passed', 60 + n
+from generate_series(17, 26) as n
+join public.leads l on l.id = ('1ead2031-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'))::uuid;
+
+update public.interview_serial_counters set last_number = 23 where enrollment_year = 2031;
+
+commit;
+
+-- The 2031 Fee schedule, saved by Test Accountant.
+begin;
+
+select set_config('request.jwt.claims', '{"sub":"44444444-4444-4444-8444-444444444444","role":"authenticated"}', true);
+
+select public.save_fee_schedule(2031, '{
+    "bands": {
+        "nursery": {"day_fee": 1100000, "boarding_fee": 3000000},
+        "primary_lower": {"day_fee": 2000000, "boarding_fee": 3000000},
+        "primary_upper": {"day_fee": 2100000, "boarding_fee": 3300000},
+        "secondary": {"day_fee": 2800000, "boarding_fee": 4300000}
+    },
+    "first_share": 40, "second_share": 40, "third_share": 20,
+    "first_due": "2030-11-01", "second_due": "2031-04-01", "third_due": "2031-06-01",
+    "minimum_deposit": 300000, "pre_form_one_day_fee": 450000, "pre_form_one_boarding_fee": 580000
+}'::jsonb);
+
+commit;
+
+-- Its Academic-year start, set by Test Manager. The start is still to come,
+-- so setting it enrols nobody.
+begin;
+
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
+
+select public.set_academic_year(2031, '{"academic_year_start": "2031-01-08", "academic_year_start_was": null}'::jsonb);
+
+commit;
+
+-- The payments and the adjustment, recorded by Test Accountant in date
+-- order. Each recording recomputes the lead, which enrols it on the date
+-- Full is reached.
+begin;
+
+select set_config('request.jwt.claims', '{"sub":"44444444-4444-4444-8444-444444444444","role":"authenticated"}', true);
+
+select public.record_school_fee_payment(p.lead_id, p.payment_type, p.amount, p.paid_on, p.request_id)
+from (values
+    ('1ead2031-0000-4000-8000-000000000017'::uuid, 'full_payment', 2000000, date '2025-12-31', 'fee02031-0000-4000-8000-000000000017'::uuid),
+    ('1ead2031-0000-4000-8000-000000000018'::uuid, 'full_payment', 2000000, date '2026-01-01', 'fee02031-0000-4000-8000-000000000018'::uuid),
+    ('1ead2031-0000-4000-8000-000000000019'::uuid, 'full_payment', 2000000, date '2026-05-31', 'fee02031-0000-4000-8000-000000000019'::uuid),
+    ('1ead2031-0000-4000-8000-000000000020'::uuid, 'full_payment', 2000000, date '2026-06-01', 'fee02031-0000-4000-8000-000000000020'::uuid),
+    ('1ead2031-0000-4000-8000-000000000021'::uuid, 'initial_deposit', 800000, date '2026-07-06', 'fee02031-0000-4000-8000-000000000021'::uuid),
+    ('1ead2031-0000-4000-8000-000000000022'::uuid, 'initial_deposit', 800000, date '2026-07-07', 'fee02031-0000-4000-8000-000000000022'::uuid),
+    ('1ead2031-0000-4000-8000-000000000026'::uuid, 'initial_deposit', 800000, date '2026-07-08', 'fee02031-0000-4000-8000-000000000026'::uuid),
+    ('1ead2031-0000-4000-8000-000000000022'::uuid, 'second_instalment', 800000, date '2026-08-11', 'fee02031-0000-4000-8000-000000000122'::uuid),
+    ('1ead2031-0000-4000-8000-000000000022'::uuid, 'third_instalment', 400000, date '2026-08-11', 'fee02031-0000-4000-8000-000000000222'::uuid),
+    ('1ead2031-0000-4000-8000-000000000023'::uuid, 'full_payment', 2000000, date '2026-08-12', 'fee02031-0000-4000-8000-000000000023'::uuid),
+    ('1ead2031-0000-4000-8000-000000000024'::uuid, 'full_payment', 2000000, date '2026-08-13', 'fee02031-0000-4000-8000-000000000024'::uuid),
+    ('1ead2031-0000-4000-8000-000000000025'::uuid, 'full_payment', 2000000, date '2026-08-14', 'fee02031-0000-4000-8000-000000000025'::uuid)
+) as p(lead_id, payment_type, amount, paid_on, request_id)
+order by p.paid_on, p.request_id;
+
+-- ADMSN-31023's Full payment was really an Initial deposit of 300,000.
+select public.adjust_school_fee_payment(
+    p.id, 'Wrong amount', false, 'initial_deposit', 300000, date '2026-08-12',
+    'The family paid the Initial deposit only.', 'ad1e2031-0000-4000-8000-000000000023'
+)
+from public.school_fee_payments p
+where p.request_id = 'fee02031-0000-4000-8000-000000000023';
+
+commit;
+
+-- Declined and Archived by Test Admissions after they were Enrolled.
+begin;
+
+select set_config('request.jwt.claims', '{"sub":"33333333-3333-4333-8333-333333333333","role":"authenticated"}', true);
+
+select public.decline_lead('1ead2031-0000-4000-8000-000000000024', 'Family changed plans');
+select public.mark_lead('1ead2031-0000-4000-8000-000000000025', 'Archived', 'Admission cycle ended');
+
+commit;
+
+-- ADMSN-31021 enrolled on the Academic-year start, as
+-- enrol_from_academic_year_start('2031-01-08') would enrol it, by the system.
+begin;
+
+select public.set_audit_actor('system');
+select pg_advisory_xact_lock(hashtext('enrol_from_academic_year_start'));
+select set_config('app.recompute_as_of', '2031-01-08', true);
+select public.recompute_lead_fee('1ead2031-0000-4000-8000-000000000021', 'academic_year_start', date '2031-01-08');
+select set_config('app.recompute_as_of', '', true);
+
+commit;

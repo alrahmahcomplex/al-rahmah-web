@@ -407,3 +407,31 @@ select public.recompute_lead_fee('1ead2031-0000-4000-8000-000000000021', 'academ
 select set_config('app.recompute_as_of', '', true);
 
 commit;
+
+-- Seats by class (#121) reads slice 9's seat count for 2031. Test Manager
+-- sets seats for a few classes (set_academic_year). The leads above hold
+-- them, a lead taking a seat once it has a Seat priority:
+--
+--   Class           Seats    Taken  By priority
+--   STD 2 Day       3        4      Full 2 (31017, 31020), First instalment 1
+--                                   (31026), Deposit 1 (31023): over by 1
+--   STD 2 Boarding  5        0      5 left
+--   STD 3 Day       3        2      Full 1 (31018), First instalment 1 (31021):
+--                                   1 left; the Declined 31024 paid in full
+--                                   and takes none
+--   STD 4 Day       not set  3      Full 3 (31019, 31022, and 31025, which
+--                                   keeps its seat while Archived)
+--
+-- Every other 2031 class has its seats not set and none taken.
+
+begin;
+
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
+
+select public.set_academic_year(2031, '{"seats": [
+    {"class_name": "STD 2", "day_or_boarding": "Day", "seats": 3, "was": null},
+    {"class_name": "STD 2", "day_or_boarding": "Boarding", "seats": 5, "was": null},
+    {"class_name": "STD 3", "day_or_boarding": "Day", "seats": 3, "was": null}
+]}'::jsonb);
+
+commit;

@@ -7,7 +7,7 @@ import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
 import { createLead, type LeadClass } from "@/lib/services/leads"
 
-import { asSystem, signedIn } from "../tests/support/db"
+import { asSystem, createThrowawayStaff, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
@@ -119,6 +119,21 @@ test("Admissions Staff tick the programme on a FORM 1 lead, and the Accountant r
   await expect(detail(page, "School fee", "Total paid")).toHaveText("TZS 0")
   await expect(detail(page, "School fee", "Balance")).toHaveText("TZS 2,800,000")
   await expect(page.getByRole("list", { name: "Payments" })).toContainText("Pre-Form One fee")
+})
+
+test("staff who edit leads but can't view payments still tick the programme, and see no fee", async ({ page }) => {
+  const lead = await passedLead("FORM 1")
+  const editor = await createThrowawayStaff(["leads.view", "leads.edit"])
+
+  await signIn(page, editor)
+  await page.goto(`/staff/leads/${lead}`)
+  await expect(page.getByRole("region", { name: "School fee" })).toHaveCount(0)
+  const programme = page.getByRole("region", { name: "Pre-Form One programme" })
+  const tick = programme.getByRole("checkbox", { name: "Pre-Form One programme" })
+  await expect(tick).not.toBeChecked()
+  await tick.click()
+  await expect(tick).toBeChecked()
+  await expect(programme).not.toContainText("TZS")
 })
 
 test("the programme isn't offered on another class, and a tick kept after a class correction shows as not applying", async ({

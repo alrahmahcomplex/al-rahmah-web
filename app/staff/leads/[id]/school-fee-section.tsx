@@ -13,6 +13,7 @@ import { SeatPriorityBadge } from "../seat-priority-badge"
 import { enrolledBy } from "./enrolment-text"
 import { PaymentList } from "./payment-list"
 import { PreFormOneProgramme } from "./pre-form-one-programme"
+import { PreFormOneTickSection } from "./pre-form-one-tick-section"
 import { RecordPayment } from "./record-payment"
 
 const INSTALMENTS = ["First", "Second", "Third"] as const
@@ -34,14 +35,21 @@ export async function SchoolFeeSection({
   canRecord,
   canAdjust,
   canEditPreFormOne = false,
+  formOne = false,
 }: {
   leadId: string
   staff: StaffMember
   canRecord: boolean
   canAdjust: boolean
   canEditPreFormOne?: boolean
+  // The lead's class is FORM 1.
+  formOne?: boolean
 }) {
-  if (!staff.permissions.includes("payments.view")) return null
+  // Without payments.view, only the Pre-Form One tick shows, for staff who
+  // may still edit leads.
+  if (!staff.permissions.includes("payments.view")) {
+    return <PreFormOneTickSection leadId={leadId} formOne={formOne} canEdit={canEditPreFormOne} />
+  }
 
   const supabase = await createClient()
   const [fee, payments] = await Promise.all([getLeadFee(supabase, leadId), listPayments(supabase, leadId)])

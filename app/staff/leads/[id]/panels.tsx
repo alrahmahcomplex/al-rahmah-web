@@ -90,6 +90,7 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
         canRecord={open && staff.permissions.includes("payments.record")}
         canAdjust={staff.permissions.includes("payments.record")}
         canEditPreFormOne={open && staff.permissions.includes("leads.edit")}
+        formOne={lead.className === "FORM 1"}
       />
     ),
   },

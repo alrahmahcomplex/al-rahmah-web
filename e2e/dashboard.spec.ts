@@ -46,7 +46,7 @@ test("filters chosen from the filter icon go into the address, survive a reload 
   await choose(page, "Enrollment year", "2031")
   await expect(page).toHaveURL(/[?&]visited_year=2031/)
   await expect(panel.getByTestId("visited-period")).toHaveText("All time · Enrollment year 2031")
-  await expect(panel.getByTestId("visited-count")).toHaveText("12")
+  await expect(panel.getByTestId("visited-count")).toHaveText("22")
 
   // A new period starts on the one containing today.
   await choose(page, "Period", "Week")
@@ -122,6 +122,37 @@ test("the interview tiles each keep their own filters in the address", async ({ 
   await expect(passed.getByTestId("passed-count")).toHaveText("3")
 })
 
+const enrolledPanel = (page: Page) => page.getByRole("region", { name: "Enrolled students" })
+
+test("the Enrolled students tile keeps its own filters in the address", async ({ page }) => {
+  await signIn(page, MANAGER)
+  const enrolled = enrolledPanel(page)
+  await expect(enrolled.getByTestId("enrolled-period")).toHaveText("All time · All years")
+  await expect(enrolled.getByTestId("enrolled-count")).toHaveText(/^\d[\d,]*$/)
+  await expect(enrolled.getByText("Counted by the date Enrolled was triggered")).toBeVisible()
+
+  // August 2026 for 2031: one paid in full, one Archived; the reverted and
+  // Declined leads are left out.
+  await page.goto("/staff?enrolled=month:2026-08-01&enrolled_year=2031&visited_year=2031")
+  await expect(enrolled.getByTestId("enrolled-period")).toHaveText("August 2026 · Enrollment year 2031")
+  await expect(enrolled.getByTestId("enrolled-count")).toHaveText("2")
+
+  await enrolled.getByRole("button", { name: "Filter Enrolled students" }).click()
+  await choose(page, "Period", "Year")
+  await choose(page, "Year", "2025")
+  await expect(page).toHaveURL(/[?&]enrolled=year%3A2025-01-01/)
+  await expect(enrolled.getByTestId("enrolled-period")).toHaveText("2025 · Enrollment year 2031")
+  await expect(enrolled.getByTestId("enrolled-count")).toHaveText("1")
+  await expect(page).toHaveURL(/[?&]visited_year=2031/)
+  await expect(visitedPanel(page).getByTestId("visited-count")).toHaveText("22")
+
+  // A lead enrolled on the Academic-year start counts on the start date.
+  await page.keyboard.press("Escape")
+  await page.goto("/staff?enrolled=date:2031-01-08&enrolled_year=2031")
+  await expect(enrolled.getByTestId("enrolled-period")).toHaveText(`${formatDate("2031-01-08")} · Enrollment year 2031`)
+  await expect(enrolled.getByTestId("enrolled-count")).toHaveText("1")
+})
+
 const classesPanel = (page: Page) => page.getByRole("region", { name: "Leads by enrollment class" })
 
 test("Leads by enrollment class lists every class in school order, zeros included, with the total", async ({ page }) => {
@@ -134,7 +165,7 @@ test("Leads by enrollment class lists every class in school order, zeros include
   expect(classes).toEqual(["DAY CARE", "KG 1", "KG 2", "STD 1", "STD 2", "STD 3", "STD 4", "STD 5", "STD 6", "STD 7", "FORM 1", "FORM 2", "FORM 3", "FORM 4"])
   await expect(panel.getByTestId("classes-count-STD 1")).toHaveText("3")
   await expect(panel.getByTestId("classes-count-FORM 4")).toHaveText("0")
-  await expect(panel.getByTestId("classes-total")).toHaveText("16")
+  await expect(panel.getByTestId("classes-total")).toHaveText("26")
 })
 
 test("changing the Leads by enrollment class filters leaves the Visited leads tile alone", async ({ page }) => {
@@ -151,7 +182,7 @@ test("changing the Leads by enrollment class filters leaves the Visited leads ti
   await choose(page, "Year", "2025")
   await expect(page).toHaveURL(/[?&]classes=year%3A2025-01-01/)
   await expect(classes.getByTestId("classes-period")).toHaveText("2025 · Enrollment year 2031")
-  await expect(classes.getByTestId("classes-total")).toHaveText("1")
+  await expect(classes.getByTestId("classes-total")).toHaveText("11")
   await expect(classes.getByTestId("classes-count-DAY CARE")).toHaveText("1")
 
   await expect(page).toHaveURL(/[?&]visited=month%3A2026-09-01/)
@@ -197,6 +228,18 @@ test.describe("at phone width", () => {
     await expect(panel.getByTestId("visited-period")).toHaveText(`${tanzaniaToday().slice(0, 4)} · All years`)
     const filter = await page.getByRole("combobox", { name: "Enrollment year" }).boundingBox()
     expect(filter!.x + filter!.width).toBeLessThanOrEqual(375)
+  })
+
+  test("the Enrolled students tile fits the screen", async ({ page }) => {
+    await signIn(page, MANAGER)
+    await page.goto("/staff?enrolled=month:2026-08-01&enrolled_year=2031")
+    const panel = enrolledPanel(page)
+    await expect(panel.getByTestId("enrolled-count")).toHaveText("2")
+
+    const box = await panel.boundingBox()
+    expect(box!.x).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(375)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   })
 
   test("the Leads by enrollment class table fits the screen", async ({ page }) => {

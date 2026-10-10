@@ -50,9 +50,10 @@ const year = (anchor: string): Period => ({ kind: "year", anchor })
 
 describe("the interview counts", () => {
   test("All time: Interviewed leads counts children, Passed and Failed count sittings", async () => {
-    // Twelve 2031 sittings with a result, on eleven children: ADMSN-31015 sat
-    // twice. The thirteenth registration has no result yet.
-    expect(await counts(await signedIn(MANAGER), ALL)).toEqual({ interviewed: 11, passed: 6, failed: 6 })
+    // Twenty-two 2031 sittings with a result, on twenty-one children:
+    // ADMSN-31015 sat twice. One registration has no result yet. Ten of the
+    // passes are the Enrolled students fixtures', on 19 November 2025.
+    expect(await counts(await signedIn(MANAGER), ALL)).toEqual({ interviewed: 21, passed: 16, failed: 6 })
   })
 
   test("Date counts one day", async () => {
@@ -86,7 +87,7 @@ describe("the interview counts", () => {
   test("Year is the calendar year", async () => {
     const manager = await signedIn(MANAGER)
     // 31 December 2025 ends 2025; 1 January 2026 starts 2026.
-    expect(await counts(manager, year("2025-12-31"))).toEqual({ interviewed: 1, passed: 0, failed: 1 })
+    expect(await counts(manager, year("2025-12-31"))).toEqual({ interviewed: 11, passed: 10, failed: 1 })
     expect(await counts(manager, year("2026-01-01"))).toEqual({ interviewed: 10, passed: 6, failed: 5 })
     expect(await counts(manager, year("2024-06-15"))).toEqual({ interviewed: 0, passed: 0, failed: 0 })
   })
@@ -155,7 +156,7 @@ describe("the interview counts", () => {
   test("every role that may view leads sees the same counts", async () => {
     for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT]) {
       const supabase = await signedIn(person)
-      expect(await counts(supabase, ALL)).toEqual({ interviewed: 11, passed: 6, failed: 6 })
+      expect(await counts(supabase, ALL)).toEqual({ interviewed: 21, passed: 16, failed: 6 })
       expect(await counts(supabase, week("2026-09-28"))).toEqual({ interviewed: 6, passed: 3, failed: 3 })
     }
   })
@@ -297,7 +298,7 @@ describe("who may read the interview counts", () => {
 
   test("reading the counts writes nothing to the audit history", async () => {
     const reader = await createThrowawayStaff(["leads.view"])
-    expect(await counts(await signedIn(reader), ALL)).toEqual({ interviewed: 11, passed: 6, failed: 6 })
+    expect(await counts(await signedIn(reader), ALL)).toEqual({ interviewed: 21, passed: 16, failed: 6 })
 
     const rows = await asSystem(async (sql) =>
       (await sql.query("select 1 from public.audit_log where actor_staff_id = $1", [reader.id])).rowCount,

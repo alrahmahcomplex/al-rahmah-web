@@ -15,6 +15,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { anonClient, asSystem, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { overdueAround } from "../support/overdue-count"
 
 // The Follow-ups queue (#92) through the follow-up module, against local
 // Supabase. Follow-ups dated in the past can't be scheduled through the
@@ -183,13 +184,17 @@ describe("the overdue count and paging", () => {
   test("the count is the Overdue total, and a new overdue follow-up adds one", async () => {
     const staff = await signedIn(ADMISSIONS)
     const before = await getOverdueCount(staff)
-    const page = await getFollowUpQueue(staff, { section: "overdue", page: 1 })
-    expect(before.ok && page.ok && before.data).toBe(page.ok && page.data.total)
+    expect(before.ok).toBe(true)
 
-    await plant((await newLead()).id, addDays(today, -2))
-    // An upcoming one counts for nothing.
-    await plant((await newLead()).id, addDays(today, 2))
-    expect(await getOverdueCount(staff)).toEqual({ ok: true, data: (before.ok ? before.data : 0) + 1 })
+    // Read in one snapshot, so follow-ups other tests plant meanwhile don't
+    // move the count. An upcoming one counts for nothing.
+    const [late, soon] = [await newLead(), await newLead()]
+    const counts = await overdueAround(ADMISSIONS.id, async (sql) => {
+      await sql.query("insert into public.follow_ups (lead_id, due_on) values ($1, $2)", [late.id, addDays(today, -2)])
+      await sql.query("insert into public.follow_ups (lead_id, due_on) values ($1, $2)", [soon.id, addDays(today, 2)])
+    })
+    expect(counts.before.count).toBe(counts.before.total)
+    expect(counts.after).toEqual({ count: counts.before.count + 1, total: counts.before.total + 1 })
   })
 
   test("a section pages 50 rows at a time, and a page past the end is empty", async () => {
@@ -231,11 +236,13 @@ describe("the overdue count and paging", () => {
     const firstIds = new Set(first.data.items.map((item) => item.lead.id))
     expect(second.data.items.some((item) => firstIds.has(item.lead.id))).toBe(false)
 
-    const past = await getFollowUpQueue(staff, { section: "overdue", page: first.data.pageCount + 1 })
-    expect(past).toEqual({
-      ok: true,
-      data: { section: "overdue", items: [], total: first.data.total, page: first.data.pageCount + 1, pageCount: first.data.pageCount },
-    })
+    // Far past the end, so follow-ups other tests plant meanwhile can't
+    // reach it; the page still says how many there are.
+    const past = await getFollowUpQueue(staff, { section: "overdue", page: first.data.pageCount + 50 })
+    if (!past.ok) throw new Error("queue read failed")
+    expect(past.data).toMatchObject({ section: "overdue", items: [], page: first.data.pageCount + 50 })
+    expect(past.data.total).toBeGreaterThanOrEqual(54)
+    expect(past.data.pageCount).toBe(Math.ceil(past.data.total / 50))
   })
 })
 

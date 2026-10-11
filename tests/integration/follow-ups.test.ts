@@ -78,6 +78,7 @@ describe("scheduling a follow-up", () => {
         },
         earlier: [],
         records: [],
+        needsDate: false,
       },
     })
   })
@@ -85,7 +86,7 @@ describe("scheduling a follow-up", () => {
   test("a lead with none has no open follow-up", async () => {
     expect(await getLeadFollowUps(await signedIn(ADMISSIONS), await newLead())).toEqual({
       ok: true,
-      data: { open: null, earlier: [], records: [] },
+      data: { open: null, earlier: [], records: [], needsDate: false },
     })
   })
 
@@ -220,6 +221,7 @@ describe("changing a follow-up's date", () => {
           },
         ],
         records: [],
+        needsDate: false,
       },
     })
   })
@@ -327,6 +329,7 @@ describe("reading follow-ups", () => {
         }),
         earlier: [expect.objectContaining({ id: SALMA_EARLIER, replacesId: null, changeReason: null })],
         records: [],
+        needsDate: false,
       },
     })
   })
@@ -336,7 +339,7 @@ describe("reading follow-ups", () => {
     for (const client of [anonClient(), outsider]) {
       const rows = await client.from("follow_ups").select("id")
       expect(rows.data ?? []).toEqual([])
-      expect(await getLeadFollowUps(client, SALMA)).toEqual({ ok: true, data: { open: null, earlier: [], records: [] } })
+      expect(await getLeadFollowUps(client, SALMA)).toEqual({ ok: true, data: { open: null, earlier: [], records: [], needsDate: false } })
     }
   })
 })

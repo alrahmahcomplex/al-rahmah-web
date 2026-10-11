@@ -398,7 +398,7 @@ describe("reading records", () => {
     for (const client of [anonClient(), outsider]) {
       const rows = await client.from("follow_up_records").select("id")
       expect(rows.data ?? []).toEqual([])
-      expect(await getLeadFollowUps(client, BARAKA)).toEqual({ ok: true, data: { open: null, earlier: [], records: [] } })
+      expect(await getLeadFollowUps(client, BARAKA)).toEqual({ ok: true, data: { open: null, earlier: [], records: [], needsDate: false } })
       const names = await client.rpc("follow_up_record_staff", { lead_id: BARAKA })
       expect(names.data ?? []).toEqual([])
     }

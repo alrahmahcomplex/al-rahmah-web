@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { followUpsHref, parseFollowUpSearch } from "@/app/staff/follow-ups/search-params"
-import { lastContactText, overdueText, splitToday } from "@/app/staff/follow-ups/queue-format"
+import { lastContactText, overdueText, rowDue, splitToday } from "@/app/staff/follow-ups/queue-format"
 import { navFor, STAFF_NAV } from "@/app/staff/navigation"
 
 describe("parseFollowUpSearch", () => {
@@ -30,6 +30,16 @@ describe("the queue's wording", () => {
   it("says how many days a follow-up is overdue", () => {
     expect(overdueText(1)).toBe("Overdue by 1 day")
     expect(overdueText(12)).toBe("Overdue by 12 days")
+  })
+
+  it("labels a row by how late it is, or as needing a follow-up date", () => {
+    const today = "2026-10-06"
+    expect(rowDue({ kind: "follow_up", dueOn: "2026-10-03", daysOverdue: 3 }, today)).toEqual({ text: "Overdue by 3 days", overdue: true })
+    expect(rowDue({ kind: "follow_up", dueOn: "2026-10-06", daysOverdue: 0 }, today)).toEqual({ text: "Due today", overdue: false })
+    expect(rowDue({ kind: "follow_up", dueOn: "2026-10-08", daysOverdue: 0 }, today)).toEqual({ text: "Due in 2 days", overdue: false })
+    // Approved today or earlier, a reopened lead is overdue all the same.
+    expect(rowDue({ kind: "needs_date", dueOn: "2026-10-06", daysOverdue: 0 }, today)).toEqual({ text: "Needs a follow-up date", overdue: true })
+    expect(rowDue({ kind: "needs_date", dueOn: "2026-10-01", daysOverdue: 5 }, today)).toEqual({ text: "Needs a follow-up date", overdue: true })
   })
 
   it("names the last contact's method and date in Tanzania, or says there is none", () => {

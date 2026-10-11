@@ -2,11 +2,19 @@
 
 import { revalidatePath } from "next/cache"
 
-import { changeFollowUpDate, recordFollowUp, scheduleFollowUp } from "@/lib/services/follow-ups"
+import { changeFollowUpDate, recordFollowUp, scheduleFollowUp, type RecordOutcome } from "@/lib/services/follow-ups"
+import { isDeclinedReason } from "@/lib/services/lead-closure"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
-import { changedOutcome, followUpOutcome, recordedOutcome, scheduledOutcome, type FollowUpOutcome } from "./follow-up-outcome"
+import {
+  changedOutcome,
+  declinedOutcome,
+  followUpOutcome,
+  recordedOutcome,
+  scheduledOutcome,
+  type FollowUpOutcome,
+} from "./follow-up-outcome"
 import { fromTanzaniaLocal } from "./follow-up-record-format"
 
 // Schedule follow-up, Change date and Record follow-up. Server Actions take
@@ -59,7 +67,9 @@ export async function changeLeadFollowUpDate(
 
 // What the Record follow-up form sends. The contact time is as typed, in
 // Tanzania time. An empty next date asks to end with none, which the
-// database allows only on an Enrolled lead.
+// database allows only on an Enrolled lead. `decline` is set when the family
+// will not proceed: the lead is declined with that reason, and no next date
+// is planned.
 export type ContactForm = {
   followUpId: string | null
   comment: string
@@ -68,6 +78,7 @@ export type ContactForm = {
   contactedAt: string
   nextDueOn: string
   nextNote: string
+  decline?: { reason: string; note: string } | null
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -85,21 +96,34 @@ export async function recordLeadFollowUp(leadId: string, form: ContactForm): Pro
   if (typeof form.nextDueOn !== "string") return followUpOutcome({ kind: "invalid", field: "next_due_on" }, "record")
   const nextNote = optionalText(form.nextNote)
   if (nextNote === undefined) return followUpOutcome({ kind: "invalid", field: "next_note" }, "record")
+  const decline = form.decline ?? null
+  const action = decline === null ? "record" : "decline"
+  const declineReason = decline === null ? null : typeof decline === "object" ? decline.reason : undefined
+  if (declineReason !== null && !isDeclinedReason(declineReason)) {
+    return followUpOutcome({ kind: "invalid", field: "decline_reason" }, action)
+  }
+  const declineNote = decline === null ? null : optionalText(decline.note)
+  if (declineNote === undefined) return followUpOutcome({ kind: "invalid", field: "decline_note" }, action)
 
   const supabase = await createClient()
   const allowed = await requirePermission(supabase, "follow_ups.record")
   if (!allowed.ok) return followUpOutcome({ kind: "forbidden" }, "record")
 
   const nextDueOn = form.nextDueOn.trim() === "" ? null : form.nextDueOn
+  const outcome: RecordOutcome = declineReason
+    ? { kind: "lead_declined", reason: declineReason, note: declineNote }
+    : nextDueOn
+      ? { kind: "next_date", dueOn: nextDueOn, note: nextNote }
+      : { kind: "lead_enrolled" }
   const result = await recordFollowUp(supabase, leadId, {
     followUpId: form.followUpId,
     comment: form.comment,
     method: form.method,
     contactedBy: form.contactedBy,
     contactedAt,
-    outcome: nextDueOn ? { kind: "next_date", dueOn: nextDueOn, note: nextNote } : { kind: "lead_enrolled" },
+    outcome,
   })
-  if (!result.ok) return followUpOutcome(result.error, "record")
+  if (!result.ok) return followUpOutcome(result.error, action)
   revalidatePath(`/staff/leads/${leadId}`)
-  return recordedOutcome(nextDueOn)
+  return declineReason ? declinedOutcome() : recordedOutcome(nextDueOn)
 }

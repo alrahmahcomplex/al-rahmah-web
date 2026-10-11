@@ -10,8 +10,10 @@
 --   ADMSN-90602 Faraji Matokeo    Failed with 45% on 2026-09-24, fee Paid. Direct phone only.
 --   ADMSN-90603 Upendo Matokeo    Passed with 70.5% on 2026-09-24, fee Not Paid.
 --   ADMSN-90604 Tumaini Matokeo   Reopened after a decline and interviewed again: the earlier
---                                 interview Failed with 38% (fee Paid), the current one Passed
---                                 with 74% (fee Paid). Only the current result may be sent.
+--                                 interview Failed with 38% (fee Paid), the Reopening request
+--                                 approved with Retake the interview, the retaken one Passed
+--                                 with 74% (fee Paid). Only the current result may be sent, and
+--                                 #71's retake rule finds the retake used.
 
 begin;
 
@@ -57,6 +59,20 @@ values
     -- The retaken interview after the reopening: the current one.
     ('1e7e0000-0000-4000-8000-000000000605', '1ead0000-0000-4000-8000-000000000604', 5, 2028,
         timestamptz '2026-09-28 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000003', date '2026-09-30', 'Passed', 74);
+
+-- Tumaini's reopening: raised by Test Admissions after the failed sitting and
+-- approved by Test Manager with Retake the interview, before the retake was
+-- registered. The decline and its reversal left only the Initially declined
+-- mark on the lead.
+insert into public.reopening_requests (
+    id, lead_id, source, reason, requested_by, requested_at,
+    state, decided_by, decided_at, rejection_reason, enrol_without_retake, lead_was_declined, restored_status
+) values
+    ('5e0e0000-0000-4000-8000-000000000604', '1ead0000-0000-4000-8000-000000000604', 'lead',
+        'Tumaini was unwell on the interview day and the family asks for another sitting.',
+        'a1a1a1a1-0000-4000-8000-000000000003', timestamptz '2026-09-12 09:00:00+03',
+        'approved', 'a1a1a1a1-0000-4000-8000-000000000001', timestamptz '2026-09-15 11:00:00+03',
+        null, false, true, 'Interviewed');
 
 commit;
 

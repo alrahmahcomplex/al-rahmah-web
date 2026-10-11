@@ -201,6 +201,8 @@ describe("the overdue count and paging", () => {
     // Older than anything else in the queue, so these fill the first page.
     // Planted in one transaction on one family, as the owner: 54 leads made
     // through the API at once would load the database the other tests share.
+    // They are dated years back, so they can't push the new leads of tests
+    // running alongside off the first page of the newest-first lead list.
     const oldest = addDays(today, -3000)
     const guardian = await newLead()
     const leads = await asSystem(async (sql) => {
@@ -211,9 +213,9 @@ describe("the overdue count and paging", () => {
           order by random() limit 54`,
       )
       const planted = await sql.query<{ id: string }>(
-        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id)
+        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id, created_at)
          select number, 'Paged ' || number, 'STD 4', $2, 'Day', 'Visited', $3::date,
-                (select guardian_contact_id from public.leads where id = $4)
+                (select guardian_contact_id from public.leads where id = $4), now() - interval '5 years'
            from unnest($1::text[]) as number
          returning id`,
         [numbers.rows.map((row) => row.admission_number), thisYear + 1, today, guardian.id],

@@ -57,6 +57,10 @@ export type LeadFollowUps = {
   earlier: FollowUp[]
   // Every recorded contact and ending, newest first.
   records: FollowUpRecord[]
+  // Reopened and still waiting for a new follow-up date (#95): Applied,
+  // Visited or Interviewed with no closure mark, and no follow-up planned
+  // since its latest approved reopening.
+  needsDate: boolean
 }
 
 export type FollowUpField =
@@ -184,7 +188,7 @@ export async function getLeadFollowUps(
   supabase: SupabaseClient,
   leadId: string,
 ): Promise<Result<LeadFollowUps, LeadFollowUpsError>> {
-  const [plans, contacts] = await Promise.all([
+  const [plans, contacts, needed] = await Promise.all([
     supabase
       .from("follow_ups")
       .select("id, due_on, note, replaces_id, change_reason, created_at")
@@ -197,9 +201,12 @@ export async function getLeadFollowUps(
       .select("id, kind, follow_up_id, outcome, cause, comment, method, contacted_by, contacted_at, entered_at, next_follow_up_id")
       .eq("lead_id", leadId)
       .overrideTypes<RecordRow[], { merge: false }>(),
+    supabase.rpc("follow_up_date_needed").eq("lead_id", leadId),
   ])
 
-  const error = plans.error ?? contacts.error
+  // 42501: the function isn't granted to the caller, as for someone signed
+  // out, who reads no follow-ups either.
+  const error = plans.error ?? contacts.error ?? (needed.error?.code === "42501" ? null : needed.error)
   if (error && error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
   if (error) {
     console.error("Could not read a lead's follow-ups", error)
@@ -241,7 +248,10 @@ export async function getLeadFollowUps(
   for (const row of rows) if (row.replacesId) ended.add(row.replacesId)
   for (const record of records) if (record.followUpId) ended.add(record.followUpId)
   const open = rows.find((row) => !ended.has(row.id)) ?? null
-  return { ok: true, data: { open, earlier: rows.filter((row) => row !== open), records } }
+  return {
+    ok: true,
+    data: { open, earlier: rows.filter((row) => row !== open), records, needsDate: ((needed.data ?? []) as unknown[]).length > 0 },
+  }
 }
 
 // Plans the next contact with a lead that has no open follow-up. The date is
@@ -355,7 +365,8 @@ export async function listContactStaff(
 }
 
 // The Follow-ups queue (#92). Overdue holds open follow-ups whose date has
-// passed in Tanzania, oldest first; Upcoming holds those due today or later,
+// passed in Tanzania, and reopened leads that need a follow-up date (#95),
+// oldest first; Upcoming holds those due today or later,
 // nearest first. Both leave out Declined, Enrolled and closed leads. The
 // database works out "today", the order and the paging; row-level security
 // shows the queue only to staff who may view leads.
@@ -369,11 +380,13 @@ export const FOLLOW_UP_QUEUE_PAGE_SIZE = 50
 export const LAST_FOLLOW_UP_QUEUE_PAGE = 10_000
 
 export type FollowUpQueueItem = {
-  // Every item is an open follow-up for now. #95 adds reopened leads that
-  // need a follow-up date to Overdue as a kind of their own.
-  kind: "follow_up"
-  followUpId: string
-  // YYYY-MM-DD, a calendar date in Tanzania.
+  // An open follow-up, or, in Overdue only, a reopened lead that needs a
+  // follow-up date (#95).
+  kind: "follow_up" | "needs_date"
+  // Null for a lead that needs a date: it has no follow-up yet.
+  followUpId: string | null
+  // YYYY-MM-DD, a calendar date in Tanzania: the follow-up's date, or the
+  // day the reopening was approved.
   dueOn: string
   // How many days the date has passed; 0 in Upcoming.
   daysOverdue: number
@@ -401,9 +414,9 @@ export type FollowUpQueuePage = {
 }
 
 type QueueRow = {
-  kind: "follow_up"
+  kind: FollowUpQueueItem["kind"]
   lead_id: string
-  follow_up_id: string
+  follow_up_id: string | null
   due_on: string
   days_overdue: number
   note: string | null

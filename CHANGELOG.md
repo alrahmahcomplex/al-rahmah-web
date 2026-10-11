@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## October 11, 2026 `v0.61.0`
+
+### NEW
+
+- A reopened lead now shows in the Follow-ups queue under **Overdue** as **Needs a
+  follow-up date**, dated from the day the reopening was approved, and counts in the
+  overdue number on the nav. Its lead screen says "Reopened: set the next follow-up
+  date". Both clear once staff schedule a follow-up or record a contact with a next
+  date, or when the lead becomes Enrolled. A lead that goes straight to Enrolled on
+  reopening never shows there.
+
 ## October 11, 2026 `v0.60.0`
 
 ### NEW

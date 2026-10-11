@@ -9,10 +9,9 @@ import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getFollowUpQueue, type FollowUpQueueItem, type FollowUpQueuePage, type FollowUpQueueSection } from "@/lib/services/follow-ups"
 import { createClient } from "@/utils/supabase/server"
 
-import { dueLabel } from "../leads/[id]/follow-up-outcome"
 import { displayPhone } from "../re-applications/format"
 import { requireStaff } from "../session"
-import { lastContactText, overdueText, splitToday } from "./queue-format"
+import { lastContactText, rowDue, splitToday } from "./queue-format"
 import { followUpsHref, parseFollowUpSearch, type FollowUpSearch } from "./search-params"
 
 export const metadata: Metadata = {
@@ -141,16 +140,19 @@ function Rows({
   return (
     <ul aria-label={label} aria-labelledby={labelledBy} className="flex flex-col divide-y rounded-xl ring-1 ring-foreground/10">
       {items.map((item) => (
-        <Row key={`${item.kind}:${item.followUpId}`} item={item} today={today} />
+        // A lead that needs a follow-up date has no follow-up yet, and shows
+        // at most once.
+        <Row key={`${item.kind}:${item.followUpId ?? item.lead.id}`} item={item} today={today} />
       ))}
     </ul>
   )
 }
 
-// One follow-up. The whole row opens the lead's Follow-ups panel; the phone
+// One follow-up, or a reopened lead that needs a follow-up date, dated from
+// its approval. The whole row opens the lead's Follow-ups panel; the phone
 // sits above that link so a tap on it calls the family.
 function Row({ item, today }: { item: FollowUpQueueItem; today: string }) {
-  const due = item.daysOverdue > 0 ? { text: overdueText(item.daysOverdue), overdue: true } : dueLabel(item.dueOn, today)
+  const due = rowDue(item, today)
   return (
     <li className="relative flex flex-col gap-2 p-4 text-sm hover:bg-slate-50 sm:flex-row sm:justify-between sm:gap-6">
       <div className="flex min-w-0 flex-col gap-1">
@@ -168,6 +170,7 @@ function Row({ item, today }: { item: FollowUpQueueItem; today: string }) {
           {item.lead.className} · {item.lead.enrollmentYear}
         </p>
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {item.kind === "needs_date" && <span className="text-muted-foreground">Reopened</span>}
           <time dateTime={item.dueOn} className="font-medium text-slate-900">
             {formatDate(item.dueOn)}
           </time>

@@ -69,14 +69,23 @@ const laterList = (page: Page) => page.getByRole("list", { name: "Later" })
 test("the queue shows Overdue, then Today, then later follow-ups, with the overdue count on the nav", async ({ page }) => {
   const late = await leadDueOn(addDays(today, -2000), "Ask about the school bus.")
   const dueToday = await leadDueOn(today)
-  const expected = await getOverdueCount(await signedIn(ADMISSIONS))
-  if (!expected.ok) throw new Error("count failed")
 
   await signIn(page, ADMISSIONS)
   await page.goto("/staff/follow-ups")
 
-  const nav = page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /^Follow-ups/ })
-  await expect(nav).toHaveAccessibleName(new RegExp(`^Follow-ups ?, ${expected.data} overdue$`))
+  // The badge shows the overdue count. Browser tests running alongside move
+  // that count too, so the page is reloaded until the two are read between
+  // such changes.
+  const staffNav = page.getByRole("navigation", { name: "Staff" })
+  const staff = await signedIn(ADMISSIONS)
+  await expect
+    .poll(async () => {
+      await page.reload()
+      const count = await getOverdueCount(staff)
+      if (!count.ok) return false
+      return (await staffNav.getByRole("link", { name: new RegExp(`^Follow-ups ?, ${count.data} overdue$`) }).count()) === 1
+    })
+    .toBe(true)
 
   await expect(page.getByRole("heading", { level: 2 })).toHaveText([/^Overdue/, /^Upcoming/])
   await expect(page.locator("h2, h3")).toHaveText([/^Overdue/, /^Upcoming/, "Today", "Later"])

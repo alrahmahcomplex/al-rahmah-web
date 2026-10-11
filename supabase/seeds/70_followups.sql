@@ -17,6 +17,16 @@
 --           entered a day later
 --   Neema   an unplanned WhatsApp from the family 5 days ago that planned
 --           today's follow-up
+--
+-- And a lead reopened after a decline with no follow-up date yet (#95), so
+-- Overdue shows it as Needs a follow-up date:
+--
+--   ADMSN-90070 Amani Rejea      declined from Visited for Family changed
+--                                plans, then approved by Test Manager 3 days
+--                                ago: Visited again, Initially declined
+--
+-- Slice 8's seed (80_closure.sql) loads after this file, so the lead and its
+-- request are written here as rows, the way that file writes its own.
 
 begin;
 
@@ -63,5 +73,33 @@ insert into public.follow_up_records (
 insert into public.follow_up_records (id, lead_id, follow_up_id, kind, cause, entered_at) values
     ('f0120000-0000-4000-8000-000000000005', '1ead0000-0000-4000-8000-000000000005',
         'f0110000-0000-4000-8000-000000000005', 'closed_with_lead', 'archived', now() - interval '25 days');
+
+commit;
+
+begin;
+
+select public.set_audit_actor('system');
+
+insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+values
+    ('c0c0c0c0-0000-4000-8000-000000000070', 'Zainabu Rejea', 'Mother', null, '+255700000170', null, 'front_desk');
+
+insert into public.leads (
+    id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
+    status, closure, visit_date, guardian_contact_id, returning_family_joined, initially_declined
+) values
+    ('1ead0000-0000-4000-8000-000000000070', 'ADMSN-90070', 'Amani Rejea', 'STD 3', 2027, 'Day',
+        'Visited', null, public.tanzania_today() - 30, 'c0c0c0c0-0000-4000-8000-000000000070', false, true);
+
+-- Raised by Test Admissions, approved by Test Manager.
+insert into public.reopening_requests (
+    id, lead_id, source, reason, requested_by, requested_at,
+    state, decided_by, decided_at, enrol_without_retake, lead_was_declined, restored_status
+) values
+    ('5e0e0000-0000-4000-8000-000000000070', '1ead0000-0000-4000-8000-000000000070', 'lead',
+        'The family moved back to Dar and wants a place again.',
+        'a1a1a1a1-0000-4000-8000-000000000003', now() - interval '4 days',
+        'approved', 'a1a1a1a1-0000-4000-8000-000000000001', now() - interval '3 days',
+        null, true, 'Visited');
 
 commit;

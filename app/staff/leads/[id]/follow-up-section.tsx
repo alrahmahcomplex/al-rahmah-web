@@ -1,4 +1,4 @@
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadFollowUps, listContactStaff, type FollowUp, type FollowUpRecord } from "@/lib/services/follow-ups"
@@ -15,7 +15,9 @@ import { enteredLate, formatContactTime, recordOutcomeText } from "./follow-up-r
 // Schedule follow-up, Record follow-up and Change date on an open lead. A
 // closed lead shows its follow-ups with no actions. Whether the lead is
 // closed is the database's answer (lead_is_closed), the check its follow-up
-// writes make too; if that can't be read, the panel offers no actions.
+// writes make too; if that can't be read, the panel offers no actions. A lead
+// reopened after a decline that has no follow-up date yet says so at the
+// top, until one is planned or the lead becomes Enrolled (#95).
 export async function FollowUpSection({
   leadId,
   canRecord,
@@ -53,6 +55,13 @@ export async function FollowUpSection({
         </Alert>
       ) : (
         <div className="flex max-w-xl flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
+          {followUps.data.needsDate && (
+            // A standing notice, not an announcement: the panel's status
+            // messages stay the only live region.
+            <Alert role="note" className="border-amber-300 bg-amber-50 text-amber-950">
+              <AlertTitle>Reopened: set the next follow-up date</AlertTitle>
+            </Alert>
+          )}
           {followUps.data.open ? (
             <OpenFollowUp followUp={followUps.data.open} today={today} leadOpen={open} />
           ) : (

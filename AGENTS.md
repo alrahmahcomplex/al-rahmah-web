@@ -8,24 +8,27 @@ One Next.js app for Al-Rahmah Complex: School Landing Page, Admissions Portal, R
 |---|---|
 | Tweak (copy, styling) | Isolate → edit → Prove → Ship |
 | Bug | Isolate → `diagnosing-bugs` → `tdd` → Prove → Ship |
-| Feature | Align → Plan → Isolate → Build → Prove → Ship |
+| Feature | Align → Goldfish review → Plan → Isolate → Build → Prove → Ship |
 | Epic (more than one session holds) | `wayfinder`, then the Feature chain per ticket |
 
 ## Beats
 
-0. **Align**: `grill-with-docs`; add `prototype` for unsettled UI. **Stop**: the human confirms shared understanding before Plan.
-1. **Plan**: `to-spec` → `to-tickets`, labelled `ready-for-agent`. Claude Code runs Align and Plan.
-2. **Isolate**: `new-feature`. Every task gets its own worktree. Claude Code: harness worktree, branch `claude/<task>`. Codex: `.worktrees/<task>` (gitignored), branch `codex/<task>`. Claim the ticket first with a comment `Claimed by <claude|codex> on <branch>`; skip tickets that already carry a claim.
-3. **Build**: `implement` → `tdd`, to the invariants below.
-4. **Prove**: `evidence-driven-testing`. Capture *before* while reproducing, *after* once it works.
-5. **Ship**: `code-review` → cross-review (the human starts the other agent on `code-review` for the PR) → `before-and-after` (production vs PR preview) → PR → `greploop` (`greploop-apps` over the file limit) until **5/5, zero unresolved**. End by presenting the PR URL. **Stop**: merge is the human's.
-6. **Release**: when the human says "merge", run *Releasing* start to finish: merge, tag and changelog it, then housekeep.
+0. **Align**: `grill-with-docs`; add `prototype` for unsettled UI. Capture the agreed problem, scope, constraints, alternatives and decisions in `align_brief.md`, understandable without the conversation. **Stop**: the human confirms the brief and readiness for Goldfish review.
+1. **Goldfish review**: Read `egm-brainstorm`'s `SKILL.md` and its harness integration guide. Follow only Goldfish Review & Synthesis, with `Mode: BRAINSTORM` and `align_brief.md` as the working hypothesis. `grill-with-docs` owns all questioning and clarification; skip EGM's questioning and handoff stages. Run its six review lenses in parallel: necessity and complexity, cost and quotas, usability, migration and compatibility, observability, and maintenance. Each Goldfish starts with fresh context and receives the brief and selected reference files, without the grilling transcript. The main agent is the Elephant, retaining the discussion context to evaluate findings with the human. Record resolutions and accepted risks in `align_brief.md` and carry them into `concepts_brief.md`, which EGM regenerates each review. If findings need further clarification, return to `grill-with-docs`, update `align_brief.md`, and rerun the Goldfish review. **Stop**: all six lenses have reported, findings are addressed or explicitly accepted, and the human approves the revised `concepts_brief.md` before Plan.
+2. **Plan**: `to-spec` → `to-tickets`, using the approved `concepts_brief.md`, labelled `ready-for-agent`. Claude Code runs Align, Goldfish review and Plan.
+3. **Isolate**: `new-feature`. Every task gets its own worktree. Claude Code: harness worktree, branch `claude/<task>`. Codex: `.worktrees/<task>` (gitignored), branch `codex/<task>`. Claim the ticket first with a comment `Claimed by <claude|codex> on <branch>`; skip tickets that already carry a claim.
+4. **Build**: `implement` → `tdd`, to the invariants below.
+5. **Prove**: `evidence-driven-testing`. Capture *before* while reproducing, *after* once it works.
+6. **Ship**: `code-review` → cross-review (the human starts the other agent on `code-review` for the PR) → `before-and-after` (production vs PR preview) → PR → `greploop` (`greploop-apps` over the file limit) until **5/5, zero unresolved**. End by presenting the PR URL. **Stop**: merge is the human's.
+7. **Release**: when the human says "merge", run *Releasing* start to finish: merge, tag and changelog it, then housekeep.
 
 End an unfinished session with `handoff`.
 
 ## What this repo holds
 
 The repo is complete on its own: everything it needs is committed, and it holds only permanent project material (code, `CONTEXT.md`, `docs/adr/`, `docs/agents/`, agent instructions). Transient working files never reach `main`. They use the default location of the skill that makes them: `handoff` writes to the OS temp directory, and `research` and `prototype` findings go on their own throwaway branches.
+
+EGM is the exception to the default location: keep `align_brief.md`, `concepts_brief.md` and review reports in a per-feature folder under `.artifacts/egm/`. Pass that folder as `EGM artifact directory: <path>` when following the EGM review stage.
 
 ## Stack and invariants
 

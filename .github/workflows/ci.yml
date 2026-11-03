@@ -38,9 +38,7 @@ jobs:
         run: node scripts/ci-scope.mjs
       - name: Test repository helpers
         run: node --test "scripts/*.test.mjs"
-      - name: Check changed documents
-        env:
-          CHANGED_DOCUMENTS: ${{ steps.scope.outputs.documents }}
+      - name: Check tracked documents
         run: node scripts/check-docs.mjs
 
   static:

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { checkDocuments, documentErrors } from "./check-docs.mjs";
 
@@ -43,3 +45,25 @@ test("Claude instruction pointer must resolve to the shared agent rules", (t) =>
   writeFileSync(join(cwd, "CLAUDE.md"), "@missing.md\n");
   assert.equal(checkDocuments(["CLAUDE.md"], cwd).length, 1);
 });
+
+for (const operation of ["delete", "rename"]) {
+  test(`document CLI catches incoming links after a guide ${operation}`, (t) => {
+    const cwd = fixture(t);
+    const git = (...args) => execFileSync("git", args, { cwd, stdio: "pipe" });
+    writeFileSync(join(cwd, "README.md"), "[Guide](docs/guide.md)\n");
+    git("init");
+    git("add", ".");
+    if (operation === "delete") unlinkSync(join(cwd, "docs", "guide.md"));
+    else renameSync(join(cwd, "docs", "guide.md"), join(cwd, "docs", "renamed.md"));
+    git("add", "-A");
+    const script = fileURLToPath(new URL("./check-docs.mjs", import.meta.url));
+    const result = spawnSync(process.execPath, [script], {
+      cwd, encoding: "utf8",
+      env: { ...process.env, CHANGED_DOCUMENTS: '["docs/guide.md"]' },
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /README\.md: missing local link target docs\/guide\.md/);
+    writeFileSync(join(cwd, "README.md"), operation === "delete" ? "Guide removed.\n" : "[Guide](docs/renamed.md)\n");
+    assert.equal(spawnSync(process.execPath, [script], { cwd, encoding: "utf8" }).status, 0);
+  });
+}

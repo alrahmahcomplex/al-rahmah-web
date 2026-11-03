@@ -53,9 +53,8 @@ export function checkDocuments(paths, cwd = process.cwd()) {
 }
 
 function main() {
-  const requested = process.env.CHANGED_DOCUMENTS ? JSON.parse(process.env.CHANGED_DOCUMENTS) : null;
-  const paths = requested ?? execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" }).split("\0").filter(isProsePath);
-  if (!Array.isArray(paths)) throw new Error("Document list must be an array");
+  // Check incoming links too: a removed target can break an unchanged document.
+  const paths = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" }).split("\0").filter(isProsePath);
   const errors = checkDocuments(paths);
   if (errors.length) throw new Error(errors.join("\n"));
   console.log(`Checked ${paths.length} document paths and the Claude instruction pointer.`);

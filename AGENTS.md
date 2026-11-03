@@ -8,18 +8,21 @@ One Next.js app for Al-Rahmah Complex: School Landing Page, Admissions Portal, R
 |---|---|
 | Tweak (copy, styling) | Isolate → edit → Prove → Ship |
 | Bug | Isolate → `diagnosing-bugs` → `tdd` → Prove → Ship |
-| Feature | Align → Plan → Isolate → Build → Prove → Ship |
+| Feature | Align → Goldfish review → Plan → Isolate → Build → Prove → Ship |
 | Epic (more than one session holds) | `wayfinder`, then the Feature chain per ticket |
 
 ## Beats
 
-0. **Align**: `grill-with-docs`; add `prototype` for unsettled UI. **Stop**: the human confirms shared understanding before Plan.
-1. **Plan**: `to-spec` → `to-tickets`, labelled `ready-for-agent`. Claude Code runs Align and Plan.
-2. **Isolate**: `new-feature`. Every task gets its own worktree. Claude Code: harness worktree, branch `claude/<task>`. Codex: `.worktrees/<task>` (gitignored), branch `codex/<task>`. Claim the ticket first with a comment `Claimed by <claude|codex> on <branch>`; skip tickets that already carry a claim.
-3. **Build**: `implement` → `tdd`, to the invariants below.
-4. **Prove**: `evidence-driven-testing`. Capture *before* while reproducing, *after* once it works.
-5. **Ship**: `code-review` → cross-review (the human starts the other agent on `code-review` for the PR) → `before-and-after` (production vs PR preview) → PR → `greploop` (`greploop-apps` over the file limit) until **5/5, zero unresolved**. End by presenting the PR URL. **Stop**: merge is the human's.
-6. **Release**: when the human says "merge", run *Releasing* start to finish: merge, tag and changelog it, then housekeep.
+0. **Align**: `grill-with-docs`; add `prototype` for unsettled UI. Capture the agreed problem, scope, constraints, alternatives and decisions in a self-contained brief. **Stop**: the human confirms the brief and readiness for Goldfish review.
+1. **Goldfish review**: Use only the Goldfish Review & Synthesis stage of `egm-brainstorm`, with `Mode: BRAINSTORM` and the confirmed Align brief as the working hypothesis. `grill-with-docs` owns all questioning and clarification; skip EGM's questioning and handoff stages. Run its six review lenses in parallel: necessity and complexity, cost and quotas, usability, migration and compatibility, observability, and maintenance. Each Goldfish starts with fresh context and receives the brief and selected reference files, without the grilling transcript. The main agent is the Elephant, retaining the discussion context to evaluate findings with the human and refine `concepts_brief.md`. If findings need further clarification, return to `grill-with-docs`, update the brief, and rerun the Goldfish review. **Stop**: all six lenses have reported, findings are addressed or explicitly accepted, and the human approves the revised brief before Plan.
+2. **Plan**: `to-spec` → `to-tickets`, using the approved `concepts_brief.md`, labelled `ready-for-agent`. Claude Code runs Align, Goldfish review and Plan.
+3. **Isolate**: `new-feature`. Every task gets its own worktree. Claude Code: harness worktree, branch `claude/<task>`. Codex: `.worktrees/<task>` (gitignored), branch `codex/<task>`. Claim the ticket first with a comment `Claimed by <claude|codex> on <branch>`; skip tickets that already carry a claim.
+4. **Build**: `implement` → `tdd`, to the invariants below.
+5. **Prove**: `evidence-driven-testing`. Capture *before* while reproducing, *after* once it works.
+6. **Ship**: `code-review` → cross-review (the human starts the other agent on `code-review` for the PR) → `before-and-after` (production vs PR preview) → PR → `greploop` (`greploop-apps` over the file limit) until **5/5, zero unresolved**. End by presenting the PR URL. **Stop**: merge is the human's.
+7. **Release**: when the human says "merge", run *Releasing* start to finish: merge, tag and changelog it, then housekeep.
+
+Keep the Align brief and EGM reports in a per-feature folder under `.artifacts/egm/`. Pass that folder as `EGM artifact directory: <path>` when invoking EGM skills.
 
 End an unfinished session with `handoff`.
 

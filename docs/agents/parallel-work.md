@@ -20,7 +20,7 @@ rm -rf "$LOCK"
 If `mkdir` fails, someone holds it: read `owner`, wait, and try again. Never build without the lock; two `next build` runs at once run out of memory here.
 
 - Run `db:reset` from your own worktree, so the database holds your migrations and not another branch's.
-- Never run `npm run db:stop`; it stops the database for everyone.
+- Run `npm run db:stop` only when no other session uses the shared database; it stops the database for everyone.
 - Create `.env.local` with `npm run env:local` while local Supabase runs.
 
 ## Ports
@@ -50,7 +50,7 @@ Each slice owns a migration timestamp range and a seed file. Use only your slice
 
 The `xxxx` is yours to number within the range. Within a slice, tickets that run one after another number upwards, so a later ticket's migration sorts after an earlier one's. Seeds load in file-name order, after `00_base.sql`, so a later slice's seed may refer to an earlier slice's rows.
 
-**Renumber at release.** Slices merge in any order, but the hosted database applies migrations in timestamp order, and one older than its newest may never be applied. So in *Releasing* step 1, after the rebase, compare each migration the PR adds with the newest on `origin/main`. If it sorts before, rename it with `git mv`: change the eight-digit date to the day after the newest migration's date and keep the last six digits. `20261010500100` after `20261010900000` becomes `20261011500100`. Then rerun the integration tests before pushing.
+**Renumber at release.** Slices merge in any order, but the hosted database applies migrations in timestamp order, and one older than its newest may never be applied. During [release preparation](releasing.md), after the rebase, compare each migration the PR adds with the newest on `origin/main`. If it sorts before, rename it with `git mv`: change the eight-digit date to the day after the newest migration's date and keep the last six digits. `20261010500100` after `20261010900000` becomes `20261011500100`. Then rerun the integration tests before pushing.
 
 - **Lead screen.** A new panel is a file in `app/staff/leads/[id]/` plus one line in `LEAD_PANELS` (`panels.tsx`). Nothing else in `page.tsx`. A closed lead shows no panel unless it sets `readOnlyWhenClosed: true`, and such a panel offers no work action while its `open` prop is false. The exceptions are slice 8's own workflow on closed leads: the closure panel's Mark inactive and Archive follow the lead's mark, since a closure mark is a change a closed lead still takes, and the Reopening requests panel offers Withdraw to the requester of a Pending request and Approve and Reject to approvers, since a request exists only for a closed lead. Slice 9's School fee panel also keeps Adjust on each payment for staff with `payments.record`, since a payment adjustment corrects history rather than continuing work (`CONTEXT.md`); Record payment still waits for a reopening.
 - **Staff navigation.** One line in `STAFF_NAV` (`app/staff/navigation.ts`). An entry may take a list of permissions, any one of which shows it.
@@ -83,20 +83,12 @@ When a ticket you build on has not merged, code against the signature its body g
 
 ## Checks while you work
 
-Follow the tiers in `AGENTS.md`. While building, run only what your change touches:
-
-```bash
-npm run lint
-npm run typecheck
-npx vitest run --project unit --changed origin/main
-npx vitest run --project integration --changed origin/main   # under the lock
-npx playwright test --only-changed=origin/main               # under the lock
-```
+Follow the risk tiers and affected-check rules in [Workflow](workflow.md). The shared lock applies whenever those checks require database, browser or build work; selecting a lighter tier does not waive resource isolation.
 
 On `AuthRetryableFetchError` under load, rerun the failed files before treating the failure as real.
 
 ## Housekeeping
 
 - Name scratch files with your ticket number first (`67-pr-body.md`), since agents share a scratchpad.
-- Claim a ticket with a comment before you start: `Claimed by claude on claude/<task>`.
-- Stop after the PR is open, CI is green, code review is done and the changelog entry is under `## Unreleased`. Report the PR URL, your worktree path, and any checks the ticket says a human must make. The orchestrator runs greploop; nobody but the human merges.
+- Follow the ticket-claim rule in [AGENTS.md](../../AGENTS.md).
+- Complete the PR using [Workflow](workflow.md), including only the reviews, checks and evidence its tier needs. Add an Unreleased entry only for an app release under [Releasing](releasing.md). Report the PR URL, worktree and any outstanding human decision. The human authorizes merge.

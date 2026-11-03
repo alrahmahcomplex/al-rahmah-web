@@ -1,0 +1,90 @@
+# Workflow
+
+Use the risk tier in [AGENTS.md](../../AGENTS.md) throughout the task. Planning, verification, evidence and review have different purposes; choose each by what the change needs. A sensitive one-line RLS fix needs authorization tests and focused review, but not a design workshop if the intended behavior is already agreed.
+
+## Planning and building
+
+For editorial work, the requested edit is the plan. For routine work, record a few observable acceptance criteria in the task or PR. Reuse established design decisions. Neither requires a brief, ticket breakdown or a planning approval gate.
+
+For sensitive work, identify the invariants, failure cases and recovery approach in the task or PR before editing. Agent-policy changes require examples showing how the rule applies to ordinary and sensitive tasks. Ask about unresolved authority or product decisions; proceed when the human has already settled them.
+
+For architectural work, follow the design sequence below. An epic may use `wayfinder` to split work into independently verifiable tasks. Child tickets inherit approved decisions; they do not repeat the architecture review unless their scope changes those decisions.
+
+1. **Align:** use `grill-with-docs`, adding `prototype` for unsettled UI. Record the problem, scope, constraints, alternatives and decisions in `align_brief.md`. The human confirms the brief and readiness for review.
+2. **Goldfish review:** read `egm-brainstorm` and its harness integration guide. Follow only Goldfish Review & Synthesis, with `Mode: BRAINSTORM` and the alignment brief as the hypothesis. Run six independent lenses: necessity/complexity, cost/quotas, usability, migration/compatibility, observability and maintenance. Each starts fresh with the brief and selected references. The main agent retains discussion context and resolves findings with the human. `grill-with-docs` owns further questions; skip EGM's questioning and handoff stages. Record resolutions and accepted risks in the alignment brief and regenerated `concepts_brief.md`. Rerun review when clarification changes the hypothesis. All lenses must report, and the human approves the revised concepts brief before planning.
+3. **Plan:** Claude Code uses `to-spec` then `to-tickets` on the approved concepts brief, marking actionable tickets `ready-for-agent`.
+
+Keep EGM files under `.artifacts/egm/<feature>/`. Pass that path as `EGM artifact directory`.
+
+Use `diagnosing-bugs` when diagnosing a defect and `tdd` for meaningful behavior regressions or new logic. Use `implement` when following an implementation ticket. These skills follow the selected tier. A reversible copy edit does not need a test that repeats its text. New logic needs tests that would fail for a plausible wrong implementation.
+
+## Checks
+
+Read the available commands from `package.json`. Run affected checks locally and report their actual results; CI provides the full application suite. Once relevant checks pass, repeat or broaden them only after changes, failures or unresolved concerns justify it. Documentation-only work uses Git and Node for document checks; it does not require installing application dependencies or starting Supabase.
+
+| Change | Local checks | CI |
+|---|---|---|
+| Prose or documentation | Diff, accuracy, affected links and document checks | Document checks for the documented path allowlist |
+| Agent instructions, security policy or operational documentation | Document checks plus independent consistency/authority review and representative scenarios | Document checks; a Markdown filename does not waive policy review |
+| Application code | Lint, typecheck and affected unit tests; integration/browser checks where the behavior needs them | Full application suite |
+| Database schema or permissions | Local Supabase migration and relevant integration tests, including denial paths; affected app checks | Full application suite |
+| CI, dependencies, configuration or internal executable tools | Tests for the changed mechanism and applicable static checks | Full application suite |
+
+For local application checks, use an explicit comparison base, such as `origin/main`:
+
+```bash
+npm run lint
+npm run typecheck
+npx vitest run --project unit --changed origin/main
+npx vitest run --project integration --changed origin/main
+npx playwright test --only-changed=origin/main
+```
+
+Take the shared lock for integration/browser checks, database resets and builds. Changed-file selection is a starting point: SQL, permissions, configuration and indirect dependencies may require explicitly named tests even when automatic selection finds none. Local browser tests build the app when needed; avoid a duplicate standalone build for the same unchanged inputs.
+
+Before opening a PR, complete the local checks relevant to the changed behavior. A full local suite is not a universal prerequisite. After rebasing, inspect incoming changes and rerun checks for affected interactions. Incoming migrations, seeds, shared services or configuration warrant broader relevant checks. CI must pass for the final PR revision before merge. Documentation-only release preparation still requires fresh CI, which selects the cheap document path if no runtime inputs changed.
+
+The CI workflow always runs its scope/document job and final `CI complete` gate. Only allowlisted Markdown files can skip runtime jobs; unknown paths, mixed changes, dependencies, configuration and workflows receive the full suite. Policy and domain documents can take the document path because runtime tests do not validate their meaning. Their review tier still applies. Missing or invalid comparison data must require the full suite. The gate checks upstream outcomes, including failures, cancellations and unexpected skips. If configuring required checks, require `CI complete`; the workflow itself must remain unfiltered by file paths.
+
+## Evidence
+
+Choose evidence that demonstrates the acceptance criteria:
+
+- **Appearance:** inspect relevant viewport sizes and attach screenshots. Use `before-and-after` for a production/Preview pair when comparison makes the change assessable; a focused screenshot can be enough for a small styling change.
+- **Interaction:** exercise the changed user journey, including relevant failure paths. Use `evidence-driven-testing` when a recording explains a sequence better than test results or screenshots. UI work still requires hands-on inspection.
+- **Bug:** capture the failing behavior or regression test before fixing it, then the passing result. Existing reliable reproduction evidence may serve as the before state.
+- **Data or permissions:** provide migration/integration results and negative authorization checks, using fixtures.
+- **Documentation or workflow policy:** show the diff, checked links and scenario outcomes. Browser recordings and production comparisons are unnecessary unless the change affects a UI.
+
+Evidence need not be duplicated across local runs and Preview. Record which environment and revision each artifact proves. Upload images with `IMAGE_ADAPTER=gist`; upload videos through the signed-in PR comment box. Use [Hosted services](hosted-services.md) when checking a hosted page.
+
+## Review and acceptance
+
+Editorial work needs the author's diff/accuracy check. Every other tier needs one independent review of the final substantive change, using `code-review` or an equivalent repository-aware automated reviewer. A fresh subagent, another coding agent or a human can provide it; the implementing agent's own reread is not independent. The task agent arranges the review without making the human relay routine requests.
+
+Sensitive work focuses that review on the affected trust boundary, data rule, workflow authority or release behavior. Add another specialist only for an uncovered concern. Architectural work also includes the approved design review; it does not automatically multiply implementation reviews.
+
+Resolve verified blocking defects and unmet acceptance criteria. Record accepted non-blocking tradeoffs with reasons. A known correctness or security defect cannot be dismissed solely to finish quickly. Ask the human to accept material unresolved risk; do not invent acceptance on their behalf. Style preferences remain non-blocking.
+
+Review scores are advisory. There is no mandatory Greptile 5/5 loop or second human-started cross-review. If Greptile is installed or explicitly requested, assess its concrete findings using the same criteria. Recheck changed areas after fixes; repeat a full review only when the fixes materially alter the reviewed scope. A failing CI check remains a blocker.
+
+## Complete the task
+
+1. Confirm scope and acceptance criteria, finish applicable local checks, and assemble only relevant evidence. Classify whether this is an app release under [Releasing](releasing.md); add an Unreleased entry only for an app release.
+2. Inspect the diff, apply `unslop` to changed prose, commit, fetch and rebase onto `origin/main`. Resolve only conflicts you understand and verify affected interactions.
+3. Push your branch, using `--force-with-lease` only when rebasing your own pushed branch. Open the PR with its tier/reason, behavior changed, actual verification results, relevant evidence, release classification and risks.
+4. Complete the independent review where required and resolve findings. Wait for the final revision's applicable CI to pass. When fixes change the revision, update evidence and review only the affected scope.
+5. Present the PR URL, any material limitations and the worktree path. Keep the worktree until the PR merges or closes. Only the human authorizes merge.
+
+## Policy examples
+
+Use these cases when changing this workflow; they are checks of the rules, not reasons to run the application:
+
+| Example | Expected result |
+|---|---|
+| Correct a README typo | Editorial; document checks; no independent review, browser evidence or app version |
+| Change which actions an agent can authorize | Sensitive; policy scenarios and independent review; no runtime tests for Markdown alone; no app version |
+| Change one button's spacing | Routine; relevant static checks, hands-on visual inspection and one review; full CI; app release |
+| Fix a one-line RLS predicate | Sensitive; migration, allow/deny tests and focused review; full CI; app release |
+| Change CI filtering or a release script | Sensitive; routing/release regression tests and focused review; full CI; internal maintenance unless deployed app behavior changes |
+| Add an unresolved cross-system admissions workflow | Architectural; approved design sequence, system verification and app release |

@@ -6,11 +6,12 @@ language lives in [CONTEXT.md](CONTEXT.md).
 
 ## Releases
 
-Each release is tagged with [Semantic Versioning](https://semver.org) and written up
-in [CHANGELOG.md](CHANGELOG.md). `v1.0.0` is reserved for the complete app, with all
-three products implemented, so releases before that stay in the `0.x` range. The
-current release is `v0.1.1`, which brings the site back up after `v0.1.0` and keeps
-the public pages up when staff sign-in is misconfigured.
+App releases are tagged with [Semantic Versioning](https://semver.org) and written
+up in [CHANGELOG.md](CHANGELOG.md), which holds the current release. `v1.0.0` is
+reserved for the complete app, with all three products implemented. Internal
+documentation, tests and development workflow maintenance can merge without an
+app version. See [Releasing](docs/agents/releasing.md) for classification and the
+release helper commands. The human authorizes every merge.
 
 ## Requirements
 
@@ -63,8 +64,11 @@ npm run build
 `test:integration` and `test:e2e` need local Supabase running and a `.env.local`
 (`npm run env:local` writes one from it). `test:e2e` builds and serves the app on port
 3100, and serves the same build on 3101 with a Turnstile secret that always fails. To rerun without building again, start `npm run e2e:serve` first: the tests reuse
-that server once they've checked it serves this checkout's build. CI
-(`.github/workflows/ci.yml`) runs every check on each PR.
+that server once they've checked it serves this checkout's build. Local checks
+follow the affected behavior under [Workflow](docs/agents/workflow.md). CI runs
+the full suite for application, configuration and executable-tool changes;
+allowlisted Markdown-only changes receive document checks. Every PR receives a
+final `CI complete` result.
 
 ## Staff sign-in
 

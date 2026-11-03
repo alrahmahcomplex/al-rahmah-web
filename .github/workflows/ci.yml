@@ -1,8 +1,8 @@
 name: CI
 
-# Every check from AGENTS.md, on every PR and on main, against a local
-# Supabase started inside the job. No hosted Supabase or Vercel credentials:
-# .env.local holds the local stack's own keys only.
+# Every PR and main push gets a completed gate. Only allowlisted Markdown
+# changes skip runtime checks. Full checks use local Supabase, without hosted
+# Supabase or Vercel credentials.
 
 on:
   pull_request:
@@ -20,8 +20,33 @@ env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
+  scope:
+    name: Scope and document checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      full_suite: ${{ steps.scope.outputs.full_suite }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Classify the complete Git diff
+        id: scope
+        run: node scripts/ci-scope.mjs
+      - name: Test repository helpers
+        run: node --test "scripts/*.test.mjs"
+      - name: Check changed documents
+        env:
+          CHANGED_DOCUMENTS: ${{ steps.scope.outputs.documents }}
+        run: node scripts/check-docs.mjs
+
   static:
     name: Lint, typecheck and unit tests
+    needs: scope
+    if: ${{ needs.scope.outputs.full_suite == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -37,6 +62,8 @@ jobs:
 
   database-and-browser:
     name: Integration, build and browser tests
+    needs: scope
+    if: ${{ needs.scope.outputs.full_suite == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -66,3 +93,19 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  complete:
+    name: CI complete
+    if: ${{ always() }}
+    needs: [scope, static, database-and-browser]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Require every applicable check
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: node scripts/ci-scope.mjs --gate

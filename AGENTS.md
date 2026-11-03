@@ -1,152 +1,52 @@
 # Agent workflow: al-rahmah-web
 
-One Next.js app for Al-Rahmah Complex: School Landing Page, Admissions Portal, Referral Tracking System. Claude Code and Codex work here in parallel with the same skills. Skills are named bare: `/name` in Claude Code, `$name` in Codex.
+One Next.js app for Al-Rahmah Complex: School Landing Page, Admissions Portal, Referral Tracking System. Claude Code and Codex work here in parallel. Skills use bare names: `/name` in Claude Code, `$name` in Codex.
 
-## Route by size
+## Choose the work by risk
 
-| Work | Chain |
-|---|---|
-| Tweak (copy, styling) | Isolate → edit → Prove → Ship |
-| Bug | Isolate → `diagnosing-bugs` → `tdd` → Prove → Ship |
-| Feature | Align → Goldfish review → Plan → Isolate → Build → Prove → Ship |
-| Epic (more than one session holds) | `wayfinder`, then the Feature chain per ticket |
+State the tier and reason in one sentence, then proceed within the requested scope. Choose by affected behavior, consequences, uncertainty and recovery difficulty. Escalate when discoveries change the risk. A small diff can be sensitive.
 
-## Beats
+| Tier | Applies to | Required approach |
+|---|---|---|
+| Editorial | Prose, comments or links with no behavior, executable example, policy or permission change | Edit and check the document. No application tests or independent review required. |
+| Routine | Bounded UI, bug or feature following established patterns, with easy recovery | Short acceptance criteria, affected checks and one independent review. |
+| Sensitive | Auth, RLS, payments, student/family data, migrations, shared contracts, secrets/deployment, CI gates or agent authority | Explicit invariants and failure cases, focused independent review and relevant security/data/policy checks. |
+| Architectural | Unsettled design, broad system changes or difficult recovery | Agreed brief and design review before implementation; verify the affected system. |
 
-0. **Align**: `grill-with-docs`; add `prototype` for unsettled UI. Capture the agreed problem, scope, constraints, alternatives and decisions in `align_brief.md`, understandable without the conversation. **Stop**: the human confirms the brief and readiness for Goldfish review.
-1. **Goldfish review**: Read `egm-brainstorm`'s `SKILL.md` and its harness integration guide. Follow only Goldfish Review & Synthesis, with `Mode: BRAINSTORM` and `align_brief.md` as the working hypothesis. `grill-with-docs` owns all questioning and clarification; skip EGM's questioning and handoff stages. Run its six review lenses in parallel: necessity and complexity, cost and quotas, usability, migration and compatibility, observability, and maintenance. Each Goldfish starts with fresh context and receives the brief and selected reference files, without the grilling transcript. The main agent is the Elephant, retaining the discussion context to evaluate findings with the human. Record resolutions and accepted risks in `align_brief.md` and carry them into `concepts_brief.md`, which EGM regenerates each review. If findings need further clarification, return to `grill-with-docs`, update `align_brief.md`, and rerun the Goldfish review. **Stop**: all six lenses have reported, findings are addressed or explicitly accepted, and the human approves the revised `concepts_brief.md` before Plan.
-2. **Plan**: `to-spec` → `to-tickets`, using the approved `concepts_brief.md`, labelled `ready-for-agent`. Claude Code runs Align, Goldfish review and Plan.
-3. **Isolate**: `new-feature`. Every task gets its own worktree. Claude Code: harness worktree, branch `claude/<task>`. Codex: `.worktrees/<task>` (gitignored), branch `codex/<task>`. Claim the ticket first with a comment `Claimed by <claude|codex> on <branch>`; skip tickets that already carry a claim.
-4. **Build**: `implement` → `tdd`, to the invariants below.
-5. **Prove**: `evidence-driven-testing`. Capture *before* while reproducing, *after* once it works.
-6. **Ship**: `code-review` → cross-review (the human starts the other agent on `code-review` for the PR) → `before-and-after` (production vs PR preview) → PR → `greploop` (`greploop-apps` over the file limit) until **5/5, zero unresolved**. End by presenting the PR URL. **Stop**: merge is the human's.
-7. **Release**: when the human says "merge", run *Releasing* start to finish: merge, tag and changelog it, then housekeep.
+The tier governs planning, skill use, local checks, evidence, review and completion. The procedures in [Workflow](docs/agents/workflow.md) are authoritative for those stages. Generic skill recipes do not add universal tests, recordings, approval gates or perfect-score loops. Explicit human instructions still take precedence. Runtime CI selection and app release eligibility are separate from the review tier.
 
-End an unfinished session with `handoff`.
+## Start and finish
 
-## What this repo holds
+1. **Isolate before editing:** use `new-feature`. Scope-check open PRs with `gh pr list` and `gh pr diff <n> --name-only`; ask on overlapping files. Use your own worktree: Codex `.worktrees/<task>` on `codex/<task>`, Claude's harness worktree on `claude/<task>`. If a ticket exists, claim it with `Claimed by <claude|codex> on <branch>`; skip claimed tickets. A direct human request does not need a new ticket.
+2. **Build and verify:** read [Workflow](docs/agents/workflow.md) for the chosen tier. Continue routine implementation and repair without repeated approval. Ask when a product decision or material scope change needs the human.
+3. **Complete:** follow Workflow's completion checklist through a reviewed PR with the applicable CI green. Present the PR URL and retain the worktree. Merge remains the human's decision.
+4. **On "merge":** follow [Releasing](docs/agents/releasing.md) through merge and housekeeping. App releases also get a changelog entry and tag. Internal maintenance can merge without an app version.
 
-The repo is complete on its own: everything it needs is committed, and it holds only permanent project material (code, `CONTEXT.md`, `docs/adr/`, `docs/agents/`, agent instructions). Transient working files never reach `main`. They use the default location of the skill that makes them: `handoff` writes to the OS temp directory, and `research` and `prototype` findings go on their own throwaway branches.
+Use `handoff` for an unfinished session, with the tier, current commit, evidence and remaining work.
 
-EGM is the exception to the default location: keep `align_brief.md`, `concepts_brief.md` and review reports in a per-feature folder under `.artifacts/egm/`. Pass that folder as `EGM artifact directory: <path>` when following the EGM review stage.
+## Invariants
 
-## Stack and invariants
+Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, Vercel and npm.
 
-Next.js App Router (TypeScript), Tailwind v4, shadcn (`base-nova`), Supabase (database, storage, auth), Vercel, npm.
+- Server Actions and route handlers orchestrate. `lib/services/*` owns Supabase/SDK calls and returns `{ ok, data } | { ok: false, error }`; use `code-structure` when changing these boundaries.
+- Every table has RLS and policies in its creating migration. Schema changes live in `supabase/migrations/` and are tested against local Supabase. Hosted migrations arrive only through the GitHub integration on merge; agents hold no hosted database credentials.
+- Service-role and secret keys stay server-only, never in `NEXT_PUBLIC_*`.
+- Add shadcn components through its CLI into `components/ui/`.
+- `proxy.ts` matches only routes reading the staff session: `/staff`, `/login`, `/auth`. Add a route only if it needs that session, so public pages stay up when Supabase is down or misconfigured.
+- Real family/student data stays out of Git and evidence. Use seeded fixture data and the seeded test account.
+- Worktrees share one local Supabase and limited memory. Before database resets, integration/e2e tests, builds or evidence servers, take the shared lock described in [Parallel work](docs/agents/parallel-work.md). Confirm a reused port serves your process. Stop the database only when no other session uses it.
+- Leave other agents' branches, worktrees and uncommitted changes untouched. Release housekeeping may remove merged work only after its safety checks. Force-push only your own branch with `--force-with-lease`; regenerate conflicting lockfiles with `npm install`. Stop on a conflict you cannot resolve confidently.
 
-1. `code-structure`: Server Actions and route handlers orchestrate; `lib/services/*` owns Supabase and SDK calls and returns `{ ok, data } | { ok: false, error }`.
-2. Every table has RLS, with its policies in the migration that creates it.
-3. The Supabase service-role key lives on the server only, never in `NEXT_PUBLIC_*`.
-4. Add shadcn components with its CLI into `components/ui/`.
-5. `proxy.ts` runs only on the routes that read the staff session (`/staff`, `/login`, `/auth`), so public pages stay up when Supabase is down or misconfigured. A new route joins its matcher only if it needs the session.
+## Read only what the task needs
 
-## Data and evidence
+- **Planning, verification or PR preparation:** [Workflow](docs/agents/workflow.md).
+- **Release or merge:** [Releasing](docs/agents/releasing.md).
+- **Local database, shared resources or parallel feature slices:** [Parallel work](docs/agents/parallel-work.md).
+- **Production, Preview, hosted dashboards or service setup:** [Hosted services](docs/agents/hosted-services.md). Check the signed-in in-app browser yourself; request sign-in if needed.
+- **Business behavior or terminology:** relevant sections of [CONTEXT.md](CONTEXT.md), relevant [ADRs](docs/adr/), and [domain guidance](docs/agents/domain.md).
+- **Tickets or triage:** [Issue tracker](docs/agents/issue-tracker.md) and [triage labels](docs/agents/triage-labels.md).
 
-- Schema changes are files in `supabase/migrations/`, tested against local Supabase. Hosted databases change only through the Supabase GitHub integration on merge; agents hold no hosted database credentials.
-- Every checkout shares one local Supabase and the e2e port, on a machine with too little memory for two builds. A local `db:reset`, `test:integration`, `test:e2e`, `build` or evidence server runs only while holding the shared lock; `docs/agents/parallel-work.md` holds the lock, the ports, and each slice's migration range and seed file. `npm run db:stop` stops the database for every worktree, so run it only when no other session is using it.
-- Real family and student records stay out of git and out of evidence. Screens, recordings and tests use the seeded fixture data and the seeded test account.
-- Upload images with `IMAGE_ADAPTER=gist`. Post videos through the PR comment box in the signed-in browser.
-
-### Checking hosted services
-
-Checking production, a Vercel Preview or a dashboard (GitHub, Supabase, Vercel) is the agent's job. The in-app browser holds the human's sessions and shares them across agent sessions, so:
-
-1. Open the page in the in-app browser and see whether it is signed in.
-2. If it shows a sign-in page, ask the human to sign in to that service or site (`AskUserQuestion` in Claude Code), wait for their answer that they are done, then open it again.
-3. Report what the page shows.
-
-A missing session is a sign-in to ask for, never a reason to hand the check to the human. Their calls are merges and destructive changes.
-
-### Hosted setup
-
-The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human owns every change below; an agent asks for it and says why.
-
-- **Migrations** reach the hosted database when their PR merges to `main`, through the Supabase GitHub integration. The agent confirms each version during *Releasing* (step 5).
-- **Vercel** needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in both Production and Preview. Next.js bakes `NEXT_PUBLIC_*` values in at build, so a changed value takes effect only after a redeploy. A Preview without them serves 500 on `/staff`, `/login` and `/auth`, and `before-and-after` then captures error pages.
-- **The first staff member** on a fresh database: the sign-up trigger refuses any auth user without an active staff record, and every write to staff members needs an audit actor, so the order is fixed. First run this in the SQL editor, with the person's name and lowercase email:
-
-  ```sql
-  begin;
-  select public.set_audit_actor('system');
-  insert into public.staff_members (full_name, email, role_id)
-  select 'Full Name', 'person@example.com', id from public.roles where name = 'Admissions Manager';
-  commit;
-  ```
-
-  Then invite the user under Authentication → Users. Their link lands on the site root, which forwards it to `/auth/confirm`. Everyone after them is invited from Staff and roles.
-- **Staff invites** from Staff and roles need, on the hosted project: custom SMTP (Authentication → SMTP Settings, with a verified sending domain; the built-in sender reaches only the project's team), the Site URL set to production, Redirect URLs allowing `/auth/confirm` on production and on `https://*-<vercel-team>.vercel.app/**`, the Invite user template from `supabase/templates/invite.html`, and a named secret key. Vercel needs that key as `SUPABASE_SECRET_KEY`, unprefixed, in Production and Preview. Without the key the Manager's invite still creates the staff record, reports that the email wasn't sent, and offers Resend invite.
-
-## Checks
-
-`npm run lint`, `npm run typecheck`, `npm run test` (unit), `npm run test:integration` (database, needs local Supabase), `npm run test:e2e` (browser), `npm run build`. CI runs all of them on every PR and on `main`. Locally, run them in tiers:
-
-- **While building:** lint, typecheck, and the tests the change touches (`vitest --changed`, `playwright test --only-changed`).
-- **Before opening the PR:** all of them once, with build and e2e under the lock.
-- **After a rebase:** all of them again if the rebase brought in migrations, `supabase/seeds/`, shared services or config. Otherwise lint, typecheck and the changed-file tests.
-- **At release:** CI green on the final commit, unless the release commit changed code.
-
-## Multi-agent rules
-
-- Work on your own task branch; `main` changes only by merged PR.
-- Leave other agents' worktrees, branches and uncommitted work untouched. The one exception is housekeeping after a merge (*Releasing*, step 6), and only for work whose PR has merged.
-- Before starting, scope-check open PRs (`gh pr list`, `gh pr diff <n> --name-only`). On overlap, stop and ask.
-- Force-push only with `--force-with-lease`, only on your own branch.
-- Regenerate lockfiles on conflict (`npm install`).
-- Confirm a dev-server port answers *your* process before trusting it.
-- If a conflict can't be resolved confidently, stop and report.
-
-## Completing a task
-
-1. Keep changes to the assigned task.
-2. Run the checks (the before-the-PR tier).
-3. Assemble before/after pairs from the evidence captured along the way.
-4. Add the changelog entry under `## Unreleased` (see *Releasing*), commit, rebase onto `origin/main`, run the after-a-rebase tier.
-5. `git push -u origin <branch>` (`--force-with-lease` after rebasing a pushed branch).
-6. Open the PR: what changed, how it was tested (every claim backed by evidence), before/after proof, risks and follow-ups. Run the title and body through `unslop`.
-7. `greploop` to 5/5 with zero unresolved comments.
-8. Present the PR URL. Keep the worktree until the PR merges or closes.
-
-## Releasing
-
-Every merge to `main` is a release: it carries a SemVer tag and a `CHANGELOG.md` entry. A merge without both is unfinished work. Parallel PRs would all claim the same version, so a PR carries its entry under an `## Unreleased` heading at the top of `CHANGELOG.md`, and the version is settled only when the PR is about to merge. On a rebase conflict in `## Unreleased`, keep every entry.
-
-"Merge" from the human means the whole of this section, housekeeping included, with no further confirmation.
-
-1. When the human says "merge", rebase onto `origin/main` and pick the version from the latest tag. `v1.0.0` is reserved for the complete app, with the School Landing Page, Admissions Portal and Referral Tracking System all implemented, so stay in `0.x` until then. Before 1.0, a new capability bumps the minor (`v0.2.0`) and a correction to shipped behaviour bumps the patch (`v0.1.1`). After 1.0, ordinary SemVer: breaking change major, capability minor, fix patch.
-2. Turn this PR's `## Unreleased` entry into a date heading carrying the version (newest at the top), commit, push, and wait for CI to pass on that commit (the release tier). The entry has only the sections that have content: `NEW` for what a person can now do, `IMPROVED` for what already existed and got better, `FIXED` for what was broken. Write each line for someone using the app, in the plain voice the existing entries use, not as a commit subject. `unslop` applies.
-3. Merge the PR with a message that says what the change does.
-4. Tag the merge commit on `main`, annotated, message `<version>: <one line>`, then `git push origin <version>`.
-5. If the PR added migrations, confirm each reached the hosted database. Look only: hosted changes arrive through merges, never through the dashboard.
-   - Wait for the Supabase integration's check on the merge commit to finish (`gh api repos/alrahmahcomplex/al-rahmah-web/commits/<sha>/check-runs`).
-   - In the in-app browser (see *Checking hosted services*), open project `al-rahmah-web`, Database → Migrations, and read the list with `get_page_text`. Every version the PR added must be there.
-   - Spot-check the new schema under Database → Tables, Functions or Extensions.
-   - A missing version or a failed check is a production decision: hold every merge that carries a migration, and report to the human with a screenshot.
-6. Housekeep, so nothing finished lingers and nothing unfinished is lost. The main checkout ends on `main`, clean, at the new `origin/main` (`git pull --ff-only`). Every worktree and branch, local and remote, whose PR has merged is removed, this task's and any earlier ones. Remove one only after all four checks pass:
-   - its PR shows merged (`gh pr view <branch> --json state,headRefOid`);
-   - the local branch tip equals that PR's `headRefOid`, so every commit reached GitHub (squash merges leave the commits off `main`, so `git branch --merged` can't tell);
-   - `git status --porcelain` in its worktree is empty;
-   - nothing needed lives only in its ignored files. Evidence is uploaded by now, and `.env.local` is recreated from `.env.example`.
-
-   Anything that fails a check stays, and the report names it and why. The main checkout's own uncommitted changes are never discarded: stop and report them. Finish with `git worktree prune` and `git fetch --prune`, and remove any scratch copies the task made outside the repo.
-7. Give the human the tag, the release entry, the merged PR URL, and each hosted migration version confirmed or missing. Also list what housekeeping removed and anything it left, with the reason.
-
-## Writing for humans
-
-Run `unslop` over text a person will read (commits, PR title and body, docs, comments, the closing reply), only on text you wrote or changed.
-
-## Agent skills
-
-### Issue tracker
-
-GitHub Issues via `gh`. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-The five defaults: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Keep only permanent project material on `main`. Research and prototype findings stay on their own throwaway branches; handoffs use the skill's OS-temp location. EGM briefs and reports go under `.artifacts/egm/<feature>/`; pass that path as `EGM artifact directory` to EGM. Apply `unslop` to human-facing text you write or change.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

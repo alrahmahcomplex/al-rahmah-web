@@ -289,7 +289,7 @@ An agent registers with their full name, a phone number and, when it differs, a 
 _Avoid_: External referral agent, referrer, staff owner, follow-up staff
 
 **Agent approval**:
-A newly registered Marketing Agent's **Referral code** is **Pending** until the Admissions Manager approves it, after which it is **Approved**. Only an **Approved** code grants the interview discount. Staff tell the agent about the approval themselves, outside the system, until agent sign-in brings the system's own invite email.
+A newly registered Marketing Agent's **Referral code** is **Pending** until the Admissions Manager approves it, after which it is **Approved**. Only an **Approved** code grants the interview discount. Staff tell the agent about the approval themselves, outside the system, until agent invites arrive (#191), which go out only after the Manager has confirmed the agent's email.
 Approval is one-way: nothing returns an **Approved** agent to **Pending**. Approving needs only `agents.approve`, with no lead permission.
 
 **Referral code**:

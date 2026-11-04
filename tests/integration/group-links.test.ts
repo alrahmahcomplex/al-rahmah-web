@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from "node:crypto"
+import { randomUUID } from "node:crypto"
 
 import { describe, expect, test } from "vitest"
 
@@ -23,15 +23,22 @@ const usedYears = new Set<number>()
 
 async function unusedYear(): Promise<number> {
   return inRolledBackTransaction(async (sql) => {
-    for (;;) {
-      const year = randomInt(2100, 3000)
-      if (usedYears.has(year)) continue
-      const taken = await sql.query("select 1 from public.whatsapp_group_links where enrollment_year = $1", [year])
-      if (taken.rowCount === 0) {
-        usedYears.add(year)
-        return year
-      }
+    const { rows } = await sql.query<{ year: number }>(
+      `select year from generate_series(2100, 2999) as year
+       where year <> all($1::integer[])
+         and not exists (
+           select 1 from public.whatsapp_group_links where enrollment_year = year
+         )
+       order by year limit 1`,
+      [[...usedYears]],
+    )
+    if (!rows.length) {
+      throw new Error(
+        "No unused group-link test year remains (2100 to 2999). Reset the local test database with npm run db:reset.",
+      )
     }
+    usedYears.add(rows[0].year)
+    return rows[0].year
   })
 }
 
@@ -42,6 +49,17 @@ async function linkFor(year: number) {
   if (!links.ok) throw new Error(`could not read links: ${links.error}`)
   return links.data.find((link) => link.year === year) ?? null
 }
+
+test("year allocation fails clearly when every candidate is reserved", async () => {
+  const previous = new Set(usedYears)
+  try {
+    for (let year = 2100; year <= 2999; year++) usedYears.add(year)
+    await expect(unusedYear()).rejects.toThrow("Reset the local test database with npm run db:reset")
+  } finally {
+    usedYears.clear()
+    for (const year of previous) usedYears.add(year)
+  }
+})
 
 describe("the group-link permission on a fresh database", () => {
   test("every starting role holding leads.edit has it, and the Accountant does not", async () => {
@@ -130,6 +148,48 @@ describe("setting a year's group link", () => {
     })
     expect((await linkFor(year))?.url).toBe(second)
   })
+
+  for (const replacing of [false, true]) {
+    test(`concurrent ${replacing ? "replacements" : "inserts"} save only the winner and its audit`, async () => {
+      const year = await unusedYear()
+      const [admissions, manager] = await Promise.all([signedIn(ADMISSIONS), signedIn(MANAGER)])
+      const original = replacing ? inviteLink() : null
+      if (original) {
+        expect(await setGroupLink(admissions, year, original, null)).toEqual({ ok: true, data: null })
+      }
+      const candidates = [
+        { client: admissions, person: ADMISSIONS, url: inviteLink() },
+        { client: manager, person: MANAGER, url: inviteLink() },
+      ]
+      const results = await Promise.all(
+        candidates.map(({ client, url }) => setGroupLink(client, year, url, original)),
+      )
+      expect(results.filter((result) => result.ok)).toEqual([{ ok: true, data: null }])
+      expect(results.filter((result) => !result.ok)).toEqual([{ ok: false, error: "stale" }])
+      const winner = candidates[results.findIndex((result) => result.ok)]
+      expect(await linkFor(year)).toMatchObject({ url: winner.url, setByName: winner.person.name })
+
+      const { data: row, error: rowError } = await admissions.from("whatsapp_group_links")
+        .select("id").eq("enrollment_year", year).single()
+      expect(rowError).toBeNull()
+      const { data: history, error } = await admissions.from("audit_log")
+        .select("action, actor_staff_id, old_values, new_values")
+        .eq("table_name", "whatsapp_group_links").eq("row_id", row!.id).order("id")
+      expect(error).toBeNull()
+      expect(history).toHaveLength(replacing ? 2 : 1)
+      if (replacing) {
+        expect(history![0]).toMatchObject({
+          action: "insert", actor_staff_id: ADMISSIONS.id, new_values: { url: original },
+        })
+      }
+      expect(history!.at(-1)).toMatchObject({
+        action: replacing ? "update" : "insert",
+        actor_staff_id: winner.person.id,
+        ...(replacing ? { old_values: { url: original } } : {}),
+        new_values: { url: winner.url },
+      })
+    })
+  }
 
   test("surrounding spaces are trimmed before the link is checked and saved", async () => {
     const year = await unusedYear()

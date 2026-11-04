@@ -23,6 +23,20 @@ stay in the `0.x` range.
   WhatsApp on 3 Oct 2026 by Amina", and the lead's history records each release with the
   result and score it carried. The Accountant sees this too, with no send button.
 
+## November 4, 2026 `v0.63.0`
+
+### NEW
+
+- Staff can save an admissions WhatsApp group link for each Enrollment year, see who set it and when, and open it to test before inviting families.
+
+## November 4, 2026 `v0.62.0`
+
+### IMPROVED
+
+- Discount codes now follow one current Marketing Agent record, with interview
+  discounts reserved for Approved agents who are neither switched off nor retired.
+  This prepares for the agent management controls coming in a later release.
+
 ## November 3, 2026 `v0.61.1`
 
 ### IMPROVED

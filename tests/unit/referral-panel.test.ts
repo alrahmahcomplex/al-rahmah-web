@@ -20,7 +20,7 @@ describe("the Referral code panel's words", () => {
   })
 
   it("turns every refusal into a plain sentence, never a code", () => {
-    const errors = ["forbidden", "not-found", "lead-closed", "unknown-code", "no-change", "unavailable", "signed-out"] as const
+    const errors = ["forbidden", "not-found", "lead-closed", "unknown-code", "retired-code", "no-change", "unavailable", "signed-out"] as const
     for (const error of errors) {
       for (const action of ["set", "clear"] as const) {
         const outcome = referralOutcome({ ok: false, error }, action)

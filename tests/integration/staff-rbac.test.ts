@@ -30,6 +30,7 @@ const SLICE_ONE_TABLES = [
 const STARTING_GRANTS: Record<string, string[]> = {
   "Admissions Staff": [
     "follow_ups.record",
+    "group_links.manage",
     "interviews.record",
     "leads.close",
     "leads.create",
@@ -45,6 +46,7 @@ const STARTING_GRANTS: Record<string, string[]> = {
     "agents.approve",
     "discounts.approve",
     "follow_ups.record",
+    "group_links.manage",
     "interviews.record",
     "leads.close",
     "leads.create",

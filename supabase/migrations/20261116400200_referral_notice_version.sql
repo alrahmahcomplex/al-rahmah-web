@@ -11,12 +11,16 @@
 -- apply_form_discount_code. The two-argument version stays, unchanged, while
 -- builds from before this migration may still call it (PostgREST picks by the
 -- argument names sent, and the new argument has no default, so the two never
--- clash). A ticketed follow-up removes it.
+-- clash). #205 removes it once no build from before this migration can be live.
 
 alter table public.leads
     add column referral_notice_version text
         constraint leads_referral_notice_version_known
-            check (referral_notice_version in ('form_v1', 'staff_reminder'));
+            check (referral_notice_version in ('form_v1', 'staff_reminder')),
+    -- A notice goes with a code: a version on a lead with no code would claim
+    -- a notice about nothing.
+    add constraint leads_referral_notice_version_needs_code
+        check (referral_notice_version is null or referral_code is not null);
 
 comment on column public.leads.referral_notice_version is
     'Which version of the code-holder notice accompanied the lead''s Referral code: form_v1 (shown under the Admission form''s Discount code field) or staff_reminder (staff reminded to tell the family). Null means no notice was shown: no code, a code from before the notice, or an import.';

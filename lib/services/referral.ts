@@ -205,17 +205,26 @@ export type ApplyFormDiscountCodeError =
 // showed (null when it showed none). Writes only into an empty code, so
 // calling it again, or after staff set a code, changes nothing, the version
 // included. Secret key only. Returns the code the lead now carries.
+//
+// If this build is live before the migration that adds the three-argument
+// function, PostgREST answers PGRST202 (no such function). The lead already
+// exists by then, so the code still goes on it through the two-argument
+// function, with no notice version recorded. #205 removes the fallback.
 export async function applyFormDiscountCode(
   supabase: SupabaseClient,
   leadId: string,
   code: string,
   noticeVersion: string | null,
 ): Promise<Result<{ code: string }, ApplyFormDiscountCodeError>> {
-  const { data, error } = await supabase.rpc("apply_form_discount_code", {
+  let { data, error } = await supabase.rpc("apply_form_discount_code", {
     lead_id: leadId,
     code,
     notice_version: noticeVersion,
   })
+  if (error?.code === "PGRST202") {
+    console.warn("apply_form_discount_code(lead_id, code, notice_version) is missing; using the two-argument version")
+    ;({ data, error } = await supabase.rpc("apply_form_discount_code", { lead_id: leadId, code }))
+  }
   if (error) {
     if (error.message === "invalid") return { ok: false, error: "invalid" }
     if (error.message === "lead_closed") return { ok: false, error: "lead-closed" }

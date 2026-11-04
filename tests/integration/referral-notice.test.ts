@@ -247,4 +247,30 @@ describe("the referral_notice_version column", () => {
       }),
     ).rejects.toThrow(/leads_referral_notice_version_known/)
   })
+
+  test("holds a version only beside a code", async () => {
+    // The seeded lead carries BJN-402, so a version beside it is accepted.
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("update public.leads set referral_notice_version = 'form_v1' where id = '1ead0000-0000-4000-8000-000000000431'")
+    })
+
+    await expect(
+      inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        await sql.query(
+          "update public.leads set referral_code = null, referral_notice_version = 'staff_reminder' where id = '1ead0000-0000-4000-8000-000000000431'",
+        )
+      }),
+    ).rejects.toThrow(/leads_referral_notice_version_needs_code/)
+
+    // Clearing the code while a version stays is refused too.
+    await expect(
+      inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        await sql.query("update public.leads set referral_notice_version = 'form_v1' where id = '1ead0000-0000-4000-8000-000000000431'")
+        await sql.query("update public.leads set referral_code = null where id = '1ead0000-0000-4000-8000-000000000431'")
+      }),
+    ).rejects.toThrow(/leads_referral_notice_version_needs_code/)
+  })
 })

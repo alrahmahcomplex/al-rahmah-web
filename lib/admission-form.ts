@@ -156,7 +156,12 @@ export function parseAdmissionForm(
 
   const form: AdmissionForm = { submissionKey: submissionKey.toLowerCase(), parent: cleanParent, children: cleanChildren }
   if (code) form.discountCode = code
-  // Only a version this build knows is kept; any other value records none.
+  // Only the version this build shows is kept. Any other value records none
+  // (null, "not shown") and the code is still saved, by design: during a
+  // deploy a page from one build can post to another, and refusing would lose
+  // a family's code over a notice this server can't vouch it showed. Recording
+  // null claims nothing it can't prove. The database refuses an unknown
+  // version from any caller that does send one.
   if (code && noticeVersion === FORM_NOTICE_VERSION) form.noticeVersion = FORM_NOTICE_VERSION
   return { ok: true, data: form }
 }

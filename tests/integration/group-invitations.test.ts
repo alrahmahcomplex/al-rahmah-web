@@ -479,6 +479,28 @@ describe("a lead moved to another Enrollment year", () => {
     expect(await countInvitedFamilies(staff, year)).toEqual({ ok: true, data: 0 })
     expect(await countInvitedFamilies(staff, nextYear)).toEqual({ ok: true, data: 1 })
   })
+
+  test("leaves its family counted for the year while a sibling the invitation covered is still there", async () => {
+    const year = await unusedYear()
+    const nextYear = await unusedYear()
+    const link = await saveLink(year)
+    const sender = await visitedLead(year)
+    const sibling = await visitedLead(year, { family: sender.family })
+    const staff = await signedIn(ADMISSIONS)
+    const sent = await sendGroupInvitation(staff, sender.leadId, "link", link, year)
+    expect(sent.ok && sent.data.siblingLeadIds).toEqual([sibling.leadId])
+
+    const move = (leadId: string) =>
+      asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [leadId, nextYear]))
+
+    // The sending child moves: the sibling it covered keeps the family counted.
+    await move(sender.leadId)
+    expect(await countInvitedFamilies(staff, year)).toEqual({ ok: true, data: 1 })
+
+    // The sibling moves too: nobody the invitation covered is left in the year.
+    await move(sibling.leadId)
+    expect(await countInvitedFamilies(staff, year)).toEqual({ ok: true, data: 0 })
+  })
 })
 
 describe("families invited", () => {

@@ -343,8 +343,11 @@ grant execute on function public.leads_with_earlier_group_link(integer) to authe
 -- ---------------------------------------------------------------------------
 -- group_invitation_family_count: how many distinct families were sent an
 -- invitation for the year, counted by the parent/guardian contact the
--- invited leads have now, among leads still in that year. Families invited,
--- not group members: nobody knows who joined. For staff with leads.view.
+-- invited leads have now, among leads still in that year. An invitation
+-- covers its lead and the siblings it named, as in
+-- leads_with_earlier_group_link, so a family stays counted while any child
+-- it covered is still in the year. Families invited, not group members:
+-- nobody knows who joined. For staff with leads.view.
 -- ---------------------------------------------------------------------------
 
 create function public.group_invitation_family_count(link_year integer)
@@ -362,7 +365,8 @@ begin
     return (
         select count(distinct l.guardian_contact_id)::integer
         from public.whatsapp_group_invitations i
-        join public.leads l on l.id = i.lead_id
+        cross join lateral unnest(array[i.lead_id] || i.sibling_lead_ids) as x (id)
+        join public.leads l on l.id = x.id
         where i.enrollment_year = group_invitation_family_count.link_year
           and l.enrollment_year = group_invitation_family_count.link_year
     );

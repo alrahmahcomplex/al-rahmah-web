@@ -24,7 +24,9 @@ const CLOSURE_LABELS: Record<ClosureFilter, string> = {
 // The search box and, for the list, its filters. Everything lives in the URL,
 // so a search can be shared and the back button undoes it. A filter applies
 // as soon as it changes, and always starts again from the first page.
-export function LeadSearchBar({ search }: { search: LeadSearch }) {
+// `groupYears` are the Enrollment years with a saved WhatsApp group link, for
+// the "invitation sent with an earlier link" filter.
+export function LeadSearchBar({ search, groupYears }: { search: LeadSearch; groupYears: number[] }) {
   const router = useRouter()
   const [typed, setTyped] = useState(search.query ?? "")
 
@@ -33,13 +35,24 @@ export function LeadSearchBar({ search }: { search: LeadSearch }) {
   // search is shown the selects are hidden, and `search` has them.
   const statusRef = useRef<HTMLSelectElement>(null)
   const closureRef = useRef<HTMLSelectElement>(null)
-  function currentFilters(): Pick<LeadSearch, "status" | "closure"> {
-    if (!statusRef.current || !closureRef.current) return { status: search.status, closure: search.closure }
+  const earlierLinkRef = useRef<HTMLSelectElement>(null)
+  function currentFilters(): Pick<LeadSearch, "status" | "closure" | "earlierLinkYear"> {
+    if (!statusRef.current || !closureRef.current || !earlierLinkRef.current) {
+      return { status: search.status, closure: search.closure, earlierLinkYear: search.earlierLinkYear }
+    }
     return {
       status: (statusRef.current.value || undefined) as LeadStatus | undefined,
       closure: closureRef.current.value as ClosureFilter,
+      earlierLinkYear: earlierLinkRef.current.value ? Number(earlierLinkRef.current.value) : undefined,
     }
   }
+
+  // A year from the URL with no saved link still shows, so the select says
+  // what the list is showing.
+  const linkYears =
+    search.earlierLinkYear !== undefined && !groupYears.includes(search.earlierLinkYear)
+      ? [...groupYears, search.earlierLinkYear].sort((a, b) => a - b)
+      : groupYears
 
   function applyFilters() {
     router.push(leadsHref({ ...currentFilters(), page: 1 }))
@@ -109,6 +122,23 @@ export function LeadSearchBar({ search }: { search: LeadSearch }) {
               {(Object.keys(CLOSURE_LABELS) as ClosureFilter[]).map((closure) => (
                 <option key={closure} value={closure}>
                   {CLOSURE_LABELS[closure]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex w-72 flex-col gap-1.5">
+            <Label htmlFor="lead-earlier-link">Group invitation</Label>
+            <select
+              ref={earlierLinkRef}
+              id="lead-earlier-link"
+              className={SELECT_CLASS}
+              defaultValue={search.earlierLinkYear === undefined ? "" : String(search.earlierLinkYear)}
+              onChange={applyFilters}
+            >
+              <option value="">Any</option>
+              {linkYears.map((year) => (
+                <option key={year} value={year}>
+                  Invitation sent with an earlier link, {year}
                 </option>
               ))}
             </select>

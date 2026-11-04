@@ -138,7 +138,7 @@ The permissions are:
 |---|---|
 | `leads.view` | Finding and reading leads and their history, the dashboard, and the follow-up queue. |
 | `leads.create` | Entering a new lead. A lead matching an existing record becomes a reopening request instead. |
-| `leads.edit` | Correcting a lead's details, parent/guardian contacts, class, enrollment year, day or boarding, **Pre-Form One programme** and referral code, requesting a **Staff child** or **Qualified orphan** discount, and reviewing re-applications. |
+| `leads.edit` | Correcting a lead's details, parent/guardian contacts, class, enrollment year, day or boarding, **Pre-Form One programme** and referral code, requesting a **Staff child** or **Qualified orphan** discount, reviewing re-applications, and sending the admissions WhatsApp group invitation. |
 | `visits.record` | Recording a campus visit. |
 | `interviews.record` | Registering a lead for interview and recording its result and score, including editing a recorded result or score. |
 | `interview_payments.record` | Marking the interview fee **Paid** or **Not Paid**. |
@@ -192,6 +192,9 @@ Admissions Staff may edit interview results and percentage scores directly. Ever
 
 **Admissions WhatsApp group links**:
 Staff with `leads.view` read each Enrollment year's saved link, who set it and when, under WhatsApp groups. Staff with `group_links.manage` save or replace it. Only `https://chat.whatsapp.com/` invite links are accepted. A year need not have a Fee schedule. Replacing a link affects only new invitations; earlier families still hold the earlier link. Links cannot be deleted, and every change is audited in the lead scope. The migration grants the permission to every non-retired role holding `leads.edit`; roles created later must be granted it explicitly.
+
+**Admissions WhatsApp group invitation**:
+From **Visited** onward, staff with `leads.edit` send the owner's fixed Swahili invitation for the lead's Enrollment year, carrying that year's group link, from the lead's screen. It goes by WhatsApp to the parent's WhatsApp number, else their direct phone (Tanzanian mobiles only); with neither, staff copy it and send it themselves. Declined, Inactive and Archived leads offer no invitation, and a reopened lead offers it again. Each send is a permanent record holding the year, the exact link, the message version, the channel, the other children of the confirmed **Family** in the same Enrollment year at that moment, and who sent it and when. A send says the message left the school, never that the family received it or joined. Every child the invitation covered shows it, and shows "sent with an earlier link" once the year's link has been replaced, until it is sent again with the current one. The count of families invited counts parent or guardian contacts, not group members.
 
 **Audit history**:
 The preserved record of changes to admissions data. Every edit records the previous value, the new value, the user who made the change, and the change history. This applies across student details, parent/guardian contacts, class, enrollment year, referral code, interviews, follow-ups, lifecycle status, and payments.

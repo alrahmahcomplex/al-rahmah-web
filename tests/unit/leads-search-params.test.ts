@@ -50,3 +50,18 @@ describe("leadsHref", () => {
     )
   })
 })
+
+describe("the earlier group link filter", () => {
+  it("reads an Enrollment year and keeps it in the URL", () => {
+    expect(parseLeadSearch({ earlier_link: "2027" }).earlierLinkYear).toBe(2027)
+    expect(leadsHref({ closure: "open", earlierLinkYear: 2027, page: 1 }, { page: 2 })).toBe(
+      "/staff/leads?earlier_link=2027&page=2",
+    )
+  })
+
+  it("ignores anything that isn't a year", () => {
+    for (const value of ["", "27", "1999", "2027x", "abcd"]) {
+      expect(parseLeadSearch({ earlier_link: value }).earlierLinkYear).toBeUndefined()
+    }
+  })
+})

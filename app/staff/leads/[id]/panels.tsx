@@ -9,6 +9,7 @@ import { DeclineSection } from "./decline-section"
 import { DiscountSection } from "./discount-section"
 import { FamilySection } from "./family-section"
 import { FollowUpSection } from "./follow-up-section"
+import { GroupInvitationSection } from "./group-invitation-section"
 import { InterviewSection } from "./interview-section"
 import { ReApplicationSection } from "./re-application-section"
 import { ReopenedNote } from "./reopened-note"
@@ -78,6 +79,8 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
       />
     ),
   },
+  // A closed lead keeps showing its latest invitation, without the button.
+  { key: "group-invitation", readOnlyWhenClosed: true, Panel: GroupInvitationSection },
   {
     key: "school-fee",
     // The fee and what was paid stay readable on a closed lead, without

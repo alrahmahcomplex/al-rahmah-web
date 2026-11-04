@@ -5,6 +5,27 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- From Visited onward, a lead's screen offers **Send WhatsApp group invitation**. It
+  opens WhatsApp on the family's WhatsApp number, or their direct phone when there is no
+  separate one, with the owner's approved Swahili invitation for the lead's Enrollment
+  year and that year's group link. With no usable mobile on file, staff copy the
+  invitation instead, and it counts as sent only once it is on the clipboard. With no
+  link saved for the year, the button says so and opens WhatsApp groups. The button is
+  hidden on Declined, Inactive and Archived leads, comes back after a reopening, and
+  stays available for resending.
+- Each send is recorded with the year, the exact link, the message version, the
+  channel, the brothers and sisters in the same confirmed Family and year, and who sent
+  it and when. The lead shows "Invitation to the 2027 group sent on … by …", with the
+  sibling it went with, and "Sent with an earlier link" once the year's link has been
+  replaced. It never says the family received it.
+- A Leads filter, "Invitation sent with an earlier link", finds the families to resend
+  to for a chosen year. WhatsApp groups shows how many families were invited, not how
+  many joined, and warns from 900 families, before WhatsApp's 1,024-member limit.
+
 ## November 4, 2026 `v0.66.0`
 
 ### NEW

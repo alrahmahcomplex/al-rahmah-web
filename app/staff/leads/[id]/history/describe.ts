@@ -21,6 +21,12 @@ import {
   enrolmentValue,
   type EnrolmentCauses,
 } from "./enrolment-history"
+import {
+  GROUP_INVITATION_HIDDEN,
+  groupInvitationLabel,
+  groupInvitationSummary,
+  groupInvitationValue,
+} from "./group-invitation-history"
 import { interviewSerials, withInterviewSerial } from "./interview-history"
 import { REOPENING_HIDDEN, reopenedLeadSummary, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
 import {
@@ -140,6 +146,7 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
   // A record's follow-ups show as their own entries; its kind and entry time
   // show in the entry itself.
   follow_up_records: new Set(["lead_id", "follow_up_id", "next_follow_up_id", "kind", "entered_at"]),
+  whatsapp_group_invitations: GROUP_INVITATION_HIDDEN,
 }
 
 const OUTCOMES: Record<string, string> = {
@@ -355,6 +362,9 @@ function summarize(
     return changed.get("follow_up_id")?.to ? "recorded a follow-up" : "recorded an unplanned contact"
   }
 
+  const invitation = groupInvitationSummary(entry)
+  if (invitation) return invitation
+
   if (entry.record !== null) {
     if (insert) return `added ${article(entry.record)} ${entry.record} record`
     if (entry.action === "update") return `changed ${article(entry.record)} ${entry.record} record`
@@ -441,6 +451,7 @@ function describeEntry(
       .map((c) => ({
         label:
           resultReleaseLabel(entry.action, c.field) ??
+          groupInvitationLabel(entry.record, c.field) ??
           reopeningLabel(entry.record, c.field) ??
           discountLabel(entry.record, c.field) ??
           enrolmentLabel(entry.record, c.field) ??
@@ -458,6 +469,7 @@ function describeEntry(
             : null,
         to:
           resultReleaseValue(entry.action, c.field, c.to) ??
+          groupInvitationValue(entry.record, c.field, c.to) ??
           reopeningValue(entry.record, c.field, c.to) ??
           discountValue(entry.record, c.field, c.to) ??
           enrolmentValue(entry.record, c.field, c.to) ??

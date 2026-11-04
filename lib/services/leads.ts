@@ -303,6 +303,9 @@ export type LeadSearch = {
   query?: string
   status?: LeadStatus
   closure?: ClosureFilter
+  // Only leads whose latest group invitation for this Enrollment year carried
+  // a link the year no longer has (#186).
+  earlierLinkYear?: number
   // From 1.
   page: number
 }
@@ -378,7 +381,15 @@ export async function searchLeads(
   const mode = !query ? "list" : admissionNumber ? "number" : "name"
 
   const build = (head = false) => {
-    const select = supabase.from("leads").select(LEAD_LIST_COLUMNS, { count: "exact", head })
+    const fromLeads = () => supabase.from("leads").select(LEAD_LIST_COLUMNS, { count: "exact", head })
+    // The earlier-link filter reads leads rows from a function, filtered and
+    // paged the same way as the table.
+    const select =
+      mode === "list" && search.earlierLinkYear !== undefined
+        ? (supabase
+            .rpc("leads_with_earlier_group_link", { link_year: search.earlierLinkYear }, { count: "exact", head })
+            .select(LEAD_LIST_COLUMNS) as unknown as ReturnType<typeof fromLeads>)
+        : fromLeads()
     if (mode === "number") return select.eq("admission_number", admissionNumber)
     if (mode === "name") {
       return select

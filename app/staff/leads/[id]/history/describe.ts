@@ -22,7 +22,14 @@ import {
   type EnrolmentCauses,
 } from "./enrolment-history"
 import { interviewSerials, withInterviewSerial } from "./interview-history"
-import { REOPENING_HIDDEN,reopenedLeadSummary, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
+import { REOPENING_HIDDEN, reopenedLeadSummary, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
+import {
+  isResultRelease,
+  RESULT_RELEASE_HIDDEN,
+  resultReleaseLabel,
+  resultReleaseSummary,
+  resultReleaseValue,
+} from "./result-release-history"
 
 // A lead's history entry in plain words: who, what they did, and each field's
 // old and new value. A field, table or action kind this file does not know
@@ -345,6 +352,7 @@ function summarize(
   }
 
   // An action event: something done that changed no row.
+  if (isResultRelease(entry)) return resultReleaseSummary(entry)
   return `recorded ${entry.action}`
 }
 
@@ -417,10 +425,12 @@ function describeEntry(
     changes: entry.changes
       .filter((c) => !HIDDEN[entry.record ?? ""]?.has(c.field))
       .filter((c) => !(isPriorityChange(entry) && PRIORITY_CHANGE_HIDDEN.has(c.field)))
+      .filter((c) => !(isResultRelease(entry) && RESULT_RELEASE_HIDDEN.has(c.field)))
       .filter((c) => fromOld || !isEmpty(c.to))
       .sort((a, b) => rank(a.field) - rank(b.field))
       .map((c) => ({
         label:
+          resultReleaseLabel(entry.action, c.field) ??
           reopeningLabel(entry.record, c.field) ??
           discountLabel(entry.record, c.field) ??
           enrolmentLabel(entry.record, c.field) ??
@@ -437,6 +447,7 @@ function describeEntry(
               display(c.field, c.from, contactNames))
             : null,
         to:
+          resultReleaseValue(entry.action, c.field, c.to) ??
           reopeningValue(entry.record, c.field, c.to) ??
           discountValue(entry.record, c.field, c.to) ??
           enrolmentValue(entry.record, c.field, c.to) ??

@@ -50,7 +50,7 @@ A required choice from a fixed list recorded when a lead is marked **Declined**,
 The initial choices are: **Enrolled elsewhere**, **Family changed plans**, **Fees or cost**, **Fee payment not completed**, **No seat available**, **Did not pass interview**, **Unreachable after follow-up**, **School decision**, and **Other**.
 
 **Interview payment**:
-The payment status for the admission interview, in Tanzanian shillings (TZS). The standard interview amount is **TZS 50,000**. An **Approved** **Referral code** on the lead grants a **TZS 20,000** discount, making the calculated expected amount **TZS 30,000**. Staff cannot override the calculated fee. The Accountant records only **Paid** or **Not Paid**; payment date, method, and receipt reference are outside the current scope.
+The payment status for the admission interview, in Tanzanian shillings (TZS). The standard interview amount is **TZS 50,000**. An **Approved** **Referral code** on the lead grants a **TZS 10,000** discount, making the calculated expected amount **TZS 40,000**. A fee already **Paid** keeps the amount locked when it was marked, and a family who pays less than the expected amount stays **Not Paid**. Staff cannot override the calculated fee. The Accountant records only **Paid** or **Not Paid**; payment date, method, and receipt reference are outside the current scope.
 
 The fee belongs to each interview, not to the lead, so a retaken interview after a reopening starts **Not Paid** with its own fee. Marking it **Paid** locks the calculated amount at that moment, and a later change to the **Referral code** or the agent's approval does not change it. Marking it **Not Paid** again, to undo a wrong click, releases the lock; the next **Paid** locks the amount as it is then.
 
@@ -306,7 +306,7 @@ Staff can only enter a registered agent's code, **Pending** or **Approved**; a c
 _Avoid_: External referral code, Marketing Agent code. Parents and agents see it as a **Discount code**.
 
 **Discount code**:
-The name used for a **Referral code** wherever parents, guardians or Marketing Agents see it: on the **Admission form**, the agent registration page, and every message or page addressed to them. In Swahili it is **Code ya Punguzo**. Parent-facing text never mentions Marketing Agents, referrals or agent approval: a **Pending** code is described as a discount code awaiting confirmation. The agent registration page tells the agent that families who use their discount code get TZS 20,000 off the interview fee.
+The name used for a **Referral code** wherever parents, guardians or Marketing Agents see it: on the **Admission form**, the agent registration page, and every message or page addressed to them. In Swahili it is **Code ya Punguzo**. Parent-facing text never mentions Marketing Agents, referrals or agent approval: a **Pending** code is described as a discount code awaiting confirmation. The agent registration page tells the agent that families who use their discount code get TZS 10,000 off the interview fee.
 _Avoid_ (in text parents or agents see): Referral code, agent, Wakala, Kodi ya punguzo
 
 **Referral link**:

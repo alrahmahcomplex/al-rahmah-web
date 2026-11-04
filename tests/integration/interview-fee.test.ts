@@ -71,7 +71,7 @@ async function discountedFee(sql: Client) {
     create or replace function public.expected_interview_amount(lead_id uuid, out amount integer, out discount_applied boolean)
     language plpgsql stable security definer set search_path = '' as $$
     begin
-        amount := 30000;
+        amount := 40000;
         discount_applied := true;
     end;
     $$`)
@@ -118,14 +118,14 @@ describe("marking the interview fee Paid", () => {
       return { expected, whilePaid, unlocked, afterUnlock, relocked, afterRelock }
     })
 
-    // The fee now comes to TZS 30,000, but what was paid stays at 50,000.
-    expect(seen.expected).toEqual({ amount: 30000, discount_applied: true })
+    // The fee now comes to TZS 40,000, but what was paid stays at 50,000.
+    expect(seen.expected).toEqual({ amount: 40000, discount_applied: true })
     expect(seen.whilePaid).toEqual({ fee_status: "Paid", locked_amount: 50000, locked_discount_applied: false })
     // Not Paid releases the lock, and the next Paid takes the fee as it is then.
     expect(seen.unlocked).toMatchObject({ fee_status: "Not Paid", locked_amount: null })
     expect(seen.afterUnlock).toEqual({ fee_status: "Not Paid", locked_amount: null, locked_discount_applied: null })
-    expect(seen.relocked).toEqual({ interview_id: interviewId, fee_status: "Paid", locked_amount: 30000, discount_applied: true })
-    expect(seen.afterRelock).toEqual({ fee_status: "Paid", locked_amount: 30000, locked_discount_applied: true })
+    expect(seen.relocked).toEqual({ interview_id: interviewId, fee_status: "Paid", locked_amount: 40000, discount_applied: true })
+    expect(seen.afterRelock).toEqual({ fee_status: "Paid", locked_amount: 40000, locked_discount_applied: true })
     // The stand-in went with the rollback.
     expect(await stored(interviewId)).toMatchObject({ fee_status: "Paid", locked_amount: 50000 })
   })
@@ -151,6 +151,27 @@ describe("marking the interview fee Paid", () => {
     expect(await getLeadInterviews(staff, await lock(40000, false))).toMatchObject({
       ok: true,
       data: [{ feeStatus: "Paid", amount: 40000, discountApplied: false }],
+    })
+  })
+
+  test("an Approved code's unpaid fee comes to TZS 40,000, and one Paid at the old TZS 30,000 keeps it", async () => {
+    const { leadId, interviewId } = await registeredLead()
+    await asSystem((sql) => sql.query("update public.leads set referral_code = 'BJN-402' where id = $1", [leadId]))
+    const staff = await signedIn(ADMISSIONS)
+    expect(await getLeadInterviews(staff, leadId)).toMatchObject({
+      ok: true,
+      data: [{ feeStatus: "Not Paid", amount: 40000, discountApplied: true }],
+    })
+
+    // Paid before the discount changed: the locked amount stands.
+    await asSystem((sql) =>
+      sql.query("update public.interviews set fee_status = 'Paid', locked_amount = 30000, locked_discount_applied = true where id = $1", [
+        interviewId,
+      ]),
+    )
+    expect(await getLeadInterviews(staff, leadId)).toMatchObject({
+      ok: true,
+      data: [{ feeStatus: "Paid", amount: 30000, discountApplied: true }],
     })
   })
 

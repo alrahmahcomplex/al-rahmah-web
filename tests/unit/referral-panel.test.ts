@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest"
 
-import { formatTzs, referralLookupNote, referralOutcome } from "@/app/staff/leads/[id]/referral-outcome"
+import { discountNote, formatTzs, referralLookupNote, referralOutcome } from "@/app/staff/leads/[id]/referral-outcome"
 
 describe("the Referral code panel's words", () => {
   it("writes amounts as whole shillings with thousands separators", () => {
-    expect(formatTzs(30000)).toBe("TZS 30,000")
+    expect(formatTzs(40000)).toBe("TZS 40,000")
     expect(formatTzs(50000)).toBe("TZS 50,000")
+  })
+
+  it("names the discount the database gives, or none when it couldn't be read", () => {
+    expect(discountNote(true, 10000)).toBe("includes TZS 10,000 discount")
+    expect(discountNote(true, null)).toBe("includes the agent discount")
+    expect(discountNote(false, 10000)).toBeNull()
   })
 
   it("confirms a saved or cleared code", () => {

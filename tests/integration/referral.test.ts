@@ -57,10 +57,10 @@ async function newAgent() {
 }
 
 describe("reading a lead's Referral code", () => {
-  test("an Approved agent's code names the agent and brings the fee to TZS 30,000", async () => {
+  test("an Approved agent's code names the agent and brings the fee to TZS 40,000", async () => {
     expect(await getLeadReferral(await signedIn(ADMISSIONS), ASHA_APPROVED)).toEqual({
       ok: true,
-      data: { code: APPROVED.code, state: "approved", agentName: APPROVED.fullName, amount: 30000, discountApplied: true },
+      data: { code: APPROVED.code, state: "approved", agentName: APPROVED.fullName, amount: 40000, discountApplied: true },
     })
   })
 
@@ -114,7 +114,7 @@ describe("setting a lead's Referral code", () => {
     expect(await setLeadReferralCode(staff, lead, APPROVED.code)).toEqual({ ok: true, data: { code: APPROVED.code } })
     expect(await getLeadReferral(staff, lead)).toMatchObject({
       ok: true,
-      data: { state: "approved", agentName: APPROVED.fullName, amount: 30000, discountApplied: true },
+      data: { state: "approved", agentName: APPROVED.fullName, amount: 40000, discountApplied: true },
     })
   })
 
@@ -210,11 +210,11 @@ describe("expected_interview_amount", () => {
     return data
   }
 
-  test("no code, Unrecognised and Pending pay TZS 50,000; Approved pays TZS 30,000", async () => {
+  test("no code, Unrecognised and Pending pay TZS 50,000; Approved pays TZS 40,000", async () => {
     expect(await amountOf(await newLead())).toEqual({ amount: 50000, discount_applied: false })
     expect(await amountOf(TATU_UNRECOGNISED)).toEqual({ amount: 50000, discount_applied: false })
     expect(await amountOf(JUMA_PENDING)).toEqual({ amount: 50000, discount_applied: false })
-    expect(await amountOf(ASHA_APPROVED)).toEqual({ amount: 30000, discount_applied: true })
+    expect(await amountOf(ASHA_APPROVED)).toEqual({ amount: 40000, discount_applied: true })
   })
 
   test("approving the agent drops the fee at once on a lead that already carries the code", async () => {
@@ -226,8 +226,8 @@ describe("expected_interview_amount", () => {
     expect(await amountOf(one)).toEqual({ amount: 50000, discount_applied: false })
 
     expect(await approveAgent(await signedIn(MANAGER), agent.id)).toEqual({ ok: true, data: null })
-    expect(await amountOf(one)).toEqual({ amount: 30000, discount_applied: true })
-    expect(await getLeadReferral(staff, other)).toMatchObject({ ok: true, data: { state: "approved", amount: 30000 } })
+    expect(await amountOf(one)).toEqual({ amount: 40000, discount_applied: true })
+    expect(await getLeadReferral(staff, other)).toMatchObject({ ok: true, data: { state: "approved", amount: 40000 } })
   })
 
   test("is forbidden without leads.view, closed to anon, and open to the secret key", async () => {
@@ -240,7 +240,7 @@ describe("expected_interview_amount", () => {
     expect(anon.data).toBeNull()
 
     const server = await secretClient().rpc("expected_interview_amount", { lead_id: ASHA_APPROVED }).single()
-    expect(server.data).toEqual({ amount: 30000, discount_applied: true })
+    expect(server.data).toEqual({ amount: 40000, discount_applied: true })
   })
 
   test("a lead that doesn't exist is not_found", async () => {

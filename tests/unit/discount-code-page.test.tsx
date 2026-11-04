@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const jar = vi.hoisted(() => ({ values: new Map<string, string>() }))
-const stubs = vi.hoisted(() => ({ submit: vi.fn(), reset: vi.fn(), token: "fake-token" }))
+const stubs = vi.hoisted(() => ({ submit: vi.fn(), reset: vi.fn(), token: "fake-token", client: vi.fn(), discount: vi.fn() }))
 
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 vi.mock("next/headers", () => ({
@@ -12,18 +12,16 @@ vi.mock("next/headers", () => ({
     get: (name: string) => (jar.values.has(name) ? { name, value: jar.values.get(name) } : undefined),
   }),
 }))
-// The page must render with Supabase down: any use of a Supabase client
-// fails this test.
+// The page reads only the interview discount, through the secret-key client,
+// and must still render when that read fails. A staff session is never read.
+vi.mock("server-only", () => ({}))
 vi.mock("@/utils/supabase/server", () => ({
   createClient: () => {
-    throw new Error("the Discount code page must not read Supabase to render")
+    throw new Error("the Discount code page must not read a staff session")
   },
 }))
-vi.mock("@/utils/supabase/public-form", () => ({
-  publicFormClient: () => {
-    throw new Error("the Discount code page must not read Supabase to render")
-  },
-}))
+vi.mock("@/utils/supabase/public-form", () => ({ publicFormClient: () => stubs.client() }))
+vi.mock("@/lib/services/referral", () => ({ getInterviewDiscount: (...args: unknown[]) => stubs.discount(...args) }))
 vi.mock("@/app/discount-code/actions", () => ({ registerAsAgent: stubs.submit }))
 vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
 vi.mock("@/components/turnstile-widget", () => ({
@@ -50,6 +48,8 @@ beforeEach(() => {
   stubs.submit.mockReset()
   stubs.reset.mockReset()
   stubs.token = "fake-token"
+  stubs.client.mockReset().mockReturnValue({ secret: "client" })
+  stubs.discount.mockReset().mockResolvedValue({ ok: true, data: 10000 })
 })
 
 async function fill(user: ReturnType<typeof userEvent.setup>, lang: "sw" | "en" = "sw", whatsapp = "") {
@@ -66,13 +66,14 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
     )
   })
 
-  it("renders in Swahili by default, reading no Supabase, and offers TZS 20,000 off once the school confirms", async () => {
+  it("renders in Swahili by default and offers the database's discount once the school confirms", async () => {
     render(await DiscountCodePage())
 
+    expect(stubs.discount).toHaveBeenCalledWith({ secret: "client" }, expect.objectContaining({ signal: expect.any(AbortSignal) }))
     expect(screen.getByRole("main")).toHaveAttribute("lang", "sw")
     expect(screen.getByRole("heading", { level: 1, name: "Pata Code ya Punguzo" })).toBeInTheDocument()
-    expect(screen.getByText(/TZS 20,000/)).toHaveTextContent(/ada ya usaili/)
-    expect(screen.getByText(/TZS 20,000/)).toHaveTextContent(/shule itakapothibitisha/)
+    expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/ada ya usaili/)
+    expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/shule itakapothibitisha/)
     expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument()
     expect(document.querySelector('input[name="cf-turnstile-response"]')).toHaveAttribute("data-action", "agent")
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
@@ -84,10 +85,26 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
 
     expect(screen.getByRole("main")).toHaveAttribute("lang", "en")
     expect(screen.getByRole("heading", { level: 1, name: "Get a Discount code" })).toBeInTheDocument()
-    expect(screen.getByText(/TZS 20,000/)).toHaveTextContent(/interview fee once the school confirms/)
+    expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/interview fee once the school confirms/)
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
     jar.values.set("lang", "en")
     expect(await generateMetadata()).toEqual(expect.objectContaining({ title: "Discount code · Al-Rahmah Complex" }))
+  })
+
+  it.each([
+    ["the secret key is missing", () => stubs.client.mockReturnValue(null)],
+    ["the client can't be made", () => stubs.client.mockImplementation(() => { throw new Error("no url") })],
+    ["the read fails", () => stubs.discount.mockResolvedValue({ ok: false, error: "unavailable" })],
+    ["the read throws", () => stubs.discount.mockRejectedValue(new Error("fetch failed"))],
+  ])("still renders, naming no figure, when %s", async (_, breakIt) => {
+    breakIt()
+    render(await DiscountCodePage())
+    expect(screen.getByText(/punguzo kwenye ada ya usaili, shule itakapothibitisha/)).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/TZS/)
+
+    jar.values.set("lang", "en")
+    render(await DiscountCodePage())
+    expect(screen.getByText(/get a discount on the interview fee once the school confirms/)).toBeInTheDocument()
   })
 
   it("names a missing name or phone without sending", async () => {

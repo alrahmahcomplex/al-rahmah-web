@@ -164,6 +164,23 @@ export async function estimateDiscountCode(
   return { ok: true, data: { state: data.state, amount: data.amount } }
 }
 
+// How much an Approved agent's code takes off the interview fee, in whole
+// TZS: the one figure the Admission form, the Discount code page and the
+// Referral code panel state. Signed-in staff and the secret key only. The
+// optional signal lets a public page give up rather than wait on Supabase.
+export async function getInterviewDiscount(
+  supabase: SupabaseClient,
+  { signal }: { signal?: AbortSignal } = {},
+): Promise<Result<number, "unavailable">> {
+  const query = supabase.rpc("interview_discount")
+  const { data, error } = await (signal ? query.abortSignal(signal) : query)
+  if (error || typeof data !== "number") {
+    console.error("Could not read the interview discount", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data }
+}
+
 export type ApplyFormDiscountCodeError =
   // The value isn't a code.
   | "invalid"

@@ -10,7 +10,9 @@ import type { Language } from "@/lib/language"
 type Copy = {
   title: string
   heading: string
-  intro: string
+  // Takes the discount as written ("TZS 10,000"), or null when it couldn't be
+  // read, and then names no figure.
+  intro: (discount: string | null) => string
   fullName: string
   phone: string
   phoneHint: string
@@ -40,8 +42,8 @@ export const COPY: Record<Language, Copy> = {
   sw: {
     title: "Code ya Punguzo",
     heading: "Pata Code ya Punguzo",
-    intro:
-      "Shiriki Code yako ya Punguzo na familia unazozifahamu. Familia itakayoitumia itapata punguzo la TZS 20,000 kwenye ada ya usaili, shule itakapothibitisha code yako.",
+    intro: (discount) =>
+      `Shiriki Code yako ya Punguzo na familia unazozifahamu. Familia itakayoitumia itapata punguzo${discount ? ` la ${discount}` : ""} kwenye ada ya usaili, shule itakapothibitisha code yako.`,
     fullName: "Jina lako kamili",
     phone: "Namba ya simu",
     phoneHint: "Mfano: 0712 345 678",
@@ -76,8 +78,8 @@ export const COPY: Record<Language, Copy> = {
   en: {
     title: "Discount code",
     heading: "Get a Discount code",
-    intro:
-      "Share your Discount code with families you know. Families who use it get TZS 20,000 off the interview fee once the school confirms your code.",
+    intro: (discount) =>
+      `Share your Discount code with families you know. Families who use it get ${discount ? `${discount} off` : "a discount on"} the interview fee once the school confirms your code.`,
     fullName: "Your full name",
     phone: "Phone number",
     phoneHint: "For example: 0712 345 678",

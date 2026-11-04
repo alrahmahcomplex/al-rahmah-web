@@ -7,6 +7,14 @@ export function formatTzs(amount: number): string {
   return `TZS ${amount.toLocaleString("en-US")}`
 }
 
+// What the fee line adds when an Approved agent's code brought the fee down:
+// the discount as interview_discount() gives it, or no figure when that read
+// failed, so the panel never states an amount the database doesn't hold.
+export function discountNote(discountApplied: boolean, discount: number | null): string | null {
+  if (!discountApplied) return null
+  return discount === null ? "includes the agent discount" : `includes ${formatTzs(discount)} discount`
+}
+
 export type ReferralOutcome = { status: "saved"; message: string } | { status: "refused"; message: string }
 
 export type ReferralAction = "set" | "clear"

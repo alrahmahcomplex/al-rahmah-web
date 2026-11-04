@@ -504,15 +504,22 @@ describe("the Discount code on the review step", { timeout: 20_000 }, () => {
   })
 
   it("starts from the link's code, remembers it for 30 days, and checks it as the step opens", async () => {
-    stubs.check.mockResolvedValue({ status: "approved", amount: 30000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
     await reviewStep({ discountCode: "BJN-402", rememberDiscountCode: "BJN-402" })
 
     expect(document.cookie).toContain("discount_code=BJN-402")
     expect(screen.getByLabelText("Discount code · optional")).toHaveValue("BJN-402")
-    expect(await screen.findByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+    expect(await screen.findByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
     expect(stubs.check).toHaveBeenCalledWith("BJN-402")
-    expect(screen.getByText("TZS 30,000 per child")).toBeInTheDocument()
-    expect(screen.getByText("Total: TZS 30,000")).toBeInTheDocument()
+    expect(screen.getByText("TZS 40,000 per child")).toBeInTheDocument()
+    expect(screen.getByText("Total: TZS 40,000")).toBeInTheDocument()
+  })
+
+  it("confirms an Approved code without a figure when the discount couldn't be read", async () => {
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: null })
+    await reviewStep({ discountCode: "BJN-402", rememberDiscountCode: "BJN-402" })
+    expect(await screen.findByText("A discount on the interview fee for each child.")).toBeInTheDocument()
+    expect(screen.getByText("TZS 40,000 per child")).toBeInTheDocument()
   })
 
   it("leaves the remembered code alone on a visit without a link", async () => {
@@ -524,7 +531,7 @@ describe("the Discount code on the review step", { timeout: 20_000 }, () => {
   })
 
   it.each([
-    [{ status: "approved", amount: 30000 }, "TZS 20,000 off the interview fee for each child.", "TZS 30,000"],
+    [{ status: "approved", amount: 40000, discount: 10000 }, "TZS 10,000 off the interview fee for each child.", "TZS 40,000"],
     [{ status: "pending", amount: 50000 }, "This code is waiting to be confirmed. The discount applies if it is confirmed before you pay.", "TZS 50,000"],
     [{ status: "unknown", amount: 50000 }, "We don't recognise this code. Check it, or send the form without it.", "TZS 50,000"],
     [{ status: "rate-limited" }, "We couldn't check your code just now. It will still be saved with your application.", "TZS 50,000"],
@@ -553,16 +560,16 @@ describe("the Discount code on the review step", { timeout: 20_000 }, () => {
     await user.tab()
     expect(stubs.check).toHaveBeenCalledTimes(1)
 
-    stubs.check.mockResolvedValue({ status: "approved", amount: 30000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
     await user.clear(field)
     await user.type(field, "BJN-402")
     await user.tab()
-    expect(await screen.findByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+    expect(await screen.findByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
     expect(stubs.check).toHaveBeenCalledTimes(2)
   })
 
   it("asks again on the next blur when a check couldn't run", async () => {
-    stubs.check.mockResolvedValueOnce({ status: "unavailable" }).mockResolvedValueOnce({ status: "approved", amount: 30000 })
+    stubs.check.mockResolvedValueOnce({ status: "unavailable" }).mockResolvedValueOnce({ status: "approved", amount: 40000, discount: 10000 })
     const user = await reviewStep()
     const field = screen.getByLabelText("Discount code · optional")
     await user.type(field, "BJN-402")
@@ -570,7 +577,7 @@ describe("the Discount code on the review step", { timeout: 20_000 }, () => {
     await screen.findByText(/We couldn't check your code just now/)
     await user.click(field)
     await user.tab()
-    expect(await screen.findByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+    expect(await screen.findByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
     expect(stubs.check).toHaveBeenCalledTimes(2)
   })
 
@@ -578,7 +585,7 @@ describe("the Discount code on the review step", { timeout: 20_000 }, () => {
     let finishFirst: (value: unknown) => void = () => {}
     stubs.check
       .mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)))
-      .mockResolvedValueOnce({ status: "approved", amount: 30000 })
+      .mockResolvedValueOnce({ status: "approved", amount: 40000, discount: 10000 })
     const user = await reviewStep()
     const field = screen.getByLabelText("Discount code · optional")
     await user.type(field, "QQQ-000")
@@ -586,11 +593,11 @@ describe("the Discount code on the review step", { timeout: 20_000 }, () => {
     await user.clear(field)
     await user.type(field, "BJN-402")
     await user.tab()
-    expect(await screen.findByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+    expect(await screen.findByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
 
     finishFirst({ status: "unknown", amount: 50000 })
-    await screen.findByText("TZS 30,000 per child")
-    expect(screen.getByText("TZS 20,000 off the interview fee for each child.")).toBeInTheDocument()
+    await screen.findByText("TZS 40,000 per child")
+    expect(screen.getByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
   })
 
   it("sends whatever code is in the field, recognised or not, and the confirmation shows no fee", async () => {

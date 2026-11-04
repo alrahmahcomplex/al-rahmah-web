@@ -6,6 +6,7 @@ vi.mock("server-only", () => ({}))
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadInterviews, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
+import { declineLead, markLead } from "@/lib/services/lead-closure"
 import { createLead } from "@/lib/services/leads"
 import {
   approveAgent,
@@ -18,7 +19,7 @@ import {
 } from "@/lib/services/marketing-agents"
 import { estimateDiscountCode, findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
 
-import { anonClient, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Switching an agent off and on, and retiring them (#187), through the
@@ -203,6 +204,56 @@ describe("the Manager's status actions", () => {
       ok: true,
       data: { families: [{ leadId: unpaid.leadId, feeNow: 50000, feeAfter: 40000 }] },
     })
+  })
+
+  test("closed leads whose fee is not yet Paid are listed and counted too", async () => {
+    const agent = await newAgent()
+    const inactive = await registeredLead(agent.code)
+    const archived = await registeredLead(agent.code)
+    const declined = await registeredLead(agent.code)
+    expect(await markLead(await signedIn(MANAGER), inactive.leadId, { mark: "inactive", reason: "Family requested closure" })).toEqual({
+      ok: true,
+      data: null,
+    })
+    expect(await markLead(await signedIn(MANAGER), archived.leadId, { mark: "archived", reason: "Admission cycle ended" })).toEqual({
+      ok: true,
+      data: null,
+    })
+    expect(await declineLead(await signedIn(MANAGER), declined.leadId, { reason: "Fees or cost" })).toEqual({ ok: true, data: null })
+    expect(await interviewFee(inactive.leadId)).toEqual({ amount: 40000, feeStatus: "Not Paid" })
+
+    const impact = await getAgentFeeImpact(await signedIn(MANAGER), agent.id, "switch-off")
+    expect(impact.ok && impact.data.families.map((family) => family.leadId).sort()).toEqual(
+      [inactive.leadId, archived.leadId, declined.leadId].sort(),
+    )
+    expect(impact.ok && impact.data.families.every((family) => family.feeNow === 40000 && family.feeAfter === 50000)).toBe(true)
+
+    expect(await change(agent.id, "switch-off")).toEqual({ ok: true, data: { feeChangeCount: 3 } })
+    for (const lead of [inactive, archived, declined]) {
+      expect(await interviewFee(lead.leadId)).toEqual({ amount: 50000, feeStatus: "Not Paid" })
+    }
+    expect((await history(agent.id)).map((row) => row.fee_change_count)).toEqual([3])
+  })
+
+  test("recreating a switched-off agent counts the fees not yet Paid that get the discount back", async () => {
+    const agent = await newAgent()
+    const unpaid = await registeredLead(agent.code)
+    expect((await change(agent.id, "switch-off")).ok).toBe(true)
+    expect(await interviewFee(unpaid.leadId)).toEqual({ amount: 50000, feeStatus: "Not Paid" })
+
+    const replacement = randomUUID()
+    await asSystem(async (sql) => {
+      await sql.query("select public.record_agent_status_change($1, 'recreated', 'Wrong name', $2)", [agent.id, replacement])
+      await sql.query(
+        "insert into public.marketing_agents (id, full_name, phone, code, status, approved_at, approved_by) values ($1, $2, $3, $4, 'Approved', now(), $5)",
+        [replacement, `${agent.fullName} Corrected`, `+255${phone().slice(1)}`, agent.code, MANAGER.id],
+      )
+    })
+    expect(await interviewFee(unpaid.leadId)).toEqual({ amount: 40000, feeStatus: "Not Paid" })
+    expect((await history(agent.id)).map((row) => [row.kind, row.fee_change_count])).toEqual([
+      ["switched_off", 1],
+      ["recreated", 1],
+    ])
   })
 
   test("switching off a Pending agent changes no fee", async () => {

@@ -80,7 +80,10 @@ export async function changeMarketingAgentStatus(
   }
 
   const result = await changeAgentStatus(supabase, agentId, action, reason)
-  // The list, the Pending count and every lead's fee may change.
-  if (result.ok || result.error === "no-change" || result.error === "retired") revalidatePath("/staff", "layout")
+  // The list, the Pending count and every lead's fee may change. A lost
+  // answer may hide a saved change.
+  if (result.ok || result.error === "no-change" || result.error === "retired" || result.error === "uncertain") {
+    revalidatePath("/staff", "layout")
+  }
   return statusOutcome(result, action, words)
 }

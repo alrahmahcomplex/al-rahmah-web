@@ -69,6 +69,11 @@ export function familyLine(family: { feeNow: number; feeAfter: number }): string
     : `Code ya punguzo mliyotumia haitoi punguzo kwa sasa. Ada ya usaili sasa ni ${amount} kwa kila mtoto.`
 }
 
+// When the change may or may not have been saved: the request or its answer
+// was lost, or the reply could not be read.
+export const STATUS_LOST =
+  "The change could not be confirmed. Check your connection, reload the page and see whether the agent's status changed."
+
 export type StatusOutcome = { status: "changed"; message: string } | { status: "refused"; message: string }
 
 const STATUS_REFUSED: Record<AgentStatusError | "signed-out", string> = {
@@ -78,6 +83,7 @@ const STATUS_REFUSED: Record<AgentStatusError | "signed-out", string> = {
   "no-change": "Someone already made this change. Reload the page to see the agent as they are now.",
   "invalid-reason": `Write a reason, up to ${STATUS_REASON_MAX} characters.`,
   unavailable: "The change could not be saved just now. Nothing was changed. Try again in a moment.",
+  uncertain: STATUS_LOST,
   "signed-out": "Your session has ended. Sign in again, then try again.",
 }
 

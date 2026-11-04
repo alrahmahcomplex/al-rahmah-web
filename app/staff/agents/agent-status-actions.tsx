@@ -11,11 +11,9 @@ import { Textarea } from "@/components/ui/textarea"
 import type { AgentStatusAction, FeeImpact } from "@/lib/services/marketing-agents"
 
 import { changeMarketingAgentStatus, readAgentFeeImpact } from "./actions"
-import { actionEffect, actionVerb, familyLine, feeImpactLine, STATUS_REASON_MAX } from "./outcome"
+import { actionEffect, actionVerb, familyLine, feeImpactLine, STATUS_LOST, STATUS_REASON_MAX } from "./outcome"
 
 type Agent = { id: string; fullName: string; code: string }
-
-const LOST_REQUEST = "The change could not be confirmed. Check your connection, reload the page and see whether it was saved."
 
 function tzs(amount: number) {
   return `TZS ${amount.toLocaleString("en-US")}`
@@ -69,7 +67,7 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
       try {
         outcome = await changeMarketingAgentStatus(agent.id, action, reason, { fullName: agent.fullName, code: agent.code })
       } catch {
-        outcome = { status: "refused" as const, message: LOST_REQUEST }
+        outcome = { status: "refused" as const, message: STATUS_LOST }
       }
       if (outcome.status === "refused") return setRefusal(outcome.message)
       setOpen(false)

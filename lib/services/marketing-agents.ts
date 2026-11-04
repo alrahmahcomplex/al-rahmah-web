@@ -321,7 +321,10 @@ export type FeeImpactFamily = {
 
 export type FeeImpact = { families: FeeImpactFamily[] }
 
-export type AgentStatusError = "forbidden" | "not-found" | "retired" | "no-change" | "invalid-reason" | "unavailable"
+// "uncertain": a change met an error it can't read as a refusal, such as a
+// lost request or a gateway's reply, so it may have been saved. Only a
+// change returns it.
+export type AgentStatusError = "forbidden" | "not-found" | "retired" | "no-change" | "invalid-reason" | "unavailable" | "uncertain"
 
 function kindOf(action: AgentStatusAction): AgentStatusKind | null {
   return Object.hasOwn(ACTION_KINDS, action) ? ACTION_KINDS[action] : null
@@ -357,19 +360,32 @@ type FeeImpactRow = {
   fee_after: number
 }
 
+// The API answers at most this many rows at a time (supabase/config.toml
+// max_rows, the hosted default too).
+const FEE_IMPACT_PAGE = 1000
+
 // The families whose interview fee the action would move, for the dialog the
-// Manager confirms. Needs agents.approve and leads.view.
+// Manager confirms. Needs agents.approve and leads.view. Reads every page, so
+// the list and its count match the count the change records.
 export async function getAgentFeeImpact(
   supabase: SupabaseClient,
   agentId: string,
   action: AgentStatusAction,
 ): Promise<Result<FeeImpact, AgentStatusError>> {
-  const { data, error } = await supabase.rpc("agent_status_fee_impact", { agent_id: agentId, kind: kindOf(action) })
-  if (error) return { ok: false, error: statusError(error, "Could not read an agent status change's fee impact") }
+  const rows: FeeImpactRow[] = []
+  for (;;) {
+    const { data, error } = await supabase
+      .rpc("agent_status_fee_impact", { agent_id: agentId, kind: kindOf(action) })
+      .range(rows.length, rows.length + FEE_IMPACT_PAGE - 1)
+    if (error) return { ok: false, error: statusError(error, "Could not read an agent status change's fee impact") }
+    const page = data as FeeImpactRow[]
+    rows.push(...page)
+    if (page.length < FEE_IMPACT_PAGE) break
+  }
   return {
     ok: true,
     data: {
-      families: (data as FeeImpactRow[]).map((row) => ({
+      families: rows.map((row) => ({
         leadId: row.lead_id,
         admissionNumber: row.admission_number,
         studentName: row.student_name,
@@ -397,6 +413,10 @@ export async function changeAgentStatus(
     kind: kindOf(action),
     reason: typeof reason === "string" ? reason : null,
   })
-  if (error) return { ok: false, error: statusError(error, "Could not change a Marketing Agent's status") }
+  if (error) {
+    const refused = statusError(error, "Could not change a Marketing Agent's status")
+    // Not a refusal the database gave: the change may have committed.
+    return { ok: false, error: refused === "unavailable" ? "uncertain" : refused }
+  }
   return { ok: true, data: { feeChangeCount: data as number } }
 }

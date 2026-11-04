@@ -6,9 +6,14 @@
 --   the cached columns and their history (#184).
 -- - agent_status_fee_impact(agent_id, kind) lists, before the Manager
 --   confirms, the families whose interview fee the change would move: leads
---   carrying the agent's code, open, whose current interview fee is not yet
---   Paid (or who have no interview yet), when the code's discount would
---   change. A Paid fee keeps its locked_amount, so it is never listed.
+--   carrying the agent's code whose current interview fee is not yet Paid
+--   (or who have no interview yet), when the code's discount would change.
+--   Closed leads (Declined, Inactive, Archived) count too: their unpaid fee
+--   moves like any other. A Paid fee keeps its locked_amount, so it is never
+--   listed.
+-- - A recreated row's new record must be Approved and switched on by commit
+--   (check_recreated_agent), as Recreate's contract says, so the count it
+--   records and the fee-impact list are right.
 -- - Every status-change row now records fee_change_count, that number at the
 --   moment of the change, counted under the agent's lock.
 -- - find_marketing_agent also returns switched_off_at, so staff screens can
@@ -34,8 +39,8 @@ alter table public.agent_status_changes alter column fee_change_count drop defau
 -- move, for the agent as they stand now. The discount applies while the
 -- agent is Approved, switched on and not retired (expected_interview_amount);
 -- a change moves a fee only when it changes that. Recreate's new record
--- starts Approved and switched on. Internal: security definer callers check
--- the permission first.
+-- starts Approved and switched on, which check_recreated_agent enforces.
+-- Internal: security definer callers check the permission first.
 -- ---------------------------------------------------------------------------
 
 create function public.agent_fee_change_leads(agent public.marketing_agents, kind text)
@@ -55,8 +60,6 @@ as $$
               when 'recreated' then true
               else false
           end
-      and l.status <> 'Declined'
-      and l.closure is null
       -- The current interview, the newest registration, is not Paid; or the
       -- lead has none yet.
       and (
@@ -70,6 +73,36 @@ as $$
 $$;
 
 revoke execute on function public.agent_fee_change_leads(public.marketing_agents, text) from public, anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- check_recreated_agent, re-created with its signature and trigger unchanged:
+-- the new record must also be Approved and switched on by commit, so the
+-- discount never lapses and the recorded fee count holds.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.check_recreated_agent()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    replacement record;
+begin
+    select c.status, c.switched_off_at into replacement
+    from public.agent_for_code(new.code) c
+    where c.id = new.new_agent_id;
+    if not found then
+        raise exception 'recreated_code_mismatch' using detail = new.id::text;
+    end if;
+    if replacement.status <> 'Approved' or replacement.switched_off_at is not null then
+        raise exception 'recreated_agent_not_approved' using detail = new.id::text;
+    end if;
+    return null;
+end;
+$$;
+
+revoke execute on function public.check_recreated_agent() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- record_agent_status_change, re-created with its signature unchanged: it now
@@ -221,7 +254,8 @@ begin
     from public.agent_fee_change_leads(agent, agent_status_fee_impact.kind) changed (id)
     join public.leads l on l.id = changed.id
     join public.guardian_contacts c on c.id = l.guardian_contact_id
-    order by l.student_name, l.admission_number;
+    -- The lead id last, so the service can read the list in pages.
+    order by l.student_name, l.admission_number, l.id;
 end;
 $$;
 

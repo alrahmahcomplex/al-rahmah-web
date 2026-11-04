@@ -15,7 +15,8 @@ stay in the `0.x` range.
   field to put the family's value on the lead or its parent or guardian. It saves as
   their own correction, shows in the lead's history under their name, and the row then
   reads **Matches now**. A parent or guardian change says which other children share
-  the contact.
+  the contact. If the submitted WhatsApp number is the current phone number, staff
+  apply Phone first, then WhatsApp.
 - On a Declined, Inactive or Archived lead, the re-application offers no Apply, since
   a closed lead is read-only, and offers **Request reopening** instead. It opens the
   lead's reopening request form.

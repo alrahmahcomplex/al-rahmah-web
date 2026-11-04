@@ -10,9 +10,10 @@ import { inRolledBackTransaction } from "./db"
 // year at once. Saving a schedule overwrites whatever an earlier run left in
 // the year, so the years are reused, never used up.
 //
-// The range sits below `fee-schedule` tests' 2100 and up and above the seeded
-// and dashboard years. Leads hold years up to 2100.
-export const FEE_YEARS = { first: 2050, last: 2098 } as const
+// The range sits below the group-invitation tests' 2084 to 2098 and the
+// `fee-schedule` tests' 2100 and up, and above the seeded and dashboard years.
+// Leads hold years up to 2100.
+export const FEE_YEARS = { first: 2050, last: 2083 } as const
 
 // A year no test saves a schedule in, for "no schedule" cases. It is outside
 // FEE_YEARS, so claims never hand it out.

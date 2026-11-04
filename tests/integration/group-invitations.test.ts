@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test } from "vitest"
 
 import { renderGroupInvitation } from "@/lib/group-invitation"
 import { tanzaniaToday } from "@/lib/school-calendar"
@@ -10,34 +10,28 @@ import { createLead, searchLeads } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { claimGroupInvitationYear, currentGroupLink, type GroupInvitationYearClaim } from "../support/group-invitation-years"
 
 // Sending the admissions WhatsApp group invitation (#186), through the
 // group-invitations service against local Supabase, signed in as each seeded
-// role. Each test moves its own leads to an Enrollment year of its own (2030
-// to 2099, clear of the years real leads and the group-link tests use), so
-// one test's link never reaches another's leads.
+// role. Each test moves its own leads to Enrollment years it claims (see
+// tests/support/group-invitation-years.ts), so one test's link and counts
+// never reach another's leads.
 
 const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
-const usedYears = new Set<number>()
+const claims: GroupInvitationYearClaim[] = []
 
-async function unusedYear(): Promise<number> {
-  return inRolledBackTransaction(async (sql) => {
-    const { rows } = await sql.query<{ year: number }>(
-      `select year from generate_series(2030, 2099) as year
-       where year <> all($1::integer[])
-         and not exists (select 1 from public.whatsapp_group_links where enrollment_year = year)
-         and not exists (select 1 from public.leads where enrollment_year = year)
-       order by year limit 1`,
-      [[...usedYears]],
-    )
-    if (!rows.length) {
-      throw new Error("No unused group-invitation test year remains (2030 to 2099). Reset the local test database with npm run db:reset.")
-    }
-    usedYears.add(rows[0].year)
-    return rows[0].year
-  })
+// With `link: false`, a year where no link has ever been saved.
+async function unusedYear(options?: { link: boolean }): Promise<number> {
+  const claim = await claimGroupInvitationYear(options)
+  claims.push(claim)
+  return claim.year
 }
+
+afterEach(async () => {
+  await Promise.all(claims.splice(0).map((claim) => claim.release()))
+})
 
 const inviteLink = () => `https://chat.whatsapp.com/${randomUUID().replaceAll("-", "").slice(0, 22)}`
 
@@ -67,8 +61,9 @@ async function visitedLead(year: number, options: { family?: Family; whatsapp?: 
   return { leadId, studentName, family: { contactId } }
 }
 
-async function saveLink(year: number, link = inviteLink(), seen: string | null = null) {
-  const saved = await setGroupLink(await signedIn(MANAGER), year, link, seen)
+// Without `seen`, replaces whatever link an earlier test left in the year.
+async function saveLink(year: number, link = inviteLink(), seen?: string | null) {
+  const saved = await setGroupLink(await signedIn(MANAGER), year, link, seen === undefined ? await currentGroupLink(year) : seen)
   if (!saved.ok) throw new Error(`could not save the link: ${saved.error}`)
   return link
 }
@@ -219,7 +214,7 @@ describe("refusals", () => {
   })
 
   test("a year with no link saved is refused, and the view says so", async () => {
-    const year = await unusedYear()
+    const year = await unusedYear({ link: false })
     const lead = await visitedLead(year)
 
     const staff = await signedIn(ADMISSIONS)
@@ -429,7 +424,7 @@ describe("an earlier link", () => {
     expect(await found()).not.toContain(notInvited.leadId)
 
     // The filter is for the year asked about.
-    const other = await searchLeads(staff, { earlierLinkYear: year + 1, closure: "all", page: 1 })
+    const other = await searchLeads(staff, { earlierLinkYear: await unusedYear(), closure: "all", page: 1 })
     expect(other.ok && other.data.total).toBe(0)
 
     // Resent with the current link: the family drops out.

@@ -9,13 +9,15 @@ import { setGroupLink } from "@/lib/services/group-links"
 import { createLead } from "@/lib/services/leads"
 import { buildWhatsAppLink } from "@/lib/whatsapp"
 
-import { asSystem, inRolledBackTransaction, signedIn } from "../tests/support/db"
+import { asSystem, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { claimGroupInvitationYear, currentGroupLink, type GroupInvitationYearClaim } from "../tests/support/group-invitation-years"
 
 // Sending the admissions WhatsApp group invitation from a lead's screen
-// (#186). Each test moves its leads to an Enrollment year of its own, so its
-// group link reaches no other lead. The wa.me tab is checked by its address
-// and never reaches WhatsApp.
+// (#186). Each test moves its leads to an Enrollment year it claims (see
+// tests/support/group-invitation-years.ts), so its group link and counts
+// reach no other test's lead.
+// The wa.me tab is checked by its address and never reaches WhatsApp.
 
 const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
@@ -28,26 +30,26 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-// 2030 to 2098: clear of real leads' years and of the group-links spec's 2099.
-async function unusedYear(): Promise<number> {
-  return inRolledBackTransaction(async (sql) => {
-    const { rows } = await sql.query<{ year: number }>(
-      `select year from generate_series(2030, 2098) as year
-       where not exists (select 1 from public.whatsapp_group_links where enrollment_year = year)
-         and not exists (select 1 from public.leads where enrollment_year = year)
-       order by random() limit 1`,
-    )
-    if (!rows.length) throw new Error("No unused group-invitation year remains. Reset the local test database.")
-    return rows[0].year
-  })
+const claims: GroupInvitationYearClaim[] = []
+
+// With `link: false`, a year where no link has ever been saved.
+async function unusedYear(options?: { link: boolean }): Promise<number> {
+  const claim = await claimGroupInvitationYear(options)
+  claims.push(claim)
+  return claim.year
 }
+
+test.afterEach(async () => {
+  await Promise.all(claims.splice(0).map((claim) => claim.release()))
+})
 
 const inviteLink = () => `https://chat.whatsapp.com/${randomUUID().replaceAll("-", "").slice(0, 22)}`
 const mobile = () => `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
 const spaced = (local: string) => `+255 ${local.slice(1, 4)} ${local.slice(4, 7)} ${local.slice(7)}`
 
-async function saveLink(year: number, link = inviteLink(), seen: string | null = null) {
-  const saved = await setGroupLink(await signedIn(MANAGER), year, link, seen)
+// Without `seen`, replaces whatever link an earlier test left in the year.
+async function saveLink(year: number, link = inviteLink(), seen?: string | null) {
+  const saved = await setGroupLink(await signedIn(MANAGER), year, link, seen === undefined ? await currentGroupLink(year) : seen)
   if (!saved.ok) throw new Error(`could not save the link: ${saved.error}`)
   return link
 }
@@ -150,7 +152,7 @@ test.describe("the group invitation on a lead's screen", () => {
   })
 
   test("with no link saved for the year, the button says so and opens the setting", async ({ page }) => {
-    const year = await unusedYear()
+    const year = await unusedYear({ link: false })
     const lead = await visitedLead(year)
 
     await signIn(page, ADMISSIONS)

@@ -10,7 +10,7 @@ web
 
 **Parents and guardians in Tanzania** are the primary audience of the public side. Most arrive on a phone, from a WhatsApp message, a Marketing Agent's **Referral link**, or a social post. They are deciding whether Al-Rahmah is the right school for their child and, if it is, applying through the **Admission form**. A parent may be applying for more than one child.
 
-**Marketing Agents** are people outside the school who refer families. They register publicly, receive a **Referral code** and **Referral link**, and currently see nothing else in the system.
+**Marketing Agents** refer families to the school; most are Al-Rahmah's own teachers. They register publicly, receive a **Referral code** and **Referral link**, and currently see nothing else in the system. Agent sign-in and a phone-first list of the students who used their code are being built.
 
 **Staff** use the Admissions Portal at an office desktop or laptop, often with a family sitting across the desk. There are three starting roles: **Admissions Staff** (leads, visits, interviews, follow-ups, result release), **Admissions Manager** (everything Admissions Staff do, plus approvals, interventions, and staff and role administration) and **Accountant** (school-fee payments and adjustments).
 
@@ -20,7 +20,7 @@ One Next.js app, three products:
 
 1. **School Landing Page**: persuades parents that Al-Rahmah is the right school and sends them to the Admission form.
 2. **Admissions Portal**: the staff-side system that carries each **Admissions lead** from **Applied** or **Visited** through **Interviewed** to **Enrolled** or **Declined**, with complete audit history. It replaces the `2026-2027 Admissions.xlsx` workbook.
-3. **Referral Tracking System**: registers Marketing Agents, issues codes and links, and credits referred leads. Agent-facing tracking and commission come later.
+3. **Referral Tracking System**: registers Marketing Agents, issues codes and links, and credits referred leads. Agent accounts, with a view of the students each agent referred and no money shown, are being built. Commission and settlement come later.
 
 Success means parents apply without friction from a phone, staff never lose a lead or its history, and every referral is traceable to its agent.
 

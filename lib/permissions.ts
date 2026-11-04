@@ -20,6 +20,7 @@ export const PERMISSIONS = [
   "discounts.approve",
   "academic_years.manage",
   "staff.administer",
+  "group_links.manage",
 ] as const
 
 export type Permission = (typeof PERMISSIONS)[number]

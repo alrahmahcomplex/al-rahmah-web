@@ -6,6 +6,12 @@ import { correctionOutcome, type CorrectionOutcome } from "../../leads/[id]/corr
 // worded for a re-application where they differ.
 export function applyOutcome(error: ApplyError): CorrectionOutcome {
   switch (error.kind) {
+    case "phone-first":
+      return {
+        status: "refused",
+        field: "whatsapp",
+        message: "Apply Phone first, then apply WhatsApp. This WhatsApp number is the current phone number.",
+      }
     case "not-differing":
       return {
         status: "refused",

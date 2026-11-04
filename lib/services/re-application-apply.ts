@@ -19,7 +19,7 @@ import type { Result } from "./result"
 // corrections. So it needs leads.edit, is audited as the staff member's edit,
 // and is refused on a closed lead like any other correction.
 
-export type ApplyError = CorrectionError | { kind: "not-differing" }
+export type ApplyError = CorrectionError | { kind: "not-differing" } | { kind: "phone-first" }
 
 export type SubmittedChange = { to: "lead"; changes: LeadDetailsChanges } | { to: "contact"; changes: ContactChanges }
 
@@ -71,6 +71,13 @@ export async function applyReApplicationField(
   // database; a contact one only once every child on it is closed, so the
   // re-application's lead is checked here too.
   if (isClosed(lead.data)) return { ok: false, error: { kind: "closed" } }
+
+  // A separate WhatsApp number equal to the current phone is normalized to
+  // null by the contact correction. Apply Phone first so this value can stay.
+  const sent = reApplication.data.submitted
+  if (field === "whatsapp" && sent.whatsapp === lead.data.contact.phone && sent.phone !== lead.data.contact.phone) {
+    return { ok: false, error: { kind: "phone-first" } }
+  }
 
   const change = submittedChange(field, reApplication.data.submitted)
   if (change.to === "lead") return updateLeadDetails(supabase, lead.data.id, change.changes)

@@ -31,7 +31,7 @@ const spaced = (local: string) => `+255 ${local.slice(1, 4)} ${local.slice(4, 7)
 
 // A lead from the Admission form, then the same child sent again asking for
 // STD 4 from a new phone: the class and the phone differ.
-async function reApplied() {
+async function reApplied(withWhatsApp = false) {
   const studentName = `Mtoto Linganisha ${randomUUID().slice(0, 6)}`
   const phone = localPhone()
   const newPhone = localPhone()
@@ -49,7 +49,10 @@ async function reApplied() {
   const recorded = await supabase.rpc("record_re_application", {
     lead_id: created.data.lead_id,
     submission_key: randomUUID(),
-    submitted: { contact: { ...contact, phone: newPhone }, student: { ...student, class_name: "STD 4" } },
+    submitted: {
+      contact: { ...contact, phone: newPhone, ...(withWhatsApp ? { whatsapp: phone } : {}) },
+      student: { ...student, class_name: "STD 4" },
+    },
   })
   if (recorded.error) throw new Error(`could not record a re-application: ${recorded.error.message}`)
   return {
@@ -103,6 +106,24 @@ test.describe("comparing a re-application with its lead", () => {
     await expect(entries.nth(0)).toContainText(mine.newPhone.replaceAll(" ", ""))
     await expect(entries.nth(1)).toContainText(`${ADMISSIONS.name} changed the lead`)
     await expect(entries.nth(1)).toContainText("Class: STD 3 → STD 4")
+  })
+
+  test("WhatsApp asks for Phone first when the numbers depend on each other", async ({ page }) => {
+    const mine = await reApplied(true)
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/re-applications/${mine.id}`)
+
+    await row(page, "WhatsApp").getByRole("button", { name: "Apply WhatsApp" }).click()
+    await expect(row(page, "WhatsApp").getByRole("alert")).toHaveText(
+      "Apply Phone first, then apply WhatsApp. This WhatsApp number is the current phone number.",
+    )
+    await expect(row(page, "WhatsApp")).not.toContainText("Matches now")
+
+    await row(page, "Phone").getByRole("button", { name: "Apply Phone" }).click()
+    await expect(row(page, "Phone")).toContainText("Matches now")
+    await row(page, "WhatsApp").getByRole("button", { name: "Apply WhatsApp" }).click()
+    await expect(row(page, "WhatsApp")).toContainText("Matches now")
+    await expect(row(page, "WhatsApp").getByRole("button")).toHaveCount(0)
   })
 
   test("the Accountant reads the comparison, with no Apply", async ({ page }) => {

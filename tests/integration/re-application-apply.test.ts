@@ -52,12 +52,12 @@ async function onFile(closure: "Archived" | null = null): Promise<Lead> {
 
 // The Admission form sending the child again, asking for STD 4 from a new
 // phone number: the class and the phone differ.
-async function reApply(lead: Lead, newPhone: string): Promise<string> {
+async function reApply(lead: Lead, newPhone: string, whatsapp?: string): Promise<string> {
   const { data, error } = await secretClient().rpc("record_re_application", {
     lead_id: lead.id,
     submission_key: randomUUID(),
     submitted: {
-      contact: { full_name: "Mama Linganisha", relationship: "Mother", phone: newPhone },
+      contact: { full_name: "Mama Linganisha", relationship: "Mother", phone: newPhone, whatsapp },
       student: { full_name: lead.studentName, class_name: "STD 4", enrollment_year: nextYear, day_or_boarding: "Day" },
     },
   })
@@ -103,6 +103,26 @@ describe("Apply on a re-application", () => {
     const [edit] = history.data.entries
     expect(edit).toMatchObject({ actor: MANAGER.name, record: "contact", recordId: lead.contactId, action: "update" })
     expect(edit.changes).toEqual([{ field: "phone", from: international(lead.phone), to: international(sentPhone) }])
+  })
+
+  test("asks for Phone first when the submitted WhatsApp is the current phone, then saves both numbers", async () => {
+    const lead = await onFile()
+    const sentPhone = phone()
+    const id = await reApply(lead, sentPhone, lead.phone)
+    const staff = await signedIn(ADMISSIONS)
+
+    expect(await applyReApplicationField(staff, id, "whatsapp", [lead.id])).toEqual({
+      ok: false,
+      error: { kind: "phone-first" },
+    })
+    expect((await stored(lead.id)).contact).toMatchObject({ phone: international(lead.phone), whatsapp: null })
+
+    expect(await applyReApplicationField(staff, id, "phone", [lead.id])).toEqual({ ok: true, data: null })
+    expect(await applyReApplicationField(staff, id, "whatsapp", [lead.id])).toEqual({ ok: true, data: null })
+    expect((await stored(lead.id)).contact).toMatchObject({
+      phone: international(sentPhone),
+      whatsapp: international(lead.phone),
+    })
   })
 
   test("is refused on a closed lead, and changes nothing", async () => {

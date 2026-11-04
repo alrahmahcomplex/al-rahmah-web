@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-import { approveOutcome } from "@/app/staff/agents/outcome"
+import { approveOutcome, familyLine, feeImpactLine, statusChangeLine, statusOutcome } from "@/app/staff/agents/outcome"
 import { agentsHref, parseAgentSearch } from "@/app/staff/agents/search-params"
 import { navFor, STAFF_NAV } from "@/app/staff/navigation"
 import { AGENTS_PER_PAGE, agentSearchPatterns } from "@/lib/services/marketing-agents"
@@ -81,5 +81,64 @@ describe("what the Approve dialog is told", () => {
     expect(approveOutcome({ ok: false, error: "forbidden" }, agent).message).toMatch(/permission/)
     expect(approveOutcome({ ok: false, error: "unavailable" }, agent).message).toMatch(/Try again/)
     expect(approveOutcome({ ok: false, error: "signed-out" }, agent).message).toMatch(/Sign in again/)
+  })
+})
+
+describe("switching an agent off and on, and retiring them", () => {
+  const agent = { fullName: "Baraka Juma", code: "BJN-402" }
+
+  it("reads the Retired filter from the URL, and never starts on it", () => {
+    expect(parseAgentSearch({ status: "retired" }, true).status).toBe("Retired")
+    expect(agentsHref({ status: "Retired", page: 1 })).toBe("/staff/agents?status=retired")
+    expect(parseAgentSearch({}, true).status).not.toBe("Retired")
+    expect(parseAgentSearch({}, false).status).not.toBe("Retired")
+  })
+
+  it("counts the families whose fee changes", () => {
+    expect(feeImpactLine(0)).toBe("This changes the interview fee for 0 families not yet Paid.")
+    expect(feeImpactLine(1)).toBe("This changes the interview fee for 1 family not yet Paid.")
+    expect(feeImpactLine(3)).toBe("This changes the interview fee for 3 families not yet Paid.")
+  })
+
+  it("gives staff a Swahili line for each family, with the fee the change leaves", () => {
+    expect(familyLine({ feeNow: 40000, feeAfter: 50000 })).toBe(
+      "Code ya punguzo mliyotumia haitoi punguzo kwa sasa. Ada ya usaili sasa ni TZS 50,000 kwa kila mtoto.",
+    )
+    expect(familyLine({ feeNow: 50000, feeAfter: 40000 })).toBe(
+      "Code ya punguzo mliyotumia inatoa punguzo tena. Ada ya usaili sasa ni TZS 40,000 kwa kila mtoto.",
+    )
+  })
+
+  it("writes the retired row's line, naming the replacement once there is one", () => {
+    const retiredAt = "2026-11-04T06:30:00Z"
+    const note = { kind: "retired" as const, changedAt: retiredAt, changedBy: "Test Manager", replacedBy: null }
+    expect(statusChangeLine({ retiredAt, switchedOffAt: null, statusChange: note })).toBe("Retired by Test Manager on 4 Nov 2026")
+    expect(
+      statusChangeLine({
+        retiredAt,
+        switchedOffAt: null,
+        statusChange: { ...note, kind: "recreated", replacedBy: { fullName: "Baraka Juma Njoroge", code: "BJN-402" } },
+      }),
+    ).toBe("Retired by Test Manager on 4 Nov 2026, replaced by Baraka Juma Njoroge (BJN-402)")
+    expect(
+      statusChangeLine({ retiredAt: null, switchedOffAt: retiredAt, statusChange: { ...note, kind: "switched_off" } }),
+    ).toBe("Switched off by Test Manager on 4 Nov 2026")
+    expect(statusChangeLine({ retiredAt: null, switchedOffAt: null, statusChange: null })).toBeNull()
+  })
+
+  it("reports what changed, and every refusal as a sentence", () => {
+    expect(statusOutcome({ ok: true, data: { feeChangeCount: 2 } }, "switch-off", agent)).toEqual({
+      status: "changed",
+      message: "Baraka Juma (BJN-402) is switched off. 2 families' interview fee changed.",
+    })
+    expect(statusOutcome({ ok: true, data: { feeChangeCount: 0 } }, "retire", agent).message).toBe(
+      "Baraka Juma (BJN-402) is retired. No interview fee changed.",
+    )
+    for (const error of ["forbidden", "not-found", "retired", "no-change", "invalid-reason", "unavailable", "signed-out"] as const) {
+      const outcome = statusOutcome({ ok: false, error }, "switch-on", agent)
+      expect(outcome.status).toBe("refused")
+      expect(outcome.message).toMatch(/^[A-Z].*\.$/)
+      if (error.includes("-")) expect(outcome.message).not.toContain(error)
+    }
   })
 })

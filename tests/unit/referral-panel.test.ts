@@ -43,6 +43,29 @@ describe("the Referral code panel's words", () => {
     })
   })
 
+  it("says the code is switched off, and since when, on a fee not yet Paid", () => {
+    const referral = { amount: 50000, discountApplied: false, state: "switched_off" as const, switchedOffAt: "2026-11-04T06:30:00Z" }
+    expect(referralFeeLine(referral, 10000, null)).toEqual({
+      label: "Expected interview fee",
+      amount: "TZS 50,000",
+      note: "No discount: code switched off on 4 Nov 2026",
+      pending: false,
+    })
+    // A Paid fee keeps its locked amount, and says nothing of the switch-off.
+    expect(referralFeeLine(referral, 10000, { feeStatus: "Paid", amount: 40000, discountApplied: true })).toEqual({
+      label: "Interview fee paid",
+      amount: "TZS 40,000",
+      note: "includes the Referral code discount",
+      pending: false,
+    })
+  })
+
+  it("tells staff a typed code is switched off", () => {
+    expect(referralLookupNote({ status: "found", agent: { code: "BJN-402", fullName: "Baraka", state: "switched_off" } })).toBe(
+      "Baraka · This code is switched off. No discount.",
+    )
+  })
+
   it("confirms a saved or cleared code", () => {
     expect(referralOutcome({ ok: true, data: { code: "BJN-402" } }, "set")).toEqual({
       status: "saved",

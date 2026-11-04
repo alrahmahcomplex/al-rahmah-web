@@ -12,7 +12,8 @@ import type { Result } from "./result"
 
 export const AGENT_STATUSES = ["Pending", "Approved"] as const
 export type AgentStatus = (typeof AGENT_STATUSES)[number]
-export type AgentFilter = AgentStatus | "all"
+// Every filter but Retired leaves retired records out.
+export type AgentFilter = AgentStatus | "Retired" | "all"
 
 export const AGENTS_PER_PAGE = 50
 
@@ -28,8 +29,25 @@ export type MarketingAgent = {
   approvedAt: string | null
   // The approving staff member's name, looked up now. Null while Pending.
   approvedBy: string | null
-  // How many leads carry the agent's code.
+  // How many leads carry the agent's code. None for a retired record, whose
+  // leads follow the code.
   leadCount: number
+  // When the agent was switched off, while they are; set once retired.
+  switchedOffAt: string | null
+  retiredAt: string | null
+  // The latest switch-off, switch-on, retirement or recreation, or null.
+  statusChange: AgentStatusNote | null
+}
+
+export type AgentStatusKind = "switched_off" | "switched_on" | "retired" | "recreated"
+
+export type AgentStatusNote = {
+  kind: AgentStatusKind
+  changedAt: string
+  // The staff member's name, looked up now; null when the system made it.
+  changedBy: string | null
+  // The record that replaced a recreated one.
+  replacedBy: { fullName: string; code: string } | null
 }
 
 export type AgentList = {
@@ -96,11 +114,22 @@ type AgentRow = {
   registered_at: string
   approved_at: string | null
   lead_count: number
+  switched_off_at: string | null
+  retired_at: string | null
+}
+
+type StatusNoteRow = {
+  agent_id: string
+  kind: AgentStatusKind
+  changed_at: string
+  changed_by_name: string | null
+  replaced_by_name: string | null
+  replaced_by_code: string | null
 }
 
 // lead_count is a computed column: the database counts each code's leads in
 // the list query itself.
-const AGENT_COLUMNS = "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count"
+const AGENT_COLUMNS = "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count, switched_off_at, retired_at"
 
 // The search box's patterns, matched against the agent's search text: the
 // name in lowercase, the code, and both numbers as digits only. A query that
@@ -130,8 +159,9 @@ export function agentSearchPatterns(query: string): string[] {
 }
 
 // One page of agents. Pending is oldest first, the order they are approved
-// in; Approved is the latest approval first; All is the latest registration
-// first. Staff without leads.view read an empty list.
+// in; Approved is the latest approval first; Retired the latest retirement
+// first; All is the latest registration first. Only the Retired filter shows
+// retired records. Staff without leads.view read an empty list.
 export async function listAgents(
   supabase: SupabaseClient,
   search: AgentListSearch,
@@ -142,12 +172,14 @@ export async function listAgents(
 
   const build = (head = false) => {
     let list = supabase.from("marketing_agents").select(AGENT_COLUMNS, { count: "exact", head })
-    if (status !== "all") list = list.eq("status", status)
+    list = status === "Retired" ? list.not("retired_at", "is", null) : list.is("retired_at", null)
+    if (status === "Pending" || status === "Approved") list = list.eq("status", status)
     if (patterns.length > 0) {
       list = list.or(patterns.map((pattern) => `search_text.ilike."*${pattern}*"`).join(","))
     }
     if (status === "Pending") return list.order("registered_at", { ascending: true }).order("id")
     if (status === "Approved") return list.order("approved_at", { ascending: false }).order("id")
+    if (status === "Retired") return list.order("retired_at", { ascending: false }).order("id")
     return list.order("registered_at", { ascending: false }).order("id")
   }
 
@@ -180,6 +212,24 @@ export async function listAgents(
     }
   }
 
+  const changedIds = rows.filter((row) => row.switched_off_at || row.retired_at).map((row) => row.id)
+  const notes = new Map<string, AgentStatusNote>()
+  if (changedIds.length > 0) {
+    const read = await supabase.rpc("marketing_agent_status_notes", { agent_ids: changedIds })
+    if (read.error) {
+      console.error("Could not read the Marketing Agents' status changes", read.error)
+      return { ok: false, error: "unavailable" }
+    }
+    for (const row of read.data as StatusNoteRow[]) {
+      notes.set(row.agent_id, {
+        kind: row.kind,
+        changedAt: row.changed_at,
+        changedBy: row.changed_by_name,
+        replacedBy: row.replaced_by_name && row.replaced_by_code ? { fullName: row.replaced_by_name, code: row.replaced_by_code } : null,
+      })
+    }
+  }
+
   const total = count ?? 0
   return {
     ok: true,
@@ -198,6 +248,9 @@ export async function listAgents(
         approvedAt: row.approved_at,
         approvedBy: approvers.get(row.id) ?? null,
         leadCount: row.lead_count,
+        switchedOffAt: row.switched_off_at,
+        retiredAt: row.retired_at,
+        statusChange: notes.get(row.id) ?? null,
       })),
     },
   }
@@ -223,16 +276,127 @@ export async function approveAgent(
   return { ok: true, data: null }
 }
 
-// How many agents wait for approval. Zero for staff without leads.view,
-// who can't read the list.
+// How many agents wait for approval; a retired record waits for nothing.
+// Zero for staff without leads.view, who can't read the list.
 export async function getPendingAgentCount(supabase: SupabaseClient): Promise<Result<number, "unavailable">> {
   const { count, error } = await supabase
     .from("marketing_agents")
     .select("id", { count: "exact", head: true })
     .eq("status", "Pending")
+    .is("retired_at", null)
   if (error) {
     console.error("Could not count the Pending Marketing Agents", error)
     return { ok: false, error: "unavailable" }
   }
   return { ok: true, data: count ?? 0 }
+}
+
+// ---------------------------------------------------------------------------
+// Switching an agent off and on, and retiring them (#187).
+// ---------------------------------------------------------------------------
+
+// The Manager's three actions. Retiring is permanent: a retired record never
+// changes again, gives no discount, and frees its phone for a new agent.
+export const AGENT_STATUS_ACTIONS = ["switch-off", "switch-on", "retire"] as const
+export type AgentStatusAction = (typeof AGENT_STATUS_ACTIONS)[number]
+
+const ACTION_KINDS: Readonly<Record<AgentStatusAction, AgentStatusKind>> = {
+  "switch-off": "switched_off",
+  "switch-on": "switched_on",
+  retire: "retired",
+}
+
+// A family whose interview fee the action moves: a lead carrying the code,
+// open, whose current interview fee is not yet Paid. Amounts in whole TZS.
+export type FeeImpactFamily = {
+  leadId: string
+  admissionNumber: string
+  studentName: string
+  className: string
+  contactName: string
+  contactPhone: string
+  feeNow: number
+  feeAfter: number
+}
+
+export type FeeImpact = { families: FeeImpactFamily[] }
+
+export type AgentStatusError = "forbidden" | "not-found" | "retired" | "no-change" | "invalid-reason" | "unavailable"
+
+function kindOf(action: AgentStatusAction): AgentStatusKind | null {
+  return Object.hasOwn(ACTION_KINDS, action) ? ACTION_KINDS[action] : null
+}
+
+function statusError(error: { message: string; code?: string; details?: string | null }, what: string): AgentStatusError {
+  // 42501: the function isn't granted to the caller at all, as for someone
+  // signed out.
+  if (error.message === "not_permitted" || error.code === "42501") return "forbidden"
+  // A malformed id is no agent at all.
+  if (error.message === "not_found" || error.code === "22P02") return "not-found"
+  if (error.message === "agent_retired") return "retired"
+  if (error.message === "no_change") return "no-change"
+  if (error.message === "invalid") {
+    try {
+      if (JSON.parse(error.details ?? "")?.field === "reason") return "invalid-reason"
+    } catch {
+      // Not the reason, so not the caller's to fix.
+    }
+  }
+  console.error(what, error)
+  return "unavailable"
+}
+
+type FeeImpactRow = {
+  lead_id: string
+  admission_number: string
+  student_name: string
+  class_name: string
+  contact_name: string
+  contact_phone: string
+  fee_now: number
+  fee_after: number
+}
+
+// The families whose interview fee the action would move, for the dialog the
+// Manager confirms. Needs agents.approve and leads.view.
+export async function getAgentFeeImpact(
+  supabase: SupabaseClient,
+  agentId: string,
+  action: AgentStatusAction,
+): Promise<Result<FeeImpact, AgentStatusError>> {
+  const { data, error } = await supabase.rpc("agent_status_fee_impact", { agent_id: agentId, kind: kindOf(action) })
+  if (error) return { ok: false, error: statusError(error, "Could not read an agent status change's fee impact") }
+  return {
+    ok: true,
+    data: {
+      families: (data as FeeImpactRow[]).map((row) => ({
+        leadId: row.lead_id,
+        admissionNumber: row.admission_number,
+        studentName: row.student_name,
+        className: row.class_name,
+        contactName: row.contact_name,
+        contactPhone: row.contact_phone,
+        feeNow: row.fee_now,
+        feeAfter: row.fee_after,
+      })),
+    },
+  }
+}
+
+// Switches an agent off or on, or retires them, with the Manager's reason.
+// Needs agents.approve. Returns how many families' interview fees moved: the
+// number recorded on the status change.
+export async function changeAgentStatus(
+  supabase: SupabaseClient,
+  agentId: string,
+  action: AgentStatusAction,
+  reason: string,
+): Promise<Result<{ feeChangeCount: number }, AgentStatusError>> {
+  const { data, error } = await supabase.rpc("change_marketing_agent_status", {
+    agent_id: agentId,
+    kind: kindOf(action),
+    reason: typeof reason === "string" ? reason : null,
+  })
+  if (error) return { ok: false, error: statusError(error, "Could not change a Marketing Agent's status") }
+  return { ok: true, data: { feeChangeCount: data as number } }
 }

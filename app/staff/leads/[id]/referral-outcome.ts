@@ -18,11 +18,14 @@ export function discountNote(discountApplied: boolean, discount: number | null):
 
 export type ReferralFeeLine = { label: string; amount: string; note: string | null; pending: boolean }
 
+// A day in East Africa Time, such as 4 Nov 2026.
+const DAY = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "Africa/Dar_es_Salaam" })
+
 // The panel's fee line. Once the current interview's fee is Paid, the amount
 // locked then is what the family paid, so the panel shows that instead of
 // the live expected fee, which may have changed since.
 export function referralFeeLine(
-  referral: { amount: number; discountApplied: boolean; state: ReferralState | null },
+  referral: { amount: number; discountApplied: boolean; state: ReferralState | null; switchedOffAt?: string | null },
   discount: number | null,
   current: { feeStatus: InterviewFeeStatus; amount: number; discountApplied: boolean } | null,
 ): ReferralFeeLine {
@@ -37,7 +40,10 @@ export function referralFeeLine(
   return {
     label: "Expected interview fee",
     amount: formatTzs(referral.amount),
-    note: discountNote(referral.discountApplied, discount),
+    note:
+      referral.state === "switched_off"
+        ? `No discount: code switched off${referral.switchedOffAt ? ` on ${DAY.format(new Date(referral.switchedOffAt))}` : ""}`
+        : discountNote(referral.discountApplied, discount),
     pending: referral.state === "pending",
   }
 }
@@ -89,6 +95,7 @@ export function referralLookupNote(lookup: ReferralLookup): string {
     case "checking":
       return "Checking the code…"
     case "found":
+      if (lookup.agent.state === "switched_off") return `${lookup.agent.fullName} · This code is switched off. No discount.`
       return lookup.agent.state === "approved"
         ? `${lookup.agent.fullName} · Approved`
         : `${lookup.agent.fullName} · Pending: no discount until the Manager approves the agent`

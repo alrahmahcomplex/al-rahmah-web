@@ -9,8 +9,9 @@ import type { Result } from "./result"
 // so approving an agent changes every lead carrying the code at once. Codes
 // are normalized and the amounts set in the database only.
 
-// A code an Approved agent holds, a Pending agent's, or one no agent holds.
-export type ReferralState = "approved" | "pending" | "unrecognised"
+// A code an Approved agent holds, a Pending agent's, a switched-off agent's
+// (no discount, whatever their approval), or one no current agent holds.
+export type ReferralState = "approved" | "pending" | "switched_off" | "unrecognised"
 
 export type LeadReferral = {
   // The code as stored, such as BJN-402, or null when the lead has none.
@@ -19,6 +20,8 @@ export type LeadReferral = {
   state: ReferralState | null
   // The agent's name, when an agent holds the code.
   agentName: string | null
+  // When the code's agent was switched off, while they are.
+  switchedOffAt: string | null
   // The expected interview fee in whole TZS, and whether an Approved agent's
   // discount brought it down.
   amount: number
@@ -43,10 +46,12 @@ export type SetReferralCodeError =
   | "no-change"
   | "unavailable"
 
-function stateOf(status: AgentStatus | null | undefined): ReferralState {
-  if (status === "Approved") return "approved"
-  if (status === "Pending") return "pending"
-  return "unrecognised"
+type FoundAgent = { code: string; full_name: string; status: AgentStatus; switched_off_at: string | null }
+
+function stateOf(agent: FoundAgent | null | undefined): ReferralState {
+  if (!agent) return "unrecognised"
+  if (agent.switched_off_at) return "switched_off"
+  return agent.status === "Approved" ? "approved" : "pending"
 }
 
 // The lead's Referral code with its agent and the expected interview fee.
@@ -76,7 +81,7 @@ export async function getLeadReferral(
     code
       ? supabase
           .rpc("find_marketing_agent", { typed_code: code })
-          .maybeSingle<{ full_name: string; status: AgentStatus }>()
+          .maybeSingle<FoundAgent>()
       : Promise.resolve({ data: null, error: null }),
     supabase
       .rpc("expected_interview_amount", { lead_id: leadId })
@@ -92,8 +97,9 @@ export async function getLeadReferral(
     ok: true,
     data: {
       code,
-      state: code ? stateOf(agent.data?.status) : null,
+      state: code ? stateOf(agent.data) : null,
       agentName: agent.data?.full_name ?? null,
+      switchedOffAt: agent.data?.switched_off_at ?? null,
       amount: fee.data.amount,
       discountApplied: fee.data.discount_applied,
     },
@@ -136,13 +142,13 @@ export async function findReferralAgent(
 ): Promise<Result<ReferralAgent | null, "unavailable">> {
   const { data, error } = await supabase
     .rpc("find_marketing_agent", { typed_code: code })
-    .maybeSingle<{ code: string; full_name: string; status: AgentStatus }>()
+    .maybeSingle<FoundAgent>()
   if (error) {
     console.error("Could not look up a Referral code", error)
     return { ok: false, error: "unavailable" }
   }
   if (!data) return { ok: true, data: null }
-  return { ok: true, data: { code: data.code, fullName: data.full_name, state: data.status === "Approved" ? "approved" : "pending" } }
+  return { ok: true, data: { code: data.code, fullName: data.full_name, state: stateOf(data) as ReferralAgent["state"] } }
 }
 
 // What a code typed on the Admission form means for the interview fee: an

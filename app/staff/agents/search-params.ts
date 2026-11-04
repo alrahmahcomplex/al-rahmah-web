@@ -7,8 +7,8 @@ type SearchParams = { [key: string]: string | string[] | undefined }
 
 export type AgentScreenSearch = { status: AgentFilter; query?: string; page: number }
 
-const STATUS_PARAMS: Record<string, AgentFilter> = { pending: "Pending", approved: "Approved", all: "all" }
-const PARAM_FOR: Record<AgentFilter, string> = { Pending: "pending", Approved: "approved", all: "all" }
+const STATUS_PARAMS: Record<string, AgentFilter> = { pending: "Pending", approved: "Approved", retired: "Retired", all: "all" }
+const PARAM_FOR: Record<AgentFilter, string> = { Pending: "pending", Approved: "approved", Retired: "retired", all: "all" }
 
 // Far past any real list, and small enough to stay a safe range offset.
 const LAST_PAGE = 10_000

@@ -11,6 +11,7 @@ import { referralFeeLine } from "./referral-outcome"
 const STATE_LABEL: Record<ReferralState, string> = {
   approved: "Approved",
   pending: "Pending",
+  switched_off: "Switched off",
   unrecognised: "Unrecognised",
 }
 

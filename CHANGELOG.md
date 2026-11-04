@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 4, 2026 `v0.62.0`
+
+### IMPROVED
+
+- Discount codes now follow one current Marketing Agent record, with interview
+  discounts reserved for Approved agents who are neither switched off nor retired.
+  This prepares for the agent management controls coming in a later release.
+
 ## November 3, 2026 `v0.61.1`
 
 ### IMPROVED

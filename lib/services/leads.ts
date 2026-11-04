@@ -463,6 +463,8 @@ export type CorrectionError =
   | { kind: "not-visited" }
   // The children on a contact are no longer the ones the staff member saw.
   | { kind: "children-changed" }
+  // A separate WhatsApp number needs its dependent Phone change first.
+  | { kind: "phone-first" }
   | { kind: "invalid"; field: InvalidField | null }
   | { kind: "unavailable" }
 
@@ -483,6 +485,7 @@ async function correction(call: PromiseLike<RpcAnswer>, what: string): Promise<R
     if (error.message === "closed" || error.message === "lead_closed") return { ok: false, error: { kind: "closed" } }
     if (error.message === "not_visited") return { ok: false, error: { kind: "not-visited" } }
     if (error.message === "children_changed") return { ok: false, error: { kind: "children-changed" } }
+    if (error.message === "phone_first") return { ok: false, error: { kind: "phone-first" } }
     if (error.message === "invalid") {
       return { ok: false, error: { kind: "invalid", field: invalidFieldOf(error.details) } }
     }

@@ -212,6 +212,42 @@ describe("Apply on a re-application", () => {
     }
   })
 
+  test("refuses WhatsApp if a concurrent phone edit makes it the same as Phone before the write", async () => {
+    const lead = await onFile()
+    const whatsapp = phone()
+    const id = await reApply(lead, phone(), whatsapp)
+    const staff = await signedIn(ADMISSIONS)
+    const editing = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await editing.connect()
+    let applying: ReturnType<typeof applyReApplicationField> | undefined
+    try {
+      await editing.query("begin")
+      await editing.query("select public.set_audit_actor('system')")
+      await editing.query("update public.guardian_contacts set phone = $2 where id = $1", [lead.contactId, international(whatsapp)])
+      const { rows: [{ pid }] } = await editing.query<{ pid: number }>("select pg_backend_pid() as pid")
+      let finished = false
+      applying = applyReApplicationField(staff, id, "whatsapp", [lead.id]).then((answer) => {
+        finished = true
+        return answer
+      })
+      await vi.waitFor(async () => {
+        if (finished) return
+        await editing.query("select pg_stat_clear_snapshot()")
+        const { rows } = await editing.query<{ blocked: boolean }>(
+          "select exists(select 1 from pg_stat_activity where $1 = any(pg_blocking_pids(pid))) as blocked", [pid],
+        )
+        expect(rows[0].blocked).toBe(true)
+      }, { timeout: 5000, interval: 25 })
+      await editing.query("commit")
+      expect(await applying).toEqual({ ok: false, error: { kind: "phone-first" } })
+      expect((await stored(lead.id)).contact).toMatchObject({ phone: international(whatsapp), whatsapp: null })
+    } finally {
+      await editing.query("rollback")
+      await applying
+      await editing.end()
+    }
+  })
+
   test("the guarded correction refuses a different contact or missing source, and API roles cannot bypass its permission", async () => {
     const lead = await onFile()
     const other = await onFile()

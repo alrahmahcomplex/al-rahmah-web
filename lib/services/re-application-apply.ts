@@ -19,7 +19,7 @@ import type { Result } from "./result"
 // corrections. So it needs leads.edit, is audited as the staff member's edit,
 // and is refused on a closed lead like any other correction.
 
-export type ApplyError = CorrectionError | { kind: "not-differing" } | { kind: "phone-first" }
+export type ApplyError = CorrectionError | { kind: "not-differing" }
 
 export type SubmittedChange = { to: "lead"; changes: LeadDetailsChanges } | { to: "contact"; changes: ContactChanges }
 

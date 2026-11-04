@@ -55,6 +55,12 @@ export function correctionOutcome(error: CorrectionError): CorrectionOutcome {
         message:
           "The children who share this parent or guardian have changed since you opened the form. Nothing was saved. Reload the page to see who the change reaches.",
       }
+    case "phone-first":
+      return {
+        status: "refused",
+        field: "whatsapp",
+        message: "Save the new phone number before this WhatsApp number.",
+      }
     case "not-visited":
       return { status: "refused", field: null, message: "This lead has no visit yet, so there is no Visit date to correct." }
     case "unavailable":

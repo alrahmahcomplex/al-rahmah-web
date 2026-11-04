@@ -14,6 +14,7 @@ set search_path = ''
 as $$
 declare
     target public.leads;
+    current_phone text;
 begin
     if auth.role() is distinct from 'authenticated' or not public.has_permission('leads.edit') then
         raise exception 'not_permitted';
@@ -31,6 +32,19 @@ begin
     perform public.assert_lead_open(target.id);
     if target.guardian_contact_id is distinct from contact_id then
         raise exception 'children_changed';
+    end if;
+
+    select c.phone into current_phone from public.guardian_contacts c
+    where c.id = contact_id for update;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    -- A single-field Apply must not report success when normalization would
+    -- clear the submitted WhatsApp number. Check after any phone edit that
+    -- held this contact, while keeping the contact locked through the write.
+    if changes ? 'whatsapp' and not (changes ? 'phone')
+       and public.normalize_phone(coalesce(changes ->> 'whatsapp', '')) = current_phone then
+        raise exception 'phone_first';
     end if;
 
     return public.update_guardian_contact(contact_id, changes, expected_lead_ids);

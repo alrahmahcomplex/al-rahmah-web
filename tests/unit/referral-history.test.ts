@@ -37,6 +37,31 @@ describe("a Referral code change in the lead's history", () => {
     })
   })
 
+  it("shows which code-holder notice went with the code, and still names the code change", () => {
+    const withNotice = (from: unknown, to: unknown, notice: [unknown, unknown]): LeadHistoryEntry => ({
+      ...update(from, to),
+      changes: [
+        { field: "referral_code", from, to },
+        { field: "referral_notice_version", from: notice[0], to: notice[1] },
+      ],
+    })
+    expect(described(withNotice(null, "ZNM-401", [null, "form_v1"]))).toMatchObject({
+      summary: "added a Referral code",
+      changes: [
+        { label: "Referral code", from: "None", to: "ZNM-401" },
+        { label: "Code holder notice", from: "None", to: "Shown on the Admission form (form_v1)" },
+      ],
+    })
+    expect(described(withNotice("ZNM-401", "BJN-402", ["form_v1", "staff_reminder"]))).toMatchObject({
+      summary: "changed the Referral code",
+      changes: [
+        { label: "Referral code", from: "ZNM-401", to: "BJN-402" },
+        { label: "Code holder notice", from: "Shown on the Admission form (form_v1)", to: "Staff reminded to tell the family" },
+      ],
+    })
+    expect(described(withNotice("BJN-402", null, ["staff_reminder", null])).summary).toBe("cleared the Referral code")
+  })
+
   it("shows the code on a lead's creation, as the Admission form stores it", () => {
     const created = described({ ...update(null, "XYZ-999"), action: "insert" })
     expect(created.summary).toBe("created the lead")

@@ -17,6 +17,7 @@ import {
 } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
 import { discountCodeCookie, normalizeDiscountCode, STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
+import { FORM_NOTICE, FORM_NOTICE_VERSION } from "@/lib/referral-notice"
 import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS } from "@/lib/services/leads"
 import { cn } from "@/lib/utils"
 
@@ -268,6 +269,8 @@ export function AdmissionFormSteps({
         parent: asParent(parent),
         children: children.map(asChild),
         discountCode: discountCode.trim() || undefined,
+        // The field has a value, so the code-holder notice is showing.
+        noticeVersion: discountCode.trim() ? FORM_NOTICE_VERSION : undefined,
       }),
     )
     setNotice(null)
@@ -565,6 +568,7 @@ export function AdmissionFormSteps({
               }}
               onBlur={() => void checkCode(discountCode)}
               note={discountNote}
+              holderNotice={discountCode.trim() ? FORM_NOTICE[language] : null}
               confirmed={answer?.status === "approved"}
               error={message("discount_code")}
             />
@@ -746,6 +750,8 @@ function ChipField({
 
 // The optional Discount code, with the note that says what the code means.
 // The note is a live region, so a screen reader hears the answer arrive.
+// Whenever the field has a value, the code-holder notice (#182) shows under
+// it: information only, fixed wording, versioned in lib/referral-notice.ts.
 function DiscountCodeField({
   label,
   hint,
@@ -753,6 +759,7 @@ function DiscountCodeField({
   onChange,
   onBlur,
   note,
+  holderNotice,
   confirmed,
   error,
 }: {
@@ -762,11 +769,14 @@ function DiscountCodeField({
   onChange: (value: string) => void
   onBlur: () => void
   note: string | null
+  holderNotice: string | null
   confirmed: boolean
   error: string | null
 }) {
   const id = "discount-code"
-  const described = [`${id}-hint`, `${id}-note`, error ? `${id}-error` : null].filter(Boolean).join(" ")
+  const described = [`${id}-hint`, `${id}-note`, holderNotice ? `${id}-holder-notice` : null, error ? `${id}-error` : null]
+    .filter(Boolean)
+    .join(" ")
   return (
     <div>
       <label htmlFor={id} className="block text-sm font-semibold text-slate-700">
@@ -800,6 +810,11 @@ function DiscountCodeField({
       >
         {note}
       </p>
+      {holderNotice && (
+        <p id={`${id}-holder-notice`} data-notice-version={FORM_NOTICE_VERSION} className="mt-1.5 text-sm text-slate-600">
+          {holderNotice}
+        </p>
+      )}
       {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
     </div>
   )

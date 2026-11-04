@@ -195,13 +195,13 @@ describe("apply_form_discount_code", () => {
     await submitAdmissionForm(secretClient(), sent)
     const lead = await leadIdOf(sent.children[0].fullName)
 
-    expect(await applyFormDiscountCode(secretClient(), lead, "ABC_123!")).toEqual({ ok: false, error: "invalid" })
-    expect(await applyFormDiscountCode(secretClient(), lead, "   ")).toEqual({ ok: false, error: "invalid" })
+    expect(await applyFormDiscountCode(secretClient(), lead, "ABC_123!", null)).toEqual({ ok: false, error: "invalid" })
+    expect(await applyFormDiscountCode(secretClient(), lead, "   ", null)).toEqual({ ok: false, error: "invalid" })
     expect(await codeOf(sent.children[0].fullName)).toBeNull()
   })
 
   test("leaves a closed lead as it is", async () => {
-    expect(await applyFormDiscountCode(secretClient(), ARCHIVED, APPROVED)).toEqual({ ok: false, error: "lead-closed" })
+    expect(await applyFormDiscountCode(secretClient(), ARCHIVED, APPROVED, null)).toEqual({ ok: false, error: "lead-closed" })
   })
 
   test("no visitor and no staff member may call it", async () => {
@@ -210,7 +210,7 @@ describe("apply_form_discount_code", () => {
     const lead = await leadIdOf(sent.children[0].fullName)
 
     for (const client of [anonClient(), await signedIn(MANAGER)]) {
-      expect(await applyFormDiscountCode(client, lead, APPROVED)).toEqual({ ok: false, error: "unavailable" })
+      expect(await applyFormDiscountCode(client, lead, APPROVED, null)).toEqual({ ok: false, error: "unavailable" })
     }
     expect(await codeOf(sent.children[0].fullName)).toBeNull()
   })

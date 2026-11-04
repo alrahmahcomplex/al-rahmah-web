@@ -1,4 +1,5 @@
 import { normalizeDiscountCode } from "@/lib/referral-link"
+import { FORM_NOTICE_VERSION } from "@/lib/referral-notice"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, type NewContact, type NewStudent } from "@/lib/services/leads"
 
@@ -20,6 +21,9 @@ export type AdmissionForm = {
   // One Discount code for every child on the form, normalized as the
   // database stores it. Absent when the parent left the field empty.
   discountCode?: string
+  // The version of the code-holder notice the page showed under the code.
+  // Absent with no code, and from a page that showed no notice.
+  noticeVersion?: typeof FORM_NOTICE_VERSION
 }
 
 // The fields a refusal can name. `child` says which child card, for the
@@ -97,7 +101,7 @@ export function parseAdmissionForm(
     return { ok: false, error: payload }
   }
   if (!value || typeof value !== "object") return { ok: false, error: payload }
-  const { submissionKey, parent, children, discountCode } = value as Record<string, unknown>
+  const { submissionKey, parent, children, discountCode, noticeVersion } = value as Record<string, unknown>
 
   if (typeof submissionKey !== "string" || !UUID.test(submissionKey)) {
     return { ok: false, error: { field: "submission_key", child: null } }
@@ -152,5 +156,7 @@ export function parseAdmissionForm(
 
   const form: AdmissionForm = { submissionKey: submissionKey.toLowerCase(), parent: cleanParent, children: cleanChildren }
   if (code) form.discountCode = code
+  // Only a version this build knows is kept; any other value records none.
+  if (code && noticeVersion === FORM_NOTICE_VERSION) form.noticeVersion = FORM_NOTICE_VERSION
   return { ok: true, data: form }
 }

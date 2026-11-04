@@ -67,6 +67,7 @@ const LABELS: Record<string, string> = {
   returning_family_joined: "Returning family: joined a Family",
   returning_family_reapplied: "Returning family: re-applied",
   referral_code: "Referral code",
+  referral_notice_version: "Code holder notice",
   // Its parent or guardian.
   full_name: "Full name",
   contact_name: "Parent or guardian name",
@@ -156,6 +157,12 @@ const CAUSES: Record<string, string> = {
 
 const CONTACT_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Dar_es_Salaam" })
 
+// Which code-holder notice went with a Referral code (#182).
+const NOTICE_VERSIONS: Record<string, string> = {
+  form_v1: "Shown on the Admission form (form_v1)",
+  staff_reminder: "Staff reminded to tell the family",
+}
+
 const ORIGINS: Record<string, string> = {
   front_desk: "Front desk",
   admission_form: "Admission form",
@@ -180,6 +187,8 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
       return contactNames[String(value)] ?? raw(value)
     case "origin":
       return ORIGINS[String(value)] ?? raw(value)
+    case "referral_notice_version":
+      return NOTICE_VERSIONS[String(value)] ?? raw(value)
     case "score":
       return typeof value === "number" ? `${value}%` : raw(value)
     case "locked_amount":
@@ -285,8 +294,9 @@ function summarize(
     if (closure?.to === "Inactive") return "marked the lead Inactive"
     if (closure?.to === "Archived") return closure.from === "Inactive" ? "moved the lead from Inactive to Archived" : "archived the lead"
     if (changed.get("returning_family_reapplied")?.to === true) return "flagged the lead Returning family: re-applied"
+    // The notice version changes with the code, and says nothing on its own.
     const referral = changed.get("referral_code")
-    if (referral && changed.size === 1) {
+    if (referral && changed.size === (changed.has("referral_notice_version") ? 2 : 1)) {
       if (referral.to === null) return "cleared the Referral code"
       return referral.from === null ? "added a Referral code" : "changed the Referral code"
     }

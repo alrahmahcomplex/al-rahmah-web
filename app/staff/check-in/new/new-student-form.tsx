@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { STAFF_REMINDER } from "@/lib/referral-notice"
 import { formatDate } from "@/lib/school-calendar"
 import {
   DAY_OR_BOARDING,
@@ -950,7 +951,7 @@ function ReferralCodeField({
         autoCapitalize="characters"
         spellCheck={false}
         maxLength={40}
-        aria-describedby={`${id}-agent`}
+        aria-describedby={value.trim() ? `${id}-agent ${id}-reminder` : `${id}-agent`}
         aria-invalid={invalid || undefined}
         className="max-w-48 font-mono uppercase"
       />
@@ -964,6 +965,12 @@ function ReferralCodeField({
       >
         {note}
       </p>
+      {/* A code staff save records that the family was told (#182). */}
+      {value.trim() && (
+        <p id={`${id}-reminder`} data-notice-version="staff_reminder" className="text-xs text-slate-900">
+          {STAFF_REMINDER}
+        </p>
+      )}
     </div>
   )
 }

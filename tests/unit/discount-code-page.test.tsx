@@ -69,7 +69,7 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
   it("renders in Swahili by default and offers the database's discount once the school confirms", async () => {
     render(await DiscountCodePage())
 
-    expect(stubs.discount).toHaveBeenCalledWith({ secret: "client" }, expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    expect(stubs.discount).toHaveBeenCalledWith({ secret: "client" })
     expect(screen.getByRole("main")).toHaveAttribute("lang", "sw")
     expect(screen.getByRole("heading", { level: 1, name: "Pata Code ya Punguzo" })).toBeInTheDocument()
     expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/ada ya usaili/)

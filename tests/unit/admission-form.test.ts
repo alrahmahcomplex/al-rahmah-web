@@ -103,6 +103,23 @@ describe("reading the posted Admission form", () => {
     expect(parse(form({ discountCode: 402 }))).toEqual({ ok: false, error: { field: "payload", child: null } })
   })
 
+  it("keeps the code-holder notice's version only with a code, and only one this build knows", () => {
+    const shown = parse(form({ discountCode: "BJN-402", noticeVersion: "form_v1" }))
+    expect(shown.ok && shown.data.noticeVersion).toBe("form_v1")
+
+    // An unknown version is tolerated on purpose, so pages and servers from
+    // different builds can meet during a deploy: the code is kept and the
+    // lead records no notice rather than one this server did not show.
+    for (const noticeVersion of ["form_v0", "form_v2", "staff_reminder", 1, null, undefined]) {
+      const parsed = parse(form({ discountCode: "BJN-402", noticeVersion }))
+      expect(parsed.ok, String(noticeVersion)).toBe(true)
+      expect(parsed.ok && parsed.data.discountCode, String(noticeVersion)).toBe("BJN-402")
+      expect(parsed.ok && "noticeVersion" in parsed.data, String(noticeVersion)).toBe(false)
+    }
+    const noCode = parse(form({ noticeVersion: "form_v1" }))
+    expect(noCode.ok && "noticeVersion" in noCode.data).toBe(false)
+  })
+
   it("refuses a missing or malformed submission key", () => {
     expect(parse(form({ submissionKey: "not-a-uuid" }))).toEqual({ ok: false, error: { field: "submission_key", child: null } })
   })

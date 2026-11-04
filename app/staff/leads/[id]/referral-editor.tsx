@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { STAFF_REMINDER } from "@/lib/referral-notice"
 import { cn } from "@/lib/utils"
 
 import { Field, Saved } from "./lead-editors"
@@ -171,7 +172,7 @@ function CodeForm({
               autoCapitalize="characters"
               spellCheck={false}
               maxLength={40}
-              aria-describedby={`${id}-agent`}
+              aria-describedby={typed.trim() ? `${id}-agent ${id}-reminder` : `${id}-agent`}
               aria-invalid={lookup.status === "none"}
               className="max-w-48 font-mono uppercase"
             />
@@ -186,6 +187,12 @@ function CodeForm({
             >
               {unchanged ? `${referralLookupNote(lookup)} (the lead's current code)` : referralLookupNote(lookup)}
             </p>
+            {/* A code staff save records that the family was told (#182). */}
+            {typed.trim() && (
+              <p id={`${id}-reminder`} data-notice-version="staff_reminder" className="text-sm text-slate-900">
+                {STAFF_REMINDER}
+              </p>
+            )}
           </>
         )}
       </Field>

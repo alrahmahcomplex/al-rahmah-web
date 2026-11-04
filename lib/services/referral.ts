@@ -114,8 +114,10 @@ function setError(error: PostgrestError): SetReferralCodeError {
 }
 
 // Sets the lead's Referral code to a registered Marketing Agent's, Pending or
-// Approved, matched however it is typed; null clears it. Needs leads.edit,
-// and the lead must be open. Returns the code as stored.
+// Approved, matched however it is typed; null clears it. A code set this way
+// records the staff reminder as its notice version, and clearing it clears
+// the version. Needs leads.edit, and the lead must be open. Returns the code
+// as stored.
 export async function setLeadReferralCode(
   supabase: SupabaseClient,
   leadId: string,
@@ -191,7 +193,7 @@ export async function getInterviewDiscount(
 }
 
 export type ApplyFormDiscountCodeError =
-  // The value isn't a code.
+  // The value isn't a code, or the notice version isn't the Admission form's.
   | "invalid"
   // The lead closed before the code reached it.
   | "lead-closed"
@@ -199,15 +201,30 @@ export type ApplyFormDiscountCodeError =
   | "unavailable"
 
 // Puts the code the Admission form sent on a lead the form created, whether or
-// not an agent holds it. Writes only into an empty code, so calling it again,
-// or after staff set a code, changes nothing. Secret key only. Returns the
-// code the lead now carries.
+// not an agent holds it, with the version of the code-holder notice the form
+// showed (null when it showed none). Writes only into an empty code, so
+// calling it again, or after staff set a code, changes nothing, the version
+// included. Secret key only. Returns the code the lead now carries.
+//
+// If this build is live before the migration that adds the three-argument
+// function, PostgREST answers PGRST202 (no such function). The lead already
+// exists by then, so the code still goes on it through the two-argument
+// function, with no notice version recorded. #205 removes the fallback.
 export async function applyFormDiscountCode(
   supabase: SupabaseClient,
   leadId: string,
   code: string,
+  noticeVersion: string | null,
 ): Promise<Result<{ code: string }, ApplyFormDiscountCodeError>> {
-  const { data, error } = await supabase.rpc("apply_form_discount_code", { lead_id: leadId, code })
+  let { data, error } = await supabase.rpc("apply_form_discount_code", {
+    lead_id: leadId,
+    code,
+    notice_version: noticeVersion,
+  })
+  if (error?.code === "PGRST202") {
+    console.warn("apply_form_discount_code(lead_id, code, notice_version) is missing; using the two-argument version")
+    ;({ data, error } = await supabase.rpc("apply_form_discount_code", { lead_id: leadId, code }))
+  }
   if (error) {
     if (error.message === "invalid") return { ok: false, error: "invalid" }
     if (error.message === "lead_closed") return { ok: false, error: "lead-closed" }

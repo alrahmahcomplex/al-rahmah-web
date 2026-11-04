@@ -32,6 +32,10 @@ import type { Result } from "./result"
 // off and never overwrites a code staff set since. A child already on file
 // gets nothing on its lead (#84 keeps the code on the Re-application).
 //
+// The code-holder notice's version (#182) goes with the code onto each lead,
+// and stays out of the submission key's hash, so a retry from a page loaded
+// before or after a deploy that changed the notice is the same send.
+//
 // Takes the secret-key client (utils/supabase/public-form.ts): only the
 // secret key may use the Admission form start.
 
@@ -113,7 +117,7 @@ export async function submitAdmissionForm(
   supabase: SupabaseClient,
   form: AdmissionForm,
 ): Promise<Result<ChildOutcome[], AdmissionFormError>> {
-  const { submissionKey, parent, children, discountCode } = form
+  const { submissionKey, parent, children, discountCode, noticeVersion } = form
   const hash = payloadHash(form)
   const newContact = {
     full_name: parent.fullName,
@@ -161,7 +165,7 @@ export async function submitAdmissionForm(
       return { ok: false, error: { kind: "unavailable" } }
     }
     if (row.result === "created" && discountCode) {
-      const applied = await applyFormDiscountCode(supabase, row.lead_id, discountCode)
+      const applied = await applyFormDiscountCode(supabase, row.lead_id, discountCode, noticeVersion ?? null)
       if (!applied.ok) {
         if (applied.error === "invalid") return { ok: false, error: { kind: "invalid", field: "discount_code", child: null } }
         // Staff closed the lead before the code reached it: it stays as they

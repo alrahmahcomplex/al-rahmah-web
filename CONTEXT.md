@@ -307,6 +307,7 @@ _Avoid_: External referral code, Marketing Agent code. Parents and agents see it
 
 **Discount code**:
 The name used for a **Referral code** wherever parents, guardians or Marketing Agents see it: on the **Admission form**, the agent registration page, and every message or page addressed to them. In Swahili it is **Code ya Punguzo**. Parent-facing text never mentions Marketing Agents, referrals or agent approval: a **Pending** code is described as a discount code awaiting confirmation. The agent registration page tells the agent that families who use their discount code get TZS 10,000 off the interview fee.
+While the field holds a code, the **Admission form** shows the code-holder notice under it: the person who gave the family the code will see their child's admission progress. Staff entering a code for a walk-in family see a reminder to tell the family the same. Each lead records which notice went with its code (`form_v1` or `staff_reminder`), as the school's PDPA 2022 evidence; no version means no notice was shown, as for codes from before the notice and imports.
 _Avoid_ (in text parents or agents see): Referral code, agent, Wakala, Kodi ya punguzo
 
 **Referral link**:

@@ -4,14 +4,14 @@ import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-import type { Client } from "pg"
+import { Client } from "pg"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
 import { approveAgent, listAgents, registerAgent } from "@/lib/services/marketing-agents"
 import { estimateDiscountCode, findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
 
-import { asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // One current agent per Discount code (#184): agent_for_code, the cached
@@ -396,6 +396,31 @@ describe("the cached status columns and their history", () => {
     expect((await state(agent.id)).changes).toHaveLength(4)
   })
 
+  test("a change whose transaction began before another committed still replays after it", async () => {
+    const agent = await newAgent({ approved: true })
+    // Opened first, so its transaction start is earlier than the switch-off.
+    const early = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await early.connect()
+    try {
+      await early.query("begin")
+      await early.query("select public.set_audit_actor('system')")
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      await asSystem((sql) => changeStatus(sql, agent.id, "switched_off"))
+
+      await changeStatus(early, agent.id, "switched_on")
+      await early.query("commit")
+    } finally {
+      await early.query("rollback").catch(() => {})
+      await early.end()
+    }
+
+    const now = await state(agent.id)
+    expect(now.changes.map((c) => c.kind)).toEqual(["switched_off", "switched_on"])
+    expect(now.switched_off_at).toBeNull()
+    expect({ retired_at: now.retired_at, switched_off_at: now.switched_off_at }).toEqual(expected(now.changes))
+  })
+
   test("a change that doesn't apply is refused and writes nothing", async () => {
     const agent = await newAgent()
     const attempt = (kind: string) => asSystem((sql) => changeStatus(sql, agent.id, kind))
@@ -482,5 +507,52 @@ describe("the cached status columns and their history", () => {
     expect(rpc.error).not.toBeNull()
     const secret = await secretClient().from("agent_status_changes").insert({ agent_id: agent.id, kind: "switched_on", reason: "x" })
     expect(secret.error).not.toBeNull()
+  })
+
+  test("staff without leads.view and visitors not signed in read no history", async () => {
+    const agent = await newAgent()
+    await asSystem((sql) => changeStatus(sql, agent.id, "switched_off"))
+    const outsider = await signedIn(await createThrowawayStaff(["payments.view"]))
+    for (const client of [outsider, anonClient()]) {
+      const read = await client.from("agent_status_changes").select("kind").eq("agent_id", agent.id)
+      expect(read.data ?? []).toEqual([])
+    }
+  })
+})
+
+describe("lead_count, called directly", () => {
+  // Calls lead_count with the agent's own row inside a session for `staffId`,
+  // as the API would, so the permission check is what decides.
+  async function countAs(staffId: string, agentId: string) {
+    return inRolledBackTransaction(async (sql) => {
+      const row = await sql.query<{ agent: string }>("select a::text as agent from public.marketing_agents a where a.id = $1", [agentId])
+      const { rows } = await sql.query("select user_id from public.staff_members where id = $1", [staffId])
+      await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: rows[0].user_id, role: "authenticated" })])
+      await sql.query("set local role authenticated")
+      const counted = await sql.query<{ count: string }>("select public.lead_count($1::public.marketing_agents)::text as count", [
+        row.rows[0].agent,
+      ])
+      return Number(counted.rows[0].count)
+    })
+  }
+
+  test("counts the agent's leads for staff who may view leads and nothing for staff who may not", async () => {
+    const agent = await newAgent({ approved: true })
+    await newLead(agent.code)
+    const outsider = await createThrowawayStaff(["payments.view"])
+    expect(await countAs(ADMISSIONS.id, agent.id)).toBe(1)
+    expect(await countAs(outsider.id, agent.id)).toBe(0)
+  })
+
+  test("can't be called by a visitor who isn't signed in", async () => {
+    const agent = await newAgent()
+    await expect(
+      inRolledBackTransaction(async (sql) => {
+        const row = await sql.query<{ agent: string }>("select a::text as agent from public.marketing_agents a where a.id = $1", [agent.id])
+        await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "anon" })])
+        await sql.query("set local role anon")
+        await sql.query("select public.lead_count($1::public.marketing_agents)", [row.rows[0].agent])
+      }),
+    ).rejects.toThrow(/permission denied/)
   })
 })

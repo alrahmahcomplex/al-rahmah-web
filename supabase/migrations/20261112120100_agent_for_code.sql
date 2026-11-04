@@ -93,12 +93,14 @@ revoke execute on function public.agent_code_issued(text) from public, anon, aut
 
 create table public.agent_status_changes (
     id uuid primary key default gen_random_uuid(),
-    -- Orders changes made within one transaction, which share changed_at.
+    -- Breaks a tie between two changes with the same changed_at.
     sequence bigint generated always as identity,
     agent_id uuid not null references public.marketing_agents (id),
     kind text not null check (kind in ('switched_off', 'switched_on', 'retired', 'recreated')),
     reason text not null check (btrim(reason) <> '' and char_length(reason) <= 500),
-    changed_at timestamptz not null default now(),
+    -- When the change took the agent's lock, so a change that waited, or
+    -- whose transaction began earlier, still sorts after the one it followed.
+    changed_at timestamptz not null default clock_timestamp(),
     -- Null when the system made the change.
     changed_by uuid references public.staff_members (id),
     old_agent_id uuid references public.marketing_agents (id),
@@ -269,7 +271,7 @@ as $$
 declare
     agent public.marketing_agents;
     actor record;
-    changed timestamptz := now();
+    changed timestamptz;
     moved uuid[];
     change_id uuid;
 begin
@@ -292,6 +294,10 @@ begin
     if not found then
         raise exception 'not_found';
     end if;
+    -- Read after the lock, not now(): the transaction's start can come before
+    -- a change that committed while this one waited or ran, and the history
+    -- would then replay the two out of order.
+    changed := clock_timestamp();
     if agent.retired_at is not null then
         raise exception 'agent_retired';
     end if;

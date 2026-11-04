@@ -31,6 +31,13 @@ describe("pickWhatsAppNumber", () => {
     })
   })
 
+  it("falls back to the direct phone when the WhatsApp contact is empty", () => {
+    expect(pickWhatsAppNumber({ whatsapp: "", phone: "+255698765432" })).toEqual({
+      channel: "phone",
+      digits: "255698765432",
+    })
+  })
+
   it("accepts any object with the two fields, such as a whole contact row", () => {
     const contact = { id: "c1", full_name: "Mwanaisha Mfano", whatsapp: undefined, phone: "+255612345678" }
     expect(pickWhatsAppNumber(contact)).toEqual({ channel: "phone", digits: "255612345678" })
@@ -127,6 +134,15 @@ describe("buildWhatsAppLink", () => {
     expect(text.length).toBe(WHATSAPP_TEXT_MAX_LENGTH)
     expect(buildWhatsAppLink(text, "255712345678")).toEqual({ ok: false, error: "too_long" })
     expect(buildWhatsAppLink(text)).toEqual({ ok: false, error: "too_long" })
+  })
+
+  it("accepts a URL of exactly the URL limit and refuses one character more", () => {
+    const prefix = "https://wa.me/?text=".length
+    const atLimit = "a".repeat(WHATSAPP_URL_MAX_LENGTH - prefix)
+    const link = buildWhatsAppLink(atLimit)
+    if (!link.ok) throw new Error("refused")
+    expect(link.data.length).toBe(WHATSAPP_URL_MAX_LENGTH)
+    expect(buildWhatsAppLink(atLimit + "a")).toEqual({ ok: false, error: "too_long" })
   })
 
   it("refuses text with a lone surrogate instead of throwing", () => {

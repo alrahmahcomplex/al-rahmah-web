@@ -6,7 +6,8 @@
 -- lead, the Enrollment year, the exact link, the template version, the
 -- channel, the siblings included at that moment, and who sent it and when.
 -- It is audited in the `lead` scope, refuses updates and deletes, and is
--- written only through send_group_invitation, which needs leads.edit. There
+-- written only through send_group_invitation, which needs leads.edit and
+-- leads.view, since it returns the family's number and siblings. There
 -- is no separate action event and no "latest" row: the latest invitation for
 -- a lead is an indexed read.
 --
@@ -118,7 +119,11 @@ declare
     staff_id uuid;
     invitation_id uuid;
 begin
-    if auth.role() is distinct from 'authenticated' or not public.has_permission('leads.edit') then
+    -- Both: sending needs leads.edit, and the reply carries the family's
+    -- number and sibling IDs, which only leads.view may read.
+    if auth.role() is distinct from 'authenticated'
+       or not public.has_permission('leads.edit')
+       or not public.has_permission('leads.view') then
         raise exception 'forbidden';
     end if;
     if send_group_invitation.method is null or send_group_invitation.method not in ('link', 'copy') then
@@ -249,12 +254,11 @@ begin
         end if;
     end if;
 
-    select i.*, s.full_name as sent_by_name, sender.student_name as sender_name
+    select i.*, s.full_name as sent_by_name
     into latest
     from public.whatsapp_group_invitations i
     left join public.staff_members s on s.id = i.sent_by
-    join public.leads sender on sender.id = i.lead_id
-    where i.lead_id = lead_row.id or lead_row.id = any (i.sibling_lead_ids)
+    where i.lead_id = lead_row.id or i.sibling_lead_ids @> array[lead_row.id]
     order by i.sent_at desc, i.id desc
     limit 1;
 
@@ -301,7 +305,8 @@ grant execute on function public.lead_group_invitation(uuid) to authenticated;
 -- leads_with_earlier_group_link: the leads whose latest invitation for the
 -- year, sent from them or from a sibling, carried a link other than the
 -- year's link now. These are the families to send the new link to; a lead
--- invited again with the current link drops out. Runs as the caller, so the
+-- invited again with the current link drops out, and so does a lead since
+-- moved to another Enrollment year. Runs as the caller, so the
 -- lead, invitation and link policies (all leads.view) decide what it shows.
 -- Returns leads rows, so the Leads screen filters and pages it like any
 -- other list.
@@ -328,7 +333,8 @@ as $$
     from public.leads l
     join latest on latest.lead_id = l.id
     join public.whatsapp_group_links g on g.enrollment_year = leads_with_earlier_group_link.link_year
-    where latest.url <> g.url;
+    where latest.url <> g.url
+      and l.enrollment_year = leads_with_earlier_group_link.link_year;
 $$;
 
 revoke execute on function public.leads_with_earlier_group_link(integer) from public, anon;
@@ -337,8 +343,8 @@ grant execute on function public.leads_with_earlier_group_link(integer) to authe
 -- ---------------------------------------------------------------------------
 -- group_invitation_family_count: how many distinct families were sent an
 -- invitation for the year, counted by the parent/guardian contact the
--- invited leads have now. Families invited, not group members: nobody knows
--- who joined. For staff with leads.view.
+-- invited leads have now, among leads still in that year. Families invited,
+-- not group members: nobody knows who joined. For staff with leads.view.
 -- ---------------------------------------------------------------------------
 
 create function public.group_invitation_family_count(link_year integer)
@@ -358,6 +364,7 @@ begin
         from public.whatsapp_group_invitations i
         join public.leads l on l.id = i.lead_id
         where i.enrollment_year = group_invitation_family_count.link_year
+          and l.enrollment_year = group_invitation_family_count.link_year
     );
 end;
 $$;

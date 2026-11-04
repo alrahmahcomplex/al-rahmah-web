@@ -279,6 +279,29 @@ describe("who may send", () => {
     expect(await rowsFor(lead.leadId)).toHaveLength(1)
   })
 
+  test("a role holding leads.edit without leads.view may not send, and learns nothing about the family", async () => {
+    const year = await unusedYear()
+    const link = await saveLink(year)
+    const whatsapp = mobile()
+    const lead = await visitedLead(year, { whatsapp })
+    await visitedLead(year, { family: lead.family })
+
+    const editOnly = await signedIn(await createThrowawayStaff(["leads.edit"]))
+    const { data, error } = await editOnly.rpc("send_group_invitation", {
+      lead_id: lead.leadId,
+      method: "link",
+      link_year: year,
+      link_seen: link,
+      template_version: "group_invitation_v2",
+    })
+    expect(error?.message).toBe("forbidden")
+    expect(data).toBeNull()
+    expect(await sendGroupInvitation(editOnly, lead.leadId, "link", link, year)).toEqual({ ok: false, error: "forbidden" })
+    expect(await getGroupInvitation(editOnly, lead.leadId)).toEqual({ ok: false, error: "forbidden" })
+    expect(await countInvitedFamilies(editOnly, year)).toEqual({ ok: false, error: "forbidden" })
+    expect(await rowsFor(lead.leadId)).toHaveLength(0)
+  })
+
   test("signed-out visitors and staff without leads.view read and send nothing", async () => {
     const year = await unusedYear()
     const link = await saveLink(year)
@@ -433,6 +456,31 @@ describe("an earlier link", () => {
   })
 })
 
+describe("a lead moved to another Enrollment year", () => {
+  test("is neither found by the earlier-link filter nor counted for the year it left", async () => {
+    const year = await unusedYear()
+    const nextYear = await unusedYear()
+    const first = await saveLink(year)
+    const lead = await visitedLead(year)
+    const staff = await signedIn(ADMISSIONS)
+    expect((await sendGroupInvitation(staff, lead.leadId, "link", first, year)).ok).toBe(true)
+    expect(await countInvitedFamilies(staff, year)).toEqual({ ok: true, data: 1 })
+
+    // The Enrollment year is corrected, and the lead is invited for the new one.
+    await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [lead.leadId, nextYear]))
+    const nextLink = await saveLink(nextYear)
+    expect((await sendGroupInvitation(staff, lead.leadId, "link", nextLink, nextYear)).ok).toBe(true)
+
+    // The year it left gets a new link: its old invitation is no longer this lead's concern.
+    await saveLink(year, inviteLink(), first)
+    const listed = await searchLeads(staff, { earlierLinkYear: year, closure: "all", page: 1 })
+    expect(listed.ok && listed.data.leads.map((row) => row.id)).not.toContain(lead.leadId)
+    expect(listed.ok && listed.data.total).toBe(0)
+    expect(await countInvitedFamilies(staff, year)).toEqual({ ok: true, data: 0 })
+    expect(await countInvitedFamilies(staff, nextYear)).toEqual({ ok: true, data: 1 })
+  })
+})
+
 describe("families invited", () => {
   test("counts distinct families, not sends or children", async () => {
     const year = await unusedYear()
@@ -471,7 +519,7 @@ describe("the invitations table", () => {
     expect(await rowsFor(lead.leadId)).toHaveLength(0)
   })
 
-  test("a row is never changed or deleted, by the database owner either", async () => {
+  test("a row is never changed, deleted or truncated, by the database owner either", async () => {
     const year = await unusedYear()
     const link = await saveLink(year)
     const lead = await visitedLead(year)
@@ -483,6 +531,7 @@ describe("the invitations table", () => {
     await expect(
       asSystem((sql) => sql.query("delete from public.whatsapp_group_invitations where lead_id = $1", [lead.leadId])),
     ).rejects.toThrow("delete_refused")
+    await expect(asSystem((sql) => sql.query("truncate public.whatsapp_group_invitations"))).rejects.toThrow("delete_refused")
     expect((await rowsFor(lead.leadId))[0]).toMatchObject({ channel: "phone" })
   })
 })

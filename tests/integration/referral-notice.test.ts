@@ -12,8 +12,8 @@ import { submitAdmissionForm } from "@/lib/services/admission-form"
 import { createLead } from "@/lib/services/leads"
 import { applyFormDiscountCode, setLeadReferralCode } from "@/lib/services/referral"
 
-import { inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ADMISSIONS } from "../support/fixtures"
+import { anonClient, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Which version of the code-holder notice a lead's family saw (#182), against
 // local Supabase: the Admission form's version through the admission-form
@@ -170,6 +170,17 @@ describe("apply_form_discount_code with a notice version", () => {
     expect(await versionOf(id)).toBeNull()
   })
 
+  test("only the secret key may call it: no visitor and no staff member", async () => {
+    const sent = form()
+    await submitAdmissionForm(secretClient(), sent)
+    const { id } = await leadOf(sent.children[0].fullName)
+
+    for (const client of [anonClient(), await signedIn(MANAGER), await signedIn(ADMISSIONS)]) {
+      expect(await applyFormDiscountCode(client, id, APPROVED, FORM_NOTICE_VERSION)).toEqual({ ok: false, error: "unavailable" })
+    }
+    expect(await leadOf(sent.children[0].fullName)).toMatchObject({ code: null, version: null })
+  })
+
   test("a lead that already carries a code keeps its version", async () => {
     const sent = form({ discountCode: PENDING, noticeVersion: FORM_NOTICE_VERSION })
     await submitAdmissionForm(secretClient(), sent)
@@ -189,6 +200,18 @@ describe("the notice version on codes staff set", () => {
     expect(await versionOf(lead)).toBe(STAFF_REMINDER_VERSION)
 
     expect((await setLeadReferralCode(await signedIn(ADMISSIONS), lead, null)).ok).toBe(true)
+    expect(await versionOf(lead)).toBeNull()
+  })
+
+  test("staff without leads.edit can't set a code, so no version is recorded", async () => {
+    const lead = await walkIn()
+    expect((await setLeadReferralCode(await signedIn(ACCOUNTANT), lead, APPROVED)).ok).toBe(false)
+    expect(await versionOf(lead)).toBeNull()
+  })
+
+  test("a retired or unknown code is still refused, and records no version", async () => {
+    const lead = await walkIn()
+    expect(await setLeadReferralCode(await signedIn(ADMISSIONS), lead, "QQQ-000")).toMatchObject({ ok: false })
     expect(await versionOf(lead)).toBeNull()
   })
 

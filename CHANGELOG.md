@@ -5,6 +5,19 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- When the Discount code field on the Admission form has a value, typed or filled in by
+  a Referral link, a notice under it tells the parent that the person who gave them the
+  code will see their child's admission progress, in Swahili or English. It is
+  information only, and the field stays optional. Each lead records which version of
+  the notice the family saw, as the school's PDPA 2022 evidence.
+- Staff entering a Referral code at New Student or in the lead's Referral code panel see
+  a reminder to tell the family the same thing, and the lead records that the reminder
+  was shown. The lead's history lists the notice version beside the code.
+
 ## November 4, 2026 `v0.65.1`
 
 ### IMPROVED

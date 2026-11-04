@@ -82,10 +82,10 @@ revoke execute on function public.apply_form_discount_code(uuid, text, text) fro
 grant execute on function public.apply_form_discount_code(uuid, text, text) to service_role;
 
 -- ---------------------------------------------------------------------------
--- set_lead_referral_code: unchanged, except that a code staff set records
--- `staff_reminder`, since the Referral code editor and the front desk's
--- Referral code field show staff the reminder, and clearing the code clears
--- the version.
+-- set_lead_referral_code: as 20261112120100_agent_for_code left it, except
+-- that a code staff set records `staff_reminder`, since the Referral code
+-- editor and the front desk's Referral code field show staff the reminder,
+-- and clearing the code clears the version.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.set_lead_referral_code(lead_id uuid, code text)
@@ -115,7 +115,13 @@ begin
 
     if set_lead_referral_code.code is not null then
         new_code := public.normalize_referral_code(set_lead_referral_code.code);
-        if new_code is null or not exists (select 1 from public.marketing_agents a where a.code = new_code) then
+        if new_code is null then
+            raise exception 'unknown_code';
+        end if;
+        if not exists (select 1 from public.agent_for_code(new_code)) then
+            if public.agent_code_issued(new_code) then
+                raise exception 'retired_code';
+            end if;
             raise exception 'unknown_code';
         end if;
     end if;

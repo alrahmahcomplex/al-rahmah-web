@@ -5,6 +5,12 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Staff can save an admissions WhatsApp group link for each Enrollment year, see who set it and when, and open it to test before inviting families.
+
 ## November 4, 2026 `v0.62.0`
 
 ### IMPROVED

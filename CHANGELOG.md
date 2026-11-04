@@ -20,6 +20,38 @@ stay in the `0.x` range.
   a closed lead is read-only, and offers **Request reopening** instead. It opens the
   lead's reopening request form.
 
+## November 4, 2026 `v0.64.0`
+
+### NEW
+
+- The interview panel on the lead screen has a **Result release** section. Once the
+  current interview has a result and its fee is **Paid**, Admissions Staff and Managers
+  see the prepared Swahili message for that result, with the parent's name, the child's
+  name, the score and the Admission Number filled in, and press **Send through
+  WhatsApp**. WhatsApp opens in a new tab addressed to the parent's WhatsApp number, or
+  their phone if they have no separate WhatsApp number, with the whole message typed in,
+  ready to send. The wording is fixed and can't be edited.
+- Until then the section says why the result can't go yet: no interview, no result, the
+  lead is closed, or the fee isn't paid, with the amount the family owes. A result from
+  an earlier interview is never sent after a retake.
+- The section shows when the result was last sent, how and by whom, such as "Sent by
+  WhatsApp on 3 Oct 2026 by Amina", and the lead's history records each release with the
+  result and score it carried. The Accountant sees this too, with no send button.
+
+## November 4, 2026 `v0.63.0`
+
+### NEW
+
+- Staff can save an admissions WhatsApp group link for each Enrollment year, see who set it and when, and open it to test before inviting families.
+
+## November 4, 2026 `v0.62.0`
+
+### IMPROVED
+
+- Discount codes now follow one current Marketing Agent record, with interview
+  discounts reserved for Approved agents who are neither switched off nor retired.
+  This prepares for the agent management controls coming in a later release.
+
 ## November 3, 2026 `v0.61.1`
 
 ### IMPROVED

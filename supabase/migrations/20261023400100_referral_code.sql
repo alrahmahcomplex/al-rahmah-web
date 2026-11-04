@@ -3,11 +3,13 @@
 -- staff write that sets or clears a lead's code.
 --
 -- A lead holds its code as normalized and nothing else: no foreign key and no
--- copied agent name. The agent and their status come from a join on
--- marketing_agents.code whenever the code is read; a code no agent holds is
--- Unrecognised. Agents' codes never change and agents are never deleted, so
--- the join stays stable. Slice 2's audit trigger on leads records every
--- change, and the closed-lead trigger refuses one on a closed lead.
+-- copied agent name. The agent and their status are looked up from the code
+-- whenever it is read; a code no agent holds is Unrecognised. A record's code
+-- never changes and records are never deleted, but since #184 a code can
+-- pass from a retired record to the one that replaces it, so every lookup
+-- goes through agent_for_code (20261112120100_agent_for_code.sql), which
+-- returns the one current record. Slice 2's audit trigger on leads records
+-- every change, and the closed-lead trigger refuses one on a closed lead.
 --
 -- Refusal codes: `not_permitted`, `forbidden`, `not_found`, `lead_closed`
 -- (from assert_lead_open), `unknown_code` and `no_change`.

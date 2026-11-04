@@ -67,6 +67,8 @@ The prepared Swahili message that releases an interview result, one for **Passed
 
 The WhatsApp action targets the parent/guardian's separate WhatsApp contact when available, otherwise it falls back to the direct phone contact. If no WhatsApp-capable number is available, the action is presented as **Send SMS**; it reveals the prepared message and provides a copy function instead of generating a WhatsApp link.
 
+A release is recorded when the message leaves the app: for WhatsApp, the click on **Send through WhatsApp**; for **Send SMS**, the click that reveals the text to copy. The app cannot know whether the parent received it, so the lead's history records that staff sent it, by which channel, and the result and score it carried, never that the family got it.
+
 **Next action**:
 A required selection from a fixed list that tells the parent or guardian what to do after receiving the interview result. It is included in the prepared Swahili result message.
 
@@ -152,6 +154,7 @@ The permissions are:
 | `discounts.approve` | Granting or refusing a **Staff child** or **Qualified orphan** discount. |
 | `academic_years.manage` | Setting the **Academic-year start** and the seats in each class, and releasing a seat with **No seat available**. |
 | `staff.administer` | Inviting, deactivating and reactivating staff members, assigning their roles, and defining roles. This is the permission the role guardrails protect. |
+| `group_links.manage` | Saving or replacing the admissions WhatsApp group link for an Enrollment year. |
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
 
@@ -177,6 +180,7 @@ The three starting roles hold:
 | `discounts.approve` | | ✓ | |
 | `academic_years.manage` | | ✓ | |
 | `staff.administer` | | ✓ | |
+| `group_links.manage` | ✓ | ✓ | |
 
 **Admissions Staff** may create and update leads, record visits, record interviews, add follow-ups, mark leads **Declined**, and send interview results. They see school-fee payments but may not record them, mark the interview fee paid, reopen leads, or perform lifecycle interventions.
 
@@ -185,6 +189,9 @@ Admissions Staff may edit interview results and percentage scores directly. Ever
 **Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. They grant **Staff child** and **Qualified orphan** discounts and set each year's **Academic-year start** and class seats. The Admissions Manager also administers the staff side: adding and removing staff members, assigning each one's role, and defining roles.
 
 **Accountant** records school-fee payments and payment adjustments, maintains the fee amounts, and marks the interview fee **Paid** or **Not Paid**. School-fee payment records are the source of the system-derived **Enrolled** status. The Accountant reads leads to find the student being paid for, but does not change them.
+
+**Admissions WhatsApp group links**:
+Staff with `leads.view` read each Enrollment year's saved link, who set it and when, under WhatsApp groups. Staff with `group_links.manage` save or replace it. Only `https://chat.whatsapp.com/` invite links are accepted. A year need not have a Fee schedule. Replacing a link affects only new invitations; earlier families still hold the earlier link. Links cannot be deleted, and every change is audited in the lead scope. The migration grants the permission to every non-retired role holding `leads.edit`; roles created later must be granted it explicitly.
 
 **Audit history**:
 The preserved record of changes to admissions data. Every edit records the previous value, the new value, the user who made the change, and the change history. This applies across student details, parent/guardian contacts, class, enrollment year, referral code, interviews, follow-ups, lifecycle status, and payments.

@@ -379,4 +379,51 @@ describe("a payment and a status change at once", () => {
     expect(await lockedAmount(lead.interviewId)).toBe(40000)
     expect((await history(agent.id)).map((row) => row.fee_change_count)).toEqual([0])
   })
+
+  test("a payment that waited for a Recreate holds the new record too, so switching it off waits and doesn't count the fee just Paid", async () => {
+    const agent = await newAgent()
+    const lead = await registeredLead(agent.code)
+    expect((await change(agent.id, "switch-off")).ok).toBe(true)
+
+    // The Recreate, as the database owner: it holds the old record while it
+    // retires it and adds the Approved replacement.
+    const recreator = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await recreator.connect()
+    await recreator.query("set statement_timeout = '15s'")
+    await recreator.query("begin")
+    await recreator.query("select public.set_audit_actor('system')")
+    const replacement = randomUUID()
+    const accountant = await sessionOf(ACCOUNTANT)
+    const manager = await sessionOf(MANAGER)
+    try {
+      await recreator.query("select public.record_agent_status_change($1, 'recreated', 'Wrong name', $2)", [agent.id, replacement])
+      await recreator.query(
+        "insert into public.marketing_agents (id, full_name, phone, code, status, approved_at, approved_by) values ($1, $2, $3, $4, 'Approved', now(), $5)",
+        [replacement, `${agent.fullName} Corrected`, `+255${phone().slice(1)}`, agent.code, MANAGER.id],
+      )
+
+      // The payment waits for the old record, then reads the replacement's
+      // discount once the Recreate commits.
+      const paying = accountant.query("select public.set_interview_fee_status($1, 'Paid')", [lead.interviewId])
+      expect(await stillWaiting(paying)).toBe(true)
+      await recreator.query("commit")
+      await paying
+
+      // The payment hasn't committed. Switching the replacement off must wait
+      // for it, or it counts the fee as unpaid and records a change that
+      // never happened.
+      const switching = manager.query<{ n: number }>("select public.change_marketing_agent_status($1, 'switched_off', 'Left the school') as n", [
+        replacement,
+      ])
+      expect(await stillWaiting(switching)).toBe(true)
+      await accountant.query("commit")
+      expect((await switching).rows[0].n).toBe(0)
+      await manager.query("commit")
+    } finally {
+      await Promise.all([recreator.end(), manager.end(), accountant.end()])
+    }
+
+    expect(await lockedAmount(lead.interviewId)).toBe(40000)
+    expect((await history(replacement)).map((row) => [row.kind, row.fee_change_count])).toEqual([["switched_off", 0]])
+  })
 })

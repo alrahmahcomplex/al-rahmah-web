@@ -18,7 +18,8 @@
 --   moment of the change, counted under the agent's lock.
 -- - set_interview_fee_status holds the code's agent record in share mode
 --   before it reads the discount, so a payment and a status change wait for
---   each other and the recorded count stays true.
+--   each other and the recorded count stays true. After a Recreate it waited
+--   for, it holds the replacement too.
 -- - find_marketing_agent also returns switched_off_at, so staff screens can
 --   say a code is switched off and since when.
 -- - marketing_agent_status_notes(agent_ids) gives the Agents screen the
@@ -215,7 +216,8 @@ revoke execute on function public.record_agent_status_change(uuid, text, text, u
 -- fee as Paid. Either way the recorded count is the fees that moved.
 --
 -- Lock order, on every path that takes these rows: the lead, then the
--- interview, then the agent record. record_agent_status_change takes only
+-- interview, then the agent record (after a Recreate, the old record and
+-- then its replacement). record_agent_status_change takes only
 -- the agent and reads the leads and interviews without locking them, so it
 -- can't hold one while waiting for the other.
 -- ---------------------------------------------------------------------------
@@ -229,6 +231,8 @@ as $$
 declare
     target public.interviews;
     lead_code text;
+    held uuid;
+    holder uuid;
     expected record;
     new_amount integer;
     discounted boolean := false;
@@ -263,9 +267,18 @@ begin
     -- ways: a fee going back to Not Paid starts moving with the code's
     -- discount again, so a count in progress must see it. Read in its own
     -- statement after the wait, the discount is the one that change leaves.
-    perform 1 from public.marketing_agents a
-    where a.id in (select c.id from public.agent_for_code(lead_code) c)
-    for share;
+    --
+    -- A Recreate this waited for has retired the record it held and put a
+    -- new one in its place, which the locking statement couldn't see. So
+    -- look the holder up again after each lock, and hold the new one too,
+    -- until the record held is the code's current one. Otherwise a switch-off
+    -- of the new record wouldn't wait, and would count this fee as unpaid.
+    loop
+        select c.id into holder from public.agent_for_code(lead_code) c;
+        exit when holder is not distinct from held;
+        perform 1 from public.marketing_agents a where a.id = holder for share;
+        held := holder;
+    end loop;
 
     if set_interview_fee_status.fee_status = 'Paid' then
         select e.amount, e.discount_applied into expected from public.expected_interview_amount(target.lead) e;

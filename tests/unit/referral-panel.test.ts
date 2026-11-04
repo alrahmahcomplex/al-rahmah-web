@@ -1,11 +1,46 @@
 import { describe, expect, it } from "vitest"
 
-import { formatTzs, referralLookupNote, referralOutcome } from "@/app/staff/leads/[id]/referral-outcome"
+import { discountNote, formatTzs, referralFeeLine, referralLookupNote, referralOutcome } from "@/app/staff/leads/[id]/referral-outcome"
 
 describe("the Referral code panel's words", () => {
   it("writes amounts as whole shillings with thousands separators", () => {
-    expect(formatTzs(30000)).toBe("TZS 30,000")
+    expect(formatTzs(40000)).toBe("TZS 40,000")
     expect(formatTzs(50000)).toBe("TZS 50,000")
+  })
+
+  it("names the discount the database gives, or none when it couldn't be read", () => {
+    expect(discountNote(true, 10000)).toBe("includes TZS 10,000 discount")
+    expect(discountNote(true, null)).toBe("includes the agent discount")
+    expect(discountNote(false, 10000)).toBeNull()
+  })
+
+  it("shows the expected fee while the current interview fee is unpaid or there is no interview", () => {
+    const referral = { amount: 40000, discountApplied: true, state: "approved" as const }
+    const expected = { label: "Expected interview fee", amount: "TZS 40,000", note: "includes TZS 10,000 discount", pending: false }
+    expect(referralFeeLine(referral, 10000, null)).toEqual(expected)
+    expect(referralFeeLine(referral, 10000, { feeStatus: "Not Paid", amount: 40000, discountApplied: true })).toEqual(expected)
+    expect(referralFeeLine({ amount: 50000, discountApplied: false, state: "pending" }, 10000, null)).toEqual({
+      label: "Expected interview fee",
+      amount: "TZS 50,000",
+      note: null,
+      pending: true,
+    })
+  })
+
+  it("shows the amount locked when the current interview fee was Paid, not the live expected fee", () => {
+    const referral = { amount: 40000, discountApplied: true, state: "pending" as const }
+    expect(referralFeeLine(referral, 10000, { feeStatus: "Paid", amount: 30000, discountApplied: false })).toEqual({
+      label: "Interview fee paid",
+      amount: "TZS 30,000",
+      note: null,
+      pending: false,
+    })
+    expect(referralFeeLine(referral, 10000, { feeStatus: "Paid", amount: 20000, discountApplied: true })).toEqual({
+      label: "Interview fee paid",
+      amount: "TZS 20,000",
+      note: "includes the Referral code discount",
+      pending: false,
+    })
   })
 
   it("confirms a saved or cleared code", () => {

@@ -6,7 +6,7 @@ import { admissionYears, parseAdmissionForm } from "@/lib/admission-form"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { normalizeDiscountCode } from "@/lib/referral-link"
 import { submitAdmissionForm as saveAdmissionForm } from "@/lib/services/admission-form"
-import { estimateDiscountCode } from "@/lib/services/referral"
+import { estimateDiscountCode, getInterviewDiscount } from "@/lib/services/referral"
 import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
@@ -94,5 +94,15 @@ export async function checkDiscountCode(code: unknown): Promise<DiscountCodeChec
   // No screen switches an agent off yet (#187 adds that, with the form's own
   // note); until then such a code reads as one that gives no discount.
   const state = estimate.data.state === "switched_off" ? "unknown" : estimate.data.state
-  return { status: state, amount: estimate.data.amount }
+  if (state !== "approved") return { status: state, amount: estimate.data.amount }
+
+  // The note names the discount; the code is confirmed even if this fails.
+  let discount: number | null = null
+  try {
+    const read = await getInterviewDiscount(supabase)
+    if (read.ok) discount = read.data
+  } catch (error) {
+    console.error("Discount code check: could not read the interview discount", error)
+  }
+  return { status: "approved", amount: estimate.data.amount, discount }
 }

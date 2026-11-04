@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 4, 2026 `v0.65.1`
+
+### IMPROVED
+
+- A Discount code from a confirmed agent now takes TZS 10,000 off the interview fee, so
+  the family pays TZS 40,000 instead of TZS 50,000. It was TZS 20,000 off. The change
+  takes effect from November 4, 2026, when it reached the hosted database, for every
+  interview fee not yet Paid; fees already Paid keep the amount locked when they were
+  marked. A family who pays only TZS 30,000 stays Not Paid. The Admission form, the
+  Discount code page and the lead's Referral code panel all take the amount from the
+  database.
+
 ## November 4, 2026 `v0.65.0`
 
 ### NEW

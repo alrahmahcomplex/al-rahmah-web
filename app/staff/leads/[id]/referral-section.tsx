@@ -1,11 +1,12 @@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { getLeadReferral, type LeadReferral, type ReferralState } from "@/lib/services/referral"
+import { getLeadInterviews, type LeadInterview } from "@/lib/services/interviews"
+import { getInterviewDiscount, getLeadReferral, type LeadReferral, type ReferralState } from "@/lib/services/referral"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { ReferralEditor } from "./referral-editor"
-import { formatTzs } from "./referral-outcome"
+import { referralFeeLine } from "./referral-outcome"
 
 const STATE_LABEL: Record<ReferralState, string> = {
   approved: "Approved",
@@ -14,10 +15,18 @@ const STATE_LABEL: Record<ReferralState, string> = {
 }
 
 // The lead's Referral code panel: the code, its state and the agent it names,
-// and the expected interview fee. Staff who hold leads.edit get Edit and
+// and the expected interview fee, or the amount paid once the current
+// interview's fee is Paid. Staff who hold leads.edit get Edit and
 // Clear on an open lead; everyone else, and a closed lead, read it only.
 export async function ReferralSection({ leadId, canEdit }: { leadId: string; canEdit: boolean }) {
-  const referral = await getLeadReferral(await createClient(), leadId)
+  const supabase = await createClient()
+  const [referral, discount, interviews] = await Promise.all([
+    getLeadReferral(supabase, leadId),
+    getInterviewDiscount(supabase),
+    getLeadInterviews(supabase, leadId),
+  ])
+  // The newest registration is the current interview.
+  const current = interviews.ok ? (interviews.data[0] ?? null) : null
 
   return (
     <section aria-labelledby="lead-referral" className="flex flex-col gap-3">
@@ -31,7 +40,7 @@ export async function ReferralSection({ leadId, canEdit }: { leadId: string; can
       ) : (
         <div className="flex max-w-xl flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
           <Code referral={referral.data} />
-          <Fee referral={referral.data} />
+          <Fee referral={referral.data} discount={discount.ok ? discount.data : null} current={current} />
           {canEdit && (
             <ReferralEditor
               key={leadId}
@@ -76,19 +85,18 @@ function Code({ referral }: { referral: LeadReferral }) {
   )
 }
 
-function Fee({ referral }: { referral: LeadReferral }) {
+function Fee({ referral, discount, current }: { referral: LeadReferral; discount: number | null; current: LeadInterview | null }) {
+  const line = referralFeeLine(referral, discount, current)
   return (
     <div className="flex flex-col gap-0.5 border-t pt-3">
-      <p className="text-xs text-muted-foreground">Expected interview fee</p>
+      <p className="text-xs text-muted-foreground">{line.label}</p>
       <p className="text-sm text-slate-900">
-        <span className="font-semibold" aria-label="Expected interview fee">
-          {formatTzs(referral.amount)}
+        <span className="font-semibold" aria-label={line.label}>
+          {line.amount}
         </span>
-        {referral.discountApplied && <span className="text-muted-foreground"> · includes {formatTzs(20000)} discount</span>}
+        {line.note && <span className="text-muted-foreground"> · {line.note}</span>}
       </p>
-      {referral.state === "pending" && (
-        <p className="text-xs text-muted-foreground">The discount applies once the Manager approves the agent.</p>
-      )}
+      {line.pending && <p className="text-xs text-muted-foreground">The discount applies once the Manager approves the agent.</p>}
     </div>
   )
 }

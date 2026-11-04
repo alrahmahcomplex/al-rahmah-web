@@ -291,7 +291,7 @@ describe("reading a lead's interviews", () => {
     const retake = await asSystem(async (sql) => {
       await sql.query(
         `update public.interviews
-         set interview_date = $2, result = 'Failed', score = 41.5, fee_status = 'Paid', locked_amount = 30000,
+         set interview_date = $2, result = 'Failed', score = 41.5, fee_status = 'Paid', locked_amount = 40000,
              locked_discount_applied = true
          where id = $1`,
         [first.data.interviewId, today],
@@ -321,7 +321,7 @@ describe("reading a lead's interviews", () => {
           score: 41.5,
           nextAction: "Contact the admissions office",
           feeStatus: "Paid",
-          amount: 30_000,
+          amount: 40_000,
           discountApplied: true,
         },
       ],

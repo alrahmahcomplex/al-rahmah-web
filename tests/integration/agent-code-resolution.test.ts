@@ -167,7 +167,7 @@ describe("a code held by a retired record and a new one", () => {
   test("gives exactly one answer, the new record, and the fee follows the new record's status", async () => {
     const old = await newAgent({ approved: true })
     const lead = await newLead(old.code)
-    expect(await fee(lead)).toMatchObject({ agentName: old.fullName, amount: 30000, discountApplied: true })
+    expect(await fee(lead)).toMatchObject({ agentName: old.fullName, amount: 40000, discountApplied: true })
 
     const replacement = await recreate(old)
 
@@ -193,12 +193,12 @@ describe("a code held by a retired record and a new one", () => {
     const replacement = await recreate(old)
     expect(await approveAgent(await signedIn(MANAGER), replacement.id)).toEqual({ ok: true, data: null })
 
-    expect(await fee(lead)).toMatchObject({ state: "approved", agentName: replacement.fullName, amount: 30000, discountApplied: true })
+    expect(await fee(lead)).toMatchObject({ state: "approved", agentName: replacement.fullName, amount: 40000, discountApplied: true })
     expect(await findReferralAgent(await signedIn(ADMISSIONS), old.code)).toEqual({
       ok: true,
       data: { code: old.code, fullName: replacement.fullName, state: "approved" },
     })
-    expect(await estimateDiscountCode(secretClient(), old.code)).toEqual({ ok: true, data: { state: "approved", amount: 30000 } })
+    expect(await estimateDiscountCode(secretClient(), old.code)).toEqual({ ok: true, data: { state: "approved", amount: 40000 } })
 
     // The students follow the code to the new record; the retired one has none.
     const list = await listAgents(await signedIn(MANAGER), { query: old.code, page: 1 })
@@ -268,8 +268,8 @@ describe("the discount rule", () => {
     })
 
     await asSystem((sql) => changeStatus(sql, agent.id, "switched_on"))
-    expect(await fee(lead)).toMatchObject({ amount: 30000, discountApplied: true })
-    expect(await estimateDiscountCode(secretClient(), agent.code)).toEqual({ ok: true, data: { state: "approved", amount: 30000 } })
+    expect(await fee(lead)).toMatchObject({ amount: 40000, discountApplied: true })
+    expect(await estimateDiscountCode(secretClient(), agent.code)).toEqual({ ok: true, data: { state: "approved", amount: 40000 } })
   })
 
   test("a retired Approved agent's code gives no discount and names no agent", async () => {

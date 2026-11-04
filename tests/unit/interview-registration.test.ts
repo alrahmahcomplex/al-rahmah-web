@@ -92,7 +92,7 @@ describe("an interview registration in the lead's history", () => {
           action: "update",
           changes: [
             { field: "interview_date", from: null, to: "2026-09-30" },
-            { field: "locked_amount", from: null, to: 30000 },
+            { field: "locked_amount", from: null, to: 40000 },
           ],
         },
       ],
@@ -101,7 +101,7 @@ describe("an interview registration in the lead's history", () => {
     expect(described.summary).toBe("changed the interview")
     expect(described.changes).toEqual([
       { label: "Interview date", from: "None", to: "30 Sept 2026" },
-      { label: "Amount paid", from: "None", to: "TZS 30,000" },
+      { label: "Amount paid", from: "None", to: "TZS 40,000" },
     ])
   })
 })

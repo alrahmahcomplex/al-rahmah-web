@@ -56,7 +56,7 @@ test.describe("a Referral code at New Student", () => {
     const panel = page.getByRole("region", { name: "Referral code" })
     await expect(panel.getByLabel("Code", { exact: true })).toHaveText("BJN-402")
     await expect(panel).toContainText("Marketing Agent: Baraka Juma Njoroge")
-    await expect(panel.getByLabel("Expected interview fee")).toHaveText("TZS 30,000")
+    await expect(panel.getByLabel("Expected interview fee")).toHaveText("TZS 40,000")
 
     // Its history shows the staff member who added it.
     await page.getByRole("link", { name: "History" }).click()

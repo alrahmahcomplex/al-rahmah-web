@@ -351,9 +351,11 @@ export function AdmissionFormSteps({
       ? null
       : checking.has(currentCode)
         ? copy.discountChecking
-        : answer
-          ? copy.discountNotes[answer.status === "rate-limited" || answer.status === "unavailable" ? "unchecked" : answer.status]
-          : null
+        : answer?.status === "approved"
+          ? copy.discountNotes.approved(answer.discount === null ? null : tzs(answer.discount))
+          : answer
+            ? copy.discountNotes[answer.status === "rate-limited" || answer.status === "unavailable" ? "unchecked" : answer.status]
+            : null
   const feePerChild = answer && "amount" in answer ? answer.amount : STANDARD_INTERVIEW_FEE
 
   const noticeText = notice

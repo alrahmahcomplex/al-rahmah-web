@@ -51,9 +51,9 @@ test("a Referral link fills in the code, remembers it for 30 days, and the fee d
 
   await toReview(page, "sw")
   await expect(page.getByLabel(FIELD.sw)).toHaveValue("BJN-402")
-  await expect(page.getByText("Punguzo la TZS 20,000 kwenye ada ya usaili kwa kila mtoto.")).toBeVisible()
-  await expect(page.getByText("TZS 30,000 kwa kila mtoto")).toBeVisible()
-  await expect(page.getByText("Jumla: TZS 30,000")).toBeVisible()
+  await expect(page.getByText("Punguzo la TZS 10,000 kwenye ada ya usaili kwa kila mtoto.")).toBeVisible()
+  await expect(page.getByText("TZS 40,000 kwa kila mtoto")).toBeVisible()
+  await expect(page.getByText("Jumla: TZS 40,000")).toBeVisible()
 
   await waitForSecurityCheck(page)
   await page.getByRole("button", { name: "Tuma maombi" }).click()
@@ -106,9 +106,9 @@ test("each code's note, and the fee for several children", async ({ page }) => {
 
   await field.fill("bjn-402")
   await field.blur()
-  await expect(page.getByText("TZS 20,000 off the interview fee for each child.")).toBeVisible()
-  await expect(page.getByText("TZS 30,000 per child")).toBeVisible()
-  await expect(page.getByText("Total for 3 children: TZS 90,000")).toBeVisible()
+  await expect(page.getByText("TZS 10,000 off the interview fee for each child.")).toBeVisible()
+  await expect(page.getByText("TZS 40,000 per child")).toBeVisible()
+  await expect(page.getByText("Total for 3 children: TZS 120,000")).toBeVisible()
 })
 
 test("an unrecognised code never stops the form", async ({ page }) => {

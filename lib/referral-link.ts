@@ -12,7 +12,8 @@ export const DISCOUNT_CODE_MAX_AGE = 30 * 24 * 60 * 60
 
 // The interview fee per child when no confirmed code brings it down, in whole
 // TZS: what the form shows before a code is checked, or when the check can't
-// run. The database's interview_fee() holds the amounts; an integration test
+// run, and what a lead's interviews show if their fee can't be read. The
+// database's interview_fee() holds the amounts; an integration test
 // keeps this equal to what discount_code_estimate returns for a code it
 // doesn't recognise.
 export const STANDARD_INTERVIEW_FEE = 50000

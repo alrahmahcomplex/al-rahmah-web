@@ -3,6 +3,7 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { LanguageSwitch } from "@/components/language-switch"
+import { publicInterviewDiscount } from "@/lib/interview-discount"
 import { getLanguage } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
 
@@ -11,10 +12,11 @@ import { DiscountCodeForm } from "./registration-form"
 
 // Where someone the school wants bringing in families gets a Discount code.
 // The school hands out the URL itself: nothing links here and search engines
-// are asked to leave it out. Like the Admission form it reads no Supabase and
-// stays out of the proxy matcher, so it loads with Supabase down; only
-// sending touches the database. The language switch sits outside the form,
-// which keeps its entries in client state.
+// are asked to leave it out. It stays out of the proxy matcher and reads only
+// the interview discount, with the secret key and a short wait, so it still
+// loads with Supabase down and then names no figure. Sending touches the
+// database. The language switch sits outside the form, which keeps its
+// entries in client state.
 
 export async function generateMetadata(): Promise<Metadata> {
   const language = await getLanguage()
@@ -25,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function DiscountCodePage() {
-  const language = await getLanguage()
+  const [language, discount] = await Promise.all([getLanguage(), publicInterviewDiscount()])
 
   return (
     <main
@@ -41,7 +43,7 @@ export default async function DiscountCodePage() {
           <LanguageSwitch language={language} className="ml-auto shrink-0" />
         </header>
 
-        <DiscountCodeForm language={language} officePhone={OFFICE_PHONE} />
+        <DiscountCodeForm language={language} officePhone={OFFICE_PHONE} discount={discount} />
       </div>
     </main>
   )

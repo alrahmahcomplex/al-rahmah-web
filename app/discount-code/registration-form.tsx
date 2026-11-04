@@ -25,7 +25,17 @@ type Registered = Extract<DiscountCodeState, { status: "registered" }>
 type Shown = { field: AgentField; server: boolean }
 type Notice = "check-pending" | "rate-limited" | "check-failed" | "unavailable" | null
 
-export function DiscountCodeForm({ language, officePhone }: { language: Language; officePhone: string }) {
+// `discount` is the interview discount in whole TZS, or null when the page
+// couldn't read it.
+export function DiscountCodeForm({
+  language,
+  officePhone,
+  discount = null,
+}: {
+  language: Language
+  officePhone: string
+  discount?: number | null
+}) {
   const copy = COPY[language]
   const [draft, setDraft] = useState<AgentDraft>(EMPTY)
   const [problem, setProblem] = useState<Shown | null>(null)
@@ -108,7 +118,7 @@ export function DiscountCodeForm({ language, officePhone }: { language: Language
   return (
     <section className="rounded-[40px] bg-white px-5 py-7 shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">
       <h1 className="font-exo text-[1.75rem] font-extrabold italic leading-tight text-blue-600">{copy.heading}</h1>
-      <p className="mt-3 text-base text-slate-700">{copy.intro}</p>
+      <p className="mt-3 text-base text-slate-700">{copy.intro(discount === null ? null : `TZS ${discount.toLocaleString("en-US")}`)}</p>
 
       <form
         noValidate

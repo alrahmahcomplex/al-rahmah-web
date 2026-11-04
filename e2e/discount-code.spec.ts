@@ -48,7 +48,7 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
 
     await page.goto("/discount-code")
     await expect(page.getByRole("heading", { level: 1, name: t.heading })).toBeVisible()
-    await expect(page.getByText(/TZS 20,000/)).toBeVisible()
+    await expect(page.getByText(/TZS 10,000/)).toBeVisible()
     expect(await page.locator("body").innerText()).not.toMatch(FORBIDDEN)
 
     const code = await register(page, lang, who, "0754 000 111")

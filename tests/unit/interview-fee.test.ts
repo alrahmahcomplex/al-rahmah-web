@@ -7,9 +7,9 @@ import type { FeeStatusError } from "@/lib/services/interviews"
 
 describe("feeChangedOutcome", () => {
   it("names the locked amount when the fee is marked Paid", () => {
-    expect(feeChangedOutcome({ feeStatus: "Paid", lockedAmount: 30000, discountApplied: true })).toEqual({
+    expect(feeChangedOutcome({ feeStatus: "Paid", lockedAmount: 40000, discountApplied: true })).toEqual({
       status: "saved",
-      message: "Marked Paid. TZS 30,000 is locked as the amount paid.",
+      message: "Marked Paid. TZS 40,000 is locked as the amount paid.",
     })
   })
 
@@ -73,7 +73,7 @@ describe("the interview fee in the lead's history", () => {
           ...base,
           changes: [
             { field: "fee_status", from: "Paid", to: "Not Paid" },
-            { field: "locked_amount", from: 30000, to: null },
+            { field: "locked_amount", from: 40000, to: null },
           ],
         },
       ],
@@ -82,7 +82,7 @@ describe("the interview fee in the lead's history", () => {
     expect(described.summary).toBe("marked the interview fee Not Paid")
     expect(described.changes).toEqual([
       { label: "Interview fee", from: "Paid", to: "Not Paid" },
-      { label: "Amount paid", from: "TZS 30,000", to: "None" },
+      { label: "Amount paid", from: "TZS 40,000", to: "None" },
     ])
   })
 })

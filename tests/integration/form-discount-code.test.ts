@@ -79,8 +79,8 @@ function failingCodeStep(): SupabaseClient {
 }
 
 describe("estimating a Discount code for the form", () => {
-  test("an Approved agent's code brings the fee per child to TZS 30,000, matched however it is typed", async () => {
-    expect(await estimateDiscountCode(secretClient(), " bjn -402 ")).toEqual({ ok: true, data: { state: "approved", amount: 30000 } })
+  test("an Approved agent's code brings the fee per child to TZS 40,000, matched however it is typed", async () => {
+    expect(await estimateDiscountCode(secretClient(), " bjn -402 ")).toEqual({ ok: true, data: { state: "approved", amount: 40000 } })
   })
 
   test("a Pending agent's code, an unknown one and a value that isn't a code keep the standard fee", async () => {
@@ -117,7 +117,7 @@ describe("the form's Discount code on the leads it creates", () => {
 
     for (const c of sent.children) expect(await codeOf(c.fullName)).toBe(APPROVED)
     const referral = await getLeadReferral(await signedIn(ADMISSIONS), await leadIdOf(sent.children[0].fullName))
-    expect(referral.ok && referral.data).toMatchObject({ state: "approved", amount: 30000, discountApplied: true })
+    expect(referral.ok && referral.data).toMatchObject({ state: "approved", amount: 40000, discountApplied: true })
   })
 
   test("a code no agent holds is kept as Unrecognised, at the full fee", async () => {

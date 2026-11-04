@@ -83,8 +83,8 @@ test.describe("the Referral code panel", () => {
     await expect(panel(page).getByLabel("Code", { exact: true })).toHaveText("BJN-402")
     await expect(panel(page)).toContainText("Approved")
     await expect(panel(page)).toContainText("Marketing Agent: Baraka Juma Njoroge")
-    await expect(fee(page)).toHaveText("TZS 30,000")
-    await expect(panel(page)).toContainText("includes TZS 20,000 discount")
+    await expect(fee(page)).toHaveText("TZS 40,000")
+    await expect(panel(page)).toContainText("includes TZS 10,000 discount")
 
     // Changed to a Pending agent's code: the fee goes back up.
     await panel(page).getByRole("button", { name: "Edit" }).click()
@@ -112,7 +112,7 @@ test.describe("the Referral code panel", () => {
     await expect(page.getByText("cleared the Referral code")).toBeVisible()
   })
 
-  test("the Manager approves a Pending agent and the lead's fee drops to TZS 30,000", async ({ page }) => {
+  test("the Manager approves a Pending agent and the lead's fee drops to TZS 40,000", async ({ page }) => {
     const agent = await registerPendingAgent()
     const lead = await newLead()
     const set = await setLeadReferralCode(await signedIn(ADMISSIONS), lead, agent.code)
@@ -133,8 +133,8 @@ test.describe("the Referral code panel", () => {
 
     await page.goto(`/staff/leads/${lead}`)
     await expect(panel(page)).toContainText("Approved")
-    await expect(fee(page)).toHaveText("TZS 30,000")
-    await expect(panel(page)).toContainText("includes TZS 20,000 discount")
+    await expect(fee(page)).toHaveText("TZS 40,000")
+    await expect(panel(page)).toContainText("includes TZS 10,000 discount")
   })
 
   test("the Accountant reads each state with no Edit or Clear", async ({ page }) => {
@@ -143,7 +143,7 @@ test.describe("the Referral code panel", () => {
     await page.goto(`/staff/leads/${ASHA_APPROVED}`)
     await expect(panel(page).getByLabel("Code", { exact: true })).toHaveText("BJN-402")
     await expect(panel(page)).toContainText("Approved")
-    await expect(fee(page)).toHaveText("TZS 30,000")
+    await expect(fee(page)).toHaveText("TZS 40,000")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
 
     await page.goto(`/staff/leads/${JUMA_PENDING}`)

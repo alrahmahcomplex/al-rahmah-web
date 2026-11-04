@@ -39,7 +39,9 @@ type Copy = {
   discountCode: string
   discountCodeHint: string
   discountChecking: string
-  discountNotes: Record<"approved" | "pending" | "unknown" | "unchecked", string>
+  // `approved` takes the discount as written ("TZS 10,000"), or null when it
+  // couldn't be read, and then names no figure.
+  discountNotes: { approved: (discount: string | null) => string } & Record<"pending" | "unknown" | "unchecked", string>
   interviewFee: string
   feePerChild: (amount: string) => string
   feeTotal: (children: number, amount: string) => string
@@ -94,7 +96,8 @@ export const COPY: Record<Language, Copy> = {
     discountCodeHint: "Kama kuna mtu aliyekupa code ya punguzo, iandike hapa.",
     discountChecking: "Tunahakiki code…",
     discountNotes: {
-      approved: "Punguzo la TZS 20,000 kwenye ada ya usaili kwa kila mtoto.",
+      approved: (discount) =>
+        discount ? `Punguzo la ${discount} kwenye ada ya usaili kwa kila mtoto.` : "Punguzo kwenye ada ya usaili kwa kila mtoto.",
       pending: "Code hii inasubiri kuthibitishwa. Punguzo litatumika ikithibitishwa kabla hujalipa.",
       unknown: "Hatuitambui code hii. Ihakiki, au tuma fomu bila code.",
       unchecked: "Hatukuweza kuhakiki code yako kwa sasa. Itahifadhiwa pamoja na maombi yako.",
@@ -167,7 +170,8 @@ export const COPY: Record<Language, Copy> = {
     discountCodeHint: "If someone gave you a discount code, enter it here.",
     discountChecking: "Checking the code…",
     discountNotes: {
-      approved: "TZS 20,000 off the interview fee for each child.",
+      approved: (discount) =>
+        discount ? `${discount} off the interview fee for each child.` : "A discount on the interview fee for each child.",
       pending: "This code is waiting to be confirmed. The discount applies if it is confirmed before you pay.",
       unknown: "We don't recognise this code. Check it, or send the form without it.",
       unchecked: "We couldn't check your code just now. It will still be saved with your application.",

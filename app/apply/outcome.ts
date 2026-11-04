@@ -19,8 +19,11 @@ export const IDLE: AdmissionFormState = { status: "idle" }
 // What the Discount code field is told about a code: an Approved agent's
 // (`approved`), a Pending agent's (`pending`) or nobody's (`unknown`), with
 // the interview fee per child in whole TZS; or that the check couldn't run
-// (`rate-limited`, `unavailable`), when the form shows the standard fee.
+// (`rate-limited`, `unavailable`), when the form shows the standard fee. An
+// Approved code also carries the discount in whole TZS, from
+// interview_discount(), or null when that read failed.
 export type DiscountCodeCheck =
-  | { status: "approved" | "pending" | "unknown"; amount: number }
+  | { status: "approved"; amount: number; discount: number | null }
+  | { status: "pending" | "unknown"; amount: number }
   | { status: "rate-limited" }
   | { status: "unavailable" }

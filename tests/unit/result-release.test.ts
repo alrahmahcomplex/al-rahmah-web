@@ -72,8 +72,8 @@ describe("a result release in the lead's history", () => {
 
 describe("the Result release section's words", () => {
   it("says why the result can't go yet, with the amount owed while Not Paid", () => {
-    expect(blockedText("not_paid", 30000)).toBe(
-      "The result can't be sent until the interview fee is Paid. The family owes TZS 30,000.",
+    expect(blockedText("not_paid", 40000)).toBe(
+      "The result can't be sent until the interview fee is Paid. The family owes TZS 40,000.",
     )
     expect(blockedText("no_interview", null)).toBe("There is no interview yet, so there is no result to send.")
     expect(blockedText("no_result", null)).toBe("No result is recorded yet, so there is nothing to send.")

@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
+
 import type { Result } from "./result"
 
 // The interview module (slice 5, #26): registering a lead for interview,
@@ -259,9 +261,6 @@ type InterviewRow = {
   locked_discount_applied: boolean | null
 }
 
-// The standard fee before any discount, shown if the fee can't be worked out.
-const FULL_INTERVIEW_FEE = 50_000
-
 export function nextActionOf(result: InterviewResult | null): NextAction | null {
   if (result === "Passed") return "Complete enrollment"
   if (result === "Failed") return "Contact the admissions office"
@@ -308,11 +307,12 @@ export async function getLeadInterviews(
     data: rows.map((row) => {
       // The database keeps an amount, and whether it was discounted, locked
       // exactly while the fee is Paid, so every other row has the expected
-      // amount read above.
+      // amount read above, or the standard fee before any discount if that
+      // read gave nothing.
       const fee =
         row.locked_amount !== null
           ? { amount: row.locked_amount, discountApplied: row.locked_discount_applied === true }
-          : { amount: expected?.amount ?? FULL_INTERVIEW_FEE, discountApplied: expected?.discount_applied ?? false }
+          : { amount: expected?.amount ?? STANDARD_INTERVIEW_FEE, discountApplied: expected?.discount_applied ?? false }
       return {
         id: row.id,
         serialNumber: row.serial_number,

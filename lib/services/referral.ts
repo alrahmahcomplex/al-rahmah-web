@@ -164,6 +164,32 @@ export async function estimateDiscountCode(
   return { ok: true, data: { state: data.state, amount: data.amount } }
 }
 
+// How long a read of the interview discount waits before giving up.
+const DISCOUNT_WAIT_MS = 2000
+
+// How much an Approved agent's code takes off the interview fee, in whole
+// TZS: the one figure the Admission form, the Discount code page and the
+// Referral code panel state. Signed-in staff and the secret key only. Every
+// caller can do without the figure, so the read gives up after 2 seconds
+// (or when the caller's own signal fires) rather than hold up a fee.
+export async function getInterviewDiscount(
+  supabase: SupabaseClient,
+  { signal }: { signal?: AbortSignal } = {},
+): Promise<Result<number, "unavailable">> {
+  const timeout = signal ? null : new AbortController()
+  const timer = timeout ? setTimeout(() => timeout.abort(), DISCOUNT_WAIT_MS) : undefined
+  try {
+    const { data, error } = await supabase.rpc("interview_discount").abortSignal(signal ?? timeout!.signal)
+    if (error || typeof data !== "number") {
+      console.error("Could not read the interview discount", error)
+      return { ok: false, error: "unavailable" }
+    }
+    return { ok: true, data }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export type ApplyFormDiscountCodeError =
   // The value isn't a code.
   | "invalid"

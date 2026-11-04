@@ -25,7 +25,7 @@ commit;
 -- agent holds, as the Admission form keeps a mistyped one. Invented families
 -- with +255 700 000 43x numbers. Tests read them and leave them as they are.
 --
---   ADMSN-90431 Asha Referral    BJN-402, Approved: TZS 30,000
+--   ADMSN-90431 Asha Referral    BJN-402, Approved: TZS 40,000 (TZS 10,000 off)
 --   ADMSN-90432 Juma Referral    ZNM-401, Pending: TZS 50,000
 --   ADMSN-90433 Tatu Referral    XYZ-999, Unrecognised: TZS 50,000
 begin;

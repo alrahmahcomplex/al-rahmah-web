@@ -184,6 +184,7 @@ describe("a code held by a retired record and a new one", () => {
       agentName: replacement.fullName,
       amount: 50000,
       discountApplied: false,
+      switchedOffAt: null,
     })
   })
 
@@ -200,10 +201,18 @@ describe("a code held by a retired record and a new one", () => {
     })
     expect(await estimateDiscountCode(secretClient(), old.code)).toEqual({ ok: true, data: { state: "approved", amount: 40000 } })
 
-    // The students follow the code to the new record; the retired one has none.
-    const list = await listAgents(await signedIn(MANAGER), { query: old.code, page: 1 })
-    if (!list.ok) throw new Error("list unavailable")
-    const counts = Object.fromEntries(list.data.agents.filter((a) => a.code === old.code).map((a) => [a.id, a.leadCount]))
+    // The students follow the code to the new record; the retired one, shown
+    // only under the Retired filter (#187), has none.
+    const manager = await signedIn(MANAGER)
+    const lists = await Promise.all([
+      listAgents(manager, { query: old.code, page: 1 }),
+      listAgents(manager, { status: "Retired", query: old.code, page: 1 }),
+    ])
+    const agents = lists.flatMap((list) => {
+      if (!list.ok) throw new Error("list unavailable")
+      return list.data.agents
+    })
+    const counts = Object.fromEntries(agents.filter((a) => a.code === old.code).map((a) => [a.id, a.leadCount]))
     expect(counts).toEqual({ [old.id]: 0, [replacement.id]: 1 })
   })
 
@@ -277,7 +286,7 @@ describe("the discount rule", () => {
     const lead = await newLead(agent.code)
     await asSystem((sql) => changeStatus(sql, agent.id, "retired"))
 
-    expect(await fee(lead)).toEqual({ code: agent.code, state: "unrecognised", agentName: null, amount: 50000, discountApplied: false })
+    expect(await fee(lead)).toEqual({ code: agent.code, state: "unrecognised", agentName: null, amount: 50000, discountApplied: false, switchedOffAt: null })
     expect(await estimateDiscountCode(secretClient(), agent.code)).toEqual({ ok: true, data: { state: "unknown", amount: 50000 } })
     expect(await findReferralAgent(await signedIn(ADMISSIONS), agent.code)).toEqual({ ok: true, data: null })
   })

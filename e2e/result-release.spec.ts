@@ -12,8 +12,8 @@ import { releaseResult } from "@/lib/services/result-release"
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
-// Releasing an interview result through WhatsApp from the lead screen's
-// interview panel. The wa.me tab is checked by its address and never reaches
+// Releasing an interview result through WhatsApp or by SMS from the lead
+// screen's interview panel. The wa.me tab is checked by its address and never reaches
 // WhatsApp.
 
 const today = tanzaniaToday()
@@ -33,13 +33,21 @@ async function signIn(page: Page, person: FixtureStaff) {
 
 const digits = (count: number) => String(randomInt(0, 10 ** count)).padStart(count, "0")
 
-// A lead of the test's own, interviewed and Passed, with its fee Not Paid and
-// a separate WhatsApp number.
-async function interviewedLead() {
+// A lead of the test's own, interviewed and Passed with 81.5% unless asked
+// otherwise, with its fee Not Paid and a separate WhatsApp number unless
+// given only a phone.
+async function interviewedLead({
+  phone = `06${digits(8)}`,
+  whatsapp = `07${digits(8)}`,
+  result = "Passed",
+  score = 81.5,
+  parentName = "Release Parent",
+}: { phone?: string; whatsapp?: string | null; result?: "Passed" | "Failed"; score?: number; parentName?: string } = {}) {
   const studentName = `Candidate ${randomUUID().slice(0, 6)}`
-  const whatsapp = `07${digits(8)}`
   const created = await createLead(await signedIn(ADMISSIONS), {
-    guardian: { contact: { fullName: "Release Parent", relationship: "Mother", phone: `06${digits(8)}`, whatsapp } },
+    guardian: {
+      contact: { fullName: parentName, relationship: "Mother", phone, whatsapp: whatsapp ?? undefined },
+    },
     student: { fullName: studentName, className: "STD 4", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
     start: { kind: "walk-in", visitDate: today },
   })
@@ -47,9 +55,9 @@ async function interviewedLead() {
   const registered = await registerForInterview(await signedIn(ADMISSIONS), created.data.leadId)
   if (!registered.ok) throw new Error(`registration failed: ${registered.error}`)
   const interviewId = registered.data.interviewId
-  const recorded = await recordInterviewResult(await signedIn(ADMISSIONS), interviewId, { interviewDate: today, result: "Passed", score: 81.5 })
+  const recorded = await recordInterviewResult(await signedIn(ADMISSIONS), interviewId, { interviewDate: today, result, score })
   if (!recorded.ok) throw new Error(`result failed: ${recorded.error}`)
-  return { id: created.data.leadId, interviewId, studentName, whatsapp, admissionNumber: created.data.admissionNumber }
+  return { id: created.data.leadId, interviewId, studentName, phone, whatsapp: whatsapp ?? "", admissionNumber: created.data.admissionNumber }
 }
 
 async function markPaid(interviewId: string) {
@@ -130,5 +138,112 @@ test.describe("releasing a result through WhatsApp", () => {
     await expect(release(page)).toContainText("Not sent yet.")
     await expect(page.getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
     await expect(page.getByRole("group", { name: "Message preview" })).toHaveCount(0)
+  })
+})
+
+test.describe("releasing a result by SMS", () => {
+  test("with only a landline-shaped number, Send SMS alone records the release, then shows the text and the number to copy", async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"])
+    const lead = await interviewedLead({ phone: `022${digits(7)}`, whatsapp: null, result: "Failed", score: 45 })
+    await markPaid(lead.interviewId)
+    const phone = `+255${lead.phone.slice(1)}`
+    const spaced = `+255 ${lead.phone.slice(1, 4)} ${lead.phone.slice(4, 7)} ${lead.phone.slice(7)}`
+    const sms = renderResultMessage({
+      channel: "sms",
+      result: "failed",
+      parentName: "Release Parent",
+      studentName: lead.studentName,
+      score: 45,
+      admissionNumber: lead.admissionNumber,
+      className: "STD 4",
+      enrollmentYear: thisYear + 1,
+      officePhone: OFFICE_PHONE,
+    })
+    if (!sms.ok) throw new Error("the expected SMS could not be rendered")
+
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead.id}`)
+    await expect(release(page)).toContainText("None of the parent's numbers can take a WhatsApp link, so the result goes by SMS.")
+    await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
+    await expect(release(page).getByRole("button", { name: "Send SMS instead" })).toHaveCount(0)
+    // Nothing to copy until the release is recorded.
+    await expect(release(page).getByRole("group", { name: "SMS text" })).toHaveCount(0)
+    await expect(release(page)).not.toContainText(spaced)
+
+    await release(page).getByRole("button", { name: "Send SMS", exact: true }).click()
+    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", {
+      timeout: 15_000,
+    })
+    await expect(release(page).getByRole("group", { name: "SMS text" })).toHaveText(sms.data.text, { useInnerText: true })
+    await expect(release(page)).toContainText(`To ${spaced}`)
+    await expect(release(page)).toContainText(`Sent by SMS on ${formatDate(today)} by ${ADMISSIONS.name}`)
+
+    // Windows hands clipboard text back with CRLF line ends.
+    const clipboard = async () => (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n")
+    await release(page).getByRole("button", { name: "Copy number" }).click()
+    await expect.poll(clipboard).toBe(phone)
+    await release(page).getByRole("button", { name: "Copy text" }).click()
+    await expect.poll(clipboard).toBe(sms.data.text)
+
+    await page.goto(`/staff/leads/${lead.id}/history`)
+    await expect(page.getByText("sent the result by SMS: Failed, 45%")).toBeVisible()
+  })
+
+  test("where WhatsApp is offered, Send SMS instead sends the SMS text to the direct phone", async ({ page }) => {
+    const lead = await interviewedLead()
+    await markPaid(lead.interviewId)
+
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead.id}`)
+    await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toBeVisible()
+    await expect(release(page).getByRole("group", { name: "Message preview" })).toBeVisible()
+    await expect(release(page)).toContainText("By WhatsApp to")
+    await release(page).getByRole("button", { name: "Send SMS instead" }).click()
+
+    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", {
+      timeout: 15_000,
+    })
+    // The WhatsApp preview and number give way, so staff copy only the SMS.
+    await expect(release(page)).toContainText("Sent by SMS instead of WhatsApp.")
+    await expect(release(page).getByRole("group", { name: "Message preview" })).toHaveCount(0)
+    await expect(release(page)).not.toContainText("By WhatsApp to")
+    const whatsappNumber = lead.whatsapp.slice(1)
+    await expect(release(page)).not.toContainText(
+      `+255 ${whatsappNumber.slice(0, 3)} ${whatsappNumber.slice(3, 6)} ${whatsappNumber.slice(6)}`,
+    )
+    const direct = lead.phone.slice(1)
+    await expect(release(page)).toContainText(`To +255 ${direct.slice(0, 3)} ${direct.slice(3, 6)} ${direct.slice(6)}`)
+    await expect(release(page).getByRole("group", { name: "SMS text" })).toContainText(lead.studentName)
+    await expect(release(page)).toContainText(`Sent by SMS on ${formatDate(today)} by ${ADMISSIONS.name}`)
+  })
+
+  test("names too long for WhatsApp offer Send SMS alone, warning before the send that the text runs long", async ({ page }) => {
+    const lead = await interviewedLead({ parentName: `Parent ${"P".repeat(600)}` })
+    await markPaid(lead.interviewId)
+    const direct = lead.phone.slice(1)
+    const spaced = `+255 ${direct.slice(0, 3)} ${direct.slice(3, 6)} ${direct.slice(6)}`
+    const note = /^The SMS text takes \d+ messages, more than the usual two\.$/
+
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead.id}`)
+    await expect(release(page)).toContainText("The names on this lead make the message too long for WhatsApp, so it goes by SMS.")
+    await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
+    await expect(release(page).getByRole("group", { name: "Message preview" })).toHaveCount(0)
+    // The note shows before the send; the text and the number do not.
+    await expect(release(page).getByText(note)).toBeVisible()
+    await expect(release(page).getByRole("group", { name: "SMS text" })).toHaveCount(0)
+    await expect(release(page)).not.toContainText(spaced)
+    await expect(release(page)).not.toContainText(lead.studentName)
+
+    await release(page).getByRole("button", { name: "Send SMS", exact: true }).click()
+    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", {
+      timeout: 15_000,
+    })
+    await expect(release(page).getByRole("group", { name: "SMS text" })).toContainText(lead.studentName)
+    await expect(release(page)).toContainText(`To ${spaced}`)
+    await expect(release(page).getByText(note)).toHaveCount(1)
   })
 })

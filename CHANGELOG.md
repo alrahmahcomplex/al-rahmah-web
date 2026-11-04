@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 5, 2026 `v0.68.0`
+
+### NEW
+
+- An interview result can go by SMS. When none of the parent's numbers can take a
+  WhatsApp link, or the names make the WhatsApp message too long, the lead's **Result
+  release** section offers **Send SMS**. When WhatsApp is offered, **Send SMS instead**
+  sits beside **Send through WhatsApp** for a parent who isn't on WhatsApp. Pressing it
+  records the release, then shows the short SMS text and the parent's direct phone, each
+  with a **Copy** button, to send from the office phone, in place of the WhatsApp
+  preview. A note says, before and after the send, when the text takes more than two
+  SMS messages or has a character basic phones may not show.
+- The lead's history shows an SMS release as "sent the result by SMS: Failed, 45%",
+  with the direct phone as the number used.
+
 ## November 5, 2026 `v0.67.0`
 
 ### NEW

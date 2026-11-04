@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { blockedText, releaseLine, releaseRefusal, spacedPhone } from "@/app/staff/leads/[id]/result-release-outcome"
+import { blockedText, releaseLine, releaseRefusal, smsNote, spacedPhone } from "@/app/staff/leads/[id]/result-release-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import type { ReleaseError } from "@/lib/services/result-release"
 
@@ -64,6 +64,29 @@ describe("a result release in the lead's history", () => {
     expect(described.changes).toContainEqual({ label: "Sent to", from: null, to: "The parent's direct phone" })
   })
 
+  it("reads as the result sent by SMS to the direct phone", () => {
+    const [described] = describeLeadHistory(
+      [
+        release({
+          interview_id: INTERVIEW,
+          serial_number: 6,
+          channel: "sms",
+          number_used: "direct",
+          result: "Failed",
+          score: 45,
+          template_id: "sms_failed_v1",
+        }),
+      ],
+      {},
+    )
+    expect(described.summary).toBe("sent the result by SMS: Failed, 45%")
+    expect(described.changes).toEqual([
+      { label: "S/N", from: null, to: "6" },
+      { label: "Sent to", from: null, to: "The parent's direct phone" },
+      { label: "Message", from: null, to: "SMS, Failed (version 1)" },
+    ])
+  })
+
   it("leaves other action events reading as before", () => {
     const [described] = describeLeadHistory([{ ...release({}), action: "invite_sent" }], {})
     expect(described.summary).toBe("recorded invite_sent")
@@ -84,6 +107,27 @@ describe("the Result release section's words", () => {
     // 22:30 in UTC is already the next day in Tanzania.
     expect(releaseLine({ channel: "whatsapp", releasedAt: "2026-10-02T22:30:00Z", releasedBy: "Amina" })).toBe(
       "Sent by WhatsApp on 3 Oct 2026 by Amina",
+    )
+  })
+
+  it("gives the last release by SMS", () => {
+    expect(releaseLine({ channel: "sms", releasedAt: "2026-10-03T07:15:00Z", releasedBy: "Amina" })).toBe(
+      "Sent by SMS on 3 Oct 2026 by Amina",
+    )
+  })
+
+  it("adds no note to an all GSM-7 SMS text in one or two messages", () => {
+    expect(smsNote({ gsm7: true, segments: 1 })).toBeNull()
+    expect(smsNote({ gsm7: true, segments: 2 })).toBeNull()
+  })
+
+  it("notes an SMS text past two messages, and one with a character outside the basic SMS alphabet", () => {
+    expect(smsNote({ gsm7: true, segments: 3 })).toBe("The SMS text takes 3 messages, more than the usual two.")
+    expect(smsNote({ gsm7: false, segments: 2 })).toBe(
+      "A name has a character basic phones may not show, so the SMS text takes 2 messages and may cost more than usual.",
+    )
+    expect(smsNote({ gsm7: false, segments: 4 })).toBe(
+      "A name has a character basic phones may not show, so the SMS text takes 4 messages and may cost more than usual.",
     )
   })
 

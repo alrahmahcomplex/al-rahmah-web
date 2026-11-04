@@ -65,7 +65,7 @@ The prepared Swahili message that releases an interview result, one for **Passed
 
 **Send SMS** uses a separate, shorter plain-text version of each message with no formatting or emoji, so it fits in two SMS segments.
 
-The WhatsApp action targets the parent/guardian's separate WhatsApp contact when available, otherwise it falls back to the direct phone contact. If no WhatsApp-capable number is available, the action is presented as **Send SMS**; it reveals the prepared message and provides a copy function instead of generating a WhatsApp link.
+The WhatsApp action targets the parent/guardian's separate WhatsApp contact when available, otherwise it falls back to the direct phone contact. If no WhatsApp-capable number is available, the action is presented as **Send SMS**; it reveals the prepared message and the direct phone, each with a copy function, instead of generating a WhatsApp link. When WhatsApp is offered, staff may still choose **Send SMS instead** for a parent who turns out not to be on WhatsApp; the SMS then goes to the direct phone. Staff can never choose WhatsApp when no number can take it. When the names on a lead make the WhatsApp message too long, staff send it by SMS.
 
 A release is recorded when the message leaves the app: for WhatsApp, the click on **Send through WhatsApp**; for **Send SMS**, the click that reveals the text to copy. The app cannot know whether the parent received it, so the lead's history records that staff sent it, by which channel, and the result and score it carried, never that the family got it.
 

@@ -34,6 +34,8 @@ const SEEDED = {
     earlier: "1e7e0000-0000-4000-8000-000000000604",
     current: "1e7e0000-0000-4000-8000-000000000605",
   },
+  // Failed, Paid, and the parent's only number is landline-shaped.
+  landline: { lead: "1ead0000-0000-4000-8000-000000000605", interview: "1e7e0000-0000-4000-8000-000000000606" },
   // Slice 5: registered, no result yet.
   noResult: { lead: "1ead0000-0000-4000-8000-000000000501", interview: "1e7e0000-0000-4000-8000-000000000501" },
   // Slice 5: not registered for interview.
@@ -46,6 +48,11 @@ function mobile() {
   return `06${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
 }
 
+// A landline-shaped number of the test's own: Dar es Salaam's 022.
+function landline() {
+  return `022${String(randomInt(0, 10_000_000)).padStart(7, "0")}`
+}
+
 // A lead of the test's own, interviewed with the result, and its fee Paid
 // unless asked otherwise.
 async function interviewedLead({
@@ -54,10 +61,18 @@ async function interviewedLead({
   result = "Passed",
   score = 78,
   paid = true,
-}: { phone?: string; whatsapp?: string; result?: "Passed" | "Failed"; score?: number; paid?: boolean } = {}) {
+  parentName = "Release Parent",
+}: {
+  phone?: string
+  whatsapp?: string
+  result?: "Passed" | "Failed"
+  score?: number
+  paid?: boolean
+  parentName?: string
+} = {}) {
   const studentName = `Candidate ${randomUUID().slice(0, 8)}`
   const created = await createLead(await signedIn(ADMISSIONS), {
-    guardian: { contact: { fullName: "Release Parent", relationship: "Mother", phone, whatsapp } },
+    guardian: { contact: { fullName: parentName, relationship: "Mother", phone, whatsapp } },
     student: { fullName: studentName, className: "STD 4", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
     start: { kind: "walk-in", visitDate: today },
   })
@@ -394,5 +409,150 @@ describe("the record", () => {
         ],
       },
     })
+  })
+})
+
+describe("sending by SMS", () => {
+  test("the seeded lead whose only number is a landline is offered SMS alone, with the short text", async () => {
+    const view = await getResultRelease(await signedIn(ADMISSIONS), SEEDED.landline.lead, OFFICE)
+    expect(view).toMatchObject({
+      ok: true,
+      data: {
+        interviewId: SEEDED.landline.interview,
+        blocked: null,
+        canSend: true,
+        offer: { channel: "sms", whatsappPhone: null, whatsappMessage: null, directPhone: "+255222000606" },
+      },
+    })
+    const sms = view.ok ? view.data.offer?.smsMessage : null
+    expect(sms).toMatchObject({ gsm7: true })
+    expect(sms?.segments).toBeLessThanOrEqual(2)
+    expect(sms?.text).toContain("Shukuru Matokeo")
+  })
+
+  test("a landline-shaped number goes by SMS to the direct phone, and the history records channel sms and no number", async () => {
+    const phone = landline()
+    const { leadId, interviewId, studentName, admissionNumber } = await interviewedLead({ phone, result: "Failed", score: 45 })
+    const staff = await signedIn(ADMISSIONS)
+    expect(await getResultRelease(staff, leadId, OFFICE)).toMatchObject({
+      ok: true,
+      data: { offer: { channel: "sms", whatsappPhone: null, whatsappMessage: null, directPhone: `+255${phone.slice(1)}` } },
+    })
+
+    const released = await releaseResult(staff, interviewId, "sms", OFFICE)
+    const expected = renderResultMessage({
+      channel: "sms",
+      result: "failed",
+      parentName: "Release Parent",
+      studentName,
+      score: 45,
+      admissionNumber,
+      className: "STD 4",
+      enrollmentYear: thisYear + 1,
+      officePhone: OFFICE.officePhone,
+    })
+    if (!expected.ok || expected.data.channel !== "sms") throw new Error("the expected SMS could not be rendered")
+    expect(released).toEqual({
+      ok: true,
+      data: {
+        channel: "sms",
+        text: expected.data.text,
+        phone: `+255${phone.slice(1)}`,
+        gsm7: expected.data.gsm7,
+        segments: expected.data.segments,
+      },
+    })
+
+    const history = await getLeadHistory(await signedIn(ACCOUNTANT), leadId)
+    if (!history.ok) throw new Error(history.error)
+    const entry = history.data.entries.find((e) => e.action === "result_released")
+    expect(entry).toMatchObject({ actor: ADMISSIONS.name, record: null })
+    expect(Object.fromEntries(entry!.changes.map((c) => [c.field, c.to]))).toEqual({
+      interview_id: interviewId,
+      serial_number: expect.any(Number),
+      channel: "sms",
+      number_used: "direct",
+      result: "Failed",
+      score: 45,
+      template_id: "sms_failed_v1",
+    })
+    expect(JSON.stringify(entry)).not.toContain(phone.slice(1))
+    expect(await getResultRelease(staff, leadId, OFFICE)).toMatchObject({
+      ok: true,
+      data: { releases: [{ channel: "sms", numberUsed: "direct", releasedBy: ADMISSIONS.name, templateId: "sms_failed_v1" }] },
+    })
+  })
+
+  test.each([
+    ["a landline-shaped number", landline],
+    ["a foreign number", () => `+4477009${String(randomInt(0, 100_000)).padStart(5, "0")}`],
+  ])("for %s, whatsapp is refused through the service and a direct database call, and sms is allowed", async (_, number) => {
+    const { interviewId } = await interviewedLead({ phone: number(), whatsapp: number() })
+    const staff = await signedIn(ADMISSIONS)
+    expect(await releaseResult(staff, interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "no_whatsapp_number" })
+    const direct = await staff.rpc("release_result", { interview_id: interviewId, channel: "whatsapp" })
+    expect(direct.data).toBeNull()
+    expect(direct.error?.message).toBe("no_whatsapp_number")
+    expect(await releaseCount(interviewId)).toBe(0)
+
+    expect(await releaseResult(staff, interviewId, "sms", OFFICE)).toMatchObject({ ok: true, data: { channel: "sms" } })
+    expect(await getResultReleases(staff, interviewId)).toMatchObject({ ok: true, data: [{ channel: "sms", numberUsed: "direct" }] })
+  })
+
+  test("sms is allowed where WhatsApp is offered, and goes to the direct phone, not the WhatsApp number", async () => {
+    const phone = mobile()
+    const whatsapp = `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
+    const { leadId, interviewId } = await interviewedLead({ phone, whatsapp })
+    const staff = await signedIn(MANAGER)
+    expect(await getResultRelease(staff, leadId, OFFICE)).toMatchObject({ ok: true, data: { offer: { channel: "whatsapp" } } })
+
+    const released = await releaseResult(staff, interviewId, "sms", OFFICE)
+    expect(released).toMatchObject({ ok: true, data: { channel: "sms", phone: `+255${phone.slice(1)}` } })
+    expect(released.ok && released.data.text).not.toContain("*")
+    expect(await getResultReleases(staff, interviewId)).toMatchObject({
+      ok: true,
+      data: [{ channel: "sms", numberUsed: "direct", result: "Passed", score: 78, templateId: "sms_passed_v1" }],
+    })
+  })
+
+  test("names too long for WhatsApp leave SMS alone: an sms release succeeds and whatsapp is refused too_long", async () => {
+    const { leadId, interviewId } = await interviewedLead({ parentName: "P".repeat(600) })
+    const staff = await signedIn(ADMISSIONS)
+    const view = await getResultRelease(staff, leadId, OFFICE)
+    expect(view).toMatchObject({
+      ok: true,
+      data: { blocked: null, offer: { channel: "whatsapp", whatsappMessage: null, smsMessage: { gsm7: true } } },
+    })
+    // The section warns before Send SMS that this text runs past two messages.
+    expect(view.ok && view.data.offer?.smsMessage.segments).toBeGreaterThan(2)
+
+    expect(await releaseResult(staff, interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "too_long" })
+    expect(await releaseCount(interviewId)).toBe(0)
+    expect(await releaseResult(staff, interviewId, "sms", OFFICE)).toMatchObject({ ok: true, data: { channel: "sms" } })
+    expect(await getResultReleases(staff, interviewId)).toMatchObject({ ok: true, data: [{ channel: "sms", numberUsed: "direct" }] })
+  })
+
+  test("an SMS release passes the same gate: closed, Not Paid and earlier interviews are refused and nothing is recorded", async () => {
+    const staff = await signedIn(ADMISSIONS)
+    expect(await releaseResult(staff, SEEDED.notPaid.interview, "sms", OFFICE)).toEqual({ ok: false, error: "not_paid" })
+    expect(await releaseResult(staff, SEEDED.noResult.interview, "sms", OFFICE)).toEqual({ ok: false, error: "no_result" })
+    expect(await releaseResult(staff, SEEDED.retaken.earlier, "sms", OFFICE)).toEqual({ ok: false, error: "not_current" })
+
+    const { leadId, interviewId } = await interviewedLead({ phone: landline() })
+    await close(leadId, "Archived")
+    expect(await releaseResult(staff, interviewId, "sms", OFFICE)).toEqual({ ok: false, error: "lead_closed" })
+    expect(await releaseCount(interviewId)).toBe(0)
+  })
+
+  test("only staff who may send results can send by SMS", async () => {
+    const { leadId, interviewId } = await interviewedLead({ phone: landline() })
+    const accountant = await signedIn(ACCOUNTANT)
+    const view = await getResultRelease(accountant, leadId, OFFICE)
+    expect(view).toMatchObject({ ok: true, data: { canSend: false, offer: null } })
+    expect(JSON.stringify(view)).not.toMatch(/Assalaam|\+255/)
+    expect(await releaseResult(accountant, interviewId, "sms", OFFICE)).toEqual({ ok: false, error: "forbidden" })
+    expect(await releaseResult(await signedIn(DEACTIVATED), interviewId, "sms", OFFICE)).toEqual({ ok: false, error: "forbidden" })
+    expect(await releaseResult(anonClient(), interviewId, "sms", OFFICE)).toEqual({ ok: false, error: "forbidden" })
+    expect(await releaseCount(interviewId)).toBe(0)
   })
 })

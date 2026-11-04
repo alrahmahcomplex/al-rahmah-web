@@ -7,6 +7,7 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
 import { setLeadReferralCode } from "@/lib/services/referral"
 
+import { registerApprovedAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { family, fillChild, fillParent, PHONE_WIDTH, type Lang } from "./admission-form"
@@ -27,19 +28,14 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-// An Approved agent of the test's own.
+// An Approved agent of the test's own, registered and approved in one
+// transaction so the Marketing Agents spec never sees it Pending.
 async function approvedAgent() {
   const fullName = `Imani Status ${randomUUID().slice(0, 6)}`
   // A leading 7 keeps it clear of the seeded 700 000 numbers.
   const phone = `07${String(randomInt(10_000_000, 100_000_000))}`
-  const registered = await secretClient().rpc("register_marketing_agent", { full_name: fullName, phone, whatsapp: null })
-  if (registered.error) throw new Error(`could not register an agent: ${registered.error.message}`)
-  const code = registered.data as string
-  const row = await secretClient().from("marketing_agents").select("id").eq("code", code).is("retired_at", null).single<{ id: string }>()
-  if (row.error) throw new Error(`could not find the agent: ${row.error.message}`)
-  const approved = await (await signedIn(MANAGER)).rpc("approve_marketing_agent", { agent_id: row.data.id })
-  if (approved.error) throw new Error(`could not approve the agent: ${approved.error.message}`)
-  return { id: row.data.id, fullName, code }
+  const { id, code } = await registerApprovedAgent(MANAGER, { fullName, phone })
+  return { id, fullName, code }
 }
 
 // The Manager's action, as the screen calls it, for a test's setup.

@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
+import { Client } from "pg"
 import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
@@ -9,16 +10,15 @@ import { getLeadInterviews, registerForInterview, setInterviewFeeStatus } from "
 import { declineLead, markLead } from "@/lib/services/lead-closure"
 import { createLead } from "@/lib/services/leads"
 import {
-  approveAgent,
   changeAgentStatus,
   getAgentFeeImpact,
-  getPendingAgentCount,
   listAgents,
   registerAgent,
   type AgentStatusAction,
 } from "@/lib/services/marketing-agents"
 import { estimateDiscountCode, findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
 
+import { pendingAround, registerApprovedAgent } from "../support/agents"
 import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -37,17 +37,19 @@ function phone() {
 
 type Agent = { id: string; code: string; fullName: string; phone: string }
 
+// An agent of the test's own. An Approved one is registered and approved in
+// one transaction, so it is never Pending where another test counts.
 async function newAgent({ approved = true, number = phone() } = {}): Promise<Agent> {
   const fullName = `Subira Status ${randomUUID().slice(0, 8)}`
+  if (approved) {
+    const { id, code } = await registerApprovedAgent(MANAGER, { fullName, phone: number })
+    return { id, code, fullName, phone: number }
+  }
   const registered = await registerAgent(secretClient(), { fullName, phone: number })
   if (!registered.ok) throw new Error(`could not register: ${JSON.stringify(registered.error)}`)
   const list = await listAgents(await signedIn(MANAGER), { query: registered.data.code, page: 1 })
   const row = list.ok ? list.data.agents.find((a) => a.code === registered.data.code) : undefined
   if (!row) throw new Error("could not find the new agent")
-  if (approved) {
-    const done = await approveAgent(await signedIn(MANAGER), row.id)
-    if (!done.ok) throw new Error(`could not approve: ${done.error}`)
-  }
   return { id: row.id, code: row.code, fullName, phone: number }
 }
 
@@ -267,6 +269,14 @@ describe("the Manager's status actions", () => {
 describe("the Agents list", () => {
   test("hides retired records except under the Retired filter, which names who retired them and when", async () => {
     const agent = await newAgent({ approved: false })
+    // The retired Pending agent no longer waits for approval. Counted in one
+    // snapshot, with the retirement rolled back, so agents that other tests
+    // register, approve or retire meanwhile don't move the numbers.
+    const { before, after } = await pendingAround(MANAGER, (sql) =>
+      sql.query("select public.record_agent_status_change($1, 'retired', 'Duplicate record')", [agent.id]),
+    )
+    expect(before - after).toBe(1)
+
     const manager = await signedIn(MANAGER)
     expect((await change(agent.id, "retire", "Duplicate record")).ok).toBe(true)
 
@@ -279,18 +289,6 @@ describe("the Agents list", () => {
       retiredAt: expect.any(String),
       statusChange: { kind: "retired", changedBy: MANAGER.name, changedAt: expect.any(String), replacedBy: null },
     })
-    // The retired Pending agent no longer waits for approval: the count is
-    // of Pending agents not retired, read in the same moment.
-    const [count, waiting] = await Promise.all([
-      getPendingAgentCount(manager),
-      inRolledBackTransaction(async (sql) =>
-        Number(
-          (await sql.query<{ n: string }>("select count(*) as n from public.marketing_agents where status = 'Pending' and retired_at is null"))
-            .rows[0].n,
-        ),
-      ),
-    ])
-    expect(count).toEqual({ ok: true, data: waiting })
   })
 
   test("shows a switched-off agent with who switched them off", async () => {
@@ -303,5 +301,82 @@ describe("the Agents list", () => {
       retiredAt: null,
       statusChange: { kind: "switched_off", changedBy: MANAGER.name },
     })
+  })
+})
+
+// A direct connection acting as `person`'s signed-in session, as the API
+// would, for holding a transaction open while another one runs.
+async function sessionOf(person: { id: string }): Promise<Client> {
+  const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+  await sql.connect()
+  // A deadlock or a lost wake-up fails the test instead of hanging it.
+  await sql.query("set statement_timeout = '15s'")
+  await sql.query("begin")
+  const { rows } = await sql.query<{ user_id: string }>("select user_id from public.staff_members where id = $1", [person.id])
+  await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: rows[0].user_id, role: "authenticated" })])
+  return sql
+}
+
+// Whether a promise is still waiting after a moment.
+async function stillWaiting(promise: Promise<unknown>): Promise<boolean> {
+  const waiting = Symbol("waiting")
+  const first = await Promise.race([promise.then(() => null, () => null), new Promise((resolve) => setTimeout(() => resolve(waiting), 500))])
+  return first === waiting
+}
+
+async function lockedAmount(interviewId: string) {
+  return inRolledBackTransaction(
+    async (sql) =>
+      (await sql.query<{ locked_amount: number | null }>("select locked_amount from public.interviews where id = $1", [interviewId])).rows[0]
+        .locked_amount,
+  )
+}
+
+describe("a payment and a status change at once", () => {
+  test("a fee marked Paid during a switch-off waits for it, and is locked at the full fee the count promised", async () => {
+    const agent = await newAgent()
+    const lead = await registeredLead(agent.code)
+    const manager = await sessionOf(MANAGER)
+    const accountant = await sessionOf(ACCOUNTANT)
+    try {
+      const off = await manager.query<{ n: number }>("select public.change_marketing_agent_status($1, 'switched_off', 'Left the school') as n", [
+        agent.id,
+      ])
+      expect(off.rows[0].n).toBe(1)
+
+      const paying = accountant.query("select public.set_interview_fee_status($1, 'Paid')", [lead.interviewId])
+      expect(await stillWaiting(paying)).toBe(true)
+      await manager.query("commit")
+      await paying
+      await accountant.query("commit")
+    } finally {
+      await Promise.all([manager.end(), accountant.end()])
+    }
+
+    expect(await lockedAmount(lead.interviewId)).toBe(50000)
+    expect((await history(agent.id)).map((row) => row.fee_change_count)).toEqual([1])
+  })
+
+  test("a switch-off during a payment waits for it, and doesn't count the fee just Paid", async () => {
+    const agent = await newAgent()
+    const lead = await registeredLead(agent.code)
+    const accountant = await sessionOf(ACCOUNTANT)
+    const manager = await sessionOf(MANAGER)
+    try {
+      await accountant.query("select public.set_interview_fee_status($1, 'Paid')", [lead.interviewId])
+
+      const switching = manager.query<{ n: number }>("select public.change_marketing_agent_status($1, 'switched_off', 'Left the school') as n", [
+        agent.id,
+      ])
+      expect(await stillWaiting(switching)).toBe(true)
+      await accountant.query("commit")
+      expect((await switching).rows[0].n).toBe(0)
+      await manager.query("commit")
+    } finally {
+      await Promise.all([manager.end(), accountant.end()])
+    }
+
+    expect(await lockedAmount(lead.interviewId)).toBe(40000)
+    expect((await history(agent.id)).map((row) => row.fee_change_count)).toEqual([0])
   })
 })

@@ -177,7 +177,7 @@ describe("a status change whose answer is lost", () => {
 })
 
 describe("the fee impact of a large agent", () => {
-  it("reads every page, past the API's 1,000-row cap", async () => {
+  it("reads the whole list in one call, past the API's 1,000-row cap", async () => {
     const rows = Array.from({ length: 2345 }, (_, i) => ({
       lead_id: `lead-${i}`,
       admission_number: `A${i}`,
@@ -188,13 +188,13 @@ describe("the fee impact of a large agent", () => {
       fee_now: 40000,
       fee_after: 50000,
     }))
-    const client = {
-      rpc: () => ({
-        // PostgREST answers at most 1,000 rows, whatever the range asks.
-        range: async (from: number, to: number) => ({ data: rows.slice(from, Math.min(to + 1, from + 1000)), error: null }),
-      }),
-    } as unknown as Parameters<typeof getAgentFeeImpact>[0]
+    // The database answers one JSON array, one value however long. A second
+    // call could read a different moment, so the list must come from one.
+    const rpc = vi.fn(async () => ({ data: rows, error: null }))
+    const client = { rpc } as unknown as Parameters<typeof getAgentFeeImpact>[0]
     const impact = await getAgentFeeImpact(client, "agent", "switch-off")
     expect(impact.ok && impact.data.families.map((family) => family.leadId)).toEqual(rows.map((row) => row.lead_id))
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith("agent_status_fee_impact", { agent_id: "agent", kind: "switched_off" })
   })
 })

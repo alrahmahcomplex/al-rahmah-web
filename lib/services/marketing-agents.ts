@@ -360,28 +360,18 @@ type FeeImpactRow = {
   fee_after: number
 }
 
-// The API answers at most this many rows at a time (supabase/config.toml
-// max_rows, the hosted default too).
-const FEE_IMPACT_PAGE = 1000
-
 // The families whose interview fee the action would move, for the dialog the
-// Manager confirms. Needs agents.approve and leads.view. Reads every page, so
-// the list and its count match the count the change records.
+// Manager confirms. Needs agents.approve and leads.view. The database answers
+// the whole list as one JSON array, read in one snapshot, so the API's row
+// cap can't cut it short and no family is skipped or listed twice.
 export async function getAgentFeeImpact(
   supabase: SupabaseClient,
   agentId: string,
   action: AgentStatusAction,
 ): Promise<Result<FeeImpact, AgentStatusError>> {
-  const rows: FeeImpactRow[] = []
-  for (;;) {
-    const { data, error } = await supabase
-      .rpc("agent_status_fee_impact", { agent_id: agentId, kind: kindOf(action) })
-      .range(rows.length, rows.length + FEE_IMPACT_PAGE - 1)
-    if (error) return { ok: false, error: statusError(error, "Could not read an agent status change's fee impact") }
-    const page = data as FeeImpactRow[]
-    rows.push(...page)
-    if (page.length < FEE_IMPACT_PAGE) break
-  }
+  const { data, error } = await supabase.rpc("agent_status_fee_impact", { agent_id: agentId, kind: kindOf(action) })
+  if (error) return { ok: false, error: statusError(error, "Could not read an agent status change's fee impact") }
+  const rows = data as FeeImpactRow[]
   return {
     ok: true,
     data: {

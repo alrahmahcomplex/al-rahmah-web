@@ -14,6 +14,7 @@ import {
   type MarketingAgent,
 } from "@/lib/services/marketing-agents"
 
+import { pendingAround } from "../support/agents"
 import { anonClient, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER } from "../support/fixtures"
 
@@ -267,10 +268,17 @@ describe("the agent list", () => {
   })
 
   test("the Pending count counts the Pending agents, and staff without leads.view read none", async () => {
-    const before = await getPendingAgentCount(await signedIn(MANAGER))
-    await register()
-    const after = await getPendingAgentCount(await signedIn(MANAGER))
-    expect(before.ok && after.ok && after.data - before.data).toBeGreaterThanOrEqual(1)
+    // The seeded Pending agent is never approved, so the count is at least 1.
+    const count = await getPendingAgentCount(await signedIn(MANAGER))
+    expect(count.ok && count.data).toBeGreaterThanOrEqual(1)
+    // A new agent adds exactly one. Counted in one snapshot, with the new
+    // agent rolled back, so agents other tests register, approve or retire
+    // meanwhile don't move the numbers.
+    const { before, after } = await pendingAround(MANAGER, async (sql) => {
+      await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
+      await sql.query("select public.register_marketing_agent($1, $2, null)", [`Pending Count ${randomUUID().slice(0, 8)}`, asE164(phone())])
+    })
+    expect(after - before).toBe(1)
 
     const approverOnly = await createThrowawayStaff(["agents.approve"])
     expect(await getPendingAgentCount(await signedIn(approverOnly))).toEqual({ ok: true, data: 0 })

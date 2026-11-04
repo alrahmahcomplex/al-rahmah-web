@@ -4,8 +4,8 @@
 --   action: `agents.approve`, a reason, and one of switched_off, switched_on
 --   or retired. It goes through record_agent_status_change, the one writer of
 --   the cached columns and their history (#184).
--- - agent_status_fee_impact(agent_id, kind) lists, before the Manager
---   confirms, the families whose interview fee the change would move: leads
+-- - agent_status_fee_impact(agent_id, kind) lists, as one JSON array, before
+--   the Manager confirms, the families whose interview fee the change would move: leads
 --   carrying the agent's code whose current interview fee is not yet Paid
 --   (or who have no interview yet), when the code's discount would change.
 --   Closed leads (Declined, Inactive, Archived) count too: their unpaid fee
@@ -16,6 +16,9 @@
 --   records and the fee-impact list are right.
 -- - Every status-change row now records fee_change_count, that number at the
 --   moment of the change, counted under the agent's lock.
+-- - set_interview_fee_status holds the code's agent record in share mode
+--   before it reads the discount, so a payment and a status change wait for
+--   each other and the recorded count stays true.
 -- - find_marketing_agent also returns switched_off_at, so staff screens can
 --   say a code is switched off and since when.
 -- - marketing_agent_status_notes(agent_ids) gives the Agents screen the
@@ -203,22 +206,98 @@ $$;
 revoke execute on function public.record_agent_status_change(uuid, text, text, uuid) from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
+-- set_interview_fee_status, re-created with its signature and grants
+-- unchanged: before it reads whether the code gives the discount, it now
+-- holds the code's agent record in share mode. A status change holds its
+-- agent for update while it counts, so the two wait for each other: a fee
+-- marked Paid while a switch-off is under way is locked at the amount the
+-- switch-off leaves, and a switch-off that waits for a payment counts that
+-- fee as Paid. Either way the recorded count is the fees that moved.
+--
+-- Lock order, on every path that takes these rows: the lead, then the
+-- interview, then the agent record. record_agent_status_change takes only
+-- the agent and reads the leads and interviews without locking them, so it
+-- can't hold one while waiting for the other.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.set_interview_fee_status(interview_id uuid, fee_status text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    target public.interviews;
+    lead_code text;
+    expected record;
+    new_amount integer;
+    discounted boolean := false;
+begin
+    if auth.role() is distinct from 'authenticated' or not public.has_permission('interview_payments.record') then
+        raise exception 'not_permitted';
+    end if;
+
+    select * into target from public.interviews i where i.id = set_interview_fee_status.interview_id;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    -- The lead is held before the interview, in the order the other interview
+    -- writes take them, so it can't be closed between the check and the
+    -- change. Holding it also keeps its code from changing.
+    select l.referral_code into lead_code from public.leads l where l.id = target.lead for share;
+    perform public.assert_lead_open(target.lead);
+    -- Locked, so two clicks at once change the fee once: the second finds the
+    -- status already set.
+    select * into target from public.interviews i where i.id = target.id for update;
+
+    if set_interview_fee_status.fee_status is null
+       or set_interview_fee_status.fee_status not in ('Paid', 'Not Paid') then
+        raise exception 'invalid_status';
+    end if;
+    if target.fee_status::text = set_interview_fee_status.fee_status then
+        raise exception 'no_change';
+    end if;
+
+    -- The code's current record: a status change refuses a retired one, so
+    -- any change in progress, Recreate's included, holds this one. Both
+    -- ways: a fee going back to Not Paid starts moving with the code's
+    -- discount again, so a count in progress must see it. Read in its own
+    -- statement after the wait, the discount is the one that change leaves.
+    perform 1 from public.marketing_agents a
+    where a.id in (select c.id from public.agent_for_code(lead_code) c)
+    for share;
+
+    if set_interview_fee_status.fee_status = 'Paid' then
+        select e.amount, e.discount_applied into expected from public.expected_interview_amount(target.lead) e;
+        new_amount := expected.amount;
+        discounted := expected.discount_applied;
+    end if;
+
+    update public.interviews i
+    set fee_status = set_interview_fee_status.fee_status::public.interview_fee_status,
+        locked_amount = new_amount,
+        locked_discount_applied = case when new_amount is null then null else discounted end
+    where i.id = target.id;
+
+    return jsonb_build_object(
+        'interview_id', target.id,
+        'fee_status', set_interview_fee_status.fee_status,
+        'locked_amount', new_amount,
+        'discount_applied', discounted
+    );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- agent_status_fee_impact: what the Manager reads before confirming. Needs
 -- agents.approve, and leads.view since it names families. Recreate (#189)
--- shows it too, so it takes all four kinds.
+-- shows it too, so it takes all four kinds. The whole list is one JSON array
+-- in one row, read in one snapshot: the API's row cap doesn't cut it short,
+-- and no page can skip or repeat a family that changed between pages.
 -- ---------------------------------------------------------------------------
 
 create function public.agent_status_fee_impact(agent_id uuid, kind text)
-returns table (
-    lead_id uuid,
-    admission_number text,
-    student_name text,
-    class_name text,
-    contact_name text,
-    contact_phone text,
-    fee_now integer,
-    fee_after integer
-)
+returns jsonb
 language plpgsql
 stable
 security definer
@@ -226,6 +305,7 @@ set search_path = ''
 as $$
 declare
     agent public.marketing_agents;
+    families jsonb;
 begin
     if auth.role() is distinct from 'authenticated'
        or not public.has_permission('agents.approve')
@@ -247,15 +327,22 @@ begin
 
     -- Every listed fee moves between the two amounts: the discount goes on
     -- for switching on and recreating, and comes off otherwise.
-    return query
-    select l.id, l.admission_number, l.student_name, l.class_name::text, c.full_name, c.phone,
-        public.interview_fee(agent_status_fee_impact.kind not in ('switched_on', 'recreated')),
-        public.interview_fee(agent_status_fee_impact.kind in ('switched_on', 'recreated'))
+    select coalesce(jsonb_agg(jsonb_build_object(
+            'lead_id', l.id,
+            'admission_number', l.admission_number,
+            'student_name', l.student_name,
+            'class_name', l.class_name::text,
+            'contact_name', c.full_name,
+            'contact_phone', c.phone,
+            'fee_now', public.interview_fee(agent_status_fee_impact.kind not in ('switched_on', 'recreated')),
+            'fee_after', public.interview_fee(agent_status_fee_impact.kind in ('switched_on', 'recreated'))
+        ) order by l.student_name, l.admission_number, l.id), '[]'::jsonb)
+    into families
     from public.agent_fee_change_leads(agent, agent_status_fee_impact.kind) changed (id)
     join public.leads l on l.id = changed.id
-    join public.guardian_contacts c on c.id = l.guardian_contact_id
-    -- The lead id last, so the service can read the list in pages.
-    order by l.student_name, l.admission_number, l.id;
+    join public.guardian_contacts c on c.id = l.guardian_contact_id;
+
+    return families;
 end;
 $$;
 

@@ -16,6 +16,7 @@ const REFUSED: Record<Exclude<SetReferralCodeError, "no-change"> | "signed-out",
   "not-found": "This lead could not be found. Reload the page.",
   "lead-closed": "This lead is closed, so its referral code can't be changed.",
   "unknown-code": "No Marketing Agent has this code. Check it and try again.",
+  "retired-code": "This code belongs to a retired Marketing Agent record, so it can't be used. Check it and try again.",
   unavailable: "The referral code could not be saved. Nothing was changed. Try again in a moment.",
   "signed-out": "Your session has ended. Sign in again, then change the referral code.",
 }

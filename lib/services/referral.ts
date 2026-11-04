@@ -37,6 +37,8 @@ export type SetReferralCodeError =
   | "lead-closed"
   // No Marketing Agent holds the code.
   | "unknown-code"
+  // Only a retired agent record holds the code.
+  | "retired-code"
   // The lead already holds this code, or already has none.
   | "no-change"
   | "unavailable"
@@ -69,11 +71,11 @@ export async function getLeadReferral(
 
   const code = lead.data.referral_code
   const [agent, fee] = await Promise.all([
+    // The code's current agent, through the database's one code rule, so a
+    // retired record that once held it is never named.
     code
       ? supabase
-          .from("marketing_agents")
-          .select("full_name, status")
-          .eq("code", code)
+          .rpc("find_marketing_agent", { typed_code: code })
           .maybeSingle<{ full_name: string; status: AgentStatus }>()
       : Promise.resolve({ data: null, error: null }),
     supabase
@@ -105,6 +107,7 @@ function setError(error: PostgrestError): SetReferralCodeError {
   if (error.message === "not_found" || error.code === "22P02") return "not-found"
   if (error.message === "lead_closed") return "lead-closed"
   if (error.message === "unknown_code") return "unknown-code"
+  if (error.message === "retired_code") return "retired-code"
   if (error.message === "no_change") return "no-change"
   console.error("Could not set a lead's Referral code", error)
   return "unavailable"
@@ -141,10 +144,11 @@ export async function findReferralAgent(
 }
 
 // What a code typed on the Admission form means for the interview fee: an
-// Approved agent's code (`approved`), a Pending agent's (`pending`), or no
-// agent's (`unknown`), with the fee per child in whole TZS. Secret key only:
-// the public form's Server Action calls it after the rate limit.
-export type DiscountCodeEstimate = { state: "approved" | "pending" | "unknown"; amount: number }
+// Approved agent's code (`approved`), a Pending agent's (`pending`), a
+// switched-off agent's (`switched_off`, no discount), or no current agent's
+// (`unknown`), with the fee per child in whole TZS. Secret key only: the
+// public form's Server Action calls it after the rate limit.
+export type DiscountCodeEstimate = { state: "approved" | "pending" | "switched_off" | "unknown"; amount: number }
 
 export async function estimateDiscountCode(
   supabase: SupabaseClient,

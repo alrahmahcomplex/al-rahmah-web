@@ -35,11 +35,28 @@ export function spacedPhone(phone: string): string {
   return tanzanian ? `+255 ${tanzanian[1]} ${tanzanian[2]} ${tanzanian[3]}` : phone
 }
 
+// A note beside the SMS text when it would cost more than the two messages
+// the templates are written for: past two, or with a character outside GSM-7,
+// which a name can bring and which makes every message shorter.
+export function smsNote({ gsm7, segments }: { gsm7: boolean; segments: number }): string | null {
+  if (!gsm7) {
+    return `A name has a character basic phones may not show, so this text takes ${segments} SMS messages and may cost more than usual.`
+  }
+  if (segments > 2) return `This text takes ${segments} SMS messages, more than the usual two.`
+  return null
+}
+
+export type ReleaseRefusal = { status: "refused"; message: string }
+
 // What Send through WhatsApp is told. The link goes only to the tab the click
 // opened; it is never put in the page's own address.
-export type ReleaseOutcome = { status: "released"; link: string } | { status: "refused"; message: string }
+export type ReleaseOutcome = { status: "released"; link: string } | ReleaseRefusal
 
-export function releaseRefusal(error: ReleaseError): ReleaseOutcome {
+// What Send SMS is told: the text and the number to send it to, once the
+// release is recorded.
+export type SmsReleaseOutcome = { status: "released"; text: string; phone: string; note: string | null } | ReleaseRefusal
+
+export function releaseRefusal(error: ReleaseError): ReleaseRefusal {
   switch (error) {
     case "forbidden":
       return { status: "refused", message: "Your role can't send interview results." }

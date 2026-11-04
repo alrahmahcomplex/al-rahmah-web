@@ -4,11 +4,12 @@ import { getResultRelease } from "@/lib/services/result-release"
 import { createClient } from "@/utils/supabase/server"
 
 import { blockedText, releaseLine, spacedPhone } from "./result-release-outcome"
-import { SendResultByWhatsApp } from "./result-release-send"
+import { SendResult } from "./result-release-send"
 
 // The Result release section of the interview panel (slice 6). It says why
 // the current result can't go yet, or shows staff who may send it the
-// prepared message and Send through WhatsApp. Everyone who may view the lead
+// prepared message with Send through WhatsApp and Send SMS instead, or Send
+// SMS alone when no number can take a WhatsApp link. Everyone who may view the lead
 // sees whether and when it was last sent.
 export async function ResultReleaseSection({ leadId }: { leadId: string }) {
   const view = await getResultRelease(await createClient(), leadId, { officePhone: OFFICE_PHONE })
@@ -31,7 +32,8 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
           )}
           {view.data.blocked !== null ? (
             <p className="text-sm text-muted-foreground">{blockedText(view.data.blocked, view.data.amountOwed)}</p>
-          ) : view.data.offer?.channel === "whatsapp" && view.data.offer.whatsappMessage && view.data.interviewId ? (
+          ) : !view.data.offer || !view.data.interviewId ? null : view.data.offer.channel === "whatsapp" &&
+            view.data.offer.whatsappMessage ? (
             <>
               <p className="text-sm text-muted-foreground">
                 By WhatsApp to {spacedPhone(view.data.offer.whatsappPhone ?? "")}. Check the name and score; the wording
@@ -44,18 +46,24 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
               >
                 {view.data.offer.whatsappMessage}
               </div>
-              <SendResultByWhatsApp key={view.data.interviewId} leadId={leadId} interviewId={view.data.interviewId} />
+              <SendResult key={view.data.interviewId} leadId={leadId} interviewId={view.data.interviewId} whatsapp />
             </>
-          ) : view.data.offer?.channel === "whatsapp" ? (
-            <p className="text-sm text-muted-foreground">
-              The names on this lead make the message too long for WhatsApp. Check the student&apos;s and the
-              parent&apos;s names.
-            </p>
-          ) : view.data.offer?.channel === "sms" ? (
-            <p className="text-sm text-muted-foreground">
-              None of the parent&apos;s numbers can take a WhatsApp link, so this result can&apos;t be sent by WhatsApp.
-            </p>
-          ) : null}
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {view.data.offer.channel === "whatsapp"
+                  ? "The names on this lead make the message too long for WhatsApp, so it goes by SMS. Check the student's and the parent's names."
+                  : "None of the parent's numbers can take a WhatsApp link, so the result goes by SMS."}{" "}
+                Send SMS records the release, then shows the text and the number to send it to from the office phone.
+              </p>
+              <SendResult
+                key={view.data.interviewId}
+                leadId={leadId}
+                interviewId={view.data.interviewId}
+                whatsapp={false}
+              />
+            </>
+          )}
         </>
       )}
     </section>

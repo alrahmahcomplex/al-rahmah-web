@@ -94,6 +94,12 @@ test.describe("the interview fee", () => {
     await expect(panel(page).getByText("TZS 50,000", { exact: true })).toBeVisible()
     await expect(page.getByRole("button", { name: "Mark paid" })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Mark not paid" })).toHaveCount(0)
+
+    // The Referral code panel agrees with the amount paid, not the fee as it
+    // would come to now.
+    const referral = page.getByRole("region", { name: "Referral code" })
+    await expect(referral.getByLabel("Interview fee paid")).toHaveText("TZS 50,000")
+    await expect(referral.getByLabel("Expected interview fee")).toHaveCount(0)
   })
 
   test("a closed lead keeps showing its fee, with no control for the Accountant", async ({ page }) => {

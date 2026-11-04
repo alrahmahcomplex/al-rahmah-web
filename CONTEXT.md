@@ -67,6 +67,8 @@ The prepared Swahili message that releases an interview result, one for **Passed
 
 The WhatsApp action targets the parent/guardian's separate WhatsApp contact when available, otherwise it falls back to the direct phone contact. If no WhatsApp-capable number is available, the action is presented as **Send SMS**; it reveals the prepared message and provides a copy function instead of generating a WhatsApp link.
 
+A release is recorded when the message leaves the app: for WhatsApp, the click on **Send through WhatsApp**; for **Send SMS**, the click that reveals the text to copy. The app cannot know whether the parent received it, so the lead's history records that staff sent it, by which channel, and the result and score it carried, never that the family got it.
+
 **Next action**:
 A required selection from a fixed list that tells the parent or guardian what to do after receiving the interview result. It is included in the prepared Swahili result message.
 

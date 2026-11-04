@@ -538,14 +538,18 @@ export async function updateLeadDetails(
 // them all. With `expectedChildren`, the ids of the leads the staff member was
 // told the change reaches, a contact whose children differ by then is refused
 // as `children-changed`.
+// With `sourceLeadId`, that lead must still be open and on this contact;
+// the database holds it through the write. Re-application Apply uses this.
 export async function updateGuardianContact(
   supabase: SupabaseClient,
   contactId: string,
   changes: ContactChanges,
   expectedChildren?: string[],
+  sourceLeadId?: string,
 ): Promise<Result<null, CorrectionError>> {
   return correction(
-    supabase.rpc("update_guardian_contact", {
+    supabase.rpc(sourceLeadId === undefined ? "update_guardian_contact" : "update_guardian_contact_for_lead", {
+      ...(sourceLeadId === undefined ? {} : { lead_id: sourceLeadId }),
       contact_id: contactId,
       changes: given({
         full_name: changes.fullName,

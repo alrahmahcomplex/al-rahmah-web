@@ -67,9 +67,8 @@ export async function applyReApplicationField(
 
   const lead = await getLead(supabase, reApplication.data.leadId)
   if (!lead.ok) return { ok: false, error: { kind: lead.error } }
-  // A closed lead is read-only. The lead's own corrections refuse it in the
-  // database; a contact one only once every child on it is closed, so the
-  // re-application's lead is checked here too.
+  // Refuse early for a closed lead. Both correction paths check again in
+  // the database while holding the re-application's lead through the write.
   if (isClosed(lead.data)) return { ok: false, error: { kind: "closed" } }
 
   // A separate WhatsApp number equal to the current phone is normalized to
@@ -81,5 +80,5 @@ export async function applyReApplicationField(
 
   const change = submittedChange(field, reApplication.data.submitted)
   if (change.to === "lead") return updateLeadDetails(supabase, lead.data.id, change.changes)
-  return updateGuardianContact(supabase, lead.data.contact.id, change.changes, expectedChildren)
+  return updateGuardianContact(supabase, lead.data.contact.id, change.changes, expectedChildren, lead.data.id)
 }

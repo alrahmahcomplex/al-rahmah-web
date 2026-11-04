@@ -1,6 +1,7 @@
 import type { Result } from "@/lib/services/result"
+import { WHATSAPP_TEXT_MAX_LENGTH } from "@/lib/whatsapp"
 
-// The result messages families receive, and the wa.me link that carries one.
+// The result messages families receive. lib/whatsapp.ts builds the link.
 // Pure: no I/O. Callers pass the office phone (OFFICE_PHONE from lib/office.ts)
 // so this module stays importable anywhere, tests included.
 
@@ -48,10 +49,6 @@ _Ofisi ya Udahili, Al-Rahmah Schools_`,
     "Assalaam Alaykum {parent_name}. Asante kwa kumleta {student_name} kwenye usaili wa Al-Rahmah Schools. Kwa masikitiko, hakufaulu; alama {score}%. Namba ya Udahili: {admission_number}. Tafadhali wasiliana na ofisi ya udahili: {office_phone}. - Ofisi ya Udahili",
 })
 
-// The research budget for a wa.me message (research/whatsapp-links). The
-// approved text with realistic names never comes near it.
-const WHATSAPP_MAX_LENGTH = 1000
-
 export type ResultMessageInput = {
   channel: ResultChannel
   result: InterviewResult
@@ -84,7 +81,7 @@ export function renderResultMessage(input: ResultMessageInput): Result<ResultMes
   const text = RESULT_TEMPLATES[templateId].replace(/\{(\w+)\}/g, (placeholder, key: string) => values[key] ?? placeholder)
 
   if (input.channel === "whatsapp") {
-    if (text.length > WHATSAPP_MAX_LENGTH) return { ok: false, error: "too_long" }
+    if (text.length > WHATSAPP_TEXT_MAX_LENGTH) return { ok: false, error: "too_long" }
     return { ok: true, data: { channel: "whatsapp", templateId, text } }
   }
   return { ok: true, data: { channel: "sms", templateId, text, ...smsSegments(text) } }
@@ -104,17 +101,6 @@ export function formatScore(score: number): string {
 
 function scoreNumber(score: number): string {
   return String(Math.round(score * 10) / 10)
-}
-
-const TANZANIAN_MOBILE = /^255[67]\d{8}$/
-
-// A wa.me link that opens a chat with the number and the text typed in. Only a
-// Tanzanian mobile in international form without its `+` is accepted: wa.me
-// doesn't validate numbers, so `0712…` would open a chat with a stranger.
-// encodeURIComponent, never a hand-built query, since a raw `+` reads as a space.
-export function buildWhatsAppLink(phoneDigits: string, text: string): Result<string, "invalid_number"> {
-  if (!TANZANIAN_MOBILE.test(phoneDigits)) return { ok: false, error: "invalid_number" }
-  return { ok: true, data: `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}` }
 }
 
 // The GSM 03.38 alphabet a basic phone shows. Extension characters cost two

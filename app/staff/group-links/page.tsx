@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { tanzaniaToday } from "@/lib/school-calendar"
+import { countInvitedFamilies } from "@/lib/services/group-invitations"
 import { listGroupLinks } from "@/lib/services/group-links"
 import { createClient } from "@/utils/supabase/server"
 import { requireStaff } from "../session"
+import { familiesInvitedText, familiesWarning } from "./families-text"
 import { LinkForm } from "./link-form"
 
 export const metadata: Metadata = { title: "WhatsApp groups · Al-Rahmah Complex" }
@@ -17,7 +19,12 @@ export default async function GroupLinksPage({ searchParams }: { searchParams: P
   if (!staff.permissions.includes("leads.view")) forbidden()
   const { year: requested } = await searchParams
   const year = requested === undefined ? Number(tanzaniaToday().slice(0, 4)) + 1 : /^2\d{3}$/.test(requested) ? Number(requested) : null
-  const links = await listGroupLinks(await createClient())
+  const supabase = await createClient()
+  const [links, families] = await Promise.all([
+    listGroupLinks(supabase),
+    year === null ? null : countInvitedFamilies(supabase, year),
+  ])
+  const warning = families?.ok ? familiesWarning(families.data) : null
   const saved = links.ok ? links.data.find((link) => link.year === year) : null
   return <div className="flex flex-col gap-6">
     <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">WhatsApp groups</h1>
@@ -35,6 +42,10 @@ export default async function GroupLinksPage({ searchParams }: { searchParams: P
           <p className="text-sm text-muted-foreground">Set by {saved.setByName} on <time dateTime={saved.setAt}>{new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Dar_es_Salaam", dateStyle: "medium", timeStyle: "short" }).format(new Date(saved.setAt))}</time> (Tanzania)</p>
           <a href={saved.url} target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">Open to test</a>
         </div> : <p className="text-sm text-muted-foreground">No group link saved for {year} yet.</p>}
+        {families && (families.ok ? <div className="flex max-w-xl flex-col gap-2">
+          <p className="text-sm">{familiesInvitedText(families.data)}</p>
+          {warning && <p role="alert" className="text-sm font-medium text-amber-700">{warning}</p>}
+        </div> : <p role="alert" className="text-sm text-destructive">The families invited could not be counted. Reload the page to try again.</p>)}
         {staff.permissions.includes("group_links.manage") && <LinkForm key={year} year={year} saved={saved?.url ?? null} />}
       </section>}
     {links.ok && links.data.length > 0 && <nav aria-label="Saved group years" className="flex flex-wrap gap-4">{links.data.map((link) => <Link key={link.year} href={`/staff/group-links?year=${link.year}`} className="text-sm underline underline-offset-4">{link.year}</Link>)}</nav>}

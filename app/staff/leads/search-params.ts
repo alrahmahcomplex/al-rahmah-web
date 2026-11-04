@@ -1,6 +1,7 @@
 import { CLOSURE_FILTERS, LAST_PAGE, LEAD_STATUSES, type ClosureFilter, type LeadSearch, type LeadStatus } from "@/lib/services/leads"
 
-// The Leads screen keeps its search in the URL (q, status, closure, page), so
+// The Leads screen keeps its search in the URL (q, status, closure,
+// earlier_link, page), so
 // a search can be bookmarked, shared and paged with the back button working.
 
 type SearchParams = { [key: string]: string | string[] | undefined }
@@ -18,21 +19,24 @@ function oneOf<T extends string>(allowed: readonly T[], value: string | undefine
 export function parseLeadSearch(params: SearchParams): LeadSearch & { closure: ClosureFilter } {
   const query = first(params.q)?.trim() || undefined
   const page = Number(first(params.page))
+  const earlierLink = first(params.earlier_link)
   return {
     query,
     status: oneOf<LeadStatus>(LEAD_STATUSES, first(params.status)),
     closure: oneOf<ClosureFilter>(CLOSURE_FILTERS, first(params.closure)) ?? "open",
+    earlierLinkYear: earlierLink && /^2\d{3}$/.test(earlierLink) ? Number(earlierLink) : undefined,
     page: Number.isInteger(page) && page > 0 && page <= LAST_PAGE ? page : 1,
   }
 }
 
 // The URL of a search, with some of it changed. Defaults are left out.
 export function leadsHref(search: LeadSearch, changes: Partial<LeadSearch> = {}) {
-  const { query, status, closure, page } = { ...search, ...changes }
+  const { query, status, closure, earlierLinkYear, page } = { ...search, ...changes }
   const params = new URLSearchParams()
   if (query) params.set("q", query)
   if (status) params.set("status", status)
   if (closure && closure !== "open") params.set("closure", closure)
+  if (earlierLinkYear !== undefined) params.set("earlier_link", String(earlierLinkYear))
   if (page > 1) params.set("page", String(page))
   const encoded = params.toString()
   return encoded ? `/staff/leads?${encoded}` : "/staff/leads"

@@ -5,6 +5,7 @@ import { forbidden } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { listGroupLinks } from "@/lib/services/group-links"
 import { searchLeads, type LeadSearchResults } from "@/lib/services/leads"
 import { listSeatPriorities, type LeadSeatPriority } from "@/lib/services/school-fee-payments"
 import { createClient } from "@/utils/supabase/server"
@@ -34,7 +35,9 @@ export default async function LeadsPage({
 
   const search = parseLeadSearch(await searchParams)
   const supabase = await createClient()
-  const results = await searchLeads(supabase, search)
+  const [results, groupLinks] = await Promise.all([searchLeads(supabase, search), listGroupLinks(supabase)])
+  // Only the earlier-link filter's choices: without them it offers just Any.
+  const groupYears = groupLinks.ok ? groupLinks.data.map((link) => link.year) : []
   // Seat priorities need payments.view. They only decorate the rows, so if
   // they can't be read the list still shows, without the column.
   const priorities =
@@ -46,7 +49,7 @@ export default async function LeadsPage({
     <div className="flex flex-col gap-6">
       <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Leads</h1>
       {/* Keyed on the URL, so the box shows the search the page is showing. */}
-      <LeadSearchBar key={leadsHref(search)} search={search} />
+      <LeadSearchBar key={leadsHref(search)} search={search} groupYears={groupYears} />
 
       {!results.ok ? (
         <Alert variant="destructive">

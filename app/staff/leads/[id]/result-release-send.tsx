@@ -1,7 +1,7 @@
 "use client"
 
 import { Check, Copy, MessageCircle, MessageSquareText } from "lucide-react"
-import { useState, useTransition } from "react"
+import { useState, useTransition, type ReactNode } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -30,7 +30,21 @@ type Outcome =
 //
 // Send SMS records the release and only then shows the short text and the
 // number, each with a Copy button, for staff to send from the office phone.
-export function SendResult({ leadId, interviewId, whatsapp }: { leadId: string; interviewId: string; whatsapp: boolean }) {
+// The WhatsApp preview then gives way, so staff copy only the SMS's number.
+// The note about a long SMS text shows before and after the send.
+export function SendResult({
+  leadId,
+  interviewId,
+  smsNote,
+  whatsappPreview,
+}: {
+  leadId: string
+  interviewId: string
+  smsNote: string | null
+  // The WhatsApp message and number, when WhatsApp is offered.
+  whatsappPreview?: ReactNode
+}) {
+  const whatsapp = whatsappPreview !== undefined
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [sending, setSending] = useState<"whatsapp" | "sms" | null>(null)
   const [pending, startTransition] = useTransition()
@@ -73,8 +87,12 @@ export function SendResult({ leadId, interviewId, whatsapp }: { leadId: string; 
     })
   }
 
+  const sentBySms = outcome?.status === "sms"
+
   return (
     <div className="flex flex-col gap-3">
+      {whatsapp &&
+        (sentBySms ? <p className="text-sm text-muted-foreground">Sent by SMS instead of WhatsApp.</p> : whatsappPreview)}
       <div className="flex flex-wrap gap-2">
         {whatsapp && (
           <Button type="button" onClick={sendWhatsApp} disabled={pending}>
@@ -102,6 +120,7 @@ export function SendResult({ leadId, interviewId, whatsapp }: { leadId: string; 
           )}
         </p>
       )}
+      {smsNote && !sentBySms && <p className="text-sm text-amber-700">{smsNote}</p>}
       {outcome?.status === "sms" && <SmsToSend text={outcome.text} phone={outcome.phone} note={outcome.note} />}
       {outcome?.status === "refused" && (
         <Alert variant="destructive" role="alert">

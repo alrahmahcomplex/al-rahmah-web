@@ -3,14 +3,17 @@ import { OFFICE_PHONE } from "@/lib/office"
 import { getResultRelease } from "@/lib/services/result-release"
 import { createClient } from "@/utils/supabase/server"
 
-import { blockedText, releaseLine, spacedPhone } from "./result-release-outcome"
+import { blockedText, releaseLine, smsNote, spacedPhone } from "./result-release-outcome"
 import { SendResult } from "./result-release-send"
 
 // The Result release section of the interview panel (slice 6). It says why
 // the current result can't go yet, or shows staff who may send it the
 // prepared message with Send through WhatsApp and Send SMS instead, or Send
-// SMS alone when no number can take a WhatsApp link. Everyone who may view the lead
-// sees whether and when it was last sent.
+// SMS alone when no number can take a WhatsApp link or the names make the
+// WhatsApp message too long. Everyone who may view the lead sees whether and
+// when it was last sent. The SMS text and the direct phone stay on the server
+// until a release is recorded; only the note about the text's length goes
+// ahead of it.
 export async function ResultReleaseSection({ leadId }: { leadId: string }) {
   const view = await getResultRelease(await createClient(), leadId, { officePhone: OFFICE_PHONE })
 
@@ -34,20 +37,27 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
             <p className="text-sm text-muted-foreground">{blockedText(view.data.blocked, view.data.amountOwed)}</p>
           ) : !view.data.offer || !view.data.interviewId ? null : view.data.offer.channel === "whatsapp" &&
             view.data.offer.whatsappMessage ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                By WhatsApp to {spacedPhone(view.data.offer.whatsappPhone ?? "")}. Check the name and score; the wording
-                is fixed.
-              </p>
-              <div
-                role="group"
-                aria-label="Message preview"
-                className="max-h-96 overflow-y-auto rounded-lg bg-muted p-3 text-sm break-words whitespace-pre-wrap text-slate-900"
-              >
-                {view.data.offer.whatsappMessage}
-              </div>
-              <SendResult key={view.data.interviewId} leadId={leadId} interviewId={view.data.interviewId} whatsapp />
-            </>
+            <SendResult
+              key={view.data.interviewId}
+              leadId={leadId}
+              interviewId={view.data.interviewId}
+              smsNote={smsNote(view.data.offer.smsMessage)}
+              whatsappPreview={
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    By WhatsApp to {spacedPhone(view.data.offer.whatsappPhone ?? "")}. Check the name and score; the
+                    wording is fixed.
+                  </p>
+                  <div
+                    role="group"
+                    aria-label="Message preview"
+                    className="max-h-96 overflow-y-auto rounded-lg bg-muted p-3 text-sm break-words whitespace-pre-wrap text-slate-900"
+                  >
+                    {view.data.offer.whatsappMessage}
+                  </div>
+                </>
+              }
+            />
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
@@ -60,7 +70,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
                 key={view.data.interviewId}
                 leadId={leadId}
                 interviewId={view.data.interviewId}
-                whatsapp={false}
+                smsNote={smsNote(view.data.offer.smsMessage)}
               />
             </>
           )}

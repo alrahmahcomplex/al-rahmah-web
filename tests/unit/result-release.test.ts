@@ -122,12 +122,12 @@ describe("the Result release section's words", () => {
   })
 
   it("notes an SMS text past two messages, and one with a character outside the basic SMS alphabet", () => {
-    expect(smsNote({ gsm7: true, segments: 3 })).toBe("This text takes 3 SMS messages, more than the usual two.")
+    expect(smsNote({ gsm7: true, segments: 3 })).toBe("The SMS text takes 3 messages, more than the usual two.")
     expect(smsNote({ gsm7: false, segments: 2 })).toBe(
-      "A name has a character basic phones may not show, so this text takes 2 SMS messages and may cost more than usual.",
+      "A name has a character basic phones may not show, so the SMS text takes 2 messages and may cost more than usual.",
     )
     expect(smsNote({ gsm7: false, segments: 4 })).toBe(
-      "A name has a character basic phones may not show, so this text takes 4 SMS messages and may cost more than usual.",
+      "A name has a character basic phones may not show, so the SMS text takes 4 messages and may cost more than usual.",
     )
   })
 

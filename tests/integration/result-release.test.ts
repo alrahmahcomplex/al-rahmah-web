@@ -61,10 +61,18 @@ async function interviewedLead({
   result = "Passed",
   score = 78,
   paid = true,
-}: { phone?: string; whatsapp?: string; result?: "Passed" | "Failed"; score?: number; paid?: boolean } = {}) {
+  parentName = "Release Parent",
+}: {
+  phone?: string
+  whatsapp?: string
+  result?: "Passed" | "Failed"
+  score?: number
+  paid?: boolean
+  parentName?: string
+} = {}) {
   const studentName = `Candidate ${randomUUID().slice(0, 8)}`
   const created = await createLead(await signedIn(ADMISSIONS), {
-    guardian: { contact: { fullName: "Release Parent", relationship: "Mother", phone, whatsapp } },
+    guardian: { contact: { fullName: parentName, relationship: "Mother", phone, whatsapp } },
     student: { fullName: studentName, className: "STD 4", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
     start: { kind: "walk-in", visitDate: today },
   })
@@ -505,6 +513,23 @@ describe("sending by SMS", () => {
       ok: true,
       data: [{ channel: "sms", numberUsed: "direct", result: "Passed", score: 78, templateId: "sms_passed_v1" }],
     })
+  })
+
+  test("names too long for WhatsApp leave SMS alone: an sms release succeeds and whatsapp is refused too_long", async () => {
+    const { leadId, interviewId } = await interviewedLead({ parentName: "P".repeat(600) })
+    const staff = await signedIn(ADMISSIONS)
+    const view = await getResultRelease(staff, leadId, OFFICE)
+    expect(view).toMatchObject({
+      ok: true,
+      data: { blocked: null, offer: { channel: "whatsapp", whatsappMessage: null, smsMessage: { gsm7: true } } },
+    })
+    // The section warns before Send SMS that this text runs past two messages.
+    expect(view.ok && view.data.offer?.smsMessage.segments).toBeGreaterThan(2)
+
+    expect(await releaseResult(staff, interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "too_long" })
+    expect(await releaseCount(interviewId)).toBe(0)
+    expect(await releaseResult(staff, interviewId, "sms", OFFICE)).toMatchObject({ ok: true, data: { channel: "sms" } })
+    expect(await getResultReleases(staff, interviewId)).toMatchObject({ ok: true, data: [{ channel: "sms", numberUsed: "direct" }] })
   })
 
   test("an SMS release passes the same gate: closed, Not Paid and earlier interviews are refused and nothing is recorded", async () => {

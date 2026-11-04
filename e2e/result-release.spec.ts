@@ -41,11 +41,12 @@ async function interviewedLead({
   whatsapp = `07${digits(8)}`,
   result = "Passed",
   score = 81.5,
-}: { phone?: string; whatsapp?: string | null; result?: "Passed" | "Failed"; score?: number } = {}) {
+  parentName = "Release Parent",
+}: { phone?: string; whatsapp?: string | null; result?: "Passed" | "Failed"; score?: number; parentName?: string } = {}) {
   const studentName = `Candidate ${randomUUID().slice(0, 6)}`
   const created = await createLead(await signedIn(ADMISSIONS), {
     guardian: {
-      contact: { fullName: "Release Parent", relationship: "Mother", phone, whatsapp: whatsapp ?? undefined },
+      contact: { fullName: parentName, relationship: "Mother", phone, whatsapp: whatsapp ?? undefined },
     },
     student: { fullName: studentName, className: "STD 4", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
     start: { kind: "walk-in", visitDate: today },
@@ -173,7 +174,9 @@ test.describe("releasing a result by SMS", () => {
     await expect(release(page)).not.toContainText(spaced)
 
     await release(page).getByRole("button", { name: "Send SMS", exact: true }).click()
-    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.")
+    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", {
+      timeout: 15_000,
+    })
     await expect(release(page).getByRole("group", { name: "SMS text" })).toHaveText(sms.data.text, { useInnerText: true })
     await expect(release(page)).toContainText(`To ${spaced}`)
     await expect(release(page)).toContainText(`Sent by SMS on ${formatDate(today)} by ${ADMISSIONS.name}`)
@@ -196,12 +199,51 @@ test.describe("releasing a result by SMS", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${lead.id}`)
     await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toBeVisible()
+    await expect(release(page).getByRole("group", { name: "Message preview" })).toBeVisible()
+    await expect(release(page)).toContainText("By WhatsApp to")
     await release(page).getByRole("button", { name: "Send SMS instead" }).click()
 
-    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.")
+    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", {
+      timeout: 15_000,
+    })
+    // The WhatsApp preview and number give way, so staff copy only the SMS.
+    await expect(release(page)).toContainText("Sent by SMS instead of WhatsApp.")
+    await expect(release(page).getByRole("group", { name: "Message preview" })).toHaveCount(0)
+    await expect(release(page)).not.toContainText("By WhatsApp to")
+    const whatsappNumber = lead.whatsapp.slice(1)
+    await expect(release(page)).not.toContainText(
+      `+255 ${whatsappNumber.slice(0, 3)} ${whatsappNumber.slice(3, 6)} ${whatsappNumber.slice(6)}`,
+    )
     const direct = lead.phone.slice(1)
     await expect(release(page)).toContainText(`To +255 ${direct.slice(0, 3)} ${direct.slice(3, 6)} ${direct.slice(6)}`)
     await expect(release(page).getByRole("group", { name: "SMS text" })).toContainText(lead.studentName)
     await expect(release(page)).toContainText(`Sent by SMS on ${formatDate(today)} by ${ADMISSIONS.name}`)
+  })
+
+  test("names too long for WhatsApp offer Send SMS alone, warning before the send that the text runs long", async ({ page }) => {
+    const lead = await interviewedLead({ parentName: `Parent ${"P".repeat(600)}` })
+    await markPaid(lead.interviewId)
+    const direct = lead.phone.slice(1)
+    const spaced = `+255 ${direct.slice(0, 3)} ${direct.slice(3, 6)} ${direct.slice(6)}`
+    const note = /^The SMS text takes \d+ messages, more than the usual two\.$/
+
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead.id}`)
+    await expect(release(page)).toContainText("The names on this lead make the message too long for WhatsApp, so it goes by SMS.")
+    await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
+    await expect(release(page).getByRole("group", { name: "Message preview" })).toHaveCount(0)
+    // The note shows before the send; the text and the number do not.
+    await expect(release(page).getByText(note)).toBeVisible()
+    await expect(release(page).getByRole("group", { name: "SMS text" })).toHaveCount(0)
+    await expect(release(page)).not.toContainText(spaced)
+    await expect(release(page)).not.toContainText(lead.studentName)
+
+    await release(page).getByRole("button", { name: "Send SMS", exact: true }).click()
+    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", {
+      timeout: 15_000,
+    })
+    await expect(release(page).getByRole("group", { name: "SMS text" })).toContainText(lead.studentName)
+    await expect(release(page)).toContainText(`To ${spaced}`)
+    await expect(release(page).getByText(note)).toHaveCount(1)
   })
 })

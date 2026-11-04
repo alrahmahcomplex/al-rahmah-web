@@ -35,14 +35,15 @@ export function spacedPhone(phone: string): string {
   return tanzanian ? `+255 ${tanzanian[1]} ${tanzanian[2]} ${tanzanian[3]}` : phone
 }
 
-// A note beside the SMS text when it would cost more than the two messages
-// the templates are written for: past two, or with a character outside GSM-7,
-// which a name can bring and which makes every message shorter.
+// A note by Send SMS, before and after the send, when the SMS text would cost
+// more than the two messages the templates are written for: past two, or with
+// a character outside GSM-7, which a name can bring and which makes every
+// message shorter. It carries neither the text nor the number.
 export function smsNote({ gsm7, segments }: { gsm7: boolean; segments: number }): string | null {
   if (!gsm7) {
-    return `A name has a character basic phones may not show, so this text takes ${segments} SMS messages and may cost more than usual.`
+    return `A name has a character basic phones may not show, so the SMS text takes ${segments} messages and may cost more than usual.`
   }
-  if (segments > 2) return `This text takes ${segments} SMS messages, more than the usual two.`
+  if (segments > 2) return `The SMS text takes ${segments} messages, more than the usual two.`
   return null
 }
 

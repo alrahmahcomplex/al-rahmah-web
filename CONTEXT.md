@@ -284,12 +284,12 @@ The required score assigned to every lead with **Interviewed** status. It is rec
 The score runs from 0 to 100 and allows one decimal place, such as 72.5. A finer score is refused rather than rounded, so a typing mistake is never saved as something else. The interview date, result and score are recorded together, never one without the others.
 
 **Marketing Agent**:
-A person outside the school who refers families to Al-Rahmah. Anyone may register as a Marketing Agent. The agent is recorded on a lead through its **Referral code** and is never an internal follow-up owner. Marketing Agents currently have no account and see nothing in the system after registering; agent-facing tracking of referred leads and commission are planned for later.
+A person who refers families to Al-Rahmah, most often one of the school's own teachers. Anyone may register as a Marketing Agent. The agent is recorded on a lead through its **Referral code** and is never an internal follow-up owner. Marketing Agents currently have no account and see nothing in the system after registering. Agent sign-in and a read-only list of the students who used their code are specified and being built; commission and its settlement come later.
 An agent registers with their full name, a phone number and, when it differs, a WhatsApp number. One phone number holds one agent: registering again with the same number gives back the same agent and code. The agent list is open to staff who may view leads (`leads.view`).
 _Avoid_: External referral agent, referrer, staff owner, follow-up staff
 
 **Agent approval**:
-A newly registered Marketing Agent's **Referral code** is **Pending** until the Admissions Manager approves it, after which it is **Approved**. Only an **Approved** code grants the interview discount. Staff tell the agent about the approval themselves, outside the system; any message the system sends to agents belongs to the future Marketing Agent Epic.
+A newly registered Marketing Agent's **Referral code** is **Pending** until the Admissions Manager approves it, after which it is **Approved**. Only an **Approved** code grants the interview discount. Staff tell the agent about the approval themselves, outside the system, until agent invites arrive (#191), which go out only after the Manager has confirmed the agent's email.
 Approval is one-way: nothing returns an **Approved** agent to **Pending**. Approving needs only `agents.approve`, with no lead permission.
 
 **Referral code**:

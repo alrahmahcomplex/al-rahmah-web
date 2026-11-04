@@ -403,9 +403,11 @@ describe("the cached status columns and their history", () => {
     await attempt("switched_off")
     await expect(attempt("switched_off")).rejects.toThrow(/no_change/)
     await attempt("retired")
-    for (const kind of ["retired", "switched_on", "switched_off", "recreated"]) {
+    for (const kind of ["retired", "switched_on", "switched_off"]) {
       await expect(attempt(kind)).rejects.toThrow(/agent_retired/)
     }
+    await expect(asSystem((sql) => changeStatus(sql, agent.id, "recreated", randomUUID()))).rejects.toThrow(/agent_retired/)
+    await expect(attempt("recreated")).rejects.toThrow(/invalid/)
     await expect(asSystem((sql) => changeStatus(sql, randomUUID(), "retired"))).rejects.toThrow(/not_found/)
     await expect(
       asSystem((sql) => sql.query("select public.record_agent_status_change($1, 'switched_on', '  ', null)", [agent.id])),

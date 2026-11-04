@@ -49,7 +49,29 @@ describe("reading the interview discount", () => {
     }
   })
 
-  test("an anonymous visitor may not call it, and neither may anyone call interview_fee", async () => {
+  // interview_fee keeps the grants it had before #181: no visitor or
+  // signed-in role, and the secret key as Supabase grants it by default.
+  test("interview_discount is granted to signed-in staff and the secret key only; interview_fee to no visitor or staff", async () => {
+    const grants = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ role: string; fn: string; granted: boolean }>(
+        `select r.role, f.fn, has_function_privilege(r.role, f.fn, 'execute') as granted
+         from unnest(array['anon', 'authenticated', 'service_role']) r (role)
+         cross join unnest(array['public.interview_discount()', 'public.interview_fee(boolean)']) f (fn)
+         order by f.fn, r.role`,
+      )
+      return rows
+    })
+    expect(grants).toEqual([
+      { role: "anon", fn: "public.interview_discount()", granted: false },
+      { role: "authenticated", fn: "public.interview_discount()", granted: true },
+      { role: "service_role", fn: "public.interview_discount()", granted: true },
+      { role: "anon", fn: "public.interview_fee(boolean)", granted: false },
+      { role: "authenticated", fn: "public.interview_fee(boolean)", granted: false },
+      { role: "service_role", fn: "public.interview_fee(boolean)", granted: true },
+    ])
+  })
+
+  test("an anonymous visitor may not call it, and neither a visitor nor staff may call interview_fee", async () => {
     expect(await getInterviewDiscount(anonClient())).toEqual({ ok: false, error: "unavailable" })
 
     for (const client of [anonClient(), await signedIn(ADMISSIONS)]) {

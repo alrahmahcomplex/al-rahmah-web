@@ -14,8 +14,9 @@ import { DiscountCodeForm } from "./registration-form"
 // The school hands out the URL itself: nothing links here and search engines
 // are asked to leave it out. It stays out of the proxy matcher and reads only
 // the interview discount, with the secret key and a short wait, so it still
-// loads with Supabase down, naming no figure; sending touches the database. The language switch sits outside the form,
-// which keeps its entries in client state.
+// loads with Supabase down and then names no figure. Sending touches the
+// database. The language switch sits outside the form, which keeps its
+// entries in client state.
 
 export async function generateMetadata(): Promise<Metadata> {
   const language = await getLanguage()

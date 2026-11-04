@@ -108,7 +108,7 @@ test("each code's note, and the fee for several children", async ({ page }) => {
   await field.blur()
   await expect(page.getByText("TZS 10,000 off the interview fee for each child.")).toBeVisible()
   await expect(page.getByText("TZS 40,000 per child")).toBeVisible()
-  await expect(page.getByText("Total for 3 children: TZS 90,000")).toBeVisible()
+  await expect(page.getByText("Total for 3 children: TZS 120,000")).toBeVisible()
 })
 
 test("an unrecognised code never stops the form", async ({ page }) => {

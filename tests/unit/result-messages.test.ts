@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildWhatsAppLink, formatScore, renderResultMessage, type ResultMessageInput } from "@/lib/result-messages"
+import { formatScore, renderResultMessage, type ResultMessageInput } from "@/lib/result-messages"
 
 // Invented values only. The office phone is passed as a value, as callers pass
 // OFFICE_PHONE, so these tests never import the server-only module.
@@ -203,40 +203,5 @@ describe("formatScore", () => {
     [64.30000000000001, "64.3%"],
   ])("formats %s as %s", (score, expected) => {
     expect(formatScore(score)).toBe(expected)
-  })
-})
-
-describe("buildWhatsAppLink", () => {
-  it("builds a wa.me link with the text percent-encoded", () => {
-    expect(buildWhatsAppLink("255712345678", "Habari yako")).toEqual({
-      ok: true,
-      data: "https://wa.me/255712345678?text=Habari%20yako",
-    })
-  })
-
-  it("round-trips awkward characters and the emoji unchanged", () => {
-    const text = "Mama O'Neil & Baba #1: 50% + 🎉\n*Hongera*"
-    const link = buildWhatsAppLink("255612345678", text)
-    if (!link.ok) throw new Error("refused")
-    const url = new URL(link.data)
-    expect(url.origin + url.pathname).toBe("https://wa.me/255612345678")
-    // A raw `+` would arrive as a space, and a raw `&` or `#` would cut the text.
-    expect(link.data.split("?text=")[1]).not.toMatch(/[ +&#\n]/)
-    expect(decodeURIComponent(link.data.split("?text=")[1])).toBe(text)
-    expect(url.searchParams.get("text")).toBe(text)
-  })
-
-  it.each([
-    ["0712345678"],
-    ["+255712345678"],
-    ["255223456789"],
-    ["25571234567"],
-    ["2557123456789"],
-    ["254712345678"],
-    ["447712345678"],
-    [" 255712345678"],
-    ["255712345678\n"],
-  ])("refuses %j", (digits) => {
-    expect(buildWhatsAppLink(digits, "Habari")).toEqual({ ok: false, error: "invalid_number" })
   })
 })

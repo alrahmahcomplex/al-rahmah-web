@@ -10,7 +10,7 @@ stay in the `0.x` range.
 ### IMPROVED
 
 - Staff invite links now stay valid for 24 hours instead of one hour, and the invite
-  email says so. Password reset links last 24 hours too.
+  email says so.
 
 ## November 5, 2026 `v0.73.0`
 

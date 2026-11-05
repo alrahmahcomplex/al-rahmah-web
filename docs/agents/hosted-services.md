@@ -60,12 +60,12 @@ All of these live under Authentication in the Supabase dashboard.
 | IP address forwarding | Rate Limits | Off |
 
 - **Expiry** applies to every email link: invites, password resets, sign-up confirmations and email changes. `otp_expiry` in `supabase/config.toml` matches it. The invite template in `supabase/templates/invite.html` states the 24 hours, so the hosted Invite user template must be pasted again from the repo whenever either changes.
-- **Hourly limit.** It is project-wide and counts every auth email. A 30-invite batch plus about 20 resends, resets and staff invites in the same hour fits under 50. Fifty is half of Resend's daily 100, so one hour can't spend the whole day. Two busy hours can, which is why agent invites also need a daily budget. Any batch sends at most 50 an hour. Locally `email_sent = 2` has no effect, because Supabase applies it only with custom SMTP, and local mail goes to Mailpit.
-- **Minimum interval.** Supabase refuses a second email to the same address within 60 seconds, which covers a second reset request or a Resend invite clicked twice. Locally `max_frequency` is `1s`, so tests don't wait.
+- **Hourly limit.** It is project-wide and counts every auth email. A 30-invite batch plus about 20 resends, resets and staff invites in the same hour fits under 50. Fifty is half of Resend's daily 100, so one hour can't spend the whole day. Two busy hours can, which is why agent invites also need a daily budget. Cap an invite batch at 30, so 20 an hour stay free for resets and staff invites. Staff invites can still use up the shared hourly limit, and so can anyone spending the public hourly budget; both are accepted risks. Locally `email_sent = 2` has no effect, because Supabase applies it only with custom SMTP, and local mail goes to Mailpit.
+- **Minimum interval.** Supabase refuses a second reset or confirmation email to the same address within 60 seconds. Whether it applies the gap to invites sent through the admin API hasn't been checked. Locally `max_frequency` is `1s`, so tests don't wait.
 
 ### Rate limiting
 
-**The firewall rule.** `public-forms` is under Firewall → Rules in the Vercel project. The `@vercel/firewall` condition matches rate-limit ID `public-forms`. It uses a fixed window of 600 seconds, the longest the dashboard allows, and allows 5 requests per key. The dashboard shows the keys as "API controlled", because the app supplies them. Its action is **Log**, so it records requests over the limit and refuses none. Watch the rule's traffic before switching it to Deny. Five in 10 minutes is tight for a parent who retypes a Discount code several times.
+**The firewall rule.** `public-forms` is under Firewall → Rules in the Vercel project. The `@vercel/firewall` condition matches rate-limit ID `public-forms`. It uses a fixed window of 600 seconds, the longest the dashboard allows, and allows 5 requests per key. The dashboard shows the keys as "API controlled", because the app supplies them. Its action is **Log**, so the firewall records requests over the limit and refuses none. `checkRateLimit` reports a request as limited only when the firewall answers 429 or 403, so under Log the app should let every request through. That hasn't been seen on a live request yet. Watch the rule's traffic before switching it to Deny. Five in 10 minutes is tight for a parent who retypes a Discount code several times.
 
 Because one rule has one threshold, each form gets its own allowance through its key. `lib/rate-limit.ts` builds the live keys:
 
@@ -77,7 +77,7 @@ Because one rule has one threshold, each form gets its own allowance through its
 | Agent sign-in | `<form>:<ip>:<email hash>` | Planned |
 | Agent reset and "Tuma kiungo kipya" | `<form>:<ip>:<email hash>` | Planned |
 
-The email hash is a hash of the normalised email, never the email itself. Sign-in is sized for shared school Wi-Fi, where many people share one IP. With the hash in the key, each person gets 5 tries in 10 minutes rather than 5 for the whole school. Reset also relies on Turnstile, Supabase's 60-second gap per address, the public reset counter and the project-wide hourly budget for public emails, so it is still limited if the firewall check fails open. Staff `/login` isn't on the rule.
+The email hash is a hash of the normalised email, never the email itself. Sign-in is sized for shared school Wi-Fi, where many people share one IP. With the hash in the key, each person gets 5 tries in 10 minutes rather than 5 for the whole school. The same key lets one IP try any number of different addresses, so sign-in should also count against an IP-only key on the same rule, with a higher threshold left to the app, or the gap should be accepted as a risk. #191 decides. Reset also relies on Turnstile, Supabase's 60-second gap per address, the public reset counter and the project-wide hourly budget for public emails, so it is still limited if the firewall check fails open. Staff `/login` isn't on the rule.
 
 **Supabase sees Vercel's IP, not the user's.** The app calls Supabase Auth from the server, and IP address forwarding is off. On 2026-11-05 a failed sign-in on a Preview with a placeholder address reached the Auth logs from an AWS address, where Vercel runs its functions, not the tester's Tanzanian ISP address. Supabase's per-IP limits therefore count all users together, for as long as their requests leave Vercel from the same address:
 
@@ -85,7 +85,7 @@ The email hash is a hash of the normalised email, never the email itself. Sign-i
 - link and OTP verifications: 30 per 5 minutes;
 - session refreshes: 150 per 5 minutes.
 
-Thirty people signing in within five minutes, at a launch meeting say, can push everyone else into Supabase's 429 until the window passes. Staff sign-in shares the same allowance. Sign-in pages must show their own 429 message rather than "wrong password". Supabase can count the real user IP if IP address forwarding is turned on and the server's Auth calls use the secret key and forward the client's IP. That is a code change, and it hasn't been made.
+Thirty people signing in within five minutes, at a launch meeting say, can push everyone else into Supabase's 429 until the window passes. So can one attacker sending 30 wrong passwords. Staff sign-in shares the same allowance. Sign-in pages must show their own 429 message rather than "wrong password". Supabase can count the real user IP if IP address forwarding is turned on and the server's Auth calls use the secret key and forward the client's IP. That is a code change, and it hasn't been made.
 
 ### Logs
 

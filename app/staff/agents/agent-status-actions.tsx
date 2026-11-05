@@ -174,7 +174,7 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
               <Button
                 type="submit"
                 variant={action === "switch-on" ? "default" : "destructive"}
-                disabled={pending || impact.status !== "ready"}
+                disabled={pending || impact.status !== "ready" || reason.trim() === ""}
               >
                 {pending ? "Saving…" : `${verb} ${agent.code}`}
               </Button>

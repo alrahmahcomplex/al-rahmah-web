@@ -79,11 +79,14 @@ test.describe("switching an agent off and retiring them", () => {
     await expect(families).toContainText("TZS 40,000 → TZS 50,000")
     await expect(dialog.getByText("Code ya punguzo mliyotumia haitoi punguzo kwa sasa. Ada ya usaili sasa ni TZS 50,000 kwa kila mtoto.")).toBeVisible()
 
-    // A reason is required.
-    await dialog.getByRole("button", { name: `Switch off ${agent.code}` }).click()
-    await expect(dialog.getByText("Write why you are making this change.")).toBeVisible()
+    // A reason is required: confirm stays disabled while Reason is empty or only spaces.
+    const confirm = dialog.getByRole("button", { name: `Switch off ${agent.code}` })
+    await expect(confirm).toBeDisabled()
+    await dialog.getByLabel("Reason").fill("   ")
+    await expect(confirm).toBeDisabled()
     await dialog.getByLabel("Reason").fill("Has left the school")
-    await dialog.getByRole("button", { name: `Switch off ${agent.code}` }).click()
+    await expect(confirm).toBeEnabled()
+    await confirm.click()
 
     await expect(page.getByText(`${agent.fullName} (${agent.code}) is switched off. 1 family's interview fee changed.`)).toBeVisible()
     await expect(row).toContainText("Switched off")
@@ -116,13 +119,19 @@ test.describe("switching an agent off and retiring them", () => {
       expect(box!.y).toBeGreaterThanOrEqual(0)
       expect(box!.y + box!.height).toBeLessThanOrEqual(640)
 
-      // The buttons stay in view while the body scrolls to the reason.
+      // The buttons stay in view while Tab moves focus down the body to the reason.
       const confirm = dialog.getByRole("button", { name: `Retire ${agent.code}` })
       await expect(confirm).toBeInViewport({ ratio: 1 })
+      await expect(confirm).toBeDisabled()
       const reason = dialog.getByLabel("Reason")
-      await reason.scrollIntoViewIfNeeded()
+      for (let i = 0; i < 10 && !(await reason.evaluate((el) => el === document.activeElement)); i++) {
+        await page.keyboard.press("Tab")
+      }
+      await expect(reason).toBeFocused()
+      await page.keyboard.type("Has left the school")
       await expect(reason).toBeInViewport()
-      await reason.fill("Has left the school")
+      await expect(reason).toHaveValue("Has left the school")
+      await expect(confirm).toBeEnabled()
       await expect(confirm).toBeInViewport({ ratio: 1 })
       await confirm.click()
 

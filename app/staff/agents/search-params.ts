@@ -1,11 +1,12 @@
 import type { AgentFilter } from "@/lib/services/marketing-agents"
 
-// The Marketing Agents screen keeps its filter, search and page in the URL
-// (status, q, page), so the back button and a shared link show the same list.
+// The Marketing Agents screen keeps its filter, search, import and page in
+// the URL (status, q, import, page), so the back button and a shared link
+// show the same list.
 
 type SearchParams = { [key: string]: string | string[] | undefined }
 
-export type AgentScreenSearch = { status: AgentFilter; query?: string; page: number }
+export type AgentScreenSearch = { status: AgentFilter; query?: string; importBatchId?: string; page: number }
 
 const STATUS_PARAMS: Record<string, AgentFilter> = { pending: "Pending", approved: "Approved", retired: "Retired", all: "all" }
 const PARAM_FOR: Record<AgentFilter, string> = { Pending: "pending", Approved: "approved", Retired: "retired", all: "all" }
@@ -25,10 +26,12 @@ export function defaultAgentFilter(canApprove: boolean): AgentFilter {
 
 export function parseAgentSearch(params: SearchParams, canApprove: boolean): AgentScreenSearch {
   const query = first(params.q)?.trim() || undefined
+  const importBatchId = first(params.import)?.trim() || undefined
   const page = Number(first(params.page))
   return {
     status: STATUS_PARAMS[first(params.status) ?? ""] ?? defaultAgentFilter(canApprove),
     query,
+    importBatchId,
     page: Number.isInteger(page) && page > 0 && page <= LAST_PAGE ? page : 1,
   }
 }
@@ -37,10 +40,11 @@ export function parseAgentSearch(params: SearchParams, canApprove: boolean): Age
 // first page; the status is always written, so the link means the same to
 // everyone it is shared with.
 export function agentsHref(search: AgentScreenSearch, changes: Partial<AgentScreenSearch> = {}) {
-  const { status, query, page } = { ...search, ...changes }
+  const { status, query, importBatchId, page } = { ...search, ...changes }
   const params = new URLSearchParams()
   params.set("status", PARAM_FOR[status])
   if (query) params.set("q", query)
+  if (importBatchId) params.set("import", importBatchId)
   if (page > 1) params.set("page", String(page))
   return `/staff/agents?${params.toString()}`
 }

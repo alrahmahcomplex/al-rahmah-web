@@ -5,6 +5,25 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 5, 2026 `v0.73.0`
+
+### NEW
+
+- The Admissions Manager can import existing Marketing Agents from a CSV with **Import
+  from CSV** on the Agents screen. The template has the columns Code, Full name, Mobile,
+  WhatsApp and Email, with Google Sheets steps beside it. Files of up to 256 KB and
+  1,000 rows are accepted, and each limit is explained in English and Swahili.
+- Before anything is saved, a check screen lists every row with its sheet row number
+  and the uploaded value beside the one that will be saved. Each row is marked as new,
+  already present, email to add, email or mobile differs (left unchanged), flagged as an
+  Excel number, or refused with its reason.
+- Confirming saves every good row or none. If an agent changed after the check, the
+  Manager goes back to the check screen with those rows marked. Imported agents keep
+  their codes and start Approved. Imported emails count as confirmed, and the import
+  sends no email.
+- After an import, the Manager can download the refused rows as a CSV to fix and
+  upload again, and the Agents list can show only the agents one import created.
+
 ## November 5, 2026 `v0.72.0`
 
 ### NEW

@@ -56,6 +56,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
               leadId={leadId}
               interviewId={view.data.interviewId}
               smsNote={smsNote(view.data.offer.smsMessage)}
+              seenReleases={view.data.releases.length}
               repeat={repeat}
               whatsappPreview={
                 <>
@@ -86,6 +87,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
                 leadId={leadId}
                 interviewId={view.data.interviewId}
                 smsNote={smsNote(view.data.offer.smsMessage)}
+                seenReleases={view.data.releases.length}
                 repeat={repeat}
               />
             </>

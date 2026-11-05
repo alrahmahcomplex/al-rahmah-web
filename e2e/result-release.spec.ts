@@ -323,3 +323,36 @@ test.describe("sending a result again", () => {
     expect(await releases()).toBe(3)
   })
 })
+
+test.describe("a send from a stale page", () => {
+  test("a page loaded before someone else sent the result is refused, records nothing and closes the WhatsApp tab", async ({
+    page,
+    context,
+  }) => {
+    const lead = await interviewedLead()
+    await markPaid(lead.interviewId)
+    await context.route("https://wa.me/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>wa.me</title>" }))
+
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead.id}`)
+    await expect(release(page)).toContainText("Not sent yet.")
+
+    // Someone else sends it while this page is open.
+    const other = await releaseResult(await signedIn(ADMISSIONS), lead.interviewId, "sms", { officePhone: OFFICE_PHONE })
+    if (!other.ok) throw new Error(`release failed: ${other.error}`)
+
+    const opened = page.waitForEvent("popup")
+    await release(page).getByRole("button", { name: "Send through WhatsApp" }).click()
+    const tab = await opened
+    await expect(release(page).getByRole("alert")).toHaveText(
+      "This result was sent by someone else meanwhile, so nothing was sent. Reload to see it.",
+      { timeout: 15_000 },
+    )
+    await expect.poll(() => tab.isClosed()).toBe(true)
+    await expect(release(page).getByRole("status")).toHaveCount(0)
+
+    const read = await getResultReleases(await signedIn(ADMISSIONS), lead.interviewId)
+    if (!read.ok) throw new Error(read.error)
+    expect(read.data.length).toBe(1)
+  })
+})

@@ -46,17 +46,21 @@ type Outcome =
 // Once the result has been sent, either button first asks staff to confirm,
 // saying when, how and by whom it last went. Only Send again records a
 // release, and for WhatsApp opens the tab inside that click; cancelling does
-// neither.
+// neither. Each send says how many releases the page showed, and is refused
+// if someone sent the result since; the WhatsApp tab then closes.
 export function SendResult({
   leadId,
   interviewId,
   smsNote,
+  seenReleases,
   repeat,
   whatsappPreview,
 }: {
   leadId: string
   interviewId: string
   smsNote: string | null
+  // How many releases of this interview the page shows.
+  seenReleases: number
   // What the confirmation says about the last release, once there is one.
   repeat: string | null
   // The WhatsApp message and number, when WhatsApp is offered.
@@ -82,6 +86,8 @@ export function SendResult({
   }
 
   function sendAgain() {
+    // A second click while the dialog fades out sends nothing more.
+    if (!asking) return
     setAsking(false)
     if (confirming === "whatsapp") sendWhatsApp()
     else sendSms()
@@ -96,7 +102,7 @@ export function SendResult({
     startTransition(async () => {
       let result
       try {
-        result = await sendResultByWhatsApp(leadId, interviewId)
+        result = await sendResultByWhatsApp(leadId, interviewId, seenReleases)
       } catch {
         result = LOST_REQUEST
       }
@@ -117,7 +123,7 @@ export function SendResult({
     startTransition(async () => {
       let result
       try {
-        result = await sendResultBySms(leadId, interviewId)
+        result = await sendResultBySms(leadId, interviewId, seenReleases)
       } catch {
         result = LOST_REQUEST
       }
@@ -174,7 +180,7 @@ export function SendResult({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Don&apos;t send</AlertDialogCancel>
-            <AlertDialogAction onClick={sendAgain}>
+            <AlertDialogAction onClick={sendAgain} disabled={pending}>
               {confirming === "sms" ? "Send again by SMS" : "Send again through WhatsApp"}
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -113,6 +113,11 @@ export function releaseRefusal(error: ReleaseError): ReleaseRefusal {
         status: "refused",
         message: "The names on this lead make the message too long for WhatsApp, so nothing was sent. Check the names.",
       }
+    case "sent_meanwhile":
+      return {
+        status: "refused",
+        message: "This result was sent by someone else meanwhile, so nothing was sent. Reload to see it.",
+      }
     case "unavailable":
       return { status: "refused", message: "The result could not be sent. Try again in a moment." }
   }

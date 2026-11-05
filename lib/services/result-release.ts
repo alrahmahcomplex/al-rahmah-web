@@ -228,6 +228,8 @@ export type ReleaseError =
   | "no_whatsapp_number"
   // The names would take the WhatsApp message past its length budget.
   | "too_long"
+  // The interview has more releases than the sending page saw.
+  | "sent_meanwhile"
 
 const RELEASE_REFUSALS: ReadonlySet<string> = new Set<ReleaseError>([
   "lead_closed",
@@ -246,12 +248,24 @@ export type ReleasedResult =
 // when, how, and the result and score. Returns the message built from the
 // values the database checked, and for WhatsApp the wa.me link that opens the
 // chat with it typed in. Needs results.send.
+//
+// seenReleases is how many releases the sending page showed. When the
+// interview has more, someone sent it since the page loaded, and the send is
+// refused as sent_meanwhile, recording nothing, so a page that never showed
+// the repeat-send confirmation can't send twice. The count is read just
+// before the release, so two sends in the same instant can both pass.
 export async function releaseResult(
   supabase: SupabaseClient,
   interviewId: string,
   channel: ResultChannel,
-  { officePhone }: { officePhone: string },
+  { officePhone, seenReleases }: { officePhone: string; seenReleases?: number },
 ): Promise<Result<ReleasedResult, ReleaseError>> {
+  if (seenReleases !== undefined) {
+    const releases = await getResultReleases(supabase, interviewId)
+    if (!releases.ok) return releases
+    if (releases.data.length > seenReleases) return { ok: false, error: "sent_meanwhile" }
+  }
+
   const { data, error } = await supabase.rpc("release_result", { interview_id: interviewId, channel })
   if (error) {
     const known = commonError(error)

@@ -144,6 +144,13 @@ describe("the Result release section's words", () => {
     expect(spacedPhone("+447700900123")).toBe("+447700900123")
   })
 
+  it("tells a page that missed a release to reload, and that nothing was sent", () => {
+    expect(releaseRefusal("sent_meanwhile")).toEqual({
+      status: "refused",
+      message: "This result was sent by someone else meanwhile, so nothing was sent. Reload to see it.",
+    })
+  })
+
   it("turns every refusal into a sentence without its code", () => {
     const errors: ReleaseError[] = [
       "forbidden",
@@ -155,6 +162,7 @@ describe("the Result release section's words", () => {
       "not_paid",
       "no_whatsapp_number",
       "too_long",
+      "sent_meanwhile",
     ]
     for (const error of errors) {
       const outcome = releaseRefusal(error)
@@ -167,7 +175,7 @@ describe("the Result release section's words", () => {
 describe("sending a result again", () => {
   const last = {
     channel: "whatsapp" as const,
-    // 14:05 in Tanzania; 22:30 in UTC would already be the next day there.
+    // 14:05 in Tanzania, three hours ahead of UTC.
     releasedAt: "2026-10-03T11:05:00Z",
     releasedBy: "Amina Staff",
     result: "Passed" as const,

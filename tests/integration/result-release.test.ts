@@ -653,3 +653,26 @@ describe("sending again", () => {
     expect(await view(leadId)).toMatchObject({ blocked: "not_paid", offer: null, changedSinceSent: false })
   })
 })
+
+describe("a send from a stale page", () => {
+  test("a page that saw no release is refused once someone else has sent the result, and records nothing", async () => {
+    const { interviewId } = await interviewedLead()
+    // Another member of staff sends it after the page loaded.
+    expect((await releaseResult(await signedIn(MANAGER), interviewId, "sms", OFFICE)).ok).toBe(true)
+
+    for (const channel of ["whatsapp", "sms"] as const) {
+      expect(await releaseResult(await signedIn(ADMISSIONS), interviewId, channel, { ...OFFICE, seenReleases: 0 })).toEqual({
+        ok: false,
+        error: "sent_meanwhile",
+      })
+    }
+    expect(await releaseCount(interviewId)).toBe(1)
+  })
+
+  test("a page that saw every release sends again", async () => {
+    const { interviewId } = await interviewedLead()
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", { ...OFFICE, seenReleases: 0 })).ok).toBe(true)
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "sms", { ...OFFICE, seenReleases: 1 })).ok).toBe(true)
+    expect(await releaseCount(interviewId)).toBe(2)
+  })
+})

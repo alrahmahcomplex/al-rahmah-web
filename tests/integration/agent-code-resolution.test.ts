@@ -110,9 +110,10 @@ function comparesAgentCode(source: string): boolean {
   return /marketing_agents\s+where\b[^;]*\bcode\s*(=|<>|!=|\bin\b|\bis\b)/.test(body)
 }
 
-// The two functions allowed to read agents by their code column. Every other
-// lookup goes through them.
-const CODE_READERS = ["agent_for_code", "agent_code_issued"]
+// The functions allowed to read agents by their code column. Every other
+// lookup goes through them. retired_agent_for_code (#189) finds the retired
+// record Recreate starts from.
+const CODE_READERS = ["agent_for_code", "agent_code_issued", "retired_agent_for_code"]
 
 async function functionsComparingAgentCode(sql: Client): Promise<string[]> {
   const { rows } = await sql.query<{ name: string; source: string }>(
@@ -125,7 +126,7 @@ async function functionsComparingAgentCode(sql: Client): Promise<string[]> {
 }
 
 describe("one rule for code lookups", () => {
-  test("no function compares an agent's code column except agent_for_code and agent_code_issued", async () => {
+  test("no function compares an agent's code column except the code readers", async () => {
     expect(await inRolledBackTransaction(functionsComparingAgentCode)).toEqual([])
   })
 
@@ -470,7 +471,9 @@ describe("the cached status columns and their history", () => {
     for (const kind of ["retired", "switched_on", "switched_off"]) {
       await expect(attempt(kind)).rejects.toThrow(/agent_retired/)
     }
-    await expect(asSystem((sql) => changeStatus(sql, agent.id, "recreated", randomUUID()))).rejects.toThrow(/agent_retired/)
+    // Recreate may start from this retired record, since no one holds its
+    // code (#189), but only with a new record holding the code by commit.
+    await expect(asSystem((sql) => changeStatus(sql, agent.id, "recreated", randomUUID()))).rejects.toThrow(/agent_status_changes/)
     await expect(attempt("recreated")).rejects.toThrow(/invalid/)
     await expect(asSystem((sql) => changeStatus(sql, randomUUID(), "retired"))).rejects.toThrow(/not_found/)
     await expect(

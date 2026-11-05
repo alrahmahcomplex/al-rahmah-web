@@ -16,6 +16,7 @@ import {
   signedIn,
 } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
+import { claimInterviewSerialYear } from "../support/interview-serial-years"
 
 // Registering a lead for interview through the interview module, against
 // local Supabase. Each test makes its own leads; the seeded ones are only
@@ -53,20 +54,6 @@ async function newLead(start: "walk-in" | "admission-form" = "walk-in"): Promise
   return created.data.leadId
 }
 
-// An enrollment year no S/N has been issued in yet, far from any real intake,
-// so a test sees its S/Ns count from 1. The local database keeps every
-// counter the tests make, so after enough runs the pool runs out and a reset
-// is needed.
-async function freshYear(...avoid: number[]): Promise<number> {
-  const used = await rows<{ enrollment_year: number }>(
-    "select enrollment_year from public.interview_serial_counters where enrollment_year >= 2040",
-  )
-  const taken = new Set([...used.map((row) => row.enrollment_year), ...avoid])
-  const free = Array.from({ length: 61 }, (_, i) => 2040 + i).filter((year) => !taken.has(year))
-  if (free.length === 0) throw new Error("No unused enrollment year left between 2040 and 2100; run npm run db:reset")
-  return free[randomInt(0, free.length)]
-}
-
 async function moveToYear(leadIds: string[], year: number) {
   await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = any($1)", [leadIds, year]))
 }
@@ -81,19 +68,31 @@ async function interviewsOf(leadId: string) {
 describe("registering a lead for interview", () => {
   test("gives a Visited lead the next S/N for its enrollment year, counting from 1 per year", async () => {
     const [first, second, otherYear] = await Promise.all([newLead(), newLead(), newLead()])
-    const year = await freshYear()
-    const another = await freshYear(year)
-    await moveToYear([first, second], year)
-    await moveToYear([otherYear], another)
-    const staff = await signedIn(ADMISSIONS)
+    // Two years no S/N has been issued in, held so no other test registers
+    // in them meanwhile.
+    const claim = await claimInterviewSerialYear({ fresh: true })
+    try {
+      const other = await claimInterviewSerialYear({ fresh: true })
+      try {
+        const { year } = claim
+        const another = other.year
+        await moveToYear([first, second], year)
+        await moveToYear([otherYear], another)
+        const staff = await signedIn(ADMISSIONS)
 
-    const one = await registerForInterview(staff, first)
-    const two = await registerForInterview(staff, second)
-    const fresh = await registerForInterview(staff, otherYear)
+        const one = await registerForInterview(staff, first)
+        const two = await registerForInterview(staff, second)
+        const fresh = await registerForInterview(staff, otherYear)
 
-    expect(one).toEqual({ ok: true, data: { interviewId: expect.any(String), serialNumber: 1, enrollmentYear: year, retake: false } })
-    expect(two).toMatchObject({ ok: true, data: { serialNumber: 2, enrollmentYear: year } })
-    expect(fresh).toMatchObject({ ok: true, data: { serialNumber: 1, enrollmentYear: another } })
+        expect(one).toEqual({ ok: true, data: { interviewId: expect.any(String), serialNumber: 1, enrollmentYear: year, retake: false } })
+        expect(two).toMatchObject({ ok: true, data: { serialNumber: 2, enrollmentYear: year } })
+        expect(fresh).toMatchObject({ ok: true, data: { serialNumber: 1, enrollmentYear: another } })
+      } finally {
+        await other.release()
+      }
+    } finally {
+      await claim.release()
+    }
   })
 
   test("registers an Applied lead whose family has not been to campus, and leaves it Applied", async () => {
@@ -107,13 +106,18 @@ describe("registering a lead for interview", () => {
 
   test("staff registering different leads at once get distinct, consecutive S/Ns", async () => {
     const leads = await Promise.all(Array.from({ length: 6 }, () => newLead()))
-    const year = await freshYear()
-    await moveToYear(leads, year)
-    const [one, other] = await Promise.all([signedIn(ADMISSIONS), signedIn(MANAGER)])
+    // A year held so no other test registers in it meanwhile.
+    const claim = await claimInterviewSerialYear()
+    try {
+      await moveToYear(leads, claim.year)
+      const [one, other] = await Promise.all([signedIn(ADMISSIONS), signedIn(MANAGER)])
 
-    const results = await Promise.all(leads.map((lead, i) => registerForInterview(i % 2 ? one : other, lead)))
-    const numbers = results.map((result) => (result.ok ? result.data.serialNumber : null)).sort((a, b) => a! - b!)
-    expect(numbers).toEqual([1, 2, 3, 4, 5, 6])
+      const results = await Promise.all(leads.map((lead, i) => registerForInterview(i % 2 ? one : other, lead)))
+      const numbers = results.map((result) => (result.ok ? result.data.serialNumber : null)).sort((a, b) => a! - b!)
+      expect(numbers).toEqual(Array.from({ length: 6 }, (_, i) => claim.nextSerial + i))
+    } finally {
+      await claim.release()
+    }
   })
 
   test("two staff registering the same lead at once register it once", async () => {

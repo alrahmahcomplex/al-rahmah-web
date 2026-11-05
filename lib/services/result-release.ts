@@ -62,6 +62,10 @@ export type ResultReleaseView = {
   offer: ReleaseOffer | null
   // The current interview's releases, newest first.
   releases: ResultReleaseRecord[]
+  // Whether the interview's result or score differs from what the last
+  // release carried, so staff know to send the corrected result. Known only
+  // with an offer: false while the result can't go or the caller can't send.
+  changedSinceSent: boolean
 }
 
 type CommonError = "forbidden" | "not-found" | "unavailable"
@@ -148,6 +152,17 @@ export async function getResultReleases(
   }
 }
 
+async function readReleaseState(supabase: SupabaseClient, leadId: string): Promise<Result<StateRow, CommonError>> {
+  const { data, error } = await supabase.rpc("result_release_state", { lead_id: leadId })
+  if (error) {
+    const known = commonError(error)
+    if (known) return { ok: false, error: known }
+    console.error("Could not read a lead's result release", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: data as StateRow }
+}
+
 // The Result release section for a lead: whether its current result can be
 // sent now or why not, its releases, and, for a caller holding results.send
 // when it can go, the channel and the prepared messages. Records nothing.
@@ -157,20 +172,26 @@ export async function getResultRelease(
   leadId: string,
   { officePhone }: { officePhone: string },
 ): Promise<Result<ResultReleaseView, CommonError>> {
-  const { data, error } = await supabase.rpc("result_release_state", { lead_id: leadId })
-  if (error) {
-    const known = commonError(error)
-    if (known) return { ok: false, error: known }
-    console.error("Could not read a lead's result release", error)
-    return { ok: false, error: "unavailable" }
-  }
-
-  const row = data as StateRow
+  const first = await readReleaseState(supabase, leadId)
+  if (!first.ok) return first
+  let row = first.data
   let releases: ResultReleaseRecord[] = []
   if (row.interview_id) {
     const read = await getResultReleases(supabase, row.interview_id)
     if (!read.ok) return read
     releases = read.data
+  }
+
+  // Once there are releases, the state is read again, so the result and score
+  // compared with the last release are never older than it: a correction sent
+  // between the two reads is no warning. A send recorded after the releases
+  // were read leaves the page short of one, so its own send is refused as
+  // sent_meanwhile. If the current interview changed between the reads, the
+  // section shows the first read, as it would have a moment earlier.
+  if (releases.length > 0) {
+    const again = await readReleaseState(supabase, leadId)
+    if (!again.ok) return again
+    if (again.data.interview_id === row.interview_id) row = again.data
   }
 
   let offer: ReleaseOffer | null = null
@@ -192,6 +213,15 @@ export async function getResultRelease(
     }
   }
 
+  // Compared by value, not by when the interview was last changed: a
+  // correction that ends where the release was, or one that changes only the
+  // date, leaves the family with the result and score the interview carries.
+  // The result and score come from the same result_release_state row the
+  // offer's message was built from, read after the releases.
+  const last = releases[0]
+  const changedSinceSent =
+    offer !== null && last !== undefined && (last.result !== row.result || last.score !== Number(row.score))
+
   return {
     ok: true,
     data: {
@@ -201,6 +231,7 @@ export async function getResultRelease(
       canSend: row.can_send,
       offer,
       releases,
+      changedSinceSent,
     },
   }
 }
@@ -214,6 +245,8 @@ export type ReleaseError =
   | "no_whatsapp_number"
   // The names would take the WhatsApp message past its length budget.
   | "too_long"
+  // The interview has more releases than the sending page saw.
+  | "sent_meanwhile"
 
 const RELEASE_REFUSALS: ReadonlySet<string> = new Set<ReleaseError>([
   "lead_closed",
@@ -232,12 +265,24 @@ export type ReleasedResult =
 // when, how, and the result and score. Returns the message built from the
 // values the database checked, and for WhatsApp the wa.me link that opens the
 // chat with it typed in. Needs results.send.
+//
+// seenReleases is how many releases the sending page showed. When the
+// interview has more, someone sent it since the page loaded, and the send is
+// refused as sent_meanwhile, recording nothing, so a page that never showed
+// the repeat-send confirmation can't send twice. The count is read just
+// before the release, so two sends in the same instant can both pass.
 export async function releaseResult(
   supabase: SupabaseClient,
   interviewId: string,
   channel: ResultChannel,
-  { officePhone }: { officePhone: string },
+  { officePhone, seenReleases }: { officePhone: string; seenReleases?: number },
 ): Promise<Result<ReleasedResult, ReleaseError>> {
+  if (seenReleases !== undefined) {
+    const releases = await getResultReleases(supabase, interviewId)
+    if (!releases.ok) return releases
+    if (releases.data.length > seenReleases) return { ok: false, error: "sent_meanwhile" }
+  }
+
   const { data, error } = await supabase.rpc("release_result", { interview_id: interviewId, channel })
   if (error) {
     const known = commonError(error)

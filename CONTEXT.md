@@ -69,6 +69,8 @@ The WhatsApp action targets the parent/guardian's separate WhatsApp contact when
 
 A release is recorded when the message leaves the app: for WhatsApp, the click on **Send through WhatsApp**; for **Send SMS**, the click that reveals the text to copy. The app cannot know whether the parent received it, so the lead's history records that staff sent it, by which channel, and the result and score it carried, never that the family got it.
 
+Staff may send a result again, for a parent who lost the message or changed number. Once the current interview has a release, either send button first asks staff to confirm, saying when, how and by whom it was last sent; cancelling sends and records nothing. When the interview's result or score differs from what the last release carried, the section warns staff to send the corrected result. The warning never blocks a send, and a correction that ends where the release was raises none.
+
 **Next action**:
 A required selection from a fixed list that tells the parent or guardian what to do after receiving the interview result. It is included in the prepared Swahili result message.
 

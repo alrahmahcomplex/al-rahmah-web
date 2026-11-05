@@ -1,3 +1,4 @@
+import { formatScore } from "@/lib/result-messages"
 import type { ReleaseBlocker, ReleaseError, ResultReleaseRecord } from "@/lib/services/result-release"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 
@@ -27,6 +28,31 @@ const CHANNELS = { whatsapp: "WhatsApp", sms: "SMS" } as const
 export function releaseLine(release: Pick<ResultReleaseRecord, "channel" | "releasedAt" | "releasedBy">): string {
   const on = formatDate(tanzaniaToday(new Date(release.releasedAt)))
   return `Sent by ${CHANNELS[release.channel]} on ${on} by ${release.releasedBy}`
+}
+
+type SentRelease = Pick<ResultReleaseRecord, "channel" | "releasedAt" | "releasedBy" | "result" | "score">
+
+const TANZANIA_TIME = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: "Africa/Dar_es_Salaam",
+})
+
+// What a repeat send's confirmation says about the last release: when, in
+// Tanzania, how and by whom, and the result and score it carried.
+export function repeatSendText(last: SentRelease, changedSinceSent: boolean): string {
+  const at = new Date(last.releasedAt)
+  const sent = `It was already sent by ${CHANNELS[last.channel]} on ${formatDate(tanzaniaToday(at))} at ${TANZANIA_TIME.format(at)} by ${last.releasedBy}, as ${last.result}, ${formatScore(last.score)}.`
+  return changedSinceSent
+    ? `${sent} The result or score has been corrected since, so this sends the corrected result.`
+    : `${sent} Send it again only if the family lost the message or changed number.`
+}
+
+// The warning above the send buttons when the interview's result or score is
+// no longer what the last release carried. It never blocks a send.
+export function changedSinceSentText(last: Pick<ResultReleaseRecord, "result" | "score">): string {
+  return `The result or score has been corrected since it was last sent, as ${last.result}, ${formatScore(last.score)}. Send it again so the family has the corrected result.`
 }
 
 // A stored number as staff read it aloud: +255 700 000 602.
@@ -86,6 +112,11 @@ export function releaseRefusal(error: ReleaseError): ReleaseRefusal {
       return {
         status: "refused",
         message: "The names on this lead make the message too long for WhatsApp, so nothing was sent. Check the names.",
+      }
+    case "sent_meanwhile":
+      return {
+        status: "refused",
+        message: "This result was sent by someone else meanwhile, so nothing was sent. Reload to see it.",
       }
     case "unavailable":
       return { status: "refused", message: "The result could not be sent. Try again in a moment." }

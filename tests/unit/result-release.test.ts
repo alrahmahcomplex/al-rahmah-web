@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest"
 
 import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { blockedText, releaseLine, releaseRefusal, smsNote, spacedPhone } from "@/app/staff/leads/[id]/result-release-outcome"
+import {
+  blockedText,
+  changedSinceSentText,
+  releaseLine,
+  releaseRefusal,
+  repeatSendText,
+  smsNote,
+  spacedPhone,
+} from "@/app/staff/leads/[id]/result-release-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import type { ReleaseError } from "@/lib/services/result-release"
 
@@ -136,6 +144,13 @@ describe("the Result release section's words", () => {
     expect(spacedPhone("+447700900123")).toBe("+447700900123")
   })
 
+  it("tells a page that missed a release to reload, and that nothing was sent", () => {
+    expect(releaseRefusal("sent_meanwhile")).toEqual({
+      status: "refused",
+      message: "This result was sent by someone else meanwhile, so nothing was sent. Reload to see it.",
+    })
+  })
+
   it("turns every refusal into a sentence without its code", () => {
     const errors: ReleaseError[] = [
       "forbidden",
@@ -147,11 +162,47 @@ describe("the Result release section's words", () => {
       "not_paid",
       "no_whatsapp_number",
       "too_long",
+      "sent_meanwhile",
     ]
     for (const error of errors) {
       const outcome = releaseRefusal(error)
       expect(outcome.status).toBe("refused")
       if (outcome.status === "refused") expect(outcome.message).not.toMatch(/_|not-found|forbidden|unavailable/)
     }
+  })
+})
+
+describe("sending a result again", () => {
+  const last = {
+    channel: "whatsapp" as const,
+    // 14:05 in Tanzania, three hours ahead of UTC.
+    releasedAt: "2026-10-03T11:05:00Z",
+    releasedBy: "Amina Staff",
+    result: "Passed" as const,
+    score: 78,
+  }
+
+  it("asks first, saying when, how and by whom it was last sent, and what it carried", () => {
+    expect(repeatSendText(last, false)).toBe(
+      "It was already sent by WhatsApp on 3 Oct 2026 at 14:05 by Amina Staff, as Passed, 78%. Send it again only if the family lost the message or changed number.",
+    )
+  })
+
+  it("gives the time in Tanzania, by SMS too", () => {
+    expect(repeatSendText({ ...last, channel: "sms", releasedAt: "2026-10-02T22:30:00Z", score: 41.5 }, false)).toMatch(
+      /^It was already sent by SMS on 3 Oct 2026 at 01:30 by Amina Staff, as Passed, 41\.5%\./,
+    )
+  })
+
+  it("says a corrected result goes in place of the one sent", () => {
+    expect(repeatSendText(last, true)).toBe(
+      "It was already sent by WhatsApp on 3 Oct 2026 at 14:05 by Amina Staff, as Passed, 78%. The result or score has been corrected since, so this sends the corrected result.",
+    )
+  })
+
+  it("warns that the result or score changed since it was sent, without blocking", () => {
+    expect(changedSinceSentText(last)).toBe(
+      "The result or score has been corrected since it was last sent, as Passed, 78%. Send it again so the family has the corrected result.",
+    )
   })
 })

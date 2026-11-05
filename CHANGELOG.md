@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 5, 2026 `v0.69.0`
+
+### NEW
+
+- Staff can send an interview result again. Once a result has been sent, **Send
+  through WhatsApp** and **Send SMS** first ask to confirm, saying when, how and by whom
+  it last went and the result and score it carried. **Don't send** records nothing and
+  opens no WhatsApp tab; **Send again** records a new release.
+- When the result or score was corrected after the last release, the lead's **Result
+  release** section warns above the buttons to send the corrected result. The warning
+  never blocks a send, and clears once the corrected result goes out.
+
 ## November 5, 2026 `v0.68.0`
 
 ### NEW

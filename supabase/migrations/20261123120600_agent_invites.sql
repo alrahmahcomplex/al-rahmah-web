@@ -1,20 +1,23 @@
 -- Agent invites, account states and email edits (slice 12, #191).
 --
 -- - agent_events: append-only, one row per agent event. This ticket writes
---   invite attempts; the claim, reset and batch tickets add their kinds. A raw
---   email is stored only on an event linked to an agent.
+--   invite attempts and joined agents' email changes; the claim, reset and
+--   batch tickets add their kinds. A raw email is stored only on an event
+--   linked to an agent.
 -- - prepare_agent_invite and record_agent_invite: the Manager's two calls
 --   around the invite email, which the server sends with the secret key in
 --   between. Preparing refuses an agent who isn't Approved, is switched off or
---   retired, has no email or has joined, and records an attempt refused
---   because agent access is off.
+--   retired, has no email or has joined, records an attempt refused because
+--   agent access is off, and otherwise starts the attempt. Recording appends
+--   the attempt's result whatever happened to the agent since.
 -- - account_state(marketing_agents): each agent's account state, in one
 --   place, readable as a column of the agent list. agent_account_counts and
 --   agent_invites feed the Agents screen's counts and badges.
 -- - set_marketing_agent_email: adds or corrects an agent's email. An invited
 --   agent who hasn't joined loses the unused login, so the next invite goes
---   to the new address. A joined agent's Auth email is changed by the server
---   through the admin API afterwards.
+--   to the new address. For a joined agent it only starts the change: the
+--   server changes the Auth email with the admin API, then
+--   finish_agent_email_change stores the email once Auth holds it.
 -- - current_agent_account(): the signed-in agent's own name, code and state,
 --   for the agent sign-in and pages.
 
@@ -26,10 +29,14 @@ create table public.agent_events (
     id uuid primary key default gen_random_uuid(),
     -- Empty for an event that matched no agent, such as a refused claim.
     agent_id uuid references public.marketing_agents (id),
-    kind text not null check (kind in ('invite')),
-    result text not null check (result in (
-        'sent', 'rate_limited', 'smtp_error', 'rejected_address', 'other_error', 'access_off'
-    )),
+    -- invite: an invite email. email_change: a Manager changing a joined
+    -- agent's email, which changes their sign-in email first.
+    kind text not null check (kind in ('invite', 'email_change')),
+    -- `started` opens an attempt; one later row of the same kind closes it
+    -- with its result. access_off is an invite refused before it started.
+    result text not null,
+    -- The `started` row this row closes.
+    attempt_id uuid references public.agent_events (id),
     -- The error code Auth gave, for other_error, so it can be read out.
     error_code text check (char_length(error_code) <= 100),
     -- The address the event was about, only when it is linked to an agent.
@@ -38,9 +45,18 @@ create table public.agent_events (
     -- The staff member who caused it; empty when no one did.
     created_by uuid references public.staff_members (id),
     check (email is null or agent_id is not null),
-    check ((result = 'other_error') = (error_code is not null))
+    check ((result = 'other_error') = (error_code is not null)),
+    check (
+        (kind = 'invite' and result in (
+            'started', 'sent', 'rate_limited', 'smtp_error', 'rejected_address', 'other_error', 'access_off'
+        ))
+        or (kind = 'email_change' and result in ('started', 'changed', 'cancelled'))
+    ),
+    check ((attempt_id is null) = (result in ('started', 'access_off')))
 );
 
+-- One result per attempt.
+create unique index agent_events_attempt_idx on public.agent_events (attempt_id) where attempt_id is not null;
 create index agent_events_kind_created_at_idx on public.agent_events (kind, created_at);
 create index agent_events_agent_kind_created_at_idx on public.agent_events (agent_id, kind, created_at) where agent_id is not null;
 create index agent_events_created_by_idx on public.agent_events (created_by) where created_by is not null;
@@ -109,7 +125,10 @@ $$;
 
 revoke execute on function public.agent_invite_sent_at(uuid, text) from public, anon, authenticated, service_role;
 
--- Whether the agent's login has accepted its invite.
+-- Whether the agent finished joining: used the invite link and saved a
+-- password. Using the link confirms the email before the password is saved,
+-- so a confirmed login with no password is an unfinished setup, which a new
+-- invite replaces (prepare_agent_invite).
 create function public.agent_joined(user_id uuid)
 returns boolean
 language sql
@@ -119,7 +138,9 @@ set search_path = ''
 as $$
     select exists (
         select 1 from auth.users u
-        where u.id = agent_joined.user_id and u.email_confirmed_at is not null
+        where u.id = agent_joined.user_id
+          and u.email_confirmed_at is not null
+          and coalesce(u.encrypted_password, '') <> ''
     );
 $$;
 
@@ -234,7 +255,7 @@ begin
         left join lateral (
             select e.result, e.error_code, e.created_at
             from public.agent_events e
-            where e.agent_id = a.id and e.kind = 'invite'
+            where e.agent_id = a.id and e.kind = 'invite' and e.result <> 'started'
             order by e.created_at desc
             limit 1
         ) last on true
@@ -247,22 +268,27 @@ grant execute on function public.agent_invites(uuid[]) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Invites. The server calls prepare_agent_invite on the Manager's session,
--- sends the email with the secret key, then records the result with
--- record_agent_invite. The email goes only to the address the Manager sees.
+-- which checks the agent and starts the attempt, sends the email with the
+-- secret key, then records the attempt's result with record_agent_invite.
+-- The email goes only to the address the Manager sees.
 -- ---------------------------------------------------------------------------
 
 -- Refuses (`not_permitted`, `not_found`, `retired`, `switched_off`,
--- `not_approved`, `no_email`, `already_joined`) or answers `ready` with the
--- address and whether an invite to it went out before. While agent access is
--- off it answers `access_off` and records that attempt.
-create function public.prepare_agent_invite(agent_id uuid)
-returns table (outcome text, email text, resend boolean)
+-- `not_approved`, `no_email`, `already_joined`, and `email_changed` when
+-- expected_email is given and is no longer the agent's) or answers `ready`
+-- with the address, whether an invite to the agent went out before, and the
+-- attempt it started. While agent access is off it answers `access_off` and
+-- records that attempt. A login whose setup never finished (link used, no
+-- password saved) is removed, so the new invite creates a fresh one.
+create function public.prepare_agent_invite(agent_id uuid, expected_email text default null)
+returns table (outcome text, email text, resend boolean, attempt_id uuid)
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
     agent public.marketing_agents;
+    attempt uuid;
 begin
     if not public.has_permission('agents.approve') then
         raise exception 'not_permitted';
@@ -284,6 +310,14 @@ begin
     if agent.email is null then
         raise exception 'no_email';
     end if;
+    if expected_email is not null and lower(btrim(expected_email)) is distinct from agent.email then
+        raise exception 'email_changed';
+    end if;
+    -- Locks the login first, so the agent can't finish setting a password
+    -- between the joined check and the delete below.
+    if agent.user_id is not null then
+        perform 1 from auth.users u where u.id = agent.user_id for update;
+    end if;
     if agent.user_id is not null and public.agent_joined(agent.user_id) then
         raise exception 'already_joined';
     end if;
@@ -291,9 +325,20 @@ begin
     if not (select a.enabled from public.agent_access() a) then
         insert into public.agent_events (agent_id, kind, result, email, created_by)
         values (agent.id, 'invite', 'access_off', agent.email, public.current_staff_id());
-        return query select 'access_off'::text, agent.email, false;
+        return query select 'access_off'::text, agent.email, false, null::uuid;
         return;
     end if;
+
+    -- Auth won't invite an address whose login is already confirmed.
+    if agent.user_id is not null
+       and exists (select 1 from auth.users u where u.id = agent.user_id and u.email_confirmed_at is not null) then
+        update public.marketing_agents a set user_id = null where a.id = agent.id;
+        delete from auth.users u where u.id = agent.user_id and coalesce(u.encrypted_password, '') = '';
+    end if;
+
+    insert into public.agent_events (agent_id, kind, result, email, created_by)
+    values (agent.id, 'invite', 'started', agent.email, public.current_staff_id())
+    returning id into attempt;
 
     return query select
         'ready'::text,
@@ -301,25 +346,27 @@ begin
         exists (
             select 1 from public.agent_events e
             where e.agent_id = agent.id and e.kind = 'invite' and e.result = 'sent'
-        );
+        ),
+        attempt;
 end;
 $$;
 
-revoke execute on function public.prepare_agent_invite(uuid) from public, anon;
-grant execute on function public.prepare_agent_invite(uuid) to authenticated;
+revoke execute on function public.prepare_agent_invite(uuid, text) from public, anon;
+grant execute on function public.prepare_agent_invite(uuid, text) to authenticated;
 
--- Records how an invite email went, to the agent's current address. It
--- refuses an agent prepare_agent_invite would have refused, so a direct call
--- can't mark an invite sent for someone who could not be invited.
-create function public.record_agent_invite(agent_id uuid, result text, error_code text)
+-- Records how an invite email went, for an attempt the same staff member
+-- started, to the address it started with. The checks were made when the
+-- attempt started; the email has gone (or not) by now, so the result is
+-- recorded even if the agent was switched off, retired or changed since.
+-- Refuses `not_permitted`, `invalid`, `not_found` and `already_recorded`.
+create function public.record_agent_invite(attempt_id uuid, result text, error_code text)
 returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-    agent public.marketing_agents;
-    address text;
+    attempt public.agent_events;
 begin
     if not public.has_permission('agents.approve') then
         raise exception 'not_permitted';
@@ -329,35 +376,31 @@ begin
         raise exception 'invalid';
     end if;
 
-    select * into agent from public.marketing_agents a where a.id = record_agent_invite.agent_id;
-    if not found or agent.email is null then
+    select * into attempt from public.agent_events e
+    where e.id = record_agent_invite.attempt_id
+      and e.kind = 'invite'
+      and e.result = 'started'
+      and e.created_by is not distinct from public.current_staff_id();
+    if not found then
         raise exception 'not_found';
     end if;
-    if agent.retired_at is not null then
-        raise exception 'retired';
-    end if;
-    if agent.switched_off_at is not null then
-        raise exception 'switched_off';
-    end if;
-    if agent.status <> 'Approved' then
-        raise exception 'not_approved';
-    end if;
-    if agent.user_id is not null and public.agent_joined(agent.user_id) then
-        raise exception 'already_joined';
-    end if;
-    address := agent.email;
 
-    insert into public.agent_events (agent_id, kind, result, error_code, email, created_by)
-    values (
-        record_agent_invite.agent_id,
-        'invite',
-        record_agent_invite.result,
-        case when record_agent_invite.result = 'other_error'
-            then left(coalesce(nullif(btrim(record_agent_invite.error_code), ''), 'unknown'), 100)
-        end,
-        address,
-        public.current_staff_id()
-    );
+    begin
+        insert into public.agent_events (agent_id, kind, result, attempt_id, error_code, email, created_by)
+        values (
+            attempt.agent_id,
+            'invite',
+            record_agent_invite.result,
+            attempt.id,
+            case when record_agent_invite.result = 'other_error'
+                then left(coalesce(nullif(btrim(record_agent_invite.error_code), ''), 'unknown'), 100)
+            end,
+            attempt.email,
+            public.current_staff_id()
+        );
+    exception when unique_violation then
+        raise exception 'already_recorded';
+    end;
 end;
 $$;
 
@@ -366,16 +409,58 @@ grant execute on function public.record_agent_invite(uuid, text, text) to authen
 
 -- ---------------------------------------------------------------------------
 -- Adding or correcting an agent's email.
+--
+-- A joined agent's change runs in three steps, one at a time per agent:
+-- set_marketing_agent_email starts it, the server changes the Auth email with
+-- the admin API, then finish_agent_email_change stores the email, but only
+-- while Auth holds that address and the change is still the agent's latest.
+-- If the Auth change fails, cancel_agent_email_change closes it. A change
+-- left open longer than email_change_lease() (a server that stopped
+-- mid-change) no longer blocks the next one.
 -- ---------------------------------------------------------------------------
 
+create function public.email_change_lease()
+returns interval
+language sql
+immutable
+set search_path = ''
+as $$
+    select interval '5 minutes';
+$$;
+
+revoke execute on function public.email_change_lease() from public, anon, authenticated, service_role;
+
+-- The agent's latest started email change, if no row closes it.
+create function public.open_email_change(agent_id uuid)
+returns public.agent_events
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select e.*
+    from public.agent_events e
+    where e.agent_id = open_email_change.agent_id and e.kind = 'email_change' and e.result = 'started'
+      and not exists (select 1 from public.agent_events c where c.attempt_id = e.id)
+      and e.created_at = (
+          select max(l.created_at) from public.agent_events l
+          where l.agent_id = open_email_change.agent_id and l.kind = 'email_change' and l.result = 'started'
+      )
+    limit 1;
+$$;
+
+revoke execute on function public.open_email_change(uuid) from public, anon, authenticated, service_role;
+
 -- Needs agents.approve. Refuses `not_permitted`, `not_found`, `retired`,
--- `email_invalid`, `no_change`, and `email_taken` with who holds the address
--- as JSON in the detail. An invited agent who hasn't joined loses the unused
--- login, so a link to the old address no longer works and the next invite
--- creates a login for the new one. For a joined agent it answers the login,
--- whose Auth email the server then changes through the admin API.
+-- `email_invalid`, `no_change`, `busy` while another change to the agent is
+-- under way, and `email_taken` with who holds the address as JSON in the
+-- detail. An invited agent who hasn't joined loses the unused login, so a
+-- link to the old address no longer works and the next invite creates a
+-- login for the new one, and change_id is null. For a joined agent the
+-- stored email stays as it is: the answer is the change it started and the
+-- login whose Auth email the server changes next.
 create function public.set_marketing_agent_email(agent_id uuid, email text)
-returns table (previous_email text, joined_user_id uuid)
+returns table (previous_email text, change_id uuid, user_id uuid)
 language plpgsql
 security definer
 set search_path = ''
@@ -385,6 +470,7 @@ declare
     address text := lower(btrim(coalesce(set_marketing_agent_email.email, '')));
     holder record;
     unused_login uuid;
+    change uuid;
 begin
     if not public.has_permission('agents.approve') then
         raise exception 'not_permitted';
@@ -399,6 +485,12 @@ begin
     end if;
     if agent.retired_at is not null then
         raise exception 'retired';
+    end if;
+    if exists (
+        select 1 from public.open_email_change(agent.id) o
+        where o.id is not null and o.created_at > clock_timestamp() - public.email_change_lease()
+    ) then
+        raise exception 'busy';
     end if;
     if agent.email is not distinct from address then
         raise exception 'no_change';
@@ -421,28 +513,124 @@ begin
         )::text;
     end if;
 
-    -- Locks the login first, so the agent can't use their link between the
+    -- Locks the login first, so the agent can't finish joining between the
     -- joined check and the delete below and be left with an orphaned login.
     if agent.user_id is not null then
         perform 1 from auth.users u where u.id = agent.user_id for update;
     end if;
     if agent.user_id is not null and public.agent_joined(agent.user_id) then
-        update public.marketing_agents a set email = address where a.id = agent.id;
-        return query select agent.email, agent.user_id;
+        insert into public.agent_events (agent_id, kind, result, email, created_by)
+        values (agent.id, 'email_change', 'started', address, public.current_staff_id())
+        returning id into change;
+        return query select agent.email, change, agent.user_id;
         return;
     end if;
 
     unused_login := agent.user_id;
     update public.marketing_agents a set email = address, user_id = null where a.id = agent.id;
     if unused_login is not null then
-        delete from auth.users u where u.id = unused_login and u.email_confirmed_at is null;
+        delete from auth.users u where u.id = unused_login and coalesce(u.encrypted_password, '') = '';
     end if;
-    return query select agent.email, null::uuid;
+    return query select agent.email, null::uuid, null::uuid;
 end;
 $$;
 
 revoke execute on function public.set_marketing_agent_email(uuid, text) from public, anon;
 grant execute on function public.set_marketing_agent_email(uuid, text) to authenticated;
+
+-- Stores the email of a change the same staff member started, once the
+-- agent's Auth email is that address. Answers again, without changing
+-- anything, for a change already finished. Refuses `not_permitted`,
+-- `not_found`, `superseded` when it is no longer the agent's latest open
+-- change, `retired`, `login_mismatch` when Auth doesn't hold the address,
+-- and `email_taken` as set_marketing_agent_email does.
+create function public.finish_agent_email_change(change_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    change public.agent_events;
+    agent public.marketing_agents;
+begin
+    if not public.has_permission('agents.approve') then
+        raise exception 'not_permitted';
+    end if;
+
+    select * into change from public.agent_events e
+    where e.id = finish_agent_email_change.change_id
+      and e.kind = 'email_change'
+      and e.result = 'started'
+      and e.created_by is not distinct from public.current_staff_id();
+    if not found then
+        raise exception 'not_found';
+    end if;
+
+    select * into agent from public.marketing_agents a where a.id = change.agent_id for update;
+    if exists (select 1 from public.agent_events c where c.attempt_id = change.id and c.result = 'changed') then
+        return;
+    end if;
+    if (select o.id from public.open_email_change(agent.id) o) is distinct from change.id then
+        raise exception 'superseded';
+    end if;
+    if agent.retired_at is not null then
+        raise exception 'retired';
+    end if;
+    if agent.user_id is null or not exists (
+        select 1 from auth.users u where u.id = agent.user_id and lower(u.email) = change.email
+    ) then
+        raise exception 'login_mismatch';
+    end if;
+
+    perform public.lock_login_email(change.email);
+    if exists (select 1 from public.staff_members s where s.email = change.email)
+       or exists (select 1 from public.marketing_agents a where a.email = change.email and a.id <> agent.id and a.retired_at is null) then
+        raise exception 'email_taken';
+    end if;
+
+    update public.marketing_agents a set email = change.email where a.id = agent.id;
+    insert into public.agent_events (agent_id, kind, result, attempt_id, email, created_by)
+    values (agent.id, 'email_change', 'changed', change.id, change.email, public.current_staff_id());
+end;
+$$;
+
+revoke execute on function public.finish_agent_email_change(uuid) from public, anon;
+grant execute on function public.finish_agent_email_change(uuid) to authenticated;
+
+-- Closes a change the same staff member started whose Auth change failed.
+-- The stored email never moved, so nothing else changes. Does nothing for a
+-- change already closed. Refuses `not_permitted` and `not_found`.
+create function public.cancel_agent_email_change(change_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    change public.agent_events;
+begin
+    if not public.has_permission('agents.approve') then
+        raise exception 'not_permitted';
+    end if;
+
+    select * into change from public.agent_events e
+    where e.id = cancel_agent_email_change.change_id
+      and e.kind = 'email_change'
+      and e.result = 'started'
+      and e.created_by is not distinct from public.current_staff_id();
+    if not found then
+        raise exception 'not_found';
+    end if;
+
+    insert into public.agent_events (agent_id, kind, result, attempt_id, email, created_by)
+    values (change.agent_id, 'email_change', 'cancelled', change.id, change.email, public.current_staff_id())
+    on conflict (attempt_id) where attempt_id is not null do nothing;
+end;
+$$;
+
+revoke execute on function public.cancel_agent_email_change(uuid) from public, anon;
+grant execute on function public.cancel_agent_email_change(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- The signed-in agent.

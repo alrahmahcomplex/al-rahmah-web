@@ -6,6 +6,9 @@ import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
+import { confirmationOf } from "@/lib/agent-import"
+import { toCsv } from "@/lib/import"
+import { checkAgentImportFile, confirmAgentImport } from "@/lib/services/agent-import"
 import {
   getAgentAccountCounts,
   getAgentInvites,
@@ -62,14 +65,58 @@ const realSender: AgentInviteSender = async (address, redirectTo) => {
   return { error: error ? { message: error.message, status: error.status, code: error.code } : null }
 }
 
+// The recorded outcome of each invite attempt, oldest first.
 async function events(agentId: string) {
   return inRolledBackTransaction(async (sql) => {
     const { rows } = await sql.query<{ result: string; error_code: string | null; email: string; created_by: string | null }>(
-      "select result, error_code, email, created_by from public.agent_events where agent_id = $1 order by created_at",
+      `select result, error_code, email, created_by from public.agent_events
+       where agent_id = $1 and kind = 'invite' and result <> 'started' order by created_at`,
       [agentId],
     )
     return rows
   })
+}
+
+// An invite to `address` that went out 25 hours ago, so its link has expired.
+async function sentLongAgo(agentId: string, address: string) {
+  await asSystem(async (sql) => {
+    const { rows } = await sql.query<{ id: string }>(
+      "insert into public.agent_events (agent_id, kind, result, email, created_at) values ($1, 'invite', 'started', $2, now() - interval '25 hours') returning id",
+      [agentId, address],
+    )
+    await sql.query(
+      "insert into public.agent_events (agent_id, kind, result, attempt_id, email, created_at) values ($1, 'invite', 'sent', $2, $3, now() - interval '25 hours')",
+      [agentId, rows[0].id, address],
+    )
+  })
+}
+
+async function storedEmail(agentId: string) {
+  return inRolledBackTransaction(async (sql) => {
+    const { rows } = await sql.query<{ email: string }>("select email from public.marketing_agents where id = $1", [agentId])
+    return rows[0].email
+  })
+}
+
+async function loginEmail(userId: string) {
+  return inRolledBackTransaction(async (sql) => {
+    const { rows } = await sql.query<{ email: string }>("select email from auth.users where id = $1", [userId])
+    return rows[0]?.email ?? null
+  })
+}
+
+// An Approved agent who has joined: a login with a password, linked by email.
+async function joinedAgent(label: string) {
+  const address = email(label)
+  const agent = await approvedAgent(address)
+  const login = await secretClient().auth.admin.createUser({ email: address, password: "fixture-password", email_confirm: true })
+  if (login.error || !login.data.user) throw new Error(`could not create the login: ${login.error?.message}`)
+  return { ...agent, address, userId: login.data.user.id }
+}
+
+const realLoginUpdater = async (userId: string, value: string) => {
+  const { error } = await secretClient().auth.admin.updateUserById(userId, { email: value, email_confirm: true })
+  return { error: error ? { message: error.message } : null }
 }
 
 async function stateOf(client: SupabaseClient, agentId: string) {
@@ -121,16 +168,68 @@ describe("sending an invite", () => {
     expect(await events(agent.id)).toEqual([])
   })
 
-  test("recording a send directly is refused for an agent who couldn't be invited", async () => {
+  test("a result is recorded only for an attempt the Manager started, and only once", async () => {
     const client = await manager()
-    const joined = await client.rpc("record_agent_invite", { agent_id: SEEDED_AGENT.id, result: "sent", error_code: null })
-    expect(joined.error?.message).toBe("already_joined")
+    const unknown = await client.rpc("record_agent_invite", { attempt_id: randomUUID(), result: "sent", error_code: null })
+    expect(unknown.error?.message).toBe("not_found")
 
-    const retired = await approvedAgent(email("record-retired"))
-    await changeAgentStatus(client, retired.id, "retire", "Testing a direct record")
-    const refused = await client.rpc("record_agent_invite", { agent_id: retired.id, result: "sent", error_code: null })
-    expect(refused.error?.message).toBe("retired")
-    expect(await events(retired.id)).toEqual([])
+    const address = email("record-once")
+    const agent = await approvedAgent(address)
+    const prepared = await client.rpc("prepare_agent_invite", { agent_id: agent.id, expected_email: null })
+    const attemptId = (prepared.data as { attempt_id: string }[])[0].attempt_id
+    expect((await client.rpc("record_agent_invite", { attempt_id: attemptId, result: "sent", error_code: null })).error).toBeNull()
+    const again = await client.rpc("record_agent_invite", { attempt_id: attemptId, result: "smtp_error", error_code: null })
+    expect(again.error?.message).toBe("already_recorded")
+
+    const other = await signedIn(await createThrowawayStaff(["agents.approve", "leads.view"]))
+    const second = await client.rpc("prepare_agent_invite", { agent_id: agent.id, expected_email: null })
+    const secondId = (second.data as { attempt_id: string }[])[0].attempt_id
+    const notTheirs = await other.rpc("record_agent_invite", { attempt_id: secondId, result: "sent", error_code: null })
+    expect(notTheirs.error?.message).toBe("not_found")
+    expect(await events(agent.id)).toEqual([{ result: "sent", error_code: null, email: address, created_by: MANAGER.id }])
+  })
+
+  test("a send still counts when the agent is switched off while it goes out, to the address it went to", async () => {
+    const client = await manager()
+    const address = email("off-mid-send")
+    const agent = await approvedAgent(address)
+    const send = vi.fn<AgentInviteSender>(async () => {
+      expect((await changeAgentStatus(client, agent.id, "switch-off", "Switched off while the invite went out")).ok).toBe(true)
+      return { error: null }
+    })
+
+    const result = await sendAgentInvite(client, send, agent.id, REDIRECT)
+
+    expect(result).toEqual({ ok: true, data: { email: address, resend: false } })
+    expect(await events(agent.id)).toEqual([{ result: "sent", error_code: null, email: address, created_by: MANAGER.id }])
+    expect((await changeAgentStatus(client, agent.id, "switch-on", "Back on")).ok).toBe(true)
+    expect(await stateOf(client, agent.id)).toBe("invited")
+  })
+
+  test("a used link whose password wasn't saved leaves the agent invited, and a resend starts a new login", async () => {
+    const client = await manager()
+    const address = email("unfinished")
+    const agent = await approvedAgent(address)
+    expect((await sendAgentInvite(client, realSender, agent.id, REDIRECT)).ok).toBe(true)
+    // Using the link confirms the email; the password save then failed.
+    const firstLogin = await asSystem(async (sql) => {
+      const { rows } = await sql.query<{ user_id: string }>("select user_id from public.marketing_agents where id = $1", [agent.id])
+      await sql.query("update auth.users set email_confirmed_at = now() where id = $1", [rows[0].user_id])
+      return rows[0].user_id
+    })
+
+    expect(await stateOf(client, agent.id)).toBe("invited")
+    const resent = await sendAgentInvite(client, realSender, agent.id, REDIRECT)
+
+    expect(resent).toEqual({ ok: true, data: { email: address, resend: true } })
+    expect(await loginEmail(firstLogin)).toBeNull()
+    const secondLogin = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ user_id: string | null }>("select user_id from public.marketing_agents where id = $1", [agent.id])
+      return rows[0].user_id
+    })
+    expect(secondLogin).not.toBeNull()
+    expect(secondLogin).not.toBe(firstLogin)
+    expect(await stateOf(client, agent.id)).toBe("invited")
   })
 
   test("a second invite is a resend", async () => {
@@ -223,7 +322,7 @@ describe("sending an invite", () => {
       return { answer, recorded }
     })
 
-    expect(answer).toEqual([{ outcome: "access_off", email: address, resend: false }])
+    expect(answer).toEqual([{ outcome: "access_off", email: address, resend: false, attempt_id: null }])
     expect(recorded).toEqual([{ result: "access_off", email: address }])
   })
 
@@ -259,12 +358,7 @@ describe("account state", () => {
 
     const expiredAddress = email("expired")
     const expired = await approvedAgent(expiredAddress)
-    await asSystem((sql) =>
-      sql.query(
-        "insert into public.agent_events (agent_id, kind, result, email, created_at) values ($1, 'invite', 'sent', $2, now() - interval '25 hours')",
-        [expired.id, expiredAddress],
-      ),
-    )
+    await sentLongAgo(expired.id, expiredAddress)
     expect(await stateOf(client, expired.id)).toBe("invite_expired")
 
     expect(await stateOf(client, SEEDED_AGENT.id)).toBe("joined")
@@ -331,18 +425,41 @@ describe("the Agents screen's account-state filters", () => {
     await sendAgentInvite(await manager(), stubSender(), invited.id, REDIRECT)
     const expiredAddress = email("filter-expired")
     const expired = await approvedAgent(expiredAddress)
-    await asSystem((sql) =>
-      sql.query(
-        "insert into public.agent_events (agent_id, kind, result, email, created_at) values ($1, 'invite', 'sent', $2, now() - interval '25 hours')",
-        [expired.id, expiredAddress],
-      ),
-    )
+    await sentLongAgo(expired.id, expiredAddress)
 
     expect(await listed("invite_not_sent", notSent.fullName)).toEqual([notSent.fullName])
     expect(await listed("invite_not_sent", invited.fullName)).toEqual([])
     expect(await listed("invite_not_sent", expired.fullName)).toEqual([])
     expect(await listed("invite_expired", expired.fullName)).toEqual([expired.fullName])
     expect(await listed("invite_expired", notSent.fullName)).toEqual([])
+  })
+
+  test("an import's filter stays on: only that import's agents are listed", async () => {
+    const stem = `Imani Filter ${randomUUID().slice(0, 8)}`
+    const outside = await createAgent(await manager(), { fullName: `${stem} Outside`, phone: phone(), whatsapp: "", email: email("outside"), code: "" })
+    expect(outside).toMatchObject({ ok: true, data: { kind: "created" } })
+    const file = `agents-${randomUUID().slice(0, 8)}.csv`
+    const bytes = new TextEncoder().encode(
+      toCsv([
+        ["Code", "Full name", "Mobile", "WhatsApp", "Email"],
+        [`IFL-${randomInt(10_000, 100_000)}`, `${stem} Imported`, phone(), "", email("imported")],
+      ]),
+    )
+    const checked = await checkAgentImportFile(await manager(), file, bytes)
+    if (!checked.ok) throw new Error(JSON.stringify(checked.error))
+    const done = await confirmAgentImport(await manager(), confirmationOf(checked.data))
+    if (!done.ok || done.data.kind !== "imported") throw new Error(JSON.stringify(done))
+
+    const list = await listAgentsInAccountState(await manager(), "invite_not_sent", {
+      query: stem,
+      page: 1,
+      importBatchId: done.data.batchId,
+    })
+
+    expect(list).toMatchObject({ ok: true, data: { total: 1 } })
+    expect(list.ok && list.data.agents.map((agent) => agent.fullName)).toEqual([`${stem} Imported`])
+    const malformed = await listAgentsInAccountState(await manager(), "invite_not_sent", { query: stem, page: 1, importBatchId: "nope" })
+    expect(malformed).toMatchObject({ ok: true, data: { total: 0 } })
   })
 
   test("staff without leads.view list nobody", async () => {
@@ -447,6 +564,76 @@ describe("editing an agent's email", () => {
   test("refused for staff without agents.approve", async () => {
     const agent = await approvedAgent(null)
     expect(await setAgentEmail(await signedIn(ADMISSIONS), agent.id, email("nope"))).toEqual({ ok: false, error: { kind: "forbidden" } })
+  })
+
+  test("two saves for a joined agent take turns, so the stored and sign-in emails agree", async () => {
+    const agent = await joinedAgent("turns-before")
+    const first = email("turns-first")
+    const second = email("turns-second")
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    let reached!: () => void
+    const firstAtAuth = new Promise<void>((resolve) => (reached = resolve))
+    const slowUpdater = async (userId: string, value: string) => {
+      reached()
+      await held
+      return realLoginUpdater(userId, value)
+    }
+
+    const firstSave = setAgentEmail(await manager(), agent.id, first, slowUpdater)
+    await firstAtAuth
+    const secondSave = await setAgentEmail(await manager(), agent.id, second, realLoginUpdater)
+    release()
+
+    expect(secondSave).toEqual({ ok: false, error: { kind: "busy" } })
+    expect(await firstSave).toEqual({ ok: true, data: { email: first, previousEmail: agent.address, joined: true } })
+    expect(await storedEmail(agent.id)).toBe(first)
+    expect(await loginEmail(agent.userId)).toBe(first)
+  })
+
+  test("a failed save closes only its own change, and the next save goes ahead", async () => {
+    const agent = await joinedAgent("closes-before")
+
+    const failed = await setAgentEmail(await manager(), agent.id, email("closes-failed"), async () => ({ error: { message: "down" } }))
+    expect(failed).toEqual({ ok: false, error: { kind: "login-not-updated" } })
+
+    const next = email("closes-next")
+    expect(await setAgentEmail(await manager(), agent.id, next, realLoginUpdater)).toMatchObject({ ok: true })
+    expect(await storedEmail(agent.id)).toBe(next)
+    expect(await loginEmail(agent.userId)).toBe(next)
+  })
+
+  test("a change left behind for too long is taken over, and can't then finish", async () => {
+    const agent = await joinedAgent("stale-before")
+    const stale = await asSystem(async (sql) => {
+      const { rows } = await sql.query<{ id: string }>(
+        "insert into public.agent_events (agent_id, kind, result, email, created_by, created_at) values ($1, 'email_change', 'started', $2, $3, now() - interval '10 minutes') returning id",
+        [agent.id, email("stale-abandoned"), MANAGER.id],
+      )
+      return rows[0].id
+    })
+
+    const next = email("stale-next")
+    expect(await setAgentEmail(await manager(), agent.id, next, realLoginUpdater)).toMatchObject({ ok: true })
+
+    const late = await (await manager()).rpc("finish_agent_email_change", { change_id: stale })
+    expect(late.error?.message).toBe("superseded")
+    expect(await storedEmail(agent.id)).toBe(next)
+  })
+
+  test("an approver's own call can't change a joined agent's stored email without their sign-in email", async () => {
+    const client = await manager()
+    const agent = await joinedAgent("direct-before")
+
+    const started = await client.rpc("set_marketing_agent_email", { agent_id: agent.id, email: email("direct-after") })
+    expect(started.error).toBeNull()
+    const changeId = (started.data as { change_id: string }[])[0].change_id
+    expect(await storedEmail(agent.id)).toBe(agent.address)
+
+    const finished = await client.rpc("finish_agent_email_change", { change_id: changeId })
+    expect(finished.error?.message).toBe("login_mismatch")
+    expect(await storedEmail(agent.id)).toBe(agent.address)
+    expect(await loginEmail(agent.userId)).toBe(agent.address)
   })
 })
 

@@ -135,6 +135,7 @@ const EMAIL_REFUSALS: Record<Exclude<SetEmailError["kind"], "email-taken">, stri
   retired: "This agent is retired, so nothing about them can change.",
   "email-invalid": "Enter a valid email address.",
   "no-change": "That is already their email.",
+  busy: "Someone is changing this agent's email right now. Reload the page in a few minutes and check it.",
   "login-not-updated": "Their sign-in email couldn't be changed, so their email stays as it was. Try again in a moment.",
   unavailable: "The email couldn't be saved just now. Try again in a moment.",
 }

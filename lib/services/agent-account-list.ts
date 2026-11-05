@@ -3,13 +3,14 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { AccountState } from "./agent-invites"
-import { agentSearchPatterns, AGENTS_PER_PAGE, type AgentList, type AgentStatus } from "./marketing-agents"
+import { agentSearchPatterns, AGENTS_PER_PAGE, UUID, type AgentList, type AgentStatus } from "./marketing-agents"
 import type { Result } from "./result"
 
 // The Agents screen's account-state filters (#191): one page of the agents in
 // one account state, filtered by the account_state column the database
-// computes. Same rows and order as the Approved list in marketing-agents.ts
-// (which the agent-record tickets own): the latest approval first. Agents in
+// computes, within one import when the screen shows one. Same rows and order
+// as the Approved list in marketing-agents.ts (which the agent-record
+// tickets own): the latest approval first. Agents in
 // these states are never switched off or retired, so no status note applies.
 
 // The states the screen filters on. Awaiting email confirmation joins them
@@ -34,7 +35,7 @@ const COLUMNS = "id, full_name, phone, whatsapp, code, status, registered_at, ap
 export async function listAgentsInAccountState(
   supabase: SupabaseClient,
   state: AccountFilter,
-  search: { query?: string; page: number },
+  search: { query?: string; page: number; importBatchId?: string },
 ): Promise<Result<AgentList, "unavailable">> {
   const page = Number.isInteger(search.page) && search.page > 0 ? search.page : 1
   const patterns = agentSearchPatterns(search.query ?? "")
@@ -45,6 +46,10 @@ export async function listAgentsInAccountState(
       .select(COLUMNS, { count: "exact", head })
       .is("retired_at", null)
       .eq("account_state", state)
+    if (search.importBatchId !== undefined) {
+      // A malformed id is no import, so no agent.
+      list = UUID.test(search.importBatchId) ? list.eq("import_batch_id", search.importBatchId) : list.is("id", null)
+    }
     if (patterns.length > 0) list = list.or(patterns.map((pattern) => `search_text.ilike."*${pattern}*"`).join(","))
     return list.order("approved_at", { ascending: false }).order("id")
   }

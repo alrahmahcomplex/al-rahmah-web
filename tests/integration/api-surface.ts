@@ -139,6 +139,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  // Closes the Manager's own started email change (#191).
+  "public.cancel_agent_email_change(change_id uuid)": {
+    roles: ["authenticated"],
+    setup:
+      "insert into public.agent_events (id, agent_id, kind, result, email, created_by) select 'e7e7e7e7-0000-4000-8000-000000000191', a.id, 'email_change', 'started', lower(u.email), 'a1a1a1a1-0000-4000-8000-000000000001' from public.marketing_agents a join auth.users u on u.id = a.user_id where a.id = 'a4a4a4a4-0000-4000-8000-000000000003'",
+    args: { change_id: "'e7e7e7e7-0000-4000-8000-000000000191'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.change_follow_up_date(follow_up_id uuid, due_on date, reason text, note text)": {
     roles: ["authenticated"],
     args: {
@@ -324,6 +332,15 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: { class_name: "'STD 2'" },
     agent: { returns: ["primary_lower"] },
+  },
+  // Stores a joined agent's email once Auth holds it (#191). The sample
+  // change is to the seeded agent's own sign-in email.
+  "public.finish_agent_email_change(change_id uuid)": {
+    roles: ["authenticated"],
+    setup:
+      "insert into public.agent_events (id, agent_id, kind, result, email, created_by) select 'e7e7e7e7-0000-4000-8000-000000000191', a.id, 'email_change', 'started', lower(u.email), 'a1a1a1a1-0000-4000-8000-000000000001' from public.marketing_agents a join auth.users u on u.id = a.user_id where a.id = 'a4a4a4a4-0000-4000-8000-000000000003'",
+    args: { change_id: "'e7e7e7e7-0000-4000-8000-000000000191'" },
+    agent: { refused: "not_permitted" },
   },
   "public.find_family_by_phone(phone text, whatsapp text)": {
     roles: ["authenticated"],
@@ -588,10 +605,10 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000005'" },
     agent: { refused: "not_permitted" },
   },
-  "public.prepare_agent_invite(agent_id uuid)": {
+  "public.prepare_agent_invite(agent_id uuid, expected_email text)": {
     roles: ["authenticated"],
     setup: "update public.marketing_agents set email = 'surface-invite@example.test' where id = 'a4a4a4a4-0000-4000-8000-000000000002'",
-    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'" },
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'", expected_email: "'surface-invite@example.test'" },
     agent: { refused: "not_permitted" },
   },
   "public.record_action(kind text, lead_id uuid, details jsonb)": {
@@ -603,10 +620,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
-  "public.record_agent_invite(agent_id uuid, result text, error_code text)": {
+  // The result of an invite attempt the Manager started.
+  "public.record_agent_invite(attempt_id uuid, result text, error_code text)": {
     roles: ["authenticated"],
-    setup: "update public.marketing_agents set email = 'surface-invite@example.test' where id = 'a4a4a4a4-0000-4000-8000-000000000002'",
-    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'", result: "'sent'", error_code: "null" },
+    setup:
+      "insert into public.agent_events (id, agent_id, kind, result, email, created_by) values ('e7e7e7e7-0000-4000-8000-000000000192', 'a4a4a4a4-0000-4000-8000-000000000002', 'invite', 'started', 'surface-invite@example.test', 'a1a1a1a1-0000-4000-8000-000000000001')",
+    args: { attempt_id: "'e7e7e7e7-0000-4000-8000-000000000192'", result: "'sent'", error_code: "null" },
     agent: { refused: "not_permitted" },
   },
   "public.record_follow_up(lead_id uuid, follow_up_id uuid, comment text, method text, contacted_by uuid, contacted_at timestamp with time zone, outcome text, next_due_on date, next_note text, decline_reason text, decline_note text)":

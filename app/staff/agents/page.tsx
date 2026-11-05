@@ -77,7 +77,11 @@ export default async function MarketingAgentsPage({
   const supabase = await createClient()
   const [results, batch, access, counts, pendingCount] = await Promise.all([
     search.account
-      ? listAgentsInAccountState(supabase, search.account, { query: search.query, page: search.page })
+      ? listAgentsInAccountState(supabase, search.account, {
+          query: search.query,
+          page: search.page,
+          importBatchId: search.importBatchId,
+        })
       : listAgents(supabase, search),
     search.importBatchId ? getAgentImport(supabase, search.importBatchId) : null,
     getAgentAccess(supabase),

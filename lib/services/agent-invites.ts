@@ -71,6 +71,7 @@ const PREPARE_REFUSALS: Record<string, AgentInviteError> = {
   not_approved: { kind: "not-approved" },
   no_email: { kind: "no-email" },
   already_joined: { kind: "already-joined" },
+  email_changed: { kind: "email-changed" },
 }
 
 const RECORDED: Record<SendFailure["kind"], string> = {
@@ -96,6 +97,8 @@ export function classifySendFailure(error: { message: string; status?: number; c
 // how it went. Approving or confirming never waits on this: callers report a
 // failure as "Invite not sent" and offer Resend. With `expectedEmail`, the
 // address the Manager saw, nothing goes out if the email has changed since.
+// The database checks the agent and starts the attempt before the send, so
+// the result is recorded even if the agent is switched off meanwhile.
 export async function sendAgentInvite(
   supabase: SupabaseClient,
   send: AgentInviteSender,
@@ -103,7 +106,10 @@ export async function sendAgentInvite(
   redirectTo: string,
   { expectedEmail }: { expectedEmail?: string } = {},
 ): Promise<Result<SentInvite, AgentInviteError>> {
-  const prepared = await supabase.rpc("prepare_agent_invite", { agent_id: agentId })
+  const prepared = await supabase.rpc("prepare_agent_invite", {
+    agent_id: agentId,
+    expected_email: expectedEmail ?? null,
+  })
   if (prepared.error) {
     const refusal = PREPARE_REFUSALS[prepared.error.message]
     // 22P02: a malformed id is no agent. 42501: not granted, as for a visitor.
@@ -113,12 +119,10 @@ export async function sendAgentInvite(
     console.error("Could not prepare an agent invite", prepared.error)
     return { ok: false, error: { kind: "unavailable" } }
   }
-  const row = ((prepared.data ?? []) as { outcome: string; email: string; resend: boolean }[])[0]
+  const row = ((prepared.data ?? []) as { outcome: string; email: string; resend: boolean; attempt_id: string | null }[])[0]
   if (!row) return { ok: false, error: { kind: "unavailable" } }
   if (row.outcome === "access_off") return { ok: false, error: { kind: "access-off" } }
-  if (expectedEmail !== undefined && expectedEmail.trim().toLowerCase() !== row.email) {
-    return { ok: false, error: { kind: "email-changed" } }
-  }
+  if (!row.attempt_id) return { ok: false, error: { kind: "unavailable" } }
 
   const { error } = await send(row.email, redirectTo)
   const failure = error ? classifySendFailure(error) : null
@@ -127,7 +131,7 @@ export async function sendAgentInvite(
   // Recorded as soon as the send is done. The email has gone (or not) either
   // way, so a failure to record is logged, not reported as the send's result.
   const recorded = await supabase.rpc("record_agent_invite", {
-    agent_id: agentId,
+    attempt_id: row.attempt_id,
     result: failure ? RECORDED[failure.kind] : "sent",
     error_code: failure?.kind === "other-error" ? failure.code : null,
   })
@@ -236,8 +240,10 @@ export type SetEmailError =
   | { kind: "email-invalid" }
   | { kind: "no-change" }
   | { kind: "email-taken"; holder: EmailHolder; name: string | null; code: string | null }
-  // A joined agent's Auth email couldn't be changed; the stored email was
-  // put back, so the two still agree.
+  // Another change to this joined agent's email is under way.
+  | { kind: "busy" }
+  // A joined agent's Auth email couldn't be changed, so the stored email
+  // stayed as it was and the two still agree.
   | { kind: "login-not-updated" }
   | { kind: "unavailable" }
 
@@ -249,6 +255,7 @@ const EMAIL_REFUSALS: Record<string, SetEmailError> = {
   retired: { kind: "retired" },
   email_invalid: { kind: "email-invalid" },
   no_change: { kind: "no-change" },
+  busy: { kind: "busy" },
 }
 
 function takenBy(details: string | null | undefined): SetEmailError {
@@ -263,27 +270,46 @@ function takenBy(details: string | null | undefined): SetEmailError {
   return { kind: "email-taken", holder: "login", name: null, code: null }
 }
 
-async function writeEmail(
-  supabase: SupabaseClient,
-  agentId: string,
-  email: string,
-): Promise<Result<{ previous_email: string | null; joined_user_id: string | null }, SetEmailError>> {
+type EmailStart = { previous_email: string | null; change_id: string | null; user_id: string | null }
+
+function emailRefusal(error: { message: string; code?: string; details?: string | null }): SetEmailError | null {
+  const refusal = EMAIL_REFUSALS[error.message]
+  if (refusal) return refusal
+  if (error.message === "email_taken") return takenBy(error.details)
+  // 23505: another agent saved the same email a moment earlier.
+  if (error.code === "23505") return { kind: "email-taken", holder: "agent", name: null, code: null }
+  if (error.code === "22P02") return { kind: "not-found" }
+  if (error.code === "42501") return { kind: "forbidden" }
+  return null
+}
+
+async function startEmailChange(supabase: SupabaseClient, agentId: string, email: string): Promise<Result<EmailStart, SetEmailError>> {
   const { data, error } = await supabase.rpc("set_marketing_agent_email", { agent_id: agentId, email })
   if (error) {
-    const refusal = EMAIL_REFUSALS[error.message]
+    const refusal = emailRefusal(error)
     if (refusal) return { ok: false, error: refusal }
-    if (error.message === "email_taken") return { ok: false, error: takenBy(error.details) }
-    // 23505: another agent saved the same email a moment earlier.
-    if (error.code === "23505")
-      return { ok: false, error: { kind: "email-taken", holder: "agent", name: null, code: null } }
-    if (error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
-    if (error.code === "42501") return { ok: false, error: { kind: "forbidden" } }
     console.error("Could not save an agent's email", error)
     return { ok: false, error: { kind: "unavailable" } }
   }
-  const row = ((data ?? []) as { previous_email: string | null; joined_user_id: string | null }[])[0]
+  const row = ((data ?? []) as EmailStart[])[0]
   if (!row) return { ok: false, error: { kind: "unavailable" } }
   return { ok: true, data: row }
+}
+
+async function cancelEmailChange(supabase: SupabaseClient, changeId: string) {
+  const { error } = await supabase.rpc("cancel_agent_email_change", { change_id: changeId })
+  // Left open, the change stops blocking the next one after a few minutes.
+  if (error) console.error("Could not close an agent's email change", changeId, error)
+}
+
+// Refusals that mean the change will never finish.
+const DEFINITE_FINISH_REFUSALS = new Set(["superseded", "retired", "login_mismatch", "not_found"])
+
+async function finishEmailChange(supabase: SupabaseClient, changeId: string) {
+  const first = await supabase.rpc("finish_agent_email_change", { change_id: changeId })
+  if (!first.error || emailRefusal(first.error) || DEFINITE_FINISH_REFUSALS.has(first.error.message)) return first
+  // A lost answer may hide a finished change; finishing again says so.
+  return supabase.rpc("finish_agent_email_change", { change_id: changeId })
 }
 
 const NO_LOGIN_UPDATER: LoginEmailUpdater = async () => ({
@@ -291,27 +317,44 @@ const NO_LOGIN_UPDATER: LoginEmailUpdater = async () => ({
 })
 
 // Before the agent joins, the email changes and any unused invite stops
-// working. After they join, their sign-in email changes too, through
-// `updateLogin`; if that fails, the old email is put back.
+// working. After they join, the change runs one at a time per agent: the
+// database starts it, `updateLogin` changes the sign-in email, and only then
+// is the email stored, so the stored and sign-in emails never disagree for
+// long. If the sign-in email can't be changed, the stored one stays.
 export async function setAgentEmail(
   supabase: SupabaseClient,
   agentId: string,
   email: string,
   updateLogin: LoginEmailUpdater = NO_LOGIN_UPDATER,
 ): Promise<Result<EmailChange, SetEmailError>> {
-  const written = await writeEmail(supabase, agentId, email)
-  if (!written.ok) return written
+  const started = await startEmailChange(supabase, agentId, email)
+  if (!started.ok) return started
   const address = email.trim().toLowerCase()
-  const { previous_email: previousEmail, joined_user_id: userId } = written.data
-  if (!userId) return { ok: true, data: { email: address, previousEmail, joined: false } }
+  const { previous_email: previousEmail, change_id: changeId, user_id: userId } = started.data
+  if (!changeId || !userId) return { ok: true, data: { email: address, previousEmail, joined: false } }
 
   const { error } = await updateLogin(userId, address)
-  if (!error) return { ok: true, data: { email: address, previousEmail, joined: true } }
-
-  console.error("Could not change a joined agent's sign-in email", agentId, error)
-  if (previousEmail) {
-    const reverted = await writeEmail(supabase, agentId, previousEmail)
-    if (!reverted.ok) console.error("Could not put an agent's email back", agentId, reverted.error)
+  if (error) {
+    console.error("Could not change a joined agent's sign-in email", agentId, error)
+    await cancelEmailChange(supabase, changeId)
+    return { ok: false, error: { kind: "login-not-updated" } }
   }
-  return { ok: false, error: { kind: "login-not-updated" } }
+
+  const finished = await finishEmailChange(supabase, changeId)
+  if (!finished.error) return { ok: true, data: { email: address, previousEmail, joined: true } }
+
+  const refusal = emailRefusal(finished.error)
+  console.error("Changed a joined agent's sign-in email but could not store it", agentId, finished.error)
+  if (refusal?.kind === "email-taken" && previousEmail) {
+    // Someone took the address while Auth changed: the sign-in email goes
+    // back, so it matches the stored one again.
+    const { error: revertError } = await updateLogin(userId, previousEmail)
+    if (revertError) console.error("Could not put a joined agent's sign-in email back", agentId, revertError)
+    await cancelEmailChange(supabase, changeId)
+    return { ok: false, error: refusal }
+  }
+  // superseded, retired or login_mismatch: a later change or a retirement
+  // now owns the sign-in email, so it is left alone.
+  if (DEFINITE_FINISH_REFUSALS.has(finished.error.message)) await cancelEmailChange(supabase, changeId)
+  return { ok: false, error: { kind: "unavailable" } }
 }

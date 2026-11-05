@@ -61,8 +61,12 @@ export type AgentListSearch = {
   // Left out, every agent.
   status?: AgentFilter
   query?: string
+  // Only the agents one import created (#190).
+  importBatchId?: string
   page: number
 }
+
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export type NewAgent = { fullName: string; phone: string; whatsapp?: string | null }
 export type AgentField = "full_name" | "phone" | "whatsapp"
@@ -174,6 +178,10 @@ export async function listAgents(
     let list = supabase.from("marketing_agents").select(AGENT_COLUMNS, { count: "exact", head })
     list = status === "Retired" ? list.not("retired_at", "is", null) : list.is("retired_at", null)
     if (status === "Pending" || status === "Approved") list = list.eq("status", status)
+    if (search.importBatchId !== undefined) {
+      // A malformed id is no import, so no agent.
+      list = UUID.test(search.importBatchId) ? list.eq("import_batch_id", search.importBatchId) : list.is("id", null)
+    }
     if (patterns.length > 0) {
       list = list.or(patterns.map((pattern) => `search_text.ilike."*${pattern}*"`).join(","))
     }

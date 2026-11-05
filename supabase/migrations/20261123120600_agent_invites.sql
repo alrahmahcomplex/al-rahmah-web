@@ -200,11 +200,12 @@ $$;
 revoke execute on function public.agent_account_counts() from public, anon;
 grant execute on function public.agent_account_counts() to authenticated;
 
--- Each agent's state with its latest invite to the current email and its
+-- Each agent's email and state with its latest invite to that email and its
 -- latest invite attempt of any result, for the badges. Staff who view leads.
 create function public.agent_invites(agent_ids uuid[])
 returns table (
     agent_id uuid,
+    email text,
     state text,
     sent_at timestamptz,
     last_result text,
@@ -223,6 +224,7 @@ begin
     return query
         select
             a.id,
+            a.email,
             public.account_state(a),
             public.agent_invite_sent_at(a.id, a.email),
             last.result,

@@ -10,14 +10,22 @@ function runsOn(url: string) {
 }
 
 describe("proxy matcher", () => {
-  it.each(["/staff", "/staff/applications", "/login", "/auth/callback"])(
+  it.each([
+    "/staff",
+    "/staff/applications",
+    "/login",
+    "/auth/callback",
+    "/discount-code/sign-in",
+    "/discount-code/set-password",
+    "/discount-code/students",
+  ])(
     "runs on the auth-bound route %s",
     (url) => {
       expect(runsOn(url)).toBe(true)
     },
   )
 
-  it.each(["/", "/apply", "/discount-code", "/admissions", "/about", "/Al-Rahmah_Official_Logo.svg", "/_next/static/chunk.js"])(
+  it.each(["/", "/apply", "/discount-code", "/discount-code/forgot-password", "/admissions", "/about", "/Al-Rahmah_Official_Logo.svg", "/_next/static/chunk.js"])(
     "skips the public route %s",
     (url) => {
       expect(runsOn(url)).toBe(false)

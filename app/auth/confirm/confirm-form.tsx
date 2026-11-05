@@ -5,6 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useActionState, useState } from "react"
 
+import { AGENT_SESSION, OtherSessionNotice } from "@/app/login/login-form"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 
 import { setInvitePassword, type AcceptInviteState } from "./actions"
@@ -20,6 +21,7 @@ const MESSAGES: Record<NonNullable<AcceptInviteState>["error"], string> = {
   "password-not-saved": "Your password could not be saved. Try again in a moment.",
   "joined-unavailable": "Your password is set, but the staff side isn't answering right now. Sign in with it in a moment.",
   unavailable: "Something went wrong. Open the link from your email again in a moment.",
+  "agent-session": AGENT_SESSION,
 }
 
 // Errors after which the link is spent, so the form goes away.
@@ -28,7 +30,7 @@ const FINAL = new Set<keyof typeof MESSAGES>(["invalid-link", "deactivated", "no
 const INPUT =
   "w-full bg-white border border-blue-600/30 rounded-full h-11 pl-10 pr-10 outline-none focus:border-blue-600 transition-colors font-exo font-light italic placeholder:text-slate-400 text-slate-800 text-[12px]"
 
-export function ConfirmForm({ tokenHash }: { tokenHash: string | null }) {
+export function ConfirmForm({ tokenHash, agentSession = false }: { tokenHash: string | null; agentSession?: boolean }) {
   const [state, formAction, pending] = useActionState(setInvitePassword, null)
   const [showPassword, setShowPassword] = useState(false)
   const message = !tokenHash ? EXPIRED : state ? MESSAGES[state.error] : null
@@ -55,7 +57,12 @@ export function ConfirmForm({ tokenHash }: { tokenHash: string | null }) {
           </p>
         )}
 
-        {showForm ? (
+        {agentSession && tokenHash ? (
+          <OtherSessionNotice
+            message={AGENT_SESSION}
+            back={`/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}&type=invite`}
+          />
+        ) : showForm ? (
           <form action={formAction} className="w-full flex flex-col gap-3">
             <input type="hidden" name="token_hash" value={tokenHash ?? ""} />
 

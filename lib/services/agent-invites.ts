@@ -154,6 +154,7 @@ export async function sendAgentInvites(
 // ---------------------------------------------------------------------------
 
 export type AgentInviteNote = {
+  email: string | null
   state: AccountState | null
   // When the latest invite to the current email went out.
   sentAt: string | null
@@ -163,6 +164,7 @@ export type AgentInviteNote = {
 
 type InviteRow = {
   agent_id: string
+  email: string | null
   state: string | null
   sent_at: string | null
   last_result: string | null
@@ -184,6 +186,7 @@ export async function getAgentInvites(
   }
   for (const row of (data ?? []) as InviteRow[]) {
     notes.set(row.agent_id, {
+      email: row.email,
       state: isAccountState(row.state) ? row.state : null,
       sentAt: row.sent_at,
       lastAttempt:
@@ -264,7 +267,8 @@ async function writeEmail(
     if (refusal) return { ok: false, error: refusal }
     if (error.message === "email_taken") return { ok: false, error: takenBy(error.details) }
     // 23505: another agent saved the same email a moment earlier.
-    if (error.code === "23505") return { ok: false, error: { kind: "email-taken", holder: "agent", name: null, code: null } }
+    if (error.code === "23505")
+      return { ok: false, error: { kind: "email-taken", holder: "agent", name: null, code: null } }
     if (error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
     if (error.code === "42501") return { ok: false, error: { kind: "forbidden" } }
     console.error("Could not save an agent's email", error)
@@ -275,7 +279,9 @@ async function writeEmail(
   return { ok: true, data: row }
 }
 
-const NO_LOGIN_UPDATER: LoginEmailUpdater = async () => ({ error: { message: "No admin client to change the sign-in email." } })
+const NO_LOGIN_UPDATER: LoginEmailUpdater = async () => ({
+  error: { message: "No admin client to change the sign-in email." },
+})
 
 // Before the agent joins, the email changes and any unused invite stops
 // working. After they join, their sign-in email changes too, through

@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import type { Permission } from "@/lib/permissions"
 
+import { currentSessionKind, passwordSignIn, signOutSession, spendLinkAndSetPassword, type SignInFailure } from "./auth-session"
 import type { Result } from "./result"
 
 export type StaffMember = {
@@ -15,18 +15,10 @@ export type StaffMember = {
 
 // Why someone with a valid session still may not use the staff side.
 export type StaffAccessError = "not-staff" | "deactivated" | "unavailable"
-export type StaffSignInError = "invalid-credentials" | StaffAccessError
+// `agent-session`: this browser is signed in to the Discount code pages, so
+// it must sign out first (one account per browser).
+export type StaffSignInError = SignInFailure | "agent-session" | StaffAccessError
 export type StaffUserError = "signed-out" | StaffAccessError
-
-// Auth errors that mean "these credentials will not do", as opposed to a
-// service problem. Anything else is reported as an outage so a staff member
-// is never told their password is wrong when it is not.
-const CREDENTIAL_ERROR_CODES = new Set([
-  "invalid_credentials",
-  "email_not_confirmed",
-  "user_not_found",
-  "user_banned",
-])
 
 type StaffMemberRow = {
   id: string
@@ -85,13 +77,14 @@ export async function signInStaff(
   email: string,
   password: string,
 ): Promise<Result<StaffMember, StaffSignInError>> {
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) {
-    const code = (error as { code?: string }).code
-    if (code && CREDENTIAL_ERROR_CODES.has(code)) return { ok: false, error: "invalid-credentials" }
-    console.error("Staff sign-in failed", error)
-    return { ok: false, error: "unavailable" }
-  }
+  // Checked first, so an agent's session is never swapped for a staff one
+  // in the same browser without signing out.
+  const session = await currentSessionKind(supabase)
+  if (!session.ok) return { ok: false, error: "unavailable" }
+  if (session.data === "agent") return { ok: false, error: "agent-session" }
+
+  const signedIn = await passwordSignIn(supabase, email, password)
+  if (!signedIn.ok) return signedIn
 
   // A valid password is not enough: the account must belong to an active
   // staff member. Anyone else, or anyone we cannot check, loses the session
@@ -136,66 +129,27 @@ export type AcceptInviteError =
   | "invalid-link"
   | "password-not-saved"
   | "joined-unavailable"
+  | "agent-session"
   | StaffAccessError
 
-// An auth error whose answer won't change on a retry (a spent link, no
-// session), as opposed to an outage.
-function isDefinitive(error: { status?: number } | null) {
-  const status = error?.status ?? 0
-  return status >= 400 && status < 500
-}
-
-// Accepts an invite from the /auth/confirm form. The page never touches the
-// token on load, so an email link scanner opening the link can't use it up;
-// only this submit does. Using the token confirms the account for good, so
-// the password is set before the staff record is checked: someone deactivated
+// Accepts an invite from the /auth/confirm form (shared steps in
+// auth-session.ts). Using the token confirms the account for good, so the
+// password is set before the staff record is checked: someone deactivated
 // before accepting is signed out, but keeps a password that works once they
-// are reactivated, rather than being left confirmed with no password they
-// know and no invite that can be resent.
-//
-// If the password can't be saved, the session the token gave is kept and the
-// failure names that account. A retry with the same link passes it back as
-// `verifiedUserId`: the token is spent by then, so the retry sets the password
-// on the session, and only while that same account is the one signed in.
+// are reactivated. A browser signed in as an agent is refused before the
+// token is touched.
 export async function acceptInvite(
   supabase: SupabaseClient,
   tokenHash: string,
   password: string,
   { verifiedUserId }: { verifiedUserId?: string } = {},
 ): Promise<Result<StaffMember, AcceptInviteError> | { ok: false; error: "password-not-saved"; userId: string }> {
-  if (password.length < MINIMUM_PASSWORD_LENGTH) return { ok: false, error: "password-too-short" }
+  const session = await currentSessionKind(supabase)
+  if (!session.ok) return { ok: false, error: "unavailable" }
+  if (session.data === "agent") return { ok: false, error: "agent-session" }
 
-  // The account the link signed in: from the retry's cookie once the token
-  // is spent, otherwise from verifying the token.
-  let userId: string
-  if (verifiedUserId) {
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser()
-    if (!user && error && !isDefinitive(error)) {
-      console.error("Could not check the session for an invite retry", error)
-      return { ok: false, error: "unavailable" }
-    }
-    if (!user || user.id !== verifiedUserId) return { ok: false, error: "invalid-link" }
-    userId = user.id
-  } else {
-    const { data: verified, error: verifyError } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" })
-    if (verifyError || !verified.user) {
-      // A 4xx means the link itself will not do; anything else is an outage,
-      // and the unspent link still works on a retry.
-      if (isDefinitive(verifyError)) return { ok: false, error: "invalid-link" }
-      console.error("Could not check an invite link", verifyError)
-      return { ok: false, error: "unavailable" }
-    }
-    userId = verified.user.id
-  }
-
-  const { error: updateError } = await supabase.auth.updateUser({ password })
-  if (updateError) {
-    console.error("Accepted an invite but could not set the password", updateError)
-    return { ok: false, error: "password-not-saved", userId }
-  }
+  const accepted = await spendLinkAndSetPassword(supabase, tokenHash, "invite", password, { verifiedUserId })
+  if (!accepted.ok) return accepted
 
   const staff = await loadStaffMember(supabase)
   if (staff.ok) return staff
@@ -205,8 +159,4 @@ export async function acceptInvite(
   return { ok: false, error: staff.error === "unavailable" ? "joined-unavailable" : staff.error }
 }
 
-export async function signOutStaff(supabase: SupabaseClient): Promise<Result<null, "unavailable">> {
-  const { error } = await supabase.auth.signOut()
-  if (error) return { ok: false, error: "unavailable" }
-  return { ok: true, data: null }
-}
+export const signOutStaff = signOutSession

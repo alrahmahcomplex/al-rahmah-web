@@ -1,0 +1,76 @@
+"use client"
+
+import Link from "next/link"
+import { useActionState, useState } from "react"
+
+import type { Language } from "@/lib/language"
+import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
+
+import { ACCOUNT_COPY } from "../account-copy"
+import { AccountMessageView } from "../account-message"
+import { PasswordField, SUBMIT } from "../password-field"
+import { setAgentPassword, type SetAgentPasswordState } from "./actions"
+
+type ErrorKey = NonNullable<SetAgentPasswordState>["error"]
+
+// Errors after which the link is spent or can't be used here, so the form goes away.
+const FINAL = new Set<ErrorKey>(["invalid-link", "switched-off", "retired", "access-off", "not-agent", "joined-unavailable"])
+
+export function SetPasswordForm({ language, tokenHash }: { language: Language; tokenHash: string | null }) {
+  const copy = ACCOUNT_COPY[language]
+  const [state, formAction, pending] = useActionState(setAgentPassword, null)
+  const [shown, setShown] = useState(false)
+  const error: ErrorKey | null = !tokenHash ? "invalid-link" : (state?.error ?? null)
+  const message = error ? copy.messages[error] : null
+  const showForm = tokenHash !== null && !(error && FINAL.has(error))
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2 text-center">
+        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">{copy.setPasswordHeading}</h1>
+        {showForm && <p className="font-exo text-[13px] text-slate-600">{copy.setPasswordIntro}</p>}
+      </div>
+
+      {showForm ? (
+        <form action={formAction} className="flex flex-col gap-3">
+          <input type="hidden" name="token_hash" value={tokenHash ?? ""} />
+          <PasswordField
+            id="password"
+            label={copy.newPassword}
+            autoComplete="new-password"
+            shown={shown}
+            onToggle={() => setShown((value) => !value)}
+            toggleLabels={{ show: copy.showPassword, hide: copy.hidePassword }}
+            describedBy="password-rule"
+            minLength={MINIMUM_PASSWORD_LENGTH}
+          />
+          <p id="password-rule" className="-mt-1 pl-4 font-exo text-[12px] text-slate-500">
+            {copy.passwordRule}
+          </p>
+          <PasswordField
+            id="confirm"
+            label={copy.confirmPassword}
+            autoComplete="new-password"
+            shown={shown}
+            minLength={MINIMUM_PASSWORD_LENGTH}
+          />
+
+          {message && <AccountMessageView language={language} message={message} />}
+
+          <button type="submit" disabled={pending} className={SUBMIT}>
+            {pending ? copy.saving : copy.setPassword}
+          </button>
+        </form>
+      ) : (
+        <div className="flex flex-col items-center gap-4">
+          {message && <AccountMessageView language={language} message={message} />}
+          {!message?.signIn && (
+            <Link href="/discount-code/sign-in" className="font-exo text-[13px] text-blue-600 underline underline-offset-2">
+              {copy.goToSignIn}
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

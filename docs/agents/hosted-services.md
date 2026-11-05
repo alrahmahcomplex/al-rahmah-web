@@ -79,13 +79,19 @@ Because one rule has one threshold, each form gets its own allowance through its
 
 The email hash is a hash of the normalised email, never the email itself. Sign-in is sized for shared school Wi-Fi, where many people share one IP. With the hash in the key, each person gets 5 tries in 10 minutes rather than 5 for the whole school. The same key lets one IP try any number of different addresses, so sign-in should also count against an IP-only key on the same rule, with a higher threshold left to the app, or the gap should be accepted as a risk. #191 decides. Reset also relies on Turnstile, Supabase's 60-second gap per address, the public reset counter and the project-wide hourly budget for public emails, so it is still limited if the firewall check fails open. Staff `/login` isn't on the rule.
 
-**Supabase sees Vercel's IP, not the user's.** The app calls Supabase Auth from the server, and IP address forwarding is off. On 2026-11-05 a failed sign-in on a Preview with a placeholder address reached the Auth logs from an AWS address, where Vercel runs its functions, not the tester's Tanzanian ISP address. Supabase's per-IP limits therefore count all users together, for as long as their requests leave Vercel from the same address:
+**Supabase sees Vercel's IP, not the user's.** The app calls Supabase Auth from the server, and IP address forwarding is off. On 2026-11-05 a failed sign-in on a Preview with a placeholder address reached the Auth logs from an AWS address, where Vercel runs its functions, not the tester's Tanzanian ISP address. Supabase's per-IP limits therefore count all users together, for as long as their requests leave Vercel from the same address.
 
-- sign-ins and sign-ups: 30 per 5 minutes;
-- link and OTP verifications: 30 per 5 minutes;
-- session refreshes: 150 per 5 minutes.
+The per-IP limiters, from [Supabase's rate-limit docs](https://supabase.com/docs/guides/auth/rate-limits) and the [Auth token handler](https://github.com/supabase/auth/blob/master/internal/api/token.go#L44-L63):
 
-Thirty people signing in within five minutes, at a launch meeting say, can push everyone else into Supabase's 429 until the window passes. So can one attacker sending 30 wrong passwords. Staff sign-in shares the same allowance. Sign-in pages must show their own 429 message rather than "wrong password". Supabase can count the real user IP if IP address forwarding is turned on and the server's Auth calls use the secret key and forward the client's IP. That is a code change, and it hasn't been made.
+| Limiter | Endpoints | What the app sends there | Limit |
+|---|---|---|---|
+| Token | `/token`, for password, refresh-token, ID-token and PKCE grants | Every password sign-in (`signInWithPassword`) and every session refresh | 150 per 5 minutes |
+| Sign-ups and sign-ins | `/signup`, `/recover`, `/resend`, `/magiclink`, `/otp`, `PUT /user` | Password resets, resends and email OTP or magic-link requests | 30 per 5 minutes |
+| Verification | `/verify` | Opening an invite or reset link (`verifyOtp`) | 30 per 5 minutes |
+
+The docs give each of these a burst of up to 30. Each limiter is a bucket that holds 30 requests and refills at its rate, so the token bucket regains one request every 2 seconds and the other two regain one every 10 seconds. Invites go through the admin `/invite` endpoint, which has no per-IP limiter; the hourly email limit above caps them.
+
+Thirty password sign-ins at once, at a launch meeting say, empty the token bucket. Anyone who signs in or refreshes a session in the next few seconds gets a 429 until it refills, and after that sign-ins get through at one every 2 seconds. That is enough for a 20–30 agent launch if people retry after a few seconds. An attacker can block it: a burst of 30 wrong passwords, then one every 2 seconds, keeps the bucket empty, which stops every sign-in and session refresh leaving Vercel from that address, staff included. The email flows run out sooner: 30 reset or resend requests, or 30 opened links, in a burst, and then one every 10 seconds. Sign-in, reset and link pages must show their own 429 message rather than "wrong password" or "link expired". Supabase can count the real user IP if IP address forwarding is turned on and the server's Auth calls use the secret key and forward the client's IP. That is a code change, and it hasn't been made.
 
 ### Logs
 

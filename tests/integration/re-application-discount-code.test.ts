@@ -136,6 +136,7 @@ describe("a Discount code sent for a child already on file", () => {
     const entry = await reApplyWith(lead, APPROVED_CODE)
 
     expect(entry.submitted.discountCode).toBe(APPROVED_CODE)
+    expect(entry.leadReferralCode).toBe(PENDING_CODE)
     expect(entry.differingFields).toEqual(["discount_code"])
     expect((await leadCode(lead.id)).referral_code).toBe(PENDING_CODE)
   })
@@ -234,6 +235,7 @@ describe("Apply on a re-application's Discount code", () => {
     expect(await applyReApplicationField(await signedIn(ADMISSIONS), entry.id, "discount_code")).toEqual({ ok: true, data: null })
 
     expect(await leadCode(lead.id)).toEqual({ referral_code: APPROVED_CODE, referral_notice_version: "staff_reminder" })
+    expect((await onlyReApplication(lead.id)).leadReferralCode).toBe(APPROVED_CODE)
   })
 
   test("refuses an Unrecognised code, and the lead keeps its code", async () => {

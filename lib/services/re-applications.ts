@@ -68,7 +68,12 @@ export type SubmittedDetails = {
   discountCode: string | null
 }
 
-export type ReApplication = ReApplicationSummary & { submitted: SubmittedDetails }
+export type ReApplication = ReApplicationSummary & {
+  submitted: SubmittedDetails
+  // The lead's Referral code as it stands now, which the Discount code sent is
+  // compared with. Null when the lead has none.
+  leadReferralCode: string | null
+}
 
 export type ReApplicationList = {
   reApplications: ReApplicationSummary[]
@@ -85,7 +90,13 @@ type Row = {
   received_at: string
   differing_fields: ReApplicationField[]
   reviewed_at: string | null
-  lead: { admission_number: string; student_name: string; status: LeadStatus; closure: LeadClosure | null }
+  lead: {
+    admission_number: string
+    student_name: string
+    status: LeadStatus
+    closure: LeadClosure | null
+    referral_code: string | null
+  }
 }
 
 type DetailRow = Row & {
@@ -104,7 +115,7 @@ type DetailRow = Row & {
 }
 
 const COLUMNS =
-  "id, lead_id, received_at, differing_fields, reviewed_at, lead:leads!inner(admission_number, student_name, status, closure)"
+  "id, lead_id, received_at, differing_fields, reviewed_at, lead:leads!inner(admission_number, student_name, status, closure, referral_code)"
 const DETAIL_COLUMNS = `${COLUMNS}, contact_name, relationship, relationship_description, phone, phone_as_sent, whatsapp, whatsapp_as_sent, student_name, class_name, enrollment_year, day_or_boarding, discount_code`
 
 // The reviewers' names, by re-application id.
@@ -261,6 +272,7 @@ export async function getReApplication(
         dayOrBoarding: data.day_or_boarding,
         discountCode: data.discount_code,
       },
+      leadReferralCode: data.lead.referral_code,
     },
   }
 }

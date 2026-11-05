@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { getLead, isClosed, listContactChildren, type Lead } from "@/lib/services/leads"
 import { getReApplication, type ReApplication } from "@/lib/services/re-applications"
-import { findReferralAgent, getLeadReferral } from "@/lib/services/referral"
+import { findReferralAgent } from "@/lib/services/referral"
 import type { StaffMember } from "@/lib/services/staff-auth"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
@@ -127,15 +127,14 @@ type SentCode = { recognised: boolean } | null
 async function Comparison({ entry, staff }: { entry: ReApplication; staff: StaffMember }) {
   const supabase = await createClient()
   const sentCode = entry.submitted.discountCode
-  const [lead, referral, agent] = await Promise.all([
+  const [lead, agent] = await Promise.all([
     getLead(supabase, entry.leadId),
-    getLeadReferral(supabase, entry.leadId),
     sentCode ? findReferralAgent(supabase, sentCode) : null,
   ])
   const codeCheck: SentCode = agent?.ok ? { recognised: agent.data !== null } : null
 
   let body: React.ReactNode
-  if (!lead.ok || !referral.ok) {
+  if (!lead.ok) {
     body = (
       <Alert variant="destructive" className="max-w-xl">
         <AlertDescription>The lead could not be loaded to compare. Try again in a moment.</AlertDescription>
@@ -151,7 +150,6 @@ async function Comparison({ entry, staff }: { entry: ReApplication; staff: Staff
       <ComparisonTable
         entry={entry}
         lead={lead.data}
-        referralCode={referral.data.code}
         sentCode={codeCheck}
         canApply={canApply}
         contactChildren={children?.ok ? children.data : null}
@@ -174,19 +172,17 @@ const CONTACT_FIELDS = new Set(["contact_name", "relationship", "relationship_de
 function ComparisonTable({
   entry,
   lead,
-  referralCode,
   sentCode,
   canApply,
   contactChildren,
 }: {
   entry: ReApplication
   lead: Lead
-  referralCode: string | null
   sentCode: SentCode
   canApply: boolean
   contactChildren: { id: string; admissionNumber: string }[] | null
 }) {
-  const rows = compareFields(lead, entry.submitted, entry.differingFields, referralCode)
+  const rows = compareFields(lead, entry.submitted, entry.differingFields, entry.leadReferralCode)
   const siblings = contactChildren?.filter((child) => child.id !== lead.id) ?? []
   const childIds = contactChildren?.map((child) => child.id) ?? []
   const contactApplies = canApply && rows.some((row) => CONTACT_FIELDS.has(row.field) && row.differed && !row.matchesNow)
@@ -247,7 +243,7 @@ function ComparisonTable({
                   <td className={cn("px-3 py-2 break-words text-slate-900", row.differed && "font-semibold")}>
                     {row.sent}
                     {row.typedAs && <span className="block text-xs font-normal text-muted-foreground">Typed as {row.typedAs}</span>}
-                    {codeField && entry.submitted.discountCode && <CodeNote sentCode={sentCode} />}
+                    {codeField && row.differed && !row.matchesNow && <CodeNote sentCode={sentCode} />}
                   </td>
                   {canApply && (
                     <td className="px-3 py-2">

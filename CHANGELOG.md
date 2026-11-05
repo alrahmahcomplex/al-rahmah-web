@@ -7,8 +7,19 @@ stay in the `0.x` range.
 
 ## Unreleased
 
+### NEW
+
+- The Agents screen shows whether agent access is on, and when and by whom it was last
+  changed. Agent access is one switch that turns every Marketing Agent sign-in path on or
+  off at once. It starts off and changes in the database only.
+- The database now recognises a signed-in Marketing Agent separately from staff. An
+  email belongs to one login, staff or agent, and an agent login reaches no staff screen,
+  function or record. Agents can't sign in yet.
+
 ### IMPROVED
 
+- Retiring a Marketing Agent who has a login now closes that login for good and frees
+  their email, so a corrected record can use it.
 - Staff invite links now stay valid for 24 hours instead of one hour, and the invite
   email says so.
 

@@ -122,4 +122,13 @@ test.describe("Marketing Agents", () => {
     await expect(pending).toContainText("Pending")
     await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0)
   })
+
+  test("the screen says whether agent access is on and who last changed it", async ({ page }) => {
+    // The seeds turn agent access on as the system.
+    await signIn(page, MANAGER)
+    await page.goto("/staff/agents")
+    const banner = page.getByRole("alert").filter({ hasText: "Agent access" })
+    await expect(banner).toContainText(/Agent access: On since .+, changed by the system/)
+    await expect(banner).toContainText("Agents may sign up, claim a code, sign in and reset a password.")
+  })
 })

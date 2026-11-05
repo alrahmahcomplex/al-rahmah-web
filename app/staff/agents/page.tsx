@@ -8,12 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { getAgentAccess } from "@/lib/services/agent-access"
 import { getAgentImport } from "@/lib/services/agent-import"
 import { listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
+import { AgentAccessBanner } from "./access-banner"
 import { AgentStatusActions } from "./agent-status-actions"
 import { ApproveAgent } from "./approve-agent"
 import { CreateAgent } from "./create-agent"
@@ -63,9 +65,10 @@ export default async function MarketingAgentsPage({
 
   const search = parseAgentSearch(await searchParams, canApprove)
   const supabase = await createClient()
-  const [results, batch] = await Promise.all([
+  const [results, batch, access] = await Promise.all([
     listAgents(supabase, search),
     search.importBatchId ? getAgentImport(supabase, search.importBatchId) : null,
+    getAgentAccess(supabase),
   ])
 
   return (
@@ -81,6 +84,8 @@ export default async function MarketingAgentsPage({
           </div>
         )}
       </div>
+
+      <AgentAccessBanner access={access} />
 
       <div className="flex flex-col gap-4">
         {/* Keyed on the URL, so the box shows the search the page is showing. */}

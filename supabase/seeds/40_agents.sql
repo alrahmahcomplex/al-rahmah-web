@@ -50,3 +50,42 @@ insert into public.leads (
         'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000433', false, 'XYZ-999');
 
 commit;
+
+-- Slice 12 (Marketing Agent accounts, #188). The seeded agent with a login,
+-- for the security tests: Approved, switched on, with a confirmed email and
+-- the shared fixture password. The record comes first, then the auth user
+-- (whose sign-up trigger links it to the record), then its identity. Agent
+-- paths need agent access on, so the seeds turn it on as `system`.
+begin;
+
+select public.set_audit_actor('system');
+select public.set_agent_access(true);
+
+insert into public.marketing_agents (
+    id, full_name, phone, whatsapp, email, code, status, registered_at, approved_at, approved_by
+) values (
+    'a4a4a4a4-0000-4000-8000-000000000003', 'Saida Amina Mtei', '+255700000403', null, 'agent@example.test', 'SAM-403',
+    'Approved', '2026-01-03 09:00+03', '2026-01-06 11:00+03', 'a1a1a1a1-0000-4000-8000-000000000001'
+);
+
+insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+) values (
+    '00000000-0000-0000-0000-000000000000', '77777777-7777-4777-8777-777777777777', 'authenticated', 'authenticated',
+    'agent@example.test', extensions.crypt('fixture-password', extensions.gen_salt('bf')),
+    now(), '{"provider":"email","providers":["email"]}', '{}',
+    now(), now(),
+    '', '', '', ''
+);
+
+insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+values (
+    '77777777-7777-4777-8777-777777777777', '77777777-7777-4777-8777-777777777777',
+    jsonb_build_object('sub', '77777777-7777-4777-8777-777777777777', 'email', 'agent@example.test', 'email_verified', true),
+    'email', now(), now(), now()
+);
+
+commit;

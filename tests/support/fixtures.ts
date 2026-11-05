@@ -33,3 +33,16 @@ export const RETIRED_ROLE = staff(
 // Invited, with no account yet: they have not opened their invite. No
 // password works for them.
 export const INVITED = staff("a1a1a1a1-0000-4000-8000-000000000007", "Invited Staff", "invited@example.test", "Admissions Staff")
+
+// The Marketing Agent with a login, from the end of supabase/seeds/40_agents.sql:
+// Approved, switched on, with a confirmed email and the shared fixture
+// password. Seeding them turns agent access on. Local fixtures only.
+export const SEEDED_AGENT = {
+  id: "a4a4a4a4-0000-4000-8000-000000000003",
+  userId: "77777777-7777-4777-8777-777777777777",
+  name: "Saida Amina Mtei",
+  code: "SAM-403",
+  phone: "+255700000403",
+  email: "agent@example.test",
+  password: PASSWORD,
+}

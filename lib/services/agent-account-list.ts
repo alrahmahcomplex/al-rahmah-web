@@ -12,8 +12,9 @@ import type { Result } from "./result"
 // (which the agent-record tickets own): the latest approval first. Agents in
 // these states are never switched off or retired, so no status note applies.
 
-// The states the screen filters on.
-export const ACCOUNT_FILTERS = ["invite_not_sent", "invite_expired", "awaiting_confirmation"] as const satisfies readonly AccountState[]
+// The states the screen filters on. Awaiting email confirmation joins them
+// with claiming (#193), which is what produces it.
+export const ACCOUNT_FILTERS = ["invite_not_sent", "invite_expired"] as const satisfies readonly AccountState[]
 export type AccountFilter = (typeof ACCOUNT_FILTERS)[number]
 
 type Row = {

@@ -227,7 +227,6 @@ function NeedsAttention({ attention, pending }: { attention: ReturnType<typeof n
 const ACCOUNT_EMPTY: Record<NonNullable<AgentScreenSearch["account"]>, string> = {
   invite_not_sent: "Every Approved agent with an email has been sent an invite.",
   invite_expired: "No agent's invite link has expired.",
-  awaiting_confirmation: "No email is waiting for confirmation.",
 }
 
 function Results({

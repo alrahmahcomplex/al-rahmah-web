@@ -19,12 +19,10 @@ export type AgentScreenSearch = {
 const ACCOUNT_PARAMS: Record<string, AccountFilter> = {
   "invite-not-sent": "invite_not_sent",
   "link-expired": "invite_expired",
-  "awaiting-confirmation": "awaiting_confirmation",
 }
 const ACCOUNT_PARAM_FOR: Record<AccountFilter, string> = {
   invite_not_sent: "invite-not-sent",
   invite_expired: "link-expired",
-  awaiting_confirmation: "awaiting-confirmation",
 }
 
 const STATUS_PARAMS: Record<string, AgentFilter> = { pending: "Pending", approved: "Approved", retired: "Retired", all: "all" }

@@ -311,15 +311,15 @@ The email that lets an **Approved**, switched-on agent set a password, sent by t
 A browser holds one account at a time: while it is signed in as staff, the Discount code pages refuse to sign an agent in or use their link, with "Kivinjari hiki kimeingia kama mfanyakazi. Toka kwanza." ("This browser is signed in as staff. Sign out first.") and a sign-out button, and the staff sign-in and invite pages refuse the same way while an agent is signed in. The link stays unused until the right account uses it.
 
 **Account state**:
-Where an agent stands with their login, one per agent, shown as a badge on the Agents screen. The first that applies, in this order:
+Where an agent stands with their login, one per agent, shown as a badge on the Agents screen. The first that applies, in this order, except that an agent who has joined is **Joined** whatever their invites say:
 1. **Retired**.
 2. **Switched off**.
-3. **Awaiting email confirmation**: an email typed by the agent waits for the Manager to confirm it (arrives with claiming, #193).
+3. **Awaiting email confirmation**: an email typed by the agent waits for the Manager to confirm it. Claiming (#193) brings this state; until then no agent is in it.
 4. **No email**.
 5. **Invite not sent**: no invite has gone to the current email.
 6. **Invited, link expired**: the latest invite to the current email is more than 24 hours old.
 7. **Invited**: shown as "Invite sent".
-8. **Joined**: the agent has set a password.
+8. **Joined**: the agent has used their invite link.
 
 A **Pending** agent has no account state; approval comes first. The Agents screen filters and counts **Invite not sent** and **Invited, link expired**, and shows "Needs attention" beside the Pending count: the sum of **Awaiting email confirmation**, **Invite not sent** and **Invited, link expired**, with the breakdown. Agents are never labelled "Inactive". A switched-off or retired agent who signs in sees "Huwezi kuingia kwa sasa. Piga simu ofisini." ("You can't sign in right now. Call the office."), with the reason code `switched_off` or `retired`.
 

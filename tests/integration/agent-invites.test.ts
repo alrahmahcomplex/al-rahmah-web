@@ -121,6 +121,18 @@ describe("sending an invite", () => {
     expect(await events(agent.id)).toEqual([])
   })
 
+  test("recording a send directly is refused for an agent who couldn't be invited", async () => {
+    const client = await manager()
+    const joined = await client.rpc("record_agent_invite", { agent_id: SEEDED_AGENT.id, result: "sent", error_code: null })
+    expect(joined.error?.message).toBe("already_joined")
+
+    const retired = await approvedAgent(email("record-retired"))
+    await changeAgentStatus(client, retired.id, "retire", "Testing a direct record")
+    const refused = await client.rpc("record_agent_invite", { agent_id: retired.id, result: "sent", error_code: null })
+    expect(refused.error?.message).toBe("retired")
+    expect(await events(retired.id)).toEqual([])
+  })
+
   test("a second invite is a resend", async () => {
     const agent = await approvedAgent(email("resend"))
     await sendAgentInvite(await manager(), stubSender(), agent.id, REDIRECT)

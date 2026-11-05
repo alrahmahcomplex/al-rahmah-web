@@ -308,7 +308,9 @@ $$;
 revoke execute on function public.prepare_agent_invite(uuid) from public, anon;
 grant execute on function public.prepare_agent_invite(uuid) to authenticated;
 
--- Records how an invite email went, to the agent's current address.
+-- Records how an invite email went, to the agent's current address. It
+-- refuses an agent prepare_agent_invite would have refused, so a direct call
+-- can't mark an invite sent for someone who could not be invited.
 create function public.record_agent_invite(agent_id uuid, result text, error_code text)
 returns void
 language plpgsql
@@ -316,6 +318,7 @@ security definer
 set search_path = ''
 as $$
 declare
+    agent public.marketing_agents;
     address text;
 begin
     if not public.has_permission('agents.approve') then
@@ -326,10 +329,23 @@ begin
         raise exception 'invalid';
     end if;
 
-    select a.email into address from public.marketing_agents a where a.id = record_agent_invite.agent_id;
-    if address is null then
+    select * into agent from public.marketing_agents a where a.id = record_agent_invite.agent_id;
+    if not found or agent.email is null then
         raise exception 'not_found';
     end if;
+    if agent.retired_at is not null then
+        raise exception 'retired';
+    end if;
+    if agent.switched_off_at is not null then
+        raise exception 'switched_off';
+    end if;
+    if agent.status <> 'Approved' then
+        raise exception 'not_approved';
+    end if;
+    if agent.user_id is not null and public.agent_joined(agent.user_id) then
+        raise exception 'already_joined';
+    end if;
+    address := agent.email;
 
     insert into public.agent_events (agent_id, kind, result, error_code, email, created_by)
     values (
@@ -405,6 +421,11 @@ begin
         )::text;
     end if;
 
+    -- Locks the login first, so the agent can't use their link between the
+    -- joined check and the delete below and be left with an orphaned login.
+    if agent.user_id is not null then
+        perform 1 from auth.users u where u.id = agent.user_id for update;
+    end if;
     if agent.user_id is not null and public.agent_joined(agent.user_id) then
         update public.marketing_agents a set email = address where a.id = agent.id;
         return query select agent.email, agent.user_id;

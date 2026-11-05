@@ -156,11 +156,12 @@ test("a check whose answer never arrives asks to try again", async ({ page }) =>
   await expect(page.getByRole("heading", { name: `Check ${file.name}` })).toBeVisible()
 })
 
-test("a confirm whose answer never arrives says the import may be saved and where to look", async ({ page }) => {
+test("a confirm whose answer never arrives asks to check the same file again, which finds the saved rows already present", async ({ page }) => {
   const file = fixtureFile()
+  const rows = [[file.first.code, file.first.fullName, file.first.mobile, "", ""]]
   await signIn(page, MANAGER)
   await page.goto("/staff/agents/import")
-  await upload(page, file.name, [[file.first.code, file.first.fullName, file.first.mobile, "", ""]])
+  await upload(page, file.name, rows)
   await expect(page.getByRole("heading", { name: `Check ${file.name}` })).toBeVisible()
 
   // The import saves, but its answer is lost on the way back.
@@ -171,10 +172,18 @@ test("a confirm whose answer never arrives says the import may be saved and wher
   })
   await page.getByRole("button", { name: "Create 1 agent" }).click()
   await expect(page.getByText("We couldn't tell whether the import was saved.", { exact: false })).toBeVisible()
-  await expect(page.getByText("Reload this page and look under Earlier imports", { exact: false })).toBeVisible()
+  await expect(page.getByText("Reload this page, choose the same file and check it again.", { exact: false })).toBeVisible()
 
+  // Checking the same file again shows the saved row as already present, so there is nothing to confirm.
   await page.unroute("**/staff/agents/import")
   await page.reload()
+  await upload(page, file.name, rows)
+  await expect(page.getByRole("heading", { name: `Check ${file.name}` })).toBeVisible()
+  await expect(page.getByRole("listitem", { name: "Row 2" })).toContainText("Already present")
+  await expect(page.getByRole("button", { name: "Nothing to import" })).toBeDisabled()
+
+  // Earlier imports still lists the saved import.
+  await page.goto("/staff/agents/import")
   await page.getByRole("link", { name: file.name, exact: true }).click()
   await expect(page.getByText(`Agents created by the import of ${file.name}`)).toBeVisible()
   await expect(page.getByRole("row", { name: new RegExp(file.first.fullName) })).toContainText("Approved")

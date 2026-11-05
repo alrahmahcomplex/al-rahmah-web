@@ -10,12 +10,15 @@ export type ImportMessage = { en: string; sw?: string }
 export const CHECK_LOST: ImportMessage = { en: "The file could not be checked. Check your connection, choose the file again and check it." }
 
 // A confirm whose answer never arrived, or that the database left unclear:
-// the import may have been saved. Confirming the same rows again saves
-// nothing twice, since the rows it created now read as already present.
+// the import may have been saved. Checking the same file again is safe and
+// settles it: rows that were saved read as already present, and only rows
+// still to create or add can be confirmed. A file name alone can't say
+// whether this attempt saved, since an earlier import may share it.
 export const CONFIRM_LOST: ImportMessage = {
   en:
-    "We couldn't tell whether the import was saved. Reload this page and look under Earlier imports: if this file is listed, " +
-    "its link shows the agents it created on the Agents screen. Import the file again only if it isn't listed.",
+    "We couldn't tell whether the import was saved. Reload this page, choose the same file and check it again. " +
+    "Rows that were saved show as Already present, and you can confirm anything still to create. " +
+    "Earlier imports also lists each import that was saved.",
 }
 
 export function importErrorMessage(error: AgentImportError | { kind: "signed-out" }): ImportMessage {

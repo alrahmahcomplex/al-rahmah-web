@@ -356,6 +356,28 @@ describe("Seam 1: confirming an import", () => {
     expect(await agentsWithPhones([asE164(local)])).toEqual([])
   })
 
+  test("checking the same file again after a saved confirm finds every row already present, and confirming creates nothing", async () => {
+    const noEmail = await existingAgent()
+    const fresh = { code: freshCode(), fullName: name("Tumaini Import"), local: phone(), email: email() }
+    const addedEmail = email()
+    const file = fileName()
+    const rows = [
+      [fresh.code, fresh.fullName, fresh.local, "", fresh.email],
+      [noEmail.code, noEmail.fullName, noEmail.local, "", addedEmail],
+    ]
+    const manager = await signedIn(MANAGER)
+
+    // The confirm saves; the Manager never hears back, then checks the file again.
+    const saved = await confirmAgentImport(manager, confirmationOf(await check(rows, file)))
+    expect(saved).toMatchObject({ ok: true, data: { kind: "imported", created: 1, emailsAdded: 1 } })
+
+    const again = await check(rows, file)
+    expect(again.rows.map((row) => row.class)).toEqual(["present", "present"])
+    expect(await confirmAgentImport(manager, confirmationOf(again))).toEqual({ ok: false, error: { kind: "nothing-to-import" } })
+    expect(await agentsWithPhones([asE164(fresh.local)])).toHaveLength(1)
+    expect(await batchesNamed(file)).toHaveLength(1)
+  })
+
   test("a confirm with nothing to create or add is refused", async () => {
     const present = await existingAgent()
     const checked = await check([[present.code, present.fullName, present.local, "", ""]])

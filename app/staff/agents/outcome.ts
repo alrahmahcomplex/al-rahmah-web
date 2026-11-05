@@ -1,4 +1,13 @@
-import type { AgentStatusAction, AgentStatusError, AgentStatusNote, ApproveAgentError } from "@/lib/services/marketing-agents"
+import type {
+  AgentDraftField,
+  AgentRef,
+  AgentStatusAction,
+  AgentStatusError,
+  AgentStatusNote,
+  ApproveAgentError,
+  CreateAgentError,
+  RecreateError,
+} from "@/lib/services/marketing-agents"
 
 // What the Approve dialog is told after it asks.
 export type ApproveOutcome = { status: "approved"; message: string } | { status: "refused"; message: string }
@@ -117,4 +126,100 @@ export function statusChangeLine(agent: {
   if (!agent.retiredAt) return `Switched off${by}${on}`
   const replaced = note?.replacedBy ? `, replaced by ${note.replacedBy.fullName} (${note.replacedBy.code})` : ""
   return `Retired${by}${on}${replaced}`
+}
+
+// ---------------------------------------------------------------------------
+// Creating an agent, and Recreate (#189).
+// ---------------------------------------------------------------------------
+
+// Where the Manager opens an agent's record: the list, searched for the code.
+export function agentRecordHref(code: string, retired = false): string {
+  return `/staff/agents?${new URLSearchParams({ status: retired ? "retired" : "all", q: code }).toString()}`
+}
+
+// "This number already belongs to [name], [code], [status]".
+export function phoneTakenLine(agent: AgentRef): string {
+  return `This number already belongs to ${agent.fullName}, ${agent.code}, ${agent.state}`
+}
+
+export function codeTakenLine(agent: AgentRef): string {
+  return `This code already belongs to ${agent.fullName}, ${agent.code}, ${agent.state}`
+}
+
+function students(count: number): string {
+  return `${count} ${count === 1 ? "student" : "students"}`
+}
+
+// "This code belonged to retired record [name]. N students carry it."
+export function retiredCodeLine(agent: { fullName: string }, studentCount: number): string {
+  return `This code belonged to retired record ${agent.fullName}. ${students(studentCount)} ${studentCount === 1 ? "carries" : "carry"} it.`
+}
+
+// The tick the Manager gives before a Recreate.
+export function samePersonLabel(code: string, studentCount: number): string {
+  return `This is the same person. The ${students(studentCount)} carrying ${code} move to the new record.`
+}
+
+export const FIELD_LABELS: Record<AgentDraftField, string> = {
+  full_name: "Full name",
+  phone: "Mobile",
+  whatsapp: "WhatsApp",
+  email: "Email",
+  code: "Existing code",
+}
+
+const FIELD_HINTS: Record<AgentDraftField, string> = {
+  full_name: "Write the agent's full name, 2 to 100 characters.",
+  phone: "Write a Tanzanian mobile number, such as 0712 345 678.",
+  whatsapp: "Write the WhatsApp number as a Tanzanian mobile, or leave it empty.",
+  email: "Write a whole email address, such as name@example.com, or leave it empty.",
+  code: "A code uses only letters, digits, - and ., up to 20 characters. Leave it empty to make a new one.",
+}
+
+export const AGENT_LOST = "The agent could not be confirmed as saved. Check your connection, reload the page and search for the agent's phone before trying again."
+
+const CREATE_REFUSED: Record<Exclude<CreateAgentError["kind"], "invalid"> | "signed-out", string> = {
+  forbidden: "You don't have permission to add Marketing Agents.",
+  "email-taken": "This email already belongs to another agent or a staff member.",
+  unavailable: "The agent could not be checked just now. Nothing was saved. Try again in a moment.",
+  uncertain: AGENT_LOST,
+  "signed-out": "Your session has ended. Sign in again, then add the agent.",
+}
+
+export type DraftRefusal = { message: string; field?: AgentDraftField }
+
+export function createRefusal(error: CreateAgentError | { kind: "signed-out" }): DraftRefusal {
+  if (error.kind === "invalid") return { message: FIELD_HINTS[error.field], field: error.field }
+  if (error.kind === "email-taken") return { message: CREATE_REFUSED[error.kind], field: "email" }
+  return { message: CREATE_REFUSED[error.kind] }
+}
+
+export function createdMessage(agent: { fullName: string; code: string }): string {
+  return `${agent.fullName} (${agent.code}) is added and Approved.`
+}
+
+const RECREATE_REFUSED: Record<Exclude<RecreateError["kind"], "invalid" | "phone-taken"> | "signed-out", string> = {
+  forbidden: "You don't have permission to recreate a Marketing Agent.",
+  "not-found": "This agent could not be found. Reload the page and try again.",
+  retired: "This record can't be recreated: its code already belongs to a current agent. Reload the page to see the agents as they are now.",
+  "email-taken": CREATE_REFUSED["email-taken"],
+  unavailable: "The record could not be read just now. Try again in a moment.",
+  uncertain: "The Recreate could not be confirmed. Check your connection, reload the page and see whether the agent was recreated.",
+  "signed-out": "Your session has ended. Sign in again, then try again.",
+}
+
+export function recreateRefusal(error: RecreateError | { kind: "signed-out" }): DraftRefusal {
+  if (error.kind === "invalid") {
+    if (error.field === "reason") return { message: `Write a reason, up to ${STATUS_REASON_MAX} characters.` }
+    return { message: FIELD_HINTS[error.field], field: error.field }
+  }
+  if (error.kind === "phone-taken") return { message: `${phoneTakenLine(error.agent)}. Nothing was changed.`, field: "phone" }
+  if (error.kind === "email-taken") return { message: RECREATE_REFUSED[error.kind], field: "email" }
+  return { message: RECREATE_REFUSED[error.kind] }
+}
+
+export function recreatedMessage(result: { agent: { fullName: string; code: string }; studentCount: number; feeChangeCount: number }): string {
+  const count = result.feeChangeCount
+  const fees = count === 0 ? "No interview fee changed." : `${count} ${count === 1 ? "family's" : "families'"} interview fee changed.`
+  return `${result.agent.fullName} (${result.agent.code}) is recreated. ${students(result.studentCount)} ${result.studentCount === 1 ? "keeps" : "keep"} the code. ${fees}`
 }

@@ -15,6 +15,8 @@ import { createClient } from "@/utils/supabase/server"
 import { requireStaff } from "../session"
 import { AgentStatusActions } from "./agent-status-actions"
 import { ApproveAgent } from "./approve-agent"
+import { CreateAgent } from "./create-agent"
+import { RecreateAgent } from "./recreate-agent"
 import { statusChangeLine } from "./outcome"
 import { agentsHref, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
 
@@ -63,7 +65,10 @@ export default async function MarketingAgentsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Marketing Agents</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Marketing Agents</h1>
+        {canApprove && <CreateAgent />}
+      </div>
 
       <div className="flex flex-col gap-4">
         {/* Keyed on the URL, so the box shows the search the page is showing. */}
@@ -217,6 +222,7 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
                             agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
                             switchedOff={agent.switchedOffAt !== null}
                           />
+                          <RecreateAgent agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }} />
                         </div>
                       )}
                     </td>

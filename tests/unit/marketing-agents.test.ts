@@ -2,10 +2,21 @@ import { describe, expect, it, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-import { approveOutcome, familyLine, feeImpactLine, statusChangeLine, statusOutcome } from "@/app/staff/agents/outcome"
+import {
+  agentRecordHref,
+  approveOutcome,
+  createRefusal,
+  familyLine,
+  feeImpactLine,
+  phoneTakenLine,
+  recreateRefusal,
+  retiredCodeLine,
+  statusChangeLine,
+  statusOutcome,
+} from "@/app/staff/agents/outcome"
 import { agentsHref, parseAgentSearch } from "@/app/staff/agents/search-params"
 import { navFor, STAFF_NAV } from "@/app/staff/navigation"
-import { AGENTS_PER_PAGE, agentSearchPatterns, changeAgentStatus, getAgentFeeImpact } from "@/lib/services/marketing-agents"
+import { AGENTS_PER_PAGE, agentSearchPatterns, changeAgentStatus, createAgent, getAgentFeeImpact, recreateAgent } from "@/lib/services/marketing-agents"
 
 describe("the Marketing Agents navigation entry", () => {
   it("shows to anyone who may view leads, and to no one else", () => {
@@ -196,5 +207,58 @@ describe("the fee impact of a large agent", () => {
     expect(impact.ok && impact.data.families.map((family) => family.leadId)).toEqual(rows.map((row) => row.lead_id))
     expect(rpc).toHaveBeenCalledTimes(1)
     expect(rpc).toHaveBeenCalledWith("agent_status_fee_impact", { agent_id: "agent", kind: "switched_off" })
+  })
+})
+
+describe("creating an agent and Recreate (#189)", () => {
+  const baraka = { id: "a", fullName: "Baraka Juma", code: "BJN-402", state: "Switched off" as const }
+  function client(answer: { data?: unknown; error?: object | null }) {
+    return { rpc: async () => ({ data: answer.data ?? null, error: answer.error ?? null }) } as unknown as Parameters<typeof createAgent>[0]
+  }
+
+  it("names whose phone, code or retired code it is", () => {
+    expect(phoneTakenLine(baraka)).toBe("This number already belongs to Baraka Juma, BJN-402, Switched off")
+    expect(retiredCodeLine({ fullName: "Baraka Juma" }, 3)).toBe("This code belonged to retired record Baraka Juma. 3 students carry it.")
+    expect(retiredCodeLine({ fullName: "Baraka Juma" }, 1)).toBe("This code belonged to retired record Baraka Juma. 1 student carries it.")
+    expect(agentRecordHref("BJN-402")).toBe("/staff/agents?status=all&q=BJN-402")
+    expect(agentRecordHref("BJN-402", true)).toBe("/staff/agents?status=retired&q=BJN-402")
+  })
+
+  it("reads the database's answers", async () => {
+    expect(
+      await createAgent(client({ data: { outcome: "phone_taken", agent: { id: "a", full_name: "Baraka Juma", code: "BJN-402", state: "Approved" } } }), {
+        fullName: "x",
+        phone: "y",
+      }),
+    ).toEqual({ ok: true, data: { kind: "phone-taken", agent: { id: "a", fullName: "Baraka Juma", code: "BJN-402", state: "Approved" } } })
+    expect(
+      await createAgent(client({ data: { outcome: "retired_code", agent: { id: "a", full_name: "Baraka Juma", code: "BJN-402" }, student_count: 4 } }), {
+        fullName: "x",
+        phone: "y",
+      }),
+    ).toEqual({ ok: true, data: { kind: "retired-code", agent: { id: "a", fullName: "Baraka Juma", code: "BJN-402" }, studentCount: 4 } })
+    const phoneTaken = { message: "phone_taken", details: JSON.stringify({ id: "a", full_name: "Baraka Juma", code: "BJN-402", state: "Approved" }), code: "P0001" }
+    expect(await recreateAgent(client({ error: phoneTaken }), "old", { fullName: "x", phone: "y" }, "Wrong")).toEqual({
+      ok: false,
+      error: { kind: "phone-taken", agent: { id: "a", fullName: "Baraka Juma", code: "BJN-402", state: "Approved" } },
+    })
+  })
+
+  it("treats a lost answer to a save as uncertain, and tells the Manager to check before trying again", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+    const lost = { message: "TypeError: fetch failed", details: "", hint: "", code: "" }
+    expect(await createAgent(client({ error: lost }), { fullName: "x", phone: "y" })).toEqual({ ok: false, error: { kind: "uncertain" } })
+    expect(await recreateAgent(client({ error: lost }), "old", { fullName: "x", phone: "y" }, "Wrong")).toEqual({
+      ok: false,
+      error: { kind: "uncertain" },
+    })
+    expect(createRefusal({ kind: "uncertain" }).message).toMatch(/[Rr]eload the page/)
+    expect(createRefusal({ kind: "uncertain" }).message).not.toMatch(/Nothing was saved/)
+    errorLog.mockRestore()
+  })
+
+  it("points an invalid field at the field", () => {
+    expect(createRefusal({ kind: "invalid", field: "phone" })).toEqual({ field: "phone", message: expect.stringMatching(/mobile/) })
+    expect(recreateRefusal({ kind: "invalid", field: "reason" })).toEqual({ message: expect.stringMatching(/reason/) })
   })
 })

@@ -8,16 +8,13 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import type { AgentStatusAction, FeeImpact } from "@/lib/services/marketing-agents"
+import type { AgentStatusAction, FeeImpact as FeeImpactList } from "@/lib/services/marketing-agents"
 
 import { changeMarketingAgentStatus, readAgentFeeImpact } from "./actions"
-import { actionEffect, actionVerb, familyLine, feeImpactLine, STATUS_LOST, STATUS_REASON_MAX } from "./outcome"
+import { FeeImpact } from "./fee-impact"
+import { actionEffect, actionVerb, STATUS_LOST, STATUS_REASON_MAX } from "./outcome"
 
 type Agent = { id: string; fullName: string; code: string }
-
-function tzs(amount: number) {
-  return `TZS ${amount.toLocaleString("en-US")}`
-}
 
 // Switch off or Switch on, and Retire, on an agent's row, for the Manager.
 // Each opens a dialog that first lists the families whose interview fee the
@@ -31,7 +28,7 @@ export function AgentStatusActions({ agent, switchedOff }: { agent: Agent; switc
   )
 }
 
-type Impact = { status: "loading" } | { status: "ready"; impact: FeeImpact } | { status: "refused"; message: string }
+type Impact = { status: "loading" } | { status: "ready"; impact: FeeImpactList } | { status: "refused"; message: string }
 
 function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusAction }) {
   const [open, setOpen] = useState(false)
@@ -87,8 +84,6 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
     })
   }
 
-  const families = impact.status === "ready" ? impact.impact.families : []
-
   return (
     <>
       <Button
@@ -113,42 +108,7 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
             </DialogHeader>
 
             <div className="-mx-4 -my-1 grid min-h-0 gap-4 overflow-y-auto px-4 py-1">
-              <section aria-label="Fee impact" className="grid gap-2" aria-busy={impact.status === "loading"}>
-                {impact.status === "loading" && <p className="text-sm text-muted-foreground">Finding the families this changes…</p>}
-                {impact.status === "refused" && (
-                  <Alert variant="destructive" role="alert">
-                    <AlertDescription>{impact.message}</AlertDescription>
-                  </Alert>
-                )}
-                {impact.status === "ready" && (
-                  <>
-                    <p className="text-sm font-semibold text-slate-900">{feeImpactLine(families.length)}</p>
-                    {families.length > 0 && (
-                      <>
-                        <ul aria-label="Families not yet Paid" className="max-h-48 divide-y overflow-y-auto rounded-md text-sm ring-1 ring-foreground/10">
-                          {families.map((family) => (
-                            <li key={family.leadId} className="px-3 py-2">
-                              <p className="font-medium text-slate-900">
-                                {family.studentName} <span className="font-normal text-muted-foreground">· {family.admissionNumber} · {family.className}</span>
-                              </p>
-                              <p className="text-muted-foreground">
-                                {family.contactName} · <a href={`tel:${family.contactPhone}`} className="underline-offset-4 hover:underline">{family.contactPhone}</a>{" "}
-                                · {tzs(family.feeNow)} → {tzs(family.feeAfter)}
-                              </p>
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-                          <p className="text-xs text-muted-foreground">Read this to each family:</p>
-                          <p lang="sw" className="text-slate-900">
-                            {familyLine(families[0])}
-                          </p>
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
-              </section>
+              <FeeImpact impact={impact.status === "ready" ? { status: "ready", families: impact.impact.families } : impact} />
 
               <div className="grid gap-1.5">
                 <Label htmlFor={reasonId}>Reason</Label>

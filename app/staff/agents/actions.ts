@@ -6,14 +6,33 @@ import {
   AGENT_STATUS_ACTIONS,
   approveAgent,
   changeAgentStatus,
+  checkNewAgent,
+  createAgent,
   getAgentFeeImpact,
+  getRecreatePreview,
+  recreateAgent,
+  type AgentCheck,
+  type AgentConflict,
+  type AgentDraft,
   type AgentStatusAction,
   type FeeImpact,
+  type RecreatePreview,
 } from "@/lib/services/marketing-agents"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
-import { approveOutcome, STATUS_REASON_MAX, statusOutcome, type ApproveOutcome, type StatusOutcome } from "./outcome"
+import {
+  approveOutcome,
+  createdMessage,
+  createRefusal,
+  recreatedMessage,
+  recreateRefusal,
+  STATUS_REASON_MAX,
+  statusOutcome,
+  type ApproveOutcome,
+  type DraftRefusal,
+  type StatusOutcome,
+} from "./outcome"
 
 // Approves a Pending Marketing Agent. The name and code come from the row the
 // Manager confirmed, only to word the answer; the database decides by the id
@@ -86,4 +105,85 @@ export async function changeMarketingAgentStatus(
     revalidatePath("/staff", "layout")
   }
   return statusOutcome(result, action, words)
+}
+
+// ---------------------------------------------------------------------------
+// Creating an agent, and Recreate (#189). The database checks agents.approve
+// itself; the check here only words a signed-out session's answer.
+// ---------------------------------------------------------------------------
+
+export type AgentDraftInput = { fullName: string; phone: string; whatsapp: string; email: string; code: string }
+
+function draftOf(input: AgentDraftInput | undefined): AgentDraft {
+  const text = (value: unknown) => (typeof value === "string" ? value : "")
+  return { fullName: text(input?.fullName), phone: text(input?.phone), whatsapp: text(input?.whatsapp), email: text(input?.email), code: text(input?.code) }
+}
+
+async function approverClient() {
+  const supabase = await createClient()
+  const allowed = await requirePermission(supabase, "agents.approve")
+  if (allowed.ok) return { ok: true as const, supabase }
+  return { ok: false as const, error: allowed.error === "signed-out" || allowed.error === "unavailable" ? allowed.error : ("forbidden" as const) }
+}
+
+export type CheckAnswer =
+  | { status: "ready"; check: Extract<AgentCheck, { kind: "ready" }> }
+  | { status: "conflict"; conflict: AgentConflict }
+  | ({ status: "refused" } & DraftRefusal)
+
+// What the Manager checks before saving. Saves nothing.
+export async function checkNewMarketingAgent(input: AgentDraftInput): Promise<CheckAnswer> {
+  const client = await approverClient()
+  if (!client.ok) return { status: "refused", ...createRefusal({ kind: client.error }) }
+  const result = await checkNewAgent(client.supabase, draftOf(input))
+  if (!result.ok) return { status: "refused", ...createRefusal(result.error) }
+  if (result.data.kind === "ready") return { status: "ready", check: result.data }
+  return { status: "conflict", conflict: result.data }
+}
+
+export type CreateAnswer = { status: "created"; message: string } | { status: "conflict"; conflict: AgentConflict } | ({ status: "refused" } & DraftRefusal)
+
+// The Manager's create: Approved at once.
+export async function createMarketingAgent(input: AgentDraftInput): Promise<CreateAnswer> {
+  const client = await approverClient()
+  if (!client.ok) return { status: "refused", ...createRefusal({ kind: client.error }) }
+  const result = await createAgent(client.supabase, draftOf(input))
+  if (!result.ok) {
+    if (result.error.kind === "uncertain") revalidatePath("/staff", "layout")
+    return { status: "refused", ...createRefusal(result.error) }
+  }
+  if (result.data.kind !== "created") return { status: "conflict", conflict: result.data }
+  revalidatePath("/staff", "layout")
+  return { status: "created", message: createdMessage(result.data.agent) }
+}
+
+export type RecreatePreviewAnswer = { status: "ready"; preview: RecreatePreview } | { status: "refused"; message: string }
+
+// The record, its student count and the families whose fee the Recreate moves.
+export async function readRecreatePreview(agentId: string): Promise<RecreatePreviewAnswer> {
+  if (typeof agentId !== "string") return { status: "refused", message: recreateRefusal({ kind: "not-found" }).message }
+  const result = await getRecreatePreview(await createClient(), agentId)
+  if (result.ok) return { status: "ready", preview: result.data }
+  return { status: "refused", message: recreateRefusal(result.error).message }
+}
+
+export type RecreateAnswer = { status: "recreated"; message: string } | ({ status: "refused" } & DraftRefusal)
+
+// Recreate, with the corrected details and the Manager's reason. The screen
+// asks the Manager to confirm it is the same person first.
+export async function recreateMarketingAgent(agentId: string, input: AgentDraftInput, reason: string): Promise<RecreateAnswer> {
+  if (typeof agentId !== "string") return { status: "refused", ...recreateRefusal({ kind: "not-found" }) }
+  if (typeof reason !== "string" || reason.trim() === "" || reason.trim().length > STATUS_REASON_MAX) {
+    return { status: "refused", ...recreateRefusal({ kind: "invalid", field: "reason" }) }
+  }
+  const client = await approverClient()
+  if (!client.ok) return { status: "refused", ...recreateRefusal({ kind: client.error }) }
+  const { fullName, phone, whatsapp, email } = draftOf(input)
+  const result = await recreateAgent(client.supabase, agentId, { fullName, phone, whatsapp, email }, reason)
+  if (!result.ok) {
+    if (result.error.kind === "uncertain") revalidatePath("/staff", "layout")
+    return { status: "refused", ...recreateRefusal(result.error) }
+  }
+  revalidatePath("/staff", "layout")
+  return { status: "recreated", message: recreatedMessage(result.data) }
 }

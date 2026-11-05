@@ -14,6 +14,9 @@ import {
   type InterviewListSearch,
   type InterviewResultFilter,
 } from "@/lib/services/interview-list"
+import { listReleaseStatus, type ReleaseStatus } from "@/lib/services/result-release"
+
+import { interviewRows } from "./rows"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
@@ -25,8 +28,7 @@ export const metadata: Metadata = {
   title: "Interviews · Al-Rahmah Complex",
 }
 
-// Each filter group is a row of links, so a filter is a URL. Slice 6 adds its
-// Ready to send group here.
+// Each filter group is a row of links, so a filter is a URL.
 const RESULT_FILTERS: { value: InterviewResultFilter | undefined; label: string }[] = [
   { value: undefined, label: "Any result" },
   { value: "none", label: "No result yet" },
@@ -38,6 +40,12 @@ const FEE_FILTERS: { value: InterviewFeeStatus | undefined; label: string }[] = 
   { value: undefined, label: "Paid or not" },
   { value: "Paid", label: "Paid" },
   { value: "Not Paid", label: "Not Paid" },
+]
+
+// Slice 6's group: the families still waiting for their result.
+const RELEASE_FILTERS: { value: true | undefined; label: string }[] = [
+  { value: undefined, label: "Sent or not" },
+  { value: true, label: "Ready to send" },
 ]
 
 export default async function InterviewsPage({
@@ -59,6 +67,13 @@ export default async function InterviewsPage({
     enrollmentYear: asked.enrollmentYear ?? defaultInterviewYear(years.data, currentYear),
   }
   const results = await listInterviews(supabase, search)
+  // The Result sent column, for the interviews on this page.
+  const statuses = results.ok
+    ? await listReleaseStatus(
+        supabase,
+        results.data.interviews.map((interview) => interview.id),
+      )
+    : null
   // The year on show is offered even when it has no registrations, so the
   // year links always say which one is open.
   const offered = [...new Set([...years.data, search.enrollmentYear])].sort((a, b) => a - b)
@@ -93,9 +108,21 @@ export default async function InterviewsPage({
             current: filter.value === search.feeStatus,
           }))}
         />
+        <FilterGroup
+          label="Result release"
+          options={RELEASE_FILTERS.map((filter) => ({
+            label: filter.label,
+            href: interviewsHref(search, { readyToSend: filter.value, page: 1 }),
+            current: filter.value === search.readyToSend,
+          }))}
+        />
       </div>
 
-      {!results.ok ? <Unavailable /> : <Results results={results.data} search={search} />}
+      {!results.ok || !statuses?.ok ? (
+        <Unavailable />
+      ) : (
+        <Results results={results.data} statuses={statuses.data} search={search} />
+      )}
     </div>
   )
 }
@@ -128,12 +155,25 @@ function FilterGroup({ label, options }: { label: string; options: { label: stri
   )
 }
 
-function Results({ results, search }: { results: InterviewList; search: InterviewListSearch }) {
-  const { interviews, total, page, pageCount } = results
-  const filtered = search.result !== undefined || search.feeStatus !== undefined
-  const empty = filtered
-    ? "No interviews match these filters."
-    : `No one is registered for interview for ${search.enrollmentYear} yet.`
+function Results({
+  results,
+  statuses,
+  search,
+}: {
+  results: InterviewList
+  statuses: Map<string, ReleaseStatus>
+  search: InterviewListSearch
+}) {
+  const { total, page, pageCount } = results
+  // Result, score and Result sent from the one status read (see rows.ts).
+  const interviews = interviewRows(results.interviews, statuses)
+  const filtered = search.result !== undefined || search.feeStatus !== undefined || search.readyToSend !== undefined
+  const onlyReady = search.readyToSend && search.result === undefined && search.feeStatus === undefined
+  const empty = onlyReady
+    ? `No results for ${search.enrollmentYear} are waiting to be sent.`
+    : filtered
+      ? "No interviews match these filters."
+      : `No one is registered for interview for ${search.enrollmentYear} yet.`
 
   return (
     <section aria-label="Results" className="flex flex-col gap-3">
@@ -154,7 +194,7 @@ function Results({ results, search }: { results: InterviewList; search: Intervie
 
       {interviews.length > 0 && (
         <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
-          <table aria-label={`Interviews for ${search.enrollmentYear}`} className="w-full min-w-[52rem] text-left text-sm">
+          <table aria-label={`Interviews for ${search.enrollmentYear}`} className="w-full min-w-[58rem] text-left text-sm">
             <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">S/N</th>
@@ -164,7 +204,8 @@ function Results({ results, search }: { results: InterviewList; search: Intervie
                 <th scope="col" className="px-3 py-2 font-medium">Day or boarding</th>
                 <th scope="col" className="px-3 py-2 font-medium">Result</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Score</th>
-                <th scope="col" className="px-3 py-2 font-medium">Interview fee</th>
+                <th scope="col" data-column="fee" className="px-3 py-2 font-medium">Interview fee</th>
+                <th scope="col" data-column="sent" className="px-3 py-2 font-medium">Result sent</th>
               </tr>
             </thead>
             <tbody>
@@ -204,7 +245,7 @@ function Results({ results, search }: { results: InterviewList; search: Intervie
                   <td className="px-3 py-2 text-right tabular-nums">
                     {interview.score === null ? <span className="text-muted-foreground">–</span> : `${interview.score}%`}
                   </td>
-                  <td className="px-3 py-2">
+                  <td data-column="fee" className="px-3 py-2">
                     <Badge
                       variant={interview.feeStatus === "Paid" ? "secondary" : "outline"}
                       className={cn(interview.feeStatus === "Paid" && "bg-emerald-50 text-emerald-800")}
@@ -212,6 +253,7 @@ function Results({ results, search }: { results: InterviewList; search: Intervie
                       {interview.feeStatus}
                     </Badge>
                   </td>
+                  <td data-column="sent" className="px-3 py-2 whitespace-nowrap">{interview.sentOn}</td>
                 </tr>
               ))}
             </tbody>

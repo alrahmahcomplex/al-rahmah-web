@@ -8,6 +8,7 @@ import {
 } from "@/lib/result-messages"
 import { buildWhatsAppLink } from "@/lib/whatsapp"
 
+import type { InterviewResult as InterviewOutcome } from "./interviews"
 import type { LeadClass } from "./leads"
 import type { Result } from "./result"
 
@@ -91,6 +92,8 @@ type StateRow = Partial<MessageValues> & {
   // release_result will judge it.
   whatsapp_fits?: boolean
   direct_phone?: string
+  // From interview_release_status, in the same read as the result and score.
+  changed_since_sent?: boolean
 }
 
 type ReleaseRow = {
@@ -182,9 +185,9 @@ export async function getResultRelease(
     releases = read.data
   }
 
-  // Once there are releases, the state is read again, so the result and score
-  // compared with the last release are never older than it: a correction sent
-  // between the two reads is no warning. A send recorded after the releases
+  // Once there are releases, the state is read again, so the changed-since-
+  // sent answer is never older than them: a correction sent between the two
+  // reads is no warning. A send recorded after the releases
   // were read leaves the page short of one, so its own send is refused as
   // sent_meanwhile. If the current interview changed between the reads, the
   // section shows the first read, as it would have a moment earlier.
@@ -213,14 +216,11 @@ export async function getResultRelease(
     }
   }
 
-  // Compared by value, not by when the interview was last changed: a
-  // correction that ends where the release was, or one that changes only the
-  // date, leaves the family with the result and score the interview carries.
-  // The result and score come from the same result_release_state row the
-  // offer's message was built from, read after the releases.
-  const last = releases[0]
-  const changedSinceSent =
-    offer !== null && last !== undefined && (last.result !== row.result || last.score !== Number(row.score))
+  // The database compares the last release with the interview's result and
+  // score (interview_release_status), in the same read the offer's message
+  // was built from, so the lead screen and the Interviews screen apply one
+  // rule.
+  const changedSinceSent = offer !== null && releases.length > 0 && row.changed_since_sent === true
 
   return {
     ok: true,
@@ -233,6 +233,67 @@ export async function getResultRelease(
       releases,
       changedSinceSent,
     },
+  }
+}
+
+// Where an interview's result stands with the family, for the Interviews
+// screen.
+export type ReleaseStatus = {
+  // The result and score now, read with the rest, so the screen shows the
+  // values the release was compared with.
+  result: InterviewOutcome | null
+  score: number | null
+  // When its result was last sent, or null if never.
+  lastReleasedAt: string | null
+  // Whether its result or score differs from what the last release carried.
+  // Such a result counts as not sent.
+  changedSinceSent: boolean
+  // Whether it is its lead's newest registration, the only one that can be sent.
+  current: boolean
+  // Current, the lead open, a result recorded, the fee Paid, and not sent or
+  // changed since: what release_result would accept now.
+  readyToSend: boolean
+}
+
+type StatusRow = {
+  interview_id: string
+  is_current: boolean
+  result: InterviewOutcome | null
+  score: number | string | null
+  last_released_at: string | null
+  changed_since_sent: boolean
+  ready_to_send: boolean
+}
+
+// The release status of each of these interviews, by id, read at one moment.
+// Ids that match no interview are left out. Needs leads.view.
+export async function listReleaseStatus(
+  supabase: SupabaseClient,
+  interviewIds: readonly string[],
+): Promise<Result<Map<string, ReleaseStatus>, CommonError>> {
+  if (interviewIds.length === 0) return { ok: true, data: new Map() }
+  const { data, error } = await supabase.rpc("interview_release_status", { interview_ids: interviewIds })
+  if (error) {
+    const known = commonError(error)
+    if (known) return { ok: false, error: known }
+    console.error("Could not read the interviews' release status", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return {
+    ok: true,
+    data: new Map(
+      ((data ?? []) as StatusRow[]).map((row) => [
+        row.interview_id,
+        {
+          result: row.result,
+          score: row.score === null ? null : Number(row.score),
+          lastReleasedAt: row.last_released_at,
+          changedSinceSent: row.changed_since_sent,
+          current: row.is_current,
+          readyToSend: row.ready_to_send,
+        },
+      ]),
+    ),
   }
 }
 

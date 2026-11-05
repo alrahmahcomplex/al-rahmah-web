@@ -27,6 +27,9 @@ export type InterviewListSearch = {
   result?: InterviewResultFilter
   // Left out: Paid and Not Paid.
   feeStatus?: InterviewFeeStatus
+  // Only results that can be sent and haven't been, or changed since they
+  // were (slice 6, #89; interview_release_status decides).
+  readyToSend?: boolean
   // From 1.
   page: number
 }
@@ -80,7 +83,7 @@ const INTERVIEW_LIST_COLUMNS =
   "id, serial_number, result, score, fee_status, lead:leads!inner(id, admission_number, student_name, class_name, day_or_boarding, status, closure)"
 
 // One page of an enrollment year's registrations, in S/N order, under the
-// result and fee filters.
+// result, fee and Ready to send filters.
 export async function listInterviews(
   supabase: SupabaseClient,
   search: InterviewListSearch,
@@ -95,6 +98,7 @@ export async function listInterviews(
     if (search.result === "none") list = list.is("result", null)
     else if (search.result) list = list.eq("result", search.result)
     if (search.feeStatus) list = list.eq("fee_status", search.feeStatus)
+    if (search.readyToSend) list = list.eq("result_ready_to_send", true)
     return list.order("serial_number", { ascending: true })
   }
 

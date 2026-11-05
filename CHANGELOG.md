@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 5, 2026 `v0.70.0`
+
+### NEW
+
+- The **Interviews** screen has a **Result sent** column with the date each result was
+  last sent, and a **Ready to send** filter listing the families still waiting: result
+  recorded, interview fee **Paid**, lead open, and the current result not sent yet. A
+  result corrected after it was sent shows no date and is back on the list until the
+  corrected result goes out.
+
+### IMPROVED
+
+- The lead screen's corrected-since-sent warning and the Interviews screen now use the
+  same database check, so the two screens always agree.
+
 ## November 5, 2026 `v0.69.0`
 
 ### NEW

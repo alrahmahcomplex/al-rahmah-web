@@ -27,6 +27,18 @@ export function applyOutcome(error: ApplyError): CorrectionOutcome {
         message:
           "The children who share this parent or guardian have changed since you opened the page. Nothing was saved. Reload the page to see who the change reaches.",
       }
+    case "unknown-code":
+      return {
+        status: "refused",
+        field: null,
+        message: "No Marketing Agent has this code, so it can't become the lead's Referral code.",
+      }
+    case "retired-code":
+      return {
+        status: "refused",
+        field: null,
+        message: "This code belongs to a retired Marketing Agent record, so it can't become the lead's Referral code.",
+      }
     default:
       return correctionOutcome(error)
   }

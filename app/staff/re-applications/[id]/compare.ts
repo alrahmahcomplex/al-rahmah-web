@@ -28,12 +28,15 @@ const FIELDS: ReApplicationField[] = [
   "relationship_description",
   "phone",
   "whatsapp",
+  "discount_code",
 ]
 
 const whatsappText = (whatsapp: string | null) => (whatsapp ? displayPhone(whatsapp) : "Same as phone")
 
 // The lead's value and the family's, raw and as shown, for one field.
-function values(field: ReApplicationField, lead: Lead, sent: SubmittedDetails) {
+// `referralCode` is the lead's Referral code, which the Discount code is
+// compared with.
+function values(field: ReApplicationField, lead: Lead, sent: SubmittedDetails, referralCode: string | null) {
   const contact = lead.contact
   switch (field) {
     case "student_name":
@@ -63,15 +66,28 @@ function values(field: ReApplicationField, lead: Lead, sent: SubmittedDetails) {
         same: contact.whatsapp === sent.whatsapp,
         typedAs: sent.whatsappAsSent && sent.whatsappAsSent !== whatsappText(sent.whatsapp) ? sent.whatsappAsSent : null,
       }
+    case "discount_code":
+      // No code sent never matches: there is no code to apply.
+      return {
+        stored: referralCode ?? "None",
+        sent: sent.discountCode ?? "None",
+        same: sent.discountCode !== null && sent.discountCode === referralCode,
+      }
   }
 }
 
-// Every field the Admission form sends, the lead's value beside the family's.
-// The highlight follows what differed on arrival, as the queue counts it.
-export function compareFields(lead: Lead, sent: SubmittedDetails, differing: ReApplicationField[]): ComparedField[] {
+// Every field the Admission form sends, the lead's value beside the family's,
+// and the Discount code beside the lead's Referral code (`referralCode`). The
+// highlight follows what differed on arrival, as the queue counts it.
+export function compareFields(
+  lead: Lead,
+  sent: SubmittedDetails,
+  differing: ReApplicationField[],
+  referralCode: string | null,
+): ComparedField[] {
   const differed = new Set(differing)
   return FIELDS.map((field) => {
-    const shown = values(field, lead, sent)
+    const shown = values(field, lead, sent, referralCode)
     const phoneTyped = field === "phone" && sent.phoneAsSent !== shown.sent ? sent.phoneAsSent : null
     return {
       field,

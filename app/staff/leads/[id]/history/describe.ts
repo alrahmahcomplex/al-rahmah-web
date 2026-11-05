@@ -101,6 +101,7 @@ const LABELS: Record<string, string> = {
   amount: "Amount",
   paid_on: "Payment date",
   // Its re-applications, which also use the lead's and contact's labels.
+  discount_code: "Discount code",
   differing_fields: "Differs from the lead",
   // A Marketing Agent. Agent rows carry no lead id, so they show in no lead's
   // history; these label them wherever the history is read.

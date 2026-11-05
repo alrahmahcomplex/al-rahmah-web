@@ -30,7 +30,9 @@ import type { Result } from "./result"
 // created, and again when a retry replays that child: the code is written only
 // into an empty one, so the replay finishes a step a dropped connection cut
 // off and never overwrites a code staff set since. A child already on file
-// gets nothing on its lead (#84 keeps the code on the Re-application).
+// gets nothing on its lead: the code travels in the child's details to
+// record_re_application, which keeps it on the Re-application for staff to
+// compare and Apply (#84). create_lead ignores it.
 //
 // The code-holder notice's version (#182) goes with the code onto each lead,
 // and stays out of the submission key's hash, so a retry from a page loaded
@@ -61,6 +63,7 @@ type ChildRow =
 
 const PARENT_FIELDS = new Set<string>(["contact_name", "relationship", "relationship_description", "phone", "whatsapp"])
 const CHILD_FIELDS = new Set<string>(["student_name", "class_name", "enrollment_year", "day_or_boarding", "duplicate_child"])
+const FORM_FIELDS = new Set<string>(["discount_code"])
 
 // What the submission key is checked against: the form exactly as validated,
 // in a fixed key order. The Discount code joins it only when there is one, so
@@ -80,12 +83,13 @@ function payloadHash({ parent, children, discountCode }: Pick<AdmissionForm, "pa
   return createHash("sha256").update(canonical).digest("hex")
 }
 
-function studentDetails(child: AdmissionChild) {
+function studentDetails(child: AdmissionChild, discountCode: string | undefined) {
   return {
     full_name: child.fullName,
     class_name: child.className,
     enrollment_year: child.enrollmentYear,
     day_or_boarding: child.dayOrBoarding,
+    ...(discountCode ? { discount_code: discountCode } : {}),
   }
 }
 
@@ -135,7 +139,7 @@ export async function submitAdmissionForm(
       child_count: children.length,
       child_index: index,
       new_contact: newContact,
-      student_details: studentDetails(child),
+      student_details: studentDetails(child, discountCode),
     })
 
     if (error) {
@@ -147,6 +151,9 @@ export async function submitAdmissionForm(
         const field = fieldOf(error.details)
         if (field && PARENT_FIELDS.has(field)) {
           return { ok: false, error: { kind: "invalid", field: field as ParentField, child: null } }
+        }
+        if (field && FORM_FIELDS.has(field)) {
+          return { ok: false, error: { kind: "invalid", field: "discount_code", child: null } }
         }
         if (field && CHILD_FIELDS.has(field)) {
           return {

@@ -44,11 +44,12 @@ const sent: SubmittedDetails = {
   className: "STD 4",
   enrollmentYear: 2027,
   dayOrBoarding: "Day",
+  discountCode: null,
 }
 
 describe("comparing a re-application with its lead", () => {
   it("shows every field stored and sent, side by side, in the form's order", () => {
-    const rows = compareFields(lead, sent, ["class_name", "whatsapp"])
+    const rows = compareFields(lead, sent, ["class_name", "whatsapp"], null)
     expect(rows.map((row) => [row.label, row.stored, row.sent])).toEqual([
       ["Student name", "Zuberi Marudio", "Zuberi Marudio"],
       ["Class", "STD 3", "STD 4"],
@@ -59,28 +60,29 @@ describe("comparing a re-application with its lead", () => {
       ["Relationship details", "None", "None"],
       ["Phone", "+255 700 000 301", "+255 700 000 301"],
       ["WhatsApp", "Same as phone", "+255 700 000 311"],
+      ["Discount code", "None", "None"],
     ])
   })
 
   it("highlights exactly the fields that differed on arrival, so the count matches the queue's", () => {
     const differing = ["class_name", "relationship", "relationship_description", "whatsapp"] as const
-    const rows = compareFields(lead, sent, [...differing])
+    const rows = compareFields(lead, sent, [...differing], null)
     expect(rows.filter((row) => row.differed).map((row) => row.field)).toEqual(differing)
   })
 
   it("says when a field that differed now matches the lead, once it is applied or corrected", () => {
     const applied = { ...lead, className: "STD 4" as const }
-    const [, classRow] = compareFields(applied, sent, ["class_name", "whatsapp"])
+    const [, classRow] = compareFields(applied, sent, ["class_name", "whatsapp"], null)
     expect(classRow).toMatchObject({ differed: true, matchesNow: true })
-    const whatsappRow = compareFields(applied, sent, ["class_name", "whatsapp"]).at(-1)
+    const whatsappRow = compareFields(applied, sent, ["class_name", "whatsapp"], null).find((row) => row.field === "whatsapp")
     expect(whatsappRow).toMatchObject({ differed: true, matchesNow: false })
   })
 
   it("shows a number as the family typed it when that reads differently", () => {
-    const rows = compareFields(lead, sent, [])
+    const rows = compareFields(lead, sent, [], null)
     expect(rows.find((row) => row.field === "phone")?.typedAs).toBe("0700 000 301")
     expect(rows.find((row) => row.field === "whatsapp")?.typedAs).toBe("0700 000 311")
-    const plain = compareFields(lead, { ...sent, phoneAsSent: "+255 700 000 301" }, [])
+    const plain = compareFields(lead, { ...sent, phoneAsSent: "+255 700 000 301" }, [], null)
     expect(plain.find((row) => row.field === "phone")?.typedAs).toBeNull()
   })
 
@@ -88,7 +90,7 @@ describe("comparing a re-application with its lead", () => {
     const other = { ...lead, contact: { ...lead.contact, relationship: "Other" as const, relationshipDescription: "Aunt" } }
     const rows = compareFields(other, { ...sent, relationship: "Other", relationshipDescription: "Grandmother" }, [
       "relationship_description",
-    ])
+    ], null)
     expect(rows.find((row) => row.field === "relationship")).toMatchObject({ stored: "Other", matchesNow: true })
     expect(rows.find((row) => row.field === "relationship_description")).toMatchObject({
       stored: "Aunt",
@@ -96,6 +98,28 @@ describe("comparing a re-application with its lead", () => {
       differed: true,
       matchesNow: false,
     })
+  })
+
+  it("compares the Discount code sent with the lead's Referral code", () => {
+    const withCode = { ...sent, discountCode: "BJN-402" }
+    expect(compareFields(lead, withCode, ["discount_code"], "ZNM-401").at(-1)).toMatchObject({
+      field: "discount_code",
+      label: "Discount code",
+      stored: "ZNM-401",
+      sent: "BJN-402",
+      differed: true,
+      matchesNow: false,
+    })
+    expect(compareFields(lead, withCode, ["discount_code"], null).at(-1)).toMatchObject({ stored: "None", sent: "BJN-402" })
+  })
+
+  it("says the Discount code matches now once the lead holds it", () => {
+    const withCode = { ...sent, discountCode: "BJN-402" }
+    expect(compareFields(lead, withCode, ["discount_code"], "BJN-402").at(-1)).toMatchObject({ differed: true, matchesNow: true })
+  })
+
+  it("never calls no code sent a match, so there is never an empty code to apply", () => {
+    expect(compareFields(lead, sent, [], null).at(-1)).toMatchObject({ differed: false, matchesNow: false })
   })
 })
 

@@ -69,6 +69,24 @@ describe("a re-application in the lead's history", () => {
     expect(described.changes).toEqual([{ label: "Differs from the lead", from: null, to: "Nothing" }])
   })
 
+  it("labels the Discount code the family sent, and lists it among what differs", () => {
+    const [described] = describeLeadHistory(
+      [
+        entry({
+          record: "re_applications",
+          recordId: RE_APPLICATION,
+          action: "insert",
+          changes: [change("discount_code", null, "BJN-402"), change("differing_fields", null, ["discount_code"])],
+        }),
+      ],
+      {},
+    )
+    expect(described.changes).toEqual([
+      { label: "Discount code", from: null, to: "BJN-402" },
+      { label: "Differs from the lead", from: null, to: "Discount code" },
+    ])
+  })
+
   it("reads a review as the staff member marking it reviewed, with no raw ids or times", () => {
     const [described] = describeLeadHistory(
       [

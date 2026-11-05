@@ -91,9 +91,7 @@ export async function checkDiscountCode(code: unknown): Promise<DiscountCodeChec
     return { status: "unavailable" }
   }
   if (!estimate.ok) return { status: "unavailable" }
-  // No screen switches an agent off yet (#187 adds that, with the form's own
-  // note); until then such a code reads as one that gives no discount.
-  const state = estimate.data.state === "switched_off" ? "unknown" : estimate.data.state
+  const state = estimate.data.state
   if (state !== "approved") return { status: state, amount: estimate.data.amount }
 
   // The note names the discount; the code is confirmed even if this fails.

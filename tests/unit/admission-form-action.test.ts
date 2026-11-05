@@ -193,6 +193,8 @@ describe("checking a Discount code", () => {
   it.each([
     [{ state: "pending", amount: 50000 }, { status: "pending", amount: 50000 }],
     [{ state: "unknown", amount: 50000 }, { status: "unknown", amount: 50000 }],
+    // A switched-off agent's code gives no discount, with its own note.
+    [{ state: "switched_off", amount: 50000 }, { status: "switched_off", amount: 50000 }],
   ])("passes on the estimate %j, without reading the discount", async (data, answer) => {
     stubs.estimate.mockResolvedValue({ ok: true, data })
     expect(await checkDiscountCode("ZNM-401")).toEqual(answer)

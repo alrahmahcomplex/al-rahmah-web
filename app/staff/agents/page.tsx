@@ -13,7 +13,9 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
+import { AgentStatusActions } from "./agent-status-actions"
 import { ApproveAgent } from "./approve-agent"
+import { statusChangeLine } from "./outcome"
 import { agentsHref, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
 
 export const metadata: Metadata = {
@@ -30,11 +32,14 @@ const FILTERS: { status: AgentFilter; label: string }[] = [
   { status: "Pending", label: "Pending" },
   { status: "Approved", label: "Approved" },
   { status: "all", label: "All" },
+  // Retired records show only here.
+  { status: "Retired", label: "Retired" },
 ]
 
 const EMPTY: Record<AgentFilter, string> = {
   Pending: "No agents are waiting for approval.",
   Approved: "No agents are Approved yet.",
+  Retired: "No agents are retired.",
   all: "No Marketing Agents have registered yet.",
 }
 
@@ -163,12 +168,22 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
                   </td>
                   <td className="px-3 py-2 font-mono whitespace-nowrap">{agent.code}</td>
                   <td className="px-3 py-2">
-                    <Badge
-                      variant={agent.status === "Approved" ? "secondary" : "outline"}
-                      className={cn(agent.status === "Approved" && "bg-emerald-50 text-emerald-800")}
-                    >
-                      {agent.status}
-                    </Badge>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge
+                        variant={agent.status === "Approved" && !agent.retiredAt ? "secondary" : "outline"}
+                        className={cn(agent.status === "Approved" && !agent.retiredAt && "bg-emerald-50 text-emerald-800")}
+                      >
+                        {agent.status}
+                      </Badge>
+                      {agent.retiredAt ? (
+                        <Badge variant="destructive">Retired</Badge>
+                      ) : (
+                        agent.switchedOffAt && <Badge variant="destructive">Switched off</Badge>
+                      )}
+                    </div>
+                    {statusChangeLine(agent) && (
+                      <p className="mt-1 max-w-64 text-xs text-muted-foreground">{statusChangeLine(agent)}</p>
+                    )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <time dateTime={agent.registeredAt}>{WHEN.format(new Date(agent.registeredAt))}</time>
@@ -192,8 +207,17 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
                   </td>
                   {canApprove && (
                     <td className="px-3 py-2">
-                      {agent.status === "Pending" && (
-                        <ApproveAgent agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }} />
+                      {/* A retired record never changes again. */}
+                      {!agent.retiredAt && (
+                        <div className="flex flex-col items-start gap-2">
+                          {agent.status === "Pending" && (
+                            <ApproveAgent agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }} />
+                          )}
+                          <AgentStatusActions
+                            agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
+                            switchedOff={agent.switchedOffAt !== null}
+                          />
+                        </div>
                       )}
                     </td>
                   )}

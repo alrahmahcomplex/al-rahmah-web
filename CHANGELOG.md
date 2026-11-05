@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 5, 2026 `v0.71.0`
+
+### NEW
+
+- The Admissions Manager can switch a Marketing Agent off and back on, or retire a
+  wrong record for good, from the Agents screen. Each needs a reason. Before confirming,
+  the Manager sees how many families not yet Paid the change affects, with the list and
+  a Swahili line to read to them. A switched-off code gives no discount on any interview
+  fee not yet Paid; fees already Paid keep their amount. Retiring also frees the
+  agent's phone so the agent can register again.
+- Retired records are hidden from the Agents screen except under a new Retired filter,
+  which shows who retired each one and when, and they no longer count as Pending.
+- A switched-off code is explained wherever it shows: the Admission form says the code
+  gives no discount for now and the form can still be sent, the lead's Referral code
+  panel says "This code is switched off. No discount." as staff type it, and the fee
+  line says when the code was switched off.
+
 ## November 5, 2026 `v0.70.0`
 
 ### NEW

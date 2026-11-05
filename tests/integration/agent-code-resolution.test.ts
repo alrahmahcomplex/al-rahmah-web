@@ -67,17 +67,16 @@ function changeStatus(sql: Client, agentId: string, kind: string, newAgentId: st
 }
 
 // Retires `old` and creates its replacement with the same code, as Recreate
-// will: the status change first, then the new record, in one transaction.
+// will: the status change first, then the new record, Approved and switched
+// on, in one transaction.
 async function recreate(old: Agent): Promise<Agent> {
   const replacement = { id: randomUUID(), code: old.code, fullName: `${old.fullName} Corrected`, phone: asE164(phone()) }
   await asSystem(async (sql) => {
     await changeStatus(sql, old.id, "recreated", replacement.id)
-    await sql.query("insert into public.marketing_agents (id, full_name, phone, code) values ($1, $2, $3, $4)", [
-      replacement.id,
-      replacement.fullName,
-      replacement.phone,
-      replacement.code,
-    ])
+    await sql.query(
+      "insert into public.marketing_agents (id, full_name, phone, code, status, approved_at, approved_by) values ($1, $2, $3, $4, 'Approved', now(), $5)",
+      [replacement.id, replacement.fullName, replacement.phone, replacement.code, MANAGER.id],
+    )
   })
   return replacement
 }
@@ -164,7 +163,7 @@ describe("one rule for code lookups", () => {
 })
 
 describe("a code held by a retired record and a new one", () => {
-  test("gives exactly one answer, the new record, and the fee follows the new record's status", async () => {
+  test("gives exactly one answer, the new record, and the discount never lapses", async () => {
     const old = await newAgent({ approved: true })
     const lead = await newLead(old.code)
     expect(await fee(lead)).toMatchObject({ agentName: old.fullName, amount: 40000, discountApplied: true })
@@ -177,21 +176,21 @@ describe("a code held by a retired record and a new one", () => {
     })
     expect(resolved).toEqual([replacement.id])
 
-    // The replacement is Pending, so the code gives no discount until approved.
+    // The replacement starts Approved and switched on, so the fee keeps the discount.
     expect(await fee(lead)).toEqual({
       code: old.code,
-      state: "pending",
+      state: "approved",
       agentName: replacement.fullName,
-      amount: 50000,
-      discountApplied: false,
+      amount: 40000,
+      discountApplied: true,
+      switchedOffAt: null,
     })
   })
 
-  test("after the new record is approved the discount is back, through every lookup", async () => {
+  test("every lookup gives the new record, with the discount", async () => {
     const old = await newAgent({ approved: true })
     const lead = await newLead(old.code)
     const replacement = await recreate(old)
-    expect(await approveAgent(await signedIn(MANAGER), replacement.id)).toEqual({ ok: true, data: null })
 
     expect(await fee(lead)).toMatchObject({ state: "approved", agentName: replacement.fullName, amount: 40000, discountApplied: true })
     expect(await findReferralAgent(await signedIn(ADMISSIONS), old.code)).toEqual({
@@ -200,10 +199,18 @@ describe("a code held by a retired record and a new one", () => {
     })
     expect(await estimateDiscountCode(secretClient(), old.code)).toEqual({ ok: true, data: { state: "approved", amount: 40000 } })
 
-    // The students follow the code to the new record; the retired one has none.
-    const list = await listAgents(await signedIn(MANAGER), { query: old.code, page: 1 })
-    if (!list.ok) throw new Error("list unavailable")
-    const counts = Object.fromEntries(list.data.agents.filter((a) => a.code === old.code).map((a) => [a.id, a.leadCount]))
+    // The students follow the code to the new record; the retired one, shown
+    // only under the Retired filter (#187), has none.
+    const manager = await signedIn(MANAGER)
+    const lists = await Promise.all([
+      listAgents(manager, { query: old.code, page: 1 }),
+      listAgents(manager, { status: "Retired", query: old.code, page: 1 }),
+    ])
+    const agents = lists.flatMap((list) => {
+      if (!list.ok) throw new Error("list unavailable")
+      return list.data.agents
+    })
+    const counts = Object.fromEntries(agents.filter((a) => a.code === old.code).map((a) => [a.id, a.leadCount]))
     expect(counts).toEqual({ [old.id]: 0, [replacement.id]: 1 })
   })
 
@@ -214,7 +221,7 @@ describe("a code held by a retired record and a new one", () => {
 
     const rows = await inRolledBackTransaction(async (sql) => {
       const result = await sql.query(
-        `select kind, agent_id, old_agent_id, new_agent_id, code, student_count, lead_ids, reason, changed_by
+        `select kind, agent_id, old_agent_id, new_agent_id, code, student_count, lead_ids, reason, changed_by, fee_change_count
          from public.agent_status_changes where agent_id = $1`,
         [old.id],
       )
@@ -230,8 +237,40 @@ describe("a code held by a retired record and a new one", () => {
       student_count: 2,
       reason: "Test: recreated",
       changed_by: null,
+      // Approved before and after: no fee moves.
+      fee_change_count: 0,
     })
     expect([...rows[0].lead_ids].sort()).toEqual([...leads].sort())
+  })
+
+  test("a recreated row must name a record that starts Approved and switched on", async () => {
+    const old = await newAgent()
+    await newLead(old.code)
+    for (const replacement of ["pending", "switched-off"] as const) {
+      await expect(
+        inRolledBackTransaction(async (sql) => {
+          await sql.query("select public.set_audit_actor('system')")
+          const id = randomUUID()
+          await changeStatus(sql, old.id, "recreated", id)
+          if (replacement === "pending") {
+            await sql.query("insert into public.marketing_agents (id, full_name, phone, code) values ($1, $2, $3, $4)", [
+              id,
+              "Pending Copy",
+              asE164(phone()),
+              old.code,
+            ])
+          } else {
+            await sql.query(
+              "insert into public.marketing_agents (id, full_name, phone, code, status, approved_at, approved_by) values ($1, $2, $3, $4, 'Approved', now(), $5)",
+              [id, "Switched-off Copy", asE164(phone()), old.code, MANAGER.id],
+            )
+            await changeStatus(sql, id, "switched_off")
+          }
+          await sql.query("set constraints all immediate")
+        }),
+        replacement,
+      ).rejects.toThrow(/recreated_agent_not_approved/)
+    }
   })
 
   test("a recreated row must name a new record that holds the same code by commit", async () => {
@@ -277,7 +316,7 @@ describe("the discount rule", () => {
     const lead = await newLead(agent.code)
     await asSystem((sql) => changeStatus(sql, agent.id, "retired"))
 
-    expect(await fee(lead)).toEqual({ code: agent.code, state: "unrecognised", agentName: null, amount: 50000, discountApplied: false })
+    expect(await fee(lead)).toEqual({ code: agent.code, state: "unrecognised", agentName: null, amount: 50000, discountApplied: false, switchedOffAt: null })
     expect(await estimateDiscountCode(secretClient(), agent.code)).toEqual({ ok: true, data: { state: "unknown", amount: 50000 } })
     expect(await findReferralAgent(await signedIn(ADMISSIONS), agent.code)).toEqual({ ok: true, data: null })
   })

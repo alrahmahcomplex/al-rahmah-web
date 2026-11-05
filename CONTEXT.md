@@ -304,6 +304,14 @@ _Avoid_: External referral agent, referrer, staff owner, follow-up staff
 A newly registered Marketing Agent's **Referral code** is **Pending** until the Admissions Manager approves it, after which it is **Approved**. Only an **Approved** code grants the interview discount. Staff tell the agent about the approval themselves, outside the system, until agent invites arrive (#191), which go out only after the Manager has confirmed the agent's email.
 Approval is one-way: nothing returns an **Approved** agent to **Pending**. Approving needs only `agents.approve`, with no lead permission.
 
+**Switched off**:
+A Marketing Agent the Admissions Manager has stopped for now, such as one who has left the school. A switched-off agent's code gives no discount on any interview fee not yet Paid, whatever their approval; fees already Paid keep the amount locked when they were marked. Switching the agent back on restores the discount on every fee still not Paid. The Admission form tells the family "Code hii haitoi punguzo kwa sasa. Unaweza kutuma fomu." ("This code gives no discount at the moment. You can still send the form."), and the form can still be sent with the code.
+
+**Retired** (agent record):
+A Marketing Agent record the Admissions Manager has closed for good, usually because it was created wrongly. It stays for history, gives no discount and never changes again. Its phone is freed so the agent can be created again correctly, and its code comes back only through Recreate. Retired records are hidden from the Agents screen except under its Retired filter, and never count towards the Pending count.
+
+Switching off, switching on and retiring each need `agents.approve` and a reason. Before the Manager confirms, the Agents screen lists the families whose interview fee the change moves: leads carrying the code whose current interview fee is not yet Paid, closed leads included. It gives staff a Swahili line to read to each of them, and records the number with the change.
+
 **Referral code**:
 The code that identifies a Marketing Agent, issued when the agent registers. It is the only referral field on a lead: the agent's name is never entered separately and is resolved from the code. A lead gets its code from a **Referral link**, from the parent or guardian typing it into the **Admission form**, or from staff entering it for a walk-in family. However it arrives, an **Approved** code on the lead is what grants the interview discount. A code typed on the form that matches no Marketing Agent is kept on the lead as **Unrecognised** and grants no discount; staff may correct it to a real code, and the correction is audited.
 A code is the initials of the first three words of the agent's name, a hyphen and three digits, such as `AJM-407` (four digits once the three-digit codes for those initials run short). Codes are matched however they are typed: case and spaces never matter.

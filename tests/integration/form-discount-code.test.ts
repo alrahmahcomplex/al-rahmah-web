@@ -131,6 +131,7 @@ describe("the form's Discount code on the leads it creates", () => {
       agentName: null,
       amount: 50000,
       discountApplied: false,
+      switchedOffAt: null,
     })
   })
 

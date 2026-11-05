@@ -33,11 +33,13 @@ async function registerPendingAgent() {
   }
 }
 
+// Pending agents not retired: a retired record waits for nothing (#187).
 async function pendingInDatabase(): Promise<number> {
   const { count, error } = await secretClient()
     .from("marketing_agents")
     .select("id", { count: "exact", head: true })
     .eq("status", "Pending")
+    .is("retired_at", null)
   if (error) throw new Error(error.message)
   return count ?? 0
 }

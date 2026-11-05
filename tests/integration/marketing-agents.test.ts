@@ -14,7 +14,8 @@ import {
   type MarketingAgent,
 } from "@/lib/services/marketing-agents"
 
-import { anonClient, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { pendingAround } from "../support/agents"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER } from "../support/fixtures"
 
 // The marketing-agent module against local Supabase: registration with the
@@ -267,15 +268,51 @@ describe("the agent list", () => {
   })
 
   test("the Pending count counts the Pending agents, and staff without leads.view read none", async () => {
-    const before = await getPendingAgentCount(await signedIn(MANAGER))
-    await register()
-    const after = await getPendingAgentCount(await signedIn(MANAGER))
-    expect(before.ok && after.ok && after.data - before.data).toBeGreaterThanOrEqual(1)
+    // The seeded Pending agent is never approved, so the count is at least 1.
+    const count = await getPendingAgentCount(await signedIn(MANAGER))
+    expect(count.ok && count.data).toBeGreaterThanOrEqual(1)
+    // A new agent adds exactly one. Counted in one snapshot, with the new
+    // agent rolled back, so agents other tests register, approve or retire
+    // meanwhile don't move the numbers.
+    const { before, after } = await pendingAround(MANAGER, async (sql) => {
+      await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
+      await sql.query("select public.register_marketing_agent($1, $2, null)", [`Pending Count ${randomUUID().slice(0, 8)}`, asE164(phone())])
+    })
+    expect(after - before).toBe(1)
 
     const approverOnly = await createThrowawayStaff(["agents.approve"])
     expect(await getPendingAgentCount(await signedIn(approverOnly))).toEqual({ ok: true, data: 0 })
     const list = await listAgents(await signedIn(approverOnly), { page: 1 })
     expect(list.ok && list.data.total).toBe(0)
+  })
+
+  test("the Pending count leaves out a retired Pending agent", async () => {
+    const registered = await registerAgent(secretClient(), { fullName: agentName(), phone: phone() })
+    if (!registered.ok) throw new Error(`could not register: ${JSON.stringify(registered.error)}`)
+    const agentId = await asSystem(
+      async (sql) =>
+        (
+          await sql.query<{ id: string }>(
+            "select public.record_agent_status_change(a.id, 'retired', 'Duplicate record') is not null, a.id from public.marketing_agents a where a.code = $1 and a.retired_at is null",
+            [registered.data.code],
+          )
+        ).rows[0].id,
+    )
+    const manager = await signedIn(MANAGER)
+    // Writes to the agents wait while the table is held, so the service's
+    // count and the counts read here see the same agents.
+    const { service, counts } = await inRolledBackTransaction(async (sql) => {
+      await lockExclusively(sql, ["public.marketing_agents"])
+      const { rows } = await sql.query<{ current: number; ours_retired: boolean }>(
+        `select count(*) filter (where retired_at is null)::int as current,
+                bool_or(id = $1 and retired_at is not null) as ours_retired
+         from public.marketing_agents where status = 'Pending'`,
+        [agentId],
+      )
+      return { service: await getPendingAgentCount(manager), counts: rows[0] }
+    })
+    expect(counts.ours_retired).toBe(true)
+    expect(service).toEqual({ ok: true, data: counts.current })
   })
 
   test("visitors read no agent and no approver", async () => {

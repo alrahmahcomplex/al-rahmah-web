@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="en" dir="ltr" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<!-- al-rahmah-template: invite v2 (2026-11-05, #191). Paste into hosted Supabase: Authentication > Email Templates > Invite user. -->
+{{ $agent := eq (printf "%v" .Data.kind) "agent" }}
+<html lang="{{ if $agent }}sw{{ else }}en{{ end }}" dir="ltr" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <meta name="supported-color-schemes" content="light">
-    <title>You're invited to Al-Rahmah Complex</title>
+    <title>{{ if $agent }}Code ya Punguzo: weka nenosiri lako{{ else }}Welcome to Al-Rahmah Admissions Portal{{ end }}</title>
     <!--[if !mso]><!-->
     <link href="https://fonts.googleapis.com/css2?family=Exo:ital,wght@1,300;1,400;1,700;1,800&amp;display=swap" rel="stylesheet">
     <!--<![endif]-->
@@ -24,7 +26,7 @@
   </head>
   <body style="margin:0; padding:0; background-color:#f2f0fc;">
     <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:transparent;">
-      Set your password to sign in to the Al-Rahmah Complex staff portal.
+      {{ if $agent }}Weka nenosiri uone wanafunzi wanaotumia Code yako ya Punguzo. Set a password to see the students using your Discount code.{{ else }}Set your password to sign in to the Al-Rahmah Admissions Portal.{{ end }}
     </div>
 
     <table role="presentation" width="100%" height="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#eceafb" style="width:100%; height:100%; background-color:#eceafb; background-image:linear-gradient(135deg, #e0dcf9 0%, #f2f0fc 55%, #ffffff 100%);">
@@ -35,32 +37,59 @@
               <td class="card-pad" align="center" style="padding:44px 36px 40px;">
                 <img src="{{ .SiteURL }}/email/al-rahmah-logo.png" width="130" height="100" alt="Al-Rahmah Development Complex" style="display:block; width:130px; height:100px; margin:0 auto 24px; border:0; outline:none;">
 
+                {{ if $agent }}
                 <h1 style="margin:0 0 14px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:26px; font-style:italic; font-weight:800; line-height:32px; color:#0900bb;">
-                  You're invited!
+                  Karibu!
                 </h1>
-
-                <p style="margin:0 0 28px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:15px; font-style:italic; font-weight:400; line-height:24px; color:#334155;">
-                  An Admissions Manager has added you to the Al-Rahmah Complex staff. Set a password, then sign in with this email address.
+                <p style="margin:0 0 10px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:15px; font-style:italic; font-weight:400; line-height:24px; color:#334155;">
+                  Al-Rahmah imethibitisha barua pepe yako kwa Code yako ya Punguzo. Weka nenosiri, kisha uone wanafunzi wanaotumia code yako.
                 </p>
+                <p lang="en" style="margin:0 0 28px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:13px; font-style:italic; font-weight:300; line-height:21px; color:#64748b;">
+                  Al-Rahmah has confirmed your email for your Discount code. Set a password, then see the students using your code.
+                </p>
+                {{ else }}
+                <h1 style="margin:0 0 14px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:26px; font-style:italic; font-weight:800; line-height:32px; color:#0900bb;">
+                  Welcome to Al-Rahmah Admissions Portal
+                </h1>
+                <p style="margin:0 0 28px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:15px; font-style:italic; font-weight:400; line-height:24px; color:#334155;">
+                  You have been invited to the Al-Rahmah Admissions Portal. Set a password to set up your account, then sign in with this email address.
+                </p>
+                {{ end }}
 
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                   <tr>
                     <td align="center">
                       <!--[if mso]>
                       <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite" style="height:44px; v-text-anchor:middle; width:328px;" arcsize="50%" stroke="f" fillcolor="#da6b0d">
-                        <center style="color:#ffffff; font-family:'Trebuchet MS', Arial, sans-serif; font-size:19px; font-style:italic; font-weight:bold;">Set your password</center>
+                        <center style="color:#ffffff; font-family:'Trebuchet MS', Arial, sans-serif; font-size:19px; font-style:italic; font-weight:bold;">{{ if $agent }}Weka nenosiri / Set password{{ else }}Set your password{{ end }}</center>
                       </v:roundrect>
                       <![endif]-->
                       <!--[if !mso]><!-->
-                      <a class="cta" href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite" style="display:block; height:44px; background-color:#da6b0d; border-radius:999px; box-shadow:0 6px 14px -4px rgba(218, 107, 13, 0.35); font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:19px; font-style:italic; font-weight:700; line-height:44px; color:#ffffff; text-align:center; text-decoration:none;">Set your password</a>
+                      <a class="cta" href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite" style="display:block; height:44px; background-color:#da6b0d; border-radius:999px; box-shadow:0 6px 14px -4px rgba(218, 107, 13, 0.35); font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:19px; font-style:italic; font-weight:700; line-height:44px; color:#ffffff; text-align:center; text-decoration:none;">{{ if $agent }}Weka nenosiri / Set password{{ else }}Set your password{{ end }}</a>
                       <!--<![endif]-->
                     </td>
                   </tr>
                 </table>
 
+                {{ if $agent }}
+                <p style="margin:24px 0 0; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:13px; font-style:italic; font-weight:400; line-height:21px; color:#334155;">
+                  Baadaye, ingia kwa barua pepe hii na nenosiri lako hapa:<br>
+                  <a href="{{ .SiteURL }}/discount-code/sign-in" style="color:#0900bb;">{{ .SiteURL }}/discount-code/sign-in</a>
+                </p>
+                <p lang="en" style="margin:6px 0 0; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:12px; font-style:italic; font-weight:300; line-height:19px; color:#64748b;">
+                  Later, sign in there with this email and your password.
+                </p>
+                <p style="margin:20px 0 0; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:12px; font-style:italic; font-weight:400; line-height:19px; color:#64748b;">
+                  Kiungo hiki kinatumika mara moja tu na kinaisha muda baada ya saa 24. Kikiisha, piga simu ofisini upate kiungo kipya.
+                </p>
+                <p lang="en" style="margin:6px 0 0; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:12px; font-style:italic; font-weight:300; line-height:19px; color:#64748b;">
+                  The link works once and expires in 24 hours. If it has expired, call the office for a new one.
+                </p>
+                {{ else }}
                 <p style="margin:24px 0 0; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:12px; font-style:italic; font-weight:300; line-height:19px; color:#64748b;">
                   The link works once and expires in 24 hours. If it has expired, ask an Admissions Manager to send a new invite.
                 </p>
+                {{ end }}
               </td>
             </tr>
           </table>

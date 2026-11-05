@@ -159,14 +159,17 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-# /auth/callback takes password-reset links and /auth/confirm takes invite links. Port 3100 is
-# the Playwright server.
+# /auth/callback takes password-reset links and /auth/confirm takes invite links. The Discount
+# code invite (#191) lands on /discount-code/set-password. Port 3100 is the Playwright server.
 additional_redirect_urls = [
   "http://127.0.0.1:3000/auth/callback",
   "http://localhost:3000/auth/callback",
   "http://127.0.0.1:3000/auth/confirm",
   "http://localhost:3000/auth/confirm",
   "http://localhost:3100/auth/confirm",
+  "http://127.0.0.1:3000/discount-code/set-password",
+  "http://localhost:3000/discount-code/set-password",
+  "http://localhost:3100/discount-code/set-password",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -258,12 +261,20 @@ otp_expiry = 86400
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# The invite link carries a token_hash to /auth/confirm, which verifies it only when the person
-# submits their new password, so an email link scanner opening the link can't use it up. The
-# hosted project needs the same template pasted under Authentication > Email Templates.
+# The invite link carries a token_hash to the redirect address (/auth/confirm for staff,
+# /discount-code/set-password for a Discount code holder), which verifies it only when the
+# person submits their new password, so an email link scanner opening the link can't use it up.
+# Both templates branch on user_metadata.kind = "agent" for the Discount code wording; staff
+# wording is the default. They are the source of truth: the hosted project needs the same
+# templates and subjects pasted under Authentication > Email Templates, checked by the version
+# marker on each template's second line.
 [auth.email.template.invite]
-subject = "Your Al-Rahmah Complex staff account"
+subject = "Welcome to Al-Rahmah Admissions Portal - Setup your Account Today!"
 content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Al-Rahmah Admissions Portal password"
+content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

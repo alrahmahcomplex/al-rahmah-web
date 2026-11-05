@@ -112,7 +112,7 @@ test("a Manager invites someone, who sets a password from the email and lands on
   await expect(row.getByRole("button", { name: "Resend invite" })).toBeVisible()
 
   const [email] = await waitForInvites(invitee.email, 1)
-  expect(email.subject).toBe("Your Al-Rahmah Complex staff account")
+  expect(email.subject).toBe("Welcome to Al-Rahmah Admissions Portal - Setup your Account Today!")
   expect(email.link).toMatch(/^http:\/\/localhost:3100\/auth\/confirm\?token_hash=[^&]+&type=invite$/)
 
   const invitedPage = await openInvite(browser, email.link)

@@ -47,16 +47,20 @@ export function AgentInviteActions({
   email,
   state,
   everSent,
+  emailUnknown = false,
 }: {
   agent: Agent
   email: string | null
   state: AccountState | null
   // Whether an invite to this email ever went out.
   everSent: boolean
+  // The emails couldn't be read, so there is nothing to send to or edit.
+  emailUnknown?: boolean
 }) {
   const [refusal, setRefusal] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const label = everSent ? "Resend invite" : "Send invite"
+  if (emailUnknown) return null
 
   function send() {
     if (!email) return

@@ -197,6 +197,15 @@ export default async function MarketingAgentsPage({
         </div>
       )}
 
+      {invites && !invites.ok && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            The agents&apos; emails and invites could not be loaded, so Approve, Send invite and Edit email are off.
+            Reload the page in a moment.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {!results.ok ? (
         <Alert variant="destructive">
           <AlertDescription>Marketing Agents could not be loaded. Try again in a moment.</AlertDescription>
@@ -206,7 +215,7 @@ export default async function MarketingAgentsPage({
           results={results.data}
           search={search}
           canApprove={canApprove}
-          invites={invites?.ok ? invites.data : new Map()}
+          invites={invites?.ok ? invites.data : null}
         />
       )}
     </div>
@@ -242,7 +251,8 @@ function Results({
   results: AgentList
   search: AgentScreenSearch
   canApprove: boolean
-  invites: Map<string, AgentInviteNote>
+  // Null when they couldn't be read: the actions that use the email are off.
+  invites: Map<string, AgentInviteNote> | null
 }) {
   const { agents, total, page, pageCount } = results
   const empty = search.query
@@ -291,7 +301,7 @@ function Results({
                     {agent.whatsapp && (
                       <p className="text-xs text-muted-foreground">WhatsApp {displayPhone(agent.whatsapp)}</p>
                     )}
-                    {invites.get(agent.id)?.email && (
+                    {invites?.get(agent.id)?.email && (
                       <p className="max-w-56 text-xs whitespace-normal wrap-anywhere text-muted-foreground">{invites.get(agent.id)?.email}</p>
                     )}
                   </td>
@@ -313,7 +323,7 @@ function Results({
                     {statusChangeLine(agent) && (
                       <p className="mt-1 max-w-64 text-xs text-muted-foreground">{statusChangeLine(agent)}</p>
                     )}
-                    <InviteState note={invites.get(agent.id)} />
+                    <InviteState note={invites?.get(agent.id)} />
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <time dateTime={agent.registeredAt}>{WHEN.format(new Date(agent.registeredAt))}</time>
@@ -343,14 +353,16 @@ function Results({
                           {agent.status === "Pending" && (
                             <ApproveAgent
                               agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
-                              email={invites.get(agent.id)?.email ?? null}
+                              email={invites?.get(agent.id)?.email ?? null}
+                              emailUnknown={invites === null}
                             />
                           )}
                           <AgentInviteActions
                             agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
-                            email={invites.get(agent.id)?.email ?? null}
-                            state={invites.get(agent.id)?.state ?? null}
-                            everSent={Boolean(invites.get(agent.id)?.sentAt)}
+                            email={invites?.get(agent.id)?.email ?? null}
+                            state={invites?.get(agent.id)?.state ?? null}
+                            everSent={Boolean(invites?.get(agent.id)?.sentAt)}
+                            emailUnknown={invites === null}
                           />
                           <AgentStatusActions
                             agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}

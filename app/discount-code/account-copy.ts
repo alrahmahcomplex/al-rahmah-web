@@ -98,7 +98,7 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
       "password-too-short": { text: `Tumia angalau herufi ${MINIMUM_PASSWORD_LENGTH}.` },
       "password-mismatch": { text: "Manenosiri mawili hayafanani." },
       "invalid-link": { text: EXPIRED_SW, code: "invalid_link" },
-      "password-not-saved": { text: "Nenosiri halikuhifadhiwa. Jaribu tena baada ya muda mfupi." },
+      "password-not-saved": { text: "Nenosiri halikuhifadhiwa. Jaribu tena baada ya muda mfupi. Likishindikana tena, piga simu ofisini upate kiungo kipya." },
       "joined-unavailable": {
         text: "Nenosiri lako limewekwa, lakini huduma haipatikani kwa sasa. Ingia nalo baada ya muda mfupi.",
         signIn: true,
@@ -148,7 +148,7 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
       "password-too-short": { text: `Use at least ${MINIMUM_PASSWORD_LENGTH} characters.` },
       "password-mismatch": { text: "The two passwords don't match." },
       "invalid-link": { text: EXPIRED_EN, code: "invalid_link" },
-      "password-not-saved": { text: "Your password wasn't saved. Try again in a moment." },
+      "password-not-saved": { text: "Your password wasn't saved. Try again in a moment. If it fails again, call the office for a new link." },
       "joined-unavailable": {
         text: "Your password is set, but the service isn't available right now. Sign in with it in a moment.",
         signIn: true,

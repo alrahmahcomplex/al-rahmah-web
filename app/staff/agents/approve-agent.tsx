@@ -19,13 +19,16 @@ import { approveMarketingAgent } from "./actions"
 
 // The Approve button on a Pending agent's row. It asks the Manager to confirm
 // the agent's name, code and email first, since approval can't be undone and
-// the invite goes to that email.
+// the invite goes to that email. With `emailUnknown` (the emails couldn't be
+// read) it can't be pressed, so no agent is approved without their invite.
 export function ApproveAgent({
   agent,
   email,
+  emailUnknown = false,
 }: {
   agent: { id: string; fullName: string; code: string }
   email: string | null
+  emailUnknown?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -44,7 +47,7 @@ export function ApproveAgent({
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <Button size="sm" onClick={() => setOpen(true)} disabled={pending} aria-label={`Approve ${agent.fullName}`}>
+      <Button size="sm" onClick={() => setOpen(true)} disabled={pending || emailUnknown} aria-label={`Approve ${agent.fullName}`}>
         {pending ? "Approving…" : "Approve"}
       </Button>
       {refusal && (

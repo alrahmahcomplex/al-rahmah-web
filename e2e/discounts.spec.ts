@@ -112,7 +112,12 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   await expect(row).toContainText("Staff child (25% off)")
   await expect(row).toContainText(`Requested by ${ADMISSIONS.name}`)
   await row.getByRole("button", { name: "Grant" }).click()
-  await page.getByRole("dialog").getByRole("button", { name: "Grant discount" }).click()
+  const grant = page.getByRole("dialog")
+  await grant.getByRole("button", { name: "Grant discount" }).click()
+  // The dialog closes once the grant is saved. While it is open, the page
+  // behind it is hidden from the accessibility tree, so the row can't be
+  // found even before the grant lands (#173).
+  await expect(grant).toHaveCount(0)
   await expect(row).toHaveCount(0)
 
   await page.goto(`/staff/leads/${lead.id}`)

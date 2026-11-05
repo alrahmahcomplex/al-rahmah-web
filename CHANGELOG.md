@@ -5,6 +5,13 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- Staff invite links now stay valid for 24 hours instead of one hour, and the invite
+  email says so.
+
 ## November 5, 2026 `v0.73.0`
 
 ### NEW

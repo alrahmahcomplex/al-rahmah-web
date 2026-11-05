@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-import type { AgentImportRow } from "@/lib/agent-import"
+import { confirmationOf, withChanges, type AgentImportRow } from "@/lib/agent-import"
 import { toCsv } from "@/lib/import"
 import {
   checkAgentImportFile,
@@ -158,7 +158,7 @@ describe("Seam 1: confirming an import", () => {
       ],
       file,
     )
-    const done = await confirmAgentImport(await signedIn(MANAGER), checked)
+    const done = await confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))
     expect(done).toEqual({ ok: true, data: { kind: "imported", batchId: expect.any(String), created: 2, emailsAdded: 1, skipped: 2 } })
     if (!done.ok || done.data.kind !== "imported") return
     const { batchId } = done.data
@@ -248,7 +248,7 @@ describe("Seam 1: confirming an import", () => {
       [created.code, name("Wema Import"), created.local, "", created.email],
       [noEmail.code, noEmail.fullName, noEmail.local, "", added],
     ])
-    const done = await confirmAgentImport(await signedIn(MANAGER), checked)
+    const done = await confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))
     expect(done).toMatchObject({ ok: true, data: { kind: "imported", created: 1, emailsAdded: 1 } })
 
     // Give an email anything sent a moment to arrive.
@@ -292,10 +292,11 @@ describe("Seam 1: confirming an import", () => {
       await sql.end()
     }
 
-    const answer = await confirmAgentImport(await signedIn(MANAGER), checked)
+    const answer = await confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))
     expect(answer.ok && answer.data.kind).toBe("changed")
     if (!answer.ok || answer.data.kind !== "changed") return
-    expect(answer.data.rows.map((row) => [row.sheetRow, row.class, row.changed, row.reason])).toEqual([
+    const rows = withChanges(checked.rows, answer.data.changed)
+    expect(rows.map((row) => [row.sheetRow, row.class, row.changed, row.reason])).toEqual([
       [2, "create", false, null],
       [3, "refused", true, `Mobile already belongs to ${taker.data.agent.fullName}, ${taker.data.agent.code}`],
       [4, "email-differs", true, "Email differs (not changed)"],
@@ -305,7 +306,7 @@ describe("Seam 1: confirming an import", () => {
     expect(await batchesNamed(file)).toEqual([])
 
     // Confirming the rows as they now stand imports the one left to create.
-    const again = await confirmAgentImport(await signedIn(MANAGER), { fileName: file, rows: answer.data.rows })
+    const again = await confirmAgentImport(await signedIn(MANAGER), confirmationOf({ fileName: file, rows }))
     expect(again).toMatchObject({ ok: true, data: { kind: "imported", created: 1, emailsAdded: 0, skipped: 2 } })
     expect(await agentsWithPhones([asE164(steady.local)])).toHaveLength(1)
   })
@@ -327,7 +328,7 @@ describe("Seam 1: confirming an import", () => {
       await holder.query("begin")
       await holder.query("select public.set_audit_actor('system')")
       await holder.query("select 1 from public.marketing_agents where id = $1 for update", [noEmail.id])
-      const confirming = confirmAgentImport(await signedIn(MANAGER), checked)
+      const confirming = confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))
       await waitForLockWait(holder)
       await holder.query("update public.marketing_agents set email = $1 where id = $2", [email(), noEmail.id])
       await holder.query("commit")
@@ -344,10 +345,8 @@ describe("Seam 1: confirming an import", () => {
     const local = phone()
     const checked = await check([[freshCode(), name("Rashidi Import"), local, "", ""]])
     const [row] = checked.rows
-    const tampered = (change: Partial<AgentImportRow["normalized"]>, extra: AgentImportRow[] = []) => ({
-      fileName: checked.fileName,
-      rows: [{ ...row, normalized: { ...row.normalized, ...change } }, ...extra],
-    })
+    const tampered = (change: Partial<AgentImportRow["normalized"]>, extra: AgentImportRow[] = []) =>
+      confirmationOf({ fileName: checked.fileName, rows: [{ ...row, normalized: { ...row.normalized, ...change } }, ...extra] })
     const manager = await signedIn(MANAGER)
     expect(await confirmAgentImport(manager, tampered({ mobile: local }))).toEqual({ ok: false, error: { kind: "invalid" } })
     expect(await confirmAgentImport(manager, tampered({ code: row.normalized.code!.toLowerCase() }))).toEqual({ ok: false, error: { kind: "invalid" } })
@@ -360,7 +359,7 @@ describe("Seam 1: confirming an import", () => {
   test("a confirm with nothing to create or add is refused", async () => {
     const present = await existingAgent()
     const checked = await check([[present.code, present.fullName, present.local, "", ""]])
-    expect(await confirmAgentImport(await signedIn(MANAGER), checked)).toEqual({ ok: false, error: { kind: "nothing-to-import" } })
+    expect(await confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))).toEqual({ ok: false, error: { kind: "nothing-to-import" } })
   })
 })
 
@@ -371,7 +370,7 @@ describe("Seam 1: who may import", () => {
     const checked = await check(rows)
     for (const client of [await signedIn(ADMISSIONS), await signedIn(ACCOUNTANT), anonClient()]) {
       expect(await checkAgentImportFile(client, fileName(), csv(rows))).toEqual({ ok: false, error: { kind: "forbidden" } })
-      expect(await confirmAgentImport(client, checked)).toEqual({ ok: false, error: { kind: "forbidden" } })
+      expect(await confirmAgentImport(client, confirmationOf(checked))).toEqual({ ok: false, error: { kind: "forbidden" } })
     }
     expect(await agentsWithPhones([asE164(local)])).toEqual([])
   })
@@ -389,7 +388,7 @@ describe("Seam 1: who may import", () => {
   test("a batch never changes, and an agent's import never changes", async () => {
     const steady = phone()
     const checked = await check([[freshCode(), name("Stays Put"), steady, "", ""]])
-    const done = await confirmAgentImport(await signedIn(MANAGER), checked)
+    const done = await confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))
     if (!done.ok || done.data.kind !== "imported") throw new Error("import failed")
     const { batchId } = done.data
     const refusals = await inRolledBackTransaction(async (sql) => {

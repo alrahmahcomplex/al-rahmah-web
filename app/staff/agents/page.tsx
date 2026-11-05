@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { getAgentImport } from "@/lib/services/agent-import"
 import { listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
@@ -61,19 +62,31 @@ export default async function MarketingAgentsPage({
   const canApprove = staff.permissions.includes("agents.approve")
 
   const search = parseAgentSearch(await searchParams, canApprove)
-  const results = await listAgents(await createClient(), search)
+  const supabase = await createClient()
+  const [results, batch] = await Promise.all([
+    listAgents(supabase, search),
+    search.importBatchId ? getAgentImport(supabase, search.importBatchId) : null,
+  ])
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Marketing Agents</h1>
-        {canApprove && <CreateAgent />}
+        {canApprove && (
+          <div className="flex flex-wrap gap-2">
+            <Link href="/staff/agents/import" className={buttonVariants({ variant: "outline" })}>
+              Import from CSV
+            </Link>
+            <CreateAgent />
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-4">
         {/* Keyed on the URL, so the box shows the search the page is showing. */}
         <Form key={agentsHref(search)} action="/staff/agents" role="search" className="flex max-w-xl flex-col gap-1.5">
           <input type="hidden" name="status" value={statusParam(search.status)} />
+          {search.importBatchId && <input type="hidden" name="import" value={search.importBatchId} />}
           <Label htmlFor="agent-search">Search agents</Label>
           <div className="flex gap-2">
             <Input
@@ -116,6 +129,28 @@ export default async function MarketingAgentsPage({
           )}
         </nav>
       </div>
+
+      {search.importBatchId && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
+          <p>
+            {batch?.ok && batch.data ? (
+              <>
+                Agents created by the import of <span className="font-medium">{batch.data.fileName}</span> on{" "}
+                <time dateTime={batch.data.importedAt}>{WHEN.format(new Date(batch.data.importedAt))}</time>
+                {batch.data.importedBy ? ` by ${batch.data.importedBy}` : ""}
+              </>
+            ) : (
+              "Agents created by an import that can't be found"
+            )}
+          </p>
+          <Link
+            href={agentsHref(search, { importBatchId: undefined, page: 1 })}
+            className="font-medium text-slate-900 underline underline-offset-4"
+          >
+            Show every agent
+          </Link>
+        </div>
+      )}
 
       {!results.ok ? (
         <Alert variant="destructive">

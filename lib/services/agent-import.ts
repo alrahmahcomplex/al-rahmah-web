@@ -5,8 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import {
   AGENT_IMPORT_COLUMNS,
   applyAgentVerdicts,
-  classOfVerdict,
   screenAgentRows,
+  type AgentImportConfirmation,
   type AgentImportRow,
   type AgentImportValues,
   type AgentVerdict,
@@ -39,9 +39,9 @@ export type AgentImportError =
 
 export type AgentImportOutcome =
   | { kind: "imported"; batchId: string; created: number; emailsAdded: number; skipped: number }
-  // Every row, with those whose verdict changed since the check marked
-  // `changed` and reclassified. Nothing was saved.
-  | { kind: "changed"; rows: AgentImportRow[] }
+  // The rows whose verdict changed since the check, with the verdict now.
+  // Nothing was saved.
+  | { kind: "changed"; changed: { sheetRow: number; verdict: AgentVerdict }[] }
 
 export type AgentImportBatch = {
   id: string
@@ -119,13 +119,12 @@ export async function checkAgentImportFile(
 // each email to add is stored, confirmed by the Manager. Sends no email.
 export async function confirmAgentImport(
   supabase: SupabaseClient,
-  check: AgentImportCheck,
+  confirmation: AgentImportConfirmation,
 ): Promise<Result<AgentImportOutcome, AgentImportError>> {
-  const checked = check.rows.filter((row) => row.verdict !== null)
   const { data, error } = await supabase.rpc("confirm_agent_import", {
-    file_name: check.fileName,
-    row_count: check.rows.length,
-    rows: checked.map((row) => ({ ...rowArgs(row), expected: verdictToDb(row.verdict!) })),
+    file_name: confirmation.fileName,
+    row_count: confirmation.rowCount,
+    rows: confirmation.rows.map((row) => ({ ...rowArgs(row), expected: verdictToDb(row.verdict) })),
   })
   if (error) {
     const refused = refusal(error)
@@ -142,17 +141,9 @@ export async function confirmAgentImport(
       data: { kind: "imported", batchId: answer.batch_id, created: answer.created, emailsAdded: answer.emails_added, skipped: answer.skipped },
     }
   }
-  const now = new Map(answer.rows.map((row) => [row.sheet_row, verdictFromDb(row.verdict)]))
   return {
     ok: true,
-    data: {
-      kind: "changed",
-      rows: check.rows.map((row) => {
-        const verdict = now.get(row.sheetRow)
-        if (!verdict) return { ...row, changed: false }
-        return { ...row, ...classOfVerdict(verdict), verdict, changed: true }
-      }),
-    },
+    data: { kind: "changed", changed: answer.rows.map((row) => ({ sheetRow: row.sheet_row, verdict: verdictFromDb(row.verdict) })) },
   }
 }
 

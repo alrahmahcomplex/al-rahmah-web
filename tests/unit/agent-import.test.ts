@@ -5,11 +5,13 @@ import {
   AGENT_IMPORT_TEMPLATE,
   agentImportSummary,
   applyAgentVerdicts,
+  confirmationOf,
   confirmLabel,
   normalizeAgentCode,
   normalizeAgentPhone,
   refusedAgentRowsCsv,
   screenAgentRows,
+  withChanges,
   type AgentImportRow,
   type AgentVerdict,
 } from "@/lib/agent-import"
@@ -207,5 +209,34 @@ describe("the refused-rows file", () => {
     )
     const injected = applyAgentVerdicts(rows, new Map([[2, { verdict: "retired_code" } as const], [4, { verdict: "create" } as const]]))
     expect(refusedAgentRowsCsv(injected)).toContain("AJM-1,'=HYPERLINK(1),0712000001,,,Code belongs to a retired record (use Recreate),2\r\n")
+  })
+})
+
+describe("confirming and coming back changed", () => {
+  const rest = Object.fromEntries([5, 6, 7, 8, 9, 10].map((n) => [n, { verdict: "create" } as const]))
+  const rows = checked({ 2: { verdict: "create" }, 3: { verdict: "email_to_add", agent: AGENT }, 4: { verdict: "present", agent: AGENT }, ...rest })
+    .filter((row) => row.sheetRow <= 4 || row.sheetRow === 11)
+
+  test("confirm sends the file's row count and each checked row's saved values and verdict, never the uploaded ones", () => {
+    expect(confirmationOf({ fileName: "agents.csv", rows })).toEqual({
+      fileName: "agents.csv",
+      rowCount: 4,
+      rows: [
+        { sheetRow: 2, normalized: expect.objectContaining({ code: "AJM-1", mobile: "+255712000001" }), verdict: { verdict: "create" } },
+        { sheetRow: 3, normalized: expect.objectContaining({ code: "AJM-2" }), verdict: { verdict: "email_to_add", agent: AGENT } },
+        { sheetRow: 4, normalized: expect.objectContaining({ code: "AJM-3" }), verdict: { verdict: "present", agent: AGENT } },
+      ],
+    })
+  })
+
+  test("a changed row is reclassified and marked; the rest are unmarked", () => {
+    const changed = withChanges(rows, [{ sheetRow: 2, verdict: { verdict: "mobile_taken", agent: AGENT } }])
+    expect(changed.map((row) => [row.sheetRow, row.class, row.changed, row.reason])).toEqual([
+      [2, "refused", true, "Mobile already belongs to Asha Juma, AJM-1"],
+      [3, "email-to-add", false, null],
+      [4, "present", false, null],
+      [11, "refused", false, "Bad code"],
+    ])
+    expect(changed[0].verdict).toEqual({ verdict: "mobile_taken", agent: AGENT })
   })
 })

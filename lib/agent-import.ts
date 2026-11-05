@@ -237,3 +237,31 @@ export function refusedAgentRowsCsv(rows: readonly AgentImportRow[]): string {
       .map((row) => ({ sheetRow: row.sheetRow, cells: row.original, reason: row.reason ?? "" })),
   )
 }
+
+// What confirm sends: the file's name and row count, and each row the
+// database checked with the verdict the Manager saw. The original values
+// stay in the browser.
+export type AgentImportConfirmation = {
+  fileName: string
+  rowCount: number
+  rows: { sheetRow: number; normalized: AgentImportValues; verdict: AgentVerdict }[]
+}
+
+export function confirmationOf(check: { fileName: string; rows: readonly AgentImportRow[] }): AgentImportConfirmation {
+  return {
+    fileName: check.fileName,
+    rowCount: check.rows.length,
+    rows: check.rows.flatMap((row) => (row.verdict ? [{ sheetRow: row.sheetRow, normalized: row.normalized, verdict: row.verdict }] : [])),
+  }
+}
+
+// The rows after a confirm found some changed: those reclassified by their
+// verdict now and marked, every other row unmarked.
+export function withChanges(rows: readonly AgentImportRow[], changed: readonly { sheetRow: number; verdict: AgentVerdict }[]): AgentImportRow[] {
+  const now = new Map(changed.map((row) => [row.sheetRow, row.verdict]))
+  return rows.map((row) => {
+    const verdict = now.get(row.sheetRow)
+    if (!verdict) return { ...row, changed: false }
+    return { ...row, ...classOfVerdict(verdict), verdict, changed: true }
+  })
+}

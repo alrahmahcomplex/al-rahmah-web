@@ -14,6 +14,7 @@ import {
   setAgentEmail,
   type AgentInviteSender,
 } from "@/lib/services/agent-invites"
+import { listAgentsInAccountState } from "@/lib/services/agent-account-list"
 import { changeAgentStatus, createAgent } from "@/lib/services/marketing-agents"
 
 import { asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
@@ -37,16 +38,17 @@ async function manager() {
   return signedIn(MANAGER)
 }
 
-async function approvedAgent(address: string | null): Promise<{ id: string; code: string }> {
+async function approvedAgent(address: string | null): Promise<{ id: string; code: string; fullName: string }> {
+  const fullName = `Neema Invite ${randomUUID().slice(0, 8)}`
   const created = await createAgent(await manager(), {
-    fullName: `Neema Invite ${randomUUID().slice(0, 8)}`,
+    fullName,
     phone: phone(),
     whatsapp: "",
     email: address ?? "",
     code: "",
   })
   if (!created.ok || created.data.kind !== "created") throw new Error(`could not create: ${JSON.stringify(created)}`)
-  return { id: created.data.agent.id, code: created.data.agent.code }
+  return { id: created.data.agent.id, code: created.data.agent.code, fullName }
 }
 
 // A sender that answers `error` and remembers what it was asked to send.
@@ -104,6 +106,19 @@ describe("sending an invite", () => {
     expect(result).toEqual({ ok: true, data: { email: address, resend: false } })
     expect(send).toHaveBeenCalledWith(address, REDIRECT)
     expect(await events(agent.id)).toEqual([{ result: "sent", error_code: null, email: address, created_by: MANAGER.id }])
+  })
+
+  test("nothing goes out when the email changed since the Manager saw it", async () => {
+    const shown = email("shown")
+    const agent = await approvedAgent(shown)
+    expect((await setAgentEmail(await manager(), agent.id, email("changed"))).ok).toBe(true)
+    const send = stubSender()
+
+    const result = await sendAgentInvite(await manager(), send, agent.id, REDIRECT, { expectedEmail: shown })
+
+    expect(result).toEqual({ ok: false, error: { kind: "email-changed" } })
+    expect(send).not.toHaveBeenCalled()
+    expect(await events(agent.id)).toEqual([])
   })
 
   test("a second invite is a resend", async () => {
@@ -288,6 +303,43 @@ describe("account state", () => {
     expect(counts.data.invite_not_sent).toBeGreaterThanOrEqual(1)
     expect(counts.data.joined).toBeGreaterThanOrEqual(1)
     expect(await stateOf(await manager(), agent.id)).toBe("invite_not_sent")
+  })
+})
+
+describe("the Agents screen's account-state filters", () => {
+  async function listed(state: "invite_not_sent" | "invite_expired", fullName: string) {
+    const list = await listAgentsInAccountState(await manager(), state, { query: fullName, page: 1 })
+    if (!list.ok) throw new Error(list.error)
+    return list.data.agents.map((agent) => agent.fullName)
+  }
+
+  test("invite not sent and link expired each list only their agents", async () => {
+    const notSent = await approvedAgent(email("filter-not-sent"))
+    const invited = await approvedAgent(email("filter-invited"))
+    await sendAgentInvite(await manager(), stubSender(), invited.id, REDIRECT)
+    const expiredAddress = email("filter-expired")
+    const expired = await approvedAgent(expiredAddress)
+    await asSystem((sql) =>
+      sql.query(
+        "insert into public.agent_events (agent_id, kind, result, email, created_at) values ($1, 'invite', 'sent', $2, now() - interval '25 hours')",
+        [expired.id, expiredAddress],
+      ),
+    )
+
+    expect(await listed("invite_not_sent", notSent.fullName)).toEqual([notSent.fullName])
+    expect(await listed("invite_not_sent", invited.fullName)).toEqual([])
+    expect(await listed("invite_not_sent", expired.fullName)).toEqual([])
+    expect(await listed("invite_expired", expired.fullName)).toEqual([expired.fullName])
+    expect(await listed("invite_expired", notSent.fullName)).toEqual([])
+  })
+
+  test("staff without leads.view list nobody", async () => {
+    const agent = await approvedAgent(email("filter-no-view"))
+    const list = await listAgentsInAccountState(await signedIn(await createThrowawayStaff([])), "invite_not_sent", {
+      query: agent.fullName,
+      page: 1,
+    })
+    expect(list).toMatchObject({ ok: true, data: { total: 0, agents: [] } })
   })
 })
 

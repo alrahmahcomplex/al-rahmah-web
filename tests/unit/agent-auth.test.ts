@@ -1,0 +1,162 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { describe, expect, it, vi } from "vitest"
+
+import { acceptAgentInvite, getAgentUser, signInAgent } from "@/lib/services/agent-auth"
+
+type Answer = { data: unknown; error: { message: string; code?: string } | null }
+
+const ACTIVE: Answer = { data: { state: "active", full_name: "Neema Juma", code: "NEEMA-01" }, error: null }
+
+// A stand-in for the Supabase SDK. The browser has a session once signed in
+// or once a link is used, or from the start with `startedAs`, which also
+// picks who the one-account check finds.
+function fakeSupabase({
+  startedAs = null as "staff" | "agent" | null,
+  account = ACTIVE,
+  signInError = null as { message: string; code?: string; status?: number } | null,
+  verifyError = null as { message: string; status?: number } | null,
+} = {}) {
+  let session: "staff" | "agent" | null = startedAs
+  const calls: string[] = []
+  const signOut = vi.fn(async () => {
+    session = null
+    return { error: null }
+  })
+  const client = {
+    auth: {
+      getUser: vi.fn(async () =>
+        session ? { data: { user: { id: "user" } }, error: null } : { data: { user: null }, error: { message: "Auth session missing!", status: 400 } },
+      ),
+      signInWithPassword: vi.fn(async () => {
+        calls.push("signInWithPassword")
+        if (!signInError) session = "agent"
+        return { data: {}, error: signInError }
+      }),
+      verifyOtp: vi.fn(async () => {
+        calls.push("verifyOtp")
+        if (verifyError) return { data: { user: null }, error: verifyError }
+        session = "agent"
+        return { data: { user: { id: "user" } }, error: null }
+      }),
+      updateUser: vi.fn(async () => {
+        calls.push("updateUser")
+        return { data: {}, error: null }
+      }),
+      signOut,
+    },
+    rpc: vi.fn((fn: string) => ({
+      maybeSingle: vi.fn(async () => {
+        if (fn === "current_staff_member") return { data: session === "staff" ? { id: "staff" } : null, error: null }
+        if (fn === "current_agent_account") return session === "agent" ? account : { data: null, error: null }
+        return { data: null, error: null }
+      }),
+    })),
+  }
+  return { client: client as unknown as SupabaseClient, auth: client.auth, signOut, calls }
+}
+
+describe("signInAgent", () => {
+  it("signs in a switched-on agent and keeps the session", async () => {
+    const { client, signOut } = fakeSupabase()
+
+    expect(await signInAgent(client, "neema@example.test", "a-password")).toEqual({
+      ok: true,
+      data: { fullName: "Neema Juma", code: "NEEMA-01" },
+    })
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it("refuses while staff are signed in in this browser, before trying the password", async () => {
+    const { client, calls } = fakeSupabase({ startedAs: "staff" })
+
+    expect(await signInAgent(client, "neema@example.test", "a-password")).toEqual({ ok: false, error: "staff-session" })
+    expect(calls).toEqual([])
+  })
+
+  it("points wrong credentials to the forgotten-password link", async () => {
+    const { client } = fakeSupabase({ signInError: { message: "Invalid login credentials", code: "invalid_credentials" } })
+
+    expect(await signInAgent(client, "neema@example.test", "wrong")).toEqual({ ok: false, error: "invalid-credentials" })
+  })
+
+  it("gives a rate limit and a banned login their own refusals", async () => {
+    expect(await signInAgent(fakeSupabase({ signInError: { message: "slow down", status: 429 } }).client, "a@example.test", "p")).toEqual({
+      ok: false,
+      error: "rate-limited",
+    })
+    expect(
+      await signInAgent(fakeSupabase({ signInError: { message: "banned", code: "user_banned" } }).client, "a@example.test", "p"),
+    ).toEqual({ ok: false, error: "banned" })
+  })
+
+  it("ends the session of a switched-off or retired agent, or while agent access is off", async () => {
+    for (const [state, error] of [
+      ["switched_off", "switched-off"],
+      ["retired", "retired"],
+      ["access_off", "access-off"],
+    ] as const) {
+      const { client, signOut } = fakeSupabase({ account: { data: { state, full_name: null, code: null }, error: null } })
+
+      expect(await signInAgent(client, "neema@example.test", "a-password")).toEqual({ ok: false, error })
+      expect(signOut).toHaveBeenCalled()
+    }
+  })
+
+  it("ends the session of a login that is no agent's", async () => {
+    const { client, signOut } = fakeSupabase({ account: { data: null, error: null } })
+
+    expect(await signInAgent(client, "someone@example.test", "a-password")).toEqual({ ok: false, error: "not-agent" })
+    expect(signOut).toHaveBeenCalled()
+  })
+})
+
+describe("acceptAgentInvite", () => {
+  it("uses the link, sets the password and lands the agent signed in", async () => {
+    const { client, calls, auth } = fakeSupabase()
+
+    expect(await acceptAgentInvite(client, "hash-1", "a-new-password")).toEqual({
+      ok: true,
+      data: { fullName: "Neema Juma", code: "NEEMA-01" },
+    })
+    expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: "hash-1", type: "invite" })
+    expect(calls).toEqual(["verifyOtp", "updateUser"])
+  })
+
+  it("refuses while staff are signed in, leaving the link unused", async () => {
+    const { client, calls } = fakeSupabase({ startedAs: "staff" })
+
+    expect(await acceptAgentInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "staff-session" })
+    expect(calls).toEqual([])
+  })
+
+  it("keeps the password but signs out an agent switched off before accepting", async () => {
+    const { client, calls, signOut } = fakeSupabase({
+      account: { data: { state: "switched_off", full_name: null, code: null }, error: null },
+    })
+
+    expect(await acceptAgentInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "switched-off" })
+    expect(calls).toEqual(["verifyOtp", "updateUser"])
+    expect(signOut).toHaveBeenCalled()
+  })
+
+  it("reports an expired or used link", async () => {
+    const { client } = fakeSupabase({ verifyError: { message: "Email link is invalid or has expired", status: 403 } })
+
+    expect(await acceptAgentInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "invalid-link" })
+  })
+})
+
+describe("getAgentUser", () => {
+  it("reads the signed-in agent afresh, so a switch-off applies at once", async () => {
+    const { client } = fakeSupabase({
+      startedAs: "agent",
+      account: { data: { state: "switched_off", full_name: null, code: null }, error: null },
+    })
+
+    expect(await getAgentUser(client)).toEqual({ ok: false, error: "switched-off" })
+  })
+
+  it("is signed out with no session", async () => {
+    expect(await getAgentUser(fakeSupabase().client)).toEqual({ ok: false, error: "signed-out" })
+  })
+})

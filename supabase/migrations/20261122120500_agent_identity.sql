@@ -403,6 +403,7 @@ as $$
 declare
     previous_kind text := coalesce(current_setting('audit.actor_kind', true), '');
     previous_staff_id text := coalesce(current_setting('audit.actor_staff_id', true), '');
+    linked boolean := false;
 begin
     perform set_config('audit.actor_kind', 'system', true);
     perform set_config('audit.actor_staff_id', '', true);
@@ -411,12 +412,16 @@ begin
         update public.staff_members
         set user_id = new.id
         where email = lower(new.email) and active and user_id is null;
+        linked := found;
     elsif public.agent_login_open(new.email) and not public.staff_login_open(new.email) then
         update public.marketing_agents
         set user_id = new.id
         where email = lower(new.email)
           and status = 'Approved' and switched_off_at is null and retired_at is null and user_id is null;
-    else
+        linked := found;
+    end if;
+    -- Neither matched, or the record changed since the first check.
+    if not linked then
         raise exception 'This email does not belong to an active staff member or an approved agent.';
     end if;
 

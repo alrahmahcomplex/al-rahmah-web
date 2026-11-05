@@ -492,16 +492,14 @@ describe("public registration through the shared creation function", () => {
   })
 })
 
-// Links an auth user to an agent record, as agent sign-in will (#188,
-// #191). Until then only staff may have an auth user, so the test borrows a
-// throwaway staff member's: only the id matters here.
+// Gives an agent record a login, as agent sign-in does (#188): a confirmed
+// email on the record, then the auth user, which the sign-up trigger links.
 async function linkLogin(agentId: string): Promise<string> {
-  const staff = await createThrowawayStaff([])
-  return asSystem(async (sql) => {
-    const { rows } = await sql.query("select user_id from public.staff_members where id = $1", [staff.id])
-    await sql.query("update public.marketing_agents set user_id = $1 where id = $2", [rows[0].user_id, agentId])
-    return rows[0].user_id as string
-  })
+  const email = `login-${randomUUID().slice(0, 8)}@example.test`
+  await asSystem((sql) => sql.query("update public.marketing_agents set email = $1 where id = $2", [email, agentId]))
+  const { data, error } = await secretClient().auth.admin.createUser({ email, password: "fixture-password", email_confirm: true })
+  if (error || !data.user) throw new Error(`could not create the login: ${error?.message}`)
+  return data.user.id
 }
 
 // A direct connection acting as `person`'s signed-in session, as the API

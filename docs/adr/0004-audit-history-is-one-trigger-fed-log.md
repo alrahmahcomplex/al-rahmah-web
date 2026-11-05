@@ -58,3 +58,7 @@ The starting roles are seeded before the audit triggers are attached, so they ha
 ## Amendment, 2026-09-29: audit rows take the time they are written
 
 `audit_log.created_at` is `clock_timestamp()`, the moment the row is written, rather than the start of its transaction. A write to a record holds that record's row lock until it commits, so the audit rows about one record are timed in the order they commit. Sign-in notices rely on this. Dismissing notices sets `notices_seen_at` to the time of the newest notice the person was shown. With transaction-start times, a change that began before that notice but committed after the dismissal would be timed earlier and never shown.
+
+## Amendment, 2026-11-05: agent sessions write nothing
+
+Marketing Agents sign in as a separate principal (ADR 5). The trigger still reads the actor through `audit_actor`, which now finds the staff member through `current_principal()`. An agent session has no actor, even when the transaction sets one, so the trigger refuses any audited write it would make. No `agent` value is added to `actor_kind`. The agent access switch is audited in the `staff_admin` scope.

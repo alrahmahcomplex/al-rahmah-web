@@ -56,3 +56,7 @@ portal later gives parents or applicants their own logins, this trigger must be
 revisited in the migration that introduces them: either widen it to consult a wider
 set of account tables, or drop it and rely on `is_admin()` plus RLS, which already
 distinguish staff from other signed-in users.
+
+## Amendment, 2026-11-05: Marketing Agents get logins
+
+The sign-up trigger is widened, as the last consequence above foresaw. ADR 5 records how: the `auth.users` triggers now accept exactly one of an active staff member with no login yet, or an Approved, switched-on, non-retired agent with no login yet and a confirmed email while agent access is on. `user_metadata.kind` never grants access. Public sign-up stays off.

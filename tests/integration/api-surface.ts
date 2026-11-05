@@ -1,0 +1,1085 @@
+// The permanent grant list (#188): everything the `anon` and `authenticated`
+// API roles can reach in the schemas the API exposes, and what the seeded
+// Marketing Agent gets from each. tests/integration/api-surface.test.ts reads
+// the database's actual grants and policies and fails on anything missing
+// from here, on any entry here that no longer exists, and on any answer that
+// differs from the one recorded.
+//
+// Adding a function, table or policy the API roles can reach means adding
+// its entry here, by hand, after checking what an agent gets. An agent
+// session must get nothing: a refusal, false, zero or no rows. The only other
+// answers are public facts anyone may know, such as how a phone number is
+// normalised.
+//
+// Sample arguments are SQL expressions, evaluated as the database owner
+// before the call, in the function's parameter order. They are valid calls
+// for a staff member who may make them, so a refusal comes from who is
+// asking. Trigger functions are exempt: no role can call them directly.
+
+export type ApiRole = "anon" | "authenticated"
+
+export type AgentAnswer =
+  // The error message the call raises.
+  | { refused: string }
+  // Every row the call returns, as JSON: a scalar function gives one row.
+  | { returns: unknown[] }
+  // A public answer that changes over time, with why it holds no staff data.
+  | { anyAnswer: string }
+
+export type FunctionEntry = {
+  roles: ApiRole[]
+  args: Record<string, string>
+  agent: AgentAnswer
+  // A deprecated overload: the date (YYYY-MM-DD) by which it must be gone.
+  removeBy?: string
+}
+
+export type RelationEntry = { authenticated: string[]; anon: string[] }
+
+export type PolicyEntry = {
+  command: string
+  roles: string[]
+  using: string | null
+  check: string | null
+}
+
+export const FUNCTIONS: Record<string, FunctionEntry> = {
+  'graphql_public.graphql("operationName" text, query text, variables jsonb, extensions jsonb)': {
+    roles: ["anon", "authenticated"],
+    args: {
+      operationName: "null",
+      query: "'{ leadsCollection { edges { node { id } } } }'",
+      variables: "null",
+      extensions: "null",
+    },
+    agent: {
+      returns: [{ errors: [{ message: "pg_graphql extension is not enabled." }] }],
+    },
+    // Local and CI databases run without pg_graphql. Row security would still
+    // hide every row from an agent if it were enabled.
+  },
+  "public.adjust_school_fee_payment(payment_id uuid, reason text, voided boolean, payment_type text, amount numeric, paid_on date, note text, request_id uuid)":
+    {
+      roles: ["authenticated"],
+      args: {
+        payment_id: "'fee00000-0000-4000-8000-000000000902'",
+        reason: "'A sample reason'",
+        voided: "false",
+        payment_type: "'Initial deposit'",
+        amount: "100000",
+        paid_on: "current_date",
+        note: "'A note'",
+        request_id: "'00000000-0000-4000-8000-000000000188'",
+      },
+      agent: { refused: "not_permitted" },
+    },
+  "public.agent_access_status()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.agent_recreate_preview(agent_id uuid)": {
+    roles: ["authenticated"],
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.agent_status_fee_impact(agent_id uuid, kind text)": {
+    roles: ["authenticated"],
+    args: {
+      agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'",
+      kind: "'switched_off'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.approve_marketing_agent(agent_id uuid)": {
+    roles: ["authenticated"],
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.approve_reopening_request(request_id uuid, enrol_without_retake boolean)": {
+    roles: ["authenticated"],
+    args: {
+      request_id: "'00000000-0000-4000-8000-000000000188'",
+      enrol_without_retake: "false",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.assign_staff_role(staff_id uuid, role_id uuid)": {
+    roles: ["authenticated"],
+    args: {
+      staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'",
+      role_id: "(select id from public.roles where name = 'Admissions Staff')",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.change_follow_up_date(follow_up_id uuid, due_on date, reason text, note text)": {
+    roles: ["authenticated"],
+    args: {
+      follow_up_id: "'f0110000-0000-4000-8000-000000000002'",
+      due_on: "current_date + 7",
+      reason: "'A sample reason'",
+      note: "'A note'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.change_marketing_agent_status(agent_id uuid, kind text, reason text)": {
+    roles: ["authenticated"],
+    args: {
+      agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'",
+      kind: "'switched_off'",
+      reason: "'A sample reason'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.check_agent_import(rows jsonb)": {
+    roles: ["authenticated"],
+    args: { rows: "'[]'::jsonb" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.check_marketing_agent(full_name text, phone text, whatsapp text, email text, code text)": {
+    roles: ["authenticated"],
+    args: {
+      full_name: "'Sample Person'",
+      phone: "'0700000101'",
+      whatsapp: "null",
+      email: "'sample@example.test'",
+      code: "'BJN-402'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.confirm_agent_import(file_name text, row_count integer, rows jsonb)": {
+    roles: ["authenticated"],
+    args: { file_name: "'agents.csv'", row_count: "0", rows: "'[]'::jsonb" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.confirm_family_match(lead_id uuid, expected_lead_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.correct_staff_name(staff_id uuid, full_name text)": {
+    roles: ["authenticated"],
+    args: {
+      staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'",
+      full_name: "'Sample Person'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.correct_visit_date(lead_id uuid, visited_on date)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      visited_on: "current_date",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.create_lead(start_kind text, existing_contact_id uuid, new_contact jsonb, student_details jsonb, visited_on date, also_check_phones text[])":
+    {
+      roles: ["authenticated"],
+      args: {
+        start_kind: "'walk_in'",
+        existing_contact_id: "'c0c0c0c0-0000-4000-8000-000000000431'",
+        new_contact: "null",
+        student_details:
+          '\'{"student_name": "Sample Pupil", "class_name": "STD 2", "enrollment_year": 2027, "day_or_boarding": "Day"}\'::jsonb',
+        visited_on: "current_date",
+        also_check_phones: "array[]::text[]",
+      },
+      agent: { refused: "not_permitted" },
+    },
+  "public.create_marketing_agent(full_name text, phone text, whatsapp text, email text, code text)": {
+    roles: ["authenticated"],
+    args: {
+      full_name: "'Sample Person'",
+      phone: "'0700000101'",
+      whatsapp: "null",
+      email: "'sample@example.test'",
+      code: "'BJN-402'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.create_role(name text)": {
+    roles: ["authenticated"],
+    args: { name: "'Sample role'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.current_staff_member()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [] },
+  },
+  "public.dashboard_count(metric text, period_kind text, anchor date, enrollment_year integer)": {
+    roles: ["authenticated"],
+    args: {
+      metric: "'leads'",
+      period_kind: "'month'",
+      anchor: "date '2026-11-05'",
+      enrollment_year: "2027",
+    },
+    agent: { refused: "forbidden" },
+  },
+  "public.dashboard_enrollment_years()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "forbidden" },
+  },
+  "public.dashboard_leads_by_class(period_kind text, anchor date, enrollment_year integer)": {
+    roles: ["authenticated"],
+    args: {
+      period_kind: "'month'",
+      anchor: "date '2026-11-05'",
+      enrollment_year: "2027",
+    },
+    agent: { refused: "forbidden" },
+  },
+  "public.dashboard_period_bounds(period_kind text, anchor date, OUT starts date, OUT ends date)": {
+    roles: ["authenticated"],
+    args: { period_kind: "'month'", anchor: "date '2026-11-05'" },
+    agent: { returns: [{ ends: "2026-12-01", starts: "2026-11-01" }] },
+  },
+  "public.deactivate_staff_member(staff_id uuid)": {
+    roles: ["authenticated"],
+    args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.decide_discount(request_id uuid, decision text, reason text)": {
+    roles: ["authenticated"],
+    args: {
+      request_id: "'00000000-0000-4000-8000-000000000188'",
+      decision: "'refuse'",
+      reason: "'A sample reason'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.decline_lead(lead_id uuid, reason text, explanation text)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      reason: "'Family changed plans'",
+      explanation: "'The family moved away'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.dismiss_notices(through bigint)": {
+    roles: ["authenticated"],
+    args: { through: "0" },
+    agent: { refused: "not_staff" },
+  },
+  "public.expected_interview_amount(lead_id uuid, OUT amount integer, OUT discount_applied boolean)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "forbidden" },
+  },
+  "public.family_children(family_contact_id uuid)": {
+    roles: ["authenticated"],
+    args: { family_contact_id: "'c0c0c0c0-0000-4000-8000-000000000431'" },
+    agent: { returns: [[]] },
+  },
+  "public.fee_band_of(class_name lead_class)": {
+    roles: ["authenticated"],
+    args: { class_name: "'STD 2'" },
+    agent: { returns: ["primary_lower"] },
+  },
+  "public.find_family_by_phone(phone text, whatsapp text)": {
+    roles: ["authenticated"],
+    args: { phone: "'0700000101'", whatsapp: "null" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.find_marketing_agent(typed_code text)": {
+    roles: ["authenticated"],
+    args: { typed_code: "'BJN-402'" },
+    agent: { returns: [] },
+  },
+  "public.follow_up_date_needed()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [] },
+  },
+  "public.follow_up_overdue_count()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [0] },
+  },
+  "public.follow_up_queue(section text, page integer)": {
+    roles: ["authenticated"],
+    args: { section: "'overdue'", page: "1" },
+    agent: { returns: [] },
+  },
+  "public.follow_up_queue_items(section text)": {
+    roles: ["authenticated"],
+    args: { section: "'overdue'" },
+    agent: { returns: [] },
+  },
+  "public.follow_up_record_staff(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { returns: [] },
+  },
+  "public.group_invitation_family_count(link_year integer)": {
+    roles: ["authenticated"],
+    args: { link_year: "2027" },
+    agent: { refused: "forbidden" },
+  },
+  "public.group_links()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.has_permission(permission text)": {
+    roles: ["authenticated"],
+    args: { permission: "'leads.view'" },
+    agent: { returns: [false] },
+  },
+  "public.import_batch_importers(batch_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      batch_ids: "array(select id from public.import_batches order by id limit 1)",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.interview_discount()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [10000] },
+  },
+  "public.interview_registration_open(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.interview_release_status(interview_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      interview_ids: "array['1e7e0000-0000-4000-8000-000000000501']::uuid[]",
+    },
+    agent: { refused: "forbidden" },
+  },
+  "public.interview_years()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [] },
+  },
+  "public.invite_staff_member(full_name text, email text, role_id uuid)": {
+    roles: ["authenticated"],
+    args: {
+      full_name: "'Sample Person'",
+      email: "'sample@example.test'",
+      role_id: "(select id from public.roles where name = 'Admissions Staff')",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.invited_staff_members()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [] },
+  },
+  "public.is_active_staff()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [false] },
+  },
+  "public.lead_closure(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.lead_count(agent marketing_agents)": {
+    roles: ["authenticated"],
+    args: {
+      agent: "(select a from public.marketing_agents a where a.id = 'a4a4a4a4-0000-4000-8000-000000000002')",
+    },
+    agent: { returns: [0] },
+  },
+  "public.lead_discount_requests(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.lead_family(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.lead_group_invitation(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "forbidden" },
+  },
+  "public.lead_history(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.lead_is_closed(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "forbidden" },
+  },
+  "public.lead_reopening_requests(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.lead_school_fee(lead_id uuid, OUT enrollment_year integer, OUT band fee_band, OUT day_or_boarding day_or_boarding, OUT has_schedule boolean, OUT school_fee integer, OUT total_paid bigint, OUT balance bigint, OUT first_amount integer, OUT first_due date, OUT second_amount integer, OUT second_due date, OUT third_amount integer, OUT third_due date, OUT priority seat_priority, OUT priority_reached_on date, OUT enrolled_trigger text, OUT enrolled_on date, OUT enrolled_payment_type school_fee_payment_type, OUT enrolled_payment_amount integer, OUT band_fee integer, OUT discount text, OUT discount_percent integer, OUT pre_form_one boolean, OUT pre_form_one_offered boolean, OUT pre_form_one_applies boolean, OUT pre_form_one_fee integer, OUT pre_form_one_paid bigint, OUT pre_form_one_balance bigint)":
+    {
+      roles: ["authenticated"],
+      args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+      agent: { refused: "forbidden" },
+    },
+  "public.lead_school_fee_payments(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "forbidden" },
+  },
+  "public.lead_seat_priorities(lead_ids uuid[])": {
+    roles: ["authenticated"],
+    args: { lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]" },
+    agent: { refused: "forbidden" },
+  },
+  "public.leads_with_earlier_group_link(link_year integer)": {
+    roles: ["authenticated"],
+    args: { link_year: "2027" },
+    agent: { returns: [] },
+  },
+  "public.list_contact_staff()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.mark_lead(lead_id uuid, mark text, reason text, note text)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      mark: "'Inactive'",
+      reason: "'A sample reason'",
+      note: "'A note'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.mark_re_application_reviewed(re_application_id uuid)": {
+    roles: ["authenticated"],
+    args: {
+      re_application_id: "(select id from public.re_applications order by id limit 1)",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.marketing_agent_approvers(agent_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      agent_ids: "array['a4a4a4a4-0000-4000-8000-000000000002']::uuid[]",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.marketing_agent_status_notes(agent_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      agent_ids: "array['a4a4a4a4-0000-4000-8000-000000000002']::uuid[]",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.my_notices()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [] },
+  },
+  "public.normalize_phone(phone text)": {
+    roles: ["authenticated"],
+    args: { phone: "'0700000101'" },
+    agent: { returns: ["+255700000101"] },
+  },
+  "public.normalize_referral_code(code text)": {
+    roles: ["authenticated"],
+    args: { code: "'BJN-402'" },
+    agent: { returns: ["BJN-402"] },
+  },
+  "public.normalize_student_name(name text)": {
+    roles: ["authenticated"],
+    args: { name: "'Sample role'" },
+    agent: { returns: ["sample role"] },
+  },
+  "public.pending_discount_requests()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.pending_reopening_request_count()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.pending_reopening_requests()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.preview_school_fee_payment(lead_id uuid, payment_type text, amount numeric, paid_on date)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      payment_type: "'Initial deposit'",
+      amount: "100000",
+      paid_on: "current_date",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.raise_reopening_request(lead_id uuid, reason text, source text)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      reason: "'A sample reason'",
+      source: "'staff'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.re_application_reviewers(re_application_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      re_application_ids: "array(select id from public.re_applications order by id limit 1)",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.reactivate_staff_member(staff_id uuid)": {
+    roles: ["authenticated"],
+    args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.record_action(kind text, lead_id uuid, details jsonb)": {
+    roles: ["authenticated"],
+    args: {
+      kind: "'invite_sent'",
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      details: "'{}'::jsonb",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.record_follow_up(lead_id uuid, follow_up_id uuid, comment text, method text, contacted_by uuid, contacted_at timestamp with time zone, outcome text, next_due_on date, next_note text, decline_reason text, decline_note text)":
+    {
+      roles: ["authenticated"],
+      args: {
+        lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+        follow_up_id: "'f0110000-0000-4000-8000-000000000002'",
+        comment: "'Called the family'",
+        method: "'phone'",
+        contacted_by: "'a1a1a1a1-0000-4000-8000-000000000003'",
+        contacted_at: "now()",
+        outcome: "'Passed'",
+        next_due_on: "current_date + 7",
+        next_note: "null",
+        decline_reason: "null",
+        decline_note: "null",
+      },
+      agent: { refused: "not_permitted" },
+    },
+  "public.record_interview_result(interview_id uuid, interviewed_on date, outcome text, score numeric)": {
+    roles: ["authenticated"],
+    args: {
+      interview_id: "'1e7e0000-0000-4000-8000-000000000501'",
+      interviewed_on: "current_date",
+      outcome: "'Passed'",
+      score: "75",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.record_school_fee_payment(lead_id uuid, payment_type text, amount numeric, paid_on date, request_id uuid)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      payment_type: "'Initial deposit'",
+      amount: "100000",
+      paid_on: "current_date",
+      request_id: "'00000000-0000-4000-8000-000000000188'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.record_visit(lead_id uuid, visited_on date)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      visited_on: "current_date",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.recreate_marketing_agent(agent_id uuid, full_name text, phone text, whatsapp text, email text, reason text)": {
+    roles: ["authenticated"],
+    args: {
+      agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'",
+      full_name: "'Sample Person'",
+      phone: "'0700000101'",
+      whatsapp: "null",
+      email: "'sample@example.test'",
+      reason: "'A sample reason'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.register_for_interview(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.reject_family_match(lead_id uuid, expected_lead_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.reject_reopening_request(request_id uuid, reason text)": {
+    roles: ["authenticated"],
+    args: {
+      request_id: "'00000000-0000-4000-8000-000000000188'",
+      reason: "'A sample reason'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.release_result(interview_id uuid, channel text)": {
+    roles: ["authenticated"],
+    args: {
+      interview_id: "'1e7e0000-0000-4000-8000-000000000501'",
+      channel: "'whatsapp'",
+    },
+    agent: { refused: "forbidden" },
+  },
+  "public.rename_role(role_id uuid, name text)": {
+    roles: ["authenticated"],
+    args: {
+      role_id: "(select id from public.roles where name = 'Admissions Staff')",
+      name: "'Sample role'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.request_discount(lead_id uuid, kind text, note text, request_id uuid)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      kind: "'switched_off'",
+      note: "'A note'",
+      request_id: "'00000000-0000-4000-8000-000000000188'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.resendable_invite(staff_id uuid)": {
+    roles: ["authenticated"],
+    args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.result_ready_to_send(interviews)": {
+    roles: ["authenticated"],
+    args: {
+      $1: "(select i from public.interviews i where i.id = '1e7e0000-0000-4000-8000-000000000501')",
+    },
+    agent: { refused: "forbidden" },
+  },
+  "public.result_release_state(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "forbidden" },
+  },
+  "public.result_releases(interview_id uuid)": {
+    roles: ["authenticated"],
+    args: { interview_id: "'1e7e0000-0000-4000-8000-000000000501'" },
+    agent: { refused: "forbidden" },
+  },
+  "public.retire_role(role_id uuid)": {
+    roles: ["authenticated"],
+    args: {
+      role_id: "(select id from public.roles where name = 'Admissions Staff')",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.save_fee_schedule(schedule_year integer, amounts jsonb)": {
+    roles: ["authenticated"],
+    args: { schedule_year: "2027", amounts: "'{}'::jsonb" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.schedule_follow_up(lead_id uuid, due_on date, note text)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      due_on: "current_date + 7",
+      note: "'A note'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.seat_check(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "forbidden" },
+  },
+  "public.send_group_invitation(lead_id uuid, method text, link_year integer, link_seen text, template_version text)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      method: "'link'",
+      link_year: "2027",
+      link_seen: "null",
+      template_version: "'v1'",
+    },
+    agent: { refused: "forbidden" },
+  },
+  "public.separate_from_family(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_academic_year(schedule_year integer, settings jsonb)": {
+    roles: ["authenticated"],
+    args: { schedule_year: "2027", settings: "'{}'::jsonb" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_group_link(link_year integer, link text, link_was text)": {
+    roles: ["authenticated"],
+    args: {
+      link_year: "2027",
+      link: "'https://chat.whatsapp.com/AbCdEf1234567890'",
+      link_was: "null",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_interview_fee_status(interview_id uuid, fee_status text)": {
+    roles: ["authenticated"],
+    args: {
+      interview_id: "'1e7e0000-0000-4000-8000-000000000501'",
+      fee_status: "'Paid'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_lead_referral_code(lead_id uuid, code text)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      code: "'BJN-402'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_pre_form_one(lead_id uuid, ticked boolean)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'", ticked: "true" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_prior_sibling(lead_id uuid, sibling_name text, sibling_class text)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      sibling_name: "'Sample Sibling'",
+      sibling_class: "'STD 3'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_role_permission(role_id uuid, permission text, granted boolean)": {
+    roles: ["authenticated"],
+    args: {
+      role_id: "(select id from public.roles where name = 'Admissions Staff')",
+      permission: "'leads.view'",
+      granted: "true",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.tanzania_today()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { anyAnswer: "Today's date in Tanzania, the same for everyone." },
+  },
+  "public.update_guardian_contact(contact_id uuid, changes jsonb, expected_lead_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      contact_id: "'c0c0c0c0-0000-4000-8000-000000000431'",
+      changes: '\'{"student_name": "Asha Referral"}\'::jsonb',
+      expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.update_guardian_contact_for_lead(lead_id uuid, contact_id uuid, changes jsonb, expected_lead_ids uuid[])": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      contact_id: "'c0c0c0c0-0000-4000-8000-000000000431'",
+      changes: '\'{"student_name": "Asha Referral"}\'::jsonb',
+      expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.update_lead_details(lead_id uuid, changes jsonb)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      changes: '\'{"student_name": "Asha Referral"}\'::jsonb',
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.withdraw_reopening_request(request_id uuid)": {
+    roles: ["authenticated"],
+    args: { request_id: "'00000000-0000-4000-8000-000000000188'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.year_seats(schedule_year integer)": {
+    roles: ["authenticated"],
+    args: { schedule_year: "2027" },
+    agent: { refused: "forbidden" },
+  },
+}
+
+export const RELATIONS: Record<string, RelationEntry> = {
+  "public.admission_submissions": { authenticated: [], anon: [] },
+  "public.agent_access_settings": { authenticated: [], anon: [] },
+  "public.agent_detached_logins": { authenticated: [], anon: [] },
+  "public.agent_status_changes": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.audit_action_kinds": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.audit_log": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.audit_scopes": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.class_seats": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.discount_requests": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.fee_band_amounts": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.fee_schedules": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.follow_up_records": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.follow_ups": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.guardian_contacts": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.import_batches": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.interview_serial_counters": { authenticated: [], anon: [] },
+  "public.interviews": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.lead_fee_profiles": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.leads": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.marketing_agents": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.payment_adjustments": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.permissions": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.re_applications": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.reopening_requests": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.roles": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.school_fee_payments": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.staff_members": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.whatsapp_group_invitations": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+  "public.whatsapp_group_links": {
+    authenticated: ["select", "references", "trigger"],
+    anon: ["select", "references", "trigger"],
+  },
+}
+
+export const POLICIES: Record<string, PolicyEntry> = {
+  "public.agent_status_changes: Staff who may view leads read agent status changes": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.audit_action_kinds: Active staff read the action kinds": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT is_active_staff() AS is_active_staff)",
+    check: null,
+  },
+  "public.audit_log: Staff read the history of what they may read": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using:
+      "\nCASE scope\n    WHEN 'lead'::text THEN ( SELECT has_permission('leads.view'::text) AS has_permission)\n    WHEN 'payment'::text THEN ( SELECT has_permission('payments.view'::text) AS has_permission)\n    WHEN 'staff_admin'::text THEN ( SELECT has_permission('staff.administer'::text) AS has_permission)\n    ELSE false\nEND",
+    check: null,
+  },
+  "public.audit_scopes: Active staff read the audit scopes": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT is_active_staff() AS is_active_staff)",
+    check: null,
+  },
+  "public.class_seats: Staff who may view payments read class seats": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.discount_requests: Staff who may view leads read discount requests": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.fee_band_amounts: Staff who may view payments read fee band amounts": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.fee_schedules: Staff who may view payments read fee schedules": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.follow_up_records: Staff who may view leads read follow-up records": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.follow_ups: Staff who may view leads read follow-ups": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.guardian_contacts: Staff who may view leads read contacts": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.import_batches: Staff who may view leads read agent imports": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "((kind = 'agents'::text) AND ( SELECT has_permission('leads.view'::text) AS has_permission))",
+    check: null,
+  },
+  "public.interviews: Staff who may view leads read interviews": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.lead_fee_profiles: Staff who may view leads read lead fee profiles": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.leads: Staff who may view leads read leads": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.marketing_agents: Staff who may view leads read marketing agents": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.payment_adjustments: Staff who may view payments read payment adjustments": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.permissions: Active staff read the permission list": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT is_active_staff() AS is_active_staff)",
+    check: null,
+  },
+  "public.re_applications: Staff who may view leads read re-applications": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.reopening_requests: Staff who may view leads read reopening requests": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.roles: Active staff read roles": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT is_active_staff() AS is_active_staff)",
+    check: null,
+  },
+  "public.school_fee_payments: Staff who may view payments read school-fee payments": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.staff_members: Staff read their own record; administrators read everyone": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using:
+      "(((user_id = ( SELECT auth.uid() AS uid)) AND active) OR ( SELECT has_permission('staff.administer'::text) AS has_permission))",
+    check: null,
+  },
+  "public.whatsapp_group_invitations: Staff who view leads read group invitations": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.whatsapp_group_links: Staff who view leads read group links": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+}

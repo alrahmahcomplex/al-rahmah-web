@@ -18,8 +18,15 @@ import { Button } from "@/components/ui/button"
 import { approveMarketingAgent } from "./actions"
 
 // The Approve button on a Pending agent's row. It asks the Manager to confirm
-// the agent's name and code first, since approval can't be undone.
-export function ApproveAgent({ agent }: { agent: { id: string; fullName: string; code: string } }) {
+// the agent's name, code and email first, since approval can't be undone and
+// the invite goes to that email.
+export function ApproveAgent({
+  agent,
+  email,
+}: {
+  agent: { id: string; fullName: string; code: string }
+  email: string | null
+}) {
   const [open, setOpen] = useState(false)
   const [refusal, setRefusal] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -28,9 +35,10 @@ export function ApproveAgent({ agent }: { agent: { id: string; fullName: string;
     setOpen(false)
     setRefusal(null)
     startTransition(async () => {
-      const outcome = await approveMarketingAgent(agent.id, { fullName: agent.fullName, code: agent.code })
-      if (outcome.status === "approved") toast.success(outcome.message)
-      else setRefusal(outcome.message)
+      const outcome = await approveMarketingAgent(agent.id, { fullName: agent.fullName, code: agent.code }, email)
+      if (outcome.status !== "approved") return setRefusal(outcome.message)
+      if ("inviteSent" in outcome && !outcome.inviteSent && email) toast.warning(outcome.message)
+      else toast.success(outcome.message)
     })
   }
 
@@ -51,8 +59,17 @@ export function ApproveAgent({ agent }: { agent: { id: string; fullName: string;
             <AlertDialogTitle>Approve {agent.fullName}?</AlertDialogTitle>
             <AlertDialogDescription>
               Their code <span className="font-mono font-semibold text-foreground">{agent.code}</span> will give
-              families the interview discount. Approval can&apos;t be undone. Tell the agent yourself, by WhatsApp or a
-              call.
+              families the interview discount. Approval can&apos;t be undone.
+            </AlertDialogDescription>
+            <AlertDialogDescription>
+              {email ? (
+                <>
+                  An invite to set a password goes to <span className="font-semibold text-foreground">{email}</span>.
+                  Check it is theirs.
+                </>
+              ) : (
+                "They have no email, so no invite goes out. Tell them yourself, by WhatsApp or a call."
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -9,19 +9,23 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getAgentAccess } from "@/lib/services/agent-access"
+import { listAgentsInAccountState } from "@/lib/services/agent-account-list"
 import { getAgentImport } from "@/lib/services/agent-import"
-import { listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
+import { getAgentAccountCounts, getAgentInvites, type AgentInviteNote } from "@/lib/services/agent-invites"
+import { getPendingAgentCount, listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
 import { AgentAccessBanner } from "./access-banner"
+import { AccountStateBadge, AgentInviteActions } from "./agent-invite"
 import { AgentStatusActions } from "./agent-status-actions"
 import { ApproveAgent } from "./approve-agent"
 import { CreateAgent } from "./create-agent"
+import { inviteLine, needsAttention } from "./invite-outcome"
 import { RecreateAgent } from "./recreate-agent"
 import { statusChangeLine } from "./outcome"
-import { agentsHref, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
+import { accountParam, agentsHref, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
 
 export const metadata: Metadata = {
   title: "Marketing Agents · Al-Rahmah Complex",
@@ -40,6 +44,12 @@ const FILTERS: { status: AgentFilter; label: string }[] = [
   // Retired records show only here.
   { status: "Retired", label: "Retired" },
 ]
+
+// The account-state filters (#191), each with its count.
+const ACCOUNT_FILTERS = [
+  { account: "invite_not_sent", label: "Invite not sent" },
+  { account: "invite_expired", label: "Invited, link expired" },
+] as const
 
 const EMPTY: Record<AgentFilter, string> = {
   Pending: "No agents are waiting for approval.",
@@ -65,11 +75,18 @@ export default async function MarketingAgentsPage({
 
   const search = parseAgentSearch(await searchParams, canApprove)
   const supabase = await createClient()
-  const [results, batch, access] = await Promise.all([
-    listAgents(supabase, search),
+  const [results, batch, access, counts, pendingCount] = await Promise.all([
+    search.account
+      ? listAgentsInAccountState(supabase, search.account, { query: search.query, page: search.page })
+      : listAgents(supabase, search),
     search.importBatchId ? getAgentImport(supabase, search.importBatchId) : null,
     getAgentAccess(supabase),
+    getAgentAccountCounts(supabase),
+    getPendingAgentCount(supabase),
   ])
+  // The invite badge and line for each agent on this page.
+  const invites = results.ok ? await getAgentInvites(supabase, results.data.agents.map((agent) => agent.id)) : null
+  const attention = counts.ok ? needsAttention(counts.data) : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -91,6 +108,7 @@ export default async function MarketingAgentsPage({
         {/* Keyed on the URL, so the box shows the search the page is showing. */}
         <Form key={agentsHref(search)} action="/staff/agents" role="search" className="flex max-w-xl flex-col gap-1.5">
           <input type="hidden" name="status" value={statusParam(search.status)} />
+          {search.account && <input type="hidden" name="account" value={accountParam(search.account)} />}
           {search.importBatchId && <input type="hidden" name="import" value={search.importBatchId} />}
           <Label htmlFor="agent-search">Search agents</Label>
           <div className="flex gap-2">
@@ -112,18 +130,35 @@ export default async function MarketingAgentsPage({
 
         <nav aria-label="Agent status" className="flex flex-wrap items-center gap-2">
           {FILTERS.map((filter) => {
-            const current = filter.status === search.status
+            const current = !search.account && filter.status === search.status
+            const count = filter.status === "Pending" && pendingCount.ok ? pendingCount.data : null
             return (
               <Link
                 key={filter.status}
-                href={agentsHref(search, { status: filter.status, page: 1 })}
+                href={agentsHref(search, { status: filter.status, account: undefined, page: 1 })}
                 aria-current={current ? "page" : undefined}
                 className={buttonVariants({ variant: current ? "default" : "outline", size: "sm" })}
               >
                 {filter.label}
+                {count !== null && <span className="tabular-nums">&nbsp;({count})</span>}
               </Link>
             )
           })}
+          {counts.ok &&
+            ACCOUNT_FILTERS.map((filter) => {
+              const current = search.account === filter.account
+              return (
+                <Link
+                  key={filter.account}
+                  href={agentsHref(search, { account: filter.account, page: 1 })}
+                  aria-current={current ? "page" : undefined}
+                  className={buttonVariants({ variant: current ? "default" : "outline", size: "sm" })}
+                >
+                  {filter.label}
+                  <span className="tabular-nums">&nbsp;({counts.data[filter.account]})</span>
+                </Link>
+              )
+            })}
           {search.query && (
             <Link
               href={agentsHref(search, { query: undefined, page: 1 })}
@@ -133,6 +168,7 @@ export default async function MarketingAgentsPage({
             </Link>
           )}
         </nav>
+        {attention && <NeedsAttention attention={attention} />}
       </div>
 
       {search.importBatchId && (
@@ -162,15 +198,53 @@ export default async function MarketingAgentsPage({
           <AlertDescription>Marketing Agents could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : (
-        <Results results={results.data} search={search} canApprove={canApprove} />
+        <Results
+          results={results.data}
+          search={search}
+          canApprove={canApprove}
+          invites={invites?.ok ? invites.data : new Map()}
+        />
       )}
     </div>
   )
 }
 
-function Results({ results, search, canApprove }: { results: AgentList; search: AgentScreenSearch; canApprove: boolean }) {
+// "Needs attention": the sum of the named counts, with the breakdown.
+function NeedsAttention({ attention }: { attention: ReturnType<typeof needsAttention> }) {
+  return (
+    <p className="text-sm">
+      <span className="font-medium">Needs attention: {attention.total}</span>
+      <span className="text-muted-foreground">
+        {" "}
+        ({attention.parts.map((part) => part.count + " " + part.label).join(", ")})
+      </span>
+    </p>
+  )
+}
+
+const ACCOUNT_EMPTY: Record<NonNullable<AgentScreenSearch["account"]>, string> = {
+  invite_not_sent: "Every Approved agent with an email has been sent an invite.",
+  invite_expired: "No agent's invite link has expired.",
+  awaiting_confirmation: "No email is waiting for confirmation.",
+}
+
+function Results({
+  results,
+  search,
+  canApprove,
+  invites,
+}: {
+  results: AgentList
+  search: AgentScreenSearch
+  canApprove: boolean
+  invites: Map<string, AgentInviteNote>
+}) {
   const { agents, total, page, pageCount } = results
-  const empty = search.query ? "No agent matches this search." : EMPTY[search.status]
+  const empty = search.query
+    ? "No agent matches this search."
+    : search.account
+      ? ACCOUNT_EMPTY[search.account]
+      : EMPTY[search.status]
 
   return (
     <section aria-label="Results" className="flex flex-col gap-3">
@@ -212,6 +286,9 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
                     {agent.whatsapp && (
                       <p className="text-xs text-muted-foreground">WhatsApp {displayPhone(agent.whatsapp)}</p>
                     )}
+                    {invites.get(agent.id)?.email && (
+                      <p className="max-w-56 text-xs wrap-anywhere text-muted-foreground">{invites.get(agent.id)?.email}</p>
+                    )}
                   </td>
                   <td className="px-3 py-2 font-mono whitespace-nowrap">{agent.code}</td>
                   <td className="px-3 py-2">
@@ -231,6 +308,7 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
                     {statusChangeLine(agent) && (
                       <p className="mt-1 max-w-64 text-xs text-muted-foreground">{statusChangeLine(agent)}</p>
                     )}
+                    <InviteState note={invites.get(agent.id)} />
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <time dateTime={agent.registeredAt}>{WHEN.format(new Date(agent.registeredAt))}</time>
@@ -258,8 +336,17 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
                       {!agent.retiredAt && (
                         <div className="flex flex-col items-start gap-2">
                           {agent.status === "Pending" && (
-                            <ApproveAgent agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }} />
+                            <ApproveAgent
+                              agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
+                              email={invites.get(agent.id)?.email ?? null}
+                            />
                           )}
+                          <AgentInviteActions
+                            agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
+                            email={invites.get(agent.id)?.email ?? null}
+                            state={invites.get(agent.id)?.state ?? null}
+                            everSent={Boolean(invites.get(agent.id)?.sentAt)}
+                          />
                           <AgentStatusActions
                             agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
                             switchedOff={agent.switchedOffAt !== null}
@@ -295,4 +382,9 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
       )}
     </section>
   )
+}
+
+function InviteState({ note }: { note: AgentInviteNote | undefined }) {
+  if (!note) return null
+  return <AccountStateBadge state={note.state} line={inviteLine(note)} />
 }

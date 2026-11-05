@@ -56,6 +56,8 @@ export type AgentInviteError =
   | { kind: "no-email" }
   | { kind: "already-joined" }
   | { kind: "access-off" }
+  // The email is no longer the one the Manager saw, so nothing was sent.
+  | { kind: "email-changed" }
   | { kind: "unavailable" }
   | SendFailure
 
@@ -92,12 +94,14 @@ export function classifySendFailure(error: { message: string; status?: number; c
 
 // Sends one invite (or a resend) to the agent's current email and records
 // how it went. Approving or confirming never waits on this: callers report a
-// failure as "Invite not sent" and offer Resend.
+// failure as "Invite not sent" and offer Resend. With `expectedEmail`, the
+// address the Manager saw, nothing goes out if the email has changed since.
 export async function sendAgentInvite(
   supabase: SupabaseClient,
   send: AgentInviteSender,
   agentId: string,
   redirectTo: string,
+  { expectedEmail }: { expectedEmail?: string } = {},
 ): Promise<Result<SentInvite, AgentInviteError>> {
   const prepared = await supabase.rpc("prepare_agent_invite", { agent_id: agentId })
   if (prepared.error) {
@@ -112,6 +116,9 @@ export async function sendAgentInvite(
   const row = ((prepared.data ?? []) as { outcome: string; email: string; resend: boolean }[])[0]
   if (!row) return { ok: false, error: { kind: "unavailable" } }
   if (row.outcome === "access_off") return { ok: false, error: { kind: "access-off" } }
+  if (expectedEmail !== undefined && expectedEmail.trim().toLowerCase() !== row.email) {
+    return { ok: false, error: { kind: "email-changed" } }
+  }
 
   const { error } = await send(row.email, redirectTo)
   const failure = error ? classifySendFailure(error) : null

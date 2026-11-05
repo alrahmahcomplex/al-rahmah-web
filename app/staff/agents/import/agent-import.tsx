@@ -25,7 +25,7 @@ import { IMPORT_LIMITS, importFileMessage } from "@/lib/import"
 import { cn } from "@/lib/utils"
 
 import { checkAgentImportUpload, confirmAgentImportRows } from "./actions"
-import type { ImportMessage } from "./messages"
+import { CHECK_LOST, CONFIRM_LOST, type ImportMessage } from "./messages"
 
 const CLASS_LABELS: Record<AgentImportClass, string> = {
   create: "To create",
@@ -106,7 +106,13 @@ export function AgentImport() {
     }
     setMessage(null)
     startTransition(async () => {
-      const answer = await checkAgentImportUpload(form)
+      let answer
+      try {
+        answer = await checkAgentImportUpload(form)
+      } catch {
+        // The check saves nothing, so trying again is safe.
+        answer = { status: "refused" as const, message: CHECK_LOST }
+      }
       if (answer.status === "refused") setMessage(answer.message)
       else setStep({ name: "check", fileName: answer.fileName, rows: answer.rows, changedCount: 0, round: 0 })
     })
@@ -115,7 +121,13 @@ export function AgentImport() {
   function confirm(check: Extract<Step, { name: "check" }>) {
     setMessage(null)
     startTransition(async () => {
-      const answer = await confirmAgentImportRows(confirmationOf(check))
+      let answer
+      try {
+        answer = await confirmAgentImportRows(confirmationOf(check))
+      } catch {
+        // The answer was lost, perhaps after the import saved.
+        answer = { status: "refused" as const, message: CONFIRM_LOST }
+      }
       if (answer.status === "refused") setMessage(answer.message)
       else if (answer.status === "changed") {
         setStep({ ...check, rows: withChanges(check.rows, answer.changed), changedCount: answer.changed.length, round: check.round + 1 })
@@ -130,7 +142,9 @@ export function AgentImport() {
 
   return (
     <div className="flex flex-col gap-6">
-      {message && <Message message={message} title={step.name === "upload" ? "This file can't be imported" : undefined} />}
+      {message && (
+        <Message message={message} title={step.name === "upload" && message !== CHECK_LOST ? "This file can't be imported" : undefined} />
+      )}
       {step.name === "upload" && <Upload onUpload={upload} pending={pending} />}
       {step.name === "check" && <CheckScreen key={step.round} check={step} pending={pending} onConfirm={() => confirm(step)} onStartOver={startOver} />}
       {step.name === "done" && <Result result={step} onStartOver={startOver} />}
@@ -219,7 +233,7 @@ function CheckScreen({
   return (
     <section aria-labelledby="check-heading" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 id="check-heading" className="text-lg font-semibold text-slate-900">
+        <h2 id="check-heading" className="text-lg font-semibold wrap-anywhere text-slate-900">
           Check {check.fileName}
         </h2>
         <p className="text-sm text-slate-700">
@@ -287,8 +301,8 @@ function RowCard({ row }: { row: AgentImportRow }) {
         </Badge>
         {row.changed && <Badge className="bg-amber-500 text-white">Changed since you checked</Badge>}
       </div>
-      {row.reason && <p className="mt-1 text-slate-800">{row.reason}</p>}
-      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+      {row.reason && <p className="mt-1 wrap-anywhere text-slate-800">{row.reason}</p>}
+      <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
         {VALUE_KEYS.map(({ key, label, normalized }) => {
           const original = row.original[key]
           const saved = row.normalized[normalized]
@@ -312,7 +326,7 @@ function RowCard({ row }: { row: AgentImportRow }) {
         })}
       </dl>
       {row.agent && (
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs wrap-anywhere text-muted-foreground">
           Stored: {row.agent.fullName}, {row.agent.code}, {row.agent.phone}
           {row.agent.email ? `, ${row.agent.email}` : ", no email"}
         </p>
@@ -327,7 +341,7 @@ function Result({ result, onStartOver }: { result: Extract<Step, { name: "done" 
   const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`
   return (
     <section aria-labelledby="result-heading" className="flex max-w-2xl flex-col gap-4">
-      <h2 id="result-heading" className="text-lg font-semibold text-slate-900">
+      <h2 id="result-heading" className="text-lg font-semibold wrap-anywhere text-slate-900">
         {result.fileName} is imported
       </h2>
       <ul className="list-disc pl-5 text-sm text-slate-800">

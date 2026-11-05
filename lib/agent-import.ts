@@ -95,11 +95,11 @@ function normalizeEmail(raw: string): string | null {
   return email.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ? email : null
 }
 
-// A number Excel has turned into a figure: scientific notation, which drops
-// digits, or a decimal point added to a mobile.
-function looksLikeExcelNumber(raw: string, phone: boolean): boolean {
-  const value = raw.trim()
-  return /^[+-]?\d+(\.\d+)?[eE][+-]?\d+$/.test(value) || (phone && /^\+?\d+\.\d+$/.test(value))
+// A number Excel has turned into a figure: all digits with a decimal point
+// (`712000012.0`, `123.0`) or in scientific notation, which drops digits.
+// Codes with letters, like `AJM.12`, and plain digits are left alone.
+function looksLikeExcelNumber(raw: string): boolean {
+  return /^[+-]?(\d+\.\d+|\d+(\.\d+)?[eE][+-]?\d+)$/.test(raw.trim())
 }
 
 // ---------------------------------------------------------------------------
@@ -151,7 +151,7 @@ export function screenAgentRows(records: readonly ImportRecord<AgentImportKey>[]
     const { original: o, normalized: n, sheetRow } = row
     const refused = (reason: string) => ({ class: "refused" as const, reason })
     let problem: ScreenedAgentRow["problem"] = null
-    if (looksLikeExcelNumber(o.code, false) || looksLikeExcelNumber(o.mobile, true) || looksLikeExcelNumber(o.whatsapp, true)) {
+    if (looksLikeExcelNumber(o.code) || looksLikeExcelNumber(o.mobile) || looksLikeExcelNumber(o.whatsapp)) {
       problem = { class: "flagged", reason: AGENT_REASONS.flagged }
     } else if (n.fullName === null || n.fullName.length < 2) problem = refused(AGENT_REASONS.missingName)
     else if (n.fullName.length > 100) problem = refused(AGENT_REASONS.nameTooLong)

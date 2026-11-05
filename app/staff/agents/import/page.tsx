@@ -46,7 +46,7 @@ export default async function AgentImportPage() {
           </h2>
           <ul className="flex flex-col gap-1 text-sm">
             {imports.data.map((batch) => (
-              <li key={batch.id}>
+              <li key={batch.id} className="wrap-anywhere">
                 <Link href={`/staff/agents?status=all&import=${batch.id}`} className="font-medium underline underline-offset-4">
                   {batch.fileName}
                 </Link>{" "}

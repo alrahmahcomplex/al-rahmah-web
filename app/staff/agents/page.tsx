@@ -132,7 +132,7 @@ export default async function MarketingAgentsPage({
 
       {search.importBatchId && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
-          <p>
+          <p className="min-w-0 wrap-anywhere">
             {batch?.ok && batch.data ? (
               <>
                 Agents created by the import of <span className="font-medium">{batch.data.fileName}</span> on{" "}
@@ -174,7 +174,9 @@ function Results({ results, search, canApprove }: { results: AgentList; search: 
       </p>
 
       {agents.length > 0 && (
-        <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
+        <div className="relative overflow-x-auto rounded-lg ring-1 ring-foreground/10">
+          {/* Relative, so the table's screen-reader-only text scrolls with it
+              instead of widening the page on a phone. */}
           <table aria-label="Marketing Agents" className="w-full min-w-[52rem] text-left text-sm">
             <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
               <tr>

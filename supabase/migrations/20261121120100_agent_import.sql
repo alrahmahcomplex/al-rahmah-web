@@ -29,6 +29,18 @@
 -- - create_agent_record takes the batch as a new last argument, with every
 --   other rule carried forward from 20261120120100_agent_create_recreate.sql.
 --
+-- Lock order. Every write that creates or changes an agent takes its locks
+-- in this order and never the other way: (1) the import lock, for an import;
+-- (2) phone locks (`agent-phone:`), sorted when there are several; (3)
+-- lock_login_email, sorted when there are several; (4) marketing_agents rows.
+-- Registration takes (2); the Manager's create takes (2) then (3); Recreate
+-- takes (2), (3), then the old record, then what record_agent_status_change
+-- locks; an import takes (1), (2), (3), then the agents it adds an email to;
+-- invite_staff_member takes staff_members, then (3). Switching off, on and
+-- Retire, and the payment and fee paths, take no phone or email lock, so
+-- they only ever wait on rows. recreate_marketing_agent is re-created below
+-- to take (3) before (4).
+--
 -- Refusal codes: `not_permitted`, `invalid` with the field as JSON in the
 -- detail, `nothing_to_import`, `import_conflict`, and create_agent_record's
 -- own `code_taken`, `retired_code` and `email_taken`, which mean a creation
@@ -268,6 +280,93 @@ revoke execute on function public.create_agent_record(text, text, text, text, te
     from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
+-- recreate_marketing_agent, re-created from
+-- 20261120120100_agent_create_recreate.sql with its signature and grants
+-- unchanged. It now takes the new email's lock after the new phone's and
+-- before the old record, the order in the header above. It used to take the
+-- email inside create_agent_record, after locking the old record, so an
+-- import adding that email to the same agent deadlocked with it.
+--
+-- Recreate, one transaction. Needs agents.approve and a reason. The new
+-- record keeps the code, starts Approved (by the Manager) and switched on,
+-- and takes the old record's login. Returns the new record, the student
+-- count and how many families' fees moved, as recorded on the history row.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.recreate_marketing_agent(agent_id uuid, full_name text, phone text, whatsapp text, email text, reason text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    draft record;
+    manager uuid;
+    old public.marketing_agents;
+    login uuid;
+    new_id uuid := gen_random_uuid();
+    change_id uuid;
+    made record;
+    holder public.marketing_agents;
+    history public.agent_status_changes;
+begin
+    if auth.role() is distinct from 'authenticated' or not public.has_permission('agents.approve') then
+        raise exception 'not_permitted';
+    end if;
+    if btrim(coalesce(recreate_marketing_agent.reason, '')) = ''
+       or char_length(btrim(recreate_marketing_agent.reason)) > 500 then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'reason')::text;
+    end if;
+    select * into draft
+    from public.agent_draft(
+        recreate_marketing_agent.full_name, recreate_marketing_agent.phone, recreate_marketing_agent.whatsapp,
+        recreate_marketing_agent.email, null
+    );
+    select s.id into manager from public.staff_members s where s.user_id = auth.uid();
+
+    perform pg_advisory_xact_lock(hashtextextended('agent-phone:' || draft.agent_phone, 0));
+    -- The email before the old record, as an import takes its emails before
+    -- the agents it updates. create_agent_record takes it again below.
+    if draft.agent_email is not null then
+        perform public.lock_login_email(draft.agent_email);
+    end if;
+
+    select * into old from public.marketing_agents a where a.id = recreate_marketing_agent.agent_id for update;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    if not public.agent_recreatable(old) then
+        raise exception 'agent_retired';
+    end if;
+    login := old.user_id;
+
+    -- Retires the old record and detaches its login before the new record
+    -- takes the code, the phone and the login.
+    change_id := public.record_agent_status_change(old.id, 'recreated', recreate_marketing_agent.reason, new_id);
+
+    select * into made
+    from public.create_agent_record(
+        draft.agent_name, draft.agent_phone, draft.agent_whatsapp, draft.agent_email, old.code,
+        'Approved', manager, new_id, login, true
+    );
+    if not made.created then
+        select * into holder from public.marketing_agents a where a.id = made.existing_agent;
+        raise exception 'phone_taken' using detail = public.agent_ref(holder)::text;
+    end if;
+
+    select * into history from public.agent_status_changes c where c.id = change_id;
+    return jsonb_build_object(
+        'agent', jsonb_build_object('id', new_id, 'full_name', draft.agent_name, 'code', old.code),
+        'student_count', history.student_count,
+        'fee_change_count', history.fee_change_count
+    );
+end;
+$$;
+
+revoke execute on function public.recreate_marketing_agent(uuid, text, text, text, text, text) from public, anon;
+grant execute on function public.recreate_marketing_agent(uuid, text, text, text, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- agent_import_rows: the rows the app sends, read and re-checked. Each row
 -- is an object with sheet_row, code, full_name, phone, whatsapp and email,
 -- every value already normalised as agent_draft stores it. A row that isn't
@@ -486,10 +585,9 @@ begin
     -- One import at a time.
     perform pg_advisory_xact_lock(hashtextextended('agent-import', 0));
 
-    -- Every phone, then every email, each in sorted order, as a single
-    -- creation takes its one phone and then its one email, so the two never
-    -- wait for each other in a cycle. A creation elsewhere holding one
-    -- finishes first, and the verdicts below see it.
+    -- Every phone, then every email, each in sorted order, then the agents
+    -- it updates: the lock order in the header. A creation or a Recreate
+    -- holding one finishes first, and the verdicts below see it.
     for lock_key in
         select r.phone from public.agent_import_rows(confirm_agent_import.rows) r order by r.phone
     loop

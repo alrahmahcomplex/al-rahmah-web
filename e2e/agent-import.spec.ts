@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
 
 import { expect, test, type Page } from "@playwright/test"
+import { Client } from "pg"
 
 import { toCsv } from "@/lib/import"
 
@@ -122,23 +123,97 @@ test("a file over the row limit is refused in English and Swahili", async ({ pag
   await expect(page.getByText("Faili hili lina safu 1,001. Pakia safu zisizozidi 1,000 kwa wakati mmoja.")).toBeVisible()
 })
 
+// Gives a stored agent an email, as the database owner.
+async function setAgentEmail(agentId: string, email: string) {
+  const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+  await sql.connect()
+  try {
+    await sql.query("begin")
+    await sql.query("select public.set_audit_actor('system')")
+    await sql.query("update public.marketing_agents set email = $1 where id = $2", [email, agentId])
+    await sql.query("commit")
+  } finally {
+    await sql.end()
+  }
+}
+
+// Server Actions post to the page with a Next-Action header.
+const isAction = (method: string, headers: Record<string, string>) => method === "POST" && "next-action" in headers
+
+test("a check whose answer never arrives asks to try again", async ({ page }) => {
+  const file = fixtureFile()
+  await signIn(page, MANAGER)
+  await page.goto("/staff/agents/import")
+  await page.route("**/staff/agents/import", (route) =>
+    isAction(route.request().method(), route.request().headers()) ? route.abort("connectionreset") : route.fallback(),
+  )
+  await upload(page, file.name, [[file.first.code, file.first.fullName, file.first.mobile, "", ""]])
+  await expect(page.getByText("The file could not be checked. Check your connection, choose the file again and check it.")).toBeVisible()
+
+  // The form clears once it is sent, so the file is chosen again.
+  await page.unroute("**/staff/agents/import")
+  await upload(page, file.name, [[file.first.code, file.first.fullName, file.first.mobile, "", ""]])
+  await expect(page.getByRole("heading", { name: `Check ${file.name}` })).toBeVisible()
+})
+
+test("a confirm whose answer never arrives says the import may be saved and where to look", async ({ page }) => {
+  const file = fixtureFile()
+  await signIn(page, MANAGER)
+  await page.goto("/staff/agents/import")
+  await upload(page, file.name, [[file.first.code, file.first.fullName, file.first.mobile, "", ""]])
+  await expect(page.getByRole("heading", { name: `Check ${file.name}` })).toBeVisible()
+
+  // The import saves, but its answer is lost on the way back.
+  await page.route("**/staff/agents/import", async (route) => {
+    if (!isAction(route.request().method(), route.request().headers())) return route.fallback()
+    await route.fetch()
+    await route.abort("connectionreset")
+  })
+  await page.getByRole("button", { name: "Create 1 agent" }).click()
+  await expect(page.getByText("We couldn't tell whether the import was saved.", { exact: false })).toBeVisible()
+  await expect(page.getByText("Reload this page and look under Earlier imports", { exact: false })).toBeVisible()
+
+  await page.unroute("**/staff/agents/import")
+  await page.reload()
+  await page.getByRole("link", { name: file.name, exact: true }).click()
+  await expect(page.getByText(`Agents created by the import of ${file.name}`)).toBeVisible()
+  await expect(page.getByRole("row", { name: new RegExp(file.first.fullName) })).toContainText("Approved")
+})
+
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 360, height: 640 } })
 
-  test("the check screen fits and the confirm button stays in reach", async ({ page }) => {
+  test("the check screen fits and the confirm button stays in reach, with a long file name and a long stored email", async ({ page }) => {
     const file = fixtureFile()
+    const longName = `agents-${file.tag}-${"spreadsheetexportfromthemarketingteam".repeat(3)}.csv`
+    const stored = { fullName: `Neema Stored ${file.tag}`, mobile: mobile() }
+    const { id, code } = await registerApprovedAgent(MANAGER, { fullName: stored.fullName, phone: stored.mobile })
+    await setAgentEmail(id, `neema.stored.${file.tag}.${"marketingagent".repeat(4)}@${"agents".repeat(6)}.example.test`)
+
     await signIn(page, MANAGER)
     await page.goto("/staff/agents/import")
-    await upload(page, file.name, [
+    await upload(page, longName, [
       [file.first.code, file.first.fullName, file.first.mobile, "", ""],
       [file.second.code, file.second.fullName, file.second.mobile, "", ""],
+      [code, stored.fullName, stored.mobile, "", `other.${file.tag}@example.test`],
       ...Array.from({ length: 12 }, (_, i) => ["", `Refused ${i}`, mobile(), "", ""]),
     ])
-    const confirm = page.getByRole("button", { name: "Create 2 agents, skip 12 rows" })
+    await expect(page.getByRole("heading", { name: `Check ${longName}` })).toBeVisible()
+    await expect(page.getByRole("listitem", { name: "Row 4", exact: true })).toContainText("Email differs")
+    const confirm = page.getByRole("button", { name: "Create 2 agents, skip 13 rows" })
     await expect(confirm).toBeInViewport()
     // Nothing runs off the side of the screen.
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
     await confirm.click()
-    await expect(page.getByRole("heading", { name: `${file.name} is imported` })).toBeVisible()
+    await expect(page.getByRole("heading", { name: `${longName} is imported` })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
+
+    // The earlier imports list, and the Agents screen filtered by the import.
+    await page.reload()
+    await expect(page.getByRole("link", { name: longName, exact: true })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
+    await page.getByRole("link", { name: longName, exact: true }).click()
+    await expect(page.getByText(`Agents created by the import of ${longName}`)).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360)
   })
 })

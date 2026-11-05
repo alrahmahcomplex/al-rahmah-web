@@ -414,6 +414,53 @@ describe("Seam 1: who may import", () => {
   })
 })
 
+describe("an import and a Recreate at once", () => {
+  test("an import adding an email to an agent while Recreate moves that agent to the same email: both finish, neither deadlocks", async () => {
+    const stored = await existingAgent()
+    const shared = email()
+    const file = fileName()
+    const checked = await check([[stored.code, stored.fullName, stored.local, "", shared]], file)
+    expect(checked.rows.map((row) => row.class)).toEqual(["email-to-add"])
+
+    // Hold the batch table, so confirm takes its phone and email locks and
+    // then waits, before it updates the agent.
+    const holder = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await holder.connect()
+    const recreating = await sessionOf(MANAGER)
+    try {
+      await holder.query("begin")
+      await holder.query("lock table public.import_batches in exclusive mode")
+      const confirming = confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))
+      await waitForLockWait(holder)
+
+      // Recreate moves the agent to a new mobile with the email the import
+      // is adding, and waits for the import's email lock.
+      const recreate = recreating
+        .query("select public.recreate_marketing_agent($1, $2, $3, null, $4, 'New number') as r", [stored.id, stored.fullName, phone(), shared])
+        .then(
+          (result) => ({ ok: true as const, result }),
+          (error: unknown) => ({ ok: false as const, error }),
+        )
+      await waitUntilBlocked(recreating)
+      await holder.query("commit")
+
+      expect(await confirming).toMatchObject({ ok: true, data: { kind: "imported", emailsAdded: 1 } })
+      const recreated = await recreate
+      if (!recreated.ok) throw recreated.error
+      await recreating.query("commit")
+    } finally {
+      await holder.query("rollback").catch(() => {})
+      await holder.end()
+      await recreating.query("rollback").catch(() => {})
+      await recreating.end()
+    }
+    const current = await inRolledBackTransaction(
+      async (sql) => (await sql.query("select email from public.marketing_agents where code = $1 and retired_at is null", [stored.code])).rows,
+    )
+    expect(current).toEqual([{ email: shared }])
+  })
+})
+
 describe("confirm at 1,000 rows", () => {
   test("runs as one statement within the statement timeout the API gives a signed-in session", async () => {
     const stem = `${String.fromCharCode(65 + randomInt(0, 26))}${String.fromCharCode(65 + randomInt(0, 26))}${randomInt(100, 1000)}`
@@ -466,4 +513,34 @@ async function waitForLockWait(holder: Client) {
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
   throw new Error("confirm never waited for the held agent")
+}
+
+// A direct connection acting as `person`'s signed-in session, as the API
+// would, for holding a transaction open while another one runs.
+async function sessionOf(person: { id: string }) {
+  const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+  await sql.connect()
+  // A deadlock or a lost wake-up fails the test instead of hanging it.
+  await sql.query("set statement_timeout = '15s'")
+  await sql.query("begin")
+  const { rows } = await sql.query<{ user_id: string }>("select user_id from public.staff_members where id = $1", [person.id])
+  await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: rows[0].user_id, role: "authenticated" })])
+  return sql
+}
+
+// Waits until `session`'s running statement is blocked on a lock.
+async function waitUntilBlocked(session: Client) {
+  const pid = (session as unknown as { processID: number }).processID
+  const watcher = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+  await watcher.connect()
+  try {
+    for (let i = 0; i < 100; i++) {
+      const blocked = await watcher.query("select 1 where cardinality(pg_blocking_pids($1)) > 0", [pid])
+      if (blocked.rowCount) return
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    throw new Error("the session never waited on a lock")
+  } finally {
+    await watcher.end()
+  }
 }

@@ -31,6 +31,28 @@ function screen(body: string) {
 
 const reasonOf = (rows: ReturnType<typeof screen>, sheetRow: number) => rows.find((row) => row.sheetRow === sheetRow)?.problem
 
+describe("codes Excel has turned into numbers", () => {
+  test("a code that is all digits with a decimal point or an exponent is flagged; dotted codes with letters, and plain digits, are kept", () => {
+    const rows = screen(
+      [
+        "123.0,Asha Juma,0712000002,,", // 2 flagged
+        "0.5,Asha Juma,0712000003,,", // 3 flagged
+        "1.2E+05,Asha Juma,0712000004,,", // 4 flagged
+        "12e3,Asha Juma,0712000005,,", // 5 flagged
+        "AJM.12,Asha Juma,0712000006,,", // 6 kept
+        "A.1.2,Asha Juma,0712000007,,", // 7 kept
+        "1.2.3,Asha Juma,0712000008,,", // 8 kept
+        "12345,Asha Juma,0712000009,,", // 9 kept
+        "AJM-12E3,Asha Juma,0712000010,,", // 10 kept
+      ].join("\n"),
+    )
+    for (const sheetRow of [2, 3, 4, 5]) {
+      expect(reasonOf(rows, sheetRow)).toEqual({ class: "flagged", reason: "Looks like an Excel number" })
+    }
+    for (const sheetRow of [6, 7, 8, 9, 10]) expect(reasonOf(rows, sheetRow)).toBeNull()
+  })
+})
+
 describe("the template", () => {
   test("has the columns code, full name, mobile, WhatsApp and email, and nothing else", () => {
     expect(AGENT_IMPORT_TEMPLATE).toBe("Code,Full name,Mobile,WhatsApp,Email\r\n")

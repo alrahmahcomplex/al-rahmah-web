@@ -225,6 +225,17 @@ describe("a Discount code sent for a child already on file", () => {
     )
     expect(rows).toHaveLength(0)
   })
+
+  test("the table itself refuses a stored code that is not normalized or not a code", async () => {
+    const lead = await onFile()
+    await reApplyWith(lead, APPROVED_CODE)
+    for (const bad of ["not a code!", "bjn-402"]) {
+      await expect(
+        asSystem((sql) => sql.query("update public.re_applications set discount_code = $1 where lead_id = $2", [bad, lead.id])),
+        bad,
+      ).rejects.toThrow(/re_applications_discount_code_normalized/)
+    }
+  })
 })
 
 describe("Apply on a re-application's Discount code", () => {

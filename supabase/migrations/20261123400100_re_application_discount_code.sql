@@ -13,7 +13,9 @@ alter table public.re_applications
     -- The code as normalized, recognised or not. Null when the form sent none.
     add column discount_code text
         constraint re_applications_discount_code_normalized
-            check (discount_code = public.normalize_referral_code(discount_code)),
+            -- `is not distinct from`, so a value that is not a code (normalized to
+            -- null) fails the check rather than passing it as unknown.
+            check (public.normalize_referral_code(discount_code) is not distinct from discount_code),
     drop constraint re_applications_differing_fields_check,
     add constraint re_applications_differing_fields_check check (
         differing_fields <@ array[

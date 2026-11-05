@@ -4,9 +4,10 @@
 -- can't disagree.
 --
 --   - interview_release_status(interview_ids): for each interview, whether it
---     is its lead's current one, when its result was last sent, whether its
---     result or score has changed since, and whether it is ready to send.
---     One query, so every value comes from the same snapshot.
+--     is its lead's current one, its result and score, when its result was
+--     last sent, whether the result or score has changed since, and whether
+--     it is ready to send. One query, so every value comes from the same
+--     snapshot, and the screen shows the result and score from here.
 --   - result_ready_to_send(interviews): the Ready to send flag as a computed
 --     column, so the Interviews list can filter and page on it.
 --   - result_release_state(lead_id) now returns `changed_since_sent` with the
@@ -39,6 +40,8 @@ create function public.interview_release_status(interview_ids uuid[])
 returns table (
     interview_id uuid,
     is_current boolean,
+    result public.interview_result,
+    score numeric,
     last_released_at timestamptz,
     changed_since_sent boolean,
     ready_to_send boolean
@@ -57,6 +60,8 @@ begin
     select
         s.id,
         s.is_current,
+        s.result,
+        s.score,
         s.released_at,
         s.changed,
         s.is_current
@@ -68,6 +73,7 @@ begin
         select
             i.id,
             i.result,
+            i.score,
             i.fee_status,
             cur.id = i.id as is_current,
             l.status <> 'Declined' and l.closure is null as lead_open,
@@ -93,6 +99,7 @@ begin
             from public.audit_log a
             where a.lead_id = i.lead
               and a.action = 'result_released'
+              and a.scope = 'lead'
               and a.new_values ->> 'interview_id' = i.id::text
             order by a.created_at desc, a.id desc
             limit 1

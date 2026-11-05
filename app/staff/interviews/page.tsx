@@ -5,7 +5,7 @@ import { forbidden } from "next/navigation"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
-import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { tanzaniaToday } from "@/lib/school-calendar"
 import type { InterviewFeeStatus } from "@/lib/services/interviews"
 import {
   listInterviews,
@@ -15,6 +15,8 @@ import {
   type InterviewResultFilter,
 } from "@/lib/services/interview-list"
 import { listReleaseStatus, type ReleaseStatus } from "@/lib/services/result-release"
+
+import { interviewRows } from "./rows"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
@@ -153,14 +155,6 @@ function FilterGroup({ label, options }: { label: string; options: { label: stri
   )
 }
 
-// When the current result was last sent, as the Result sent column shows it.
-// A result changed since its last release counts as not sent, so it shows
-// nothing, as it does on the Ready to send list.
-function sentOn(status: ReleaseStatus | undefined): string | null {
-  if (!status?.lastReleasedAt || status.changedSinceSent) return null
-  return formatDate(tanzaniaToday(new Date(status.lastReleasedAt)))
-}
-
 function Results({
   results,
   statuses,
@@ -170,7 +164,9 @@ function Results({
   statuses: Map<string, ReleaseStatus>
   search: InterviewListSearch
 }) {
-  const { interviews, total, page, pageCount } = results
+  const { total, page, pageCount } = results
+  // Result, score and Result sent from the one status read (see rows.ts).
+  const interviews = interviewRows(results.interviews, statuses)
   const filtered = search.result !== undefined || search.feeStatus !== undefined || search.readyToSend !== undefined
   const onlyReady = search.readyToSend && search.result === undefined && search.feeStatus === undefined
   const empty = onlyReady
@@ -208,8 +204,8 @@ function Results({
                 <th scope="col" className="px-3 py-2 font-medium">Day or boarding</th>
                 <th scope="col" className="px-3 py-2 font-medium">Result</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Score</th>
-                <th scope="col" className="px-3 py-2 font-medium">Interview fee</th>
-                <th scope="col" className="px-3 py-2 font-medium">Result sent</th>
+                <th scope="col" data-column="fee" className="px-3 py-2 font-medium">Interview fee</th>
+                <th scope="col" data-column="sent" className="px-3 py-2 font-medium">Result sent</th>
               </tr>
             </thead>
             <tbody>
@@ -249,7 +245,7 @@ function Results({
                   <td className="px-3 py-2 text-right tabular-nums">
                     {interview.score === null ? <span className="text-muted-foreground">–</span> : `${interview.score}%`}
                   </td>
-                  <td className="px-3 py-2">
+                  <td data-column="fee" className="px-3 py-2">
                     <Badge
                       variant={interview.feeStatus === "Paid" ? "secondary" : "outline"}
                       className={cn(interview.feeStatus === "Paid" && "bg-emerald-50 text-emerald-800")}
@@ -257,7 +253,7 @@ function Results({
                       {interview.feeStatus}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{sentOn(statuses.get(interview.id))}</td>
+                  <td data-column="sent" className="px-3 py-2 whitespace-nowrap">{interview.sentOn}</td>
                 </tr>
               ))}
             </tbody>

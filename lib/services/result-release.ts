@@ -8,6 +8,7 @@ import {
 } from "@/lib/result-messages"
 import { buildWhatsAppLink } from "@/lib/whatsapp"
 
+import type { InterviewResult as InterviewOutcome } from "./interviews"
 import type { LeadClass } from "./leads"
 import type { Result } from "./result"
 
@@ -238,6 +239,10 @@ export async function getResultRelease(
 // Where an interview's result stands with the family, for the Interviews
 // screen.
 export type ReleaseStatus = {
+  // The result and score now, read with the rest, so the screen shows the
+  // values the release was compared with.
+  result: InterviewOutcome | null
+  score: number | null
   // When its result was last sent, or null if never.
   lastReleasedAt: string | null
   // Whether its result or score differs from what the last release carried.
@@ -253,6 +258,8 @@ export type ReleaseStatus = {
 type StatusRow = {
   interview_id: string
   is_current: boolean
+  result: InterviewOutcome | null
+  score: number | string | null
   last_released_at: string | null
   changed_since_sent: boolean
   ready_to_send: boolean
@@ -278,6 +285,8 @@ export async function listReleaseStatus(
       ((data ?? []) as StatusRow[]).map((row) => [
         row.interview_id,
         {
+          result: row.result,
+          score: row.score === null ? null : Number(row.score),
           lastReleasedAt: row.last_released_at,
           changedSinceSent: row.changed_since_sent,
           current: row.is_current,

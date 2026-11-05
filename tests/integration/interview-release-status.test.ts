@@ -90,6 +90,8 @@ describe("listReleaseStatus", () => {
   test("a result never sent has no release time and is ready to send", async () => {
     const { interviewId } = await interviewedLead()
     expect((await status([interviewId])).get(interviewId)).toEqual({
+      result: "Passed",
+      score: 74,
       lastReleasedAt: null,
       changedSinceSent: false,
       current: true,
@@ -114,7 +116,11 @@ describe("listReleaseStatus", () => {
     await send(interviewId)
     await correct(interviewId, "Passed", 79)
 
+    // The corrected result and score come with the answer, so the screen
+    // shows what was compared.
     expect((await status([interviewId])).get(interviewId)).toMatchObject({
+      result: "Passed",
+      score: 79,
       lastReleasedAt: expect.any(String),
       changedSinceSent: true,
       readyToSend: true,
@@ -145,7 +151,7 @@ describe("listReleaseStatus", () => {
 
     const read = await status([notPaid.interviewId, noResult.interviewId, closed.interviewId, RETAKEN.earlier, RETAKEN.current])
     expect(read.get(notPaid.interviewId)).toMatchObject({ readyToSend: false, current: true })
-    expect(read.get(noResult.interviewId)).toMatchObject({ readyToSend: false, current: true })
+    expect(read.get(noResult.interviewId)).toMatchObject({ result: null, score: null, readyToSend: false, current: true })
     expect(read.get(closed.interviewId)).toMatchObject({ readyToSend: false, current: true })
     expect(read.get(RETAKEN.earlier)).toMatchObject({ readyToSend: false, current: false })
     expect(read.get(RETAKEN.current)).toMatchObject({ current: true })

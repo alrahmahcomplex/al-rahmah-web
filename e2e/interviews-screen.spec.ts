@@ -64,8 +64,10 @@ async function readyLead(year: number) {
   return { studentName, admissionNumber: created.data.admissionNumber }
 }
 
-// The Interview fee column's cells; Result sent comes after it.
-const FEE_CELL = "td:nth-child(8)"
+// The Interview fee and Result sent columns' cells, by the column they're in
+// rather than their position.
+const FEE_CELL = 'td[data-column="fee"]'
+const SENT_CELL = 'td[data-column="sent"]'
 
 test.describe("the Interviews screen", () => {
   test("Admissions Staff open it from the navigation, walk the result filters and open a lead", async ({ page }) => {
@@ -171,7 +173,7 @@ test.describe("the Result sent column and the Ready to send filter", () => {
     const pages = await lastPage({ readyToSend: true })
     if (pages > 1) await page.goto(`/staff/interviews?year=${year}&release=ready&page=${pages}`)
     await expect(row(page)).toContainText("Paid")
-    await expect(row(page).locator("td:last-child")).toHaveText("")
+    await expect(row(page).locator(SENT_CELL)).toHaveText("")
 
     // Released from the lead's screen, by SMS.
     await row(page).getByRole("link", { name: lead.studentName }).click()
@@ -192,7 +194,7 @@ test.describe("the Result sent column and the Ready to send filter", () => {
     await page.setViewportSize({ width: 375, height: 812 })
     await signIn(page, ACCOUNTANT)
     await page.goto(`/staff/interviews?year=${year}&page=${await lastPage({})}`)
-    await expect(row(page).locator("td:last-child")).toHaveText(formatDate(tanzaniaToday()))
+    await expect(row(page).locator(SENT_CELL)).toHaveText(formatDate(tanzaniaToday()))
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   })
 })

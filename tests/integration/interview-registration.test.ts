@@ -71,23 +71,27 @@ describe("registering a lead for interview", () => {
     // Two years no S/N has been issued in, held so no other test registers
     // in them meanwhile.
     const claim = await claimInterviewSerialYear({ fresh: true })
-    const other = await claimInterviewSerialYear({ fresh: true })
     try {
-      const { year } = claim
-      const another = other.year
-      await moveToYear([first, second], year)
-      await moveToYear([otherYear], another)
-      const staff = await signedIn(ADMISSIONS)
+      const other = await claimInterviewSerialYear({ fresh: true })
+      try {
+        const { year } = claim
+        const another = other.year
+        await moveToYear([first, second], year)
+        await moveToYear([otherYear], another)
+        const staff = await signedIn(ADMISSIONS)
 
-      const one = await registerForInterview(staff, first)
-      const two = await registerForInterview(staff, second)
-      const fresh = await registerForInterview(staff, otherYear)
+        const one = await registerForInterview(staff, first)
+        const two = await registerForInterview(staff, second)
+        const fresh = await registerForInterview(staff, otherYear)
 
-      expect(one).toEqual({ ok: true, data: { interviewId: expect.any(String), serialNumber: 1, enrollmentYear: year, retake: false } })
-      expect(two).toMatchObject({ ok: true, data: { serialNumber: 2, enrollmentYear: year } })
-      expect(fresh).toMatchObject({ ok: true, data: { serialNumber: 1, enrollmentYear: another } })
+        expect(one).toEqual({ ok: true, data: { interviewId: expect.any(String), serialNumber: 1, enrollmentYear: year, retake: false } })
+        expect(two).toMatchObject({ ok: true, data: { serialNumber: 2, enrollmentYear: year } })
+        expect(fresh).toMatchObject({ ok: true, data: { serialNumber: 1, enrollmentYear: another } })
+      } finally {
+        await other.release()
+      }
     } finally {
-      await Promise.all([claim.release(), other.release()])
+      await claim.release()
     }
   })
 

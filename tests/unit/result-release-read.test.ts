@@ -8,7 +8,8 @@ import { getResultRelease } from "@/lib/services/result-release"
 
 const OFFICE = { officePhone: "+255 673 526 644" }
 
-function state(score: number) {
+// changed: what interview_release_status answered in the same read.
+function state(score: number, changed: boolean) {
   return {
     interview_id: "interview-1",
     blocked: null,
@@ -20,6 +21,7 @@ function state(score: number) {
     direct_phone: "+255700000601",
     result: "Passed",
     score,
+    changed_since_sent: changed,
     parent_name: "Release Parent",
     student_name: "Candidate One",
     admission_number: "ADMSN-00601",
@@ -51,19 +53,35 @@ function client(states: object[], releases: object[]) {
 }
 
 describe("reading the Result release section", () => {
-  it("compares the releases with the result read after them, so a correction sent meanwhile is no warning", async () => {
-    // 78 was sent; then, between the first read and the releases, the score
-    // was corrected to 90 and sent again.
-    const read = await getResultRelease(client([state(78), state(90)], [release(90), release(78)]), "lead-1", OFFICE)
+  it("takes changed since sent from the read after the releases, so a correction sent meanwhile is no warning", async () => {
+    // 78 was sent and corrected to 90, so the first read says changed; then,
+    // before the releases were read, 90 was sent too.
+    const read = await getResultRelease(client([state(78, true), state(90, false)], [release(90), release(78)]), "lead-1", OFFICE)
     if (!read.ok) throw new Error(read.error)
     expect(read.data.changedSinceSent).toBe(false)
     expect(read.data.offer?.whatsappMessage).toContain("90%")
   })
 
-  it("warns when the result read after the releases differs from the last one sent", async () => {
-    const read = await getResultRelease(client([state(78), state(90)], [release(78)]), "lead-1", OFFICE)
+  it("warns when the read after the releases says the result changed since the last one sent", async () => {
+    const read = await getResultRelease(client([state(78, false), state(90, true)], [release(78)]), "lead-1", OFFICE)
     if (!read.ok) throw new Error(read.error)
     expect(read.data.changedSinceSent).toBe(true)
     expect(read.data.offer?.whatsappMessage).toContain("90%")
+  })
+})
+
+describe("whether the result changed since sent", () => {
+  it("is never claimed without a release to compare with", async () => {
+    const read = await getResultRelease(client([state(78, true)], []), "lead-1", OFFICE)
+    if (!read.ok) throw new Error(read.error)
+    expect(read.data.changedSinceSent).toBe(false)
+  })
+
+  it("is the database's answer, not a comparison made here", async () => {
+    // The release and the result agree, but the database says changed: the
+    // service follows the database.
+    const read = await getResultRelease(client([state(78, true), state(78, true)], [release(78)]), "lead-1", OFFICE)
+    if (!read.ok) throw new Error(read.error)
+    expect(read.data.changedSinceSent).toBe(true)
   })
 })

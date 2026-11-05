@@ -27,6 +27,12 @@ describe("parseInterviewSearch", () => {
     expect(parseInterviewSearch({ page: "10000" }).page).toBe(10_000)
   })
 
+  it("reads the Ready to send filter, and ignores any other release value", () => {
+    expect(parseInterviewSearch({ release: "ready" }).readyToSend).toBe(true)
+    expect(parseInterviewSearch({ release: "sent" }).readyToSend).toBeUndefined()
+    expect(parseInterviewSearch({ release: "true" }).readyToSend).toBeUndefined()
+  })
+
   it("takes the first value of a repeated parameter", () => {
     expect(parseInterviewSearch({ year: ["2028", "2027"], fee: ["paid", "not-paid"] })).toMatchObject({
       enrollmentYear: 2028,
@@ -43,9 +49,9 @@ describe("interviewsHref", () => {
   })
 
   it("writes back what parseInterviewSearch reads", () => {
-    const full = { enrollmentYear: 2028, result: "none", feeStatus: "Not Paid", page: 3 } as const
+    const full = { enrollmentYear: 2028, result: "none", feeStatus: "Not Paid", readyToSend: true, page: 3 } as const
     const href = interviewsHref(full)
-    expect(href).toBe("/staff/interviews?year=2028&result=none&fee=not-paid&page=3")
+    expect(href).toBe("/staff/interviews?year=2028&result=none&fee=not-paid&release=ready&page=3")
     expect(parseInterviewSearch(Object.fromEntries(new URL(href, "http://x").searchParams))).toEqual(full)
   })
 
@@ -54,6 +60,8 @@ describe("interviewsHref", () => {
       "/staff/interviews?year=2027&result=passed&fee=paid",
     )
     expect(interviewsHref({ ...search, result: "Failed" }, { result: undefined })).toBe("/staff/interviews?year=2027")
+    expect(interviewsHref({ ...search, readyToSend: true, page: 2 }, { page: 1 })).toBe("/staff/interviews?year=2027&release=ready")
+    expect(interviewsHref({ ...search, readyToSend: true }, { readyToSend: undefined })).toBe("/staff/interviews?year=2027")
   })
 })
 

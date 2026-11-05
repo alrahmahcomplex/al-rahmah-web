@@ -2,7 +2,7 @@ import type { InterviewFeeStatus } from "@/lib/services/interviews"
 import { LAST_INTERVIEW_PAGE, type InterviewListSearch, type InterviewResultFilter } from "@/lib/services/interview-list"
 
 // The Interviews screen keeps its year, filters and page in the URL (year,
-// result, fee, page), so interview day's list can be shared, bookmarked and
+// result, fee, release, page), so interview day's list can be shared, bookmarked and
 // paged with the back button working.
 
 type SearchParams = { [key: string]: string | string[] | undefined }
@@ -29,6 +29,7 @@ export function parseInterviewSearch(params: SearchParams): InterviewScreenSearc
     enrollmentYear: year >= 2000 && year <= 2100 ? year : undefined,
     result: RESULT_PARAMS[first(params.result) ?? ""],
     feeStatus: FEE_PARAMS[first(params.fee) ?? ""],
+    readyToSend: first(params.release) === "ready" ? true : undefined,
     page: Number.isInteger(page) && page > 0 && page <= LAST_INTERVIEW_PAGE ? page : 1,
   }
 }
@@ -48,11 +49,12 @@ export function defaultInterviewYear(years: readonly number[], currentYear: numb
 // a shared link shows the same year to everyone; the first page and absent
 // filters are left out.
 export function interviewsHref(search: InterviewListSearch, changes: Partial<InterviewListSearch> = {}) {
-  const { enrollmentYear, result, feeStatus, page } = { ...search, ...changes }
+  const { enrollmentYear, result, feeStatus, readyToSend, page } = { ...search, ...changes }
   const params = new URLSearchParams()
   params.set("year", String(enrollmentYear))
   if (result) params.set("result", RESULT_PARAM[result])
   if (feeStatus) params.set("fee", FEE_PARAM[feeStatus])
+  if (readyToSend) params.set("release", "ready")
   if (page > 1) params.set("page", String(page))
   return `/staff/interviews?${params.toString()}`
 }

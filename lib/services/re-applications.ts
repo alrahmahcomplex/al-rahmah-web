@@ -17,7 +17,8 @@ export const RE_APPLICATIONS_PER_PAGE = 50
 export type ReApplicationFilter = "unreviewed" | "reviewed"
 
 // The Admission form's field names, as re_applications.differing_fields holds
-// them.
+// them. `discount_code` differs when the form sent a code that is not the
+// lead's Referral code (#84).
 export type ReApplicationField =
   | "student_name"
   | "class_name"
@@ -28,6 +29,7 @@ export type ReApplicationField =
   | "relationship_description"
   | "phone"
   | "whatsapp"
+  | "discount_code"
 
 export type ReApplicationSummary = {
   id: string
@@ -61,6 +63,9 @@ export type SubmittedDetails = {
   className: LeadClass
   enrollmentYear: number
   dayOrBoarding: DayOrBoarding
+  // The Discount code the form sent, normalized, recognised or not. Null when
+  // it sent none. It never reaches the lead unless staff Apply it.
+  discountCode: string | null
 }
 
 export type ReApplication = ReApplicationSummary & { submitted: SubmittedDetails }
@@ -95,11 +100,12 @@ type DetailRow = Row & {
   class_name: LeadClass
   enrollment_year: number
   day_or_boarding: DayOrBoarding
+  discount_code: string | null
 }
 
 const COLUMNS =
   "id, lead_id, received_at, differing_fields, reviewed_at, lead:leads!inner(admission_number, student_name, status, closure)"
-const DETAIL_COLUMNS = `${COLUMNS}, contact_name, relationship, relationship_description, phone, phone_as_sent, whatsapp, whatsapp_as_sent, student_name, class_name, enrollment_year, day_or_boarding`
+const DETAIL_COLUMNS = `${COLUMNS}, contact_name, relationship, relationship_description, phone, phone_as_sent, whatsapp, whatsapp_as_sent, student_name, class_name, enrollment_year, day_or_boarding, discount_code`
 
 // The reviewers' names, by re-application id.
 async function reviewers(supabase: SupabaseClient, rows: Row[]): Promise<Result<Map<string, string>, "unavailable">> {
@@ -253,6 +259,7 @@ export async function getReApplication(
         className: data.class_name,
         enrollmentYear: data.enrollment_year,
         dayOrBoarding: data.day_or_boarding,
+        discountCode: data.discount_code,
       },
     },
   }

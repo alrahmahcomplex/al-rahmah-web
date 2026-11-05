@@ -12,6 +12,7 @@ export const FIELD_LABELS: Record<ReApplicationField, string> = {
   relationship_description: "Relationship details",
   phone: "Phone",
   whatsapp: "WhatsApp",
+  discount_code: "Discount code",
 }
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { getLead, isClosed, listContactChildren, type Lead } from "@/lib/services/leads"
 import { getReApplication, type ReApplication } from "@/lib/services/re-applications"
+import { findReferralAgent, getLeadReferral } from "@/lib/services/referral"
 import type { StaffMember } from "@/lib/services/staff-auth"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
@@ -115,15 +116,26 @@ function ClosedLead({ entry, staff }: { entry: ReApplication; staff: StaffMember
   )
 }
 
+// Whether a Marketing Agent holds the Discount code the family sent: only
+// then can Apply make it the lead's Referral code. Null when no code was sent
+// or the check failed, which offers no Apply either.
+type SentCode = { recognised: boolean } | null
+
 // What the lead holds now beside what the family sent, field by field. The
 // fields that differed on arrival are highlighted, as many as the queue
 // counts; on an open lead staff with leads.edit Apply each one.
 async function Comparison({ entry, staff }: { entry: ReApplication; staff: StaffMember }) {
   const supabase = await createClient()
-  const lead = await getLead(supabase, entry.leadId)
+  const sentCode = entry.submitted.discountCode
+  const [lead, referral, agent] = await Promise.all([
+    getLead(supabase, entry.leadId),
+    getLeadReferral(supabase, entry.leadId),
+    sentCode ? findReferralAgent(supabase, sentCode) : null,
+  ])
+  const codeCheck: SentCode = agent?.ok ? { recognised: agent.data !== null } : null
 
   let body: React.ReactNode
-  if (!lead.ok) {
+  if (!lead.ok || !referral.ok) {
     body = (
       <Alert variant="destructive" className="max-w-xl">
         <AlertDescription>The lead could not be loaded to compare. Try again in a moment.</AlertDescription>
@@ -139,6 +151,8 @@ async function Comparison({ entry, staff }: { entry: ReApplication; staff: Staff
       <ComparisonTable
         entry={entry}
         lead={lead.data}
+        referralCode={referral.data.code}
+        sentCode={codeCheck}
         canApply={canApply}
         contactChildren={children?.ok ? children.data : null}
       />
@@ -160,15 +174,19 @@ const CONTACT_FIELDS = new Set(["contact_name", "relationship", "relationship_de
 function ComparisonTable({
   entry,
   lead,
+  referralCode,
+  sentCode,
   canApply,
   contactChildren,
 }: {
   entry: ReApplication
   lead: Lead
+  referralCode: string | null
+  sentCode: SentCode
   canApply: boolean
   contactChildren: { id: string; admissionNumber: string }[] | null
 }) {
-  const rows = compareFields(lead, entry.submitted, entry.differingFields)
+  const rows = compareFields(lead, entry.submitted, entry.differingFields, referralCode)
   const siblings = contactChildren?.filter((child) => child.id !== lead.id) ?? []
   const childIds = contactChildren?.map((child) => child.id) ?? []
   const contactApplies = canApply && rows.some((row) => CONTACT_FIELDS.has(row.field) && row.differed && !row.matchesNow)
@@ -204,7 +222,12 @@ function ComparisonTable({
           <tbody>
             {rows.map((row) => {
               const contactField = CONTACT_FIELDS.has(row.field)
-              const applicable = row.differed && !row.matchesNow && (!contactField || contactChildren !== null)
+              const codeField = row.field === "discount_code"
+              const applicable =
+                row.differed &&
+                !row.matchesNow &&
+                (!contactField || contactChildren !== null) &&
+                (!codeField || sentCode?.recognised === true)
               return (
                 <tr
                   key={row.field}
@@ -224,6 +247,7 @@ function ComparisonTable({
                   <td className={cn("px-3 py-2 break-words text-slate-900", row.differed && "font-semibold")}>
                     {row.sent}
                     {row.typedAs && <span className="block text-xs font-normal text-muted-foreground">Typed as {row.typedAs}</span>}
+                    {codeField && entry.submitted.discountCode && <CodeNote sentCode={sentCode} />}
                   </td>
                   {canApply && (
                     <td className="px-3 py-2">
@@ -245,5 +269,17 @@ function ComparisonTable({
         </table>
       </div>
     </div>
+  )
+}
+
+// Why a Discount code the family sent offers no Apply.
+function CodeNote({ sentCode }: { sentCode: SentCode }) {
+  if (sentCode?.recognised) return null
+  return (
+    <span className="block text-xs font-normal text-muted-foreground">
+      {sentCode
+        ? "No Marketing Agent has this code, so it can't be applied."
+        : "Whether an agent has this code could not be checked. Reload the page to try again."}
+    </span>
   )
 }

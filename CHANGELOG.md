@@ -15,6 +15,11 @@ stay in the `0.x` range.
 - The database now recognises a signed-in Marketing Agent separately from staff. An
   email belongs to one login, staff or agent, and an agent login reaches no staff screen,
   function or record. Agents can't sign in yet.
+- A Discount code the Admission form sends for a child already on file now stays on the
+  re-application instead of being dropped. The review screen shows it beside the lead's
+  Referral code, counts it as a difference when the two differ, and offers Apply for a
+  code a Marketing Agent holds. A code no agent holds offers no Apply, and the screen
+  says why.
 
 ### IMPROVED
 

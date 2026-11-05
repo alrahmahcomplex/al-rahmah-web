@@ -2,7 +2,7 @@ import { Client } from "pg"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 
 import { anonClient, signedIn } from "../support/db"
-import { SEEDED_AGENT } from "../support/fixtures"
+import { MANAGER, SEEDED_AGENT } from "../support/fixtures"
 import { FUNCTIONS, POLICIES, RELATIONS, type AgentAnswer, type ApiRole } from "./api-surface"
 
 // The permanent security test (#188). It reads what the `anon` and
@@ -12,7 +12,7 @@ import { FUNCTIONS, POLICIES, RELATIONS, type AgentAnswer, type ApiRole } from "
 // agent session gets nothing from any staff function or table.
 
 const EXPOSED = ["public", "graphql_public"]
-const PRIVILEGES = ["select", "insert", "update", "delete", "truncate", "references", "trigger"]
+const PRIVILEGES = ["select", "insert", "update", "delete", "truncate", "references", "trigger", "maintain"]
 
 let sql: Client
 
@@ -50,24 +50,41 @@ async function catalogFunctions(): Promise<CatalogFunction[]> {
   }))
 }
 
-// Calls `fn` with its entry's sample arguments as `role`, signed in as the
-// seeded agent for `authenticated`, in a transaction that is rolled back.
-async function answer(fn: CatalogFunction, role: ApiRole): Promise<{ refused: string } | { returns: unknown[] }> {
+// Calls `fn` with its entry's sample arguments as `role`, in a transaction
+// that is rolled back. `authenticated` signs in as the seeded agent, or with
+// `asStaff` as the seeded Manager on a role holding every permission.
+async function answer(fn: CatalogFunction, role: ApiRole, { asStaff = false } = {}): Promise<{ refused: string } | { returns: unknown[] }> {
   const entry = FUNCTIONS[fn.signature]
   const args = Object.values(entry.args)
   await sql.query("begin")
   try {
+    if (entry.setup) {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(entry.setup)
+      await sql.query("select set_config('audit.actor_kind', '', true), set_config('audit.actor_staff_id', '', true)")
+    }
     const values = args.length
       ? Object.values((await sql.query(`select ${args.map((arg, i) => `(${arg})::text as a${i}`).join(", ")}`)).rows[0])
       : []
-    const claims = role === "anon" ? { role: "anon" } : { sub: SEEDED_AGENT.userId, role: "authenticated" }
+    let userId = SEEDED_AGENT.userId
+    if (asStaff) {
+      userId = (await sql.query("select user_id from public.staff_members where id = $1", [MANAGER.id])).rows[0].user_id
+      await sql.query("select public.set_audit_actor('staff', $1)", [MANAGER.id])
+      await sql.query(
+        `update public.roles set permissions = array(select name from public.permissions)
+         where id = (select role_id from public.staff_members where id = $1)`,
+        [MANAGER.id],
+      )
+    }
+    const claims = role === "anon" ? { role: "anon" } : { sub: userId, role: "authenticated" }
     await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(claims)])
     await sql.query(`set local role ${role}`)
     const call = `${fn.schema}.${fn.name}(${fn.types.map((type, i) => `$${i + 1}::${type}`).join(", ")})`
     const { rows } = await sql.query(`select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) as v from ${call} t`, values)
     return { returns: rows[0].v as unknown[] }
   } catch (error) {
-    return { refused: (error as Error).message }
+    const { message, detail } = error as Error & { detail?: string }
+    return { refused: asStaff && detail ? `${message} (${detail})` : message }
   } finally {
     await sql.query("rollback")
   }
@@ -154,6 +171,20 @@ describe("functions", () => {
     }
   })
 
+  // The refusals above prove something only if the call itself was valid: a
+  // sample with a bad argument would be refused whoever asked. So each
+  // signed-in sample must succeed for a staff member who holds every
+  // permission.
+  test("every sample is a call an authorised staff member can make", async () => {
+    const failed: string[] = []
+    for (const fn of await catalogFunctions()) {
+      if (!fn.roles.includes("authenticated")) continue
+      const got = await answer(fn, "authenticated", { asStaff: true })
+      if ("refused" in got) failed.push(`${fn.signature}: ${got.refused}`)
+    }
+    expect(failed, "fix these sample arguments in tests/integration/api-surface.ts").toEqual([])
+  })
+
   test("a visitor with no session gets the same nothing from every function open to them", async () => {
     for (const fn of await catalogFunctions()) {
       if (!fn.roles.includes("anon")) continue
@@ -161,6 +192,25 @@ describe("functions", () => {
     }
   })
 })
+
+// Every column privilege an API role holds, directly, through PUBLIC or
+// through a role it belongs to, beyond what it holds on the whole relation.
+async function columnGrants(): Promise<{ name: string; role: string; privilege: string }[]> {
+  const { rows } = await sql.query(
+    `select n.nspname || '.' || c.relname || '.' || a.attname as name, r.role, p.privilege
+     from pg_attribute a
+     join pg_class c on c.oid = a.attrelid
+     join pg_namespace n on n.oid = c.relnamespace
+     cross join unnest(array['anon', 'authenticated']) r (role)
+     cross join unnest(array['select', 'insert', 'update', 'references']) p (privilege)
+     where n.nspname = any ($1) and c.relkind in ('r', 'v', 'm', 'p', 'f') and a.attnum > 0 and not a.attisdropped
+       and has_column_privilege(r.role, c.oid, a.attnum, p.privilege)
+       and not has_table_privilege(r.role, c.oid, p.privilege)
+     order by 1, 2, 3`,
+    [EXPOSED],
+  )
+  return rows
+}
 
 describe("tables and views", () => {
   test("every relation's privileges for the API roles are on the list", async () => {
@@ -184,16 +234,19 @@ describe("tables and views", () => {
     )
     expect(open).toEqual([])
 
-    const { rows: columns } = await sql.query(
-      `select n.nspname || '.' || c.relname || '.' || a.attname as name
-       from pg_attribute a
-       join pg_class c on c.oid = a.attrelid
-       join pg_namespace n on n.oid = c.relnamespace
-       cross join lateral aclexplode(a.attacl) acl
-       where n.nspname = any ($1) and acl.grantee in (0, 'anon'::regrole, 'authenticated'::regrole)`,
-      [EXPOSED],
-    )
-    expect(columns).toEqual([])
+    expect(await columnGrants()).toEqual([])
+  })
+
+  test("the column check finds a column grant an API role holds through another role", async () => {
+    await sql.query("begin")
+    try {
+      await sql.query("create role api_surface_column_probe nologin")
+      await sql.query("grant update (id) on public.leads to api_surface_column_probe")
+      await sql.query("grant api_surface_column_probe to authenticated")
+      expect(await columnGrants()).toEqual([{ name: "public.leads.id", role: "authenticated", privilege: "update" }])
+    } finally {
+      await sql.query("rollback")
+    }
   })
 
   test("the seeded agent and a visitor see no row of any relation", async () => {

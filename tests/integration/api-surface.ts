@@ -12,9 +12,17 @@
 // normalised.
 //
 // Sample arguments are SQL expressions, evaluated as the database owner
-// before the call, in the function's parameter order. They are valid calls
-// for a staff member who may make them, so a refusal comes from who is
-// asking. Trigger functions are exempt: no role can call them directly.
+// before the call, in the function's parameter order. Each is a call a staff
+// member holding every permission makes without error, and the test checks
+// that, so a refusal comes from who is asking and not from a bad argument.
+// An entry whose call needs state the seeds don't hold creates it in `setup`.
+// Trigger functions are exempt: no role can call them directly.
+//
+// Table privileges include PostgreSQL 17's MAINTAIN (VACUUM, ANALYZE,
+// REINDEX, CLUSTER, REFRESH MATERIALIZED VIEW, LOCK TABLE). The API roles
+// hold it, with REFERENCES and TRIGGER, from Supabase's default grants. The
+// API can't use any of them: PostgREST runs none of those commands, and no
+// function an API role can call runs one as its caller.
 
 export type ApiRole = "anon" | "authenticated"
 
@@ -28,6 +36,9 @@ export type AgentAnswer =
 
 export type FunctionEntry = {
   roles: ApiRole[]
+  // SQL run as the database owner, with the system as audit actor, before the
+  // sample arguments are evaluated, in the same rolled-back transaction.
+  setup?: string
   args: Record<string, string>
   agent: AgentAnswer
   // A deprecated overload: the date (YYYY-MM-DD) by which it must be gone.
@@ -63,9 +74,9 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       roles: ["authenticated"],
       args: {
         payment_id: "'fee00000-0000-4000-8000-000000000902'",
-        reason: "'A sample reason'",
+        reason: "'Wrong amount'",
         voided: "false",
-        payment_type: "'Initial deposit'",
+        payment_type: "'initial_deposit'",
         amount: "100000",
         paid_on: "current_date",
         note: "'A note'",
@@ -93,14 +104,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.approve_marketing_agent(agent_id uuid)": {
     roles: ["authenticated"],
-    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'" },
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000001'" },
     agent: { refused: "not_permitted" },
   },
   "public.approve_reopening_request(request_id uuid, enrol_without_retake boolean)": {
     roles: ["authenticated"],
     args: {
-      request_id: "'00000000-0000-4000-8000-000000000188'",
-      enrol_without_retake: "false",
+      request_id: "'5e0e0000-0000-4000-8000-000000000080'",
+      enrol_without_retake: "null",
     },
     agent: { refused: "not_permitted" },
   },
@@ -108,7 +119,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: {
       staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'",
-      role_id: "(select id from public.roles where name = 'Admissions Staff')",
+      role_id: "(select id from public.roles where name = 'Accountant')",
     },
     agent: { refused: "not_permitted" },
   },
@@ -149,14 +160,18 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.confirm_agent_import(file_name text, row_count integer, rows jsonb)": {
     roles: ["authenticated"],
-    args: { file_name: "'agents.csv'", row_count: "0", rows: "'[]'::jsonb" },
+    args: {
+      file_name: "'agents.csv'",
+      row_count: "1",
+      rows: `'[{"sheet_row": 2, "code": "SAP-188", "full_name": "Sample Agent Person", "phone": "+255700000188", "whatsapp": null, "email": null, "expected": {"verdict": "create"}}]'::jsonb`,
+    },
     agent: { refused: "not_permitted" },
   },
   "public.confirm_family_match(lead_id uuid, expected_lead_ids uuid[])": {
     roles: ["authenticated"],
     args: {
-      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
-      expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]",
+      lead_id: "'1ead0000-0000-4000-8000-000000000049'",
+      expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000049', '1ead0000-0000-4000-8000-000000000050']::uuid[]",
     },
     agent: { refused: "not_permitted" },
   },
@@ -171,7 +186,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.correct_visit_date(lead_id uuid, visited_on date)": {
     roles: ["authenticated"],
     args: {
-      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      lead_id: "'1ead0000-0000-4000-8000-000000000002'",
       visited_on: "current_date",
     },
     agent: { refused: "not_permitted" },
@@ -184,7 +199,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
         existing_contact_id: "'c0c0c0c0-0000-4000-8000-000000000431'",
         new_contact: "null",
         student_details:
-          '\'{"student_name": "Sample Pupil", "class_name": "STD 2", "enrollment_year": 2027, "day_or_boarding": "Day"}\'::jsonb',
+          '\'{"full_name": "Sample Pupil", "class_name": "STD 2", "enrollment_year": 2027, "day_or_boarding": "Day"}\'::jsonb',
         visited_on: "current_date",
         also_check_phones: "array[]::text[]",
       },
@@ -214,7 +229,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.dashboard_count(metric text, period_kind text, anchor date, enrollment_year integer)": {
     roles: ["authenticated"],
     args: {
-      metric: "'leads'",
+      metric: "'visited_leads'",
       period_kind: "'month'",
       anchor: "date '2026-11-05'",
       enrollment_year: "2027",
@@ -248,7 +263,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.decide_discount(request_id uuid, decision text, reason text)": {
     roles: ["authenticated"],
     args: {
-      request_id: "'00000000-0000-4000-8000-000000000188'",
+      request_id: "'d15c0000-0000-4000-8000-000000000907'",
       decision: "'refuse'",
       reason: "'A sample reason'",
     },
@@ -265,7 +280,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.dismiss_notices(through bigint)": {
     roles: ["authenticated"],
-    args: { through: "0" },
+    setup:
+      "select public.set_audit_actor('staff', 'a1a1a1a1-0000-4000-8000-000000000002'); update public.staff_members set active = false where id = 'a1a1a1a1-0000-4000-8000-000000000001'; update public.staff_members set active = true where id = 'a1a1a1a1-0000-4000-8000-000000000001'",
+    args: {
+      through: "(select max(a.id) from public.audit_log a where public.is_notice_for(a, 'a1a1a1a1-0000-4000-8000-000000000001'))",
+    },
     agent: { refused: "not_staff" },
   },
   "public.expected_interview_amount(lead_id uuid, OUT amount integer, OUT discount_applied boolean)": {
@@ -454,7 +473,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: {
       lead_id: "'1ead0000-0000-4000-8000-000000000431'",
       mark: "'Inactive'",
-      reason: "'A sample reason'",
+      reason: "'Family requested closure'",
       note: "'A note'",
     },
     agent: { refused: "not_permitted" },
@@ -518,8 +537,8 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.preview_school_fee_payment(lead_id uuid, payment_type text, amount numeric, paid_on date)": {
     roles: ["authenticated"],
     args: {
-      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
-      payment_type: "'Initial deposit'",
+      lead_id: "'1ead0000-0000-4000-8000-000000000902'",
+      payment_type: "'first_instalment'",
       amount: "100000",
       paid_on: "current_date",
     },
@@ -528,9 +547,9 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.raise_reopening_request(lead_id uuid, reason text, source text)": {
     roles: ["authenticated"],
     args: {
-      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      lead_id: "'1ead0000-0000-4000-8000-000000000006'",
       reason: "'A sample reason'",
-      source: "'staff'",
+      source: "'lead'",
     },
     agent: { refused: "not_permitted" },
   },
@@ -543,7 +562,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.reactivate_staff_member(staff_id uuid)": {
     roles: ["authenticated"],
-    args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'" },
+    args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000005'" },
     agent: { refused: "not_permitted" },
   },
   "public.record_action(kind text, lead_id uuid, details jsonb)": {
@@ -559,13 +578,13 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     {
       roles: ["authenticated"],
       args: {
-        lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+        lead_id: "'1ead0000-0000-4000-8000-000000000002'",
         follow_up_id: "'f0110000-0000-4000-8000-000000000002'",
         comment: "'Called the family'",
-        method: "'phone'",
+        method: "'Phone call'",
         contacted_by: "'a1a1a1a1-0000-4000-8000-000000000003'",
         contacted_at: "now()",
-        outcome: "'Passed'",
+        outcome: "'next_date'",
         next_due_on: "current_date + 7",
         next_note: "null",
         decline_reason: "null",
@@ -586,8 +605,8 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.record_school_fee_payment(lead_id uuid, payment_type text, amount numeric, paid_on date, request_id uuid)": {
     roles: ["authenticated"],
     args: {
-      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
-      payment_type: "'Initial deposit'",
+      lead_id: "'1ead0000-0000-4000-8000-000000000902'",
+      payment_type: "'first_instalment'",
       amount: "100000",
       paid_on: "current_date",
       request_id: "'00000000-0000-4000-8000-000000000188'",
@@ -622,15 +641,15 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.reject_family_match(lead_id uuid, expected_lead_ids uuid[])": {
     roles: ["authenticated"],
     args: {
-      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
-      expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]",
+      lead_id: "'1ead0000-0000-4000-8000-000000000049'",
+      expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000049', '1ead0000-0000-4000-8000-000000000050']::uuid[]",
     },
     agent: { refused: "not_permitted" },
   },
   "public.reject_reopening_request(request_id uuid, reason text)": {
     roles: ["authenticated"],
     args: {
-      request_id: "'00000000-0000-4000-8000-000000000188'",
+      request_id: "'5e0e0000-0000-4000-8000-000000000911'",
       reason: "'A sample reason'",
     },
     agent: { refused: "not_permitted" },
@@ -638,7 +657,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.release_result(interview_id uuid, channel text)": {
     roles: ["authenticated"],
     args: {
-      interview_id: "'1e7e0000-0000-4000-8000-000000000501'",
+      interview_id: "'1e7e0000-0000-4000-8000-000000000601'",
       channel: "'whatsapp'",
     },
     agent: { refused: "forbidden" },
@@ -655,7 +674,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: {
       lead_id: "'1ead0000-0000-4000-8000-000000000431'",
-      kind: "'switched_off'",
+      kind: "'staff_child'",
       note: "'A note'",
       request_id: "'00000000-0000-4000-8000-000000000188'",
     },
@@ -663,7 +682,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.resendable_invite(staff_id uuid)": {
     roles: ["authenticated"],
-    args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'" },
+    args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000007'" },
     agent: { refused: "not_permitted" },
   },
   "public.result_ready_to_send(interviews)": {
@@ -685,14 +704,19 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.retire_role(role_id uuid)": {
     roles: ["authenticated"],
+    setup: "insert into public.roles (id, name) values ('b0b0b0b0-0000-4000-8000-000000000188', 'Sample role')",
     args: {
-      role_id: "(select id from public.roles where name = 'Admissions Staff')",
+      role_id: "'b0b0b0b0-0000-4000-8000-000000000188'",
     },
     agent: { refused: "not_permitted" },
   },
   "public.save_fee_schedule(schedule_year integer, amounts jsonb)": {
     roles: ["authenticated"],
-    args: { schedule_year: "2027", amounts: "'{}'::jsonb" },
+    args: {
+      schedule_year: "2027",
+      amounts:
+        '\'{"bands": {"nursery": {"day_fee": 1100000, "boarding_fee": 3000000}, "primary_lower": {"day_fee": 2000000, "boarding_fee": 3000000}, "primary_upper": {"day_fee": 2100000, "boarding_fee": 3300000}, "secondary": {"day_fee": 2800000, "boarding_fee": 4300000}}, "first_share": 40, "second_share": 40, "third_share": 20, "first_due": "2026-11-01", "second_due": "2027-04-01", "third_due": "2027-06-01", "minimum_deposit": 300000, "pre_form_one_day_fee": 450000, "pre_form_one_boarding_fee": 580000}\'::jsonb',
+    },
     agent: { refused: "not_permitted" },
   },
   "public.schedule_follow_up(lead_id uuid, due_on date, note text)": {
@@ -711,18 +735,20 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.send_group_invitation(lead_id uuid, method text, link_year integer, link_seen text, template_version text)": {
     roles: ["authenticated"],
+    setup:
+      "insert into public.whatsapp_group_links (enrollment_year, url, set_by) values (2027, 'https://chat.whatsapp.com/Sample188', 'a1a1a1a1-0000-4000-8000-000000000001')",
     args: {
-      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      lead_id: "'1ead0000-0000-4000-8000-000000000002'",
       method: "'link'",
       link_year: "2027",
-      link_seen: "null",
-      template_version: "'v1'",
+      link_seen: "'https://chat.whatsapp.com/Sample188'",
+      template_version: "'group_invitation_v1'",
     },
     agent: { refused: "forbidden" },
   },
   "public.separate_from_family(lead_id uuid)": {
     roles: ["authenticated"],
-    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000002'" },
     agent: { refused: "not_permitted" },
   },
   "public.set_academic_year(schedule_year integer, settings jsonb)": {
@@ -751,13 +777,13 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: {
       lead_id: "'1ead0000-0000-4000-8000-000000000431'",
-      code: "'BJN-402'",
+      code: "'SAM-403'",
     },
     agent: { refused: "not_permitted" },
   },
   "public.set_pre_form_one(lead_id uuid, ticked boolean)": {
     roles: ["authenticated"],
-    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'", ticked: "true" },
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000004'", ticked: "true" },
     agent: { refused: "not_permitted" },
   },
   "public.set_prior_sibling(lead_id uuid, sibling_name text, sibling_class text)": {
@@ -812,7 +838,9 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.withdraw_reopening_request(request_id uuid)": {
     roles: ["authenticated"],
-    args: { request_id: "'00000000-0000-4000-8000-000000000188'" },
+    setup:
+      "insert into public.reopening_requests (id, lead_id, source, reason, requested_by) values ('5e0e0000-0000-4000-8000-000000000188', '1ead0000-0000-4000-8000-000000000905', 'lead', 'A sample reason', 'a1a1a1a1-0000-4000-8000-000000000001')",
+    args: { request_id: "'5e0e0000-0000-4000-8000-000000000188'" },
     agent: { refused: "not_permitted" },
   },
   "public.year_seats(schedule_year integer)": {
@@ -827,105 +855,105 @@ export const RELATIONS: Record<string, RelationEntry> = {
   "public.agent_access_settings": { authenticated: [], anon: [] },
   "public.agent_detached_logins": { authenticated: [], anon: [] },
   "public.agent_status_changes": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.audit_action_kinds": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.audit_log": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.audit_scopes": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.class_seats": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.discount_requests": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.fee_band_amounts": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.fee_schedules": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.follow_up_records": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.follow_ups": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.guardian_contacts": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.import_batches": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.interview_serial_counters": { authenticated: [], anon: [] },
   "public.interviews": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.lead_fee_profiles": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.leads": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.marketing_agents": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.payment_adjustments": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.permissions": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.re_applications": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.reopening_requests": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.roles": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.school_fee_payments": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.staff_members": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.whatsapp_group_invitations": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
   "public.whatsapp_group_links": {
-    authenticated: ["select", "references", "trigger"],
-    anon: ["select", "references", "trigger"],
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
   },
 }
 

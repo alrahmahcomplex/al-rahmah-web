@@ -445,15 +445,20 @@ describe("an import and a Recreate at once", () => {
     expect(checked.rows.map((row) => row.class)).toEqual(["email-to-add"])
 
     // Hold the batch table, so confirm takes its phone and email locks and
-    // then waits, before it updates the agent.
+    // then waits, before it updates the agent. Confirm runs under the API's
+    // statement timeout, so everything that needs a new connection or a
+    // sign-in happens before the hold, and the hold has its own short limit.
+    const manager = await signedIn(MANAGER)
     const holder = new Client({ connectionString: process.env.SUPABASE_DB_URL })
     await holder.connect()
     const recreating = await sessionOf(MANAGER)
+    const recreatingPid = (recreating as unknown as { processID: number }).processID
     try {
       await holder.query("begin")
       await holder.query("lock table public.import_batches in exclusive mode")
-      const confirming = confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))
-      await waitForLockWait(holder)
+      const holdUntil = performance.now() + HOLD_LIMIT_MS
+      const confirming = confirmAgentImport(manager, confirmationOf(checked))
+      const confirmPid = await confirmWaitingWithEmailLock(holder, shared, holdUntil)
 
       // Recreate moves the agent to a new mobile with the email the import
       // is adding, and waits for the import's email lock.
@@ -463,10 +468,14 @@ describe("an import and a Recreate at once", () => {
           (result) => ({ ok: true as const, result }),
           (error: unknown) => ({ ok: false as const, error }),
         )
-      await waitUntilBlocked(recreating)
+      await waitingOnEmailLockOf(holder, recreatingPid, confirmPid, shared, holdUntil)
       await holder.query("commit")
 
-      expect(await confirming).toMatchObject({ ok: true, data: { kind: "imported", emailsAdded: 1 } })
+      // A deadlock would end one of them with 40P01; a lost wake-up would end
+      // confirm with the statement timeout.
+      const confirmed = await confirming
+      if (!confirmed.ok) throw new Error(`confirm failed: ${JSON.stringify(confirmed.error)}`)
+      expect(confirmed).toMatchObject({ ok: true, data: { kind: "imported", emailsAdded: 1 } })
       const recreated = await recreate
       if (!recreated.ok) throw recreated.error
       await recreating.query("commit")
@@ -550,19 +559,53 @@ async function sessionOf(person: { id: string }) {
   return sql
 }
 
-// Waits until `session`'s running statement is blocked on a lock.
-async function waitUntilBlocked(session: Client) {
-  const pid = (session as unknown as { processID: number }).processID
-  const watcher = new Client({ connectionString: process.env.SUPABASE_DB_URL })
-  await watcher.connect()
-  try {
-    for (let i = 0; i < 100; i++) {
-      const blocked = await watcher.query("select 1 where cardinality(pg_blocking_pids($1)) > 0", [pid])
-      if (blocked.rowCount) return
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
-    throw new Error("the session never waited on a lock")
-  } finally {
-    await watcher.end()
+// How long a test may hold a lock that confirm waits on: well under the 8s
+// statement timeout the API gives a signed-in session, so a slow runner fails
+// here, by name, and not as a confirm timeout.
+const HOLD_LIMIT_MS = 3000
+
+// lock_login_email's advisory key for `address`, split as pg_locks shows a
+// bigint key: the high 32 bits in classid, the low in objid.
+const EMAIL_LOCK = `
+  with k as (select hashtextextended('login-email:' || lower(btrim($1::text)), 0) as k)
+  select 1 from k where l.locktype = 'advisory'
+    and l.classid::bigint = (k.k >> 32) & 4294967295
+    and l.objid::bigint = k.k & 4294967295`
+
+// Polls `query` on `watcher`, the connection holding the lock, until it
+// returns a row or `until` passes.
+async function pollFor<T extends object>(watcher: Client, query: string, values: unknown[], until: number, what: string): Promise<T> {
+  for (;;) {
+    const { rows } = await watcher.query<T>(query, values)
+    if (rows.length) return rows[0]
+    if (performance.now() > until) throw new Error(`${what} within ${HOLD_LIMIT_MS} ms`)
+    await new Promise((resolve) => setTimeout(resolve, 10))
   }
+}
+
+// Waits until confirm holds `address`'s email lock and waits on the batch
+// table the watcher holds. Returns confirm's backend pid.
+async function confirmWaitingWithEmailLock(watcher: Client, address: string, until: number) {
+  const row = await pollFor<{ pid: number }>(
+    watcher,
+    `select w.pid from pg_locks w
+     where w.locktype = 'relation' and w.relation = 'public.import_batches'::regclass and not w.granted
+       and exists (select 1 from pg_locks l where l.pid = w.pid and l.granted and exists (${EMAIL_LOCK}))`,
+    [address],
+    until,
+    "confirm did not take the email lock and wait on the batch table",
+  )
+  return row.pid
+}
+
+// Waits until backend `pid` waits on `address`'s email lock, held by `holderPid`.
+async function waitingOnEmailLockOf(watcher: Client, pid: number, holderPid: number, address: string, until: number) {
+  await pollFor(
+    watcher,
+    `select 1 from pg_locks l
+     where l.pid = $2 and not l.granted and $3 = any(pg_blocking_pids($2)) and exists (${EMAIL_LOCK})`,
+    [address, pid, holderPid],
+    until,
+    "Recreate did not wait on confirm's email lock",
+  )
 }

@@ -1,0 +1,462 @@
+-- Agent invites, account states and email edits (slice 12, #191).
+--
+-- - agent_events: append-only, one row per agent event. This ticket writes
+--   invite attempts; the claim, reset and batch tickets add their kinds. A raw
+--   email is stored only on an event linked to an agent.
+-- - prepare_agent_invite and record_agent_invite: the Manager's two calls
+--   around the invite email, which the server sends with the secret key in
+--   between. Preparing refuses an agent who isn't Approved, is switched off or
+--   retired, has no email or has joined, and records an attempt refused
+--   because agent access is off.
+-- - account_state(marketing_agents): each agent's account state, in one
+--   place, readable as a column of the agent list. agent_account_counts and
+--   agent_invites feed the Agents screen's counts and badges.
+-- - set_marketing_agent_email: adds or corrects an agent's email. An invited
+--   agent who hasn't joined loses the unused login, so the next invite goes
+--   to the new address. A joined agent's Auth email is changed by the server
+--   through the admin API afterwards.
+-- - current_agent_account(): the signed-in agent's own name, code and state,
+--   for the agent sign-in and pages.
+
+-- ---------------------------------------------------------------------------
+-- agent_events
+-- ---------------------------------------------------------------------------
+
+create table public.agent_events (
+    id uuid primary key default gen_random_uuid(),
+    -- Empty for an event that matched no agent, such as a refused claim.
+    agent_id uuid references public.marketing_agents (id),
+    kind text not null check (kind in ('invite')),
+    result text not null check (result in (
+        'sent', 'rate_limited', 'smtp_error', 'rejected_address', 'other_error', 'access_off'
+    )),
+    -- The error code Auth gave, for other_error, so it can be read out.
+    error_code text check (char_length(error_code) <= 100),
+    -- The address the event was about, only when it is linked to an agent.
+    email text check (email = lower(btrim(email)) and char_length(email) <= 254),
+    created_at timestamptz not null default clock_timestamp(),
+    -- The staff member who caused it; empty when no one did.
+    created_by uuid references public.staff_members (id),
+    check (email is null or agent_id is not null),
+    check ((result = 'other_error') = (error_code is not null))
+);
+
+create index agent_events_kind_created_at_idx on public.agent_events (kind, created_at);
+create index agent_events_agent_kind_created_at_idx on public.agent_events (agent_id, kind, created_at) where agent_id is not null;
+create index agent_events_created_by_idx on public.agent_events (created_by) where created_by is not null;
+
+create trigger refuse_update
+    before update on public.agent_events
+    for each row
+    execute function public.refuse_agent_status_change_update();
+
+create trigger refuse_delete
+    before delete on public.agent_events
+    for each row
+    execute function public.refuse_delete();
+
+create trigger refuse_truncate
+    before truncate on public.agent_events
+    for each statement
+    execute function public.refuse_delete();
+
+-- Audit (ADR 4): lead scope with no lead id, as for the other agent tables.
+insert into public.audit_scopes (table_name, scope, lead_id_column) values
+    ('public.agent_events', 'lead', null);
+
+create trigger audit_row_change
+    after insert on public.agent_events
+    for each row
+    execute function public.audit_row_change();
+
+-- Read and written only through the functions below.
+alter table public.agent_events enable row level security;
+
+revoke all on public.agent_events from anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- Account state
+-- ---------------------------------------------------------------------------
+
+-- How long an invite link works: otp_expiry in supabase/config.toml and the
+-- hosted Email OTP expiration (docs/agents/hosted-services.md).
+create function public.invite_link_lifetime()
+returns interval
+language sql
+immutable
+set search_path = ''
+as $$
+    select interval '24 hours';
+$$;
+
+revoke execute on function public.invite_link_lifetime() from public, anon, authenticated, service_role;
+
+-- When the latest invite to the agent's current email was sent, or null.
+create function public.agent_invite_sent_at(agent_id uuid, email text)
+returns timestamptz
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select max(e.created_at)
+    from public.agent_events e
+    where e.agent_id = agent_invite_sent_at.agent_id
+      and e.kind = 'invite'
+      and e.result = 'sent'
+      and e.email = agent_invite_sent_at.email;
+$$;
+
+revoke execute on function public.agent_invite_sent_at(uuid, text) from public, anon, authenticated, service_role;
+
+-- Whether the agent's login has accepted its invite.
+create function public.agent_joined(user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select exists (
+        select 1 from auth.users u
+        where u.id = agent_joined.user_id and u.email_confirmed_at is not null
+    );
+$$;
+
+revoke execute on function public.agent_joined(uuid) from public, anon, authenticated, service_role;
+
+-- The agent's account state, in this order (CONTEXT.md, Account state):
+-- retired, switched_off, awaiting_confirmation, no_email, invite_not_sent,
+-- invite_expired, invited, joined. A Pending agent has none yet: approval
+-- comes first. awaiting_confirmation needs the email claims #193 adds, which
+-- replaces this function to return it.
+--
+-- A computed column, so the Agents screen can filter on it. Staff without
+-- leads.view, and agents, get null for every row.
+create function public.account_state(agent public.marketing_agents)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+    sent_at timestamptz;
+begin
+    if not public.has_permission('leads.view') then
+        return null;
+    end if;
+    if agent.retired_at is not null then
+        return 'retired';
+    end if;
+    if agent.switched_off_at is not null then
+        return 'switched_off';
+    end if;
+    if agent.status <> 'Approved' then
+        return null;
+    end if;
+    if agent.email is null then
+        return 'no_email';
+    end if;
+    if agent.user_id is not null and public.agent_joined(agent.user_id) then
+        return 'joined';
+    end if;
+    sent_at := public.agent_invite_sent_at(agent.id, agent.email);
+    if sent_at is null then
+        return 'invite_not_sent';
+    end if;
+    if sent_at <= now() - public.invite_link_lifetime() then
+        return 'invite_expired';
+    end if;
+    return 'invited';
+end;
+$$;
+
+revoke execute on function public.account_state(public.marketing_agents) from public, anon;
+grant execute on function public.account_state(public.marketing_agents) to authenticated;
+
+-- How many agents are in each account state, for the Agents screen's filters
+-- and its "needs attention" count. Staff who view leads.
+create function public.agent_account_counts()
+returns table (state text, agents bigint)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+    if not public.has_permission('leads.view') then
+        raise exception 'not_permitted';
+    end if;
+    return query
+        select s.state, count(*)
+        from public.marketing_agents a
+        cross join lateral (select public.account_state(a) as state) s
+        where s.state is not null
+        group by s.state;
+end;
+$$;
+
+revoke execute on function public.agent_account_counts() from public, anon;
+grant execute on function public.agent_account_counts() to authenticated;
+
+-- Each agent's state with its latest invite to the current email and its
+-- latest invite attempt of any result, for the badges. Staff who view leads.
+create function public.agent_invites(agent_ids uuid[])
+returns table (
+    agent_id uuid,
+    state text,
+    sent_at timestamptz,
+    last_result text,
+    last_error_code text,
+    last_attempt_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+    if not public.has_permission('leads.view') then
+        raise exception 'not_permitted';
+    end if;
+    return query
+        select
+            a.id,
+            public.account_state(a),
+            public.agent_invite_sent_at(a.id, a.email),
+            last.result,
+            last.error_code,
+            last.created_at
+        from public.marketing_agents a
+        left join lateral (
+            select e.result, e.error_code, e.created_at
+            from public.agent_events e
+            where e.agent_id = a.id and e.kind = 'invite'
+            order by e.created_at desc
+            limit 1
+        ) last on true
+        where a.id = any (agent_invites.agent_ids);
+end;
+$$;
+
+revoke execute on function public.agent_invites(uuid[]) from public, anon;
+grant execute on function public.agent_invites(uuid[]) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Invites. The server calls prepare_agent_invite on the Manager's session,
+-- sends the email with the secret key, then records the result with
+-- record_agent_invite. The email goes only to the address the Manager sees.
+-- ---------------------------------------------------------------------------
+
+-- Refuses (`not_permitted`, `not_found`, `retired`, `switched_off`,
+-- `not_approved`, `no_email`, `already_joined`) or answers `ready` with the
+-- address and whether an invite to it went out before. While agent access is
+-- off it answers `access_off` and records that attempt.
+create function public.prepare_agent_invite(agent_id uuid)
+returns table (outcome text, email text, resend boolean)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    agent public.marketing_agents;
+begin
+    if not public.has_permission('agents.approve') then
+        raise exception 'not_permitted';
+    end if;
+
+    select * into agent from public.marketing_agents a where a.id = prepare_agent_invite.agent_id for update;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    if agent.retired_at is not null then
+        raise exception 'retired';
+    end if;
+    if agent.switched_off_at is not null then
+        raise exception 'switched_off';
+    end if;
+    if agent.status <> 'Approved' then
+        raise exception 'not_approved';
+    end if;
+    if agent.email is null then
+        raise exception 'no_email';
+    end if;
+    if agent.user_id is not null and public.agent_joined(agent.user_id) then
+        raise exception 'already_joined';
+    end if;
+
+    if not (select a.enabled from public.agent_access() a) then
+        insert into public.agent_events (agent_id, kind, result, email, created_by)
+        values (agent.id, 'invite', 'access_off', agent.email, public.current_staff_id());
+        return query select 'access_off'::text, agent.email, false;
+        return;
+    end if;
+
+    return query select
+        'ready'::text,
+        agent.email,
+        exists (
+            select 1 from public.agent_events e
+            where e.agent_id = agent.id and e.kind = 'invite' and e.result = 'sent'
+        );
+end;
+$$;
+
+revoke execute on function public.prepare_agent_invite(uuid) from public, anon;
+grant execute on function public.prepare_agent_invite(uuid) to authenticated;
+
+-- Records how an invite email went, to the agent's current address.
+create function public.record_agent_invite(agent_id uuid, result text, error_code text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    address text;
+begin
+    if not public.has_permission('agents.approve') then
+        raise exception 'not_permitted';
+    end if;
+    if record_agent_invite.result is null
+       or record_agent_invite.result not in ('sent', 'rate_limited', 'smtp_error', 'rejected_address', 'other_error') then
+        raise exception 'invalid';
+    end if;
+
+    select a.email into address from public.marketing_agents a where a.id = record_agent_invite.agent_id;
+    if address is null then
+        raise exception 'not_found';
+    end if;
+
+    insert into public.agent_events (agent_id, kind, result, error_code, email, created_by)
+    values (
+        record_agent_invite.agent_id,
+        'invite',
+        record_agent_invite.result,
+        case when record_agent_invite.result = 'other_error'
+            then left(coalesce(nullif(btrim(record_agent_invite.error_code), ''), 'unknown'), 100)
+        end,
+        address,
+        public.current_staff_id()
+    );
+end;
+$$;
+
+revoke execute on function public.record_agent_invite(uuid, text, text) from public, anon;
+grant execute on function public.record_agent_invite(uuid, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Adding or correcting an agent's email.
+-- ---------------------------------------------------------------------------
+
+-- Needs agents.approve. Refuses `not_permitted`, `not_found`, `retired`,
+-- `email_invalid`, `no_change`, and `email_taken` with who holds the address
+-- as JSON in the detail. An invited agent who hasn't joined loses the unused
+-- login, so a link to the old address no longer works and the next invite
+-- creates a login for the new one. For a joined agent it answers the login,
+-- whose Auth email the server then changes through the admin API.
+create function public.set_marketing_agent_email(agent_id uuid, email text)
+returns table (previous_email text, joined_user_id uuid)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    agent public.marketing_agents;
+    address text := lower(btrim(coalesce(set_marketing_agent_email.email, '')));
+    holder record;
+    unused_login uuid;
+begin
+    if not public.has_permission('agents.approve') then
+        raise exception 'not_permitted';
+    end if;
+    if address = '' or char_length(address) > 254 or address !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+        raise exception 'email_invalid';
+    end if;
+
+    select * into agent from public.marketing_agents a where a.id = set_marketing_agent_email.agent_id for update;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    if agent.retired_at is not null then
+        raise exception 'retired';
+    end if;
+    if agent.email is not distinct from address then
+        raise exception 'no_change';
+    end if;
+
+    perform public.lock_login_email(address);
+    select 'staff' as kind, s.full_name as name, null::text as code into holder
+    from public.staff_members s where s.email = address;
+    if not found then
+        select 'agent' as kind, a.full_name as name, a.code into holder
+        from public.marketing_agents a where a.email = address and a.retired_at is null;
+    end if;
+    if not found then
+        select 'login' as kind, null::text as name, null::text as code into holder
+        from auth.users u where lower(u.email) = address and u.id is distinct from agent.user_id;
+    end if;
+    if found then
+        raise exception 'email_taken' using detail = jsonb_build_object(
+            'email', address, 'holder', holder.kind, 'name', holder.name, 'code', holder.code
+        )::text;
+    end if;
+
+    if agent.user_id is not null and public.agent_joined(agent.user_id) then
+        update public.marketing_agents a set email = address where a.id = agent.id;
+        return query select agent.email, agent.user_id;
+        return;
+    end if;
+
+    unused_login := agent.user_id;
+    update public.marketing_agents a set email = address, user_id = null where a.id = agent.id;
+    if unused_login is not null then
+        delete from auth.users u where u.id = unused_login and u.email_confirmed_at is null;
+    end if;
+    return query select agent.email, null::uuid;
+end;
+$$;
+
+revoke execute on function public.set_marketing_agent_email(uuid, text) from public, anon;
+grant execute on function public.set_marketing_agent_email(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- The signed-in agent.
+-- ---------------------------------------------------------------------------
+
+-- One row for an agent session: `access_off`, `retired`, `switched_off`,
+-- `not_approved` or `active`, with the name and code only while active.
+-- No row for staff, a visitor or a login that belongs to no one.
+create function public.current_agent_account()
+returns table (state text, full_name text, code text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    with me as (
+        select
+            a.full_name,
+            a.code,
+            case
+                when not acc.enabled then 'access_off'
+                when a.retired_at is not null then 'retired'
+                when a.switched_off_at is not null then 'switched_off'
+                when a.status <> 'Approved' then 'not_approved'
+                else 'active'
+            end as state
+        from public.current_principal() p
+        join public.marketing_agents a on a.id = p.agent_id
+        cross join public.agent_access() acc
+        where p.kind = 'agent'
+    )
+    select
+        me.state,
+        case when me.state = 'active' then me.full_name end,
+        case when me.state = 'active' then me.code end
+    from me;
+$$;
+
+revoke execute on function public.current_agent_account() from public, anon;
+grant execute on function public.current_agent_account() to authenticated;

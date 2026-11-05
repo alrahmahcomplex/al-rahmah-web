@@ -19,6 +19,8 @@ stay in the `0.x` range.
   discount. The Manager sees how many students carry the code and the families whose
   fee changes, and confirms it is the same person. Adding an agent with a retired
   record's code offers Recreate.
+- An email belongs to one person: adding an agent refuses an email a staff member
+  uses, and inviting staff refuses an email a current agent uses.
 
 ## November 5, 2026 `v0.71.0`
 

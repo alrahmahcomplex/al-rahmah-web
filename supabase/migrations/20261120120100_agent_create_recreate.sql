@@ -2,9 +2,13 @@
 --
 -- - marketing_agents gains `email`, confirmed by whoever stored it, and
 --   `user_id`, the agent's login. Both are unique among records that aren't
---   retired; #188 adds the cross-table email trigger and the sign-in rules on
---   top of them. Retiring a record now detaches its login (user_id), so a
---   retired record never holds one.
+--   retired; #188 adds the sign-in rules on top of them. Retiring a record
+--   now detaches its login (user_id), so a retired record never holds one,
+--   and agent_detached_logins keeps the detached id for the ban #188 adds.
+-- - An email belongs to one login, staff or agent (owner decision 32). Agent
+--   creation and invite_staff_member both take lock_login_email on the
+--   lowercased email, then check the other table, so neither can take an
+--   email the other holds or is saving.
 -- - create_agent_record is the one internal creation function: it takes the
 --   phone lock, then generates a code or checks a supplied one through
 --   agent_for_code, inserts the agent and returns (agent_id, created,
@@ -33,7 +37,8 @@
 -- Refusal codes: `not_permitted`, `not_found`, `agent_retired`,
 -- `email_taken`, `phone_taken` (with the agent as JSON in the detail),
 -- `code_taken`, `retired_code`, `unavailable`, and `invalid` with the field
--- as JSON in the detail.
+-- as JSON in the detail. invite_staff_member adds `agent_email`, with the
+-- email as JSON in the detail.
 
 -- ---------------------------------------------------------------------------
 -- email and user_id.
@@ -49,6 +54,40 @@ alter table public.marketing_agents
 
 create unique index marketing_agents_email_key on public.marketing_agents (email) where retired_at is null;
 create unique index marketing_agents_user_id_key on public.marketing_agents (user_id);
+
+-- ---------------------------------------------------------------------------
+-- agent_detached_logins: the login a Retire detached, beside the history row
+-- that records the Retire. The ban step in agent sign-in (#188) reads it to
+-- find the auth user to ban. Nobody reads or writes it through the API;
+-- record_agent_status_change writes it as the owner. Recreate moves the
+-- login to the new record instead, so it records nothing here.
+-- ---------------------------------------------------------------------------
+
+create table public.agent_detached_logins (
+    status_change_id uuid primary key references public.agent_status_changes (id),
+    user_id uuid not null references auth.users (id)
+);
+
+alter table public.agent_detached_logins enable row level security;
+
+revoke all on public.agent_detached_logins from anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- lock_login_email: the lock both agent creation and invite_staff_member take
+-- on an email before checking whether staff or an agent holds it. Held to
+-- the end of the transaction, so the second of two at once waits, then sees
+-- the first one's row.
+-- ---------------------------------------------------------------------------
+
+create function public.lock_login_email(email text)
+returns void
+language sql
+set search_path = ''
+as $$
+    select pg_advisory_xact_lock(hashtextextended('login-email:' || lower(btrim(lock_login_email.email)), 0));
+$$;
+
+revoke execute on function public.lock_login_email(text) from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- retired_agent_for_code: the most recently retired record that held a code,
@@ -275,6 +314,10 @@ begin
         return;
     end if;
 
+    -- After the phone lock, the order Recreate also takes them in.
+    if draft.agent_email is not null then
+        perform public.lock_login_email(draft.agent_email);
+    end if;
     if public.agent_email_taken(draft.agent_email) then
         raise exception 'email_taken';
     end if;
@@ -525,6 +568,7 @@ $$;
 -- - `recreated` may also name a retired record that agent_recreatable
 --   allows. Its cache stays as it is (retired_at is set once); the history
 --   row records the recreation.
+-- - A Retire that detaches a login records it in agent_detached_logins.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.record_agent_status_change(agent_id uuid, kind text, reason text, new_agent_id uuid default null)
@@ -616,6 +660,10 @@ begin
         affected
     )
     returning id into change_id;
+
+    if record_agent_status_change.kind = 'retired' and agent.user_id is not null then
+        insert into public.agent_detached_logins (status_change_id, user_id) values (change_id, agent.user_id);
+    end if;
 
     return change_id;
 end;
@@ -899,5 +947,75 @@ begin
         'locked_amount', new_amount,
         'discount_applied', discounted
     );
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- invite_staff_member, re-created with its signature and grants unchanged.
+-- It now takes lock_login_email and refuses an email a current agent holds
+-- (`agent_email`), so staff and agents never share one (owner decision 32).
+-- ---------------------------------------------------------------------------
+
+create or replace function public.invite_staff_member(full_name text, email text, role_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    invited_name text := btrim(coalesce(invite_staff_member.full_name, ''));
+    invited_email text := lower(btrim(coalesce(invite_staff_member.email, '')));
+    invited_role public.roles;
+    existing public.staff_members;
+    new_id uuid;
+begin
+    perform public.require_staff_administrator();
+
+    if invited_name = '' then
+        raise exception 'name_required';
+    end if;
+    if invited_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+        raise exception 'email_invalid';
+    end if;
+
+    -- Staff members before roles, the order the other writes lock them in, so
+    -- an invite never deadlocks against them. It is the lock the insert below
+    -- takes anyway, taken early.
+    lock table public.staff_members in row exclusive mode;
+
+    -- Held until commit, so the role can't be retired between this check and the insert.
+    select * into invited_role from public.roles r where r.id = invite_staff_member.role_id for share;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    if invited_role.retired then
+        raise exception 'role_retired' using detail = jsonb_build_object('role', invited_role.name)::text;
+    end if;
+
+    select * into existing from public.staff_members s where s.email = invited_email;
+    if found then
+        raise exception 'already_staff'
+            using detail = jsonb_build_object('email', invited_email, 'name', existing.full_name, 'active', existing.active)::text;
+    end if;
+
+    -- An agent being created with this email holds the lock until it commits,
+    -- and is then found here.
+    perform public.lock_login_email(invited_email);
+    if exists (select 1 from public.marketing_agents a where a.email = invited_email and a.retired_at is null) then
+        raise exception 'agent_email' using detail = jsonb_build_object('email', invited_email)::text;
+    end if;
+
+    begin
+        insert into public.staff_members (full_name, email, role_id)
+        values (invited_name, invited_email, invited_role.id)
+        returning id into new_id;
+    exception when unique_violation then
+        -- Two Managers inviting the same email at once: the second loses here.
+        select * into existing from public.staff_members s where s.email = invited_email;
+        raise exception 'already_staff'
+            using detail = jsonb_build_object('email', invited_email, 'name', existing.full_name, 'active', existing.active)::text;
+    end;
+
+    return public.staff_member_names(new_id) || jsonb_build_object('id', new_id, 'email', invited_email);
 end;
 $$;

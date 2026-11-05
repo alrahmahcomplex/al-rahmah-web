@@ -30,6 +30,7 @@ export type RefusalCode =
   | "role_name_required"
   | "unknown_permission"
   | "already_staff"
+  | "agent_email"
   | "email_invalid"
   | "invite_deactivated"
   | "already_joined"
@@ -72,6 +73,7 @@ const MESSAGES: Record<RefusalCode, (names: RefusalNames) => string> = {
     active
       ? `${email} already belongs to ${name}.`
       : `${email} already belongs to ${name}. Reactivate them instead of inviting again.`,
+  agent_email: ({ email }) => `${email} belongs to a Marketing Agent. Staff and agents can't share an email, so use another one.`,
   email_invalid: () => "Enter a valid email address.",
   invite_deactivated: ({ name }) => `${name} is deactivated. Reactivate them before resending the invite.`,
   already_joined: ({ name }) => `${name} has already joined and signs in with their own password.`,

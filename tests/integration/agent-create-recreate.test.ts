@@ -190,24 +190,41 @@ describe("Seam 1: the Manager creates an agent", () => {
     const template = await codedLeadWithUnknownCode(freshCode())
     const { code, coded } = await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      const inserted = await sql.query(
-        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, guardian_contact_id, status, visit_date, referral_code)
-         select free.number, 'Coded ' || free.n, l.class_name, l.enrollment_year, l.day_or_boarding, l.guardian_contact_id, l.status, l.visit_date,
-                $1 || '-' || lpad((free.n - 1)::text, 3, '0')
-         from public.leads l,
-              (select 'ADMSN-' || lpad(g::text, 5, '0') as number, row_number() over () as n
-               from generate_series(0, 99999) g
-               where not exists (select 1 from public.leads x where x.admission_number = 'ADMSN-' || lpad(g::text, 5, '0'))
-               limit 1000) free
-         where l.id = $2`,
-        [prefix, template],
-      )
+      // Admission numbers are drawn at random from the free ones, as the
+      // app and other suites draw theirs. One taken by a transaction running
+      // alongside raises a unique violation, so the planting retries from a
+      // savepoint with a fresh draw.
+      let inserted
+      for (let attempt = 1; ; attempt++) {
+        await sql.query("savepoint plant")
+        try {
+          inserted = await sql.query(
+            `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, guardian_contact_id, status, visit_date, referral_code)
+             select free.number, 'Coded ' || free.n, l.class_name, l.enrollment_year, l.day_or_boarding, l.guardian_contact_id, l.status, l.visit_date,
+                    $1 || '-' || lpad((free.n - 1)::text, 3, '0')
+             from public.leads l,
+                  (select number, row_number() over () as n
+                   from (select 'ADMSN-' || lpad(g::text, 5, '0') as number
+                         from generate_series(0, 99999) g
+                         where not exists (select 1 from public.leads x where x.admission_number = 'ADMSN-' || lpad(g::text, 5, '0'))
+                         order by random()
+                         limit 1000) picked) free
+             where l.id = $2`,
+            [prefix, template],
+          )
+          await sql.query("release savepoint plant")
+          break
+        } catch (error) {
+          if ((error as { code?: string }).code !== "23505" || attempt === 5) throw error
+          await sql.query("rollback to savepoint plant")
+        }
+      }
       const { rows } = await sql.query("select agent_id from public.create_agent_record($1, $2, null, null, null, 'Pending', null)", [
         fullName,
         asE164(phone()),
       ])
       const made = await sql.query("select code from public.marketing_agents where id = $1", [rows[0].agent_id])
-      return { code: made.rows[0].code as string, coded: inserted.rowCount }
+      return { code: made.rows[0].code as string, coded: inserted!.rowCount }
     })
     expect(coded).toBe(1000)
     expect(code).toMatch(new RegExp(`^${prefix}-\\d{4}$`))
@@ -581,5 +598,130 @@ describe("retiring", () => {
     await linkLogin(agent.id)
     await retire(agent.id)
     expect(await agentRow(agent.id)).toMatchObject({ user_id: null, retired_at: expect.any(Date) })
+  })
+})
+
+describe("retiring records the detached login", () => {
+  test("the retire's history keeps the login id for the ban step, out of staff reach", async () => {
+    const agent = await approvedAgent()
+    const userId = await linkLogin(agent.id)
+    await retire(agent.id)
+    const detached = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query(
+            `select c.kind, d.user_id
+             from public.agent_detached_logins d
+             join public.agent_status_changes c on c.id = d.status_change_id
+             where c.agent_id = $1`,
+            [agent.id],
+          )
+        ).rows,
+    )
+    expect(detached).toEqual([{ kind: "retired", user_id: userId }])
+
+    // The Manager reads the history, but not the detached login.
+    const { error } = await (await signedIn(MANAGER)).from("agent_detached_logins").select("user_id")
+    expect(error?.code).toBe("42501")
+  })
+
+  test("retiring a record with no login, and Recreate, which moves the login, record none", async () => {
+    const plain = await approvedAgent()
+    await retire(plain.id)
+    const moved = await approvedAgent()
+    await linkLogin(moved.id)
+    const done = await recreateAgent(await signedIn(MANAGER), moved.id, { fullName: moved.fullName, phone: moved.phone }, "Wrong name")
+    expect(done.ok).toBe(true)
+    const rows = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query(
+            `select d.user_id from public.agent_detached_logins d
+             join public.agent_status_changes c on c.id = d.status_change_id
+             where c.agent_id = any($1)`,
+            [[plain.id, moved.id]],
+          )
+        ).rows,
+    )
+    expect(rows).toEqual([])
+  })
+})
+
+describe("an email belongs to one login: staff or agent", () => {
+  async function inviteRoleId() {
+    return inRolledBackTransaction(
+      async (sql) => (await sql.query<{ id: string }>("select id from public.roles where name = 'Admissions Staff'")).rows[0].id,
+    )
+  }
+
+  test("a current agent's email can't be given to a staff member; a retired agent's can", async () => {
+    const email = `agent-${randomUUID().slice(0, 8)}@example.test`
+    const created = await createAgent(await signedIn(MANAGER), { fullName: name(), phone: phone(), email })
+    expect(created.ok && created.data.kind).toBe("created")
+    const administrator = await signedIn(await createThrowawayStaff(["staff.administer"]))
+    const roleId = await inviteRoleId()
+
+    const refused = await administrator.rpc("invite_staff_member", { full_name: "Staff Clash", email: email.toUpperCase(), role_id: roleId })
+    expect(refused.error?.message).toBe("agent_email")
+    expect(JSON.parse(refused.error?.details ?? "{}")).toEqual({ email })
+
+    if (created.ok && created.data.kind === "created") await retire(created.data.agent.id)
+    const invited = await administrator.rpc("invite_staff_member", { full_name: "Staff Clash", email, role_id: roleId })
+    expect(invited.error).toBeNull()
+  })
+
+  test("a staff email can't be given to an agent", async () => {
+    const staff = await createThrowawayStaff([])
+    expect(await createAgent(await signedIn(MANAGER), { fullName: name(), phone: phone(), email: staff.email })).toEqual({
+      ok: false,
+      error: { kind: "email-taken" },
+    })
+  })
+
+  test("an agent create and a staff invite of one email at once: the second waits and is refused", async () => {
+    const roleId = await inviteRoleId()
+    const inviter = await createThrowawayStaff(["staff.administer"])
+    for (const first of ["agent", "staff"] as const) {
+      const email = `race-${randomUUID().slice(0, 8)}@example.test`
+      const manager = await sessionOf(MANAGER)
+      const administrator = await sessionOf(inviter)
+      const createAgentSql = () =>
+        manager.query("select public.create_marketing_agent($1, $2, null, $3, null) as r", [name(), phone(), email])
+      const inviteSql = () => administrator.query("select public.invite_staff_member('Race Staff', $1, $2)", [email, roleId])
+      try {
+        if (first === "agent") {
+          expect((await createAgentSql()).rows[0].r.outcome).toBe("created")
+          const inviting = inviteSql()
+          expect(await stillWaiting(inviting)).toBe(true)
+          await manager.query("commit")
+          await expect(inviting).rejects.toThrow("agent_email")
+        } else {
+          await inviteSql()
+          const creating = createAgentSql()
+          expect(await stillWaiting(creating)).toBe(true)
+          await administrator.query("commit")
+          await expect(creating).rejects.toThrow("email_taken")
+        }
+      } finally {
+        await Promise.all([manager.end(), administrator.end()])
+      }
+    }
+  })
+
+  test("two agent creates of one email at once: one is created, the other refused", async () => {
+    const email = `twice-${randomUUID().slice(0, 8)}@example.test`
+    const first = await sessionOf(MANAGER)
+    const second = await sessionOf(MANAGER)
+    try {
+      const create = (sql: Awaited<ReturnType<typeof sessionOf>>) =>
+        sql.query("select public.create_marketing_agent($1, $2, null, $3, null) as r", [name(), phone(), email])
+      expect((await create(first)).rows[0].r.outcome).toBe("created")
+      const again = create(second)
+      expect(await stillWaiting(again)).toBe(true)
+      await first.query("commit")
+      await expect(again).rejects.toThrow("email_taken")
+    } finally {
+      await Promise.all([first.end(), second.end()])
+    }
   })
 })

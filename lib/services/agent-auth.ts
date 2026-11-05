@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { currentSessionKind, passwordSignIn, spendLinkAndSetPassword, type SignInFailure } from "./auth-session"
+import { readWithClockRetry } from "./clock-retry"
 import type { Result } from "./result"
 
 // Signing in to the Discount code pages (#191): the shared steps in
@@ -33,9 +34,9 @@ const STATES: Record<string, AgentAccessError> = {
 }
 
 async function loadAgentAccount(supabase: SupabaseClient): Promise<Result<AgentAccount, AgentAccessError>> {
-  const { data, error } = await supabase
-    .rpc("current_agent_account")
-    .maybeSingle<{ state: string; full_name: string | null; code: string | null }>()
+  const { data, error } = await readWithClockRetry(() =>
+    supabase.rpc("current_agent_account").maybeSingle<{ state: string; full_name: string | null; code: string | null }>(),
+  )
   if (error) {
     console.error("Could not read the signed-in Discount code account", error)
     return { ok: false, error: "unavailable" }

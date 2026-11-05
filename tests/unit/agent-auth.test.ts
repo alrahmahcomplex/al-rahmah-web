@@ -15,6 +15,9 @@ function fakeSupabase({
   account = ACTIVE,
   signInError = null as { message: string; code?: string; status?: number } | null,
   verifyError = null as { message: string; status?: number } | null,
+  // Successive answers before `account` / the staff check's usual answer.
+  accountAnswers = [] as Answer[],
+  staffAnswers = [] as Answer[],
 } = {}) {
   let session: "staff" | "agent" | null = startedAs
   const calls: string[] = []
@@ -46,13 +49,19 @@ function fakeSupabase({
     },
     rpc: vi.fn((fn: string) => ({
       maybeSingle: vi.fn(async () => {
-        if (fn === "current_staff_member") return { data: session === "staff" ? { id: "staff" } : null, error: null }
-        if (fn === "current_agent_account") return session === "agent" ? account : { data: null, error: null }
+        if (fn === "current_staff_member") {
+          return staffAnswers.shift() ?? { data: session === "staff" ? { id: "staff" } : null, error: null }
+        }
+        if (fn === "current_agent_account") {
+          const next = accountAnswers.shift()
+          if (next) return next
+          return session === "agent" ? account : { data: null, error: null }
+        }
         return { data: null, error: null }
       }),
     })),
   }
-  return { client: client as unknown as SupabaseClient, auth: client.auth, signOut, calls }
+  return { client: client as unknown as SupabaseClient, auth: client.auth, rpc: client.rpc, signOut, calls }
 }
 
 describe("signInAgent", () => {
@@ -158,5 +167,68 @@ describe("getAgentUser", () => {
 
   it("is signed out with no session", async () => {
     expect(await getAgentUser(fakeSupabase().client)).toEqual({ ok: false, error: "signed-out" })
+  })
+})
+
+// What PostgREST answers when its clock lags behind the token's issue time.
+const ISSUED_AT_FUTURE: Answer = { data: null, error: { code: "PGRST303", message: "JWT issued at future" } }
+
+describe("a token PostgREST's clock thinks is from the future", () => {
+  async function withTimersRunning<T>(pending: Promise<T>) {
+    await vi.runAllTimersAsync()
+    return pending
+  }
+
+  it("signs the agent in once a second read is accepted", async () => {
+    vi.useFakeTimers()
+    try {
+      const { client, signOut } = fakeSupabase({ accountAnswers: [ISSUED_AT_FUTURE] })
+
+      expect(await withTimersRunning(signInAgent(client, "neema@example.test", "a-password"))).toEqual({
+        ok: true,
+        data: { fullName: "Neema Juma", code: "NEEMA-01" },
+      })
+      expect(signOut).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("reads the agent again only once, and fails closed if the clock still lags", async () => {
+    vi.useFakeTimers()
+    try {
+      const { client, signOut } = fakeSupabase({ startedAs: "agent", accountAnswers: [ISSUED_AT_FUTURE, ISSUED_AT_FUTURE] })
+
+      expect(await withTimersRunning(getAgentUser(client))).toEqual({ ok: false, error: "unavailable" })
+      expect(signOut).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("retries the one-account check's reads before deciding who is signed in", async () => {
+    vi.useFakeTimers()
+    try {
+      // The browser holds an agent session; the staff read lags first.
+      const { client, calls } = fakeSupabase({ startedAs: "agent", staffAnswers: [ISSUED_AT_FUTURE], accountAnswers: [ISSUED_AT_FUTURE] })
+
+      expect(await withTimersRunning(acceptAgentInvite(client, "hash-1", "a-new-password"))).toEqual({
+        ok: true,
+        data: { fullName: "Neema Juma", code: "NEEMA-01" },
+      })
+      expect(calls).toEqual(["verifyOtp", "updateUser"])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("does not read again after any other failure", async () => {
+    const { client, rpc } = fakeSupabase({
+      startedAs: "agent",
+      accountAnswers: [{ data: null, error: { code: "PGRST303", message: "JWT expired" } }],
+    })
+
+    expect(await getAgentUser(client)).toEqual({ ok: false, error: "unavailable" })
+    expect(rpc).toHaveBeenCalledTimes(1)
   })
 })

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 
+import { readWithClockRetry } from "./clock-retry"
 import type { Result } from "./result"
 
 // The sign-in steps staff and Discount code accounts share (#191). Each side
@@ -52,11 +53,11 @@ export async function currentSessionKind(supabase: SupabaseClient): Promise<Resu
     return { ok: true, data: "none" }
   }
 
-  const staff = await supabase.rpc("current_staff_member").maybeSingle<{ id: string }>()
+  const staff = await readWithClockRetry(() => supabase.rpc("current_staff_member").maybeSingle<{ id: string }>())
   if (staff.error) return { ok: false, error: "unavailable" }
   if (staff.data) return { ok: true, data: "staff" }
 
-  const agent = await supabase.rpc("current_agent_account").maybeSingle<{ state?: unknown }>()
+  const agent = await readWithClockRetry(() => supabase.rpc("current_agent_account").maybeSingle<{ state?: unknown }>())
   if (agent.error) return { ok: false, error: "unavailable" }
   return { ok: true, data: typeof agent.data?.state === "string" ? "agent" : "none" }
 }

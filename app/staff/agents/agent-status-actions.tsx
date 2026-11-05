@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useState, useTransition } from "react"
+import { useEffect, useId, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -43,7 +43,18 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
   const reasonId = useId()
   const hintId = useId()
   const errorId = useId()
+  const reasonRef = useRef<HTMLTextAreaElement>(null)
   const verb = actionVerb(action)
+
+  // The dialog focuses the reason on open, while the families are still loading.
+  // When the list arrives above it, the focused field is pushed below the
+  // scrolling body's edge, so bring it back into view.
+  useEffect(() => {
+    const field = reasonRef.current
+    if (impact.status !== "loading" && field && field === document.activeElement) {
+      field.scrollIntoView({ block: "nearest", inline: "nearest" })
+    }
+  }, [impact.status])
 
   function changeOpen(next: boolean) {
     if (pending) return
@@ -142,9 +153,12 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
               <div className="grid gap-1.5">
                 <Label htmlFor={reasonId}>Reason</Label>
                 <Textarea
+                  ref={reasonRef}
                   id={reasonId}
                   value={reason}
                   maxLength={STATUS_REASON_MAX}
+                  // Tab can land on the field while it sits below the scrolling body's edge.
+                  onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
                   onChange={(event) => {
                     setReason(event.target.value)
                     setMissing(false)

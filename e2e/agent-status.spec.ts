@@ -128,8 +128,10 @@ test.describe("switching an agent off and retiring them", () => {
         await page.keyboard.press("Tab")
       }
       await expect(reason).toBeFocused()
+      // Focus alone must show the whole field, before any typing (WCAG 2.4.11). The
+      // dialog may already have put focus there while the families were loading.
+      await expect(reason).toBeInViewport({ ratio: 1 })
       await page.keyboard.type("Has left the school")
-      await expect(reason).toBeInViewport()
       await expect(reason).toHaveValue("Has left the school")
       await expect(confirm).toBeEnabled()
       await expect(confirm).toBeInViewport({ ratio: 1 })

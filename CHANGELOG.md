@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 5, 2026 `v0.72.0`
+
+### NEW
+
+- The Admissions Manager can add a Marketing Agent from the Agents screen with **Add
+  agent**: full name, mobile, and optionally a WhatsApp number, an email and the code
+  the agent already uses. The Manager sees the details as they will be saved before
+  confirming, and the agent starts Approved. A mobile already in use shows "This number already
+  belongs to [name], [code], [status]" with a link to that record, and nothing is added.
+- **Recreate** corrects a wrong agent record in one step: the old record is retired and
+  a corrected one keeps the same code, Approved and switched on, so families keep the
+  discount. The Manager sees how many students carry the code and the families whose
+  fee changes, and confirms it is the same person. Adding an agent with a retired
+  record's code offers Recreate.
+- An email belongs to one person: adding an agent refuses an email a staff member
+  uses, and inviting staff refuses an email a current agent uses.
+
 ## November 5, 2026 `v0.71.0`
 
 ### NEW

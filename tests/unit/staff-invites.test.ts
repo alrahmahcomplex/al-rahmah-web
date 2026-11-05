@@ -117,6 +117,23 @@ describe("inviteStaff", () => {
     expect(result).toMatchObject({ ok: false, error: { message: "amina@example.test already belongs to Amina Juma." } })
   })
 
+  it("refuses an email a Marketing Agent holds and sends nothing", async () => {
+    const { client, send, log } = fakes({
+      invite_staff_member: { error: { message: "agent_email", details: JSON.stringify({ email: "amina@example.test" }) } },
+    })
+
+    const result = await inviteStaff(client, send, details, REDIRECT)
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "agent_email",
+        message: "amina@example.test belongs to a Marketing Agent. Staff and agents can't share an email, so use another one.",
+      },
+    })
+    expect(log).toEqual(["has_permission", "invite_staff_member"])
+  })
+
   it("keeps the record and reports the failure when the email can't be sent, recording no invite", async () => {
     const { client, send, log } = fakes({}, [{ error: { message: "Error sending invite email", status: 500 } }])
 

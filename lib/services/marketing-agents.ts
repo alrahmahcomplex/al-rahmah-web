@@ -360,6 +360,19 @@ type FeeImpactRow = {
   fee_after: number
 }
 
+function feeImpactFamily(row: FeeImpactRow): FeeImpactFamily {
+  return {
+    leadId: row.lead_id,
+    admissionNumber: row.admission_number,
+    studentName: row.student_name,
+    className: row.class_name,
+    contactName: row.contact_name,
+    contactPhone: row.contact_phone,
+    feeNow: row.fee_now,
+    feeAfter: row.fee_after,
+  }
+}
+
 // The families whose interview fee the action would move, for the dialog the
 // Manager confirms. Needs agents.approve and leads.view. The database answers
 // the whole list as one JSON array, read in one snapshot, so the API's row
@@ -375,16 +388,7 @@ export async function getAgentFeeImpact(
   return {
     ok: true,
     data: {
-      families: rows.map((row) => ({
-        leadId: row.lead_id,
-        admissionNumber: row.admission_number,
-        studentName: row.student_name,
-        className: row.class_name,
-        contactName: row.contact_name,
-        contactPhone: row.contact_phone,
-        feeNow: row.fee_now,
-        feeAfter: row.fee_after,
-      })),
+      families: rows.map(feeImpactFamily),
     },
   }
 }
@@ -409,4 +413,274 @@ export async function changeAgentStatus(
     return { ok: false, error: refused === "unavailable" ? "uncertain" : refused }
   }
   return { ok: true, data: { feeChangeCount: data as number } }
+}
+
+// ---------------------------------------------------------------------------
+// Creating an agent, and Recreate (#189).
+// ---------------------------------------------------------------------------
+
+// What the Manager types. Empty optional fields are none; the code, left
+// out, is generated from the name when the agent is saved.
+export type AgentDraft = {
+  fullName: string
+  phone: string
+  whatsapp?: string | null
+  email?: string | null
+  code?: string | null
+}
+
+export type AgentDraftField = "full_name" | "phone" | "whatsapp" | "email" | "code"
+
+// An agent as the Manager's messages name them. Retired records never
+// appear here.
+export type AgentRef = { id: string; fullName: string; code: string; state: "Pending" | "Approved" | "Switched off" }
+
+// What saving would meet, short of saving.
+export type AgentConflict =
+  | { kind: "phone-taken"; agent: AgentRef }
+  | { kind: "code-taken"; agent: AgentRef }
+  | { kind: "retired-code"; agent: { id: string; fullName: string; code: string }; studentCount: number }
+
+export type AgentCheck =
+  | {
+      kind: "ready"
+      fullName: string
+      phone: string
+      whatsapp: string | null
+      email: string | null
+      // Null when the code is generated on saving, from codePrefix.
+      code: string | null
+      codePrefix: string
+    }
+  | AgentConflict
+
+export type CreatedAgent = { kind: "created"; agent: { id: string; fullName: string; code: string; phone: string } }
+
+// "uncertain": a save met an error it can't read as a refusal, so it may
+// have been saved. Only a save returns it.
+export type CreateAgentError =
+  | { kind: "forbidden" }
+  | { kind: "invalid"; field: AgentDraftField }
+  | { kind: "email-taken" }
+  | { kind: "unavailable" }
+  | { kind: "uncertain" }
+
+export type RecreateError =
+  | { kind: "forbidden" }
+  | { kind: "not-found" }
+  // Retired, and Recreate can't start from it: its code is held again, or
+  // another record that held the code retired after it.
+  | { kind: "retired" }
+  | { kind: "invalid"; field: AgentDraftField | "reason" }
+  | { kind: "phone-taken"; agent: AgentRef }
+  | { kind: "email-taken" }
+  | { kind: "unavailable" }
+  | { kind: "uncertain" }
+
+export type RecreatePreview = {
+  agent: { id: string; fullName: string; phone: string; whatsapp: string | null; email: string | null; code: string; retired: boolean }
+  // Every lead carrying the code: these follow it to the new record.
+  studentCount: number
+  // The families whose interview fee the Recreate moves.
+  families: FeeImpactFamily[]
+}
+
+export type RecreatedAgent = { agent: { id: string; fullName: string; code: string }; studentCount: number; feeChangeCount: number }
+
+const DRAFT_FIELDS = new Set<string>(["full_name", "phone", "whatsapp", "email", "code", "reason"])
+
+type DbError = { message: string; code?: string; details?: string | null }
+type AgentRefRow = { id: string; full_name: string; code: string; state: AgentRef["state"] }
+
+function draftField(error: DbError): AgentDraftField | "reason" | null {
+  if (error.message !== "invalid") return null
+  try {
+    const field = JSON.parse(error.details ?? "")?.field
+    return typeof field === "string" && DRAFT_FIELDS.has(field) ? (field as AgentDraftField | "reason") : null
+  } catch {
+    return null
+  }
+}
+
+function agentRef(row: AgentRefRow): AgentRef {
+  return { id: row.id, fullName: row.full_name, code: row.code, state: row.state }
+}
+
+const text = (value: unknown) => (typeof value === "string" ? value : null)
+
+function draftArgs(draft: Omit<AgentDraft, "code">) {
+  return { full_name: text(draft.fullName), phone: text(draft.phone), whatsapp: text(draft.whatsapp), email: text(draft.email) }
+}
+
+// A refusal the database gave, or null when the error is something else.
+function createRefusal(error: DbError): CreateAgentError | null {
+  // 42501: the function isn't granted to the caller at all, as for someone signed out.
+  if (error.message === "not_permitted" || error.code === "42501") return { kind: "forbidden" }
+  if (error.message === "email_taken") return { kind: "email-taken" }
+  const field = draftField(error)
+  if (field && field !== "reason") return { kind: "invalid", field }
+  return null
+}
+
+type OutcomeRow =
+  | { outcome: "ready"; full_name: string; phone: string; whatsapp: string | null; email: string | null; code: string | null; code_prefix: string }
+  | { outcome: "created"; agent: { id: string; full_name: string; code: string; phone: string } }
+  | { outcome: "phone_taken" | "code_taken"; agent: AgentRefRow }
+  | { outcome: "retired_code"; agent: { id: string; full_name: string; code: string }; student_count: number }
+
+function conflictOf(row: OutcomeRow): AgentConflict | null {
+  if (row.outcome === "phone_taken") return { kind: "phone-taken", agent: agentRef(row.agent) }
+  if (row.outcome === "code_taken") return { kind: "code-taken", agent: agentRef(row.agent) }
+  if (row.outcome === "retired_code") {
+    return {
+      kind: "retired-code",
+      agent: { id: row.agent.id, fullName: row.agent.full_name, code: row.agent.code },
+      studentCount: row.student_count,
+    }
+  }
+  return null
+}
+
+// What the Manager checks before saving: the details as they will be
+// stored, or what saving would meet. Saves nothing. Needs agents.approve.
+export async function checkNewAgent(supabase: SupabaseClient, draft: AgentDraft): Promise<Result<AgentCheck, CreateAgentError>> {
+  const { data, error } = await supabase.rpc("check_marketing_agent", { ...draftArgs(draft), code: text(draft.code) })
+  if (error) {
+    const refused = createRefusal(error)
+    if (refused) return { ok: false, error: refused }
+    console.error("Could not check a new Marketing Agent", error)
+    return { ok: false, error: { kind: "unavailable" } }
+  }
+  const row = data as OutcomeRow
+  const conflict = conflictOf(row)
+  if (conflict) return { ok: true, data: conflict }
+  if (row.outcome !== "ready") {
+    console.error("Unexpected answer checking a Marketing Agent", row)
+    return { ok: false, error: { kind: "unavailable" } }
+  }
+  return {
+    ok: true,
+    data: {
+      kind: "ready",
+      fullName: row.full_name,
+      phone: row.phone,
+      whatsapp: row.whatsapp,
+      email: row.email,
+      code: row.code,
+      codePrefix: row.code_prefix,
+    },
+  }
+}
+
+// The Manager's create. Needs agents.approve. The agent starts Approved,
+// approved by the Manager; an email given here counts as confirmed. A phone
+// or code already in use, or a retired code, creates nothing and says so.
+export async function createAgent(
+  supabase: SupabaseClient,
+  draft: AgentDraft,
+): Promise<Result<CreatedAgent | AgentConflict, CreateAgentError>> {
+  const { data, error } = await supabase.rpc("create_marketing_agent", { ...draftArgs(draft), code: text(draft.code) })
+  if (error) {
+    const refused = createRefusal(error)
+    if (refused) return { ok: false, error: refused }
+    console.error("Could not create a Marketing Agent", error)
+    return { ok: false, error: { kind: "uncertain" } }
+  }
+  const row = data as OutcomeRow
+  const conflict = conflictOf(row)
+  if (conflict) return { ok: true, data: conflict }
+  if (row.outcome !== "created") {
+    console.error("Unexpected answer creating a Marketing Agent", row)
+    return { ok: false, error: { kind: "uncertain" } }
+  }
+  return {
+    ok: true,
+    data: { kind: "created", agent: { id: row.agent.id, fullName: row.agent.full_name, code: row.agent.code, phone: row.agent.phone } },
+  }
+}
+
+function recreateRefusal(error: DbError): RecreateError | null {
+  if (error.message === "not_permitted" || error.code === "42501") return { kind: "forbidden" }
+  // A malformed id is no agent at all.
+  if (error.message === "not_found" || error.code === "22P02") return { kind: "not-found" }
+  if (error.message === "agent_retired") return { kind: "retired" }
+  if (error.message === "email_taken") return { kind: "email-taken" }
+  if (error.message === "phone_taken") {
+    try {
+      return { kind: "phone-taken", agent: agentRef(JSON.parse(error.details ?? "") as AgentRefRow) }
+    } catch {
+      return null
+    }
+  }
+  const field = draftField(error)
+  if (field) return { kind: "invalid", field }
+  return null
+}
+
+type PreviewRow = {
+  agent: { id: string; full_name: string; phone: string; whatsapp: string | null; email: string | null; code: string; retired: boolean }
+  student_count: number
+  families: FeeImpactRow[]
+}
+
+// What the Recreate dialog shows first: the record, how many students carry
+// its code and the families whose fee moves. Needs agents.approve and
+// leads.view, read in one snapshot.
+export async function getRecreatePreview(supabase: SupabaseClient, agentId: string): Promise<Result<RecreatePreview, RecreateError>> {
+  const { data, error } = await supabase.rpc("agent_recreate_preview", { agent_id: agentId })
+  if (error) {
+    const refused = recreateRefusal(error)
+    if (refused) return { ok: false, error: refused }
+    console.error("Could not read a Recreate's preview", error)
+    return { ok: false, error: { kind: "unavailable" } }
+  }
+  const row = data as PreviewRow
+  return {
+    ok: true,
+    data: {
+      agent: {
+        id: row.agent.id,
+        fullName: row.agent.full_name,
+        phone: row.agent.phone,
+        whatsapp: row.agent.whatsapp,
+        email: row.agent.email,
+        code: row.agent.code,
+        retired: row.agent.retired,
+      },
+      studentCount: row.student_count,
+      families: row.families.map(feeImpactFamily),
+    },
+  }
+}
+
+// Recreate: retires the record (or records the recreation of one already
+// retired) and creates the corrected one with the same code, Approved and
+// switched on, in one transaction. A linked login moves to the new record.
+// Needs agents.approve and a reason.
+export async function recreateAgent(
+  supabase: SupabaseClient,
+  agentId: string,
+  draft: Omit<AgentDraft, "code">,
+  reason: string,
+): Promise<Result<RecreatedAgent, RecreateError>> {
+  const { data, error } = await supabase.rpc("recreate_marketing_agent", {
+    agent_id: agentId,
+    ...draftArgs(draft),
+    reason: text(reason),
+  })
+  if (error) {
+    const refused = recreateRefusal(error)
+    if (refused) return { ok: false, error: refused }
+    console.error("Could not recreate a Marketing Agent", error)
+    return { ok: false, error: { kind: "uncertain" } }
+  }
+  const row = data as { agent: { id: string; full_name: string; code: string }; student_count: number; fee_change_count: number }
+  return {
+    ok: true,
+    data: {
+      agent: { id: row.agent.id, fullName: row.agent.full_name, code: row.agent.code },
+      studentCount: row.student_count,
+      feeChangeCount: row.fee_change_count,
+    },
+  }
 }

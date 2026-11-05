@@ -15,7 +15,16 @@ import {
   RE_APPLICATIONS_PER_PAGE,
 } from "@/lib/services/re-applications"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber } from "../support/db"
+import {
+  anonClient,
+  asSystem,
+  createThrowawayStaff,
+  inRolledBackTransaction,
+  lockExclusively,
+  secretClient,
+  signedIn,
+  unusedAdmissionNumber,
+} from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Reviewing Re-applications (#77), against local Supabase: the queue, a
@@ -159,14 +168,28 @@ describe("the Re-applications queue", () => {
     const staff = await signedIn(MANAGER)
     const id = await reApply(await onFile())
 
-    const before = await countUnreviewedReApplications(staff)
-    if (!before.ok) throw new Error(before.error)
-    expect(before.data).toBe(await unreviewedInDatabase())
+    // The service's count and the database's, read while the table is held
+    // against writes, so re-applications other tests record or review
+    // meanwhile can't land between the two reads.
+    const countedWhileHeld = () =>
+      inRolledBackTransaction(async (sql) => {
+        await lockExclusively(sql, ["public.re_applications"])
+        const service = await countUnreviewedReApplications(staff)
+        if (!service.ok) throw new Error(service.error)
+        const { rows } = await sql.query<{ total: number; mine: number }>(
+          `select count(*)::int as total, count(*) filter (where id = $1)::int as mine
+           from public.re_applications where reviewed_at is null`,
+          [id],
+        )
+        return { service: service.data, ...rows[0] }
+      })
+
+    const before = await countedWhileHeld()
+    expect(before).toEqual({ service: before.total, total: before.total, mine: 1 })
 
     expect((await markReApplicationReviewed(staff, id)).ok).toBe(true)
-    const after = await countUnreviewedReApplications(staff)
-    if (!after.ok) throw new Error(after.error)
-    expect(after.data).toBe(await unreviewedInDatabase())
+    const after = await countedWhileHeld()
+    expect(after).toEqual({ service: after.total, total: after.total, mine: 0 })
   })
 
   test("staff without leads.view read an empty queue and a count of none", async () => {

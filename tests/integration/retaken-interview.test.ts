@@ -17,6 +17,7 @@ import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 
 import { anonClient, asStaffActor, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { claimInterviewSerialYear } from "../support/interview-serial-years"
 
 // A retaken interview after a Retake reopening (#71), through the interview,
 // lead closure and reopening modules against local Supabase, signed in as
@@ -35,21 +36,6 @@ function phone() {
   // A leading 4 keeps it clear of the seeded 700 000 numbers and the other
   // test files' numbers.
   return `04${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
-}
-
-// An enrollment year no S/N has been issued in yet, as
-// interview-registration.test.ts picks one.
-async function freshYear(): Promise<number> {
-  const used = await inRolledBackTransaction(
-    async (sql) =>
-      (await sql.query<{ enrollment_year: number }>(
-        "select enrollment_year from public.interview_serial_counters where enrollment_year >= 2040",
-      )).rows,
-  )
-  const taken = new Set(used.map((row) => row.enrollment_year))
-  const free = Array.from({ length: 61 }, (_, i) => 2040 + i).filter((year) => !taken.has(year))
-  if (free.length === 0) throw new Error("No unused enrollment year left between 2040 and 2100; run npm run db:reset")
-  return free[randomInt(0, free.length)]
 }
 
 // A walk-in lead, registered and interviewed today with `result`. Returns
@@ -101,43 +87,49 @@ describe("registering a retaken interview", () => {
   test("is allowed once after a Retake approval, with the next S/N, and refused a second time", async () => {
     const { lead, first } = await interviewedLead()
     await reopened(lead, false)
-    // A year of its own, so the retake's S/N is known.
-    const year = await freshYear()
-    await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [lead, year]))
-    const admissions = await signedIn(ADMISSIONS)
+    // A year held so no other test registers in it meanwhile, so the
+    // retake's S/N is known.
+    const claim = await claimInterviewSerialYear()
+    try {
+      const { year, nextSerial } = claim
+      await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [lead, year]))
+      const admissions = await signedIn(ADMISSIONS)
 
-    expect(await getInterviewRegistration(admissions, lead)).toEqual({ ok: true, data: "retake" })
-    const retake = await registerForInterview(admissions, lead)
-    expect(retake).toEqual({
-      ok: true,
-      data: { interviewId: expect.any(String), serialNumber: 1, enrollmentYear: year, retake: true },
-    })
+      expect(await getInterviewRegistration(admissions, lead)).toEqual({ ok: true, data: "retake" })
+      const retake = await registerForInterview(admissions, lead)
+      expect(retake).toEqual({
+        ok: true,
+        data: { interviewId: expect.any(String), serialNumber: nextSerial, enrollmentYear: year, retake: true },
+      })
 
-    expect(await registerForInterview(admissions, lead)).toEqual({ ok: false, error: "already_registered" })
-    expect(await registerForInterview(await signedIn(MANAGER), lead)).toEqual({ ok: false, error: "already_registered" })
-    expect(await getInterviewRegistration(admissions, lead)).toEqual({ ok: true, data: null })
+      expect(await registerForInterview(admissions, lead)).toEqual({ ok: false, error: "already_registered" })
+      expect(await registerForInterview(await signedIn(MANAGER), lead)).toEqual({ ok: false, error: "already_registered" })
+      expect(await getInterviewRegistration(admissions, lead)).toEqual({ ok: true, data: null })
 
-    // The retake is current, Not Paid with the calculated amount; the first
-    // keeps its S/N and result.
-    const interviews = await interviewsOf(lead)
-    expect(interviews).toHaveLength(2)
-    expect(interviews[0]).toMatchObject({
-      id: retake.ok && retake.data.interviewId,
-      serialNumber: 1,
-      enrollmentYear: year,
-      result: null,
-      score: null,
-      feeStatus: "Not Paid",
-      amount: 50_000,
-    })
-    expect(interviews[1]).toMatchObject({
-      id: first.interviewId,
-      serialNumber: first.serialNumber,
-      enrollmentYear: thisYear + 1,
-      result: "Failed",
-      score: 42.5,
-    })
-    expect(await statusOf(lead)).toBe("Interviewed")
+      // The retake is current, Not Paid with the calculated amount; the first
+      // keeps its S/N and result.
+      const interviews = await interviewsOf(lead)
+      expect(interviews).toHaveLength(2)
+      expect(interviews[0]).toMatchObject({
+        id: retake.ok && retake.data.interviewId,
+        serialNumber: nextSerial,
+        enrollmentYear: year,
+        result: null,
+        score: null,
+        feeStatus: "Not Paid",
+        amount: 50_000,
+      })
+      expect(interviews[1]).toMatchObject({
+        id: first.interviewId,
+        serialNumber: first.serialNumber,
+        enrollmentYear: thisYear + 1,
+        result: "Failed",
+        score: 42.5,
+      })
+      expect(await statusOf(lead)).toBe("Interviewed")
+    } finally {
+      await claim.release()
+    }
   })
 
   test("two staff registering the retake at once register it once", async () => {

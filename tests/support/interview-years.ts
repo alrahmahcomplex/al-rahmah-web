@@ -9,7 +9,7 @@ import { Client } from "pg"
 // never used up.
 //
 // The range sits between the dashboard tests' 2031 and the interview
-// registration tests' 2040 and up, and away from the seeded years.
+// S/N tests' 2040 to 2049, and away from the seeded years.
 export const INTERVIEW_LIST_YEARS = { first: 2032, last: 2039 } as const
 
 // The first key of every claim's advisory lock, apart from the fee years'

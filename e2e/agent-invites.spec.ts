@@ -2,8 +2,6 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { expect, test, type Browser, type Page } from "@playwright/test"
 
-import { createAgent } from "@/lib/services/marketing-agents"
-
 import { secretClient, signedIn } from "../tests/support/db"
 import { MANAGER, SEEDED_AGENT, type FixtureStaff } from "../tests/support/fixtures"
 
@@ -41,16 +39,18 @@ async function newAgent() {
   const suffix = randomUUID().slice(0, 8)
   const fullName = `Rehema Invite ${suffix}`
   const email = `rehema-${suffix}@example.test`
-  const created = await createAgent(await signedIn(MANAGER), {
-    fullName,
+  // The Manager's create, as the Agents screen calls it.
+  const { data, error } = await (await signedIn(MANAGER)).rpc("create_marketing_agent", {
+    full_name: fullName,
     // A leading 7 keeps it clear of the seeded 700 000 numbers.
     phone: `07${String(randomInt(10_000_000, 100_000_000))}`,
     whatsapp: "",
     email,
     code: "",
   })
-  if (!created.ok || created.data.kind !== "created") throw new Error(`could not create: ${JSON.stringify(created)}`)
-  return { id: created.data.agent.id, code: created.data.agent.code, fullName, email }
+  const row = data as { outcome: string; agent: { id: string; code: string } } | null
+  if (error || row?.outcome !== "created") throw new Error(`could not create: ${JSON.stringify(error ?? row)}`)
+  return { id: row.agent.id, code: row.agent.code, fullName, email }
 }
 
 type Email = { subject: string; html: string; link: string }

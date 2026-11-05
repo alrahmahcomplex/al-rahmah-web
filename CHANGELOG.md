@@ -14,7 +14,14 @@ stay in the `0.x` range.
   off at once. It starts off and changes in the database only.
 - The database now recognises a signed-in Marketing Agent separately from staff. An
   email belongs to one login, staff or agent, and an agent login reaches no staff screen,
-  function or record. Agents can't sign in yet.
+  function or record.
+- Marketing Agents can now join and sign in. The Admissions Manager adds or corrects an
+  agent's email and presses Send invite, and approving an agent with an email sends the
+  invite too. The agent sets a password from a Swahili and English email, lands on their
+  Discount code page, and signs in there later. A browser signed in as staff refuses agent
+  sign-in until it signs out, and the other way round.
+- The Agents screen shows each agent's account state, filters and counts agents whose
+  invite wasn't sent or whose link expired, and shows how many need attention.
 - A Discount code the Admission form sends for a child already on file now stays on the
   re-application instead of being dropped. The review screen shows it beside the lead's
   Referral code, counts it as a difference when the two differ, and offers Apply for a
@@ -27,6 +34,8 @@ stay in the `0.x` range.
   their email, so a corrected record can use it.
 - Staff invite links now stay valid for 24 hours instead of one hour, and the invite
   email says so.
+- Staff sign-in now says so when there are too many attempts, or when a login has been
+  closed, instead of reporting an outage.
 
 ## November 5, 2026 `v0.73.0`
 

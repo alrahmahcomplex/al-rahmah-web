@@ -82,7 +82,7 @@ export default async function MarketingAgentsPage({
     search.importBatchId ? getAgentImport(supabase, search.importBatchId) : null,
     getAgentAccess(supabase),
     getAgentAccountCounts(supabase),
-    getPendingAgentCount(supabase),
+    canApprove ? getPendingAgentCount(supabase) : null,
   ])
   // The invite badge and line for each agent on this page.
   const invites = results.ok ? await getAgentInvites(supabase, results.data.agents.map((agent) => agent.id)) : null
@@ -131,7 +131,6 @@ export default async function MarketingAgentsPage({
         <nav aria-label="Agent status" className="flex flex-wrap items-center gap-2">
           {FILTERS.map((filter) => {
             const current = !search.account && filter.status === search.status
-            const count = filter.status === "Pending" && pendingCount.ok ? pendingCount.data : null
             return (
               <Link
                 key={filter.status}
@@ -140,7 +139,6 @@ export default async function MarketingAgentsPage({
                 className={buttonVariants({ variant: current ? "default" : "outline", size: "sm" })}
               >
                 {filter.label}
-                {count !== null && <span className="tabular-nums">&nbsp;({count})</span>}
               </Link>
             )
           })}
@@ -168,7 +166,9 @@ export default async function MarketingAgentsPage({
             </Link>
           )}
         </nav>
-        {attention && <NeedsAttention attention={attention} />}
+        {attention && (
+          <NeedsAttention attention={attention} pending={pendingCount?.ok ? pendingCount.data : null} />
+        )}
       </div>
 
       {search.importBatchId && (
@@ -209,10 +209,12 @@ export default async function MarketingAgentsPage({
   )
 }
 
-// "Needs attention": the sum of the named counts, with the breakdown.
-function NeedsAttention({ attention }: { attention: ReturnType<typeof needsAttention> }) {
+// "Needs attention" beside the Pending count, for approvers: the sum of the
+// named counts, with the breakdown.
+function NeedsAttention({ attention, pending }: { attention: ReturnType<typeof needsAttention>; pending: number | null }) {
   return (
     <p className="text-sm">
+      {pending !== null && <span className="font-medium">Pending: {pending} · </span>}
       <span className="font-medium">Needs attention: {attention.total}</span>
       <span className="text-muted-foreground">
         {" "}
@@ -287,7 +289,7 @@ function Results({
                       <p className="text-xs text-muted-foreground">WhatsApp {displayPhone(agent.whatsapp)}</p>
                     )}
                     {invites.get(agent.id)?.email && (
-                      <p className="max-w-56 text-xs wrap-anywhere text-muted-foreground">{invites.get(agent.id)?.email}</p>
+                      <p className="max-w-56 text-xs whitespace-normal wrap-anywhere text-muted-foreground">{invites.get(agent.id)?.email}</p>
                     )}
                   </td>
                   <td className="px-3 py-2 font-mono whitespace-nowrap">{agent.code}</td>

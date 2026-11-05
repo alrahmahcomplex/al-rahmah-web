@@ -14,8 +14,12 @@ import {
   getAgentInvites,
   sendAgentInvite,
   sendAgentInvites,
+  reconcileAgentEmails,
   setAgentEmail,
+  type AgentEmailReconciler,
   type AgentInviteSender,
+  type AgentLogins,
+  type LoginEmailUpdater,
 } from "@/lib/services/agent-invites"
 import { listAgentsInAccountState } from "@/lib/services/agent-account-list"
 import { changeAgentStatus, createAgent } from "@/lib/services/marketing-agents"
@@ -117,6 +121,49 @@ async function joinedAgent(label: string) {
 const realLoginUpdater = async (userId: string, value: string) => {
   const { error } = await secretClient().auth.admin.updateUserById(userId, { email: value, email_confirm: true })
   return { error: error ? { message: error.message } : null }
+}
+
+// The secret key's reconcile, as utils/supabase/admin.ts makes it.
+const realReconciler: AgentEmailReconciler = async (agentId) => {
+  const { data, error } = await secretClient().rpc("reconcile_agent_emails", { for_agent: agentId })
+  return { data, error }
+}
+
+function logins(update: LoginEmailUpdater, reconcile: AgentEmailReconciler = realReconciler): AgentLogins {
+  return { update, reconcile }
+}
+
+const realLogins = logins(realLoginUpdater)
+
+const reconcileDown: AgentEmailReconciler = async () => ({ data: null, error: { message: "fetch failed" } })
+
+// The Manager's session, except that the named calls fail as if the
+// database couldn't be reached.
+async function managerWithout(...failing: string[]): Promise<SupabaseClient> {
+  const client = await manager()
+  return new Proxy(client, {
+    get(target, property, receiver) {
+      if (property === "rpc") {
+        return (name: string, args?: object) =>
+          failing.includes(name)
+            ? Promise.resolve({ data: null, error: { message: "TypeError: fetch failed", code: "" } })
+            : target.rpc(name, args)
+      }
+      return Reflect.get(target, property, receiver)
+    },
+  })
+}
+
+async function openEmailChanges(agentId: string) {
+  return inRolledBackTransaction(async (sql) => {
+    const { rows } = await sql.query<{ n: number }>(
+      `select count(*)::int as n from public.agent_events e
+       where e.agent_id = $1 and e.kind = 'email_change' and e.result = 'started'
+         and not exists (select 1 from public.agent_events c where c.attempt_id = e.id)`,
+      [agentId],
+    )
+    return rows[0].n
+  })
 }
 
 async function stateOf(client: SupabaseClient, agentId: string) {
@@ -531,7 +578,7 @@ describe("editing an agent's email", () => {
       const { error } = await secretClient().auth.admin.updateUserById(userId, { email: value, email_confirm: true })
       return { error: error ? { message: error.message } : null }
     })
-    const edited = await setAgentEmail(client, agent.id, newAddress, updateLoginEmail)
+    const edited = await setAgentEmail(client, agent.id, newAddress, logins(updateLoginEmail))
 
     expect(edited).toEqual({ ok: true, data: { email: newAddress, previousEmail: address, joined: true } })
     expect(updateLoginEmail).toHaveBeenCalledWith(login.data.user?.id, newAddress)
@@ -551,7 +598,7 @@ describe("editing an agent's email", () => {
     const agent = await approvedAgent(address)
     expect((await secretClient().auth.admin.createUser({ email: address, password: "fixture-password", email_confirm: true })).error).toBeNull()
 
-    const edited = await setAgentEmail(client, agent.id, email("revert-after"), async () => ({ error: { message: "down" } }))
+    const edited = await setAgentEmail(client, agent.id, email("revert-after"), logins(async () => ({ error: { message: "down" } })))
 
     expect(edited).toEqual({ ok: false, error: { kind: "login-not-updated" } })
     const stored = await inRolledBackTransaction(async (sql) => {
@@ -580,9 +627,9 @@ describe("editing an agent's email", () => {
       return realLoginUpdater(userId, value)
     }
 
-    const firstSave = setAgentEmail(await manager(), agent.id, first, slowUpdater)
+    const firstSave = setAgentEmail(await manager(), agent.id, first, logins(slowUpdater))
     await firstAtAuth
-    const secondSave = await setAgentEmail(await manager(), agent.id, second, realLoginUpdater)
+    const secondSave = await setAgentEmail(await manager(), agent.id, second, realLogins)
     release()
 
     expect(secondSave).toEqual({ ok: false, error: { kind: "busy" } })
@@ -594,11 +641,11 @@ describe("editing an agent's email", () => {
   test("a failed save closes only its own change, and the next save goes ahead", async () => {
     const agent = await joinedAgent("closes-before")
 
-    const failed = await setAgentEmail(await manager(), agent.id, email("closes-failed"), async () => ({ error: { message: "down" } }))
+    const failed = await setAgentEmail(await manager(), agent.id, email("closes-failed"), logins(async () => ({ error: { message: "down" } })))
     expect(failed).toEqual({ ok: false, error: { kind: "login-not-updated" } })
 
     const next = email("closes-next")
-    expect(await setAgentEmail(await manager(), agent.id, next, realLoginUpdater)).toMatchObject({ ok: true })
+    expect(await setAgentEmail(await manager(), agent.id, next, realLogins)).toMatchObject({ ok: true })
     expect(await storedEmail(agent.id)).toBe(next)
     expect(await loginEmail(agent.userId)).toBe(next)
   })
@@ -614,7 +661,7 @@ describe("editing an agent's email", () => {
     })
 
     const next = email("stale-next")
-    expect(await setAgentEmail(await manager(), agent.id, next, realLoginUpdater)).toMatchObject({ ok: true })
+    expect(await setAgentEmail(await manager(), agent.id, next, realLogins)).toMatchObject({ ok: true })
 
     const late = await (await manager()).rpc("finish_agent_email_change", { change_id: stale })
     expect(late.error?.message).toBe("superseded")
@@ -634,6 +681,126 @@ describe("editing an agent's email", () => {
     expect(finished.error?.message).toBe("login_mismatch")
     expect(await storedEmail(agent.id)).toBe(agent.address)
     expect(await loginEmail(agent.userId)).toBe(agent.address)
+  })
+})
+
+// The sign-in (Auth) email is the source of truth for a joined agent. Each
+// save, and each load of the Agents screen, reconciles the stored email to it.
+describe("bringing a joined agent's stored email in line with their sign-in email", () => {
+  test("a save whose Auth change worked but whose finish couldn't be stored is brought in line by the same save", async () => {
+    const agent = await joinedAgent("finish-down-before")
+    const next = email("finish-down-after")
+
+    const saved = await setAgentEmail(await managerWithout("finish_agent_email_change"), agent.id, next, realLogins)
+
+    expect(saved).toEqual({ ok: true, data: { email: next, previousEmail: agent.address, joined: true } })
+    expect(await loginEmail(agent.userId)).toBe(next)
+    expect(await storedEmail(agent.id)).toBe(next)
+    expect(await openEmailChanges(agent.id)).toBe(0)
+  })
+
+  test("when the database stays down for the rest of the save, the next reconcile brings it in line and the next save goes ahead", async () => {
+    const agent = await joinedAgent("outage-before")
+    const next = email("outage-after")
+
+    const saved = await setAgentEmail(
+      await managerWithout("finish_agent_email_change", "cancel_agent_email_change"),
+      agent.id,
+      next,
+      logins(realLoginUpdater, async (agentId) => (agentId ? reconcileDown(agentId) : realReconciler(agentId))),
+    )
+    expect(saved).toEqual({ ok: false, error: { kind: "unavailable" } })
+    expect(await loginEmail(agent.userId)).toBe(next)
+    expect(await storedEmail(agent.id)).toBe(agent.address)
+
+    // The Agents screen's load, once the database answers again.
+    expect((await reconcileAgentEmails(realLogins)).ok).toBe(true)
+    expect(await storedEmail(agent.id)).toBe(next)
+    expect(await openEmailChanges(agent.id)).toBe(0)
+
+    const after = email("outage-next")
+    expect(await setAgentEmail(await manager(), agent.id, after, realLogins)).toEqual({
+      ok: true,
+      data: { email: after, previousEmail: next, joined: true },
+    })
+    expect(await loginEmail(agent.userId)).toBe(after)
+    expect(await storedEmail(agent.id)).toBe(after)
+  })
+
+  test("an Auth change that lands after a later change took over is corrected, not left split", async () => {
+    const agent = await joinedAgent("late-before")
+    const late = email("late-a")
+    const stale = await asSystem(async (sql) => {
+      const { rows } = await sql.query<{ id: string }>(
+        "insert into public.agent_events (agent_id, kind, result, email, created_by, created_at) values ($1, 'email_change', 'started', $2, $3, now() - interval '10 minutes') returning id",
+        [agent.id, late, MANAGER.id],
+      )
+      return rows[0].id
+    })
+
+    // B takes over the stale change A and finishes.
+    const taken = email("late-b")
+    expect(await setAgentEmail(await manager(), agent.id, taken, realLogins)).toMatchObject({ ok: true })
+    expect(await storedEmail(agent.id)).toBe(taken)
+
+    // A's delayed Auth write lands afterwards, and its finish is refused.
+    expect((await realLoginUpdater(agent.userId, late)).error).toBeNull()
+    const finished = await (await manager()).rpc("finish_agent_email_change", { change_id: stale })
+    expect(finished.error?.message).toBe("superseded")
+
+    // The next reconcile follows Auth, so the screen shows the address that signs in.
+    const reconciled = await reconcileAgentEmails(realLogins, agent.id)
+    expect(reconciled).toEqual({ ok: true, data: [{ agentId: agent.id, outcome: "aligned", email: late }] })
+    expect(await storedEmail(agent.id)).toBe(late)
+    expect(await loginEmail(agent.userId)).toBe(late)
+  })
+
+  test("a save that starts after a late Auth write first takes the address Auth holds", async () => {
+    const agent = await joinedAgent("pre-before")
+    const landed = email("pre-landed")
+    expect((await realLoginUpdater(agent.userId, landed)).error).toBeNull()
+
+    const next = email("pre-next")
+    expect(await setAgentEmail(await manager(), agent.id, next, realLogins)).toEqual({
+      ok: true,
+      data: { email: next, previousEmail: landed, joined: true },
+    })
+    expect(await storedEmail(agent.id)).toBe(next)
+    expect(await loginEmail(agent.userId)).toBe(next)
+  })
+
+  test("a sign-in email another current agent now holds is put back to the stored one", async () => {
+    const agent = await joinedAgent("taken-before")
+    const holderAddress = email("taken-holder")
+    await approvedAgent(holderAddress)
+    expect((await realLoginUpdater(agent.userId, holderAddress)).error).toBeNull()
+
+    const reconciled = await reconcileAgentEmails(realLogins, agent.id)
+
+    expect(reconciled).toEqual({ ok: true, data: [{ agentId: agent.id, outcome: "put_back", email: agent.address }] })
+    expect(await loginEmail(agent.userId)).toBe(agent.address)
+    expect(await storedEmail(agent.id)).toBe(agent.address)
+  })
+
+  test("a change still within its lease is left to finish", async () => {
+    const agent = await joinedAgent("lease-before")
+    const started = await (await manager()).rpc("set_marketing_agent_email", { agent_id: agent.id, email: email("lease-after") })
+    expect(started.error).toBeNull()
+
+    expect(await reconcileAgentEmails(realLogins, agent.id)).toEqual({
+      ok: true,
+      data: [{ agentId: agent.id, outcome: "in_line", email: agent.address }],
+    })
+    expect(await openEmailChanges(agent.id)).toBe(1)
+  })
+
+  test("only the secret key can reconcile: staff sessions, visitors and the seeded agent are refused", async () => {
+    const agent = await joinedAgent("reconcile-denied")
+    const asManager = await (await manager()).rpc("reconcile_agent_emails", { for_agent: agent.id })
+    expect(asManager.error?.code).toBe("42501")
+    await expect(
+      asUser(SEEDED_AGENT.userId, (sql) => sql.query("select * from public.reconcile_agent_emails($1)", [agent.id])),
+    ).rejects.toThrow(/permission denied/)
   })
 })
 

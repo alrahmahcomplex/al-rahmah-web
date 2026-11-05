@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { sendAgentInvite, setAgentEmail } from "@/lib/services/agent-invites"
 import { requirePermission } from "@/lib/services/staff-auth"
-import { agentInviteSender, loginEmailUpdater } from "@/utils/supabase/admin"
+import { agentInviteSender, agentLogins } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
 
 import { agentSetPasswordUrl } from "./invite-link"
@@ -45,7 +45,7 @@ export async function saveMarketingAgentEmail(agentId: string, email: string): P
   if (typeof email !== "string") return emailOutcome({ ok: false, error: { kind: "email-invalid" } })
   const client = await approver()
   if (!client.ok) return emailOutcome(client)
-  const result = await setAgentEmail(client.supabase, agentId, email, loginEmailUpdater())
+  const result = await setAgentEmail(client.supabase, agentId, email, agentLogins())
   if (result.ok) revalidatePath("/staff/agents")
   return emailOutcome(result)
 }

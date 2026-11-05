@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useState, useTransition } from "react"
+import { useCallback, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -18,7 +18,8 @@ const EMPTY: AgentDraftInput = { fullName: "", phone: "", whatsapp: "", email: "
 
 type Step =
   | { name: "form" }
-  | { name: "check"; check: Extract<AgentCheck, { kind: "ready" }> }
+  // `checked` is the input the check ran on, exactly what Create agent saves.
+  | { name: "check"; check: Extract<AgentCheck, { kind: "ready" }>; checked: AgentDraftInput }
   | { name: "conflict"; conflict: AgentConflict }
   | { name: "recreate"; agentId: string; code: string }
 
@@ -39,12 +40,20 @@ export function CreateAgent() {
   const [pending, startTransition] = useTransition()
   const [recreating, setRecreating] = useState(false)
   const busy = pending || recreating
+  // Bumped on every edit, so a check answering after the details changed is
+  // dropped instead of confirming values the form no longer holds.
+  const edits = useRef(0)
+
+  function edit(next: AgentDraftInput) {
+    edits.current += 1
+    setDraft(next)
+  }
 
   function changeOpen(next: boolean) {
     if (busy) return
     setOpen(next)
     if (next) {
-      setDraft(EMPTY)
+      edit(EMPTY)
       setStep({ name: "form" })
       setRefusal(null)
     }
@@ -55,24 +64,27 @@ export function CreateAgent() {
   function check(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setRefusal(null)
+    const checked = draft
+    const version = edits.current
     startTransition(async () => {
       let answer
       try {
-        answer = await checkNewMarketingAgent(draft)
+        answer = await checkNewMarketingAgent(checked)
       } catch {
         answer = { status: "refused" as const, message: "The agent could not be checked just now. Nothing was saved. Try again in a moment." }
       }
+      if (edits.current !== version) return
       if (answer.status === "refused") return setRefusal(answer)
-      setStep(answer.status === "ready" ? { name: "check", check: answer.check } : { name: "conflict", conflict: answer.conflict })
+      setStep(answer.status === "ready" ? { name: "check", check: answer.check, checked } : { name: "conflict", conflict: answer.conflict })
     })
   }
 
-  function create() {
+  function create(checked: AgentDraftInput) {
     setRefusal(null)
     startTransition(async () => {
       let answer
       try {
-        answer = await createMarketingAgent(draft)
+        answer = await createMarketingAgent(checked)
       } catch {
         answer = { status: "refused" as const, message: AGENT_LOST }
       }
@@ -111,7 +123,13 @@ export function CreateAgent() {
                 <DialogDescription>The agent starts Approved. You check the details before they are saved.</DialogDescription>
               </DialogHeader>
               <div className="-mx-4 -my-1 grid min-h-0 gap-4 overflow-y-auto px-4 py-1">
-                <AgentFields fields={["full_name", "phone", "whatsapp", "email", "code"]} value={draft} onChange={setDraft} refused={refusal} />
+                <AgentFields
+                  fields={["full_name", "phone", "whatsapp", "email", "code"]}
+                  value={draft}
+                  onChange={edit}
+                  refused={refusal}
+                  disabled={busy}
+                />
                 {refusal && !refusal.field && (
                   <Alert variant="destructive" role="alert">
                     <AlertDescription>{refusal.message}</AlertDescription>
@@ -158,7 +176,7 @@ export function CreateAgent() {
                 <Button type="button" variant="outline" onClick={() => setStep({ name: "form" })} disabled={busy}>
                   Edit
                 </Button>
-                <Button type="button" onClick={create} disabled={busy}>
+                <Button type="button" onClick={() => create(step.checked)} disabled={busy}>
                   {pending ? "Saving…" : "Create agent"}
                 </Button>
               </DialogFooter>

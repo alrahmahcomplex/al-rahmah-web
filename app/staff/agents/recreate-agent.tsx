@@ -129,10 +129,22 @@ export function RecreateForm({
         )}
         {ready && (
           <>
-            <AgentFields fields={["full_name", "phone", "whatsapp", "email"]} value={draft} onChange={setDraft} refused={refusal} />
+            <AgentFields
+              fields={["full_name", "phone", "whatsapp", "email"]}
+              value={draft}
+              onChange={setDraft}
+              refused={refusal}
+              disabled={pending}
+            />
             <FeeImpact impact={{ status: "ready", families: ready.families }} />
             <div className="flex items-start gap-2 text-sm">
-              <Checkbox id={sameId} className="mt-0.5" checked={same} onCheckedChange={(checked) => setSame(checked === true)} />
+              <Checkbox
+                id={sameId}
+                className="mt-0.5"
+                checked={same}
+                disabled={pending}
+                onCheckedChange={(checked) => setSame(checked === true)}
+              />
               <Label htmlFor={sameId} className="font-normal text-slate-900">
                 {samePersonLabel(code, studentCount)}
               </Label>
@@ -143,6 +155,7 @@ export function RecreateForm({
                 id={reasonId}
                 value={reason}
                 maxLength={STATUS_REASON_MAX}
+                disabled={pending}
                 onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
                 onChange={(event) => setReason(event.target.value)}
                 aria-describedby={`${reasonId}-hint`}

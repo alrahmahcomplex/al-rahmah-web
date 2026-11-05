@@ -24,17 +24,20 @@ const HINTS: Partial<Record<AgentDraftField, string>> = {
 }
 
 // The agent's details, for the Add agent and Recreate dialogs. A field the
-// database refused is marked, with the reason under it.
+// database refused is marked, with the reason under it. `disabled` locks the
+// fields while their values are being checked or saved.
 export function AgentFields({
   fields,
   value,
   onChange,
   refused,
+  disabled = false,
 }: {
   fields: AgentDraftField[]
   value: AgentDraftInput
   onChange: (next: AgentDraftInput) => void
   refused?: { field?: AgentDraftField; message: string } | null
+  disabled?: boolean
 }) {
   const id = useId()
   return (
@@ -57,6 +60,7 @@ export function AgentFields({
               autoComplete="off"
               spellCheck={false}
               required={field === "full_name" || field === "phone"}
+              disabled={disabled}
               className={field === "code" ? "font-mono uppercase" : undefined}
               // On a short phone the keyboard can cover the field; keep it in view.
               onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}

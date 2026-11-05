@@ -97,6 +97,39 @@ test.describe("switching an agent off and retiring them", () => {
     await expect(panel).toContainText("No discount: code switched off on")
   })
 
+  test.describe("on a short phone", () => {
+    test.use({ viewport: { width: 360, height: 640 } })
+
+    test("with several families listed, the dialog fits the screen and the reason and confirm button can be reached", async ({ page }) => {
+      const agent = await approvedAgent()
+      for (let i = 0; i < 6; i++) await leadWithCode(agent.code)
+      await signIn(page, MANAGER)
+
+      await page.goto(`/staff/agents?status=all&q=${encodeURIComponent(agent.code)}`)
+      const row = page.getByRole("row", { name: new RegExp(agent.fullName) })
+      await row.getByRole("button", { name: `Retire ${agent.fullName}` }).click()
+
+      const dialog = page.getByRole("dialog")
+      await expect(dialog.getByRole("list", { name: "Families not yet Paid" }).getByRole("listitem")).toHaveCount(6)
+      const box = await dialog.boundingBox()
+      expect(box).not.toBeNull()
+      expect(box!.y).toBeGreaterThanOrEqual(0)
+      expect(box!.y + box!.height).toBeLessThanOrEqual(640)
+
+      // The buttons stay in view while the body scrolls to the reason.
+      const confirm = dialog.getByRole("button", { name: `Retire ${agent.code}` })
+      await expect(confirm).toBeInViewport({ ratio: 1 })
+      const reason = dialog.getByLabel("Reason")
+      await reason.scrollIntoViewIfNeeded()
+      await expect(reason).toBeInViewport()
+      await reason.fill("Has left the school")
+      await expect(confirm).toBeInViewport({ ratio: 1 })
+      await confirm.click()
+
+      await expect(page.getByText(`${agent.fullName} (${agent.code}) is retired.`, { exact: false })).toBeVisible()
+    })
+  })
+
   test("a retired record is hidden from the list until the Retired filter shows it, with who retired it", async ({ page }) => {
     const agent = await approvedAgent()
     await changeStatus(agent.id, "retired")

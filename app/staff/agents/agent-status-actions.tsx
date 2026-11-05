@@ -90,8 +90,10 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
         {verb}
       </Button>
       <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <form className="grid gap-4" onSubmit={confirm} noValidate>
+        {/* Capped to the screen: on a short phone with many families the body
+            scrolls between the title and the buttons, which stay in view. */}
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-lg">
+          <form className="flex min-h-0 flex-col gap-4" onSubmit={confirm} noValidate>
             <DialogHeader>
               <DialogTitle>
                 {verb} {agent.fullName}?
@@ -99,70 +101,72 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
               <DialogDescription>{actionEffect(action, agent.code)}</DialogDescription>
             </DialogHeader>
 
-            <section aria-label="Fee impact" className="grid gap-2" aria-busy={impact.status === "loading"}>
-              {impact.status === "loading" && <p className="text-sm text-muted-foreground">Finding the families this changes…</p>}
-              {impact.status === "refused" && (
+            <div className="-mx-4 -my-1 grid min-h-0 gap-4 overflow-y-auto px-4 py-1">
+              <section aria-label="Fee impact" className="grid gap-2" aria-busy={impact.status === "loading"}>
+                {impact.status === "loading" && <p className="text-sm text-muted-foreground">Finding the families this changes…</p>}
+                {impact.status === "refused" && (
+                  <Alert variant="destructive" role="alert">
+                    <AlertDescription>{impact.message}</AlertDescription>
+                  </Alert>
+                )}
+                {impact.status === "ready" && (
+                  <>
+                    <p className="text-sm font-semibold text-slate-900">{feeImpactLine(families.length)}</p>
+                    {families.length > 0 && (
+                      <>
+                        <ul aria-label="Families not yet Paid" className="max-h-48 divide-y overflow-y-auto rounded-md text-sm ring-1 ring-foreground/10">
+                          {families.map((family) => (
+                            <li key={family.leadId} className="px-3 py-2">
+                              <p className="font-medium text-slate-900">
+                                {family.studentName} <span className="font-normal text-muted-foreground">· {family.admissionNumber} · {family.className}</span>
+                              </p>
+                              <p className="text-muted-foreground">
+                                {family.contactName} · <a href={`tel:${family.contactPhone}`} className="underline-offset-4 hover:underline">{family.contactPhone}</a>{" "}
+                                · {tzs(family.feeNow)} → {tzs(family.feeAfter)}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="rounded-md bg-slate-50 px-3 py-2 text-sm">
+                          <p className="text-xs text-muted-foreground">Read this to each family:</p>
+                          <p lang="sw" className="text-slate-900">
+                            {familyLine(families[0])}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+              </section>
+
+              <div className="grid gap-1.5">
+                <Label htmlFor={reasonId}>Reason</Label>
+                <Textarea
+                  id={reasonId}
+                  value={reason}
+                  maxLength={STATUS_REASON_MAX}
+                  onChange={(event) => {
+                    setReason(event.target.value)
+                    setMissing(false)
+                  }}
+                  aria-invalid={missing || undefined}
+                  aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
+                />
+                <p id={hintId} className="text-xs text-muted-foreground">
+                  Required. Kept with the agent&apos;s history.
+                </p>
+              </div>
+              {missing && (
+                <p id={errorId} role="alert" className="text-sm text-destructive">
+                  Write why you are making this change.
+                </p>
+              )}
+              {refusal && (
                 <Alert variant="destructive" role="alert">
-                  <AlertDescription>{impact.message}</AlertDescription>
+                  <AlertDescription>{refusal}</AlertDescription>
                 </Alert>
               )}
-              {impact.status === "ready" && (
-                <>
-                  <p className="text-sm font-semibold text-slate-900">{feeImpactLine(families.length)}</p>
-                  {families.length > 0 && (
-                    <>
-                      <ul aria-label="Families not yet Paid" className="max-h-48 divide-y overflow-y-auto rounded-md text-sm ring-1 ring-foreground/10">
-                        {families.map((family) => (
-                          <li key={family.leadId} className="px-3 py-2">
-                            <p className="font-medium text-slate-900">
-                              {family.studentName} <span className="font-normal text-muted-foreground">· {family.admissionNumber} · {family.className}</span>
-                            </p>
-                            <p className="text-muted-foreground">
-                              {family.contactName} · <a href={`tel:${family.contactPhone}`} className="underline-offset-4 hover:underline">{family.contactPhone}</a>{" "}
-                              · {tzs(family.feeNow)} → {tzs(family.feeAfter)}
-                            </p>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-                        <p className="text-xs text-muted-foreground">Read this to each family:</p>
-                        <p lang="sw" className="text-slate-900">
-                          {familyLine(families[0])}
-                        </p>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </section>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor={reasonId}>Reason</Label>
-              <Textarea
-                id={reasonId}
-                value={reason}
-                maxLength={STATUS_REASON_MAX}
-                onChange={(event) => {
-                  setReason(event.target.value)
-                  setMissing(false)
-                }}
-                aria-invalid={missing || undefined}
-                aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
-              />
-              <p id={hintId} className="text-xs text-muted-foreground">
-                Required. Kept with the agent&apos;s history.
-              </p>
             </div>
-            {missing && (
-              <p id={errorId} role="alert" className="text-sm text-destructive">
-                Write why you are making this change.
-              </p>
-            )}
-            {refusal && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{refusal}</AlertDescription>
-              </Alert>
-            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
                 Cancel

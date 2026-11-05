@@ -1,9 +1,11 @@
+import { TriangleAlert } from "lucide-react"
+
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { OFFICE_PHONE } from "@/lib/office"
 import { getResultRelease } from "@/lib/services/result-release"
 import { createClient } from "@/utils/supabase/server"
 
-import { blockedText, releaseLine, smsNote, spacedPhone } from "./result-release-outcome"
+import { blockedText, changedSinceSentText, releaseLine, repeatSendText, smsNote, spacedPhone } from "./result-release-outcome"
 import { SendResult } from "./result-release-send"
 
 // The Result release section of the interview panel (slice 6). It says why
@@ -11,11 +13,17 @@ import { SendResult } from "./result-release-send"
 // prepared message with Send through WhatsApp and Send SMS instead, or Send
 // SMS alone when no number can take a WhatsApp link or the names make the
 // WhatsApp message too long. Everyone who may view the lead sees whether and
-// when it was last sent. The SMS text and the direct phone stay on the server
+// when it was last sent. Once it has been sent, either button asks first,
+// saying when, how and by whom it went; when the result or score was
+// corrected since, a warning above the buttons says so, without blocking. The
+// SMS text and the direct phone stay on the server
 // until a release is recorded; only the note about the text's length goes
 // ahead of it.
 export async function ResultReleaseSection({ leadId }: { leadId: string }) {
   const view = await getResultRelease(await createClient(), leadId, { officePhone: OFFICE_PHONE })
+  const last = view.ok ? view.data.releases[0] : undefined
+  const changed = view.ok && view.data.changedSinceSent
+  const repeat = last ? repeatSendText(last, changed) : null
 
   return (
     <section aria-labelledby="result-release" className="flex max-w-xl flex-col gap-3 border-t pt-3">
@@ -33,6 +41,12 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
               {view.data.releases[0] ? releaseLine(view.data.releases[0]) : "Not sent yet."}
             </p>
           )}
+          {changed && last && (
+            <Alert role="note" aria-label="Changed since sent" className="border-amber-300 bg-amber-50 text-amber-900">
+              <TriangleAlert aria-hidden="true" />
+              <AlertDescription className="text-amber-900">{changedSinceSentText(last)}</AlertDescription>
+            </Alert>
+          )}
           {view.data.blocked !== null ? (
             <p className="text-sm text-muted-foreground">{blockedText(view.data.blocked, view.data.amountOwed)}</p>
           ) : !view.data.offer || !view.data.interviewId ? null : view.data.offer.channel === "whatsapp" &&
@@ -42,6 +56,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
               leadId={leadId}
               interviewId={view.data.interviewId}
               smsNote={smsNote(view.data.offer.smsMessage)}
+              repeat={repeat}
               whatsappPreview={
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -71,6 +86,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
                 leadId={leadId}
                 interviewId={view.data.interviewId}
                 smsNote={smsNote(view.data.offer.smsMessage)}
+                repeat={repeat}
               />
             </>
           )}

@@ -4,6 +4,16 @@ import { Check, Copy, MessageCircle, MessageSquareText } from "lucide-react"
 import { useState, useTransition, type ReactNode } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 
 import { sendResultBySms, sendResultByWhatsApp } from "./result-release-actions"
@@ -32,15 +42,23 @@ type Outcome =
 // number, each with a Copy button, for staff to send from the office phone.
 // The WhatsApp preview then gives way, so staff copy only the SMS's number.
 // The note about a long SMS text shows before and after the send.
+//
+// Once the result has been sent, either button first asks staff to confirm,
+// saying when, how and by whom it last went. Only Send again records a
+// release, and for WhatsApp opens the tab inside that click; cancelling does
+// neither.
 export function SendResult({
   leadId,
   interviewId,
   smsNote,
+  repeat,
   whatsappPreview,
 }: {
   leadId: string
   interviewId: string
   smsNote: string | null
+  // What the confirmation says about the last release, once there is one.
+  repeat: string | null
   // The WhatsApp message and number, when WhatsApp is offered.
   whatsappPreview?: ReactNode
 }) {
@@ -48,6 +66,26 @@ export function SendResult({
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [sending, setSending] = useState<"whatsapp" | "sms" | null>(null)
   const [pending, startTransition] = useTransition()
+  // The channel the confirmation is for. It outlives the dialog's closing,
+  // so the button's label doesn't change while the dialog fades out.
+  const [confirming, setConfirming] = useState<"whatsapp" | "sms">("whatsapp")
+  const [asking, setAsking] = useState(false)
+
+  function ask(channel: "whatsapp" | "sms") {
+    if (repeat === null) {
+      if (channel === "whatsapp") sendWhatsApp()
+      else sendSms()
+      return
+    }
+    setConfirming(channel)
+    setAsking(true)
+  }
+
+  function sendAgain() {
+    setAsking(false)
+    if (confirming === "whatsapp") sendWhatsApp()
+    else sendSms()
+  }
 
   function sendWhatsApp() {
     const tab = window.open("", "_blank")
@@ -95,12 +133,12 @@ export function SendResult({
         (sentBySms ? <p className="text-sm text-muted-foreground">Sent by SMS instead of WhatsApp.</p> : whatsappPreview)}
       <div className="flex flex-wrap gap-2">
         {whatsapp && (
-          <Button type="button" onClick={sendWhatsApp} disabled={pending}>
+          <Button type="button" onClick={() => ask("whatsapp")} disabled={pending}>
             <MessageCircle aria-hidden="true" />
             {pending && sending === "whatsapp" ? "Opening WhatsApp…" : "Send through WhatsApp"}
           </Button>
         )}
-        <Button type="button" variant={whatsapp ? "outline" : "default"} onClick={sendSms} disabled={pending}>
+        <Button type="button" variant={whatsapp ? "outline" : "default"} onClick={() => ask("sms")} disabled={pending}>
           <MessageSquareText aria-hidden="true" />
           {pending && sending === "sms" ? "Recording…" : whatsapp ? "Send SMS instead" : "Send SMS"}
         </Button>
@@ -127,6 +165,21 @@ export function SendResult({
           <AlertDescription>{outcome.message}</AlertDescription>
         </Alert>
       )}
+
+      <AlertDialog open={asking} onOpenChange={setAsking}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send the result again?</AlertDialogTitle>
+            <AlertDialogDescription>{repeat}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Don&apos;t send</AlertDialogCancel>
+            <AlertDialogAction onClick={sendAgain}>
+              {confirming === "sms" ? "Send again by SMS" : "Send again through WhatsApp"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

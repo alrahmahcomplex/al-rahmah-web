@@ -62,6 +62,10 @@ export type ResultReleaseView = {
   offer: ReleaseOffer | null
   // The current interview's releases, newest first.
   releases: ResultReleaseRecord[]
+  // Whether the interview's result or score differs from what the last
+  // release carried, so staff know to send the corrected result. Known only
+  // with an offer: false while the result can't go or the caller can't send.
+  changedSinceSent: boolean
 }
 
 type CommonError = "forbidden" | "not-found" | "unavailable"
@@ -192,6 +196,15 @@ export async function getResultRelease(
     }
   }
 
+  // Compared by value, not by when the interview was last changed: a
+  // correction that ends where the release was, or one that changes only the
+  // date, leaves the family with the result and score the interview carries.
+  // The result and score come from the same result_release_state row the
+  // offer's message was built from.
+  const last = releases[0]
+  const changedSinceSent =
+    offer !== null && last !== undefined && (last.result !== row.result || last.score !== Number(row.score))
+
   return {
     ok: true,
     data: {
@@ -201,6 +214,7 @@ export async function getResultRelease(
       canSend: row.can_send,
       offer,
       releases,
+      changedSinceSent,
     },
   }
 }

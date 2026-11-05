@@ -7,7 +7,7 @@ import { buildWhatsAppLink } from "@/lib/whatsapp"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { recordInterviewResult, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
-import { releaseResult } from "@/lib/services/result-release"
+import { getResultReleases, releaseResult } from "@/lib/services/result-release"
 
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
@@ -245,5 +245,81 @@ test.describe("releasing a result by SMS", () => {
     await expect(release(page).getByRole("group", { name: "SMS text" })).toContainText(lead.studentName)
     await expect(release(page)).toContainText(`To ${spaced}`)
     await expect(release(page).getByText(note)).toHaveCount(1)
+  })
+})
+
+test.describe("sending a result again", () => {
+  test("a repeat send asks first; Don't send records nothing and opens no tab, and the warning after a correction never blocks", async ({
+    page,
+    context,
+  }) => {
+    const lead = await interviewedLead({ score: 81.5 })
+    await markPaid(lead.interviewId)
+    const first = await releaseResult(await signedIn(ADMISSIONS), lead.interviewId, "whatsapp", { officePhone: OFFICE_PHONE })
+    if (!first.ok) throw new Error(`release failed: ${first.error}`)
+    const corrected = await recordInterviewResult(await signedIn(ADMISSIONS), lead.interviewId, {
+      interviewDate: today,
+      result: "Passed",
+      score: 90,
+    })
+    if (!corrected.ok) throw new Error(`correction failed: ${corrected.error}`)
+    const releases = async () => {
+      const read = await getResultReleases(await signedIn(ADMISSIONS), lead.interviewId)
+      if (!read.ok) throw new Error(read.error)
+      return read.data.length
+    }
+    await context.route("https://wa.me/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>wa.me</title>" }))
+    let tabs = 0
+    context.on("page", () => tabs++)
+
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead.id}`)
+    const warning = release(page).getByRole("note", { name: "Changed since sent" })
+    await expect(warning).toHaveText(
+      "The result or score has been corrected since it was last sent, as Passed, 81.5%. Send it again so the family has the corrected result.",
+    )
+    await expect(release(page).getByRole("group", { name: "Message preview" })).toContainText("90%")
+
+    // Cancelling records nothing and opens no tab.
+    await release(page).getByRole("button", { name: "Send through WhatsApp" }).click()
+    const dialog = page.getByRole("alertdialog", { name: "Send the result again?" })
+    await expect(dialog).toContainText(`It was already sent by WhatsApp on ${formatDate(today)} at `)
+    await expect(dialog).toContainText(
+      `by ${ADMISSIONS.name}, as Passed, 81.5%. The result or score has been corrected since, so this sends the corrected result.`,
+    )
+    await dialog.getByRole("button", { name: "Don't send" }).click()
+    await expect(dialog).toHaveCount(0)
+    await release(page).getByRole("button", { name: "Send SMS instead" }).click()
+    await expect(dialog).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(dialog).toHaveCount(0)
+    expect(tabs).toBe(0)
+    expect(await releases()).toBe(1)
+    await expect(release(page).getByRole("status")).toHaveCount(0)
+
+    // Confirming sends the corrected result, and the warning clears.
+    await release(page).getByRole("button", { name: "Send SMS instead" }).click()
+    await dialog.getByRole("button", { name: "Send again by SMS" }).click()
+    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. Send this text from the office phone.", {
+      timeout: 15_000,
+    })
+    await expect(release(page).getByRole("group", { name: "SMS text" })).toContainText("90%")
+    await expect(release(page)).toContainText(`Sent by SMS on ${formatDate(today)} by ${ADMISSIONS.name}`)
+    await expect(warning).toHaveCount(0)
+    expect(await releases()).toBe(2)
+
+    // With nothing changed, the confirmation says so, and confirming opens WhatsApp.
+    await page.reload()
+    await release(page).getByRole("button", { name: "Send through WhatsApp" }).click()
+    await expect(dialog).toContainText(
+      `It was already sent by SMS on ${formatDate(today)} at `,
+    )
+    await expect(dialog).toContainText("as Passed, 90%. Send it again only if the family lost the message or changed number.")
+    const opened = page.waitForEvent("popup")
+    await dialog.getByRole("button", { name: "Send again through WhatsApp" }).click()
+    const tab = await opened
+    await tab.waitForURL(/^https:\/\/wa\.me\//)
+    await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. WhatsApp opened in a new tab: press send there.")
+    expect(await releases()).toBe(3)
   })
 })

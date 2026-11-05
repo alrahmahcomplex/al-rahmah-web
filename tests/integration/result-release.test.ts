@@ -121,7 +121,15 @@ describe("the gate", () => {
     const view = await getResultRelease(await signedIn(ADMISSIONS), SEEDED.noInterview.lead, OFFICE)
     expect(view).toEqual({
       ok: true,
-      data: { interviewId: null, blocked: "no_interview", amountOwed: null, canSend: true, offer: null, releases: [] },
+      data: {
+        interviewId: null,
+        blocked: "no_interview",
+        amountOwed: null,
+        canSend: true,
+        offer: null,
+        releases: [],
+        changedSinceSent: false,
+      },
     })
   })
 
@@ -554,5 +562,94 @@ describe("sending by SMS", () => {
     expect(await releaseResult(await signedIn(DEACTIVATED), interviewId, "sms", OFFICE)).toEqual({ ok: false, error: "forbidden" })
     expect(await releaseResult(anonClient(), interviewId, "sms", OFFICE)).toEqual({ ok: false, error: "forbidden" })
     expect(await releaseCount(interviewId)).toBe(0)
+  })
+})
+
+describe("sending again", () => {
+  async function correct(interviewId: string, { result, score }: { result: "Passed" | "Failed"; score: number }) {
+    const corrected = await recordInterviewResult(await signedIn(ADMISSIONS), interviewId, { interviewDate: today, result, score })
+    if (!corrected.ok) throw new Error(`correction failed: ${corrected.error}`)
+  }
+
+  async function view(leadId: string, staff = ADMISSIONS) {
+    const read = await getResultRelease(await signedIn(staff), leadId, OFFICE)
+    if (!read.ok) throw new Error(read.error)
+    return read.data
+  }
+
+  test("a result never sent is not changed since sent", async () => {
+    const { leadId } = await interviewedLead()
+    expect(await view(leadId)).toMatchObject({ releases: [], changedSinceSent: false })
+  })
+
+  test("a repeat release by either channel is recorded again, newest first, and nothing has changed", async () => {
+    const { leadId, interviewId } = await interviewedLead()
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
+    expect((await releaseResult(await signedIn(MANAGER), interviewId, "sms", OFFICE)).ok).toBe(true)
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
+
+    const read = await view(leadId)
+    expect(read.releases.map((r) => [r.channel, r.releasedBy])).toEqual([
+      ["whatsapp", ADMISSIONS.name],
+      ["sms", MANAGER.name],
+      ["whatsapp", ADMISSIONS.name],
+    ])
+    expect(read.changedSinceSent).toBe(false)
+    expect(read.offer).not.toBeNull()
+  })
+
+  test("a score corrected after the last release is changed since sent, and sending again clears it", async () => {
+    const { leadId, interviewId } = await interviewedLead({ score: 78 })
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
+    await correct(interviewId, { result: "Passed", score: 87.5 })
+
+    const changed = await view(leadId)
+    expect(changed).toMatchObject({ changedSinceSent: true, releases: [{ result: "Passed", score: 78 }] })
+    // The warning never blocks: the corrected result can still go.
+    expect(changed.offer?.whatsappMessage).toContain("87.5%")
+
+    const resent = await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)
+    expect(resent.ok && resent.data.text).toContain("87.5%")
+    expect(await view(leadId)).toMatchObject({ changedSinceSent: false, releases: [{ score: 87.5 }, { score: 78 }] })
+  })
+
+  test("a result corrected after the last release is changed since sent, by SMS as by WhatsApp", async () => {
+    const { leadId, interviewId } = await interviewedLead({ result: "Passed", score: 60 })
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "sms", OFFICE)).ok).toBe(true)
+    await correct(interviewId, { result: "Failed", score: 60 })
+
+    expect(await view(leadId)).toMatchObject({ changedSinceSent: true, releases: [{ channel: "sms", result: "Passed" }] })
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "sms", OFFICE)).ok).toBe(true)
+    expect(await view(leadId)).toMatchObject({ changedSinceSent: false, releases: [{ result: "Failed" }, { result: "Passed" }] })
+  })
+
+  test("a correction that ends where the release was is not changed since sent", async () => {
+    const { leadId, interviewId } = await interviewedLead({ score: 78 })
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
+    await correct(interviewId, { result: "Failed", score: 40 })
+    await correct(interviewId, { result: "Passed", score: 78 })
+    // The family has the result and score the interview carries now.
+    expect(await view(leadId)).toMatchObject({ changedSinceSent: false })
+  })
+
+  test("staff who can't send see the releases but not whether the result changed, nor the current message", async () => {
+    const { leadId, interviewId } = await interviewedLead({ score: 78 })
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
+    await correct(interviewId, { result: "Passed", score: 91 })
+
+    const accountant = await view(leadId, ACCOUNTANT)
+    expect(accountant).toMatchObject({ canSend: false, offer: null, changedSinceSent: false, releases: [{ score: 78 }] })
+    expect(JSON.stringify(accountant)).not.toMatch(/Assalaam|\+255|:91[,}]/)
+    expect(await releaseResult(await signedIn(ACCOUNTANT), interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "forbidden" })
+    expect(await releaseCount(interviewId)).toBe(1)
+  })
+
+  test("a correction after the release on a blocked result shows no warning, as there is nothing to send", async () => {
+    const { leadId, interviewId } = await interviewedLead({ score: 78 })
+    expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
+    await correct(interviewId, { result: "Passed", score: 70 })
+    const unpaid = await setInterviewFeeStatus(await signedIn(ACCOUNTANT), interviewId, "not_paid")
+    if (!unpaid.ok) throw new Error(unpaid.error)
+    expect(await view(leadId)).toMatchObject({ blocked: "not_paid", offer: null, changedSinceSent: false })
   })
 })

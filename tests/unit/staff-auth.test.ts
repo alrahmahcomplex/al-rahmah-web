@@ -29,9 +29,14 @@ const ISSUED_AT_FUTURE: StaffRecordResponse = {
 }
 
 // A stand-in for the Supabase SDK: the only boundary these tests fake.
-// `staffRecord` is what `current_staff_member` answers; `staffRecords`, when
-// given, are its answers to successive calls.
+// `staffRecord` is what `current_staff_member` answers once signed in;
+// `staffRecords`, when given, are its answers to successive calls.
+// `startSignedIn` says whether the browser holds a session before the call;
+// signing in, or using a link, starts one. `agentAccount` is what
+// `current_agent_account` answers, for a browser signed in as an agent.
 function fakeSupabase({
+  startSignedIn = true,
+  agentAccount = { data: null, error: null } as StaffRecordResponse,
   signInError = null as { message: string; code?: string } | null,
   staffRecord = { data: MANAGER_ROW, error: null } as StaffRecordResponse,
   staffRecords = undefined as StaffRecordResponse[] | undefined,
@@ -41,23 +46,26 @@ function fakeSupabase({
   updateError = null as { message: string; code?: string; status?: number } | null,
 } = {}) {
   const calls: string[] = []
+  let signedIn = startSignedIn
   const maybeSingle = vi.fn()
   for (const response of staffRecords ?? []) maybeSingle.mockResolvedValueOnce(response)
   maybeSingle.mockResolvedValue(staffRecords?.at(-1) ?? staffRecord)
   const signOut = vi.fn().mockResolvedValue({ error: null })
   const client = {
     auth: {
-      signInWithPassword: vi.fn().mockResolvedValue({
-        data: signInError ? { user: null } : { user: { id: "user" } },
-        error: signInError,
+      signInWithPassword: vi.fn(async () => {
+        if (!signInError) signedIn = true
+        return { data: signInError ? { user: null } : { user: { id: "user" } }, error: signInError }
       }),
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: sessionUser ? { id: "user" } : null },
-        error: getUserError,
-      }),
+      getUser: vi.fn(async () =>
+        signedIn && sessionUser
+          ? { data: { user: { id: "user" } }, error: null }
+          : { data: { user: null }, error: signedIn ? getUserError : { message: "Auth session missing!", status: 400 } },
+      ),
       signOut,
       verifyOtp: vi.fn(async () => {
         calls.push("verifyOtp")
+        if (!verifyError) signedIn = true
         return verifyError ? { data: { user: null }, error: verifyError } : { data: { user: { id: "invitee" } }, error: null }
       }),
       updateUser: vi.fn(async () => {
@@ -67,15 +75,21 @@ function fakeSupabase({
     },
     rpc: vi.fn((fn: string) => {
       calls.push(fn)
+      if (fn === "current_agent_account") return { maybeSingle: vi.fn().mockResolvedValue(agentAccount) }
       return { maybeSingle }
     }),
   }
   return { client: client as unknown as SupabaseClient, signOut, rpc: client.rpc, auth: client.auth, calls }
 }
 
+// A browser with no session yet, as on the sign-in page or an invite link.
+function signedOut(options: Parameters<typeof fakeSupabase>[0] = {}) {
+  return fakeSupabase({ startSignedIn: false, ...options })
+}
+
 describe("signInStaff", () => {
   it("refuses a wrong password", async () => {
-    const { client } = fakeSupabase({
+    const { client } = signedOut({
       signInError: { message: "Invalid login credentials", code: "invalid_credentials" },
     })
 
@@ -86,8 +100,8 @@ describe("signInStaff", () => {
   })
 
   it("reports an outage as unavailable rather than blaming the password", async () => {
-    const { client } = fakeSupabase({
-      signInError: { message: "request failed", code: "over_request_rate_limit" },
+    const { client } = signedOut({
+      signInError: { message: "request failed", code: "unexpected_failure" },
     })
 
     expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
@@ -96,8 +110,41 @@ describe("signInStaff", () => {
     })
   })
 
+  it("reports a rate limit as its own refusal", async () => {
+    for (const signInError of [
+      { message: "Request rate limit reached", code: "over_request_rate_limit" },
+      { message: "Too many requests", status: 429 },
+    ]) {
+      const { client } = signedOut({ signInError })
+
+      expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
+        ok: false,
+        error: "rate-limited",
+      })
+    }
+  })
+
+  it("reports a banned login as its own refusal", async () => {
+    const { client } = signedOut({ signInError: { message: "User is banned", code: "user_banned" } })
+
+    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({ ok: false, error: "banned" })
+  })
+
+  it("refuses while this browser is signed in as a Discount code holder, before trying the password", async () => {
+    const { client, auth } = fakeSupabase({
+      staffRecord: { data: null, error: null },
+      agentAccount: { data: { state: "active" }, error: null },
+    })
+
+    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
+      ok: false,
+      error: "agent-session",
+    })
+    expect(auth.signInWithPassword).not.toHaveBeenCalled()
+  })
+
   it("signs in an active staff member with their role and permissions, and keeps the session", async () => {
-    const { client, signOut } = fakeSupabase()
+    const { client, signOut } = signedOut()
 
     expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
       ok: true,
@@ -107,7 +154,7 @@ describe("signInStaff", () => {
   })
 
   it("refuses an account with no staff record and ends the session", async () => {
-    const { client, signOut } = fakeSupabase({ staffRecord: { data: null, error: null } })
+    const { client, signOut } = signedOut({ staffRecord: { data: null, error: null } })
 
     expect(await signInStaff(client, "someone@example.test", "fixture-password")).toEqual({
       ok: false,
@@ -117,7 +164,7 @@ describe("signInStaff", () => {
   })
 
   it("refuses a deactivated staff member and ends the session", async () => {
-    const { client, signOut } = fakeSupabase({
+    const { client, signOut } = signedOut({
       staffRecord: { data: { ...MANAGER_ROW, active: false, permissions: [] }, error: null },
     })
 
@@ -129,7 +176,7 @@ describe("signInStaff", () => {
   })
 
   it("refuses and ends the session when the staff record cannot be read", async () => {
-    const { client, signOut } = fakeSupabase({
+    const { client, signOut } = signedOut({
       staffRecord: { data: null, error: { message: "connection refused" } },
     })
 
@@ -156,7 +203,7 @@ describe("reading the staff record when PostgREST's clock lags", () => {
 
   it("signs in once a second read is accepted", async () => {
     vi.useFakeTimers()
-    const { client, signOut, rpc } = fakeSupabase({
+    const { client, signOut, rpc } = signedOut({
       staffRecords: [ISSUED_AT_FUTURE, { data: MANAGER_ROW, error: null }],
     })
 
@@ -184,7 +231,7 @@ describe("reading the staff record when PostgREST's clock lags", () => {
 
   it("fails closed and ends the session when the second read is rejected too", async () => {
     vi.useFakeTimers()
-    const { client, signOut, rpc } = fakeSupabase({ staffRecords: [ISSUED_AT_FUTURE, ISSUED_AT_FUTURE] })
+    const { client, signOut, rpc } = signedOut({ staffRecords: [ISSUED_AT_FUTURE, ISSUED_AT_FUTURE] })
 
     expect(await withTimersRunning(signInStaff(client, "manager@example.test", "fixture-password"))).toEqual({
       ok: false,
@@ -267,8 +314,19 @@ describe("requirePermission", () => {
 })
 
 describe("acceptInvite", () => {
+  it("refuses while this browser is signed in as a Discount code holder, leaving the token unused", async () => {
+    const { client, auth } = fakeSupabase({
+      staffRecord: { data: null, error: null },
+      agentAccount: { data: { state: "active" }, error: null },
+    })
+
+    expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "agent-session" })
+    expect(auth.verifyOtp).not.toHaveBeenCalled()
+    expect(auth.updateUser).not.toHaveBeenCalled()
+  })
+
   it("uses the invite token, sets the password, then checks the staff record", async () => {
-    const { client, auth, calls, signOut } = fakeSupabase()
+    const { client, auth, calls, signOut } = signedOut()
 
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: true, data: MANAGER })
     expect(auth.verifyOtp).toHaveBeenCalledWith({ token_hash: "hash-1", type: "invite" })
@@ -278,14 +336,14 @@ describe("acceptInvite", () => {
   })
 
   it("refuses a short password without touching the token", async () => {
-    const { client, calls } = fakeSupabase()
+    const { client, calls } = signedOut()
 
     expect(await acceptInvite(client, "hash-1", "short")).toEqual({ ok: false, error: "password-too-short" })
     expect(calls).toEqual([])
   })
 
   it("reports an expired or used link", async () => {
-    const { client, calls } = fakeSupabase({
+    const { client, calls } = signedOut({
       verifyError: { message: "Email link is invalid or has expired", code: "otp_expired", status: 403 },
     })
 
@@ -294,13 +352,13 @@ describe("acceptInvite", () => {
   })
 
   it("reports an outage while checking the link as unavailable, so the person can try again", async () => {
-    const { client } = fakeSupabase({ verifyError: { message: "fetch failed", status: 0 } })
+    const { client } = signedOut({ verifyError: { message: "fetch failed", status: 0 } })
 
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({ ok: false, error: "unavailable" })
   })
 
   it("signs out someone deactivated before accepting, keeping the password for if they are reactivated", async () => {
-    const { client, calls, signOut } = fakeSupabase({
+    const { client, calls, signOut } = signedOut({
       staffRecord: { data: { ...MANAGER_ROW, active: false, permissions: [] }, error: null },
     })
 
@@ -310,15 +368,16 @@ describe("acceptInvite", () => {
   })
 
   it("keeps the session when the password can't be saved, and names the account the token verified", async () => {
-    const { client, signOut, calls, auth } = fakeSupabase({ updateError: { message: "boom", status: 500 } })
+    const { client, signOut, calls, auth } = signedOut({ updateError: { message: "boom", status: 500 } })
 
     expect(await acceptInvite(client, "hash-1", "a-new-password")).toEqual({
       ok: false,
       error: "password-not-saved",
       userId: "invitee",
     })
-    // Taken from the verification itself, so no further call can fail first.
-    expect(auth.getUser).not.toHaveBeenCalled()
+    // Taken from the verification itself; the only session read is the
+    // one-account check before the token is used.
+    expect(auth.getUser).toHaveBeenCalledTimes(1)
     expect(calls).toEqual(["verifyOtp", "updateUser"])
     expect(signOut).not.toHaveBeenCalled()
   })
@@ -341,7 +400,8 @@ describe("acceptInvite", () => {
       data: MANAGER,
     })
     expect(auth.verifyOtp).not.toHaveBeenCalled()
-    expect(calls).toEqual(["updateUser", "current_staff_member"])
+    // The first read is the one-account check.
+    expect(calls).toEqual(["current_staff_member", "updateUser", "current_staff_member"])
   })
 
   it("refuses a retry when someone else is signed in, and changes nobody's password", async () => {
@@ -351,7 +411,7 @@ describe("acceptInvite", () => {
       ok: false,
       error: "invalid-link",
     })
-    expect(calls).toEqual([])
+    expect(calls).toEqual(["current_staff_member"])
   })
 
   it("treats a retry with no session left as a spent link", async () => {
@@ -381,7 +441,7 @@ describe("acceptInvite", () => {
   })
 
   it("tells someone whose password was saved to sign in when the staff check can't run", async () => {
-    const { client, calls, signOut } = fakeSupabase({
+    const { client, calls, signOut } = signedOut({
       staffRecord: { data: null, error: { message: "fetch failed" } },
     })
 

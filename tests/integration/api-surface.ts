@@ -504,7 +504,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.mark_re_application_reviewed(re_application_id uuid)": {
     roles: ["authenticated"],
     args: {
-      re_application_id: "(select id from public.re_applications order by id limit 1)",
+      re_application_id: "(select id from public.re_applications where reviewed_at is null order by id limit 1)",
     },
     agent: { refused: "not_permitted" },
   },

@@ -23,8 +23,12 @@
 --   at both ends of every email save and when the Agents screen loads, for
 --   at most max_agents agents a load. An agent may change their own sign-in
 --   email in Supabase Auth (owner decision, 2026-11-06): their record follows
---   it here and the move is recorded with changed_by `agent`. Their Discount
---   code, name and the rest of their record never change this way.
+--   it here and the move is recorded with changed_by `agent`; `staff` only
+--   when Auth carries the mark of a Manager's own write to that address.
+--   Their Discount code, name and the rest of their record never change
+--   this way. An address the agent can't have is put back in Auth, through
+--   a leased put-back that confirm_agent_email_repair checks just before the
+--   write.
 -- - current_agent_account(): the signed-in agent's own name, code and state,
 --   for the agent sign-in and pages.
 
@@ -36,45 +40,54 @@ create table public.agent_events (
     id uuid primary key default gen_random_uuid(),
     -- Empty for an event that matched no agent, such as a refused claim.
     agent_id uuid references public.marketing_agents (id),
-    -- invite: an invite email. email_change: a Manager changing a joined
-    -- agent's email, which changes their sign-in email first, or
-    -- (`reconciled`) the stored email following a sign-in email that no
-    -- open change asked for, usually the agent's own change in Auth.
+    -- invite: an invite email. email_change: a joined agent's email. A
+    -- Manager's change (`started`) changes the sign-in email first. A
+    -- put-back (`repair`) sets the sign-in email back to the stored one when
+    -- it holds an address the agent can't have. `reconciled` is the stored
+    -- email following a sign-in email that no open change asked for.
     kind text not null check (kind in ('invite', 'email_change')),
-    -- `started` opens an attempt; one later row of the same kind closes it
-    -- with its result. access_off is an invite refused before it started.
+    -- `started` and `repair` open an attempt; one later row of the same kind
+    -- closes it with its result. access_off is an invite refused before it
+    -- started.
     result text not null,
-    -- The `started` row this row closes.
+    -- The `started` or `repair` row this row closes.
     attempt_id uuid references public.agent_events (id),
     -- The error code Auth gave, for other_error, so it can be read out.
     error_code text check (char_length(error_code) <= 100),
     -- The address the event was about, only when it is linked to an agent.
     email text check (email = lower(btrim(email)) and char_length(email) <= 254),
-    -- The stored email it replaced, on a row that moved it (`changed`,
-    -- `reconciled`).
+    -- On a row that moved the stored email (`changed`, `reconciled`), the
+    -- stored email it replaced. On a `repair`, the sign-in email it replaces.
     previous_email text check (previous_email = lower(btrim(previous_email)) and char_length(previous_email) <= 254),
     -- Who changed the sign-in email, on a row that moved the stored email:
     -- `staff` for a Manager's change, `agent` for the agent's own change in
     -- Supabase Auth.
     changed_by text check (changed_by in ('staff', 'agent')),
+    -- On a `reconciled` row with changed_by `staff`: the Manager's change
+    -- whose Auth write it took up. Auth carried that change's id with the
+    -- address (reconcile_agent_emails), so it is that write and no other.
+    write_id uuid references public.agent_events (id),
     created_at timestamptz not null default clock_timestamp(),
     -- The staff member who caused it; empty when no one did.
     created_by uuid references public.staff_members (id),
     check (email is null or agent_id is not null),
     check ((changed_by is not null) = (result in ('changed', 'reconciled'))),
-    check (previous_email is null or result in ('changed', 'reconciled')),
+    check (previous_email is null or result in ('changed', 'reconciled', 'repair')),
+    check (write_id is null or (result = 'reconciled' and changed_by = 'staff')),
     check ((result = 'other_error') = (error_code is not null)),
     check (
         (kind = 'invite' and result in (
             'started', 'sent', 'rate_limited', 'smtp_error', 'rejected_address', 'other_error', 'access_off'
         ))
-        or (kind = 'email_change' and result in ('started', 'changed', 'cancelled', 'reconciled'))
+        or (kind = 'email_change' and result in ('started', 'changed', 'cancelled', 'reconciled', 'repair', 'put_back'))
     ),
-    check ((attempt_id is null) = (result in ('started', 'access_off', 'reconciled')))
+    check ((attempt_id is null) = (result in ('started', 'access_off', 'reconciled', 'repair')))
 );
 
 -- One result per attempt.
 create unique index agent_events_attempt_idx on public.agent_events (attempt_id) where attempt_id is not null;
+-- An Auth write is taken up once.
+create unique index agent_events_write_idx on public.agent_events (write_id) where write_id is not null;
 create index agent_events_kind_created_at_idx on public.agent_events (kind, created_at);
 create index agent_events_agent_kind_created_at_idx on public.agent_events (agent_id, kind, created_at) where agent_id is not null;
 create index agent_events_created_by_idx on public.agent_events (created_by) where created_by is not null;
@@ -439,8 +452,10 @@ grant execute on function public.record_agent_invite(uuid, text, text) to authen
 -- Auth writes can't be fenced: one sent before a takeover can land after
 -- it. So the Auth email is the source of truth for a joined agent, and
 -- reconcile_agent_emails moves the stored email to it, run by the server
--- before and after every save and when the Agents screen loads. A late Auth
--- write is then put right by the next reconcile, not left split.
+-- before and after every save and when the Agents screen loads. Each admin
+-- write carries the id of the change or put-back it carries out, so the
+-- reconcile knows a write of the app's from the agent's own change. A late
+-- write that a newer save has overtaken is put back, never adopted.
 -- ---------------------------------------------------------------------------
 
 create function public.email_change_lease()
@@ -454,7 +469,8 @@ $$;
 
 revoke execute on function public.email_change_lease() from public, anon, authenticated, service_role;
 
--- The agent's latest started email change, if no row closes it.
+-- The agent's latest started email change or put-back, if no row closes it.
+-- While it is open, within email_change_lease(), no other starts.
 create function public.open_email_change(agent_id uuid)
 returns public.agent_events
 language sql
@@ -464,11 +480,11 @@ set search_path = ''
 as $$
     select e.*
     from public.agent_events e
-    where e.agent_id = open_email_change.agent_id and e.kind = 'email_change' and e.result = 'started'
+    where e.agent_id = open_email_change.agent_id and e.kind = 'email_change' and e.result in ('started', 'repair')
       and not exists (select 1 from public.agent_events c where c.attempt_id = e.id)
       and e.created_at = (
           select max(l.created_at) from public.agent_events l
-          where l.agent_id = open_email_change.agent_id and l.kind = 'email_change' and l.result = 'started'
+          where l.agent_id = open_email_change.agent_id and l.kind = 'email_change' and l.result in ('started', 'repair')
       )
     limit 1;
 $$;
@@ -656,26 +672,69 @@ $$;
 revoke execute on function public.cancel_agent_email_change(uuid) from public, anon;
 grant execute on function public.cancel_agent_email_change(uuid) to authenticated;
 
+-- The app's Auth write that set a joined agent's sign-in email, and isn't
+-- taken up yet. The server marks each admin write with the id of the change
+-- or put-back it carries out (app_metadata.agent_email_write, written in the
+-- same request as the email; agents can't write app_metadata). The mark
+-- counts only while Auth still holds that row's address, so a later change
+-- the agent makes in Auth is never read as the app's. A write is taken up by
+-- the `changed` or `put_back` row that closes it, or by a `reconciled` row
+-- naming it in write_id. No row when the sign-in email came from elsewhere.
+create function public.agent_email_write(agent_id uuid, login_email text, marker text)
+returns public.agent_events
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select w.*
+    from public.agent_events w
+    where marker ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      and w.id = marker::uuid
+      and w.agent_id = agent_email_write.agent_id
+      and w.kind = 'email_change'
+      and w.result in ('started', 'repair')
+      and w.email = agent_email_write.login_email
+      and not exists (
+          select 1 from public.agent_events c
+          where (c.attempt_id = w.id and c.result in ('changed', 'put_back')) or c.write_id = w.id
+      );
+$$;
+
+revoke execute on function public.agent_email_write(uuid, text, text) from public, anon, authenticated, service_role;
+
 -- For each joined agent (all of them whose stored and Auth emails differ or
 -- who have an open change, or just for_agent), with the agent row and the
 -- login locked:
--- - Auth holds the stored email: `in_line`. An open change past its lease is
---   closed; one within it is left to finish.
+-- - Auth holds the stored email: `in_line`. An open put-back is closed as
+--   `put_back`; an open change past its lease is closed; one within it is
+--   left to finish.
+-- - Auth holds an address written by an app write that is out of date: a
+--   put-back, which never sets a new address, or a Manager's change that a
+--   later save, reconcile or put-back has overtaken. Such a write can land
+--   long after it was sent. It is never adopted: the sign-in email goes back
+--   to the stored one, as below.
 -- - Auth holds another address that no staff member or other current agent
 --   holds: the stored email becomes it, `aligned`. An open change to that
---   address is closed as changed; any other is cancelled and the move is
---   recorded as `reconciled`, with changed_by `staff` when it is a Manager's
---   change that never finished landing late, and `agent` otherwise: the
---   agent changed their own sign-in email.
--- - Auth holds someone else's address: `taken`, with the stored email, which
---   the server puts back into Auth before reconciling again.
+--   address whose own write put it there is closed as changed. Otherwise any
+--   open change is cancelled and the move is recorded as `reconciled`, with
+--   changed_by `staff` (and write_id) only when Auth carries the mark of a
+--   Manager's change to that address that never finished, and `agent`
+--   otherwise: the agent changed their own sign-in email.
+-- - Otherwise the sign-in email goes back to the stored one: `taken`, with a
+--   new put-back (`repair`) for the server to carry out
+--   (confirm_agent_email_repair, then the Auth write marked with its id). A
+--   change or put-back within its lease is waited for instead: `waiting`.
+--   While a put-back is open no save starts, so its write can't overwrite a
+--   newer address. One delayed past the lease is out of date when it lands,
+--   and the next reconcile puts the stored email back.
 -- Only the email moves: the code, name and every other field stay. Without
 -- for_agent it takes at most max_agents agents (1 to 200), so one page load
 -- stays bounded and the rest wait for the next. Running it again changes
 -- nothing. Only the secret key may call it, so staff sessions, visitors and
 -- agents can't.
 create function public.reconcile_agent_emails(for_agent uuid default null, max_agents integer default 25)
-returns table (agent_id uuid, outcome text, user_id uuid, email text)
+returns table (agent_id uuid, outcome text, user_id uuid, email text, repair_id uuid)
 language plpgsql
 security definer
 set search_path = ''
@@ -684,11 +743,11 @@ declare
     candidate uuid;
     agent public.marketing_agents;
     login_email text;
+    marker text;
     pending public.agent_events;
-    settled text;
-    settled_email text;
-    late_by uuid;
-    late boolean;
+    writer public.agent_events;
+    out_of_date boolean;
+    repair uuid;
 begin
     perform public.set_audit_actor('system');
 
@@ -719,71 +778,142 @@ begin
         if agent.user_id is null or agent.retired_at is not null then
             continue;
         end if;
-        select lower(u.email) into login_email from auth.users u where u.id = agent.user_id for update;
+        select lower(u.email), u.raw_app_meta_data ->> 'agent_email_write' into login_email, marker
+        from auth.users u where u.id = agent.user_id for update;
         pending := public.open_email_change(agent.id);
 
         if login_email is null or login_email = agent.email then
-            if pending.id is not null and pending.created_at <= clock_timestamp() - public.email_change_lease() then
+            if pending.id is not null and pending.result = 'repair' then
+                insert into public.agent_events (agent_id, kind, result, attempt_id, email)
+                values (agent.id, 'email_change', 'put_back', pending.id, pending.email)
+                on conflict (attempt_id) where attempt_id is not null do nothing;
+            elsif pending.id is not null and pending.created_at <= clock_timestamp() - public.email_change_lease() then
                 insert into public.agent_events (agent_id, kind, result, attempt_id, email)
                 values (agent.id, 'email_change', 'cancelled', pending.id, pending.email)
                 on conflict (attempt_id) where attempt_id is not null do nothing;
             end if;
-            return query select agent.id, 'in_line'::text, agent.user_id, agent.email;
+            return query select agent.id, 'in_line'::text, agent.user_id, agent.email, null::uuid;
             continue;
         end if;
 
-        perform public.lock_login_email(login_email);
-        settled := 'taken';
-        settled_email := agent.email;
-        if not exists (select 1 from public.staff_members s where s.email = login_email)
-           and not exists (
-               select 1 from public.marketing_agents a
-               where a.email = login_email and a.id <> agent.id and a.retired_at is null
-           ) then
-            begin
-                update public.marketing_agents a set email = login_email where a.id = agent.id;
-                if pending.id is not null and pending.email = login_email then
-                    insert into public.agent_events (agent_id, kind, result, attempt_id, email, previous_email, changed_by, created_by)
-                    values (agent.id, 'email_change', 'changed', pending.id, login_email, agent.email, 'staff', pending.created_by);
-                else
-                    if pending.id is not null then
-                        insert into public.agent_events (agent_id, kind, result, attempt_id, email)
-                        values (agent.id, 'email_change', 'cancelled', pending.id, pending.email);
+        writer := public.agent_email_write(agent.id, login_email, marker);
+        out_of_date := writer.id is not null and (
+            writer.result = 'repair'
+            or exists (
+                select 1 from public.agent_events m
+                where m.agent_id = agent.id and m.kind = 'email_change'
+                  and m.result in ('changed', 'reconciled', 'put_back')
+                  and m.created_at > writer.created_at
+            )
+        );
+
+        if not out_of_date then
+            perform public.lock_login_email(login_email);
+            if not exists (select 1 from public.staff_members s where s.email = login_email)
+               and not exists (
+                   select 1 from public.marketing_agents a
+                   where a.email = login_email and a.id <> agent.id and a.retired_at is null
+               ) then
+                begin
+                    update public.marketing_agents a set email = login_email where a.id = agent.id;
+                    if pending.id is not null and pending.id is not distinct from writer.id then
+                        insert into public.agent_events (agent_id, kind, result, attempt_id, email, previous_email, changed_by, created_by)
+                        values (agent.id, 'email_change', 'changed', pending.id, login_email, agent.email, 'staff', pending.created_by);
+                    else
+                        if pending.id is not null then
+                            insert into public.agent_events (agent_id, kind, result, attempt_id, email)
+                            values (agent.id, 'email_change', 'cancelled', pending.id, pending.email)
+                            on conflict (attempt_id) where attempt_id is not null do nothing;
+                        end if;
+                        insert into public.agent_events (
+                            agent_id, kind, result, email, previous_email, changed_by, write_id, created_by
+                        ) values (
+                            agent.id, 'email_change', 'reconciled', login_email, agent.email,
+                            case when writer.id is not null then 'staff' else 'agent' end, writer.id, writer.created_by
+                        );
                     end if;
-                    -- A Manager's change to this address that never finished
-                    -- is a late Auth write; any other move is the agent's own.
-                    late_by := null;
-                    select s.created_by into late_by
-                    from public.agent_events s
-                    where s.agent_id = agent.id and s.kind = 'email_change' and s.result = 'started'
-                      and s.email = login_email
-                      and not exists (
-                          select 1 from public.agent_events c where c.attempt_id = s.id and c.result = 'changed'
-                      )
-                    order by s.created_at desc
-                    limit 1;
-                    late := found;
-                    insert into public.agent_events (agent_id, kind, result, email, previous_email, changed_by, created_by)
-                    values (
-                        agent.id, 'email_change', 'reconciled', login_email, agent.email,
-                        case when late then 'staff' else 'agent' end, late_by
-                    );
-                end if;
-                settled := 'aligned';
-                settled_email := login_email;
-            exception when check_violation or unique_violation then
-                -- An address the stored email can't take: it goes back in Auth.
-                settled := 'taken';
-                settled_email := agent.email;
-            end;
+                    return query select agent.id, 'aligned'::text, agent.user_id, login_email, null::uuid;
+                    continue;
+                exception when check_violation or unique_violation then
+                    -- An address the stored email can't take: it goes back in Auth.
+                    null;
+                end;
+            end if;
         end if;
-        return query select agent.id, settled, agent.user_id, settled_email;
+
+        if pending.id is not null and pending.created_at > clock_timestamp() - public.email_change_lease() then
+            return query select agent.id, 'waiting'::text, agent.user_id, agent.email, null::uuid;
+            continue;
+        end if;
+        if pending.id is not null then
+            insert into public.agent_events (agent_id, kind, result, attempt_id, email)
+            values (agent.id, 'email_change', 'cancelled', pending.id, pending.email)
+            on conflict (attempt_id) where attempt_id is not null do nothing;
+        end if;
+        insert into public.agent_events (agent_id, kind, result, email, previous_email)
+        values (agent.id, 'email_change', 'repair', agent.email, login_email)
+        returning id into repair;
+        return query select agent.id, 'taken'::text, agent.user_id, agent.email, repair;
     end loop;
 end;
 $$;
 
 revoke execute on function public.reconcile_agent_emails(uuid, integer) from public, anon, authenticated;
 grant execute on function public.reconcile_agent_emails(uuid, integer) to service_role;
+
+-- The server's check just before a put-back's Auth write, with the agent
+-- row and the login locked. `write` while the put-back is still the agent's
+-- open change, the stored email is the one it puts back, and Auth still
+-- holds the address it replaces. `done`, closing it, when Auth already holds
+-- the stored email. Otherwise `superseded`, closing it as cancelled, and the
+-- next reconcile looks again. A write sent after `write` can still land
+-- late; reconcile_agent_emails then treats it as out of date. Only the
+-- secret key may call it.
+create function public.confirm_agent_email_repair(repair_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    repair public.agent_events;
+    agent public.marketing_agents;
+    login_email text;
+begin
+    perform public.set_audit_actor('system');
+
+    select * into repair from public.agent_events e
+    where e.id = confirm_agent_email_repair.repair_id and e.kind = 'email_change' and e.result = 'repair';
+    if not found then
+        return 'superseded';
+    end if;
+    select * into agent from public.marketing_agents a where a.id = repair.agent_id for update;
+    if agent.user_id is not null then
+        select lower(u.email) into login_email from auth.users u where u.id = agent.user_id for update;
+    end if;
+
+    if login_email is not null and login_email = repair.email and agent.email = repair.email then
+        insert into public.agent_events (agent_id, kind, result, attempt_id, email)
+        values (agent.id, 'email_change', 'put_back', repair.id, repair.email)
+        on conflict (attempt_id) where attempt_id is not null do nothing;
+        return 'done';
+    end if;
+    if (select o.id from public.open_email_change(agent.id) o) is not distinct from repair.id
+       and agent.retired_at is null
+       and agent.email is not distinct from repair.email
+       and login_email is not distinct from repair.previous_email
+       and repair.created_at > clock_timestamp() - public.email_change_lease() then
+        return 'write';
+    end if;
+    insert into public.agent_events (agent_id, kind, result, attempt_id, email)
+    values (repair.agent_id, 'email_change', 'cancelled', repair.id, repair.email)
+    on conflict (attempt_id) where attempt_id is not null do nothing;
+    return 'superseded';
+end;
+$$;
+
+revoke execute on function public.confirm_agent_email_repair(uuid) from public, anon, authenticated;
+grant execute on function public.confirm_agent_email_repair(uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- The signed-in agent.

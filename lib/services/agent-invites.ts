@@ -38,8 +38,14 @@ export type AgentInviteSender = (
 ) => Promise<{ error: { message: string; status?: number; code?: string } | null }>
 
 // Changes a joined agent's Auth email, already confirmed, so Supabase sends
-// no confirmation email.
-export type LoginEmailUpdater = (userId: string, email: string) => Promise<{ error: { message: string } | null }>
+// no confirmation email. The same request marks the login with writeId, the
+// change or put-back it carries out, so reconcile_agent_emails can tell this
+// write from the agent's own change, however late it lands.
+export type LoginEmailUpdater = (
+  userId: string,
+  email: string,
+  writeId: string,
+) => Promise<{ error: { message: string } | null }>
 
 export type SendFailure =
   | { kind: "rate-limited" }
@@ -320,32 +326,47 @@ export type AgentEmailReconciler = (
   agentId: string | null,
 ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>
 
-// The secret key's two uses for a joined agent's email.
-export type AgentLogins = { update: LoginEmailUpdater; reconcile: AgentEmailReconciler }
+// The check just before a put-back's Auth write (confirm_agent_email_repair,
+// with the secret key): `write`, `done` or `superseded`.
+export type AgentRepairConfirmer = (
+  repairId: string,
+) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>
+
+// The secret key's uses for a joined agent's email.
+export type AgentLogins = { update: LoginEmailUpdater; reconcile: AgentEmailReconciler; confirmRepair: AgentRepairConfirmer }
 
 const NO_LOGINS: AgentLogins = {
   update: async () => ({ error: { message: "No admin client to change the sign-in email." } }),
   reconcile: async () => ({ data: [], error: null }),
+  confirmRepair: async () => ({ data: "superseded", error: null }),
 }
 
 export type ReconciledEmail = {
   agentId: string
   // in_line: the two already agreed. aligned: the stored email now follows
-  // the sign-in email. put_back: the sign-in email was an address someone
-  // else holds, so it went back to the stored one. split: it couldn't be put
-  // back, and the next reconcile tries again.
+  // the sign-in email. put_back: the sign-in email was an address the agent
+  // can't have, or an out-of-date write, so it went back to the stored one.
+  // split: they still differ (a put-back failed, or another change or
+  // put-back is under way), and the next reconcile looks again.
   outcome: "in_line" | "aligned" | "put_back" | "split"
   // The stored email afterwards.
   email: string | null
 }
 
-type ReconcileRow = { agent_id: string; outcome: string; user_id: string | null; email: string | null }
+type ReconcileRow = {
+  agent_id: string
+  outcome: string
+  user_id: string | null
+  email: string | null
+  repair_id: string | null
+}
 
 // For a joined agent the sign-in email is the source of truth: it is the
-// address they sign in with, and an Auth write can land after the change
-// that made it gave up. So the stored email follows it, unless another agent
-// or staff member holds that address, when the sign-in email goes back.
-// Running it again changes nothing.
+// address they sign in with. So the stored email follows it, unless another
+// agent or staff member holds that address, or it came from an app write a
+// newer save has overtaken, when the sign-in email goes back. The database
+// opens the put-back and holds off saves while it runs; it is checked again
+// just before the Auth write. Running it again changes nothing.
 export async function reconcileAgentEmails(
   logins: AgentLogins,
   agentId: string | null = null,
@@ -357,11 +378,25 @@ export async function reconcileAgentEmails(
   }
   const settled: ReconciledEmail[] = []
   for (const row of (reconciled.data ?? []) as ReconcileRow[]) {
-    if (row.outcome !== "taken" || !row.user_id) {
-      settled.push({ agentId: row.agent_id, outcome: row.outcome === "aligned" ? "aligned" : "in_line", email: row.email })
+    if (row.outcome === "in_line" || row.outcome === "aligned") {
+      settled.push({ agentId: row.agent_id, outcome: row.outcome, email: row.email })
       continue
     }
-    const { error } = row.email ? await logins.update(row.user_id, row.email) : { error: { message: "no stored email" } }
+    if (row.outcome !== "taken" || !row.user_id || !row.email || !row.repair_id) {
+      settled.push({ agentId: row.agent_id, outcome: "split", email: row.email })
+      continue
+    }
+    const confirmed = await logins.confirmRepair(row.repair_id)
+    if (confirmed.error) console.error("Could not check a put-back of a joined agent's sign-in email", row.agent_id, confirmed.error)
+    if (confirmed.data === "done") {
+      settled.push({ agentId: row.agent_id, outcome: "put_back", email: row.email })
+      continue
+    }
+    if (confirmed.data !== "write") {
+      settled.push({ agentId: row.agent_id, outcome: "split", email: row.email })
+      continue
+    }
+    const { error } = await logins.update(row.user_id, row.email, row.repair_id)
     if (error) {
       console.error("Could not put a joined agent's sign-in email back", row.agent_id, error)
       settled.push({ agentId: row.agent_id, outcome: "split", email: row.email })
@@ -408,7 +443,7 @@ export async function setAgentEmail(
   if (!changeId || !userId) return { ok: true, data: { email: address, previousEmail, joined: false } }
   const changed: Result<EmailChange, SetEmailError> = { ok: true, data: { email: address, previousEmail, joined: true } }
 
-  const { error } = await logins.update(userId, address)
+  const { error } = await logins.update(userId, address, changeId)
   if (error) {
     console.error("Could not change a joined agent's sign-in email", agentId, error)
     await cancelEmailChange(supabase, changeId)

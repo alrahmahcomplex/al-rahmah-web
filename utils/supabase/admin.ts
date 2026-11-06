@@ -61,23 +61,34 @@ export function agentInviteSender(): AgentInviteSender {
 }
 
 // A joined agent's sign-in email: changing it, marked confirmed so Supabase
-// sends no confirmation email, and reconciling the stored email to it
-// (reconcile_agent_emails, which only the secret key may call).
+// sends no confirmation email and marked with the change or put-back it
+// carries out (app_metadata, which agents can't write), and reconciling the
+// stored email to it (reconcile_agent_emails and confirm_agent_email_repair,
+// which only the secret key may call).
 export function agentLogins(): AgentLogins {
   const client = secretClient()
   if (!client) {
     return {
       update: async () => ({ error: { message: MISSING_KEY } }),
       reconcile: async () => ({ data: null, error: { message: MISSING_KEY } }),
+      confirmRepair: async () => ({ data: null, error: { message: MISSING_KEY } }),
     }
   }
   return {
-    update: async (userId, email) => {
-      const { error } = await client.auth.admin.updateUserById(userId, { email, email_confirm: true })
+    update: async (userId, email, writeId) => {
+      const { error } = await client.auth.admin.updateUserById(userId, {
+        email,
+        email_confirm: true,
+        app_metadata: { agent_email_write: writeId },
+      })
       return { error: error ? { message: error.message } : null }
     },
     reconcile: async (agentId) => {
       const { data, error } = await client.rpc("reconcile_agent_emails", { for_agent: agentId })
+      return { data, error: error ? { message: error.message, code: error.code } : null }
+    },
+    confirmRepair: async (repairId) => {
+      const { data, error } = await client.rpc("confirm_agent_email_repair", { repair_id: repairId })
       return { data, error: error ? { message: error.message, code: error.code } : null }
     },
   }

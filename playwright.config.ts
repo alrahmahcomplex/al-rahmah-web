@@ -13,6 +13,10 @@ const TURNSTILE_FAILS = "2x0000000000000000000000000000000AA"
 // fails: the public forms' fail-closed path.
 const FAILS_SPECS = /\.turnstile-fails\.spec\.ts$/
 
+// A daily email cap no test run reaches: the integration tests and the specs
+// all count towards one local day of agent invites (#192).
+const INVITE_BUDGET = { EMAIL_DAILY_CAP: "100000", STAFF_INVITE_RESERVE: "20" }
+
 export default defineConfig({
   testDir: "e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -43,7 +47,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,
       // The site key is built into the page, so it is set for the build too.
-      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_PASSES },
+      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_PASSES, ...INVITE_BUDGET },
     },
     {
       // The same build, started once the first server is up, with the secret
@@ -52,7 +56,7 @@ export default defineConfig({
       url: `http://localhost:${E2E_TURNSTILE_FAILS_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_FAILS },
+      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_FAILS, ...INVITE_BUDGET },
     },
   ],
 })

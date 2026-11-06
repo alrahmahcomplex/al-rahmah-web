@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { expect, test, type Page } from "@playwright/test"
 
-import { asSystem, secretClient, signedIn } from "../tests/support/db"
+import { asSystem, signedIn } from "../tests/support/db"
 import { MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
 // Invite batches (#192) end to end: the Manager sends a batch from "Approved,
@@ -78,12 +78,11 @@ const report = (page: Page) => page.getByRole("region", { name: "Invite batch" }
 
 test("a batch with mixed results: sent, skipped, no email and failed, each count linking to its agents", async ({ page }) => {
   const suffix = randomUUID().slice(0, 8)
-  const emails = [`sent-a-${suffix}@example.test`, `sent-b-${suffix}@example.test`, `taken-${suffix}@example.test`, null, `recent-${suffix}@example.test`]
+  const emails = [`sent-a-${suffix}@example.test`, `sent-b-${suffix}@example.test`, `refused-${suffix}@exa_mple.test`, null, `recent-${suffix}@example.test`]
   const { importBatchId, agents } = await importAgents(emails)
-  const [sentA, sentB, taken, noEmail, recent] = agents
-  // An address that already has its own login, so Auth refuses the invite.
-  const login = await secretClient().auth.admin.createUser({ email: taken.email!, password: "fixture-password", email_confirm: true })
-  expect(login.error).toBeNull()
+  // The third address passes the import but Auth refuses it: no underscore
+  // is allowed in a domain.
+  const [sentA, sentB, refused, noEmail, recent] = agents
   await invitedRecently(recent.id, recent.email!)
 
   await signInStaff(page, MANAGER)
@@ -93,10 +92,11 @@ test("a batch with mixed results: sent, skipped, no email and failed, each count
   await page.getByRole("button", { name: "Send invites" }).click()
   const dialog = page.getByRole("dialog", { name: "Send invites to this import's agents" })
   await expect(dialog).toContainText("Anyone invited in the last 24 hours and anyone with no email is skipped.")
-  await expect(dialog).toContainText(/Today's budget for agent invites: \d+ of 80 used/)
+  await expect(dialog).toContainText(/Today's budget for agent invites: \d+ of 99980 used/)
   await dialog.getByRole("button", { name: "Send invites" }).click()
 
-  await expect(page).toHaveURL(/[?&]batch=[0-9a-f-]{36}/)
+  // Each invite goes through local Auth and Mailpit, one at a time.
+  await expect(page).toHaveURL(/[?&]batch=[0-9a-f-]{36}/, { timeout: 30_000 })
   await expect(report(page)).toContainText("sent 2, waiting 0, no email 1, failed 1")
   await expect(report(page)).toContainText(/Started \d{1,2} \w{3} \d{4}, \d{2}:\d{2} by Test Manager, finished/)
   await expect(report(page)).toContainText("Every agent waiting for an invite was tried.")
@@ -112,7 +112,7 @@ test("a batch with mixed results: sent, skipped, no email and failed, each count
   const names = page.getByRole("table", { name: "Marketing Agents" }).getByRole("rowheader")
   await report(page).getByRole("link", { name: "failed 1" }).click()
   await expect(page).toHaveURL(/[?&]outcome=failed/)
-  await expect(names).toHaveText([taken.fullName])
+  await expect(names).toHaveText([refused.fullName])
   await report(page).getByRole("link", { name: "no email 1" }).click()
   await expect(names).toHaveText([noEmail.fullName])
   await report(page).getByRole("link", { name: "sent 2" }).click()

@@ -18,6 +18,7 @@ import {
   readInviteBudgetConfig,
   type BatchOutcome,
 } from "@/lib/services/agent-invite-batches"
+import { getEmailClaimQueue, getSignUpNotes, type SignUpNote } from "@/lib/services/agent-email-claims"
 import { getAgentAccountCounts, getAgentInvites, type AgentInviteNote } from "@/lib/services/agent-invites"
 import { getPendingAgentCount, listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
 import { cn } from "@/lib/utils"
@@ -28,6 +29,7 @@ import { AgentAccessBanner } from "./access-banner"
 import { AccountStateBadge, AgentInviteActions } from "./agent-invite"
 import { AgentStatusActions } from "./agent-status-actions"
 import { ApproveAgent } from "./approve-agent"
+import { ClaimQueue } from "./claim-queue"
 import { CreateAgent } from "./create-agent"
 import { SendInvites } from "./invite-batch"
 import { budgetLine } from "./invite-batch-outcome"
@@ -60,8 +62,9 @@ const FILTERS: { status: AgentFilter; label: string }[] = [
   { status: "Retired", label: "Retired" },
 ]
 
-// The account-state filters (#191, #192), each with its count.
+// The account-state filters (#191, #192, #193), each with its count.
 const ACCOUNT_FILTERS = [
+  { account: "awaiting_confirmation", label: "Awaiting email confirmation" },
   { account: "no_account", label: "Approved, no account yet" },
   { account: "invite_not_sent", label: "Invite not sent" },
   { account: "invite_expired", label: "Invited, link expired" },
@@ -94,8 +97,10 @@ export default async function MarketingAgentsPage({
   // "Approved, no account yet" shows the latest invite batch over the list it
   // shows; a batch's own link shows that batch.
   const showsBatches = search.account === "no_account" || search.batchId !== undefined
+  // "Awaiting email confirmation" shows the claim queue in place of the list.
+  const showsQueue = search.account === "awaiting_confirmation" && !search.batchOutcome
   const budgetConfig = readInviteBudgetConfig()
-  const [results, batch, access, counts, pendingCount, inviteBatch, budgetUsed] = await Promise.all([
+  const [results, batch, access, counts, pendingCount, inviteBatch, budgetUsed, queue] = await Promise.all([
     search.batchId && search.batchOutcome
       ? listAgentsInBatchOutcome(supabase, search.batchId, search.batchOutcome, { query: search.query, page: search.page })
       : search.account
@@ -113,9 +118,14 @@ export default async function MarketingAgentsPage({
       ? getInviteBatchReport(supabase, search.batchId ? { batchId: search.batchId } : { importBatchId: search.importBatchId })
       : null,
     canApprove && search.account === "no_account" && budgetConfig ? getInviteBudgetUsed(supabase) : null,
+    showsQueue ? getEmailClaimQueue(supabase) : null,
   ])
-  // The invite badge and line for each agent on this page.
-  const invites = results.ok ? await getAgentInvites(supabase, results.data.agents.map((agent) => agent.id)) : null
+  // The invite badge and line, and any code typed at sign-up, for each agent
+  // on this page.
+  const agentIds = results.ok ? results.data.agents.map((agent) => agent.id) : []
+  const [invites, signUpNotes] = results.ok
+    ? await Promise.all([getAgentInvites(supabase, agentIds), getSignUpNotes(supabase, agentIds)])
+    : [null, null]
   const attention = counts.ok ? needsAttention(counts.data) : null
 
   return (
@@ -274,7 +284,22 @@ export default async function MarketingAgentsPage({
         </Alert>
       )}
 
-      {!results.ok ? (
+      {queue ? (
+        !queue.ok ? (
+          <Alert variant="destructive">
+            <AlertDescription>The email claims could not be loaded. Try again in a moment.</AlertDescription>
+          </Alert>
+        ) : (
+          <section aria-label="Results" className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              {queue.data.length === 0
+                ? "No email claims are waiting."
+                : `${queue.data.length} ${queue.data.length === 1 ? "agent" : "agents"} awaiting email confirmation, oldest first`}
+            </p>
+            {queue.data.length > 0 && <ClaimQueue entries={queue.data} canApprove={canApprove} />}
+          </section>
+        )
+      ) : !results.ok ? (
         <Alert variant="destructive">
           <AlertDescription>Marketing Agents could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
@@ -284,6 +309,7 @@ export default async function MarketingAgentsPage({
           search={search}
           canApprove={canApprove}
           invites={invites?.ok ? invites.data : null}
+          signUpNotes={signUpNotes?.ok ? signUpNotes.data : null}
         />
       )}
     </div>
@@ -313,6 +339,7 @@ const BATCH_EMPTY: Record<BatchOutcome, string> = {
 }
 
 const ACCOUNT_EMPTY: Record<NonNullable<AgentScreenSearch["account"]>, string> = {
+  awaiting_confirmation: "No email claims are waiting.",
   no_account: "Every Approved agent has an account.",
   invite_not_sent: "Every Approved agent with an email has been sent an invite.",
   invite_expired: "No agent's invite link has expired.",
@@ -323,12 +350,15 @@ function Results({
   search,
   canApprove,
   invites,
+  signUpNotes,
 }: {
   results: AgentList
   search: AgentScreenSearch
   canApprove: boolean
   // Null when they couldn't be read: the actions that use the email are off.
   invites: Map<string, AgentInviteNote> | null
+  // Codes typed at sign-up that weren't adopted; null when unread.
+  signUpNotes: Map<string, SignUpNote> | null
 }) {
   const { agents, total, page, pageCount } = results
   const empty = search.query
@@ -383,7 +413,10 @@ function Results({
                       <p className="max-w-56 text-xs whitespace-normal wrap-anywhere text-muted-foreground">{invites.get(agent.id)?.email}</p>
                     )}
                   </td>
-                  <td className="px-3 py-2 font-mono whitespace-nowrap">{agent.code}</td>
+                  <td className="px-3 py-2">
+                    <span className="font-mono whitespace-nowrap">{agent.code}</span>
+                    <TypedCodeNote note={signUpNotes?.get(agent.id)} />
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
                       <Badge
@@ -483,4 +516,21 @@ function Results({
 function InviteState({ note }: { note: AgentInviteNote | undefined }) {
   if (!note) return null
   return <AccountStateBadge state={note.state} line={inviteLine(note)} />
+}
+
+// A code typed at sign-up that the record didn't get (#193): flagged, never
+// adopted, because someone holds or held it, or students carry it.
+function TypedCodeNote({ note }: { note: SignUpNote | undefined }) {
+  if (!note) return null
+  const reasons = [
+    note.holder ? `it belongs to ${note.holder.fullName} (${note.holder.code})` : null,
+    note.retiredHolder ? "a retired record held it" : null,
+    note.leadCount > 0 ? `${note.leadCount} ${note.leadCount === 1 ? "student carries" : "students carry"} it` : null,
+  ].filter(Boolean)
+  return (
+    <p className="mt-1 max-w-56 text-xs text-amber-900">
+      Typed <span className="font-mono">{note.typedCode}</span> at sign-up, not used
+      {reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}.
+    </p>
+  )
 }

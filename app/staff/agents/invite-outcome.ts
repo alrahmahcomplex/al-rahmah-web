@@ -167,7 +167,7 @@ export function emailOutcome(result: Result<EmailChange, SetEmailError | { kind:
 }
 
 const ATTENTION_LABELS: { state: AccountState; label: string; always: boolean }[] = [
-  { state: "awaiting_confirmation", label: "awaiting email confirmation", always: false },
+  { state: "awaiting_confirmation", label: "awaiting email confirmation", always: true },
   { state: "invite_not_sent", label: "invite not sent", always: true },
   { state: "invite_expired", label: "link expired", always: true },
 ]

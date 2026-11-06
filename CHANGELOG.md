@@ -5,6 +5,24 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 6, 2026 `v0.77.0`
+
+### NEW
+
+- The Discount code page now asks for an email. Someone who already has a code, such as
+  an agent the Admissions Manager imported, ticks "Tayari una code?" and gives their code
+  and mobile to claim it. Every combination gets its own message in Swahili and English:
+  the code and link, tick the box, check the code, check spam, sign in, or use another
+  email. The page never sends an email and never replaces an email the school already
+  holds. Sign-up and claiming stop while agent access is off.
+- The Agents screen has an "Awaiting email confirmation" queue, oldest first, with its
+  count in "Needs attention". It shows the typed name beside the stored one, when the
+  claim came in and any other attempts, and asks the Manager to phone the agent first.
+  Confirm saves the email, rejects the other attempts and sends the invite; Save and send
+  invite does the same with a corrected email; Reject leaves the record without one.
+- A code typed at sign-up that someone else holds or that students already carry is never
+  given to the new agent; their row on the Agents screen says why.
+
 ## November 6, 2026 `v0.76.0`
 
 ### NEW

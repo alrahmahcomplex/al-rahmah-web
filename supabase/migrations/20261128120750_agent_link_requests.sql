@@ -59,7 +59,8 @@ alter table public.agent_events
 -- - access_off: agent access is off; nothing is counted or sent.
 -- - limited: this email has had per_email_limit requests in the last hour.
 -- - busy: the project has had hourly_budget requests in the last hour.
--- - none: counted; nothing to send.
+-- - none: nothing to send. Counted, unless the same email asked in the last
+--   60 seconds, which gets this answer without being counted.
 -- - reset or invite: counted; send that email to `send_to`, then record the
 --   result of `attempt_id` with record_agent_link.
 --
@@ -98,6 +99,16 @@ begin
     delete from public.agent_link_requests r where r.requested_at < now() - interval '1 hour';
 
     hash := encode(sha256(convert_to(address, 'UTF8')), 'hex');
+    -- Supabase refuses a second email to one address within 60 seconds, so a
+    -- repeat inside that gap would send nothing: it gets the neutral reply
+    -- and uses no allowance.
+    if exists (
+        select 1 from public.agent_link_requests r
+        where r.email_hash = hash and r.requested_at > now() - interval '60 seconds'
+    ) then
+        return query select 'none'::text, null::text, null::uuid;
+        return;
+    end if;
     if (select count(*) from public.agent_link_requests r where r.email_hash = hash) >= per_email_limit then
         return query select 'limited'::text, null::text, null::uuid;
         return;

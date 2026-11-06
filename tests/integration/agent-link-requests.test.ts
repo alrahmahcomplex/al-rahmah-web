@@ -241,17 +241,46 @@ describe("who gets an email", () => {
 })
 
 describe("the limits", () => {
-  test("the per-email limit counts every request for the address, agent or not", async () => {
-    const limits = { perEmailLimit: 2, hourlyBudget: 1_000_000 }
+  test("the per-email limit counts every request for the address in the hour, agent or not", async () => {
     const agent = await joinedAgent("per-email")
-    expect((await decide(agent.address, limits)).kind).toBe("reset")
-    expect((await decide(agent.address, limits)).kind).toBe("reset")
-    expect(await decide(agent.address, limits)).toEqual({ kind: "limited" })
-
     const stranger = email("per-email-stranger")
-    expect(await decide(stranger, limits)).toEqual({ kind: "none" })
-    expect(await decide(stranger, limits)).toEqual({ kind: "none" })
-    expect(await decide(stranger.toUpperCase(), limits)).toEqual({ kind: "limited" })
+    await inRolledBackTransaction(async (sql) => {
+      // Two earlier requests each, outside Supabase's 60-second gap.
+      for (const address of [agent.address, stranger]) {
+        await sql.query(
+          "insert into public.agent_link_requests (email_hash, requested_at) values ($1, now() - interval '5 minutes'), ($1, now() - interval '3 minutes')",
+          [hashOf(address)],
+        )
+      }
+      expect(await requestInTransaction(sql, agent.address, 3, 1_000_000)).toBe("reset")
+    })
+    await inRolledBackTransaction(async (sql) => {
+      for (const address of [agent.address, stranger]) {
+        await sql.query(
+          "insert into public.agent_link_requests (email_hash, requested_at) values ($1, now() - interval '5 minutes'), ($1, now() - interval '3 minutes')",
+          [hashOf(address)],
+        )
+      }
+      expect(await requestInTransaction(sql, agent.address, 2, 1_000_000)).toBe("limited")
+      expect(await requestInTransaction(sql, stranger.toUpperCase(), 2, 1_000_000)).toBe("limited")
+    })
+  })
+
+  test("a repeat within 60 seconds gets the neutral reply and uses no allowance", async () => {
+    const agent = await joinedAgent("repeat")
+    expect((await decide(agent.address)).kind).toBe("reset")
+    expect(await decide(agent.address)).toEqual({ kind: "none" })
+    expect(await decide(agent.address.toUpperCase())).toEqual({ kind: "none" })
+
+    const counted = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ n: number }>(
+        "select count(*)::int as n from public.agent_link_requests where email_hash = $1",
+        [hashOf(agent.address)],
+      )
+      return rows[0].n
+    })
+    expect(counted).toBe(1)
+    expect(await events(agent.id, "reset")).toHaveLength(1)
   })
 
   test("the hourly budget counts every address's requests, and a refused request isn't counted", async () => {

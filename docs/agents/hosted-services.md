@@ -80,7 +80,7 @@ Agent batches send at most `EMAIL_DAILY_CAP − STAFF_INVITE_RESERVE` agent invi
 
 ### Public password-link limits
 
-"Umesahau nenosiri?" and "Tuma kiungo kipya" (#194) are public forms that can send email, so the database counts them too. Each request that passes Turnstile and the firewall goes into `agent_link_requests`, which holds only a SHA-256 hash of the email and the time, and drops rows older than an hour on every write. A request is refused when the email already has `AGENT_LINK_PER_EMAIL_LIMIT` requests in the last hour, or the whole project has `PUBLIC_EMAIL_HOURLY_BUDGET`. Both count every request, whether or not the email has an account, so the limits never tell a stranger which emails do. Both limits hold even when the firewall check fails open.
+"Umesahau nenosiri?" and "Tuma kiungo kipya" (#194) are public forms that can send email, so the database counts them too. Each request that passes Turnstile and the firewall goes into `agent_link_requests`, which holds only a SHA-256 hash of the email and the time, and drops rows older than an hour on every write. A request is refused when the email already has `AGENT_LINK_PER_EMAIL_LIMIT` requests in the last hour, or the whole project has `PUBLIC_EMAIL_HOURLY_BUDGET`. Both count every request, whether or not the email has an account, so the limits never tell a stranger which emails do. A repeat for the same email within 60 seconds, which Supabase's gap would refuse anyway, gets the usual reply and isn't counted. Both limits hold even when the firewall check fails open.
 
 Set both in Vercel for Production and Preview, server-only. A missing value, or one that isn't a whole number, falls back to the default below, never to no limit.
 

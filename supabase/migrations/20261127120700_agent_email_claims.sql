@@ -273,6 +273,11 @@ begin
 
         -- Two claims on one agent wait for each other here.
         select * into agent from public.marketing_agents a where a.id = by_code.id for update;
+        -- Switched off or retired while this waited for the row.
+        if agent.retired_at is not null or agent.switched_off_at is not null then
+            insert into public.agent_events (kind, result) values ('claim', 'no_match');
+            return jsonb_build_object('outcome', 'no_match');
+        end if;
         if agent.user_id is not null and public.agent_joined(agent.user_id) then
             return jsonb_build_object('outcome', 'joined');
         end if;

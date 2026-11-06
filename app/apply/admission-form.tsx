@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Fragment, useEffect, useRef, useState, useTransition, type ReactNode } from "react"
 
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
+import { buttonVariants } from "@/components/ui/button"
 import {
   childNameKey,
   childrenProblem,
@@ -616,7 +617,10 @@ export function AdmissionFormSteps({
           <button
             type="submit"
             disabled={sending}
-            className="h-12 flex-1 rounded-full bg-orange-500 font-exo text-lg font-bold italic text-blue-600 shadow-md shadow-orange-500/20 outline-none transition hover:-translate-y-0.5 hover:bg-orange-600 hover:text-blue-900 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-95 disabled:translate-y-0 disabled:opacity-70"
+            className={cn(
+              buttonVariants({ variant: "orange" }),
+              "h-12 flex-1 rounded-full font-exo text-lg italic shadow-md shadow-orange-500/20 transition hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:opacity-70",
+            )}
           >
             {step < 2 ? copy.continue : sending ? copy.sending : copy.send}
           </button>
@@ -845,7 +849,7 @@ function Confirmation({
 }) {
   return (
     <section className="rounded-[40px] bg-white px-5 py-8 text-center shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">
-      <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-orange-500 text-blue-600">
+      <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-orange-500 text-white">
         <Check className="size-8" strokeWidth={3} aria-hidden />
       </div>
       <h1 ref={headingRef} tabIndex={-1} className="mt-4 font-exo text-[1.75rem] font-extrabold italic leading-tight text-blue-600 outline-none">

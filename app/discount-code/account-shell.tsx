@@ -13,7 +13,7 @@ export function AccountShell({ language, children, wide = false }: { language: L
   return (
     <main
       lang={language}
-      className="min-h-dvh bg-gradient-to-br from-blue-100 via-blue-100/50 to-white px-4 py-4 sm:px-8 sm:py-6"
+      className="min-h-dvh bg-gradient-to-br from-blue-50 via-blue-100/50 to-white px-4 py-4 sm:px-8 sm:py-6"
     >
       <div className={`mx-auto flex w-full flex-col gap-4 ${wide ? "max-w-[640px]" : "max-w-[420px]"}`}>
         <header className="flex items-center gap-3">

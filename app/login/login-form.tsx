@@ -6,6 +6,8 @@ import Link from "next/link"
 import { useActionState, useState } from "react"
 
 import { signOutAndReturn } from "@/app/actions/session"
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 import { signIn, type SignInState } from "./actions"
 
@@ -30,7 +32,7 @@ export function LoginForm({ notice, agentSession }: { notice: LoginNotice | null
   const message = state ? MESSAGES[state.error] : notice ? MESSAGES[notice] : null
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 via-blue-100/50 to-white w-full p-4 sm:p-8 relative">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-blue-100/50 to-white w-full p-4 sm:p-8 relative">
       <div className="w-[325px] max-w-[90vw] shrink-0 bg-white px-8 py-[40px] rounded-[40px] sm:rounded-[50px] shadow-[0_30px_80px_-15px] shadow-blue-600/25 flex flex-col items-center">
         <div className="mb-5 shrink-0">
           <Image
@@ -114,7 +116,7 @@ export function LoginForm({ notice, agentSession }: { notice: LoginNotice | null
             <button
               disabled={pending}
               type="submit"
-              className="w-full h-11 bg-orange-500 hover:bg-orange-600 text-white rounded-full font-exo font-bold italic text-base transition-transform hover:-translate-y-0.5 shadow-md shadow-orange-500/20 active:scale-95 disabled:opacity-70 disabled:hover:translate-y-0"
+              className={cn(buttonVariants({ variant: "orange" }), "h-11 w-full rounded-full font-exo text-base italic shadow-md shadow-orange-500/20 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-70 disabled:hover:translate-y-0")}
             >
               {pending ? "Processing..." : "Log In"}
             </button>

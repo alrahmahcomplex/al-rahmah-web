@@ -2,11 +2,18 @@
 
 import { Eye, EyeOff, Lock } from "lucide-react"
 
+import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+
 export const INPUT =
   "h-11 w-full rounded-full border border-blue-600/30 bg-white pl-10 pr-10 font-exo text-[14px] text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-600"
 
-export const SUBMIT =
-  "h-11 w-full rounded-full bg-orange-500 font-exo text-base font-bold italic text-white shadow-md shadow-orange-500/20 transition-transform hover:-translate-y-0.5 hover:bg-orange-600 active:scale-95 disabled:opacity-70 disabled:hover:translate-y-0"
+// The orange submit on every Discount code form: the shared variant in its
+// public pill shape.
+export const SUBMIT = cn(
+  buttonVariants({ variant: "orange" }),
+  "h-11 w-full rounded-full font-exo text-base italic shadow-md shadow-orange-500/20 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-70 disabled:hover:translate-y-0",
+)
 
 // A password box, with the show/hide toggle on the first one. `shown` belongs
 // to the form, so every password box on it shows or hides together.

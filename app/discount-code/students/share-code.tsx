@@ -3,6 +3,7 @@
 import { Check, Copy } from "lucide-react"
 import { useState } from "react"
 
+import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 type Labels = { linkLabel: string; copy: string; copied: string; copyFailed: string; share: string }
@@ -46,7 +47,10 @@ export function ShareCode({ code, link, shareHref, labels }: { code: string; lin
           href={shareHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex h-12 items-center justify-center rounded-full bg-orange-500 px-6 font-exo text-lg font-bold italic text-blue-600 shadow-md shadow-orange-500/20 outline-none transition hover:bg-orange-600 hover:text-blue-900 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+          className={cn(
+            buttonVariants({ variant: "orange" }),
+            "h-12 rounded-full px-6 font-exo text-lg italic shadow-md shadow-orange-500/20",
+          )}
         >
           {labels.share}
         </a>

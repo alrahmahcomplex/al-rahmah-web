@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 6, 2026 `v0.81.0`
+
+### IMPROVED
+
+- The site's colours are now ShuleFasta's deep blue and orange. Headings, name bands, links
+  and the current sidebar entry are deep blue. Every orange button, Apply now and Log In
+  included, has white text. The wash behind public screens is a paler blue, and the invite
+  and password-reset emails match.
+
 ## November 6, 2026 `v0.80.1`
 
 ### IMPROVED

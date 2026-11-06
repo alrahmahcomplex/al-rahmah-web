@@ -42,7 +42,7 @@ export default async function ApplyPage({
   return (
     <main
       lang={language}
-      className="min-h-dvh bg-gradient-to-br from-blue-100 via-blue-100/50 to-white px-4 py-4 sm:px-8 sm:py-6"
+      className="min-h-dvh bg-gradient-to-br from-blue-50 via-blue-100/50 to-white px-4 py-4 sm:px-8 sm:py-6"
     >
       <div className="mx-auto flex w-full max-w-[480px] flex-col gap-4">
         <header className="flex items-center gap-3">

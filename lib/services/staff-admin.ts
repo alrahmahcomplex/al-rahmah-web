@@ -446,9 +446,12 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
   if (row.action === "insert") summary = isStaff ? `added ${subject} to staff` : isRole ? `created the role ${subject}` : `added a ${row.table_name} row`
   else if (row.action === "update") summary = isRole ? `changed the role ${subject}` : isStaff ? `changed ${subject}` : `changed a ${row.table_name} row`
   else if (row.action === "invite_sent") summary = invitee ? `sent an invite to ${invitee}` : "sent an invite"
+  else if (row.action === "hosted_reset") summary = "reset the database before launch"
   else summary = row.action
 
-  const changes = Object.keys(newValues)
+  // The reset record's values are counts per table for the owner's checklist,
+  // not field changes.
+  const changes = Object.keys(row.action === "hosted_reset" ? {} : newValues)
     .filter((key) => row.action !== "insert" || !HIDDEN_ON_INSERT.has(key))
     // The summary already names who an invite went to.
     .filter((key) => !(invitee && key === "staff_member_id"))

@@ -209,6 +209,21 @@ describe("describeAuditRow", () => {
     expect(describeAuditRow(row({ actor_staff_id: "gone" }), lookup).actor).toBe("A former staff member")
   })
 
+  it("summarises the hosted reset record in words and keeps its counts out of the change list", () => {
+    const entry = describeAuditRow(
+      row({
+        table_name: null,
+        row_id: null,
+        action: "hosted_reset",
+        actor_kind: "system",
+        actor_staff_id: null,
+        new_values: { ticket: "#197", cutoff: "2026-11-20T18:00:00+00:00", cleared: { leads: 79, staff_members: 9 }, auth_users: 9 },
+      }),
+      lookup,
+    )
+    expect(entry).toMatchObject({ actor: "System", summary: "reset the database before launch", changes: [] })
+  })
+
   it("summarises a new staff member without bookkeeping columns", () => {
     const entry = describeAuditRow(
       row({

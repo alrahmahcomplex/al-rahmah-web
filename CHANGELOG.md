@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- Before launch the hosted database is reset once, so that only real families ever
+  appear in the system and its exports. Every test record goes: leads, families,
+  interviews, follow-ups, payments, Marketing Agents and their logins, staff accounts
+  and their logins, the academic year, fee schedules, class seats and WhatsApp group
+  links. Roles and permissions stay, and agent access is switched off. The reset
+  refuses to run if it finds anything newer than the agreed cutoff, checks its own
+  result, and leaves one record of what it cleared under Staff and roles history.
+  Afterwards the owner sets up the first staff member again, who re-enters the
+  academic year, fee schedules, class seats and group links and reviews Staff and
+  roles.
+
 ## November 7, 2026 `v0.83.0`
 
 ### IMPROVED

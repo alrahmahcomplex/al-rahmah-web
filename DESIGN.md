@@ -227,7 +227,7 @@ There is no navigation component yet. The public landing page and the staff port
 ### Do:
 - **Do** put the Al-Rahmah logo at the top of every branded doorway screen, above a blue name band.
 - **Do** use the sky diagonal wash (Sky Whisper → half-strength Sky Mist → white) as the background of public screens.
-- **Do** keep Exo italic and heavy (700–800) wherever it appears.
+- **Do** keep Exo italic wherever it appears: 700–800 for headings and bands, 600 for orange action labels.
 - **Do** give every control a 44px touch height on public pages.
 - **Do** make every orange action the shared `orange` button variant: white semibold text on Sunrise Orange (The ShuleFasta Button Rule).
 

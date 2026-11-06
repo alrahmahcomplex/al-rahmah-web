@@ -19,10 +19,10 @@ test.describe("staff sign-in page", () => {
     const badge = page.getByText("AL-RAHMAH COMPLEX").locator("..")
     await expect(badge).toHaveCSS("background-color", AL_RAHMAH_BLUE)
     await expect(page.getByRole("heading", { name: "Welcome!" })).toHaveCSS("color", AL_RAHMAH_BLUE)
-    await expect(page.getByRole("button", { name: "Log In" })).toHaveCSS(
-      "background-color",
-      AL_RAHMAH_ORANGE,
-    )
+    const logIn = page.getByRole("button", { name: "Log In" })
+    await expect(logIn).toHaveCSS("background-color", AL_RAHMAH_ORANGE)
+    // White on orange: The ShuleFasta Button Rule (DESIGN.md).
+    await expect(logIn).toHaveCSS("color", "rgb(255, 255, 255)")
   })
 
   test("the password toggle shows and hides the password", async ({ page }) => {

@@ -82,23 +82,23 @@ describe("listInterviewsOn", () => {
 
   test("counts the day's interviews and names the first three by S/N", async () => {
     const read = await listInterviewsOn(await signedIn(ADMISSIONS), date)
-    expect(read).toEqual({ ok: true, data: { count: 4, students: students.slice(0, INTERVIEWS_NAMED) } })
+    expect(read).toEqual({ ok: true, data: { count: 4, students: students.slice(0, INTERVIEWS_NAMED), year } })
   })
 
   test("names everyone when three or fewer were held", async () => {
     const read = await listInterviewsOn(await signedIn(MANAGER), dayAfter)
-    expect(read).toEqual({ ok: true, data: { count: 1, students: [later] } })
+    expect(read).toEqual({ ok: true, data: { count: 1, students: [later], year } })
   })
 
   test("reads an empty day as nothing", async () => {
     const empty = new Date(Date.UTC(2000, 0, 1 + randomInt(0, 300))).toISOString().slice(0, 10)
-    expect(await listInterviewsOn(await signedIn(ACCOUNTANT), empty)).toEqual({ ok: true, data: { count: 0, students: [] } })
+    expect(await listInterviewsOn(await signedIn(ACCOUNTANT), empty)).toEqual({ ok: true, data: { count: 0, students: [], year: null } })
   })
 
   test("reads nothing for someone signed out or without leads.view", async () => {
-    expect(await listInterviewsOn(anonClient(), date)).toEqual({ ok: true, data: { count: 0, students: [] } })
+    expect(await listInterviewsOn(anonClient(), date)).toEqual({ ok: true, data: { count: 0, students: [], year: null } })
     const cashier = await createThrowawayStaff(["payments.view"])
-    expect(await listInterviewsOn(await signedIn(cashier), date)).toEqual({ ok: true, data: { count: 0, students: [] } })
+    expect(await listInterviewsOn(await signedIn(cashier), date)).toEqual({ ok: true, data: { count: 0, students: [], year: null } })
   })
 })
 
@@ -137,9 +137,9 @@ describe("countResultsReadyToSend", () => {
 
   test("agrees with the database's Ready to send rule, which takes the paid unsent result and leaves out the unpaid and the sent", async () => {
     await inRolledBackTransaction(async (sql) => {
-      // Nothing can register, record, pay or send meanwhile, so the two
-      // reads see the same interviews.
-      await lockExclusively(sql, ["public.interviews", "public.audit_log"])
+      // Nothing can register, record, pay, send or close a lead meanwhile,
+      // so the two reads see the same interviews.
+      await lockExclusively(sql, ["public.leads", "public.interviews", "public.audit_log"])
       const read = await countResultsReadyToSend(await signedIn(ADMISSIONS))
       if (!read.ok) throw new Error(`count refused: ${read.error}`)
 

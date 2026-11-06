@@ -15,16 +15,19 @@ export type InterviewsOnDate = {
   count: number
   // The first students by S/N, at most INTERVIEWS_NAMED of them.
   students: string[]
+  // The enrollment year the first of them was registered in, where the
+  // Interviews screen opens; null when none was held.
+  year: number | null
 }
 
-type InterviewOnDateRow = { id: string; lead: { student_name: string } }
+type InterviewOnDateRow = { id: string; serial_year: number; lead: { student_name: string } }
 
 // The interviews held on `date` (YYYY-MM-DD, a calendar date in Tanzania):
 // how many, and who the first few were.
 export async function listInterviewsOn(supabase: SupabaseClient, date: string): Promise<Result<InterviewsOnDate, "unavailable">> {
   const { data, count, error } = await supabase
     .from("interviews")
-    .select("id, lead:leads!inner(student_name)", { count: "exact" })
+    .select("id, serial_year, lead:leads!inner(student_name)", { count: "exact" })
     .eq("interview_date", date)
     .order("serial_year", { ascending: true })
     .order("serial_number", { ascending: true })
@@ -34,7 +37,8 @@ export async function listInterviewsOn(supabase: SupabaseClient, date: string): 
     console.error("Could not list the day's interviews", error)
     return { ok: false, error: "unavailable" }
   }
-  return { ok: true, data: { count: count ?? 0, students: (data ?? []).map((row) => row.lead.student_name) } }
+  const rows = data ?? []
+  return { ok: true, data: { count: count ?? 0, students: rows.map((row) => row.lead.student_name), year: rows[0]?.serial_year ?? null } }
 }
 
 export type ResultsReadyToSend = {

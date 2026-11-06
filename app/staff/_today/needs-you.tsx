@@ -33,7 +33,11 @@ export function NeedsYou({ rows, unavailable }: { rows: QueueRow[]; unavailable:
       <h2 id="needs-you-heading" className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">
         Needs you today
       </h2>
-      {rows.length === 0 ? (
+      {rows.length === 0 && unavailable ? (
+        <p className="rounded-xl bg-card px-4 py-3 text-sm text-muted-foreground ring-1 ring-foreground/10">
+          What is waiting could not be counted. Try again in a moment.
+        </p>
+      ) : rows.length === 0 ? (
         <p className="rounded-xl bg-card px-4 py-3 text-sm text-slate-600 ring-1 ring-foreground/10" data-testid="today-empty">
           Nothing is waiting. Families you check in will appear here.
         </p>
@@ -68,7 +72,7 @@ export function NeedsYou({ rows, unavailable }: { rows: QueueRow[]; unavailable:
           })}
         </ul>
       )}
-      {unavailable && (
+      {unavailable && rows.length > 0 && (
         <p className="text-xs text-muted-foreground">Some of what is waiting could not be counted. Try again in a moment.</p>
       )}
     </section>

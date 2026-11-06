@@ -34,7 +34,7 @@ export function LatestRegistrations({ leads }: { leads: Result<LatestLead[], "un
               >
                 <span
                   aria-hidden
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-600"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600"
                 >
                   {initials(lead.studentName)}
                 </span>

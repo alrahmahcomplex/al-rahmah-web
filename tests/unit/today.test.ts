@@ -86,13 +86,14 @@ describe("mayActOn", () => {
   it("needs leads.view with a decision that is made on the lead's screen", () => {
     expect(mayActOn("reopenings", ["reopenings.approve"])).toBe(false)
     expect(mayActOn("reopenings", ["reopenings.approve", "leads.view"])).toBe(true)
-    expect(mayActOn("agents", ["agents.approve"])).toBe(true)
+    expect(mayActOn("agents", ["agents.approve"])).toBe(false)
+    expect(mayActOn("agents", ["agents.approve", "leads.view"])).toBe(true)
   })
 })
 
 const EVERYTHING: QueueInput = {
   overdue: { count: 8, oldest: { kind: "follow_up", studentName: "Zuberi Pendo", dueOn: "2026-11-02" } },
-  interviews: { count: 3, students: ["Rukia Maandalizi", "Amani Kiwelu", "Bahati Ndugu"] },
+  interviews: { count: 3, students: ["Rukia Maandalizi", "Amani Kiwelu", "Bahati Ndugu"], year: 2027 },
   reApplications: { count: 2 },
   results: { count: 5, year: 2027 },
   agents: { count: 1 },
@@ -114,7 +115,7 @@ describe("queueRows", () => {
     expect(rows.map((row) => row.key)).toEqual([...QUEUE_ROW_KEYS])
     expect(rows.map((row) => row.href)).toEqual([
       "/staff/follow-ups",
-      "/staff/interviews",
+      "/staff/interviews?year=2027",
       "/staff/re-applications",
       "/staff/interviews?year=2027&release=ready",
       "/staff/agents?status=pending",
@@ -137,7 +138,7 @@ describe("queueRows", () => {
   })
 
   it("speaks in the singular for one", () => {
-    const rows = queueRows({ overdue: { count: 1, oldest: null }, interviews: { count: 1, students: ["Amani"] }, results: { count: 1, year: 2028 } })
+    const rows = queueRows({ overdue: { count: 1, oldest: null }, interviews: { count: 1, students: ["Amani"], year: null }, results: { count: 1, year: 2028 } })
     expect(rows.map((row) => row.title)).toEqual(["1 follow-up is overdue", "1 interview today", "1 result ready to send"])
     expect(rows[0].detail).toBe("Families waiting for a call")
   })
@@ -145,6 +146,11 @@ describe("queueRows", () => {
   it("says when the oldest overdue item is a reopened lead with no follow-up date", () => {
     const [row] = queueRows({ overdue: { count: 2, oldest: { kind: "needs_date", studentName: "Amani Rejea", dueOn: "2026-11-03" } } })
     expect(row.detail).toBe("Oldest: Amani Rejea, reopened 3 Nov 2026 with no follow-up date")
+  })
+
+  it("opens the Interviews screen on the year of the day's first interview", () => {
+    expect(queueRows({ interviews: { count: 2, students: ["A", "B"], year: 2028 } })[0].href).toBe("/staff/interviews?year=2028")
+    expect(queueRows({ interviews: { count: 1, students: ["A"], year: null } })[0].href).toBe("/staff/interviews")
   })
 
   it("opens Ready to send on the earliest year with a result waiting", () => {

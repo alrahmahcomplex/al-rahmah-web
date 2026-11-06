@@ -287,6 +287,19 @@ test("Seats by class opens on the latest year with a Fee schedule and keeps a ch
   await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2027")
 })
 
+test("a role that administers staff but may not view leads is refused the Reports page too", async ({ page }) => {
+  const person = await createThrowawayStaff(["staff.administer"])
+  await page.goto("/login")
+  await page.getByLabel("Email").fill(person.email)
+  await page.getByLabel("Password", { exact: true }).fill(person.password)
+  await page.getByRole("button", { name: "Log In" }).click()
+  await expect(page).toHaveURL(/\/staff$/)
+
+  await page.goto("/staff/reports")
+  await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
+  await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" })).toHaveCount(0)
+})
+
 test("an administrator who does not manage academic years sees Seats by class without the Seats screen link", async ({ page }) => {
   const person = await createThrowawayStaff(["leads.view", "payments.view", "staff.administer"])
   await signIn(page, person)

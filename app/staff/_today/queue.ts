@@ -16,7 +16,7 @@ export const QUEUE_PERMISSIONS: Record<QueueRowKey, readonly Permission[]> = {
   interviews: ["leads.view", "interviews.record"],
   reApplications: ["leads.view", "leads.edit"],
   results: ["leads.view", "results.send"],
-  agents: ["agents.approve"],
+  agents: ["leads.view", "agents.approve"],
   discounts: ["discounts.approve"],
   reopenings: ["leads.view", "reopenings.approve"],
 }
@@ -34,7 +34,7 @@ export type QueueInput = {
     // date, or a reopened lead that still needs a follow-up date.
     oldest: { kind: "follow_up" | "needs_date"; studentName: string; dueOn: string } | null
   }
-  interviews?: { count: number; students: string[] }
+  interviews?: { count: number; students: string[]; year: number | null }
   reApplications?: { count: number }
   results?: { count: number; year: number | null }
   agents?: { count: number }
@@ -92,7 +92,7 @@ export function queueRows(input: QueueInput): QueueRow[] {
   if (interviews && interviews.count > 0) {
     rows.push({
       key: "interviews",
-      href: "/staff/interviews",
+      href: interviews.year === null ? "/staff/interviews" : `/staff/interviews?year=${interviews.year}`,
       count: interviews.count,
       title: `${plural(interviews.count, "interview", "interviews")} today`,
       detail: namesLine(interviews.students, interviews.count),

@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import { tanzaniaToday } from "@/lib/school-calendar"
+import { signUpAgent } from "@/lib/services/agent-sign-up"
 import { getLeadInterviews, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
 import {
@@ -14,7 +15,6 @@ import {
   getRecreatePreview,
   listAgents,
   recreateAgent,
-  registerAgent,
 } from "@/lib/services/marketing-agents"
 import { findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
 
@@ -470,25 +470,37 @@ describe("Seam 1: Recreate", () => {
 })
 
 describe("public registration through the shared creation function", () => {
-  test("keeps its retry guarantee: the same phone returns the same code and makes one agent", async () => {
+  test("keeps its retry guarantee: the same details twice return the same code and make one agent", async () => {
     const number = phone()
     const fullName = name("Rehema Register")
-    const first = await registerAgent(secretClient(), { fullName, phone: number })
-    const again = await registerAgent(secretClient(), { fullName, phone: number })
-    expect(first.ok && again.ok && again.data.code).toBe(first.ok && first.data.code)
+    const email = `rehema-${randomUUID().slice(0, 8)}@example.test`
+    const signUp = () => signUpAgent(secretClient(), { fullName, phone: number, whatsapp: null, email, hasCode: false, code: null })
+    const first = await signUp()
+    const again = await signUp()
+    expect(first.ok && first.data.kind).toBe("registered")
+    expect(again).toEqual(first)
     expect(await agentsWithPhone(asE164(number))).toHaveLength(1)
-    const listed = await listAgents(await signedIn(MANAGER), { query: first.ok ? first.data.code : "", page: 1 })
+    const code = first.ok && first.data.kind === "registered" ? first.data.code : ""
+    const listed = await listAgents(await signedIn(MANAGER), { query: code, page: 1 })
     expect(listed.ok && listed.data.agents[0]).toMatchObject({ status: "Pending", approvedAt: null })
   })
 
-  test("keeps its three-argument signature", async () => {
-    const signature = await inRolledBackTransaction(async (sql) => {
-      const { rows } = await sql.query(
-        "select pg_get_function_identity_arguments('public.register_marketing_agent(text, text, text)'::regprocedure) as args",
+  // #196 dropped register_marketing_agent(full_name, phone, whatsapp), the
+  // registration function from before sign-up took an email (#193).
+  test("the old three-argument registration function is gone", async () => {
+    const remaining = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ args: string }>(
+        `select pg_get_function_identity_arguments(p.oid) as args
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.proname = 'register_marketing_agent'`,
       )
-      return rows[0].args
+      return rows.map((row) => row.args)
     })
-    expect(signature).toBe("full_name text, phone text, whatsapp text")
+    expect(remaining).toEqual([])
+
+    const { data, error } = await secretClient().rpc("register_marketing_agent", { full_name: name(), phone: phone(), whatsapp: null })
+    expect(error?.code).toBe("PGRST202")
+    expect(data).toBeNull()
   })
 })
 

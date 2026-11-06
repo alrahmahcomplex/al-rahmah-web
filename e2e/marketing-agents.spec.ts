@@ -2,13 +2,14 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { expect, test, type Page } from "@playwright/test"
 
+import { registerPendingAgent as makePendingAgent } from "../tests/support/agents"
 import { secretClient } from "../tests/support/db"
 import { ACCOUNTANT, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
 // The Marketing Agents screen, as the Admissions Manager and the Accountant
-// use it. The Manager's test registers a Pending agent of its own, the way
-// the registration page will, so reruns never meet an agent an earlier run
-// approved. The seeded agents stay as they are.
+// use it. The Manager's test makes a Pending agent of its own, as public
+// registration does, so reruns never meet an agent an earlier run approved.
+// The seeded agents stay as they are.
 
 async function signIn(page: Page, person: FixtureStaff) {
   await page.goto("/login")
@@ -22,12 +23,11 @@ async function registerPendingAgent() {
   const fullName = `Rehema Agent ${randomUUID().slice(0, 6)}`
   // A leading 7 keeps it clear of the seeded 700 000 numbers.
   const phone = `07${String(randomInt(10_000_000, 100_000_000))}`
-  const { data, error } = await secretClient().rpc("register_marketing_agent", { full_name: fullName, phone, whatsapp: null })
-  if (error) throw new Error(`could not register an agent: ${error.message}`)
+  const { code } = await makePendingAgent({ fullName, phone })
   const digits = phone.slice(1)
   return {
     fullName,
-    code: data as string,
+    code,
     phone: `+255${digits}`,
     displayPhone: `+255 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`,
   }

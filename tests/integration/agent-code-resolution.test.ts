@@ -8,9 +8,10 @@ import { Client } from "pg"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
-import { approveAgent, listAgents, registerAgent } from "@/lib/services/marketing-agents"
+import { approveAgent, listAgents } from "@/lib/services/marketing-agents"
 import { estimateDiscountCode, findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
 
+import { registerPendingAgent } from "../support/agents"
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -34,16 +35,12 @@ type Agent = { id: string; code: string; fullName: string; phone: string }
 async function newAgent({ approved = false } = {}): Promise<Agent> {
   const fullName = `Upendo Resolver ${randomUUID().slice(0, 8)}`
   const number = phone()
-  const registered = await registerAgent(secretClient(), { fullName, phone: number })
-  if (!registered.ok) throw new Error(`could not register: ${JSON.stringify(registered.error)}`)
-  const list = await listAgents(await signedIn(MANAGER), { query: registered.data.code, page: 1 })
-  const row = list.ok ? list.data.agents.find((a) => a.code === registered.data.code) : undefined
-  if (!row) throw new Error("could not find the new agent")
+  const { id, code } = await registerPendingAgent({ fullName, phone: number })
   if (approved) {
-    const done = await approveAgent(await signedIn(MANAGER), row.id)
+    const done = await approveAgent(await signedIn(MANAGER), id)
     if (!done.ok) throw new Error(`could not approve: ${done.error}`)
   }
-  return { id: row.id, code: row.code, fullName, phone: asE164(number) }
+  return { id, code, fullName, phone: asE164(number) }
 }
 
 async function newLead(code: string | null = null): Promise<string> {
@@ -345,13 +342,13 @@ describe("setting a lead's code", () => {
 describe("partial uniqueness", () => {
   test("a retired record's phone is free for a new registration, which gets a new code", async () => {
     const old = await newAgent()
-    const again = await registerAgent(secretClient(), { fullName: old.fullName, phone: old.phone })
-    expect(again).toEqual({ ok: true, data: { code: old.code } })
+    const again = await registerPendingAgent({ fullName: old.fullName, phone: old.phone })
+    expect(again).toEqual({ id: old.id, code: old.code })
 
     await asSystem((sql) => changeStatus(sql, old.id, "retired"))
-    const fresh = await registerAgent(secretClient(), { fullName: old.fullName, phone: old.phone })
-    expect(fresh.ok).toBe(true)
-    if (fresh.ok) expect(fresh.data.code).not.toBe(old.code)
+    const fresh = await registerPendingAgent({ fullName: old.fullName, phone: old.phone })
+    expect(fresh.id).not.toBe(old.id)
+    expect(fresh.code).not.toBe(old.code)
   })
 
   test("two current records can't share a code or a phone; a retired one doesn't count", async () => {
@@ -388,8 +385,12 @@ describe("partial uniqueness", () => {
       )
       await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
       await sql.query("set local role service_role")
-      const made = await sql.query("select public.register_marketing_agent($1, $2, null) as code", [name, phone()])
-      return { code: made.rows[0].code as string, retired: rows[0].retired as number }
+      const made = await sql.query<{ answer: { outcome: string; code: string } }>(
+        "select public.sign_up_marketing_agent($1, $2, null, $3, false, null) as answer",
+        [name, phone(), `rashidi-${randomUUID().slice(0, 8)}@example.test`],
+      )
+      expect(made.rows[0].answer.outcome).toBe("registered")
+      return { code: made.rows[0].answer.code, retired: rows[0].retired as number }
     })
     expect(retired).toBe(1000)
     expect(code).toMatch(new RegExp(`^${prefix}-\\d{4}$`))

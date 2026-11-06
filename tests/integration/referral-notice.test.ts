@@ -126,15 +126,30 @@ describe("the notice version on leads the Admission form creates", () => {
 })
 
 describe("apply_form_discount_code with a notice version", () => {
-  test("the old two-argument call still works and records no version", async () => {
+  // #196 dropped the two-argument version, so a build from before #182 that
+  // still sends only lead_id and code is refused as a missing function.
+  test("the two-argument call is gone: PGRST202, and nothing is written", async () => {
     const sent = form()
     await submitAdmissionForm(secretClient(), sent)
     const { id } = await leadOf(sent.children[0].fullName)
 
     const { data, error } = await secretClient().rpc("apply_form_discount_code", { lead_id: id, code: APPROVED })
-    expect(error).toBeNull()
-    expect(data).toBe(APPROVED)
-    expect(await versionOf(id)).toBeNull()
+    expect(error?.code).toBe("PGRST202")
+    expect(data).toBeNull()
+    expect(await leadOf(sent.children[0].fullName)).toMatchObject({ code: null, version: null })
+  })
+
+  test("the three-argument version is the only one the API exposes", async () => {
+    const signatures = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ args: string }>(
+        `select pg_get_function_identity_arguments(p.oid) as args
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.proname = 'apply_form_discount_code'
+         order by 1`,
+      )
+      return rows.map((row) => row.args)
+    })
+    expect(signatures).toEqual(["lead_id uuid, code text, notice_version text"])
   })
 
   test("the new argument has no default, so naming it picks the new version", async () => {

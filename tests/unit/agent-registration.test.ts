@@ -5,7 +5,6 @@ import {
   parseAgentRegistration,
   referralLink,
   requestOrigin,
-  whatsappShareLink,
 } from "@/lib/agent-registration"
 
 function posted(fields: Record<string, string>) {
@@ -102,17 +101,5 @@ describe("the Referral link", () => {
 
   it.each(["", "evil.example/path", "a b", "evil.example@x", "javascript:alert(1)"])("refuses the unusable host %j", (host) => {
     expect(requestOrigin(new Headers(host ? { host } : {}))).toBeNull()
-  })
-})
-
-describe("Share on WhatsApp", () => {
-  it("is a wa.me link with no recipient, the text encoded whole", () => {
-    const link = whatsappShareLink("Code AJM-407 + punguzo: https://x.example/apply?ref=AJM-407")
-    expect(link).toBe(
-      "https://wa.me/?text=Code%20AJM-407%20%2B%20punguzo%3A%20https%3A%2F%2Fx.example%2Fapply%3Fref%3DAJM-407",
-    )
-    expect(decodeURIComponent(new URL(link).search.slice("?text=".length))).toBe(
-      "Code AJM-407 + punguzo: https://x.example/apply?ref=AJM-407",
-    )
   })
 })

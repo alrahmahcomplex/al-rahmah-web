@@ -1,7 +1,7 @@
 import type { Result } from "@/lib/services/result"
 
-// The Discount code page's own rules: reading what someone typed, and the two
-// links the confirmation hands them. Shared by the page and its Server
+// The Discount code page's own rules: reading what someone typed, and the
+// Referral link the confirmation hands them. Shared by the page and its Server
 // Action, so both check a draft the same way. The phone's format, and
 // whether a code is one, are the database's to judge (`normalize_phone`,
 // `normalize_referral_code`), so here they only have to be present and
@@ -92,10 +92,4 @@ export function requestOrigin(headers: Headers): string | null {
 // The Referral link: the Admission form with the code filled in.
 export function referralLink(origin: string, code: string): string {
   return `${origin}/apply?ref=${encodeURIComponent(code)}`
-}
-
-// Share on WhatsApp: WhatsApp opens with the text typed and lets the sender
-// pick the chat, so there is no number in the link (#10).
-export function whatsappShareLink(message: string): string {
-  return `https://wa.me/?text=${encodeURIComponent(message)}`
 }

@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The staff home is now Today. It greets you by name, shows the date, offers Check in a
+  family and Register a student, and lists what is waiting for you: overdue follow-ups,
+  today's interviews, re-applications to review, results ready to send and, for Admissions
+  Managers, the agents, discounts and reopenings waiting for a decision. Each row opens the
+  screen where the work is done. Under it are the five newest registrations. A role with
+  nothing to act on sees one line saying so.
+
+### IMPROVED
+
+- The statistics that were the staff home are now the Reports page, under Admin in the
+  sidebar, for Admissions Managers. Its filters and addresses work as before under
+  /staff/reports.
+
 ## November 6, 2026 `v0.81.1`
 
 ### IMPROVED

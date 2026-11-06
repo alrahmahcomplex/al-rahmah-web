@@ -20,3 +20,22 @@ export function formatDate(date: string): string {
     new Date(Date.UTC(year, month - 1, day)),
   )
 }
+
+// The hour of the day in Tanzania, 0 to 23.
+export function tanzaniaHour(now: Date = new Date()): number {
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone: TANZANIA, hour: "numeric", hourCycle: "h23" }).format(now))
+}
+
+// A YYYY-MM-DD date written out in full, such as "Friday 6 November 2026".
+export function formatLongDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number)
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).formatToParts(new Date(Date.UTC(year, month - 1, day)))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((each) => each.type === type)?.value ?? ""
+  return `${part("weekday")} ${part("day")} ${part("month")} ${part("year")}`
+}

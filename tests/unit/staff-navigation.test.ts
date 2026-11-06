@@ -129,6 +129,15 @@ describe("the staff navigation", () => {
     expect(navFor(["leads.view", "leads.create", "leads.edit", "leads.decline", "leads.close"])).not.toContain(reopenings)
     expect(navFor(["leads.view", "payments.view", "payments.record"])).not.toContain(reopenings)
   })
+
+  it("shows Reports, the old dashboard, to staff who administer the staff side and may view leads", () => {
+    const reports = STAFF_NAV.find((entry) => entry.label === "Reports")
+    expect(reports).toMatchObject({ href: "/staff/reports", group: "Admin", permission: "staff.administer", alsoNeeds: "leads.view" })
+    expect(navFor(ADMISSIONS_MANAGER)).toContain(reports)
+    expect(navFor(["staff.administer"])).not.toContain(reports)
+    expect(navFor(ADMISSIONS_STAFF)).not.toContain(reports)
+    expect(navFor(ACCOUNTANT)).not.toContain(reports)
+  })
 })
 
 describe("groupNav", () => {
@@ -138,7 +147,7 @@ describe("groupNav", () => {
     const grouped = groupNav([STAFF_HOME, ...navFor(ADMISSIONS_MANAGER)])
     expect(names(grouped)).toEqual(["Front desk", "Admissions", "Referrals", "Money", "Admin"])
     expect(grouped[0].entries.map((entry) => entry.label)).toEqual(["Today", "Check-in", "Register a student"])
-    expect(grouped[4].entries.map((entry) => entry.label)).toEqual(["Discount requests", "Reopening requests", "Staff and roles"])
+    expect(grouped[4].entries.map((entry) => entry.label)).toEqual(["Discount requests", "Reopening requests", "Reports", "Staff and roles"])
   })
 
   it("leaves out a group with nothing in it", () => {

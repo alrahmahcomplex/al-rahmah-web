@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto"
 
 import { expect, test, type Browser, type Page } from "@playwright/test"
 
+import { firstName } from "@/app/staff/_today/greeting"
+
 import { inRolledBackTransaction } from "../tests/support/db"
 import { INVITED, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../tests/support/fixtures"
 
@@ -123,7 +125,9 @@ test("a Manager invites someone, who sets a password from the email and lands on
   await setPassword(invitedPage)
 
   await expect(invitedPage).toHaveURL(/\/staff$/)
-  await expect(invitedPage.getByText(`Welcome, ${invitee.name}.`)).toBeVisible()
+  await expect(
+    invitedPage.getByRole("heading", { name: new RegExp(`^Good (morning|afternoon), ${firstName(invitee.name)}$`) }),
+  ).toBeVisible()
   await expect(invitedPage.getByRole("complementary", { name: "Sidebar" })).toContainText("Admissions Manager")
   await expect(
     invitedPage.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Staff and roles" }),
@@ -244,7 +248,9 @@ test("someone deactivated before accepting is signed out with a message, and sig
   await personRow(page, invitee.name).getByRole("button", { name: "Reactivate" }).click()
   await expect(callout(page)).toHaveText(`Reactivated ${invitee.name}.`)
   await signIn(invitedPage, { ...invitee, password: "invitee-password" } as FixtureStaff)
-  await expect(invitedPage.getByText(`Welcome, ${invitee.name}.`)).toBeVisible()
+  await expect(
+    invitedPage.getByRole("heading", { name: new RegExp(`^Good (morning|afternoon), ${firstName(invitee.name)}$`) }),
+  ).toBeVisible()
 })
 
 test("inviting an email already on staff is refused in the callout, and nothing is sent", async ({ page }) => {

@@ -22,7 +22,7 @@ export const METRIC_TILES: { metric: DashboardMetric; key: string; title: string
 // The Leads by enrollment class panel's key in the page address.
 const CLASSES_KEY = "classes"
 
-// The dashboard on the staff home, for staff who may view leads. Rendered on
+// The dashboard on the Reports page, for staff who may view leads. Rendered on
 // every request, so the counts are always current. Seats by class shows only
 // for staff who may view payments; `canOpenSeats` adds its link to the Seats
 // screen.

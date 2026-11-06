@@ -44,7 +44,7 @@ export function parsePanelFilters(params: SearchParams, key: string): DashboardF
   return { period: parsePeriod(first(params[key])), enrollmentYear: parseYear(first(params[`${key}_year`])) }
 }
 
-// The staff home's address with one panel's filters changed and every other
+// The Reports page's address with one panel's filters changed and every other
 // panel's left as they are. Defaults are left out.
 export function panelHref(current: URLSearchParams, key: string, filters: DashboardFilters): string {
   const params = new URLSearchParams(current)
@@ -54,7 +54,7 @@ export function panelHref(current: URLSearchParams, key: string, filters: Dashbo
   if (enrollmentYear === null) params.delete(`${key}_year`)
   else params.set(`${key}_year`, String(enrollmentYear))
   const encoded = params.toString()
-  return encoded ? `/staff?${encoded}` : "/staff"
+  return encoded ? `/staff/reports?${encoded}` : "/staff/reports"
 }
 
 // Seats by class takes only an Enrollment year, under its own key. Null when
@@ -66,12 +66,12 @@ export function parseSeatsYear(params: SearchParams): number | null {
   return parseYear(first(params[SEATS_YEAR_KEY]))
 }
 
-// The staff home's address with the Seats by class year changed and every
+// The Reports page's address with the Seats by class year changed and every
 // other panel's filters left as they are.
 export function seatsHref(current: URLSearchParams, year: number): string {
   const params = new URLSearchParams(current)
   params.set(SEATS_YEAR_KEY, String(year))
-  return `/staff?${params.toString()}`
+  return `/staff/reports?${params.toString()}`
 }
 
 // Arithmetic on YYYY-MM-DD dates, in UTC so the server's and the browser's

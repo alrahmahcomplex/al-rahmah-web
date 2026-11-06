@@ -2,6 +2,7 @@ import {
   ArmchairIcon,
   BadgePercentIcon,
   CalendarCheckIcon,
+  ChartColumnIcon,
   ClipboardCheckIcon,
   DoorOpenIcon,
   MegaphoneIcon,
@@ -78,6 +79,7 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
     permission: "reopenings.approve",
     alsoNeeds: "leads.view",
   },
+  { href: "/staff/reports", label: "Reports", group: "Admin", icon: ChartColumnIcon, permission: "staff.administer", alsoNeeds: "leads.view" },
   { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: ShieldCheckIcon, permission: "staff.administer" },
 ]
 

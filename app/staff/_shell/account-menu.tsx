@@ -7,11 +7,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils"
 
 import { signOut } from "../actions"
-import type { ShellPerson } from "./staff-shell"
+import type { ShellPerson } from "./items"
 
 // The sidebar's foot: who is signed in, opening the menu with Sign out.
 export function AccountMenu({ person, collapsed }: { person: ShellPerson; collapsed: boolean }) {
-  const [, startTransition] = useTransition()
+  const [pending, startTransition] = useTransition()
 
   return (
     <DropdownMenu>
@@ -35,7 +35,7 @@ export function AccountMenu({ person, collapsed }: { person: ShellPerson; collap
         {!collapsed && <EllipsisIcon aria-hidden="true" className="size-4 shrink-0 text-slate-500" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" sideOffset={8} className="min-w-56">
-        <DropdownMenuItem onClick={() => startTransition(() => signOut())}>
+        <DropdownMenuItem disabled={pending} onClick={() => startTransition(() => signOut())}>
           <LogOutIcon aria-hidden="true" />
           Sign out
         </DropdownMenuItem>

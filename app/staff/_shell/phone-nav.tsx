@@ -10,7 +10,8 @@ import { cn } from "@/lib/utils"
 
 import { signOut } from "../actions"
 import { groupNav } from "../navigation"
-import { COUNT_PILL, type ShellItem, type ShellPerson } from "./staff-shell"
+import { CountPill } from "./count-pill"
+import type { ShellItem, ShellPerson } from "./items"
 
 // The tabs along the bottom of a phone, in this order, each only when the
 // staff member may see it. Everything else is behind More.
@@ -48,6 +49,7 @@ export function PhoneNav({ items, current, person }: { items: ShellItem[]; curre
               type="button"
               onClick={() => setOpen(true)}
               aria-haspopup="dialog"
+              aria-expanded={open}
               className={cn(tabClass, "w-full", moreIsCurrent ? "text-blue-600" : "text-slate-500")}
             >
               <LayoutGridIcon aria-hidden="true" />
@@ -83,11 +85,7 @@ export function PhoneNav({ items, current, person }: { items: ShellItem[]; curre
                         <span className={cn("flex", item.href === current ? "text-blue-600" : "text-slate-500")}>{item.icon}</span>
                         {item.label}
                         {item.count !== undefined && item.count.count > 0 && (
-                          <span className={cn(COUNT_PILL, "ml-auto h-5 min-w-5 px-1.5 text-[11px]")}>
-                            <span className="sr-only">, </span>
-                            {item.count.count}
-                            <span className="sr-only"> {item.count.label}</span>
-                          </span>
+                          <CountPill count={item.count} className="ml-auto h-5 min-w-5 px-1.5 text-[11px]" />
                         )}
                       </Link>
                     </li>

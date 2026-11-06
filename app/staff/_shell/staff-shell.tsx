@@ -10,16 +10,14 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
-import type { NavCount } from "../nav-counts"
-import { currentNavHref, groupNav, type StaffNavGroup } from "../navigation"
+import { currentNavHref, groupNav } from "../navigation"
 import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_RAIL_COOKIE } from "../shell-cookies"
 import { AccountMenu } from "./account-menu"
+import { CountPill } from "./count-pill"
+import type { ShellItem, ShellPerson } from "./items"
 import { PhoneNav } from "./phone-nav"
 
-// One destination in the shell, as the layout hands it over: the entry the
-// staff member may see, its icon already rendered, and the count waiting there.
-export type ShellItem = { href: string; label: string; group: StaffNavGroup; icon: ReactNode; count?: NavCount }
-export type ShellPerson = { name: string; roleName: string }
+export type { ShellItem, ShellPerson } from "./items"
 
 // The chrome around every staff page: the sidebar from `md` up, folding to a
 // 72px rail; the slim top bar; and on a phone the bottom tab bar with its
@@ -104,6 +102,7 @@ export function StaffShell({
             size="icon-sm"
             className="hidden text-slate-600 md:inline-flex"
             aria-controls="staff-sidebar"
+            aria-expanded={!collapsed}
             onClick={toggleCollapsed}
           >
             <PanelLeftIcon />
@@ -121,9 +120,6 @@ export function StaffShell({
   )
 }
 
-// A count waiting at an entry: orange, the colour of something to act on.
-export const COUNT_PILL = "inline-flex items-center justify-center rounded-full bg-orange-50 font-semibold text-orange-700 tabular-nums"
-
 function SidebarLink({ item, current, collapsed }: { item: ShellItem; current: boolean; collapsed: boolean }) {
   const link = (
     <Link
@@ -138,16 +134,10 @@ function SidebarLink({ item, current, collapsed }: { item: ShellItem; current: b
       <span className={cn("flex shrink-0 [&_svg]:size-[18px]", current ? "text-blue-600" : "text-slate-500")}>{item.icon}</span>
       <span className={cn("truncate", collapsed && "sr-only")}>{item.label}</span>
       {item.count !== undefined && item.count.count > 0 && (
-        <span
-          className={cn(
-            COUNT_PILL,
-            collapsed ? "absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px]" : "ml-auto h-5 min-w-5 px-1.5 text-[11px]",
-          )}
-        >
-          <span className="sr-only">, </span>
-          {item.count.count}
-          <span className="sr-only"> {item.count.label}</span>
-        </span>
+        <CountPill
+          count={item.count}
+          className={collapsed ? "absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px]" : "ml-auto h-5 min-w-5 px-1.5 text-[11px]"}
+        />
       )}
     </Link>
   )

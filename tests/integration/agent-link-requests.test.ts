@@ -175,6 +175,23 @@ describe("who gets an email", () => {
     expect(logins.now).not.toBe(firstLogin)
   })
 
+  test("when a joined agent's Auth email is one still stored on an unjoined agent, the joined agent gets the reset", async () => {
+    const joined = await joinedAgent("owner")
+    // Stored on an Approved agent with no login yet: Auth holds the address nowhere else.
+    const waiting = { address: email("stored") }
+    await approvedAgent(waiting.address)
+    // The joined agent changes their sign-in email in Auth to the other's address.
+    await asSystem(async (sql) => {
+      await sql.query(
+        "update auth.users set email = $1 where id = (select user_id from public.marketing_agents where id = $2)",
+        [waiting.address, joined.id],
+      )
+    })
+
+    expect(await decide(waiting.address)).toEqual({ kind: "reset", email: waiting.address, attemptId: expect.any(String) })
+    expect(await events(joined.id, "reset")).toHaveLength(1)
+  })
+
   test.each([
     ["an email nobody uses", async () => email("stranger")],
     ["an Approved agent never invited", async () => {

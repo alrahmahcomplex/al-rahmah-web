@@ -109,10 +109,14 @@ begin
     insert into public.agent_link_requests (email_hash) values (hash);
 
     -- The current, non-retired agent using this email: a joined agent's from
-    -- Auth, anyone else's from their record.
+    -- Auth, anyone else's from their record. A joined agent can change their
+    -- Auth email to one still stored on an agent who hasn't joined, so both
+    -- can match; the joined login owns the address, so it comes first.
     select a.* into agent
     from public.agent_email_holders(address) h
     join public.marketing_agents a on a.id = h.agent_id
+    order by (a.user_id is not null and public.agent_joined(a.user_id)) desc
+    limit 1
     for update of a;
     if not found or agent.status <> 'Approved' or agent.switched_off_at is not null then
         return query select 'none'::text, null::text, null::uuid;

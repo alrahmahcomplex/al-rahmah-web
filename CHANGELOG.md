@@ -5,16 +5,10 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
-## November 5, 2026 `v0.74.0`
+## November 6, 2026 `v0.75.0`
 
 ### NEW
 
-- The Agents screen shows whether agent access is on, and when and by whom it was last
-  changed. Agent access is one switch that turns every Marketing Agent sign-in path on or
-  off at once. It starts off and changes in the database only.
-- The database now recognises a signed-in Marketing Agent separately from staff. An
-  email belongs to one login, staff or agent, and an agent login reaches no staff screen,
-  function or record.
 - Marketing Agents can now join and sign in. The Admissions Manager adds or corrects an
   agent's email and presses Send invite, and approving an agent with an email sends the
   invite too. The agent sets a password from a Swahili and English email, lands on their
@@ -24,7 +18,27 @@ stay in the `0.x` range.
   invite wasn't sent or whose link expired, and shows how many need attention.
 - Once an agent has joined, only they can change their email, through Supabase's own
   change-email flow. The Agents screen shows the address they sign in with, and Edit email
-  is off for them.
+  is off for them, also after they are switched off or retired.
+
+### IMPROVED
+
+- Agent sign-in now has its own rate limit per connection and email, and says "too many
+  attempts" rather than "wrong password" when it is reached.
+- Families sending the Admission form from one shared connection now each get their own
+  allowance of tries.
+- Staff sign-in now says so when there are too many attempts, or when a login has been
+  closed, instead of reporting an outage.
+
+## November 5, 2026 `v0.74.0`
+
+### NEW
+
+- The Agents screen shows whether agent access is on, and when and by whom it was last
+  changed. Agent access is one switch that turns every Marketing Agent sign-in path on or
+  off at once. It starts off and changes in the database only.
+- The database now recognises a signed-in Marketing Agent separately from staff. An
+  email belongs to one login, staff or agent, and an agent login reaches no staff screen,
+  function or record. Agents can't sign in yet.
 - A Discount code the Admission form sends for a child already on file now stays on the
   re-application instead of being dropped. The review screen shows it beside the lead's
   Referral code, counts it as a difference when the two differ, and offers Apply for a
@@ -33,16 +47,10 @@ stay in the `0.x` range.
 
 ### IMPROVED
 
-- Agent sign-in now has its own rate limit per connection and email, and says "too many
-  attempts" rather than "wrong password" when it is reached.
-- Families sending the Admission form from one shared connection now each get their own
-  allowance of tries.
 - Retiring a Marketing Agent who has a login now closes that login for good and frees
   their email, so a corrected record can use it.
 - Staff invite links now stay valid for 24 hours instead of one hour, and the invite
   email says so.
-- Staff sign-in now says so when there are too many attempts, or when a login has been
-  closed, instead of reporting an outage.
 
 ## November 5, 2026 `v0.73.0`
 

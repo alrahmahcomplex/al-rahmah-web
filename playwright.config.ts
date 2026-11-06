@@ -17,6 +17,10 @@ const FAILS_SPECS = /\.turnstile-fails\.spec\.ts$/
 // all count towards one local day of agent invites (#192).
 const INVITE_BUDGET = { EMAIL_DAILY_CAP: "100000", STAFF_INVITE_RESERVE: "20" }
 
+// Likewise for public password-link requests (#194): every run counts towards
+// one local hour. The integration tests cover the limits themselves.
+const LINK_LIMITS = { PUBLIC_EMAIL_HOURLY_BUDGET: "100000" }
+
 export default defineConfig({
   testDir: "e2e",
   globalSetup: "./e2e/global-setup.ts",
@@ -47,7 +51,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 300_000,
       // The site key is built into the page, so it is set for the build too.
-      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_PASSES, ...INVITE_BUDGET },
+      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_PASSES, ...INVITE_BUDGET, ...LINK_LIMITS },
     },
     {
       // The same build, started once the first server is up, with the secret
@@ -56,7 +60,7 @@ export default defineConfig({
       url: `http://localhost:${E2E_TURNSTILE_FAILS_PORT}`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_FAILS, ...INVITE_BUDGET },
+      env: { NEXT_PUBLIC_TURNSTILE_SITE_KEY: TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY: TURNSTILE_FAILS, ...INVITE_BUDGET, ...LINK_LIMITS },
     },
   ],
 })

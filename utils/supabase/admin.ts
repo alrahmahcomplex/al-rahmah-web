@@ -58,3 +58,15 @@ export function agentInviteSender(): AgentInviteSender {
     return { error: error ? { message: error.message, status: error.status, code: error.code } : null }
   }
 }
+
+// The agent's own reset (#194): Supabase's recovery email, whose template
+// builds the token_hash link to redirectTo for a login marked `kind: agent`.
+// Only called for an active agent who has joined (agent-link-requests.ts).
+export function agentResetSender(): AgentInviteSender {
+  const client = secretClient()
+  if (!client) return async () => ({ error: { message: MISSING_KEY, code: "secret_key_missing" } })
+  return async (email, redirectTo) => {
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo })
+    return { error: error ? { message: error.message, status: error.status, code: error.code } : null }
+  }
+}

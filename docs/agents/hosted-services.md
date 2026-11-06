@@ -26,7 +26,7 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 
   Then invite the user under Authentication → Users. Their link lands on the site root, which forwards it to `/auth/confirm`. Everyone after them is invited from Staff and roles.
 - **Staff invites** from Staff and roles need, on the hosted project: custom SMTP (Authentication → SMTP Settings, with a verified sending domain; the built-in sender reaches only the project's team), the Site URL set to production, Redirect URLs allowing `/auth/confirm` on production and on `https://*-<vercel-team>.vercel.app/**`, the email templates below, and a named secret key. Vercel needs that key as `SUPABASE_SECRET_KEY`, unprefixed, in Production and Preview. Without the key the Manager's invite still creates the staff record, reports that the email wasn't sent, and offers Resend invite.
-- **Agent invites** (#191) use the same key and SMTP. Redirect URLs must also allow `/discount-code/set-password` on production and on the Preview pattern above; Supabase sends an address missing from the list to the Site URL, where the link fails.
+- **Agent invites** (#191) use the same key and SMTP. Redirect URLs must also allow `/discount-code/set-password` and, for the agent's own reset (#194), `/discount-code/reset-password` on production and on the Preview pattern above; Supabase sends an address missing from the list to the Site URL, where the link fails.
 - **Email templates.** `supabase/templates/invite.html` (Invite user) and `supabase/templates/recovery.html` (Reset password) are the source of truth, with their subjects in `supabase/config.toml`. Each branches on `user_metadata.kind = "agent"` for the Discount code wording, Swahili first; staff wording is the default. Each carries a version marker on its second line (`al-rahmah-template: invite v2`). Paste both into Authentication → Email Templates whenever either changes, set the same subjects, and check the marker in the hosted editor matches the repo's.
 
 ## Plans, email, rate limits and logs
@@ -76,7 +76,20 @@ The daily budget is configuration. Set both variables in Vercel for Production a
 | `EMAIL_DAILY_CAP` | 100 | Resend Free's daily cap, above. Change it if the plan changes. |
 | `STAFF_INVITE_RESERVE` | 20 | Emails a day kept for staff invites and password resets. |
 
-Agent batches send at most `EMAIL_DAILY_CAP − STAFF_INVITE_RESERVE` agent invite emails a day, 80 with these values. The count comes from the database's agent invite attempts since midnight UTC, Resend's day, which is 03:00 East Africa Time. A failed attempt doesn't count; an attempt cut off mid-send does. Single Send invite and Resend presses count towards the day too, but only batches stop at the budget. Staff invites and resets aren't counted, which is what the reserve is for.
+Agent batches send at most `EMAIL_DAILY_CAP − STAFF_INVITE_RESERVE` agent invite emails a day, 80 with these values. The count comes from the database's agent invite attempts since midnight UTC, Resend's day, which is 03:00 East Africa Time. A failed attempt doesn't count; an attempt cut off mid-send does. Single Send invite and Resend presses, and new invites an agent asks for with "Tuma kiungo kipya", count towards the day too, but only batches stop at the budget. Staff invites and resets aren't counted, which is what the reserve is for.
+
+### Public password-link limits
+
+"Umesahau nenosiri?" and "Tuma kiungo kipya" (#194) are public forms that can send email, so the database counts them too. Each request that passes Turnstile and the firewall goes into `agent_link_requests`, which holds only a SHA-256 hash of the email and the time, and drops rows older than an hour on every write. A request is refused when the email already has `AGENT_LINK_PER_EMAIL_LIMIT` requests in the last hour, or the whole project has `PUBLIC_EMAIL_HOURLY_BUDGET`. Both count every request, whether or not the email has an account, so the limits never tell a stranger which emails do. Both limits hold even when the firewall check fails open.
+
+Set both in Vercel for Production and Preview, server-only. A missing value, or one that isn't a whole number, falls back to the default below, never to no limit.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `AGENT_LINK_PER_EMAIL_LIMIT` | 3 | Requests per email per hour. Supabase's 60-second gap per address also applies to resets. |
+| `PUBLIC_EMAIL_HOURLY_BUDGET` | 15 | Public requests per hour for the whole project. With a 30-invite batch it leaves 5 of Supabase's 50 an hour for staff invites. |
+
+Only an Approved agent who isn't switched off or retired gets an email: a reset if they have joined, a new invite if the school has invited them before and they haven't joined. Everyone else, and a send that fails, gets the same reply; the send happens after the reply, and its result is recorded in `agent_events` (kind `reset`, or `invite` with no staff member). Nothing is counted or sent while agent access is off. Two requests at the same moment can both take the last place under a limit; the hourly email limit still holds. Anyone can spend the public budget with made-up emails, which then refuses resets until the hour passes; that is the accepted risk named under Hourly limit.
 
 ### Rate limiting
 
@@ -98,7 +111,8 @@ Because one rule has one threshold, each form gets its own allowance through its
 | Discount-code check on the Admission form | `code-check:<ip>` | Live |
 | Agent registration | `agent:<ip>` | Live |
 | Agent sign-in | `agent-sign-in:<ip>:<email hash>` | Live (#191) |
-| Agent reset and "Tuma kiungo kipya" | `<form>:<ip>:<email hash>` | Planned (#194) |
+| Agent reset ("Umesahau nenosiri?") | `agent-reset:<ip>:<email hash>` | Live (#194) |
+| "Tuma kiungo kipya" on an expired link | `agent-new-link:<ip>:<email hash>` | Live (#194) |
 
 A hash is the first 32 hex characters of the SHA-256 of the trimmed, lowercased value, never the value itself. The contact is the parent's phone from the Admission form, in one form however it was typed (`0700 000 900` and `+255 700 000 900` give the same hash). With it in the key, families sending the form from one shared connection each get their own 20 tries. A form whose phone can't be read falls back to `admission:<ip>`. The code check stays IP-only: a code in the key would give each code its own allowance and let one IP try every code, so it relies on the higher threshold instead.
 
@@ -111,8 +125,8 @@ The per-IP limiters, from [Supabase's rate-limit docs](https://supabase.com/docs
 | Limiter | Endpoints | What the app sends there from Vercel | Limit |
 |---|---|---|---|
 | Token | `/token`, for password, refresh-token, ID-token and PKCE grants | Every password sign-in (`signInWithPassword`), every session refresh, and the code exchange when a reset link lands on `/auth/callback` (`exchangeCodeForSession`) | 150 per 5 minutes |
-| Sign-ups and sign-ins | `/signup`, `/recover`, `/resend`, `/magiclink`, `/otp`, `PUT /user` | Setting the password when an invite is accepted (`updateUser`). Planned: agent resets, "Tuma kiungo kipya" resends, OTP or magic-link requests | 30 per 5 minutes |
-| Verification | `/verify` | Submitting the invite form on `/auth/confirm` (`verifyOtp`) | 30 per 5 minutes |
+| Sign-ups and sign-ins | `/signup`, `/recover`, `/resend`, `/magiclink`, `/otp`, `PUT /user` | Setting the password when an invite or agent reset link is used (`updateUser`), and agent resets (`resetPasswordForEmail`, #194). Planned: OTP or magic-link requests | 30 per 5 minutes |
+| Verification | `/verify` | Submitting the invite form on `/auth/confirm`, `/discount-code/set-password` or `/discount-code/reset-password` (`verifyOtp`) | 30 per 5 minutes |
 
 The docs give each of these a burst of up to 30. Each limiter is a bucket that holds 30 requests and refills at its rate, so the token bucket regains one request every 2 seconds and the other two regain one every 10 seconds. Supabase's docs list the sign-ups and sign-ins endpoints as one limiter; in the current Auth source each endpoint has its own bucket with that limit, so resets and resends don't use up each other's allowance. Session refreshes run only on the server, because the app never uses the browser client. A reset link's own `/verify` hit comes from the user's browser, so it counts against their IP. Invites go through the admin `/invite` endpoint, which has no per-IP limiter; the hourly email limit above caps them.
 

@@ -1,0 +1,78 @@
+import type { Language } from "@/lib/language"
+
+// The words of "Umesahau nenosiri?", the reset page and the expired-link
+// panel (#194), in Swahili and English. Like the other Discount code pages
+// they never say agent, referral or Wakala. A native Swahili reader checks
+// the Swahili before it ships.
+
+export type LinkRequestStatus = "sent" | "invalid-email" | "check-pending" | "check-failed" | "rate-limited" | "access-off" | "unavailable"
+
+type Copy = {
+  forgotHeading: string
+  forgotIntro: string
+  expiredHeading: string
+  expiredIntro: string
+  resetHeading: string
+  resetIntro: string
+  email: string
+  send: string
+  sending: string
+  securityNote: string
+  // The same reply whether or not the email has an account.
+  sent: string
+  messages: Record<Exclude<LinkRequestStatus, "sent">, { text: string; code?: string }>
+  fallback: string
+  callOffice: string
+  goToSignIn: string
+}
+
+export const LINK_REQUEST_COPY: Record<Language, Copy> = {
+  sw: {
+    forgotHeading: "Umesahau nenosiri?",
+    forgotIntro: "Andika barua pepe unayoitumia kuingia. Tutakutumia kiungo cha kuweka nenosiri jipya.",
+    expiredHeading: "Kiungo kimeisha muda",
+    expiredIntro: "Kiungo hiki kimeisha muda au kimeshatumika. Andika barua pepe yako, tukutumie kiungo kipya.",
+    resetHeading: "Weka nenosiri jipya",
+    resetIntro: "Utalitumia pamoja na barua pepe yako kuingia kwenye kurasa za Code ya Punguzo.",
+    email: "Barua pepe",
+    send: "Tuma kiungo kipya",
+    sending: "Inatuma…",
+    securityNote: "Ukaguzi mfupi wa usalama unalinda fomu hii.",
+    sent: "Kama barua pepe hii ina akaunti ya Code ya Punguzo, tumeitumia kiungo. Angalia barua pepe zako, pamoja na spam. Kiungo kinatumika mara moja tu, ndani ya saa 24.",
+    messages: {
+      "invalid-email": { text: "Andika barua pepe yako, mfano jina@mfano.com." },
+      "check-pending": { text: "Subiri ukaguzi wa usalama ukamilike, kisha utume." },
+      "check-failed": { text: "Ukaguzi wa usalama haukukamilika. Jaribu tena." },
+      "rate-limited": { text: "Maombi ni mengi mno. Subiri kidogo kisha ujaribu tena, au piga simu ofisini.", code: "rate_limited" },
+      "access-off": { text: "Huduma hii imesimamishwa kwa muda.", code: "access_off" },
+      unavailable: { text: "Huduma haipatikani kwa sasa. Jaribu tena baada ya muda mfupi.", code: "unavailable" },
+    },
+    fallback: "Bado unahitaji msaada?",
+    callOffice: "Piga simu ofisini",
+    goToSignIn: "Nenda kuingia",
+  },
+  en: {
+    forgotHeading: "Forgot your password?",
+    forgotIntro: "Type the email you sign in with. We'll send you a link to set a new password.",
+    expiredHeading: "This link has expired",
+    expiredIntro: "This link has expired or was already used. Type your email and we'll send you a new one.",
+    resetHeading: "Set a new password",
+    resetIntro: "You'll use it with your email to sign in to the Discount code pages.",
+    email: "Email",
+    send: "Send a new link",
+    sending: "Sending…",
+    securityNote: "A quick security check protects this form.",
+    sent: "If this email has a Discount code account, we've sent it a link. Check your email, including spam. The link works once, within 24 hours.",
+    messages: {
+      "invalid-email": { text: "Enter your email, for example name@example.com." },
+      "check-pending": { text: "Wait a moment for the security check to finish, then send." },
+      "check-failed": { text: "The security check didn't finish. Try again." },
+      "rate-limited": { text: "Too many requests. Wait a little, then try again, or call the office.", code: "rate_limited" },
+      "access-off": { text: "This service is paused for now.", code: "access_off" },
+      unavailable: { text: "The service isn't available right now. Try again in a moment.", code: "unavailable" },
+    },
+    fallback: "Still need help?",
+    callOffice: "Call the office",
+    goToSignIn: "Go to sign-in",
+  },
+}

@@ -8,6 +8,8 @@ import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 
 import { ACCOUNT_COPY } from "../account-copy"
 import { AccountMessageView } from "../account-message"
+import { LINK_REQUEST_COPY } from "../link-request-copy"
+import { ExpiredLink } from "../link-request-form"
 import { PasswordField, SUBMIT } from "../password-field"
 import { setAgentPassword, type SetAgentPasswordState } from "./actions"
 
@@ -16,24 +18,44 @@ type ErrorKey = NonNullable<SetAgentPasswordState>["error"]
 // Errors after which the link is spent or can't be used here, so the form goes away.
 const FINAL = new Set<ErrorKey>(["invalid-link", "switched-off", "retired", "access-off", "not-agent", "joined-unavailable"])
 
-export function SetPasswordForm({ language, tokenHash }: { language: Language; tokenHash: string | null }) {
+// For the invite link (`invite`) and, from #194, the reset link (`recovery`).
+// A link that has expired or was used shows "Tuma kiungo kipya" instead.
+export function SetPasswordForm({
+  language,
+  tokenHash,
+  linkType,
+  officePhone,
+}: {
+  language: Language
+  tokenHash: string | null
+  linkType: "invite" | "recovery"
+  officePhone: string
+}) {
   const copy = ACCOUNT_COPY[language]
+  const reset = LINK_REQUEST_COPY[language]
   const [state, formAction, pending] = useActionState(setAgentPassword, null)
   const [shown, setShown] = useState(false)
   const error: ErrorKey | null = !tokenHash ? "invalid-link" : (state?.error ?? null)
   const message = error ? copy.messages[error] : null
   const showForm = tokenHash !== null && !(error && FINAL.has(error))
 
+  if (error === "invalid-link") return <ExpiredLink language={language} officePhone={officePhone} />
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 text-center">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">{copy.setPasswordHeading}</h1>
-        {showForm && <p className="font-exo text-[13px] text-slate-600">{copy.setPasswordIntro}</p>}
+        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">
+          {linkType === "recovery" ? reset.resetHeading : copy.setPasswordHeading}
+        </h1>
+        {showForm && (
+          <p className="font-exo text-[13px] text-slate-600">{linkType === "recovery" ? reset.resetIntro : copy.setPasswordIntro}</p>
+        )}
       </div>
 
       {showForm ? (
         <form action={formAction} className="flex flex-col gap-3">
           <input type="hidden" name="token_hash" value={tokenHash ?? ""} />
+          <input type="hidden" name="type" value={linkType} />
           <PasswordField
             id="password"
             label={copy.newPassword}

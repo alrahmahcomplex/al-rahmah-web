@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Agents can reset a forgotten password themselves. "Umesahau nenosiri?" on the Discount
+  code sign-in page asks for their email and sends a link to a new reset page, which sets
+  the password and signs them in. The page gives the same reply whether or not the email
+  has an account, and only an active agent with an account gets an email.
+- An expired or used invite or reset link now leads with "Tuma kiungo kipya": it sends a
+  joined agent a new reset link, and an agent who was invited but hasn't joined a new
+  invite. "Piga simu ofisini" stays as the fallback.
+- Both forms are protected by Turnstile, the firewall, a limit per email and an hourly
+  budget for the whole site, and stop while agent access is off. Each email sent is
+  recorded with its result.
+
 ## November 6, 2026 `v0.78.0`
 
 ### NEW

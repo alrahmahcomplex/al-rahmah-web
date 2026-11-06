@@ -25,12 +25,12 @@ import type { Result } from "./result"
 // keeps its status and its status note, and offers the right actions.
 
 // The states each filter shows. "Approved, no account yet" is every Approved
-// agent who hasn't joined, those awaiting email confirmation (#193)
-// included. The Agents screen shows "Awaiting email confirmation" as its
-// queue (agent-email-claims.ts) rather than as a list.
+// agent who hasn't joined. The Agents screen shows "Awaiting email
+// confirmation" (#193), which a Pending agent can be in too, as its queue
+// (agent-email-claims.ts) rather than as a list.
 const FILTER_STATES = {
   awaiting_confirmation: ["awaiting_confirmation"],
-  no_account: ["awaiting_confirmation", "no_email", "invite_not_sent", "invite_expired", "invited"],
+  no_account: ["no_email", "invite_not_sent", "invite_expired", "invited"],
   invite_not_sent: ["invite_not_sent"],
   invite_expired: ["invite_expired"],
 } as const satisfies Record<string, readonly AccountState[]>

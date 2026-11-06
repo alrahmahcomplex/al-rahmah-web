@@ -72,6 +72,7 @@ export type ClaimDecisionError =
   | { kind: "not-found" }
   | { kind: "already-decided" }
   | { kind: "retired" }
+  | { kind: "switched-off" }
   // The record got an email some other way, which is never overwritten.
   | { kind: "has-email" }
   | { kind: "already-joined" }
@@ -84,6 +85,7 @@ const REFUSALS: Record<string, ClaimDecisionError> = {
   not_found: { kind: "not-found" },
   already_decided: { kind: "already-decided" },
   retired: { kind: "retired" },
+  switched_off: { kind: "switched-off" },
   has_email: { kind: "has-email" },
   already_joined: { kind: "already-joined" },
   email_invalid: { kind: "email-invalid" },

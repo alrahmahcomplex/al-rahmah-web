@@ -15,6 +15,7 @@ const REFUSALS: Record<Exclude<ClaimDecisionError["kind"], "email-taken">, strin
   "not-found": "This claim could not be found. Reload the page.",
   "already-decided": "This claim was already decided. Reload the page.",
   retired: "This agent is retired, so nothing about them can change.",
+  "switched-off": "This agent is switched off. Switch them on first.",
   "has-email": "This agent already has an email, which a claim never replaces. Reload the page.",
   "already-joined": "They have already set a password. Only the agent can change this now.",
   "email-invalid": "Enter a valid email address.",

@@ -203,6 +203,8 @@ $$;
 --                    same email and name already wait (a retry).
 --   email_unusable   staff, another current agent or a login holds it.
 --   Box not ticked:
+--   joined, invited  the phone's agent, same name, has joined (their stored
+--                    email isn't read), or has this email and was invited.
 --   registered       with code and email: no current agent has the phone, so
 --                    a Pending agent is created with the email, or the
 --                    phone's agent has this email and name (a retry). A
@@ -305,10 +307,17 @@ begin
     end if;
 
     if by_phone.id is not null then
-        if by_phone.switched_off_at is null
-           and by_phone.email is not distinct from draft.agent_email
-           and by_phone.full_name = draft.agent_name then
-            return jsonb_build_object('outcome', 'registered', 'code', by_phone.code, 'email', by_phone.email);
+        if by_phone.switched_off_at is null and by_phone.full_name = draft.agent_name then
+            -- A joined agent's email lives in Auth: the stored copy isn't read.
+            if by_phone.user_id is not null and public.agent_joined(by_phone.user_id) then
+                return jsonb_build_object('outcome', 'joined');
+            end if;
+            if by_phone.email is not distinct from draft.agent_email then
+                if public.agent_invite_sent_at(by_phone.id, by_phone.email) is not null then
+                    return jsonb_build_object('outcome', 'invited');
+                end if;
+                return jsonb_build_object('outcome', 'registered', 'code', by_phone.code, 'email', by_phone.email);
+            end if;
         end if;
         return jsonb_build_object('outcome', 'code_needed');
     end if;
@@ -393,7 +402,7 @@ grant execute on function public.agent_email_claim_queue() to authenticated;
 
 -- Confirms or rejects one waiting claim. agents.approve. Refuses
 -- `not_permitted`, `invalid` (decision), `not_found`, `already_decided`,
--- `retired` and `has_email` (the agent got an email some other way; it is
+-- `retired`, `switched_off` and `has_email` (the agent got an email some other way; it is
 -- never overwritten), and on confirm whatever set_marketing_agent_email
 -- refuses (`already_joined`, `email_invalid`, `email_taken` with the holder).
 -- Confirming saves `email` when given (Save and send invite), else the
@@ -438,6 +447,9 @@ begin
 
     if agent.retired_at is not null then
         raise exception 'retired';
+    end if;
+    if agent.switched_off_at is not null then
+        raise exception 'switched_off';
     end if;
     if agent.email is not null then
         raise exception 'has_email';

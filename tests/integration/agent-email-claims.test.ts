@@ -7,6 +7,7 @@ vi.mock("server-only", () => ({}))
 import { getAgentAccountCounts, getAgentInvites, sendAgentInvite, setAgentEmail, type AgentInviteSender } from "@/lib/services/agent-invites"
 import { confirmEmailClaim, getEmailClaimQueue, getSignUpNotes, rejectEmailClaim } from "@/lib/services/agent-email-claims"
 import { signUpAgent, type SignUp } from "@/lib/services/agent-sign-up"
+import { listAgentsInAccountState } from "@/lib/services/agent-account-list"
 import { changeAgentStatus, createAgent } from "@/lib/services/marketing-agents"
 import { createLead } from "@/lib/services/leads"
 import { setLeadReferralCode } from "@/lib/services/referral"
@@ -237,6 +238,20 @@ describe("the sign-up form", () => {
     expect(await outcome({ ...who, email: email("other") })).toEqual({ kind: "code_needed" })
   })
 
+  test("8. an unticked retry for an agent who has joined or was invited says so, reading no stored email once joined", async () => {
+    const address = email("retry-invited")
+    const invited = await existingAgent(address)
+    expect((await sendAgentInvite(await signedIn(MANAGER), sent, invited.id, REDIRECT)).ok).toBe(true)
+    expect(await outcome({ fullName: invited.fullName, phone: invited.phone, email: address })).toEqual({ kind: "invited" })
+
+    const joinedAt = email("retry-joined")
+    const joined = await existingAgent(joinedAt)
+    const login = await secretClient().auth.admin.createUser({ email: joinedAt, password: "fixture-password", email_confirm: true })
+    if (login.error) throw new Error(login.error.message)
+    // Any email: the stored copy isn't compared once they have joined.
+    expect(await outcome({ fullName: joined.fullName, phone: joined.phone, email: email("anything") })).toEqual({ kind: "joined" })
+  })
+
   test("9. no match and the box unticked: a new Pending agent with the email; a free typed code is adopted", async () => {
     const who = { fullName: `Baraka Mpya ${randomUUID().slice(0, 6)}`, phone: phone(), email: email("pending") }
     const done = await outcome(who)
@@ -381,6 +396,28 @@ describe("the Manager's queue", () => {
 
     expect(await confirmEmailClaim(manager, claim.id)).toEqual({ ok: false, error: { kind: "has-email" } })
     expect(await storedEmail(agent.id)).toBe(meanwhile)
+  })
+
+  test("Confirm refuses a switched-off agent", async () => {
+    const { agent } = await claimed()
+    const [claim] = (await queueEntry(agent.id))!.claims
+    const manager = await signedIn(MANAGER)
+    expect((await changeAgentStatus(manager, agent.id, "switch-off", "Testing claims")).ok).toBe(true)
+    expect(await confirmEmailClaim(manager, claim.id)).toEqual({ ok: false, error: { kind: "switched-off" } })
+    expect(await storedEmail(agent.id)).toBeNull()
+  })
+
+  test("a Pending agent with a claim waits in the queue but not under Approved, no account yet", async () => {
+    const who = { fullName: `Pending Dai ${randomUUID().slice(0, 6)}`, phone: phone(), email: email("pending-claim") }
+    const registered = await outcome(who)
+    if (registered.kind !== "registered") throw new Error("expected a new agent")
+    const [agent] = await agentsWithPhone(who.phone)
+    // An old online sign-up with no email, as the three-argument form made them.
+    await asSystem((sql) => sql.query("update public.marketing_agents set email = null where id = $1", [agent.id]))
+    expect(await outcome({ ...who, email: email("claimer"), hasCode: true, code: registered.code })).toMatchObject({ kind: "claimed" })
+    expect(await stateOf(agent.id)).toBe("awaiting_confirmation")
+    const list = await listAgentsInAccountState(await signedIn(MANAGER), "no_account", { query: registered.code, page: 1 })
+    expect(list.ok && list.data.agents.map((a) => a.id)).toEqual([])
   })
 
   test("Confirm refuses an email someone else now holds, naming them", async () => {

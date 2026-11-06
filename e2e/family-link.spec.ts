@@ -139,7 +139,7 @@ test.describe("settling a match of the test's own", () => {
 
     await page.goto("/staff/check-in/new")
     await page.getByLabel("Full name").fill(match.parent)
-    await page.getByLabel("Relationship to the student").selectOption("Father")
+    await page.getByRole("radio", { name: "Father" }).click()
     await page.getByLabel("Phone", { exact: true }).fill(match.phone)
     await page.getByRole("button", { name: "Continue" }).click()
     // One parent on file, not the form's copy as a second one.

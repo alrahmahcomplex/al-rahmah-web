@@ -104,18 +104,18 @@ test.describe("the reminder for staff", () => {
     await page.getByRole("button", { name: "Continue" }).click()
     const child = `Child ${randomUUID().slice(0, 6)}`
     await page.getByLabel("Student's full name").fill(child)
-    await page.getByLabel("Class").selectOption("STD 3")
-    await page.getByLabel("Enrollment year").selectOption(nextYear)
-    await page.getByLabel("Day", { exact: true }).check()
+    await page.getByRole("radio", { name: "STD 3" }).click()
+    await page.getByRole("radio", { name: nextYear }).click()
+    await page.getByRole("radio", { name: "Day", exact: true }).click()
 
     const code = page.getByLabel("Referral code (optional)")
     const reminder = page.getByText(STAFF_REMINDER)
     await expect(reminder).toHaveCount(0)
     await code.fill("bjn-402")
     await expect(reminder).toBeVisible()
-    await expect(page.getByText("Baraka Juma Njoroge · Approved")).toBeVisible()
+    await expect(page.getByText(/^Baraka Juma Njoroge · /)).toBeVisible()
 
-    await page.getByRole("button", { name: "Review" }).click()
+    await page.getByRole("button", { name: "Continue to review" }).click()
     await page.getByRole("button", { name: "Register student" }).click()
     await expect(page.getByRole("heading", { name: `${child} is registered` })).toBeVisible()
     expect(await noticeVersionOf(child)).toBe("staff_reminder")

@@ -1,7 +1,8 @@
 "use client"
 
+import { ArrowLeftIcon, CheckIcon } from "lucide-react"
 import Link from "next/link"
-import { useId, useRef, useState, useTransition } from "react"
+import { useEffect, useId, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +10,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { STAFF_REMINDER } from "@/lib/referral-notice"
+import { STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
 import { formatDate } from "@/lib/school-calendar"
 import {
   DAY_OR_BOARDING,
@@ -25,15 +27,14 @@ import {
 import type { ReferralAgent } from "@/lib/services/referral"
 import { cn } from "@/lib/utils"
 
+import { HeaderActions } from "../../_shell/header-actions"
 import type { CorrectionOutcome } from "../../leads/[id]/correction-outcome"
 import { useCodeLookup } from "../../leads/[id]/referral-editor"
-import { referralLookupNote, type ReferralLookup } from "../../leads/[id]/referral-outcome"
+import { formatTzs, referralLookupNote, type ReferralLookup } from "../../leads/[id]/referral-outcome"
 import { findFamily, registerWalkIn, updateSharedContact } from "../actions"
 import { childHref, compareContact, relationshipLabel } from "../family"
 import type { ReferralCodeResult, RegisterOutcome } from "../outcome"
-
-const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
+import { CardGroup, ChipGroup, FIELD_CLASS, focusGroup } from "./choices"
 
 const LOST_REQUEST_MESSAGE =
   "The registration could not be confirmed. Check your connection and register again. If the student comes back as already registered, the first attempt was saved."
@@ -43,6 +44,13 @@ const LOST_LOOKUP_MESSAGE =
 
 const LOST_UPDATE_MESSAGE =
   "The update could not be confirmed. Check your connection and try again, or keep the stored details."
+
+// The one orange action on each screen (DESIGN.md, The ShuleFasta Button
+// Rule), and the ghost Back beside it.
+const PRIMARY = "h-11 rounded-full px-5 text-sm"
+const BACK = "h-11 rounded-full px-4 text-sm text-slate-700"
+
+const HEADING = "font-exo text-2xl font-extrabold italic text-blue-600 outline-none"
 
 // The screens of New Student. The Family screens appear only when the
 // parent's number is already on file.
@@ -72,12 +80,16 @@ export function NewStudentForm({
   years,
   canEditContact,
   canEnterReferralCode,
+  interviewDiscount,
 }: {
   today: string
   years: number[]
   canEditContact: boolean
   // Staff who may set a lead's Referral code (leads.edit) get the field.
   canEnterReferralCode: boolean
+  // What an Approved agent's code takes off the interview fee, from
+  // interview_discount(), or null when that read failed.
+  interviewDiscount: number | null
 }) {
   const [screen, setScreen] = useState<Screen>("parent")
   const [details, setDetails] = useState<Details>({
@@ -253,6 +265,26 @@ export function NewStudentForm({
     })
   }
 
+  // Another child of the same parent: the parent's details stay typed and
+  // the Family check runs again, which now lists the child just registered.
+  function registerAnother() {
+    setCreated(null)
+    setDuplicate(null)
+    setReferralAgent(null)
+    setMatch(null)
+    setConfirmed(null)
+    setDetails((current) => ({
+      ...current,
+      studentName: "",
+      className: "",
+      enrollmentYear: "",
+      dayOrBoarding: "",
+      visitDate: today,
+      referralCode: "",
+    }))
+    goTo("parent")
+  }
+
   if (created) {
     return (
       <Confirmation
@@ -260,122 +292,192 @@ export function NewStudentForm({
         leadId={created.leadId}
         studentName={details.studentName}
         referralCode={created.referralCode}
+        onAnother={registerAnother}
       />
     )
   }
 
   const steps: Screen[] = known ? ["parent", "family", "student", "review"] : ["parent", "student", "review"]
-  const stepNumber = steps.indexOf(screen === "compare" ? "family" : screen) + 1
-  const title =
-    screen === "parent"
-      ? "Parent or guardian"
-      : screen === "family"
-        ? confirmed
-          ? `${confirmed.fullName}'s family`
-          : "Is this the same parent?"
-        : screen === "compare"
-          ? "Update the shared contact?"
-          : screen === "student"
-            ? "Student"
-            : "Review"
+  const currentIndex = steps.indexOf(screen === "compare" ? "family" : screen)
+  const stepNumber = currentIndex + 1
   const field = notice?.screen === screen ? notice.field : null
+  const { question, help } = questionFor(screen, confirmed)
+
+  const rail: RailStep[] = steps.map((key) => {
+    switch (key) {
+      case "parent":
+        return {
+          key,
+          label: "Parent or guardian",
+          hint: "Name and phone number",
+          done: [
+            `${details.parentName.trim()} · ${relationshipLabel(details.relationship, details.relationshipDescription.trim())}`,
+            details.whatsapp.trim() ? `${details.phone} · WhatsApp ${details.whatsapp}` : details.phone,
+          ],
+        }
+      case "family":
+        return {
+          key,
+          label: "Family",
+          hint: "A parent already on file",
+          done: confirmed ? [`${confirmed.fullName}'s family`, childCount(confirmed.children.length)] : ["Not the same person"],
+        }
+      case "student":
+        return {
+          key,
+          label: "Student",
+          hint: "Who is being registered",
+          done: [
+            `${details.studentName.trim()} · ${details.className}`,
+            `${details.enrollmentYear} · ${details.dayOrBoarding}${referralAgent ? ` · ${referralAgent.code}` : ""}`,
+          ],
+        }
+      default:
+        return { key, label: "Review and register", hint: "Admission Number is issued here", done: [] }
+    }
+  })
 
   return (
-    <div className="flex max-w-2xl flex-col gap-5">
-      <div className="flex flex-col gap-1">
-        <p className="text-sm text-muted-foreground">
-          Step {stepNumber} of {steps.length}
-        </p>
-        <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold text-slate-900 outline-none">
-          {title}
-        </h2>
+    <div className="flex flex-col gap-6">
+      <HeaderActions>
+        <Link href="/staff/check-in" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-slate-700")}>
+          Cancel
+        </Link>
+      </HeaderActions>
+      <Progress step={stepNumber} of={steps.length} />
+      <div className="grid gap-6 md:grid-cols-[13.5rem_minmax(0,1fr)] md:gap-12">
+        <StepRail steps={rail} currentIndex={currentIndex} onChange={(key) => goTo(key)} />
+        <div className="flex min-w-0 flex-col gap-5">
+          <div className="flex flex-col gap-1">
+            <h1 ref={headingRef} tabIndex={-1} className={HEADING}>
+              {question}
+            </h1>
+            <p className="text-sm text-slate-600">{help}</p>
+          </div>
+
+          {notice?.screen === screen && (
+            <Alert variant="destructive" role="alert">
+              <AlertDescription className="flex flex-col items-start gap-2">
+                <span>{notice.message}</span>
+                {notice.canSkip && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => goTo("student")}>
+                    Continue without checking
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {screen === "parent" && (
+            <ParentStep details={details} set={set} field={field} pending={pending} onNext={lookForFamily} />
+          )}
+          {screen === "family" && match && !confirmed && (
+            <ChooseContactStep
+              match={match}
+              onSame={(contact) => {
+                setConfirmed(contact)
+                goTo("family")
+              }}
+              onNotSame={() => {
+                // The declined contacts are done with: Back goes to the parent.
+                setMatch(null)
+                setConfirmed(null)
+                goTo("student")
+              }}
+              onBack={() => goTo("parent")}
+            />
+          )}
+          {screen === "family" && confirmed && (
+            <FamilyChildrenStep
+              contact={confirmed}
+              onRegisterSibling={registerSibling}
+              onBack={() => {
+                setConfirmed(null)
+                goTo("family")
+              }}
+            />
+          )}
+          {screen === "compare" && match && confirmed && (
+            <CompareStep
+              details={details}
+              match={match}
+              contact={confirmed}
+              canEdit={canEditContact}
+              pending={pending}
+              onUpdate={updateContact}
+              onKeep={() => goTo("student")}
+              onBack={() => goTo("family")}
+            />
+          )}
+          {screen === "student" && (
+            <StudentStep
+              details={details}
+              set={set}
+              today={today}
+              years={years}
+              field={field}
+              canEnterReferralCode={canEnterReferralCode}
+              interviewDiscount={interviewDiscount}
+              onBack={() => goTo(known ? "family" : "parent")}
+              onNext={(agent) => {
+                setReferralAgent(agent)
+                goTo("review")
+              }}
+            />
+          )}
+          {screen === "review" && (
+            <ReviewStep
+              details={details}
+              contact={confirmed}
+              referralAgent={referralAgent}
+              pending={pending}
+              duplicate={duplicate}
+              onChangeParent={() => {
+                setDuplicate(null)
+                goTo("parent")
+              }}
+              onChangeStudent={() => {
+                setDuplicate(null)
+                goTo("student")
+              }}
+              onBack={() => {
+                setDuplicate(null)
+                goTo("student")
+              }}
+              onSubmit={submit}
+            />
+          )}
+        </div>
       </div>
-
-      {notice?.screen === screen && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription className="flex flex-col items-start gap-2">
-            <span>{notice.message}</span>
-            {notice.canSkip && (
-              <Button type="button" variant="outline" size="sm" onClick={() => goTo("student")}>
-                Continue without checking
-              </Button>
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {screen === "parent" && (
-        <ParentStep details={details} set={set} field={field} pending={pending} onNext={lookForFamily} />
-      )}
-      {screen === "family" && match && !confirmed && (
-        <ChooseContactStep
-          match={match}
-          onSame={(contact) => {
-            setConfirmed(contact)
-            goTo("family")
-          }}
-          onNotSame={() => {
-            // The declined contacts are done with: Back goes to the parent.
-            setMatch(null)
-            setConfirmed(null)
-            goTo("student")
-          }}
-          onBack={() => goTo("parent")}
-        />
-      )}
-      {screen === "family" && confirmed && (
-        <FamilyChildrenStep
-          contact={confirmed}
-          onRegisterSibling={registerSibling}
-          onBack={() => {
-            setConfirmed(null)
-            goTo("family")
-          }}
-        />
-      )}
-      {screen === "compare" && match && confirmed && (
-        <CompareStep
-          details={details}
-          match={match}
-          contact={confirmed}
-          canEdit={canEditContact}
-          pending={pending}
-          onUpdate={updateContact}
-          onKeep={() => goTo("student")}
-          onBack={() => goTo("family")}
-        />
-      )}
-      {screen === "student" && (
-        <StudentStep
-          details={details}
-          set={set}
-          today={today}
-          years={years}
-          field={field}
-          canEnterReferralCode={canEnterReferralCode}
-          onBack={() => goTo(known ? "family" : "parent")}
-          onNext={(agent) => {
-            setReferralAgent(agent)
-            goTo("review")
-          }}
-        />
-      )}
-      {screen === "review" && (
-        <ReviewStep
-          details={details}
-          contact={confirmed}
-          referralAgent={referralAgent}
-          pending={pending}
-          duplicate={duplicate}
-          onBack={() => {
-            setDuplicate(null)
-            goTo("student")
-          }}
-          onSubmit={submit}
-        />
-      )}
     </div>
   )
+}
+
+// What each screen asks, as the page's heading, and the sentence under it.
+function questionFor(screen: Screen, confirmed: FamilyContact | null): { question: string; help: string } {
+  switch (screen) {
+    case "parent":
+      return {
+        question: "Who is the parent or guardian?",
+        help: "Ask the parent. Their phone number tells us whether the family is already known.",
+      }
+    case "family":
+      return confirmed
+        ? {
+            question: `${confirmed.fullName}'s family`,
+            help: "If the student is listed, open them instead of registering again. If not, register a new sibling.",
+          }
+        : {
+            question: "Is this the same parent?",
+            help: "This number is already on file. Check the name and relationship with the parent.",
+          }
+    case "compare":
+      return { question: "Update the shared contact?", help: "What you typed differs from the contact on file." }
+    case "student":
+      return { question: "Who is the student?", help: "Ask the parent. Everything can be corrected later from the student's page." }
+    case "review":
+      return { question: "Check and register", help: "Read it back to the parent. Register issues the Admission Number." }
+  }
 }
 
 // The parent as typed, with the numbers the Family lookup normalized.
@@ -387,6 +489,86 @@ function typedParent(details: Details, match: FamilyMatch) {
     phone: match.phone,
     whatsapp: match.whatsapp,
   }
+}
+
+function Progress({ step, of }: { step: number; of: number }) {
+  const id = useId()
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div
+        role="progressbar"
+        aria-labelledby={id}
+        aria-valuemin={0}
+        aria-valuemax={of}
+        aria-valuenow={step}
+        className="h-1 w-full overflow-hidden rounded-full bg-slate-200"
+      >
+        <div className="h-full rounded-full bg-blue-600 transition-[width]" style={{ width: `${Math.round((step / of) * 100)}%` }} />
+      </div>
+      <p id={id} className="text-xs text-muted-foreground">
+        Step {step} of {of}
+      </p>
+    </div>
+  )
+}
+
+// A step as the rail shows it: its name, what to expect while it is ahead,
+// and what was entered once it is done.
+type RailStep = { key: Screen; label: string; hint: string; done: string[] }
+
+// The steps beside the form (above it on a phone): a completed step shows
+// what was entered and a Change link back to it.
+function StepRail({ steps, currentIndex, onChange }: { steps: RailStep[]; currentIndex: number; onChange: (key: Screen) => void }) {
+  return (
+    <ol aria-label="Steps" className="flex flex-col md:pt-1">
+      {steps.map((step, index) => {
+        const state = index < currentIndex ? "done" : index === currentIndex ? "current" : "upcoming"
+        return (
+          <li key={step.key} aria-current={state === "current" ? "step" : undefined} className="relative flex gap-3 pb-5 last:pb-0 md:pb-6">
+            {index < steps.length - 1 && <span aria-hidden className="absolute top-8 bottom-1 left-[13px] w-0.5 bg-slate-200" />}
+            <span
+              aria-hidden
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center rounded-full border-2 bg-white text-xs font-semibold",
+                state === "done"
+                  ? "border-blue-600 bg-blue-600 text-white"
+                  : state === "current"
+                    ? "border-blue-600 text-blue-600"
+                    : "border-slate-200 text-slate-400",
+              )}
+            >
+              {state === "done" ? <CheckIcon className="size-4" /> : index + 1}
+            </span>
+            <div className="flex min-w-0 flex-col gap-0.5 pt-1">
+              <p className={cn("text-sm font-semibold", state === "upcoming" ? "text-slate-400" : "text-slate-900")}>
+                {state === "done" && <span className="sr-only">Done: </span>}
+                {step.label}
+              </p>
+              {state === "done" ? (
+                step.done.map((line) => (
+                  <p key={line} className="truncate text-xs text-slate-600">
+                    {line}
+                  </p>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">{step.hint}</p>
+              )}
+              {state === "done" && (
+                <button
+                  type="button"
+                  onClick={() => onChange(step.key)}
+                  aria-label={`Change ${step.label.toLowerCase()}`}
+                  className="w-fit rounded-sm text-xs font-medium text-blue-600 underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-blue-600/40"
+                >
+                  Change
+                </button>
+              )}
+            </div>
+          </li>
+        )
+      })}
+    </ol>
+  )
 }
 
 type StepProps = {
@@ -421,13 +603,27 @@ function Field({
   )
 }
 
+// The actions at the foot of a screen: the one orange action first, then Back.
+function Footer({ children }: { children: React.ReactNode }) {
+  return <div className="mt-1 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-5">{children}</div>
+}
+
+function BackButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
+  return (
+    <Button type="button" variant="ghost" className={BACK} onClick={onClick} disabled={disabled}>
+      <ArrowLeftIcon aria-hidden />
+      Back
+    </Button>
+  )
+}
+
 function ParentStep({ details, set, field, pending, onNext }: StepProps & { pending: boolean; onNext: () => void }) {
   const phoneError = field === "phone" ? "Check this number." : null
   const whatsappError = field === "whatsapp" ? "Check this number." : null
 
   return (
     <form
-      className="flex max-w-xl flex-col gap-4"
+      className="flex max-w-xl flex-col gap-5"
       onSubmit={(event) => {
         event.preventDefault()
         onNext()
@@ -443,25 +639,23 @@ function ParentStep({ details, set, field, pending, onNext }: StepProps & { pend
             onChange={(event) => set("parentName", event.target.value)}
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
+            className={FIELD_CLASS}
           />
         )}
       </Field>
-      <Field label="Relationship to the student">
-        {({ id }) => (
-          <select
-            id={id}
-            className={SELECT_CLASS}
-            value={details.relationship}
-            onChange={(event) => set("relationship", event.target.value as Relationship)}
-          >
-            {RELATIONSHIPS.map((relationship) => (
-              <option key={relationship}>{relationship}</option>
-            ))}
-          </select>
-        )}
-      </Field>
+      <ChipGroup
+        label="Relationship to the student"
+        options={RELATIONSHIPS}
+        value={details.relationship}
+        onChange={(relationship) => set("relationship", relationship)}
+        error={field === "relationship" ? "Choose how they are related to the student." : null}
+      />
       {details.relationship === "Other" && (
-        <Field label="Describe the relationship" hint="For example: aunt, neighbour, sponsor.">
+        <Field
+          label="Describe the relationship"
+          hint="For example: aunt, neighbour, sponsor."
+          error={field === "relationship_description" ? "Say how they are related to the student." : null}
+        >
           {({ id, describedBy, invalid }) => (
             <Input
               id={id}
@@ -471,6 +665,7 @@ function ParentStep({ details, set, field, pending, onNext }: StepProps & { pend
               onChange={(event) => set("relationshipDescription", event.target.value)}
               aria-describedby={describedBy}
               aria-invalid={invalid || undefined}
+              className={FIELD_CLASS}
             />
           )}
         </Field>
@@ -486,6 +681,7 @@ function ParentStep({ details, set, field, pending, onNext }: StepProps & { pend
             onChange={(event) => set("phone", event.target.value)}
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
+            className={FIELD_CLASS}
           />
         )}
       </Field>
@@ -499,15 +695,15 @@ function ParentStep({ details, set, field, pending, onNext }: StepProps & { pend
             onChange={(event) => set("whatsapp", event.target.value)}
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
+            className={FIELD_CLASS}
           />
         )}
       </Field>
-      <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>
+      <Footer>
+        <Button type="submit" variant="orange" className={PRIMARY} disabled={pending}>
           {pending ? "Checking…" : "Continue"}
         </Button>
-        <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Cancel</Link>
-      </div>
+      </Footer>
     </form>
   )
 }
@@ -530,37 +726,38 @@ function ChooseContactStep({
   const several = match.contacts.length > 1
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-slate-700">
-        {several
-          ? `This number is on file for ${match.contacts.length} parents or guardians. Check the name and relationship with the parent, and choose the one they are, or Not the same person if none fits.`
-          : "This number is already on file. Check the name and relationship with the parent."}
-      </p>
+      {several && (
+        <p className="text-sm text-slate-700">
+          This number is on file for {match.contacts.length} parents or guardians. Choose the one they are, or Not the same
+          person if none fits.
+        </p>
+      )}
       <ul className="flex flex-col gap-3">
         {match.contacts.map((contact) => (
           <li key={contact.id}>
-            <ContactCard contact={contact} onSame={() => onSame(contact)} />
+            <ContactCard contact={contact} primary={!several} onSame={() => onSame(contact)} />
           </li>
         ))}
       </ul>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="outline" onClick={onNotSame}>
+      <Footer>
+        <Button type="button" variant="outline" className={PRIMARY} onClick={onNotSame}>
           Not the same person
         </Button>
-        <Button type="button" variant="ghost" onClick={onBack}>
-          Back
-        </Button>
-      </div>
+        <BackButton onClick={onBack} />
+      </Footer>
     </div>
   )
 }
 
-function ContactCard({ contact, onSame }: { contact: FamilyContact; onSame: () => void }) {
+// A contact that holds the number. Same person is the one orange action
+// when there is one contact; with several, none is the obvious next step.
+function ContactCard({ contact, primary, onSame }: { contact: FamilyContact; primary: boolean; onSame: () => void }) {
   const nameId = useId()
   return (
     <div
       role="group"
       aria-labelledby={nameId}
-      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10"
     >
       <div className="flex min-w-0 flex-col gap-0.5">
         <p id={nameId} className="font-semibold break-words text-slate-900">
@@ -569,7 +766,7 @@ function ContactCard({ contact, onSame }: { contact: FamilyContact; onSame: () =
         <p className="text-sm text-slate-700">{relationshipLabel(contact.relationship, contact.relationshipDescription)}</p>
         <p className="text-xs text-muted-foreground">{childCount(contact.children.length)}</p>
       </div>
-      <Button type="button" onClick={onSame}>
+      <Button type="button" variant={primary ? "orange" : "outline"} className={PRIMARY} onClick={onSame}>
         Same person
       </Button>
     </div>
@@ -588,9 +785,6 @@ function FamilyChildrenStep({
   const anyClosed = contact.children.some(isClosed)
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-slate-700">
-        If the student is listed, open them instead of registering again. If not, register a new sibling.
-      </p>
       {contact.children.length === 0 ? (
         <p className="text-sm text-muted-foreground">No children are on file for this parent or guardian.</p>
       ) : (
@@ -628,7 +822,7 @@ function FamilyChildrenStep({
                       <Link
                         href={childHref(child)}
                         aria-label={closed ? `Reopening request for ${child.studentName}` : `Open ${child.studentName}`}
-                        className="font-medium text-blue-700 underline underline-offset-4"
+                        className="font-medium text-blue-600 underline underline-offset-4"
                       >
                         {closed ? "Reopening request" : "Open"}
                       </Link>
@@ -651,14 +845,12 @@ function FamilyChildrenStep({
           that child&apos;s lead.
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={onRegisterSibling}>
+      <Footer>
+        <Button type="button" variant="orange" className={PRIMARY} onClick={onRegisterSibling}>
           Register a new sibling
         </Button>
-        <Button type="button" variant="outline" onClick={onBack}>
-          Back
-        </Button>
-      </div>
+        <BackButton onClick={onBack} />
+      </Footer>
     </div>
   )
 }
@@ -688,10 +880,11 @@ function CompareStep({
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-slate-700">
-        What you typed differs from the contact on file.
-        {siblings.length > 0 && ` It is shared by ${siblings.join(", ")}, so updating it changes it for every one of them.`}
-      </p>
+      {siblings.length > 0 && (
+        <p className="text-sm text-slate-700">
+          The contact is shared by {siblings.join(", ")}, so updating it changes it for every one of them.
+        </p>
+      )}
       {refusal && (
         <Alert variant="destructive" role="alert">
           <AlertDescription className="flex flex-col gap-2">
@@ -743,10 +936,12 @@ function CompareStep({
           Your role can&apos;t change a shared contact, so the stored details are kept.
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
+      <Footer>
         {canEdit && (
           <Button
             type="button"
+            variant="orange"
+            className={PRIMARY}
             disabled={pending}
             onClick={async () => {
               setRefusal(null)
@@ -757,15 +952,28 @@ function CompareStep({
             {pending ? "Updating…" : "Update the shared contact"}
           </Button>
         )}
-        <Button type="button" variant="outline" disabled={pending} onClick={onKeep}>
+        <Button type="button" variant={canEdit ? "outline" : "orange"} className={PRIMARY} disabled={pending} onClick={onKeep}>
           Keep stored details
         </Button>
-        <Button type="button" variant="ghost" disabled={pending} onClick={onBack}>
-          Back
-        </Button>
-      </div>
+        <BackButton onClick={onBack} disabled={pending} />
+      </Footer>
     </div>
   )
+}
+
+// The choices the student step checks itself before going on: the database
+// refuses them too, but staff should hear it before Review.
+type MissingChoice = Extract<InvalidField, "class_name" | "enrollment_year" | "day_or_boarding">
+
+const MISSING_MESSAGE: Record<MissingChoice, string> = {
+  class_name: "Choose the student's class.",
+  enrollment_year: "Choose the year the student will enroll.",
+  day_or_boarding: "Choose day or boarding.",
+}
+
+const DAY_OR_BOARDING_MEANS: Record<DayOrBoarding, string> = {
+  Day: "Goes home after school each day.",
+  Boarding: "Lives at the school during term.",
 }
 
 function StudentStep({
@@ -775,25 +983,56 @@ function StudentStep({
   years,
   field,
   canEnterReferralCode,
+  interviewDiscount,
   onBack,
   onNext,
 }: StepProps & {
   today: string
   years: number[]
   canEnterReferralCode: boolean
+  interviewDiscount: number | null
   onBack: () => void
   onNext: (agent: ReferralAgent | null) => void
 }) {
   const typedCode = canEnterReferralCode ? details.referralCode : ""
   const lookup = useCodeLookup(typedCode)
   const [codeRefusal, setCodeRefusal] = useState<string | null>(null)
+  const [missing, setMissing] = useState<MissingChoice | null>(null)
+  const [visitOpened, setVisitOpened] = useState(false)
   const codeRef = useRef<HTMLInputElement>(null)
+  const dateRef = useRef<HTMLInputElement>(null)
+  const ids = useId()
+  const groupIds = { class_name: `${ids}-class`, enrollment_year: `${ids}-year`, day_or_boarding: `${ids}-mode` }
+
+  // The visit date reads as a line until staff change it, or until the
+  // database refuses it, or when it is no longer today.
+  const visitOpen = visitOpened || field === "visit_date" || details.visitDate !== today
+
+  function choiceError(choice: MissingChoice) {
+    return missing === choice || field === choice ? MISSING_MESSAGE[choice] : null
+  }
+
+  function chose(choice: MissingChoice) {
+    setMissing((current) => (current === choice ? null : current))
+  }
 
   return (
     <form
-      className="flex max-w-xl flex-col gap-4"
+      className="flex max-w-xl flex-col gap-5"
       onSubmit={(event) => {
         event.preventDefault()
+        const unchosen: MissingChoice | null = !details.className
+          ? "class_name"
+          : !details.enrollmentYear
+            ? "enrollment_year"
+            : !details.dayOrBoarding
+              ? "day_or_boarding"
+              : null
+        if (unchosen) {
+          setMissing(unchosen)
+          focusGroup(groupIds[unchosen])
+          return
+        }
         if (typedCode.trim() === "") return onNext(null)
         // Only a code a Marketing Agent holds goes on to Review.
         if (lookup.status === "found") return onNext(lookup.agent)
@@ -811,99 +1050,102 @@ function StudentStep({
             onChange={(event) => set("studentName", event.target.value)}
             aria-describedby={describedBy}
             aria-invalid={invalid || undefined}
+            className={FIELD_CLASS}
           />
         )}
       </Field>
-      <Field label="Class">
-        {({ id }) => (
-          <select
-            id={id}
-            required
-            className={SELECT_CLASS}
-            value={details.className}
-            onChange={(event) => set("className", event.target.value as LeadClass)}
-          >
-            <option value="" disabled>
-              Choose a class
-            </option>
-            {LEAD_CLASSES.map((className) => (
-              <option key={className}>{className}</option>
-            ))}
-          </select>
-        )}
-      </Field>
-      <Field label="Enrollment year">
-        {({ id }) => (
-          <select
-            id={id}
-            required
-            className={SELECT_CLASS}
-            value={details.enrollmentYear}
-            onChange={(event) => set("enrollmentYear", event.target.value)}
-          >
-            <option value="" disabled>
-              Choose a year
-            </option>
-            {years.map((year) => (
-              <option key={year}>{year}</option>
-            ))}
-          </select>
-        )}
-      </Field>
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="text-sm font-medium">Day or boarding</legend>
-        <div className="flex gap-4">
-          {DAY_OR_BOARDING.map((choice) => (
-            <label key={choice} className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="day-or-boarding"
-                required
-                value={choice}
-                checked={details.dayOrBoarding === choice}
-                onChange={() => set("dayOrBoarding", choice)}
-              />
-              {choice}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      <Field
-        label="Visit date"
-        hint="Today, or an earlier day if you are recording a visit late."
-        error={field === "visit_date" ? "Choose today or an earlier date." : null}
-      >
-        {({ id, describedBy, invalid }) => (
-          <Input
-            id={id}
-            type="date"
-            required
-            max={today}
-            value={details.visitDate}
-            onChange={(event) => set("visitDate", event.target.value)}
-            aria-describedby={describedBy}
-            aria-invalid={invalid || undefined}
-          />
-        )}
-      </Field>
+      <ChipGroup
+        id={groupIds.class_name}
+        label="Class they are joining"
+        options={LEAD_CLASSES}
+        value={details.className}
+        onChange={(className) => {
+          chose("class_name")
+          set("className", className)
+        }}
+        hint={details.className === "FORM 1" ? "For FORM 1 you can add the Pre-Form One programme after registration." : undefined}
+        error={choiceError("class_name")}
+      />
+      <ChipGroup
+        id={groupIds.enrollment_year}
+        label="Enrollment year"
+        options={years.map(String)}
+        value={details.enrollmentYear}
+        onChange={(year) => {
+          chose("enrollment_year")
+          set("enrollmentYear", year)
+        }}
+        error={choiceError("enrollment_year")}
+      />
+      <CardGroup
+        id={groupIds.day_or_boarding}
+        label="Day or boarding"
+        options={DAY_OR_BOARDING}
+        value={details.dayOrBoarding}
+        onChange={(mode) => {
+          chose("day_or_boarding")
+          set("dayOrBoarding", mode)
+        }}
+        describe={(mode) => DAY_OR_BOARDING_MEANS[mode]}
+        error={choiceError("day_or_boarding")}
+      />
       {canEnterReferralCode && (
         <ReferralCodeField
           ref={codeRef}
           value={details.referralCode}
           lookup={lookup}
           refusal={codeRefusal}
+          interviewDiscount={interviewDiscount}
           onChange={(value) => {
             setCodeRefusal(null)
             set("referralCode", value)
           }}
         />
       )}
-      <div className="flex gap-2">
-        <Button type="submit">Review</Button>
-        <Button type="button" variant="outline" onClick={onBack}>
-          Back
+      {visitOpen && (
+        <Field
+          label="Visit date"
+          hint="Today, or an earlier day if you are recording a visit late."
+          error={field === "visit_date" ? "Choose today or an earlier date." : null}
+        >
+          {({ id, describedBy, invalid }) => (
+            <Input
+              ref={dateRef}
+              id={id}
+              type="date"
+              required
+              max={today}
+              value={details.visitDate}
+              onChange={(event) => set("visitDate", event.target.value)}
+              aria-describedby={describedBy}
+              aria-invalid={invalid || undefined}
+              className={cn(FIELD_CLASS, "max-w-xs")}
+            />
+          )}
+        </Field>
+      )}
+      <Footer>
+        <Button type="submit" variant="orange" className={PRIMARY}>
+          Continue to review
         </Button>
-      </div>
+        <BackButton onClick={onBack} />
+        {!visitOpen && (
+          <p className="text-xs text-muted-foreground sm:ml-auto">
+            Visit date: today, {formatDate(details.visitDate)} ·{" "}
+            <button
+              type="button"
+              aria-label="Change visit date"
+              className="rounded-sm font-medium text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
+              onClick={() => {
+                setVisitOpened(true)
+                queueMicrotask(() => dateRef.current?.focus())
+              }}
+            >
+              change
+            </button>
+          </p>
+        )}
+      </Footer>
     </form>
   )
 }
@@ -912,12 +1154,21 @@ function StudentStep({
 function codeRefusalMessage(lookup: ReferralLookup): string {
   switch (lookup.status) {
     case "checking":
-      return "The code is still being checked. Wait a moment, then choose Review again."
+      return "The code is still being checked. Wait a moment, then choose Continue to review again."
     case "unavailable":
       return "The code could not be checked just now. Try again, or clear the field and add the code on the lead later."
     default:
       return "No Marketing Agent has this code. Correct it, or clear the field to register without one."
   }
+}
+
+// What the field says under a code an agent holds: for an Approved agent,
+// the interview fee the family will pay, when the discount could be read.
+function agentNote(lookup: ReferralLookup, interviewDiscount: number | null): string {
+  if (lookup.status === "found" && lookup.agent.state === "approved" && interviewDiscount !== null) {
+    return `${lookup.agent.fullName} · interview fee becomes ${formatTzs(STANDARD_INTERVIEW_FEE - interviewDiscount)}`
+  }
+  return referralLookupNote(lookup)
 }
 
 // The optional Referral code, naming the agent as it is typed.
@@ -926,21 +1177,26 @@ function ReferralCodeField({
   value,
   lookup,
   refusal,
+  interviewDiscount,
   onChange,
 }: {
   ref: React.Ref<HTMLInputElement>
   value: string
   lookup: ReferralLookup
   refusal: string | null
+  interviewDiscount: number | null
   onChange: (value: string) => void
 }) {
   const id = useId()
   const note =
-    refusal ?? (lookup.status === "empty" ? "Only if the family has a Marketing Agent's code, such as ABC-123." : referralLookupNote(lookup))
+    refusal ?? (lookup.status === "empty" ? "Only if the family has a Marketing Agent's code, such as ABC-123." : agentNote(lookup, interviewDiscount))
   const invalid = refusal !== null || lookup.status === "none"
+  const confirmed = refusal === null && lookup.status === "found" && lookup.agent.state === "approved"
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>Referral code (optional)</Label>
+      <Label htmlFor={id}>
+        Referral code <span className="font-normal text-muted-foreground">(optional)</span>
+      </Label>
       <Input
         ref={ref}
         id={id}
@@ -953,17 +1209,18 @@ function ReferralCodeField({
         maxLength={40}
         aria-describedby={value.trim() ? `${id}-agent ${id}-reminder` : `${id}-agent`}
         aria-invalid={invalid || undefined}
-        className="max-w-48 font-mono uppercase"
+        className={cn(FIELD_CLASS, "max-w-56 font-mono uppercase")}
       />
       <p
         id={`${id}-agent`}
         role="status"
         className={cn(
-          "text-xs",
-          invalid ? "text-destructive" : lookup.status === "found" ? "text-slate-900" : "text-muted-foreground",
+          "flex items-start gap-1.5 text-sm",
+          invalid ? "text-destructive" : confirmed ? "text-emerald-700" : lookup.status === "found" ? "text-slate-900" : "text-muted-foreground",
         )}
       >
-        {note}
+        {confirmed && <CheckIcon aria-hidden className="mt-0.5 size-4 shrink-0" />}
+        <span>{note}</span>
       </p>
       {/* A code staff save records that the family was told (#182). */}
       {value.trim() && (
@@ -977,14 +1234,54 @@ function ReferralCodeField({
 
 function Summary({ rows }: { rows: [string, string][] }) {
   return (
-    <dl className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+    <dl className="text-sm">
       {rows.map(([term, value]) => (
-        <div key={term} className="contents">
+        <div
+          key={term}
+          className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 border-t border-slate-100 py-2 first:border-t-0 first:pt-0 last:pb-0"
+        >
           <dt className="text-muted-foreground">{term}</dt>
-          <dd className="break-words text-slate-900">{value}</dd>
+          <dd className="font-medium break-words text-slate-900">{value}</dd>
         </div>
       ))}
     </dl>
+  )
+}
+
+// One card of the receipt-style review, with its way back to the step.
+function ReviewCard({
+  id,
+  title,
+  changeLabel,
+  onChange,
+  disabled,
+  children,
+}: {
+  id: string
+  title: string
+  changeLabel: string
+  onChange: () => void
+  disabled: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+      <div className="flex items-center justify-between gap-3">
+        <h2 id={id} className="text-sm font-semibold text-slate-900">
+          {title}
+        </h2>
+        <button
+          type="button"
+          onClick={onChange}
+          disabled={disabled}
+          aria-label={changeLabel}
+          className="rounded-sm text-xs font-medium text-blue-600 underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-blue-600/40 disabled:opacity-50"
+        >
+          Change
+        </button>
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -994,6 +1291,8 @@ function ReviewStep({
   referralAgent,
   pending,
   duplicate,
+  onChangeParent,
+  onChangeStudent,
   onBack,
   onSubmit,
 }: {
@@ -1003,6 +1302,8 @@ function ReviewStep({
   referralAgent: ReferralAgent | null
   pending: boolean
   duplicate: Extract<RegisterOutcome, { status: "duplicate" }> | null
+  onChangeParent: () => void
+  onChangeStudent: () => void
   onBack: () => void
   onSubmit: () => void
 }) {
@@ -1022,7 +1323,7 @@ function ReviewStep({
       ]
 
   return (
-    <div className="flex max-w-xl flex-col gap-5">
+    <div className="flex max-w-xl flex-col gap-4">
       {duplicate && (
         <Alert variant="destructive" role="alert">
           <AlertDescription className="flex flex-col gap-2">
@@ -1036,16 +1337,10 @@ function ReviewStep({
           </AlertDescription>
         </Alert>
       )}
-      <section aria-labelledby="review-parent" className="flex flex-col gap-2">
-        <h3 id="review-parent" className="text-sm font-semibold text-slate-900">
-          Parent or guardian
-        </h3>
+      <ReviewCard id="review-parent" title="Parent or guardian" changeLabel="Change parent or guardian" onChange={onChangeParent} disabled={pending}>
         <Summary rows={parentRows} />
-      </section>
-      <section aria-labelledby="review-student" className="flex flex-col gap-2">
-        <h3 id="review-student" className="text-sm font-semibold text-slate-900">
-          Student
-        </h3>
+      </ReviewCard>
+      <ReviewCard id="review-student" title="Student" changeLabel="Change student" onChange={onChangeStudent} disabled={pending}>
         <Summary
           rows={[
             ["Full name", details.studentName],
@@ -1061,15 +1356,13 @@ function ReviewStep({
               : []),
           ]}
         />
-      </section>
-      <div className="flex gap-2">
-        <Button type="button" onClick={onSubmit} disabled={pending}>
+      </ReviewCard>
+      <Footer>
+        <Button type="button" variant="orange" className={PRIMARY} onClick={onSubmit} disabled={pending}>
           {pending ? "Registering…" : "Register student"}
         </Button>
-        <Button type="button" variant="outline" onClick={onBack} disabled={pending}>
-          Back
-        </Button>
-      </div>
+        <BackButton onClick={onBack} disabled={pending} />
+      </Footer>
     </div>
   )
 }
@@ -1079,13 +1372,22 @@ function Confirmation({
   leadId,
   studentName,
   referralCode,
+  onAnother,
 }: {
   admissionNumber: string
   leadId: string
   studentName: string
   referralCode: ReferralCodeResult
+  onAnother: () => void
 }) {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const numberLabelId = useId()
+
+  // A new screen, so focus moves to its heading as on every other.
+  useEffect(() => {
+    headingRef.current?.focus()
+  }, [])
 
   async function copy() {
     try {
@@ -1097,22 +1399,32 @@ function Confirmation({
   }
 
   return (
-    <div className="flex max-w-xl flex-col gap-5">
+    <div className="flex max-w-xl flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold text-slate-900">{studentName} is registered</h2>
-        <p className="text-sm text-slate-700">Give the family this Admission Number.</p>
+        <h1 ref={headingRef} tabIndex={-1} className={HEADING}>
+          {studentName} is registered
+        </h1>
+        <p className="text-sm text-slate-600">
+          Tell the parent: “{studentName}&apos;s Admission Number is {admissionNumber}. Keep it; the school asks for it at every
+          visit.”
+        </p>
       </div>
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-5">
-        <p aria-label="Admission Number" className="font-mono text-4xl font-bold tracking-wide text-blue-600">
+      <div className="flex flex-col gap-3 rounded-2xl bg-card p-6 ring-1 ring-foreground/10">
+        <p id={numberLabelId} className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">
+          Admission Number
+        </p>
+        <p aria-labelledby={numberLabelId} className="font-mono text-4xl font-bold tracking-wide text-blue-600 sm:text-5xl">
           {admissionNumber}
         </p>
-        <Button type="button" variant="outline" onClick={copy}>
-          Copy number
-        </Button>
-        <p role="status" className="text-sm text-muted-foreground">
-          {copied === "yes" && "Copied."}
-          {copied === "failed" && "Could not copy. Select the number and copy it by hand."}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" variant="outline" onClick={copy}>
+            Copy number
+          </Button>
+          <p role="status" className="text-sm text-muted-foreground">
+            {copied === "yes" && "Copied."}
+            {copied === "failed" && "Could not copy. Select the number and copy it by hand."}
+          </p>
+        </div>
       </div>
       {referralCode === "not-saved" && (
         <Alert role="alert" className="border-amber-300 bg-amber-50 text-amber-950">
@@ -1124,9 +1436,13 @@ function Confirmation({
           </AlertDescription>
         </Alert>
       )}
-      <div className="flex flex-wrap gap-2">
-        <Link href={`/staff/leads/${leadId}`} className={buttonVariants()}>Open lead</Link>
-        <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Back to Check-in</Link>
+      <div className="flex flex-wrap gap-3">
+        <Link href={`/staff/leads/${leadId}`} className={cn(buttonVariants({ variant: "orange" }), PRIMARY)}>
+          Open {studentName}
+        </Link>
+        <Button type="button" variant="outline" className={PRIMARY} onClick={onAnother}>
+          Register another child
+        </Button>
       </div>
     </div>
   )

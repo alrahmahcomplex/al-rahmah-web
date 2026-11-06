@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { forbidden } from "next/navigation"
 
 import { requireStaff } from "../session"
-import { AdmissionNumberLookup } from "./admission-number-lookup"
+import { ArrivalSearch } from "./arrival-search"
 
 export const metadata: Metadata = {
   title: "Check-in · Al-Rahmah Complex",
@@ -16,12 +16,14 @@ export default async function CheckInPage() {
   const canRegister = staff.permissions.includes("leads.create") && staff.permissions.includes("visits.record")
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Check-in</h1>
-      <p className="max-w-prose text-slate-700">
-        Receive a family who has come to campus. Ask for their Admission Number first.
-      </p>
-      <AdmissionNumberLookup canRegister={canRegister} />
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Who has arrived?</h1>
+        <p className="max-w-prose text-sm text-slate-600">
+          Ask the parent for the Admission Number, or search the student&apos;s name.
+        </p>
+      </div>
+      <ArrivalSearch canRegister={canRegister} />
       {!canRegister && (
         <p className="text-sm text-muted-foreground">Your role can read leads but not register new students.</p>
       )}

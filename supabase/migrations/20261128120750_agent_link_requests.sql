@@ -60,7 +60,7 @@ alter table public.agent_events
 -- - limited: this email has had per_email_limit requests in the last hour.
 -- - busy: the project has had hourly_budget requests in the last hour.
 -- - none: counted; nothing to send.
--- - reset or invite: counted; send that email to `email`, then record the
+-- - reset or invite: counted; send that email to `send_to`, then record the
 --   result of `attempt_id` with record_agent_link.
 --
 -- Every request that passes the limits is counted, whoever's email it is, so
@@ -68,7 +68,7 @@ alter table public.agent_events
 -- may both pass a limit with one place left; Supabase's own per-address gap
 -- and hourly email limit still hold.
 create function public.request_agent_link(email text, per_email_limit integer, hourly_budget integer)
-returns table (outcome text, email text, attempt_id uuid)
+returns table (outcome text, send_to text, attempt_id uuid)
 language plpgsql
 security definer
 set search_path = ''

@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 
 import { getLanguage } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
@@ -7,7 +6,7 @@ import { OFFICE_PHONE } from "@/lib/office"
 import { ACCOUNT_COPY } from "../account-copy"
 import { AccountShell } from "../account-shell"
 import { LINK_REQUEST_COPY } from "../link-request-copy"
-import { CallOffice, LinkRequestForm } from "../link-request-form"
+import { CallOffice, LinkRequestForm, SignInLink } from "../link-request-form"
 
 export async function generateMetadata(): Promise<Metadata> {
   const language = await getLanguage()
@@ -33,9 +32,7 @@ export default async function AgentForgotPasswordPage() {
         </div>
         <LinkRequestForm language={language} form="agent-reset" />
         <CallOffice language={language} officePhone={OFFICE_PHONE} />
-        <Link href="/discount-code/sign-in" className="text-center font-exo text-[13px] text-blue-600 underline underline-offset-2">
-          {copy.goToSignIn}
-        </Link>
+        <SignInLink language={language} />
       </div>
     </AccountShell>
   )

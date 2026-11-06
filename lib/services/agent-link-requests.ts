@@ -67,7 +67,7 @@ export async function decideAgentLink(
     console.error("Could not check a password link request", error)
     return { ok: false, error: "unavailable" }
   }
-  const row = ((data ?? []) as { outcome: string; email: string | null; attempt_id: string | null }[])[0]
+  const row = ((data ?? []) as { outcome: string; send_to: string | null; attempt_id: string | null }[])[0]
   switch (row?.outcome) {
     case "access_off":
       return { ok: true, data: { kind: "access-off" } }
@@ -77,7 +77,7 @@ export async function decideAgentLink(
       return { ok: true, data: { kind: row.outcome } }
     case "reset":
     case "invite":
-      if (row.email && row.attempt_id) return { ok: true, data: { kind: row.outcome, email: row.email, attemptId: row.attempt_id } }
+      if (row.send_to && row.attempt_id) return { ok: true, data: { kind: row.outcome, email: row.send_to, attemptId: row.attempt_id } }
   }
   console.error("Unexpected answer to a password link request", data)
   return { ok: false, error: "unavailable" }

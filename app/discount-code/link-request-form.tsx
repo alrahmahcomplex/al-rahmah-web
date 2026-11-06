@@ -45,14 +45,9 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
 
   if (status === "sent") {
     return (
-      <div className="flex flex-col items-center gap-4 text-center">
-        <p role="status" className="font-exo text-[14px] text-slate-700">
-          {copy.sent}
-        </p>
-        <Link href="/discount-code/sign-in" className="font-exo text-[13px] text-blue-600 underline underline-offset-2">
-          {copy.goToSignIn}
-        </Link>
-      </div>
+      <p role="status" className="text-center font-exo text-[14px] text-slate-700">
+        {copy.sent}
+      </p>
     )
   }
 
@@ -80,6 +75,14 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
         {pending ? copy.sending : copy.send}
       </button>
     </form>
+  )
+}
+
+export function SignInLink({ language }: { language: Language }) {
+  return (
+    <Link href="/discount-code/sign-in" className="text-center font-exo text-[13px] text-blue-600 underline underline-offset-2">
+      {LINK_REQUEST_COPY[language].goToSignIn}
+    </Link>
   )
 }
 
@@ -113,6 +116,7 @@ export function ExpiredLink({ language, officePhone }: { language: Language; off
       </div>
       <LinkRequestForm language={language} form="agent-new-link" />
       <CallOffice language={language} officePhone={officePhone} />
+      <SignInLink language={language} />
     </div>
   )
 }

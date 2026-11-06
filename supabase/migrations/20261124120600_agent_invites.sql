@@ -20,7 +20,11 @@
 --   finish_agent_email_change stores the email once Auth holds it.
 -- - reconcile_agent_emails: for a joined agent the Auth email is the source
 --   of truth, so the stored email follows it. Only the secret key calls it,
---   at both ends of every email save and when the Agents screen loads.
+--   at both ends of every email save and when the Agents screen loads, for
+--   at most max_agents agents a load. An agent may change their own sign-in
+--   email in Supabase Auth (owner decision, 2026-11-06): their record follows
+--   it here and the move is recorded with changed_by `agent`. Their Discount
+--   code, name and the rest of their record never change this way.
 -- - current_agent_account(): the signed-in agent's own name, code and state,
 --   for the agent sign-in and pages.
 
@@ -35,7 +39,7 @@ create table public.agent_events (
     -- invite: an invite email. email_change: a Manager changing a joined
     -- agent's email, which changes their sign-in email first, or
     -- (`reconciled`) the stored email following a sign-in email that no
-    -- open change asked for.
+    -- open change asked for, usually the agent's own change in Auth.
     kind text not null check (kind in ('invite', 'email_change')),
     -- `started` opens an attempt; one later row of the same kind closes it
     -- with its result. access_off is an invite refused before it started.
@@ -46,10 +50,19 @@ create table public.agent_events (
     error_code text check (char_length(error_code) <= 100),
     -- The address the event was about, only when it is linked to an agent.
     email text check (email = lower(btrim(email)) and char_length(email) <= 254),
+    -- The stored email it replaced, on a row that moved it (`changed`,
+    -- `reconciled`).
+    previous_email text check (previous_email = lower(btrim(previous_email)) and char_length(previous_email) <= 254),
+    -- Who changed the sign-in email, on a row that moved the stored email:
+    -- `staff` for a Manager's change, `agent` for the agent's own change in
+    -- Supabase Auth.
+    changed_by text check (changed_by in ('staff', 'agent')),
     created_at timestamptz not null default clock_timestamp(),
     -- The staff member who caused it; empty when no one did.
     created_by uuid references public.staff_members (id),
     check (email is null or agent_id is not null),
+    check ((changed_by is not null) = (result in ('changed', 'reconciled'))),
+    check (previous_email is null or result in ('changed', 'reconciled')),
     check ((result = 'other_error') = (error_code is not null)),
     check (
         (kind = 'invite' and result in (
@@ -601,8 +614,8 @@ begin
     end if;
 
     update public.marketing_agents a set email = change.email where a.id = agent.id;
-    insert into public.agent_events (agent_id, kind, result, attempt_id, email, created_by)
-    values (agent.id, 'email_change', 'changed', change.id, change.email, public.current_staff_id());
+    insert into public.agent_events (agent_id, kind, result, attempt_id, email, previous_email, changed_by, created_by)
+    values (agent.id, 'email_change', 'changed', change.id, change.email, agent.email, 'staff', public.current_staff_id());
 end;
 $$;
 
@@ -651,12 +664,17 @@ grant execute on function public.cancel_agent_email_change(uuid) to authenticate
 -- - Auth holds another address that no staff member or other current agent
 --   holds: the stored email becomes it, `aligned`. An open change to that
 --   address is closed as changed; any other is cancelled and the move is
---   recorded as `reconciled`.
+--   recorded as `reconciled`, with changed_by `staff` when it is a Manager's
+--   change that never finished landing late, and `agent` otherwise: the
+--   agent changed their own sign-in email.
 -- - Auth holds someone else's address: `taken`, with the stored email, which
 --   the server puts back into Auth before reconciling again.
--- Running it again changes nothing. Only the secret key may call it, so
--- staff sessions, visitors and agents can't.
-create function public.reconcile_agent_emails(for_agent uuid default null)
+-- Only the email moves: the code, name and every other field stay. Without
+-- for_agent it takes at most max_agents agents (1 to 200), so one page load
+-- stays bounded and the rest wait for the next. Running it again changes
+-- nothing. Only the secret key may call it, so staff sessions, visitors and
+-- agents can't.
+create function public.reconcile_agent_emails(for_agent uuid default null, max_agents integer default 25)
 returns table (agent_id uuid, outcome text, user_id uuid, email text)
 language plpgsql
 security definer
@@ -669,6 +687,8 @@ declare
     pending public.agent_events;
     settled text;
     settled_email text;
+    late_by uuid;
+    late boolean;
 begin
     perform public.set_audit_actor('system');
 
@@ -689,6 +709,11 @@ begin
               )
           )
         order by a.id
+        limit case
+            when reconcile_agent_emails.for_agent is null
+                then least(greatest(coalesce(reconcile_agent_emails.max_agents, 25), 1), 200)
+            else 1
+        end
     loop
         select * into agent from public.marketing_agents a where a.id = candidate for update;
         if agent.user_id is null or agent.retired_at is not null then
@@ -718,15 +743,31 @@ begin
             begin
                 update public.marketing_agents a set email = login_email where a.id = agent.id;
                 if pending.id is not null and pending.email = login_email then
-                    insert into public.agent_events (agent_id, kind, result, attempt_id, email)
-                    values (agent.id, 'email_change', 'changed', pending.id, login_email);
+                    insert into public.agent_events (agent_id, kind, result, attempt_id, email, previous_email, changed_by, created_by)
+                    values (agent.id, 'email_change', 'changed', pending.id, login_email, agent.email, 'staff', pending.created_by);
                 else
                     if pending.id is not null then
                         insert into public.agent_events (agent_id, kind, result, attempt_id, email)
                         values (agent.id, 'email_change', 'cancelled', pending.id, pending.email);
                     end if;
-                    insert into public.agent_events (agent_id, kind, result, email)
-                    values (agent.id, 'email_change', 'reconciled', login_email);
+                    -- A Manager's change to this address that never finished
+                    -- is a late Auth write; any other move is the agent's own.
+                    late_by := null;
+                    select s.created_by into late_by
+                    from public.agent_events s
+                    where s.agent_id = agent.id and s.kind = 'email_change' and s.result = 'started'
+                      and s.email = login_email
+                      and not exists (
+                          select 1 from public.agent_events c where c.attempt_id = s.id and c.result = 'changed'
+                      )
+                    order by s.created_at desc
+                    limit 1;
+                    late := found;
+                    insert into public.agent_events (agent_id, kind, result, email, previous_email, changed_by, created_by)
+                    values (
+                        agent.id, 'email_change', 'reconciled', login_email, agent.email,
+                        case when late then 'staff' else 'agent' end, late_by
+                    );
                 end if;
                 settled := 'aligned';
                 settled_email := login_email;
@@ -741,8 +782,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.reconcile_agent_emails(uuid) from public, anon, authenticated;
-grant execute on function public.reconcile_agent_emails(uuid) to service_role;
+revoke execute on function public.reconcile_agent_emails(uuid, integer) from public, anon, authenticated;
+grant execute on function public.reconcile_agent_emails(uuid, integer) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- The signed-in agent.

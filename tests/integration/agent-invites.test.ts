@@ -804,6 +804,170 @@ describe("bringing a joined agent's stored email in line with their sign-in emai
   })
 })
 
+describe("an agent changing their own sign-in email (owner decision, 2026-11-06)", () => {
+  // The agent's own session asks Auth for the change, as Supabase's
+  // updateUser does, then confirms it from both inboxes (the project asks for
+  // both). The links' token hashes are read from Auth's table rather than
+  // from the emails.
+  async function changeOwnEmail(agent: { address: string; userId: string }, next: string) {
+    const session = await signedIn({ email: agent.address, password: "fixture-password" })
+    const asked = await session.auth.updateUser({ email: next })
+    if (asked.error) return { session, error: asked.error }
+    const tokens = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ token_hash: string }>(
+        "select token_hash from auth.one_time_tokens where user_id = $1 and token_type::text like 'email_change_token_%'",
+        [agent.userId],
+      )
+      return rows
+    })
+    for (const { token_hash } of tokens) {
+      const confirmed = await session.auth.verifyOtp({ token_hash, type: "email_change" })
+      if (confirmed.error) return { session, error: confirmed.error }
+    }
+    return { session, error: null }
+  }
+
+  async function emailEvents(agentId: string) {
+    return inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{
+        result: string
+        email: string | null
+        previous_email: string | null
+        changed_by: string | null
+        created_by: string | null
+      }>(
+        `select result, email, previous_email, changed_by, created_by from public.agent_events
+         where agent_id = $1 and kind = 'email_change' and result in ('changed', 'reconciled') order by created_at`,
+        [agentId],
+      )
+      return rows
+    })
+  }
+
+  async function record(agentId: string) {
+    return inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ code: string; full_name: string; phone: string; status: string; user_id: string }>(
+        "select code, full_name, phone, status, user_id from public.marketing_agents where id = $1",
+        [agentId],
+      )
+      return rows[0]
+    })
+  }
+
+  test("the record follows the confirmed change, recorded with both emails as the agent's own, and the new email signs in", async () => {
+    const agent = await joinedAgent("self-before")
+    const before = await record(agent.id)
+    const next = email("self-after")
+
+    expect((await changeOwnEmail(agent, next)).error).toBeNull()
+    expect(await loginEmail(agent.userId)).toBe(next)
+
+    expect(await reconcileAgentEmails(realLogins, agent.id)).toEqual({
+      ok: true,
+      data: [{ agentId: agent.id, outcome: "aligned", email: next }],
+    })
+    expect(await storedEmail(agent.id)).toBe(next)
+    expect(await emailEvents(agent.id)).toEqual([
+      { result: "reconciled", email: next, previous_email: agent.address, changed_by: "agent", created_by: null },
+    ])
+    // Identity stays: the code, name, phone, status and login are as they were.
+    expect(await record(agent.id)).toEqual(before)
+
+    const again = await signedIn({ email: next, password: "fixture-password" })
+    const account = await again.rpc("current_agent_account").single<{ state: string; code: string }>()
+    expect(account.data).toMatchObject({ state: "active", code: agent.code })
+  })
+
+  test("the Agents screen's load picks the change up too", async () => {
+    const agent = await joinedAgent("self-load-before")
+    const next = email("self-load-after")
+    expect((await changeOwnEmail(agent, next)).error).toBeNull()
+
+    expect((await reconcileAgentEmails(realLogins)).ok).toBe(true)
+
+    expect(await storedEmail(agent.id)).toBe(next)
+  })
+
+  test("a Manager's change is still recorded as staff's, with both emails", async () => {
+    const agent = await joinedAgent("staff-change-before")
+    const next = email("staff-change-after")
+
+    expect(await setAgentEmail(await manager(), agent.id, next, realLogins)).toMatchObject({ ok: true })
+
+    expect(await emailEvents(agent.id)).toEqual([
+      { result: "changed", email: next, previous_email: agent.address, changed_by: "staff", created_by: MANAGER.id },
+    ])
+  })
+
+  test("a self-change to another agent's email is undone: the sign-in email goes back and nothing is recorded as changed", async () => {
+    const agent = await joinedAgent("self-taken-before")
+    const holderAddress = email("self-taken-holder")
+    await approvedAgent(holderAddress)
+
+    expect((await changeOwnEmail(agent, holderAddress)).error).toBeNull()
+    expect(await reconcileAgentEmails(realLogins, agent.id)).toEqual({
+      ok: true,
+      data: [{ agentId: agent.id, outcome: "put_back", email: agent.address }],
+    })
+
+    expect(await loginEmail(agent.userId)).toBe(agent.address)
+    expect(await storedEmail(agent.id)).toBe(agent.address)
+    expect(await emailEvents(agent.id)).toEqual([])
+  })
+
+  test("a self-change to a staff member's email is refused by Auth and changes nothing", async () => {
+    const agent = await joinedAgent("self-staff-before")
+
+    const { error } = await changeOwnEmail(agent, MANAGER.email)
+
+    expect(error).not.toBeNull()
+    expect(await loginEmail(agent.userId)).toBe(agent.address)
+    expect((await reconcileAgentEmails(realLogins, agent.id)).ok).toBe(true)
+    expect(await storedEmail(agent.id)).toBe(agent.address)
+    expect(await emailEvents(agent.id)).toEqual([])
+  })
+
+  test("the agent can't change their Discount code, name or email on the record, through the database or their login's details", async () => {
+    const agent = await joinedAgent("self-identity")
+    const before = await record(agent.id)
+    const session = await signedIn({ email: agent.address, password: "fixture-password" })
+
+    await expect(
+      asUser(agent.userId, (sql) =>
+        sql.query("update public.marketing_agents set code = 'HACK-1', full_name = 'Someone Else' where id = $1", [agent.id]),
+      ),
+    ).rejects.toThrow(/permission denied/)
+    const viaApi = await session.from("marketing_agents").update({ code: "HACK-1" }).eq("id", agent.id).select()
+    expect(viaApi.data ?? []).toEqual([])
+    const viaRpc = await session.rpc("set_marketing_agent_email", { agent_id: agent.id, email: email("self-rpc") })
+    expect(viaRpc.error?.message).toBe("not_permitted")
+
+    // Details on the login are never read as the record.
+    expect((await session.auth.updateUser({ data: { code: "HACK-1", full_name: "Someone Else" } })).error).toBeNull()
+    expect((await reconcileAgentEmails(realLogins, agent.id)).ok).toBe(true)
+
+    expect(await record(agent.id)).toEqual(before)
+    expect(await storedEmail(agent.id)).toBe(agent.address)
+  })
+})
+
+describe("the Agents screen's reconcile stays bounded", () => {
+  test("without an agent it takes at most max_agents agents a call, and at least one", async () => {
+    for (const label of ["bound-a", "bound-b", "bound-c"]) {
+      const agent = await joinedAgent(label)
+      expect((await realLoginUpdater(agent.userId, email(`${label}-moved`))).error).toBeNull()
+    }
+
+    const two = await secretClient().rpc("reconcile_agent_emails", { for_agent: null, max_agents: 2 })
+    expect(two.error).toBeNull()
+    expect(two.data).toHaveLength(2)
+
+    const atLeastOne = await secretClient().rpc("reconcile_agent_emails", { for_agent: null, max_agents: 0 })
+    expect(atLeastOne.error).toBeNull()
+    expect(atLeastOne.data).toHaveLength(1)
+  })
+})
+
 describe("the signed-in agent", () => {
   test("an agent reads their own account; staff read none", async () => {
     const own = await asUser(SEEDED_AGENT.userId, (sql) => sql.query("select * from public.current_agent_account()"))

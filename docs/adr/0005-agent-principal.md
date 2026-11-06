@@ -49,3 +49,7 @@ Every new function or table the API roles can reach needs an entry in the grant 
 The base checks now do two lookups by `user_id` instead of one, both on unique indexes.
 
 Turning agent access on or off is an owner step in the SQL editor until a screen exists for it.
+
+## Amendment, 2026-11-06: an agent may change their own sign-in email
+
+The owner decided that an agent may change their own sign-in email, so they keep access if they lose the original inbox. Email isn't how an agent is identified: the agent record and its Discount code are, and the agent can never change either. The change happens in Supabase Auth (`updateUser`, confirmed from both inboxes), not in the app's tables. The server's `reconcile_agent_emails`, run with the secret key, then copies the new address into the record and appends an `agent_events` row with the old and new email and `changed_by = 'agent'`; a Manager's change is recorded with `changed_by = 'staff'`. An address a staff member or another current agent holds is put back. Agent sessions still write nothing to the app's tables, and `actor_kind` has no `agent` value.

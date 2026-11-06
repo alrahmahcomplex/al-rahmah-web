@@ -91,7 +91,7 @@ describe("the links", () => {
   })
 
   it("the database's invite lifetime matches the link expiry", () => {
-    const migration = read("supabase/migrations/20261123120600_agent_invites.sql")
+    const migration = read("supabase/migrations/20261124120600_agent_invites.sql")
     expect(migration).toMatch(/create function public\.invite_link_lifetime\(\)[\s\S]*?select interval '24 hours';/)
   })
 })

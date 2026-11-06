@@ -236,6 +236,10 @@ describe("the sign-up form", () => {
     // Another name or email on that phone is someone else's try: tick the box.
     expect(await outcome({ ...who, fullName: `${who.fullName} B` })).toEqual({ kind: "code_needed" })
     expect(await outcome({ ...who, email: email("other") })).toEqual({ kind: "code_needed" })
+    // Neither try touched the record: still one agent, with the first name,
+    // code and email.
+    if (first.kind !== "registered") throw new Error(`expected a new agent, got ${first.kind}`)
+    expect(await agentsWithPhone(who.phone)).toEqual([expect.objectContaining({ full_name: who.fullName, code: first.code, email: who.email })])
   })
 
   test("8. an unticked retry for an agent who has joined or was invited says so, reading no stored email once joined", async () => {

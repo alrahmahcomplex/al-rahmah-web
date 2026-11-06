@@ -9,13 +9,10 @@ stay in the `0.x` range.
 
 ### IMPROVED
 
-- The database keeps one version of each Discount code function. The older versions
-  of the Admission form's code write and of agent registration, kept so that builds
-  from before 4 and 6 November 2026 still worked, are removed. The Admission form
-  still records the code and the notice shown with it.
-- An instant rollback in Vercel to a build from before this release is unsafe: those
-  builds call the removed versions, so the Admission form's Discount code step would
-  fail. Fix forward instead.
+- The Admission form still saves the family's Discount code and the version of the
+  notice they saw. The site no longer supports builds from before this release, and a
+  Vercel instant rollback to a build from before this release is unsafe. Fix forward
+  instead.
 
 ## November 6, 2026 `v0.80.0`
 

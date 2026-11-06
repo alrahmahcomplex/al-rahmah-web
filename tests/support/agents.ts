@@ -4,12 +4,14 @@ import type { FixtureStaff } from "./fixtures"
 
 // Agent fixtures for the tests. Each makes its agent as the database owner
 // through create_agent_record, the shared creation function behind the
-// Manager's Create agent and the Discount code page's sign-up, with the
-// Admission form as the actor, so the record is one the public path makes:
-// Pending, with a code of the name's initials, and no email. The public
-// registration function the fixtures once called, register_marketing_agent,
-// is gone (#196); the page now signs agents up with an email through
-// sign_up_marketing_agent, tested in tests/integration/agent-email-claims.test.ts.
+// Manager's Create agent and the Discount code page's sign-up. The record
+// keeps the shape the removed public registration wrapper,
+// register_marketing_agent (#196), gave it, so tests written against that
+// shape still hold: Pending, a generated code of the name's initials, the
+// Admission form as audit actor, no email. The public Discount code page
+// now signs up through sign_up_marketing_agent, which requires an email and
+// answers code_needed for a known phone with the wrong details; that path is
+// tested in tests/integration/agent-email-claims.test.ts.
 
 // Sets the session the database functions read through auth.role() and
 // auth.uid(), as PostgREST does for a request.
@@ -20,8 +22,8 @@ async function claims(sql: Client, value: object) {
 export type NewAgentFixture = { fullName: string; phone: string; whatsapp?: string | null }
 
 // Makes a Pending agent in `sql`'s transaction and returns the record's id
-// and code. A phone a current agent already holds returns that agent, as
-// public registration always has, so a retry never makes a second agent.
+// and code. A phone a current agent already holds returns that agent, as the
+// removed wrapper did, so a retry never makes a second agent.
 async function createPending(sql: Client, agent: NewAgentFixture): Promise<{ id: string; code: string }> {
   await claims(sql, { role: "service_role" })
   await sql.query("select public.set_audit_actor('public_form', null)")

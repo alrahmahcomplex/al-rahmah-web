@@ -13,12 +13,13 @@ stay in the `0.x` range.
   appear in the system and its exports. Every test record goes: leads, families,
   interviews, follow-ups, payments, Marketing Agents and their logins, staff accounts
   and their logins, the academic year, fee schedules, class seats and WhatsApp group
-  links. Roles and permissions stay, and agent access is switched off. The reset
-  refuses to run if it finds anything newer than the agreed cutoff, checks its own
-  result, and leaves one record of what it cleared under Staff and roles history.
-  Afterwards the owner sets up the first staff member again, who re-enters the
-  academic year, fee schedules, class seats and group links and reviews Staff and
-  roles.
+  links. Roles a Manager created go too, and Admissions Staff, Admissions Manager
+  and Accountant return to their original permissions. Agent access is switched off.
+  The reset refuses to run until its cutoff is set, and refuses if it finds a lead, a
+  Marketing Agent or a staff member newer than that cutoff. It checks its own result
+  and leaves one record of what it cleared under Staff and roles history. Afterwards
+  the owner sets up the first staff member again, who re-enters the academic year,
+  fee schedules, class seats and group links.
 
 ## November 6, 2026 `v0.81.1`
 

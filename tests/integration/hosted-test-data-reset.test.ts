@@ -10,10 +10,9 @@ import { MANAGER } from "../support/fixtures"
 // local database. Every scenario runs the migration file's SQL inside a
 // transaction that is rolled back, so the fixtures survive. The owner sets
 // the cutoff at merge on the line the marker below annotates; the tests read
-// whatever it holds. Seeds and test rows are written at test time, so they
-// are newer than any cutoff the owner can set, and the file as checked in
-// refuses the seeded database. One scenario runs it unchanged and the others
-// substitute a cutoff of their own.
+// whatever it holds. As checked in the line carries a sentinel, and the
+// migration refuses to run while it does. One scenario runs the file
+// unchanged and the others substitute a cutoff of their own.
 //
 // Lifetime: the migration classifies the tables that exist when it runs. Once
 // it has run on hosted, later migrations may add tables it does not know, and
@@ -26,7 +25,15 @@ const FILE = "supabase/migrations/20261130990100_hosted_test_data_reset.sql"
 // Annotates the `cutoff constant timestamptz := '...'` line, the one line the
 // owner edits at merge.
 const CUTOFF_MARKER = "-- SET AT MERGE (#197): cutoff"
+// The literal the marked line carries as checked in. The migration refuses to
+// run while the cutoff still equals it.
+const SENTINEL = "'2020-01-01 00:00:00+00'"
+// A set cutoff that every seeded or test-written row is newer than.
+const PAST_CUTOFF = "'2026-01-01 00:00:00+00'"
 const FUTURE_CUTOFF = "'2999-01-01 00:00:00+00'"
+// The schemas the API exposes (supabase/config.toml); the migration
+// classifies every base table in them.
+const EXPOSED = ["public", "graphql_public"]
 
 // Decision 42: everything a person made goes; only what migrations create stays.
 const CLEARED = [
@@ -59,7 +66,28 @@ const CLEARED = [
   "whatsapp_group_invitations",
   "whatsapp_group_links",
 ]
-const KEPT = ["agent_access_settings", "audit_action_kinds", "audit_scopes", "permissions", "roles"]
+const KEPT = ["agent_access_settings", "audit_action_kinds", "audit_scopes", "permissions"]
+// Roles are user-created too: every role the migrations did not seed goes,
+// and the three seeded ones return to these sets, the ones
+// 20260928000000_staff_members_and_roles.sql seeds plus the
+// group_links.manage that 20261113110100_whatsapp_group_links.sql adds to
+// the roles holding leads.edit.
+const RESTORED = ["roles"]
+const SEEDED_ROLES: Record<string, string[]> = {
+  "Admissions Staff": [
+    "leads.view", "leads.create", "leads.edit", "visits.record", "interviews.record",
+    "results.send", "follow_ups.record", "leads.decline", "leads.close", "payments.view",
+    "group_links.manage",
+  ],
+  "Admissions Manager": [
+    "leads.view", "leads.create", "leads.edit", "visits.record", "interviews.record",
+    "results.send", "follow_ups.record", "leads.decline", "leads.close",
+    "reopenings.approve", "lifecycle.intervene", "agents.approve", "payments.view",
+    "discounts.approve", "academic_years.manage", "staff.administer",
+    "group_links.manage",
+  ],
+  Accountant: ["leads.view", "interview_payments.record", "payments.view", "payments.record"],
+}
 
 type Cutoff = { line: number; literal: string }
 
@@ -92,11 +120,18 @@ function unquoted(literal: string): string {
   return literal.slice(1, -1)
 }
 
-async function publicTables(sql: Client): Promise<string[]> {
+// Every base table in the exposed schemas, as `schema.table`.
+async function exposedTables(sql: Client): Promise<string[]> {
   const { rows } = await sql.query<{ name: string }>(
-    "select c.relname as name from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p') order by 1",
+    `select ns.nspname || '.' || c.relname as name from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
+     where ns.nspname = any ($1) and c.relkind in ('r', 'p') order by 1`,
+    [EXPOSED],
   )
   return rows.map((row) => row.name)
+}
+
+async function publicTables(sql: Client): Promise<string[]> {
+  return (await exposedTables(sql)).filter((name) => name.startsWith("public.")).map((name) => name.slice("public.".length))
 }
 
 async function counts(sql: Client): Promise<Record<string, number>> {
@@ -107,6 +142,12 @@ async function counts(sql: Client): Promise<Record<string, number>> {
   result["auth.users"] = (await sql.query<{ n: number }>("select count(*)::int as n from auth.users")).rows[0].n
   result["auth.identities"] = (await sql.query<{ n: number }>("select count(*)::int as n from auth.identities")).rows[0].n
   return result
+}
+
+type Role = { name: string; retired: boolean; permissions: string[] }
+
+async function roles(sql: Client): Promise<Role[]> {
+  return (await sql.query<Role>("select name, retired, permissions from public.roles order by lower(name)")).rows
 }
 
 async function disabledTriggers(sql: Client): Promise<string[]> {
@@ -121,10 +162,33 @@ function pick(all: Record<string, number>, tables: string[]): Record<string, num
   return Object.fromEntries(tables.map((table) => [table, all[table]]))
 }
 
+function sorted(values: string[]): string[] {
+  return [...values].sort()
+}
+
 // Holds off writers in test files running alongside, so the counts taken
 // before and after the migration describe the same data. Readers go on.
 async function holdTables(sql: Client): Promise<void> {
-  await lockExclusively(sql, [...CLEARED, ...KEPT].map((table) => `public.${table}`).concat(["auth.users", "auth.identities"]))
+  await lockExclusively(
+    sql,
+    [...CLEARED, ...KEPT, ...RESTORED].map((table) => `public.${table}`).concat(["auth.users", "auth.identities"]),
+  )
+}
+
+// Empties the cleared tables and Auth inside `sql`'s transaction, the way a
+// database that never held data looks, except for `except`. Replica mode
+// skips every refusal and audit trigger for this transaction only, so the
+// rows go without any schema change; the transaction is rolled back anyway.
+async function emptied(sql: Client, except: string[] = []): Promise<void> {
+  await sql.query("set local session_replication_role = replica")
+  for (const table of CLEARED) {
+    if (!except.includes(table)) await sql.query(`delete from public."${table}"`)
+  }
+  if (!except.includes("auth")) {
+    await sql.query("delete from auth.identities")
+    await sql.query("delete from auth.users")
+  }
+  await sql.query("set local session_replication_role = origin")
 }
 
 // Runs `query`, expecting it to raise, and leaves the transaction usable: a
@@ -141,11 +205,14 @@ async function raised(sql: Client, query: string): Promise<{ message: string; de
 }
 
 // Tables this migration was never told about: added by migrations after it.
-const unknownTables = await inRolledBackTransaction(async (sql) => (await publicTables(sql)).filter((t) => !CLEARED.includes(t) && !KEPT.includes(t)))
+const unknownTables = await inRolledBackTransaction(async (sql) =>
+  (await exposedTables(sql)).filter((name) => ![...CLEARED, ...KEPT, ...RESTORED].some((table) => name === `public.${table}`)),
+)
 
 describe("the hosted reset migration", () => {
-  test("the classification covers every table the migration knows", () => {
-    expect(CLEARED.filter((t) => KEPT.includes(t))).toEqual([])
+  test("the classification covers every table the migration knows, once each", () => {
+    const all = [...CLEARED, ...KEPT, ...RESTORED]
+    expect(all.filter((table, index) => all.indexOf(table) !== index)).toEqual([])
   })
 
   test("the cutoff sits once on the marked line, with its time zone, and Postgres reads it", async () => {
@@ -158,12 +225,31 @@ describe("the hosted reset migration", () => {
     })
   })
 
-  test.skipIf(unknownTables.length > 0)("as checked in, it refuses the seeded database because the data is newer than the configured cutoff", async () => {
+  test.skipIf(unknownTables.length > 0)("as checked in, it refuses the seeded database: the cutoff is still the sentinel, or the data is newer than the cutoff set", async () => {
     const { cutoff } = readMigration()
     await inRolledBackTransaction(async (sql) => {
       // One snapshot for the counts here and the migration's own, whatever
       // the test files running alongside insert meanwhile.
       await sql.query("set transaction isolation level repeatable read")
+      const { rows: sentinel } = await sql.query<{ unset: boolean }>("select $1::timestamptz = $2::timestamptz as unset", [unquoted(cutoff.literal), unquoted(SENTINEL)])
+      if (sentinel[0].unset) {
+        const failure = await raised(sql, migration())
+        expect(failure.message).toBe("hosted_reset_cutoff_not_configured")
+        expect(failure.detail).toContain("SET AT MERGE (#197)")
+        return
+      }
+
+      // A cutoff set at merge. Seeds and test rows are written at test time,
+      // so they are newer than any past moment; a cutoff ahead of this
+      // machine's clock (a proof run before merge) would find nothing newer,
+      // so one staff member is dated just after it first.
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(
+        `insert into public.staff_members (full_name, email, role_id, created_at)
+         select 'Cutoff Probe', 'cutoff-probe-' || gen_random_uuid() || '@example.test', id, $1::timestamptz + interval '1 second'
+         from public.roles where name = 'Admissions Manager'`,
+        [unquoted(cutoff.literal)],
+      )
       const { rows } = await sql.query<{ leads: number; agents: number; staff: number }>(
         `select (select count(*)::int from public.leads where created_at > $1::timestamptz) as leads,
                 (select count(*)::int from public.marketing_agents where registered_at > $1::timestamptz) as agents,
@@ -171,7 +257,7 @@ describe("the hosted reset migration", () => {
         [unquoted(cutoff.literal)],
       )
       const [newer] = rows
-      expect(newer.leads + newer.agents + newer.staff).toBeGreaterThan(0)
+      expect(newer.staff).toBeGreaterThan(0)
 
       const failure = await raised(sql, migration())
       expect(failure.message).toBe("hosted_reset_newer_than_cutoff")
@@ -189,27 +275,95 @@ describe("the hosted reset migration", () => {
     await inRolledBackTransaction(async (sql) => {
       await expect(sql.query(migration())).rejects.toMatchObject({
         message: "hosted_reset_unclassified_table",
-        detail: `not on the cleared or kept list: ${unknownTables.join(", ")}`,
+        detail: `not on the cleared, kept or restored list: ${unknownTables.join(", ")}`,
       })
+    })
+  })
+
+  test("it scans every schema the API exposes, and no table lives outside public today", async () => {
+    // The list in supabase/config.toml and the one in the migration must
+    // agree, or a table in a schema the API serves could escape the scan.
+    const config = /^schemas\s*=\s*\[([^\]]*)\]/m.exec(readFileSync("supabase/config.toml", "utf8"))
+    expect(config).not.toBeNull()
+    const inConfig = [...config![1].matchAll(/"([^"]+)"/g)].map((match) => match[1])
+    const inMigration = /exposed constant text\[\] := array\[([^\]]*)\]/.exec(readFileSync(FILE, "utf8"))
+    expect(inMigration).not.toBeNull()
+    expect(sorted([...inMigration![1].matchAll(/'([^']+)'/g)].map((match) => match[1]))).toEqual(sorted(inConfig))
+    expect(sorted(inConfig)).toEqual(sorted(EXPOSED))
+
+    // graphql_public holds no base table (the local postgres role cannot even
+    // create one there), so the public scan below is the one that can fire.
+    await inRolledBackTransaction(async (sql) => {
+      expect((await exposedTables(sql)).filter((name) => !name.startsWith("public."))).toEqual([])
     })
   })
 
   test("a table it does not classify stops it before anything changes", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("create table public.zz_unclassified (id integer)")
-      await expect(sql.query(migration(FUTURE_CUTOFF))).rejects.toMatchObject({
-        message: "hosted_reset_unclassified_table",
-        detail: expect.stringContaining("zz_unclassified"),
+      const failure = await raised(sql, migration(FUTURE_CUTOFF))
+      expect(failure.message).toBe("hosted_reset_unclassified_table")
+      expect(failure.detail).toMatch(/^not on the cleared, kept or restored list: /)
+      expect(failure.detail).toMatch(/(: |, )public\.zz_unclassified(,|$)/)
+    })
+  })
+
+  describe.skipIf(unknownTables.length > 0)("applied to a database holding no data", () => {
+    test("with no leads, agents or staff members it does nothing, roles included, before it looks at the cutoff", async () => {
+      await inRolledBackTransaction(async (sql) => {
+        const notices: string[] = []
+        sql.on("notice", (notice) => notices.push(notice.message ?? ""))
+        await holdTables(sql)
+        await emptied(sql)
+
+        const before = await counts(sql)
+        const rolesBefore = await roles(sql)
+        expect(pick(before, CLEARED)).toEqual(Object.fromEntries(CLEARED.map((table) => [table, 0])))
+        // The seeded Receptionist role is one the migrations did not seed; a
+        // database with data would lose it.
+        expect(rolesBefore.map((role) => role.name)).toContain("Receptionist")
+
+        // As checked in, sentinel and all.
+        await sql.query(migration())
+
+        expect(notices.filter((notice) => notice.includes("no leads, agents or staff members"))).toHaveLength(1)
+        expect(await counts(sql)).toEqual(before)
+        expect(await roles(sql)).toEqual(rolesBefore)
+        expect(await disabledTriggers(sql)).toEqual([])
+      })
+    })
+
+    test("with only staff members, newer than the cutoff, it refuses: the staff guard stands on its own", async () => {
+      await inRolledBackTransaction(async (sql) => {
+        await holdTables(sql)
+        await emptied(sql, ["staff_members", "auth"])
+        const { rows } = await sql.query<{ staff: number }>("select count(*)::int as staff from public.staff_members where created_at > $1::timestamptz", [unquoted(PAST_CUTOFF)])
+        expect(rows[0].staff).toBeGreaterThan(0)
+
+        const failure = await raised(sql, migration(PAST_CUTOFF))
+        expect(failure.message).toBe("hosted_reset_newer_than_cutoff")
+        expect(failure.detail).toMatch(new RegExp(`^0 leads, 0 agents and ${rows[0].staff} staff members are newer than the cutoff `))
       })
     })
   })
 
   describe.skipIf(unknownTables.length > 0)("applied to the seeded database with the cutoff in the future", () => {
-    test("clears every table a person wrote, keeps the migration-owned reference rows, and records the counts", async () => {
+    test("clears every table a person wrote, keeps the migration-owned reference rows, restores the seeded roles, and records the counts", async () => {
       await inRolledBackTransaction(async (sql) => {
         const notices: string[] = []
         sql.on("notice", (notice) => notices.push(notice.message ?? ""))
         await holdTables(sql)
+
+        // Roles a Manager made or changed: one created here, Admissions
+        // Staff given a permission it is not seeded with, Accountant retired.
+        await sql.query("select public.set_audit_actor('system')")
+        await sql.query("insert into public.roles (name, permissions) values ('Reset test role', array['leads.view'])")
+        await sql.query("update public.roles set permissions = array_append(permissions, 'payments.record') where name = 'Admissions Staff'")
+        await sql.query("update public.roles set retired = true where name = 'Accountant'")
+        const rolesBefore = await roles(sql)
+        const customRoles = rolesBefore.filter((role) => !(role.name in SEEDED_ROLES)).map((role) => role.name)
+        expect(customRoles).toContain("Reset test role")
+        expect(customRoles).toContain("Receptionist")
 
         const before = await counts(sql)
         const managerUserId = (await sql.query<{ user_id: string }>("select user_id from public.staff_members where id = $1", [MANAGER.id])).rows[0].user_id
@@ -218,6 +372,7 @@ describe("the hosted reset migration", () => {
         expect(before.leads).toBeGreaterThan(0)
         expect(before.marketing_agents).toBeGreaterThan(0)
         expect(before.fee_schedules).toBeGreaterThan(0)
+        expect(before.roles).toBe(rolesBefore.length)
         expect((await sql.query<{ enabled: boolean }>("select enabled from public.agent_access_settings")).rows[0].enabled).toBe(true)
 
         await sql.query(migration(FUTURE_CUTOFF))
@@ -233,7 +388,16 @@ describe("the hosted reset migration", () => {
 
         // Kept: untouched.
         expect(pick(after, KEPT)).toEqual(pick(before, KEPT))
-        expect((await sql.query("select 1 from public.roles where name = 'Admissions Manager'")).rowCount).toBe(1)
+
+        // Restored: exactly the three seeded roles, unretired, with the
+        // permissions the migrations give them.
+        const rolesAfter = await roles(sql)
+        expect(after.roles).toBe(3)
+        expect(sorted(rolesAfter.map((role) => role.name))).toEqual(sorted(Object.keys(SEEDED_ROLES)))
+        for (const role of rolesAfter) {
+          expect(role.retired, role.name).toBe(false)
+          expect(sorted(role.permissions), role.name).toEqual(sorted(SEEDED_ROLES[role.name]))
+        }
 
         // Every refusal trigger is back on.
         expect(await disabledTriggers(sql)).toEqual([])
@@ -252,7 +416,14 @@ describe("the hosted reset migration", () => {
           scope: string
           actor_kind: string
           actor_staff_id: string | null
-          new_values: { cutoff: string; cleared: Record<string, number>; auth_users: number; auth_identities: number; agent_access: string }
+          new_values: {
+            cutoff: string
+            cleared: Record<string, number>
+            auth_users: number
+            auth_identities: number
+            roles: { before: number; removed: number; removed_names: string[]; restored: number }
+            agent_access: string
+          }
         }>("select table_name, row_id, lead_id, action, scope, actor_kind, actor_staff_id, new_values from public.audit_log")
         expect(records).toHaveLength(1)
         const [record] = records
@@ -262,12 +433,19 @@ describe("the hosted reset migration", () => {
         expect(record.new_values.cleared).toEqual(pick(before, CLEARED))
         expect(record.new_values.auth_users).toBe(before["auth.users"])
         expect(record.new_values.auth_identities).toBe(before["auth.identities"])
+        expect({ ...record.new_values.roles, removed_names: sorted(record.new_values.roles.removed_names) }).toEqual({
+          before: rolesBefore.length,
+          removed: customRoles.length,
+          removed_names: sorted(customRoles),
+          restored: 3,
+        })
 
         // A rerun finds the record and does nothing.
         notices.length = 0
         await sql.query(migration(FUTURE_CUTOFF))
         expect(notices.filter((n) => n.includes("reset record already exists"))).toHaveLength(1)
         expect(await counts(sql)).toEqual(after)
+        expect(await roles(sql)).toEqual(rolesAfter)
       })
     })
 

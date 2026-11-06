@@ -30,6 +30,10 @@ const APPEND_ONLY = [
   "whatsapp_group_invitations",
 ]
 
+// The append-only tables whose audit trigger listens for inserts only. Every
+// other audited table audits updates too, since staff can edit its rows.
+const INSERT_ONLY_AUDIT = ["agent_email_claims", "agent_events", "agent_status_changes", "import_batches"]
+
 let sql: Client
 let audited: string[]
 let triggers: Trigger[]
@@ -87,13 +91,18 @@ describe("refusal triggers", () => {
     expect(audited).toContain("staff_members")
   })
 
-  test("every audited table writes its history through the one audit trigger", () => {
+  test("every audited table writes its history through the one audit trigger, on insert and on update unless it never updates", () => {
+    const events = (table: string) => (INSERT_ONLY_AUDIT.includes(table) ? "insert" : "insert update")
     expect(
-      audited.filter((table) => {
-        const trigger = find(table, "audit_row_change")
-        return !enabled(trigger) || trigger?.fn !== "audit_row_change" || trigger.timing !== "after" || trigger.level !== "row" || !trigger.events.includes("insert")
-      }),
+      audited
+        .filter((table) => {
+          const trigger = find(table, "audit_row_change")
+          return !enabled(trigger) || trigger?.fn !== "audit_row_change" || trigger.timing !== "after" || trigger.level !== "row" || trigger.events !== events(table)
+        })
+        .map((table) => `${table}: ${find(table, "audit_row_change")?.events ?? "missing"}`),
     ).toEqual([])
+    // A table whose audit trigger skips updates must refuse them.
+    expect(INSERT_ONLY_AUDIT.filter((table) => !APPEND_ONLY.includes(table))).toEqual([])
   })
 
   test("every audited table refuses DELETE and TRUNCATE", () => {

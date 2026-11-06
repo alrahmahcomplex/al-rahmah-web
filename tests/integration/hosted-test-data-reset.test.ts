@@ -8,19 +8,24 @@ import { MANAGER } from "../support/fixtures"
 
 // The hosted reset migration (#197, owner decision 42) against the seeded
 // local database. Every scenario runs the migration file's SQL inside a
-// transaction that is rolled back, so the fixtures survive. The cutoff is a
-// placeholder the owner sets at merge; the file as checked in refuses the
-// seeded data, which is newer than the placeholder, so one scenario runs it
-// unchanged and the others substitute the cutoff.
+// transaction that is rolled back, so the fixtures survive. The owner sets
+// the cutoff at merge on the line the marker below annotates; the tests read
+// whatever it holds. Seeds and test rows are written at test time, so they
+// are newer than any cutoff the owner can set, and the file as checked in
+// refuses the seeded database. One scenario runs it unchanged and the others
+// substitute a cutoff of their own.
 //
 // Lifetime: the migration classifies the tables that exist when it runs. Once
 // it has run on hosted, later migrations may add tables it does not know, and
 // applying it to a database holding them raises on purpose. When that
-// happens the clearing scenarios below skip and only the classification
-// scenario stays; the file can then be removed.
+// happens the clearing scenarios below skip, the as-checked-in scenario
+// expects that raise instead, and only the classification scenarios stay;
+// the file can then be removed.
 
 const FILE = "supabase/migrations/20261130990100_hosted_test_data_reset.sql"
-const CUTOFF_PLACEHOLDER = "'2020-01-01 00:00:00+00'"
+// Annotates the `cutoff constant timestamptz := '...'` line, the one line the
+// owner edits at merge.
+const CUTOFF_MARKER = "-- SET AT MERGE (#197): cutoff"
 const FUTURE_CUTOFF = "'2999-01-01 00:00:00+00'"
 
 // Decision 42: everything a person made goes; only what migrations create stays.
@@ -56,10 +61,35 @@ const CLEARED = [
 ]
 const KEPT = ["agent_access_settings", "audit_action_kinds", "audit_scopes", "permissions", "roles"]
 
-function migration(cutoff = CUTOFF_PLACEHOLDER): string {
-  const text = readFileSync(FILE, "utf8")
-  expect(text.split(CUTOFF_PLACEHOLDER)).toHaveLength(2)
-  return text.replace(CUTOFF_PLACEHOLDER, cutoff)
+type Cutoff = { line: number; literal: string }
+
+// The migration file, and the cutoff it sets: the one quoted timestamp
+// literal on the marker line or on the `cutoff constant timestamptz :=` line
+// the marker annotates. Throws rather than guessing, so a malformed edit at
+// merge time fails every scenario with the reason.
+function readMigration(): { lines: string[]; cutoff: Cutoff } {
+  const lines = readFileSync(FILE, "utf8").split("\n")
+  const markers = lines.flatMap((line, index) => (line.includes(CUTOFF_MARKER) ? [index] : []))
+  if (markers.length !== 1) throw new Error(`${FILE} must carry "${CUTOFF_MARKER}" exactly once; it carries it ${markers.length} times`)
+  const [marker] = markers
+  for (let index = marker; index < Math.min(marker + 10, lines.length); index++) {
+    if (index !== marker && !/^\s*cutoff\s+constant\s+timestamptz\s*:=/.test(lines[index])) continue
+    const literal = /'\d{4}-\d{2}-\d{2}[^']*'/.exec(lines[index])
+    if (literal) return { lines, cutoff: { line: index, literal: literal[0] } }
+  }
+  throw new Error(`${FILE}: no quoted timestamp on the marker line or on the cutoff assignment it annotates`)
+}
+
+// The migration's SQL as checked in, or with `cutoff` in place of the
+// configured value.
+function migration(cutoff?: string): string {
+  const { lines, cutoff: configured } = readMigration()
+  if (cutoff !== undefined) lines[configured.line] = lines[configured.line].replace(configured.literal, cutoff)
+  return lines.join("\n")
+}
+
+function unquoted(literal: string): string {
+  return literal.slice(1, -1)
 }
 
 async function publicTables(sql: Client): Promise<string[]> {
@@ -97,6 +127,19 @@ async function holdTables(sql: Client): Promise<void> {
   await lockExclusively(sql, [...CLEARED, ...KEPT].map((table) => `public.${table}`).concat(["auth.users", "auth.identities"]))
 }
 
+// Runs `query`, expecting it to raise, and leaves the transaction usable: a
+// failed statement otherwise aborts it.
+async function raised(sql: Client, query: string): Promise<{ message: string; detail?: string }> {
+  await sql.query("savepoint raised")
+  try {
+    await sql.query(query)
+  } catch (error) {
+    await sql.query("rollback to savepoint raised")
+    return error as { message: string; detail?: string }
+  }
+  throw new Error("the migration ran through instead of raising")
+}
+
 // Tables this migration was never told about: added by migrations after it.
 const unknownTables = await inRolledBackTransaction(async (sql) => (await publicTables(sql)).filter((t) => !CLEARED.includes(t) && !KEPT.includes(t)))
 
@@ -105,22 +148,48 @@ describe("the hosted reset migration", () => {
     expect(CLEARED.filter((t) => KEPT.includes(t))).toEqual([])
   })
 
-  test("as checked in, it refuses the seeded database because the data is newer than the cutoff placeholder", async () => {
-    const newer = await inRolledBackTransaction(async (sql) => {
-      const { rows } = await sql.query<{ leads: number; agents: number; staff: number }>(
-        `select (select count(*)::int from public.leads where created_at > $1) as leads,
-                (select count(*)::int from public.marketing_agents where registered_at > $1) as agents,
-                (select count(*)::int from public.staff_members where created_at > $1) as staff`,
-        [CUTOFF_PLACEHOLDER.replaceAll("'", "")],
-      )
-      return rows[0]
+  test("the cutoff sits once on the marked line, with its time zone, and Postgres reads it", async () => {
+    const { cutoff } = readMigration()
+    // Without a zone the hosted server's TimeZone setting would decide the moment.
+    expect(cutoff.literal, "the cutoff must end in a UTC offset, Z or UTC").toMatch(/([+-]\d{2}(:?\d{2})?|Z|UTC)'$/i)
+    await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ at: string }>("select $1::timestamptz::text as at", [unquoted(cutoff.literal)])
+      expect(rows[0].at).toMatch(/^\d{4}-\d{2}-\d{2} /)
     })
-    expect(newer.leads).toBeGreaterThan(0)
+  })
 
+  test.skipIf(unknownTables.length > 0)("as checked in, it refuses the seeded database because the data is newer than the configured cutoff", async () => {
+    const { cutoff } = readMigration()
+    await inRolledBackTransaction(async (sql) => {
+      // One snapshot for the counts here and the migration's own, whatever
+      // the test files running alongside insert meanwhile.
+      await sql.query("set transaction isolation level repeatable read")
+      const { rows } = await sql.query<{ leads: number; agents: number; staff: number }>(
+        `select (select count(*)::int from public.leads where created_at > $1::timestamptz) as leads,
+                (select count(*)::int from public.marketing_agents where registered_at > $1::timestamptz) as agents,
+                (select count(*)::int from public.staff_members where created_at > $1::timestamptz) as staff`,
+        [unquoted(cutoff.literal)],
+      )
+      const [newer] = rows
+      expect(newer.leads + newer.agents + newer.staff).toBeGreaterThan(0)
+
+      const failure = await raised(sql, migration())
+      expect(failure.message).toBe("hosted_reset_newer_than_cutoff")
+      const detail = /^(\d+) leads, (\d+) agents and (\d+) staff members are newer than the cutoff (.+)$/.exec(failure.detail ?? "")
+      expect(detail, failure.detail).not.toBeNull()
+      const [, leads, agents, staff, named] = detail!
+      expect({ leads: Number(leads), agents: Number(agents), staff: Number(staff) }).toEqual(newer)
+      // The cutoff it names is the configured one, however the server prints it.
+      const { rows: same } = await sql.query<{ same: boolean }>("select $1::timestamptz = $2::timestamptz as same", [named, unquoted(cutoff.literal)])
+      expect(same[0].same).toBe(true)
+    })
+  })
+
+  test.skipIf(unknownTables.length === 0)("as checked in, once later migrations added tables it does not know, it refuses the database naming them", async () => {
     await inRolledBackTransaction(async (sql) => {
       await expect(sql.query(migration())).rejects.toMatchObject({
-        message: "hosted_reset_newer_than_cutoff",
-        detail: expect.stringContaining(`${newer.leads} leads, ${newer.agents} agents and ${newer.staff} staff members`),
+        message: "hosted_reset_unclassified_table",
+        detail: `not on the cleared or kept list: ${unknownTables.join(", ")}`,
       })
     })
   })

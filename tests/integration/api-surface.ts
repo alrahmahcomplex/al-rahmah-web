@@ -960,6 +960,7 @@ export const RELATIONS: Record<string, RelationEntry> = {
   "public.agent_email_claims": { authenticated: [], anon: [] },
   "public.agent_events": { authenticated: [], anon: [] },
   "public.agent_invite_batches": { authenticated: [], anon: [] },
+  "public.agent_link_requests": { authenticated: [], anon: [] },
   "public.agent_status_changes": {
     authenticated: ["select", "references", "trigger", "maintain"],
     anon: ["select", "references", "trigger", "maintain"],

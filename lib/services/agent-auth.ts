@@ -82,7 +82,8 @@ export type AcceptAgentInviteError =
   | "staff-session"
   | AgentAccessError
 
-// Sets the password from the invite link, then lands the agent signed in. A
+// Sets the password from the invite link, or (#194) from a reset link with
+// `linkType: "recovery"`, then lands the agent signed in. A
 // browser signed in as staff is refused before the token is touched, so the
 // link still works once staff sign out. Like the staff invite, the password
 // is kept even when the agent check then refuses: a switched-off agent who is
@@ -91,13 +92,13 @@ export async function acceptAgentInvite(
   supabase: SupabaseClient,
   tokenHash: string,
   password: string,
-  { verifiedUserId }: { verifiedUserId?: string } = {},
+  { verifiedUserId, linkType = "invite" }: { verifiedUserId?: string; linkType?: "invite" | "recovery" } = {},
 ): Promise<Result<AgentAccount, AcceptAgentInviteError> | { ok: false; error: "password-not-saved"; userId: string }> {
   const session = await currentSessionKind(supabase)
   if (!session.ok) return { ok: false, error: "unavailable" }
   if (session.data === "staff") return { ok: false, error: "staff-session" }
 
-  const accepted = await spendLinkAndSetPassword(supabase, tokenHash, "invite", password, { verifiedUserId })
+  const accepted = await spendLinkAndSetPassword(supabase, tokenHash, linkType, password, { verifiedUserId })
   if (!accepted.ok) return accepted
 
   const agent = await loadAgentAccount(supabase)

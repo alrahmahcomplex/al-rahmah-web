@@ -42,9 +42,6 @@ type Copy = {
   signOut: string
   reasonCode: (code: string) => string
   messages: Record<MessageKey, AccountMessage>
-  forgotHeading: string
-  forgotText: string
-  callOffice: string
 }
 
 const OFF_SW = "Huwezi kuingia kwa sasa. Piga simu ofisini."
@@ -101,9 +98,6 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
         signIn: true,
       },
     },
-    forgotHeading: "Umesahau nenosiri?",
-    forgotText: "Piga simu ofisini, nasi tutakutumia kiungo kipya cha kuweka nenosiri.",
-    callOffice: "Piga simu ofisini",
   },
   en: {
     title: "Discount code",
@@ -148,9 +142,6 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
         signIn: true,
       },
     },
-    forgotHeading: "Forgot your password?",
-    forgotText: "Call the office and we'll send you a new link to set your password.",
-    callOffice: "Call the office",
   },
 }
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { getLanguage } from "@/lib/language"
+import { OFFICE_PHONE } from "@/lib/office"
 import { currentSessionKind } from "@/lib/services/auth-session"
 import { createClient } from "@/utils/supabase/server"
 
@@ -39,7 +40,7 @@ export default async function AgentSetPasswordPage({
           back={`/discount-code/set-password?token_hash=${encodeURIComponent(tokenHash)}&type=invite`}
         />
       ) : (
-        <SetPasswordForm language={language} tokenHash={usable ? tokenHash : null} />
+        <SetPasswordForm language={language} tokenHash={usable ? tokenHash : null} linkType="invite" officePhone={OFFICE_PHONE} />
       )}
     </AccountShell>
   )

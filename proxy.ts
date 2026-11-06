@@ -17,6 +17,7 @@ export const config = {
     "/auth/:path*",
     "/discount-code/sign-in",
     "/discount-code/set-password",
+    "/discount-code/reset-password",
     "/discount-code/students/:path*",
   ],
 }

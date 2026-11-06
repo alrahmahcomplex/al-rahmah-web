@@ -79,6 +79,8 @@ const REFUSALS: Record<Exclude<AgentInviteError["kind"], "rate-limited" | "smtp-
   "no-email": "there is no email. Add one first",
   "already-joined": "they have already set a password",
   "email-changed": "the email changed since this page loaded. Reload the page and check it",
+  "recently-invited": "they were sent an invite in the last 24 hours",
+  "batch-closed": "the invite batch has finished. Reload the page",
   unavailable: "something went wrong. Try again in a moment",
 }
 

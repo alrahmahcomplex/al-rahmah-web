@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 6, 2026 `v0.76.0`
+
+### NEW
+
+- The Agents screen has an "Approved, no account yet" filter, where the Admissions Manager
+  sends agent invites in batches. A batch skips anyone invited in the last 24 hours and
+  anyone with no email, sends at most 30, and stops at the hourly email limit or at
+  today's budget for agent invites, which keeps a share of the daily email allowance for
+  staff invites. Its report reads "sent, waiting, no email, failed" with times in East
+  Africa Time, and each count opens the agents behind it. The report is read again on
+  every visit, so a batch cut off part way still shows how far it got.
+
 ## November 6, 2026 `v0.75.1`
 
 ### FIXED

@@ -71,7 +71,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
           <EmptyList language={language} code={code} />
         ) : (
           <>
-            {total > PAGE_SIZE && <SearchForm language={language} search={search} />}
+            {(total > PAGE_SIZE || search) && <SearchForm language={language} search={search} />}
             {matched === 0 ? (
               <p className="font-exo text-[14px] text-slate-600">{copy.noMatch}</p>
             ) : (
@@ -89,6 +89,9 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
               >
                 {copy.more}
               </Link>
+            )}
+            {matched > students.length && shown >= MAX_SHOWN && (
+              <p className="font-exo text-[13px] text-slate-600">{copy.searchForMore}</p>
             )}
           </>
         )}

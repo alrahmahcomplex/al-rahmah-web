@@ -20,6 +20,7 @@ type Copy = {
   showAll: string
   noMatch: string
   more: string
+  searchForMore: string
   emptyText: string
   helpLine: string
 }
@@ -54,6 +55,7 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
     showAll: "Onyesha wote",
     noMatch: "Hakuna mwanafunzi mwenye jina hilo.",
     more: "Onyesha zaidi",
+    searchForMore: "Tafuta kwa jina kuona wanafunzi wengine.",
     emptyText:
       "Bado hakuna mwanafunzi anayetumia code yako. Familia itaonekana hapa mara code yako itakapowekwa kwenye maombi ya mtoto wao. Shiriki code na kiungo chako:",
     helpLine: "Huoni familia? Waombe wahakikishe walitumia code yako, au piga simu ofisini.",
@@ -87,6 +89,7 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
     showAll: "Show all",
     noMatch: "No student has that name.",
     more: "Show more",
+    searchForMore: "Search by name to find the other students.",
     emptyText:
       "No student is using your code yet. A family shows here once your code is on their child's application. Share your code and link:",
     helpLine: "Don't see a family? Ask them to check they used your code, or call the office.",

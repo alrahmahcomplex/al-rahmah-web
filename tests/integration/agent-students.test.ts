@@ -55,6 +55,10 @@ describe("the students using an agent's Discount code", () => {
         ],
       },
     })
+
+    // Searching for the other agent's student finds nothing.
+    const probed = await getAgentStudents(await signedIn(agent), { search: "Siyo Wangu", limit: 20, offset: 0 })
+    expect(probed).toMatchObject({ ok: true, data: { total: 2, matched: 0, students: [] } })
   })
 
   test("the raw function returns no contact, note, amount or id", async () => {
@@ -94,11 +98,27 @@ describe("the students using an agent's Discount code", () => {
     await studentInterview(retaken, { result: "Failed", score: 40, paid: true, registeredAt: "2026-09-03 09:00+03" })
     await studentInterview(retaken, { result: "Passed", score: 72.5, paid: true, registeredAt: "2026-09-20 09:00+03" })
 
+    // An earlier interview was Paid, but the latest isn't yet: nothing shows.
+    const retakeUnpaid = await studentLead({ name: "Retake Unpaid Wangu", code: agent.code, status: "Interviewed", createdAt: "2026-09-03 09:00+03" })
+    await studentInterview(retakeUnpaid, { result: "Passed", score: 65, paid: true, registeredAt: "2026-09-03 09:00+03" })
+    await studentInterview(retakeUnpaid, { result: "Failed", score: 20, paid: false, registeredAt: "2026-09-21 09:00+03" })
+
     const result = await getAgentStudents(await signedIn(agent), { search: "", limit: 20, offset: 0 })
     if (!result.ok || result.data.kind !== "active") throw new Error(JSON.stringify(result))
     const byName = Object.fromEntries(result.data.students.map((s) => [s.name, s]))
     expect(byName["Unpaid Wangu"]).toMatchObject({ interviewRegistered: true, result: null })
     expect(byName["Retaken Wangu"]).toMatchObject({ interviewRegistered: true, result: { outcome: "Passed", score: 72.5 } })
+    expect(byName["Retake Unpaid Wangu"]).toMatchObject({ interviewRegistered: true, result: null })
+  })
+
+  test("the last change is the newest recorded change to the lead, as a Tanzanian date", async () => {
+    const agent = await agentWithLogin()
+    // Created long ago, but recorded (and so last changed) today.
+    await studentLead({ name: "Changed Wangu", code: agent.code, createdAt: "2026-01-10 09:00+03" })
+    const today = await inRolledBackTransaction(async (sql) => (await sql.query<{ d: string }>("select public.tanzania_today()::text as d")).rows[0].d)
+    const result = await getAgentStudents(await signedIn(agent), { search: "", limit: 20, offset: 0 })
+    expect(result).toMatchObject({ ok: true, data: { students: [{ name: "Changed Wangu", lastChange: today }] } })
+    expect(today).not.toBe("2026-01-10")
   })
 
   test("it pages by creation with the total in the same call, and searches by name", async () => {

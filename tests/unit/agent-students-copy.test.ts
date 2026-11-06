@@ -55,7 +55,16 @@ describe("a student card", () => {
   })
 
   test("agent-facing words never say agent, referral or Wakala", () => {
-    expect(JSON.stringify(STUDENTS_COPY)).not.toMatch(/agent|referral|wakala/i)
+    for (const copy of Object.values(STUDENTS_COPY)) {
+      const words = [
+        JSON.stringify(copy),
+        copy.heading("ABC-123", 3),
+        copy.lastChange("5 Nov 2026"),
+        copy.result("Passed", 70),
+        copy.result("Failed", 30),
+      ]
+      for (const text of words) expect(text).not.toMatch(/agent|referral|wakala/i)
+    }
     expect(STUDENTS_COPY.sw.helpLine).toBe("Huoni familia? Waombe wahakikishe walitumia code yako, au piga simu ofisini.")
   })
 })

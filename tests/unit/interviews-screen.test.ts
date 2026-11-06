@@ -83,7 +83,7 @@ describe("defaultInterviewYear", () => {
 describe("the Interviews navigation entry", () => {
   it("shows Interviews to anyone who may view leads, and to no one else", () => {
     const interviews = STAFF_NAV.find((entry) => entry.label === "Interviews")
-    expect(interviews).toEqual({ href: "/staff/interviews", label: "Interviews", permission: "leads.view" })
+    expect(interviews).toMatchObject({ href: "/staff/interviews", label: "Interviews", group: "Admissions", permission: "leads.view" })
     expect(navFor(["leads.view"])).toContain(interviews)
     expect(navFor(["payments.view", "interview_payments.record"])).not.toContain(interviews)
   })

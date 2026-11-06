@@ -80,12 +80,13 @@ test.describe("signing in", () => {
     await signIn(page, ACCOUNTANT.email, ACCOUNTANT.password)
 
     await expect(page).toHaveURL(/\/staff$/)
-    const header = page.getByRole("banner")
-    await expect(header.getByText(ACCOUNTANT.name, { exact: true })).toBeVisible()
-    await expect(header.getByText(ACCOUNTANT.roleName, { exact: true })).toBeVisible()
+    const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+    await expect(sidebar.getByText(ACCOUNTANT.name, { exact: true })).toBeVisible()
+    await expect(sidebar.getByText(ACCOUNTANT.roleName, { exact: true })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Staff area" })).toBeVisible()
 
-    await page.getByRole("button", { name: "Sign out" }).click()
+    await sidebar.getByRole("button", { name: /^Account menu/ }).click()
+    await page.getByRole("menuitem", { name: "Sign out" }).click()
     await expect(page).toHaveURL(/\/login$/)
     await page.goto("/staff")
     await expect(page).toHaveURL(/\/login$/)

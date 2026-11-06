@@ -124,7 +124,7 @@ test("a Manager invites someone, who sets a password from the email and lands on
 
   await expect(invitedPage).toHaveURL(/\/staff$/)
   await expect(invitedPage.getByText(`Welcome, ${invitee.name}.`)).toBeVisible()
-  await expect(invitedPage.getByRole("banner")).toContainText("Admissions Manager")
+  await expect(invitedPage.getByRole("complementary", { name: "Sidebar" })).toContainText("Admissions Manager")
   await expect(
     invitedPage.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Staff and roles" }),
   ).toBeVisible()

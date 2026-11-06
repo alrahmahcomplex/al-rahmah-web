@@ -362,6 +362,7 @@ function Results({
                             email={invites?.get(agent.id)?.email ?? null}
                             state={invites?.get(agent.id)?.state ?? null}
                             everSent={Boolean(invites?.get(agent.id)?.sentAt)}
+                            joined={invites?.get(agent.id)?.joined ?? false}
                             emailUnknown={invites === null}
                           />
                           <AgentStatusActions

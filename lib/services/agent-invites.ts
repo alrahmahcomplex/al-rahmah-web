@@ -167,6 +167,10 @@ export type AgentInviteNote = {
   sentAt: string | null
   // The latest invite attempt, whatever its result.
   lastAttempt: { result: string; errorCode: string | null; at: string } | null
+  // Whether they used the invite link and saved a password, even if switched
+  // off or retired since. Their email is then the one read from Auth, which
+  // only they change (owner decision 41).
+  joined: boolean
 }
 
 type InviteRow = {
@@ -177,6 +181,7 @@ type InviteRow = {
   last_result: string | null
   last_error_code: string | null
   last_attempt_at: string | null
+  joined: boolean | null
 }
 
 export async function getAgentInvites(
@@ -200,6 +205,7 @@ export async function getAgentInvites(
         row.last_result && row.last_attempt_at
           ? { result: row.last_result, errorCode: row.last_error_code, at: row.last_attempt_at }
           : null,
+      joined: row.joined === true,
     })
   }
   return { ok: true, data: notes }

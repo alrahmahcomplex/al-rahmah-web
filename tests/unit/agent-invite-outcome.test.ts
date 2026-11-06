@@ -45,8 +45,14 @@ describe("the account-state badge", () => {
 describe("the line under the badge", () => {
   it("gives when the invite was sent, in East Africa Time", () => {
     expect(
-      inviteLine({ email: "neema@example.test", state: "invited", sentAt: "2026-11-05T11:00:00Z", lastAttempt: null }),
+      inviteLine({ email: "neema@example.test", state: "invited", sentAt: "2026-11-05T11:00:00Z", lastAttempt: null, joined: false }),
     ).toBe("Sent 5 Nov 2026, 14:00 to neema@example.test")
+  })
+
+  it("doesn't name the recipient for a joined agent, whose email may have changed since", () => {
+    expect(
+      inviteLine({ email: "new@example.test", state: "joined", sentAt: "2026-11-05T11:00:00Z", lastAttempt: null, joined: true }),
+    ).toBe("Sent 5 Nov 2026, 14:00")
   })
 
   it("gives the reason when the latest attempt failed", () => {
@@ -56,6 +62,7 @@ describe("the line under the badge", () => {
         state: "invite_not_sent",
         sentAt: null,
         lastAttempt: { result: "rate_limited", errorCode: null, at: "2026-11-05T11:00:00Z" },
+        joined: false,
       }),
     ).toBe("Not sent 5 Nov 2026, 14:00: the hourly email limit is reached")
   })
@@ -67,12 +74,13 @@ describe("the line under the badge", () => {
         state: "invite_not_sent",
         sentAt: null,
         lastAttempt: { result: "other_error", errorCode: "unexpected_failure", at: "2026-11-05T11:00:00Z" },
+        joined: false,
       }),
     ).toBe("Not sent 5 Nov 2026, 14:00: email error unexpected_failure")
   })
 
   it("is empty when nothing was tried", () => {
-    expect(inviteLine({ email: "neema@example.test", state: "invite_not_sent", sentAt: null, lastAttempt: null })).toBeNull()
+    expect(inviteLine({ email: "neema@example.test", state: "invite_not_sent", sentAt: null, lastAttempt: null, joined: false })).toBeNull()
   })
 })
 

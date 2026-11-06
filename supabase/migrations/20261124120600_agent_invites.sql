@@ -219,9 +219,10 @@ revoke execute on function public.agent_account_counts() from public, anon;
 grant execute on function public.agent_account_counts() to authenticated;
 
 -- Each agent's email and state with its latest invite to that email and its
--- latest invite attempt of any result, for the badges. A joined agent's
--- email is the one they sign in with, read from Auth: only they change it
--- (owner decision 41). Staff who view leads.
+-- latest invite attempt of any result, for the badges, and whether they
+-- joined (also when switched off or retired since). A joined agent's email
+-- is the one they sign in with, read from Auth: only they change it (owner
+-- decision 41). Staff who view leads.
 create function public.agent_invites(agent_ids uuid[])
 returns table (
     agent_id uuid,
@@ -230,7 +231,8 @@ returns table (
     sent_at timestamptz,
     last_result text,
     last_error_code text,
-    last_attempt_at timestamptz
+    last_attempt_at timestamptz,
+    joined boolean
 )
 language plpgsql
 stable
@@ -244,14 +246,16 @@ begin
     return query
         select
             a.id,
-            case when s.state = 'joined' then coalesce(lower(u.email), a.email) else a.email end,
+            case when j.joined then coalesce(lower(u.email), a.email) else a.email end,
             s.state,
             public.agent_invite_sent_at(a.id, a.email),
             last.result,
             last.error_code,
-            last.created_at
+            last.created_at,
+            j.joined
         from public.marketing_agents a
         cross join lateral (select public.account_state(a) as state) s
+        cross join lateral (select a.user_id is not null and public.agent_joined(a.user_id) as joined) j
         left join auth.users u on u.id = a.user_id
         left join lateral (
             select e.result, e.error_code, e.created_at

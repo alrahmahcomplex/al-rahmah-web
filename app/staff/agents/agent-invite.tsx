@@ -47,6 +47,7 @@ export function AgentInviteActions({
   email,
   state,
   everSent,
+  joined = false,
   emailUnknown = false,
 }: {
   agent: Agent
@@ -54,6 +55,8 @@ export function AgentInviteActions({
   state: AccountState | null
   // Whether an invite to this email ever went out.
   everSent: boolean
+  // They have joined (even if switched off since): only they change the email.
+  joined?: boolean
   // The emails couldn't be read, so there is nothing to send to or edit.
   emailUnknown?: boolean
 }) {
@@ -86,7 +89,7 @@ export function AgentInviteActions({
             {pending ? "Sending…" : label}
           </Button>
         )}
-        {state === "joined" ? (
+        {joined ? (
           <Button size="sm" variant="ghost" disabled aria-describedby={joinedNoteId}>
             Edit email
           </Button>
@@ -96,7 +99,7 @@ export function AgentInviteActions({
       </div>
       {/* A joined agent's email is their sign-in, kept in Supabase Auth, and
           only they change it (owner decision 41). */}
-      {state === "joined" && (
+      {joined && (
         <p id={joinedNoteId} className="max-w-56 text-xs text-muted-foreground">
           Only the agent can change this now.
         </p>

@@ -56,7 +56,9 @@ export function inviteLine(note: AgentInviteNote): string | null {
   if (last && last.result !== "sent") {
     return `Not sent ${WHEN.format(new Date(last.at))}: ${sendReason(last.result, last.errorCode)}`
   }
-  if (note.sentAt) return `Sent ${WHEN.format(new Date(note.sentAt))}${note.email ? ` to ${note.email}` : ""}`
+  // A joined agent's email may since have changed in Auth, so the line
+  // doesn't name it as the invite's recipient.
+  if (note.sentAt) return `Sent ${WHEN.format(new Date(note.sentAt))}${note.email && !note.joined ? ` to ${note.email}` : ""}`
   return null
 }
 

@@ -579,6 +579,11 @@ describe("a joined agent's email", () => {
     expect(await loginEmail(agent.userId)).toBe(next)
     const invites = await getAgentInvites(await manager(), [agent.id])
     expect(invites.ok && invites.data.get(agent.id)).toMatchObject({ email: next, state: "joined" })
+
+    // Switched off since, they still count as joined and show the Auth email.
+    expect((await changeAgentStatus(await manager(), agent.id, "switch-off", "Left the school")).ok).toBe(true)
+    const off = await getAgentInvites(await manager(), [agent.id])
+    expect(off.ok && off.data.get(agent.id)).toMatchObject({ email: next, state: "switched_off", joined: true })
     // The new address signs in (signedIn throws otherwise).
     await signedIn({ email: next, password: "fixture-password" })
   })

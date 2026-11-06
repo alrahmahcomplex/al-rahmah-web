@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { sendAgentInvite, setAgentEmail } from "@/lib/services/agent-invites"
 import { requirePermission } from "@/lib/services/staff-auth"
-import { agentInviteSender, agentLogins } from "@/utils/supabase/admin"
+import { agentInviteSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
 
 import { agentSetPasswordUrl } from "./invite-link"
@@ -38,14 +38,14 @@ export async function sendMarketingAgentInvite(agentId: string, email: string): 
   return inviteOutcome(result)
 }
 
-// Adds or corrects the agent's email. A joined agent's sign-in email changes
-// with it, already confirmed, so Supabase sends no confirmation email.
+// Adds or corrects the agent's email, only before they join. A joined
+// agent's email is their sign-in, which only they change (owner decision 41).
 export async function saveMarketingAgentEmail(agentId: string, email: string): Promise<EmailOutcome> {
   if (typeof agentId !== "string") return emailOutcome({ ok: false, error: { kind: "not-found" } })
   if (typeof email !== "string") return emailOutcome({ ok: false, error: { kind: "email-invalid" } })
   const client = await approver()
   if (!client.ok) return emailOutcome(client)
-  const result = await setAgentEmail(client.supabase, agentId, email, agentLogins())
+  const result = await setAgentEmail(client.supabase, agentId, email)
   if (result.ok) revalidatePath("/staff/agents")
   return emailOutcome(result)
 }

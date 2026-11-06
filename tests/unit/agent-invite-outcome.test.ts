@@ -140,14 +140,17 @@ describe("editing an email", () => {
     )
   })
 
-  it("says a joined agent's sign-in email changed too", () => {
-    expect(emailOutcome({ ok: true, data: { email: "new@example.test", previousEmail: "old@example.test", joined: true } })).toEqual({
-      status: "saved",
-      message: "Email saved. They now sign in with new@example.test.",
-    })
-    expect(emailOutcome({ ok: true, data: { email: "new@example.test", previousEmail: null, joined: false } })).toEqual({
+  it("asks for the invite once the email is saved", () => {
+    expect(emailOutcome({ ok: true, data: { email: "new@example.test", previousEmail: null } })).toEqual({
       status: "saved",
       message: "Email saved. Send the invite when you're ready.",
+    })
+  })
+
+  it("says only the agent can change a joined agent's email (owner decision 41)", () => {
+    expect(emailOutcome({ ok: false, error: { kind: "already-joined" } })).toEqual({
+      status: "refused",
+      message: "They have already set a password. Only the agent can change this now.",
     })
   })
 })

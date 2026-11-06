@@ -11,15 +11,9 @@ import { Label } from "@/components/ui/label"
 import { getAgentAccess } from "@/lib/services/agent-access"
 import { listAgentsInAccountState } from "@/lib/services/agent-account-list"
 import { getAgentImport } from "@/lib/services/agent-import"
-import {
-  getAgentAccountCounts,
-  getAgentInvites,
-  reconcileAgentEmails,
-  type AgentInviteNote,
-} from "@/lib/services/agent-invites"
+import { getAgentAccountCounts, getAgentInvites, type AgentInviteNote } from "@/lib/services/agent-invites"
 import { getPendingAgentCount, listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
 import { cn } from "@/lib/utils"
-import { agentLogins } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
@@ -81,10 +75,6 @@ export default async function MarketingAgentsPage({
 
   const search = parseAgentSearch(await searchParams, canApprove)
   const supabase = await createClient()
-  // A joined agent's email change that stopped part way, or whose sign-in
-  // email changed late, is put in line before the emails are read. A failure
-  // is logged and the screen shows what is stored.
-  await reconcileAgentEmails(agentLogins())
   const [results, batch, access, counts, pendingCount] = await Promise.all([
     search.account
       ? listAgentsInAccountState(supabase, search.account, {

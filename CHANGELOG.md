@@ -22,8 +22,9 @@ stay in the `0.x` range.
   sign-in until it signs out, and the other way round.
 - The Agents screen shows each agent's account state, filters and counts agents whose
   invite wasn't sent or whose link expired, and shows how many need attention.
-- An agent who changes their own sign-in email keeps their Discount code. Their record
-  follows the new address, and the change is recorded with both emails as the agent's own.
+- Once an agent has joined, only they can change their email, through Supabase's own
+  change-email flow. The Agents screen shows the address they sign in with, and Edit email
+  is off for them.
 - A Discount code the Admission form sends for a child already on file now stays on the
   re-application instead of being dropped. The review screen shows it beside the lead's
   Referral code, counts it as a difference when the two differ, and offers Apply for a

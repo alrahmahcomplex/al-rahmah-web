@@ -59,6 +59,7 @@ export function AgentInviteActions({
 }) {
   const [refusal, setRefusal] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const joinedNoteId = useId()
   const label = everSent ? "Resend invite" : "Send invite"
   if (emailUnknown) return null
 
@@ -85,8 +86,21 @@ export function AgentInviteActions({
             {pending ? "Sending…" : label}
           </Button>
         )}
-        <EditEmail agent={agent} email={email} joined={state === "joined"} />
+        {state === "joined" ? (
+          <Button size="sm" variant="ghost" disabled aria-describedby={joinedNoteId}>
+            Edit email
+          </Button>
+        ) : (
+          <EditEmail agent={agent} email={email} />
+        )}
       </div>
+      {/* A joined agent's email is their sign-in, kept in Supabase Auth, and
+          only they change it (owner decision 41). */}
+      {state === "joined" && (
+        <p id={joinedNoteId} className="max-w-56 text-xs text-muted-foreground">
+          Only the agent can change this now.
+        </p>
+      )}
       {refusal && (
         <p role="alert" className="max-w-56 text-xs text-destructive">
           {refusal}
@@ -96,7 +110,7 @@ export function AgentInviteActions({
   )
 }
 
-function EditEmail({ agent, email, joined }: { agent: Agent; email: string | null; joined: boolean }) {
+function EditEmail({ agent, email }: { agent: Agent; email: string | null }) {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState(email ?? "")
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -141,9 +155,8 @@ function EditEmail({ agent, email, joined }: { agent: Agent; email: string | nul
                 {verb} for {agent.fullName}
               </DialogTitle>
               <DialogDescription id={hintId}>
-                {joined
-                  ? "They have already set a password. Their sign-in email changes too, and no confirmation email is sent. Phone them to check the new address is theirs."
-                  : "Phone them to check the address is theirs. Once it is saved, send the invite from their row. A link already sent to an earlier address stops working."}
+                Phone them to check the address is theirs. Once it is saved, send the invite from their row. A link already
+                sent to an earlier address stops working.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-1.5">

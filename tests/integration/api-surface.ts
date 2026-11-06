@@ -139,14 +139,6 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
-  // Closes the Manager's own started email change (#191).
-  "public.cancel_agent_email_change(change_id uuid)": {
-    roles: ["authenticated"],
-    setup:
-      "insert into public.agent_events (id, agent_id, kind, result, email, created_by) select 'e7e7e7e7-0000-4000-8000-000000000191', a.id, 'email_change', 'started', lower(u.email), 'a1a1a1a1-0000-4000-8000-000000000001' from public.marketing_agents a join auth.users u on u.id = a.user_id where a.id = 'a4a4a4a4-0000-4000-8000-000000000003'",
-    args: { change_id: "'e7e7e7e7-0000-4000-8000-000000000191'" },
-    agent: { refused: "not_permitted" },
-  },
   "public.change_follow_up_date(follow_up_id uuid, due_on date, reason text, note text)": {
     roles: ["authenticated"],
     args: {
@@ -332,15 +324,6 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: { class_name: "'STD 2'" },
     agent: { returns: ["primary_lower"] },
-  },
-  // Stores a joined agent's email once Auth holds it (#191). The sample
-  // change is to the seeded agent's own sign-in email.
-  "public.finish_agent_email_change(change_id uuid)": {
-    roles: ["authenticated"],
-    setup:
-      "insert into public.agent_events (id, agent_id, kind, result, email, created_by) select 'e7e7e7e7-0000-4000-8000-000000000191', a.id, 'email_change', 'started', lower(u.email), 'a1a1a1a1-0000-4000-8000-000000000001' from public.marketing_agents a join auth.users u on u.id = a.user_id where a.id = 'a4a4a4a4-0000-4000-8000-000000000003'",
-    args: { change_id: "'e7e7e7e7-0000-4000-8000-000000000191'" },
-    agent: { refused: "not_permitted" },
   },
   "public.find_family_by_phone(phone text, whatsapp text)": {
     roles: ["authenticated"],

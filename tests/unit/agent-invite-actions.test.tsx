@@ -41,3 +41,14 @@ describe("once the emails are loaded", () => {
     expect(screen.getByRole("button", { name: "Add email for Neema Juma" })).toBeEnabled()
   })
 })
+
+describe("for a joined agent (owner decision 41)", () => {
+  it("Edit email can't be pressed, and says only the agent can change it", () => {
+    render(<AgentInviteActions agent={AGENT} email="neema@example.test" state="joined" everSent />)
+
+    const edit = screen.getByRole("button", { name: "Edit email" })
+    expect(edit).toBeDisabled()
+    expect(edit).toHaveAccessibleDescription("Only the agent can change this now.")
+    expect(screen.queryByRole("button", { name: /Edit email for/ })).not.toBeInTheDocument()
+  })
+})

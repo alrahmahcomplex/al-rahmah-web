@@ -15,6 +15,7 @@ import {
   type InviteBudgetConfig,
 } from "@/lib/services/agent-invite-batches"
 import type { AgentInviteSender } from "@/lib/services/agent-invites"
+import { changeAgentStatus } from "@/lib/services/marketing-agents"
 
 import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { ADMISSIONS, MANAGER, SEEDED_AGENT } from "../support/fixtures"
@@ -216,6 +217,24 @@ describe("an invite batch", () => {
       ok: true,
       data: { finishedAt: null, stopReason: null, counts: { sent: 1, waiting: 2, noEmail: 0, failed: 0 } },
     })
+  })
+})
+
+describe("a batch's lists", () => {
+  test("show an agent switched off since the batch as switched off, with its note", async () => {
+    const { importBatchId, agents } = await importAgents([email("s1"), email("s2")])
+    const batch = await sendInviteBatch(await manager(), stubSender(), REDIRECT, { config: ROOMY, importBatchId })
+    const batchId = batch.ok ? batch.data.batchId : ""
+    expect((await changeAgentStatus(await manager(), agents[0].id, "switch-off", "Left the school")).ok).toBe(true)
+
+    const list = await listAgentsInBatchOutcome(await manager(), batchId, "sent", { page: 1 })
+    if (!list.ok) throw new Error(list.error)
+    const off = list.data.agents.find((agent) => agent.id === agents[0].id)
+    const on = list.data.agents.find((agent) => agent.id === agents[1].id)
+
+    expect(off).toMatchObject({ retiredAt: null, statusChange: { kind: "switched_off", changedBy: MANAGER.name } })
+    expect(off?.switchedOffAt).not.toBeNull()
+    expect(on).toMatchObject({ switchedOffAt: null, retiredAt: null, statusChange: null })
   })
 })
 

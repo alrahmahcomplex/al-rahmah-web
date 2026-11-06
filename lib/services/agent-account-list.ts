@@ -4,7 +4,15 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { BatchOutcome } from "./agent-invite-batches"
 import type { AccountState } from "./agent-invites"
-import { agentSearchPatterns, AGENTS_PER_PAGE, UUID, type AgentList, type AgentStatus } from "./marketing-agents"
+import {
+  agentSearchPatterns,
+  AGENTS_PER_PAGE,
+  UUID,
+  type AgentList,
+  type AgentStatus,
+  type AgentStatusKind,
+  type AgentStatusNote,
+} from "./marketing-agents"
 import type { Result } from "./result"
 
 // The Agents screen's account-state filters (#191) and an invite batch's
@@ -12,9 +20,9 @@ import type { Result } from "./result"
 // account_state column the database computes, within one import when the
 // screen shows one; or one page of the agents behind one of a batch's counts.
 // Same rows and order as the Approved list in marketing-agents.ts (which the
-// agent-record tickets own): the latest approval first. No status note is
-// read: the account-state lists hold no switched-off or retired agent, and a
-// batch's sent and failed lists rarely do (only one changed since).
+// agent-record tickets own): the latest approval first. A batch's sent and
+// failed lists can hold an agent switched off or retired since, so each row
+// keeps its status and its status note, and offers the right actions.
 
 // The states each filter shows. "Approved, no account yet" is every Approved
 // agent who hasn't joined. Awaiting email confirmation joins them with
@@ -42,10 +50,21 @@ type Row = {
   registered_at: string
   approved_at: string | null
   lead_count: number
+  switched_off_at: string | null
+  retired_at: string | null
+}
+
+type StatusNoteRow = {
+  agent_id: string
+  kind: AgentStatusKind
+  changed_at: string
+  changed_by_name: string | null
+  replaced_by_name: string | null
+  replaced_by_code: string | null
 }
 
 // A plain string, so both sources below give the same query type.
-const COLUMNS: string = "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count"
+const COLUMNS: string = "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count, switched_off_at, retired_at"
 
 type Search = { query?: string; page: number; importBatchId?: string }
 
@@ -100,6 +119,24 @@ async function pageOfAgents(
     for (const row of names.data as { agent_id: string; approver_name: string }[]) approvers.set(row.agent_id, row.approver_name)
   }
 
+  const changedIds = rows.filter((row) => row.switched_off_at || row.retired_at).map((row) => row.id)
+  const notes = new Map<string, AgentStatusNote>()
+  if (changedIds.length > 0) {
+    const read = await supabase.rpc("marketing_agent_status_notes", { agent_ids: changedIds })
+    if (read.error) {
+      console.error("Could not read the Marketing Agents' status changes", read.error)
+      return { ok: false, error: "unavailable" }
+    }
+    for (const row of read.data as StatusNoteRow[]) {
+      notes.set(row.agent_id, {
+        kind: row.kind,
+        changedAt: row.changed_at,
+        changedBy: row.changed_by_name,
+        replacedBy: row.replaced_by_name && row.replaced_by_code ? { fullName: row.replaced_by_name, code: row.replaced_by_code } : null,
+      })
+    }
+  }
+
   const total = count ?? 0
   return {
     ok: true,
@@ -118,9 +155,9 @@ async function pageOfAgents(
         approvedAt: row.approved_at,
         approvedBy: approvers.get(row.id) ?? null,
         leadCount: row.lead_count,
-        switchedOffAt: null,
-        retiredAt: null,
-        statusChange: null,
+        switchedOffAt: row.switched_off_at,
+        retiredAt: row.retired_at,
+        statusChange: notes.get(row.id) ?? null,
       })),
     },
   }

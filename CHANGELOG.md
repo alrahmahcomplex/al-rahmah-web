@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- After a joined agent changes their sign-in email, the address they left is free again:
+  it can be given to a staff member or a new agent. The address they moved to now counts
+  as theirs, so staff invites and new agents with it are refused.
+
 ## November 6, 2026 `v0.75.0`
 
 ### NEW

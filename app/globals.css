@@ -9,22 +9,20 @@
     --font-sans: var(--font-sans);
     --font-exo: var(--font-exo);
 
-    /* Al-Rahmah brand scales (#231, 2026-11-06): ShuleFasta's deep blue and
-       orange. They override Tailwind's blue-* and orange-*, so every
-       text-blue-600, bg-orange-500 and so on in the app follows. blue-600 is
-       the brand blue; orange-500 is every primary action, white text on it
-       (DESIGN.md, The ShuleFasta Button Rule). */
-    --color-blue-50: #eef3ff;
-    --color-blue-100: #dbe6ff;
-    --color-blue-200: #b8cdff;
-    --color-blue-300: #8aaeff;
-    --color-blue-400: #4f7fe6;
-    --color-blue-500: #1f56c4;
-    --color-blue-600: #003a9d;
-    --color-blue-700: #002f80;
-    --color-blue-800: #002463;
-    --color-blue-900: #001a47;
+    /* Al-Rahmah Color Palette Overrides */
+    --color-blue-50: #f2f0fc;
+    --color-blue-100: #e0dcf9;
+    --color-blue-200: #b5aef0;
+    --color-blue-300: #8c82e7;
+    --color-blue-400: #5a4bda;
+    --color-blue-500: #3b28b5;
+    --color-blue-600: #0900bb;
+    --color-blue-700: #070099;
+    --color-blue-800: #050073;
+    --color-blue-900: #03004d;
 
+    /* ShuleFasta's orange (#231, 2026-11-06). orange-500 is every primary
+       action, white text on it (DESIGN.md, The ShuleFasta Button Rule). */
     --color-orange-50: #fff4ec;
     --color-orange-100: #ffe1cc;
     --color-orange-400: #ff9a5c;

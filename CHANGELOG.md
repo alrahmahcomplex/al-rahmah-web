@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 6, 2026 `v0.81.1`
+
+### IMPROVED
+
+- Headings, name bands, links and the current sidebar entry are Al-Rahmah Indigo again,
+  with the lavender wash behind public screens. Orange buttons keep ShuleFasta's orange
+  with white text. The invite and password-reset emails match.
+
 ## November 6, 2026 `v0.81.0`
 
 ### IMPROVED

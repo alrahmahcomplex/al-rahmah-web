@@ -1,53 +1,35 @@
-import Image from "next/image"
-import Link from "next/link"
+import { cookies } from "next/headers"
 
-import { Button } from "@/components/ui/button"
-
-import { signOut } from "./actions"
-import { NavLink } from "./nav-link"
+import { StaffShell, type ShellItem } from "./_shell/staff-shell"
 import { navCounts } from "./nav-counts"
-import { navFor } from "./navigation"
+import { navFor, STAFF_HOME } from "./navigation"
 import { requireStaff } from "./session"
+import { SIDEBAR_RAIL_COOKIE } from "./shell-cookies"
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const staff = await requireStaff()
-  const nav = navFor(staff.permissions)
-  const counts = await navCounts(staff)
+  const [counts, cookieStore] = await Promise.all([navCounts(staff), cookies()])
+
+  // The icons are rendered here: an icon component can't be handed to the
+  // client shell, but what it renders can.
+  const items: ShellItem[] = [STAFF_HOME, ...navFor(staff.permissions)].map((entry) => {
+    const Icon = entry.icon
+    return {
+      href: entry.href,
+      label: entry.label,
+      group: entry.group,
+      icon: <Icon aria-hidden="true" />,
+      count: counts[entry.href],
+    }
+  })
 
   return (
-    <div className="min-h-screen bg-white">
-      <header className="border-b border-slate-200">
-        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <Link href="/staff" className="shrink-0">
-            <Image src="/Al-Rahmah_Official_Logo.svg" alt="Al-Rahmah Logo" width={40} height={40} />
-          </Link>
-          <div className="ml-auto flex min-w-0 items-center gap-3">
-            <div className="min-w-0 text-right text-sm leading-tight">
-              <p className="truncate font-medium text-slate-900">{staff.name}</p>
-              <p className="truncate text-slate-500">{staff.roleName}</p>
-            </div>
-            <form action={signOut}>
-              <Button type="submit" variant="outline">
-                Sign out
-              </Button>
-            </form>
-          </div>
-        </div>
-        {nav.length > 0 && (
-          <nav aria-label="Staff" className="mx-auto max-w-5xl overflow-x-auto px-2 pb-2">
-            <ul className="flex gap-1">
-              {nav.map((entry) => (
-                <li key={entry.href}>
-                  <NavLink href={entry.href} count={counts[entry.href]}>
-                    {entry.label}
-                  </NavLink>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        )}
-      </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
-    </div>
+    <StaffShell
+      items={items}
+      initialCollapsed={cookieStore.get(SIDEBAR_RAIL_COOKIE)?.value === "1"}
+      person={{ name: staff.name, roleName: staff.roleName }}
+    >
+      {children}
+    </StaffShell>
   )
 }

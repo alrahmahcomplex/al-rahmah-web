@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 6, 2026 `v0.80.0`
+
+### IMPROVED
+
+- The staff portal's row of tabs is now a sidebar, grouped into Front desk, Admissions,
+  Referrals, Money and Admin with an icon on each entry, so the twelve areas an Admissions
+  Manager sees no longer run off the screen. A toggle in the top bar folds it to an icon
+  rail, and the choice is kept. The signed-in name at its foot opens Sign out. On a phone
+  the sidebar gives way to a bottom bar with Today, Check-in, Leads and More, which opens
+  the rest.
+
 ## November 6, 2026 `v0.79.0`
 
 ### NEW

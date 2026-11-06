@@ -21,7 +21,7 @@ import { AGENTS_PER_PAGE, agentSearchPatterns, changeAgentStatus, createAgent, g
 describe("the Marketing Agents navigation entry", () => {
   it("shows to anyone who may view leads, and to no one else", () => {
     const agents = STAFF_NAV.find((entry) => entry.label === "Marketing Agents")
-    expect(agents).toEqual({ href: "/staff/agents", label: "Marketing Agents", permission: "leads.view" })
+    expect(agents).toMatchObject({ href: "/staff/agents", label: "Marketing Agents", group: "Referrals", permission: "leads.view" })
     expect(navFor(["leads.view"])).toContain(agents)
     expect(navFor(["agents.approve"])).not.toContain(agents)
     expect(navFor(["payments.view"])).not.toContain(agents)

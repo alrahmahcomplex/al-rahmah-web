@@ -61,7 +61,7 @@ describe("the queue's wording", () => {
 describe("the Follow-ups navigation entry", () => {
   it("shows to anyone who may view leads, and to no one else", () => {
     const followUps = STAFF_NAV.find((entry) => entry.label === "Follow-ups")
-    expect(followUps).toEqual({ href: "/staff/follow-ups", label: "Follow-ups", permission: "leads.view" })
+    expect(followUps).toMatchObject({ href: "/staff/follow-ups", label: "Follow-ups", group: "Admissions", permission: "leads.view" })
     expect(navFor(["leads.view"])).toContain(followUps)
     expect(navFor(["payments.view", "follow_ups.record"])).not.toContain(followUps)
   })

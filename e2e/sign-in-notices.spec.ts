@@ -16,7 +16,8 @@ async function signIn(page: Page, person: FixtureStaff) {
 }
 
 async function signOut(page: Page) {
-  await page.getByRole("button", { name: "Sign out" }).click()
+  await page.getByRole("complementary", { name: "Sidebar" }).getByRole("button", { name: /^Account menu/ }).click()
+  await page.getByRole("menuitem", { name: "Sign out" }).click()
   await expect(page).toHaveURL(/\/login$/)
 }
 

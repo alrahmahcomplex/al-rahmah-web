@@ -131,7 +131,7 @@ test("the Manager sends the invite; the agent sets a password from the email and
   await setPassword(agentPage)
 
   await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
-  await expect(agentPage.getByRole("heading", { name: `Wanafunzi wanaotumia Code ya Punguzo ${agent.code}` })).toBeVisible()
+  await expect(agentPage.getByRole("heading", { name: `Wanafunzi wanaotumia Code ya Punguzo ${agent.code} (0)` })).toBeVisible()
 
   await openAgentsScreen(page, agent.fullName)
   await expect(agentRow(page, agent.fullName)).toContainText("Joined")
@@ -144,7 +144,7 @@ test("an agent signs in on the Discount code pages; wrong credentials point to t
 
   await signInAgent(page, SEEDED_AGENT.email, SEEDED_AGENT.password)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
-  await expect(page.getByRole("heading", { name: `Wanafunzi wanaotumia Code ya Punguzo ${SEEDED_AGENT.code}` })).toBeVisible()
+  await expect(page.getByRole("heading", { name: `Wanafunzi wanaotumia Code ya Punguzo ${SEEDED_AGENT.code} (0)` })).toBeVisible()
 })
 
 test("staff and agent sign-in pages link to each other", async ({ page }) => {

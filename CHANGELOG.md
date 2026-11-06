@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- A signed-in Discount code holder now sees the students using their code, newest first,
+  as phone-sized cards: name, class, status (marked "not active" when the lead is closed),
+  the date of the last change, the Declined reason, and the latest interview's result and
+  score once the interview fee is Paid. They never see parent contacts, staff notes or
+  amounts. Past 20 students, "Onyesha zaidi" shows more and a name search appears. With
+  no students yet, the page shows the code, the link, Copy and WhatsApp share. A
+  switched-off agent, or anyone while agent access is off, sees only the message.
+
 ## November 6, 2026 `v0.77.0`
 
 ### NEW

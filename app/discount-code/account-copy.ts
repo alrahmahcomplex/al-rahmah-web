@@ -42,9 +42,6 @@ type Copy = {
   signOut: string
   reasonCode: (code: string) => string
   messages: Record<MessageKey, AccountMessage>
-  studentsHeading: (code: string) => string
-  welcome: (name: string) => string
-  studentsComing: string
   forgotHeading: string
   forgotText: string
   callOffice: string
@@ -104,9 +101,6 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
         signIn: true,
       },
     },
-    studentsHeading: (code) => `Wanafunzi wanaotumia Code ya Punguzo ${code}`,
-    welcome: (name) => `Karibu, ${name}.`,
-    studentsComing: "Orodha ya wanafunzi wako itaonekana hapa hivi karibuni.",
     forgotHeading: "Umesahau nenosiri?",
     forgotText: "Piga simu ofisini, nasi tutakutumia kiungo kipya cha kuweka nenosiri.",
     callOffice: "Piga simu ofisini",
@@ -154,9 +148,6 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
         signIn: true,
       },
     },
-    studentsHeading: (code) => `Students using Discount code ${code}`,
-    welcome: (name) => `Welcome, ${name}.`,
-    studentsComing: "The list of your students will show here soon.",
     forgotHeading: "Forgot your password?",
     forgotText: "Call the office and we'll send you a new link to set your password.",
     callOffice: "Call the office",

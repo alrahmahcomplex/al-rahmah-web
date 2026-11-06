@@ -146,6 +146,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  // The students using the signed-in agent's own code (#195): their own
+  // leads' allowed fields only. The seeded agent's code has none. Staff and
+  // visitors get null.
+  "public.agent_students(search text, page_limit integer, page_offset integer)": {
+    roles: ["authenticated"],
+    args: { search: "null", page_limit: "20", page_offset: "0" },
+    agent: { returns: [{ state: "active", code: "SAM-403", total: 0, matched: 0, students: [] }] },
+  },
   "public.approve_marketing_agent(agent_id uuid)": {
     roles: ["authenticated"],
     args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000001'" },

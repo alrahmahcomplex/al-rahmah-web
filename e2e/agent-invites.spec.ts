@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { expect, test, type Browser, type Page } from "@playwright/test"
 
-import { secretClient, signedIn } from "../tests/support/db"
+import { createThrowawayStaff, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER, SEEDED_AGENT, type FixtureStaff } from "../tests/support/fixtures"
 
 // Agent invites and the Discount code sign-in (#191) end to end: the Manager
@@ -157,10 +157,12 @@ test("staff and agent sign-in pages link to each other", async ({ page }) => {
 
 test("a browser signed in as staff refuses the agent's link until staff sign out, and the link still works", async ({ page }) => {
   const agent = await newAgent()
-  await signInStaff(page, MANAGER)
+  // A staff member of the test's own: signing out ends every session of that
+  // login, which would sign the Manager out of the tests running alongside.
+  await signInStaff(page, await createThrowawayStaff(["leads.view", "agents.approve"]))
   const email = await sendInvite(page, agent)
 
-  // The Manager opens the agent's link in their own browser.
+  // The staff member opens the agent's link in their own browser.
   await page.goto(email.link)
   await expect(notice(page)).toHaveText(STAFF_SESSION)
   await expect(page.getByLabel("Nenosiri jipya", { exact: true })).toHaveCount(0)

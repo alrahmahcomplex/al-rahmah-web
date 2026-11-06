@@ -38,7 +38,7 @@ Checked in the signed-in in-app browser on 2026-11-05. Recheck a value in its da
 Vercel is on Hobby. Supabase is on Free, in eu-west-1. On 2026-11-03 the owner chose to stay on the free plans and accepted these risks:
 
 - **Hobby is for non-commercial use** under Vercel's terms, and a school's admissions site may not qualify.
-- **One firewall rule.** Hobby allows one custom rule, so every public form shares `public-forms` and its single threshold. Rate limiting below has the details.
+- **One firewall rule.** Hobby allows one custom rule, so every public form shares `public-forms` and its single threshold. Rate limiting below has the details, including the accepted gap in the agent sign-in key.
 - **Supabase Free pauses an inactive project.** A paused project takes the staff portal, sign-in and every form that writes down until someone restores it from the Supabase dashboard. Check that the project isn't paused before a launch step or after a quiet period.
 - **No point-in-time recovery.** A bad migration or deletion can't be rolled back to a moment in time.
 
@@ -67,19 +67,29 @@ All of these live under Authentication in the Supabase dashboard.
 
 ### Rate limiting
 
-**The firewall rule.** `public-forms` is under Firewall → Rules in the Vercel project. The `@vercel/firewall` condition matches rate-limit ID `public-forms`. It uses a fixed window of 600 seconds, the longest the dashboard allows, and allows 5 requests per key. The dashboard shows the keys as "API controlled", because the app supplies them. Its action is **Log**, so the firewall records requests over the limit and refuses none. `checkRateLimit` reports a request as limited only when the firewall answers 429 or 403, so under Log the app should let every request through. That hasn't been seen on a live request yet. Watch the rule's traffic before switching it to Deny. Five in 10 minutes is tight for a parent who retypes a Discount code several times.
+**The firewall rule.** `public-forms` is under Firewall → Rules in the Vercel project. The `@vercel/firewall` condition matches rate-limit ID `public-forms`. It uses a fixed window of 600 seconds, the longest the dashboard allows. The dashboard shows the keys as "API controlled", because the app supplies them. `checkRateLimit` reports a request as limited only when the firewall answers 429 or 403.
 
-Because one rule has one threshold, each form gets its own allowance through its key. `lib/rate-limit.ts` builds the live keys:
+| Setting | Value |
+|---|---|
+| Window | 600 seconds, fixed |
+| Requests per key | **20**, decided by the owner on 2026-11-06. Was 5 |
+| Action | **Deny**, decided by the owner on 2026-11-06. Was Log |
+
+The owner makes both changes in the Vercel dashboard; until they confirm them there, the live rule is still 5 per key with Log. Under Log the firewall records requests over the limit and refuses none. Twenty in 10 minutes per key is generous on purpose, so a parent who retypes a Discount code or resends the Admission form is never blocked once the rule denies.
+
+Because one rule has one threshold, each form gets its own allowance through its key. `lib/rate-limit.ts` builds the keys:
 
 | Form | Key | State |
 |---|---|---|
-| Admission form submission | `admission:<ip>` | Live |
+| Admission form submission | `admission:<ip>:<contact hash>` | Live |
 | Discount-code check on the Admission form | `code-check:<ip>` | Live |
 | Agent registration | `agent:<ip>` | Live |
-| Agent sign-in | `<form>:<ip>:<email hash>` | Planned |
-| Agent reset and "Tuma kiungo kipya" | `<form>:<ip>:<email hash>` | Planned |
+| Agent sign-in | `agent-sign-in:<ip>:<email hash>` | Live (#191) |
+| Agent reset and "Tuma kiungo kipya" | `<form>:<ip>:<email hash>` | Planned (#194) |
 
-The email hash is a hash of the normalised email, never the email itself. Sign-in is sized for shared school Wi-Fi, where many people share one IP. With the hash in the key, each person gets 5 tries in 10 minutes rather than 5 for the whole school. The same key lets one IP try any number of different addresses, so sign-in should also count against an IP-only key on the same rule, with a higher threshold left to the app, or the gap should be accepted as a risk. #191 decides. Reset also relies on Turnstile, Supabase's 60-second gap per address, the public reset counter and the project-wide hourly budget for public emails, so it is still limited if the firewall check fails open. Staff `/login` isn't on the rule.
+A hash is the first 32 hex characters of the SHA-256 of the trimmed, lowercased value, never the value itself. The contact is the parent's phone from the Admission form, in one form however it was typed (`0700 000 900` and `+255 700 000 900` give the same hash). With it in the key, families sending the form from one shared connection each get their own 20 tries. A form whose phone can't be read falls back to `admission:<ip>`. The code check stays IP-only: a code in the key would give each code its own allowance and let one IP try every code, so it relies on the higher threshold instead.
+
+Agent sign-in and reset keep the IP plus an email hash. Sign-in is sized for shared school Wi-Fi, where many people share one IP: each agent gets 20 tries in 10 minutes rather than 20 for the whole school. The same key lets one IP try any number of different addresses. #191 accepts that gap rather than adding an IP-only sign-in key, because Hobby has one rule and so one threshold, and an IP-only key at 20 would lock out a school's Wi-Fi. Supabase's token limiter (below) still bounds password guessing from Vercel as a whole, and a limited try never reaches Supabase. A limited sign-in shows "Majaribio ni mengi mno. Subiri dakika chache, kisha ujaribu tena." ("Too many attempts. Wait a few minutes, then try again."), not the wrong-password message. Reset also relies on Turnstile, Supabase's 60-second gap per address, the public reset counter and the project-wide hourly budget for public emails, so it is still limited if the firewall check fails open. Staff `/login` isn't on the rule.
 
 **Supabase sees Vercel's IP, not the user's.** The app calls Supabase Auth from the server, and IP address forwarding is off. On 2026-11-05 a failed sign-in on a Preview with a placeholder address reached the Auth logs from an AWS address, where Vercel runs its functions, not the tester's Tanzanian ISP address. Supabase's per-IP limits therefore count all users together, for as long as their requests leave Vercel from the same address.
 

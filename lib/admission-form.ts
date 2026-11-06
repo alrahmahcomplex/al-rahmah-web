@@ -165,3 +165,22 @@ export function parseAdmissionForm(
   if (code && noticeVersion === FORM_NOTICE_VERSION) form.noticeVersion = FORM_NOTICE_VERSION
   return { ok: true, data: form }
 }
+
+// The parent's phone from the posted form, in one form however it was typed
+// (`0700 000 900` and `+255 700 000 900` are the same), for the rate-limit
+// key, which hashes it. Read before the form's own checks, so anything that
+// isn't a phone gives null and the key falls back to the IP alone.
+export function admissionContact(raw: unknown): string | null {
+  let value: unknown
+  try {
+    value = typeof raw === "string" ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+  const phone = (value as { parent?: { phone?: unknown } } | null)?.parent?.phone
+  if (typeof phone !== "string") return null
+  const digits = phone.replace(/[^\d+]/g, "")
+  if (/^0\d{9}$/.test(digits)) return `+255${digits.slice(1)}`
+  if (/^255\d{9}$/.test(digits)) return `+${digits}`
+  return digits.replace(/(?!^)\+/g, "") || null
+}

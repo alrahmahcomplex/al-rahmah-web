@@ -19,6 +19,7 @@ const MANAGER_ENTRIES = [
   "Seats",
   "Discount requests",
   "Reopening requests",
+  "Reports",
   "Staff and roles",
 ]
 
@@ -68,7 +69,7 @@ test.describe("on a desktop", () => {
     }
     await expect(entry(page, "Fee schedule")).toBeVisible()
     await expect(nav.getByText("Admin", { exact: true })).toHaveCount(0)
-    await expect(nav.getByRole("link", { name: /^(Seats|Discount requests|Reopening requests|Staff and roles)/ })).toHaveCount(0)
+    await expect(nav.getByRole("link", { name: /^(Seats|Discount requests|Reopening requests|Reports|Staff and roles)/ })).toHaveCount(0)
   })
 
   test("the rail survives a navigation and a reload", async ({ page }) => {

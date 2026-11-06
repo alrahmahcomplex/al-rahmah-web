@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import type { ClassSeatFigures, SeatsByClass } from "@/lib/services/dashboard"
 import type { Result } from "@/lib/services/result"
 
-import { takenLine } from "../seats/format"
+import { takenLine } from "../../seats/format"
 import { SeatsYearFilter } from "./seats-year-filter"
 
 // Seats by class: how full each class is in one Enrollment year, as it

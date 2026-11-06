@@ -3,9 +3,10 @@ import { expect, test, type Page } from "@playwright/test"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 
 import { createThrowawayStaff } from "../tests/support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
-// The dashboard on the staff home. Counts are read for Enrollment year 2031,
+// The dashboard on the Reports page (/staff/reports since #226). Counts are
+// read for Enrollment year 2031,
 // the dashboard's own fixtures (supabase/seeds/95_dashboard.sql), so other
 // tests' leads never shift them.
 
@@ -15,6 +16,8 @@ async function signIn(page: Page, person: FixtureStaff) {
   await page.getByLabel("Password", { exact: true }).fill(person.password)
   await page.getByRole("button", { name: "Log In" }).click()
   await expect(page).toHaveURL(/\/staff$/)
+  await page.goto("/staff/reports")
+  await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible()
 }
 
 const visitedPanel = (page: Page) => page.getByRole("region", { name: "Visited leads" })
@@ -24,7 +27,7 @@ async function choose(page: Page, select: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click()
 }
 
-test("the Visited leads tile shows all time by default, under the welcome and notices", async ({ page }) => {
+test("the Visited leads tile shows all time by default, under the Reports heading", async ({ page }) => {
   await signIn(page, MANAGER)
 
   const panel = visitedPanel(page)
@@ -33,9 +36,9 @@ test("the Visited leads tile shows all time by default, under the welcome and no
   await expect(panel.getByTestId("visited-count")).toHaveText(/^\d[\d,]*$/)
   await expect(panel.getByRole("link", { name: "Show all time and all years" })).toHaveCount(0)
 
-  const welcome = await page.getByText(`Welcome, ${MANAGER.name}.`).boundingBox()
+  const heading = await page.getByRole("heading", { name: "Reports" }).boundingBox()
   const tile = await panel.boundingBox()
-  expect(welcome!.y).toBeLessThan(tile!.y)
+  expect(heading!.y).toBeLessThan(tile!.y)
 })
 
 test("filters chosen from the filter icon go into the address, survive a reload and clear in one click", async ({ page }) => {
@@ -67,14 +70,14 @@ test("filters chosen from the filter icon go into the address, survive a reload 
   await expect(panel.getByTestId("visited-count")).toHaveText("6")
 
   await panel.getByRole("link", { name: "Show all time and all years" }).click()
-  await expect(page).toHaveURL(/\/staff$/)
+  await expect(page).toHaveURL(/\/staff\/reports$/)
   await expect(panel.getByTestId("visited-period")).toHaveText("All time · All years")
 })
 
 test("a shared address opens the same view, with the week named by its Monday", async ({ page }) => {
   await signIn(page, MANAGER)
   // Thursday 24 September 2026.
-  await page.goto("/staff?visited=week:2026-09-24&visited_year=2031")
+  await page.goto("/staff/reports?visited=week:2026-09-24&visited_year=2031")
 
   const panel = visitedPanel(page)
   await expect(panel.getByTestId("visited-period")).toHaveText("Week of 21 Sept 2026 · Enrollment year 2031")
@@ -83,7 +86,7 @@ test("a shared address opens the same view, with the week named by its Monday", 
 
 test("an unreadable address falls back to All time and All years", async ({ page }) => {
   await signIn(page, MANAGER)
-  await page.goto("/staff?visited=fortnight:2026-02-30&visited_year=next")
+  await page.goto("/staff/reports?visited=fortnight:2026-02-30&visited_year=next")
 
   await expect(visitedPanel(page).getByTestId("visited-period")).toHaveText("All time · All years")
 })
@@ -103,7 +106,7 @@ test("the interview tiles each keep their own filters in the address", async ({ 
   }
 
   // Three different views side by side, from one shared address.
-  await page.goto("/staff?interviewed=week:2026-09-30&interviewed_year=2031&passed=month:2026-09-01&passed_year=2031&failed_year=2031")
+  await page.goto("/staff/reports?interviewed=week:2026-09-30&interviewed_year=2031&passed=month:2026-09-01&passed_year=2031&failed_year=2031")
   await expect(interviewed.getByTestId("interviewed-period")).toHaveText("Week of 28 Sept 2026 · Enrollment year 2031")
   await expect(interviewed.getByTestId("interviewed-count")).toHaveText("6")
   await expect(passed.getByTestId("passed-period")).toHaveText("September 2026 · Enrollment year 2031")
@@ -133,7 +136,7 @@ test("the Enrolled students tile keeps its own filters in the address", async ({
 
   // August 2026 for 2031: one paid in full, one Archived; the reverted and
   // Declined leads are left out.
-  await page.goto("/staff?enrolled=month:2026-08-01&enrolled_year=2031&visited_year=2031")
+  await page.goto("/staff/reports?enrolled=month:2026-08-01&enrolled_year=2031&visited_year=2031")
   await expect(enrolled.getByTestId("enrolled-period")).toHaveText("August 2026 · Enrollment year 2031")
   await expect(enrolled.getByTestId("enrolled-count")).toHaveText("2")
 
@@ -148,7 +151,7 @@ test("the Enrolled students tile keeps its own filters in the address", async ({
 
   // A lead enrolled on the Academic-year start counts on the start date.
   await page.keyboard.press("Escape")
-  await page.goto("/staff?enrolled=date:2031-01-08&enrolled_year=2031")
+  await page.goto("/staff/reports?enrolled=date:2031-01-08&enrolled_year=2031")
   await expect(enrolled.getByTestId("enrolled-period")).toHaveText(`${formatDate("2031-01-08")} · Enrollment year 2031`)
   await expect(enrolled.getByTestId("enrolled-count")).toHaveText("1")
 })
@@ -157,7 +160,7 @@ const classesPanel = (page: Page) => page.getByRole("region", { name: "Leads by 
 
 test("Leads by enrollment class lists every class in school order, zeros included, with the total", async ({ page }) => {
   await signIn(page, MANAGER)
-  await page.goto("/staff?classes_year=2031")
+  await page.goto("/staff/reports?classes_year=2031")
 
   const panel = classesPanel(page)
   await expect(panel.getByTestId("classes-period")).toHaveText("All time · Enrollment year 2031")
@@ -170,7 +173,7 @@ test("Leads by enrollment class lists every class in school order, zeros include
 
 test("changing the Leads by enrollment class filters leaves the Visited leads tile alone", async ({ page }) => {
   await signIn(page, MANAGER)
-  await page.goto("/staff?visited=month:2026-09-01&visited_year=2031")
+  await page.goto("/staff/reports?visited=month:2026-09-01&visited_year=2031")
   const visited = visitedPanel(page)
   const classes = classesPanel(page)
   await expect(visited.getByTestId("visited-count")).toHaveText("6")
@@ -191,20 +194,25 @@ test("changing the Leads by enrollment class filters leaves the Visited leads ti
 
   // A lead created at 00:30 on Monday 28 September counts on that Monday.
   await page.keyboard.press("Escape")
-  await page.goto("/staff?classes=date:2026-09-28&classes_year=2031")
+  await page.goto("/staff/reports?classes=date:2026-09-28&classes_year=2031")
   await expect(classes.getByTestId("classes-period")).toHaveText("28 Sept 2026 · Enrollment year 2031")
   await expect(classes.getByTestId("classes-total")).toHaveText("1")
 
   await classes.getByRole("link", { name: "Show all time and all years" }).click()
-  await expect(page).toHaveURL(/\/staff$/)
+  await expect(page).toHaveURL(/\/staff\/reports$/)
   await expect(classes.getByTestId("classes-period")).toHaveText("All time · All years")
 })
 
-test("a role without leads.view sees the staff home and no dashboard", async ({ page }) => {
-  const person = await createThrowawayStaff(["payments.view"])
-  await signIn(page, person)
+test("a role that does not administer staff is refused the Reports page", async ({ page }) => {
+  const person = await createThrowawayStaff(["leads.view", "payments.view"])
+  await page.goto("/login")
+  await page.getByLabel("Email").fill(person.email)
+  await page.getByLabel("Password", { exact: true }).fill(person.password)
+  await page.getByRole("button", { name: "Log In" }).click()
+  await expect(page).toHaveURL(/\/staff$/)
 
-  await expect(page.getByText(`Welcome, ${person.name}.`)).toBeVisible()
+  await page.goto("/staff/reports")
+  await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
   await expect(visitedPanel(page)).toHaveCount(0)
   await expect(classesPanel(page)).toHaveCount(0)
   await expect(page.getByRole("heading", { name: "Dashboard" })).toHaveCount(0)
@@ -215,7 +223,7 @@ const seatsRow = (page: Page, row: string) => seatsPanel(page).getByTestId(`seat
 
 test("the Manager sees Seats by class for 2031, counts only, with the link to the Seats screen", async ({ page }) => {
   await signIn(page, MANAGER)
-  await page.goto("/staff?seats_year=2031")
+  await page.goto("/staff/reports?seats_year=2031")
 
   const panel = seatsPanel(page)
   await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2031")
@@ -254,7 +262,7 @@ test("the Manager sees Seats by class for 2031, counts only, with the link to th
 
 test("Seats by class opens on the latest year with a Fee schedule and keeps a chosen year in the address", async ({ page }) => {
   await signIn(page, MANAGER)
-  await page.goto("/staff?visited_year=2031")
+  await page.goto("/staff/reports?visited_year=2031")
   const panel = seatsPanel(page)
   await expect(panel.getByTestId("seats-period")).toHaveText(/^Now · Enrollment year \d{4}$/)
   const opened = Number((await panel.getByTestId("seats-period").textContent())!.slice(-4))
@@ -279,17 +287,29 @@ test("Seats by class opens on the latest year with a Fee schedule and keeps a ch
   await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2027")
 })
 
-for (const person of [ADMISSIONS, ACCOUNTANT]) {
-  test(`${person.roleName} sees Seats by class without the Seats screen link`, async ({ page }) => {
-    await signIn(page, person)
-    await page.goto("/staff?seats_year=2031")
-    await expect(seatsRow(page, "STD 2 Day").getByTestId("seats-left")).toHaveText("Over by 1")
-    await expect(seatsPanel(page).getByRole("link")).toHaveCount(0)
-  })
-}
+test("a role that administers staff but may not view leads is refused the Reports page too", async ({ page }) => {
+  const person = await createThrowawayStaff(["staff.administer"])
+  await page.goto("/login")
+  await page.getByLabel("Email").fill(person.email)
+  await page.getByLabel("Password", { exact: true }).fill(person.password)
+  await page.getByRole("button", { name: "Log In" }).click()
+  await expect(page).toHaveURL(/\/staff$/)
+
+  await page.goto("/staff/reports")
+  await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
+  await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" })).toHaveCount(0)
+})
+
+test("an administrator who does not manage academic years sees Seats by class without the Seats screen link", async ({ page }) => {
+  const person = await createThrowawayStaff(["leads.view", "payments.view", "staff.administer"])
+  await signIn(page, person)
+  await page.goto("/staff/reports?seats_year=2031")
+  await expect(seatsRow(page, "STD 2 Day").getByTestId("seats-left")).toHaveText("Over by 1")
+  await expect(seatsPanel(page).getByRole("link")).toHaveCount(0)
+})
 
 test("staff without payments.view see the dashboard without Seats by class", async ({ page }) => {
-  const person = await createThrowawayStaff(["leads.view"])
+  const person = await createThrowawayStaff(["leads.view", "staff.administer"])
   await signIn(page, person)
 
   await expect(visitedPanel(page)).toBeVisible()
@@ -318,7 +338,7 @@ test.describe("at phone width", () => {
 
   test("the Enrolled students tile fits the screen", async ({ page }) => {
     await signIn(page, MANAGER)
-    await page.goto("/staff?enrolled=month:2026-08-01&enrolled_year=2031")
+    await page.goto("/staff/reports?enrolled=month:2026-08-01&enrolled_year=2031")
     const panel = enrolledPanel(page)
     await expect(panel.getByTestId("enrolled-count")).toHaveText("2")
 
@@ -343,7 +363,7 @@ test.describe("at phone width", () => {
 
   test("the Seats by class table fits the screen", async ({ page }) => {
     await signIn(page, MANAGER)
-    await page.goto("/staff?seats_year=2031")
+    await page.goto("/staff/reports?seats_year=2031")
     const panel = seatsPanel(page)
     await expect(seatsRow(page, "STD 2 Day").getByTestId("seats-left")).toHaveText("Over by 1")
 

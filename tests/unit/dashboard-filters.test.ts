@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { ALL_TIME, anchorFor, panelHref, parsePanelFilters, parseSeatsYear, periodLabel, seatsHref } from "@/app/staff/_dashboard/filters"
+import { ALL_TIME, anchorFor, panelHref, parsePanelFilters, parseSeatsYear, periodLabel, seatsHref } from "@/app/staff/reports/_dashboard/filters"
 
 describe("parsePanelFilters", () => {
   it("reads one panel's period and Enrollment year from its own keys", () => {
@@ -32,12 +32,12 @@ describe("panelHref", () => {
   it("changes one panel's keys and keeps every other panel's", () => {
     const current = new URLSearchParams("interviewed=month:2026-09-01&visited=all")
     expect(panelHref(current, "visited", { period: { kind: "date", anchor: "2026-09-21" }, enrollmentYear: 2031 })).toBe(
-      "/staff?interviewed=month%3A2026-09-01&visited=date%3A2026-09-21&visited_year=2031",
+      "/staff/reports?interviewed=month%3A2026-09-01&visited=date%3A2026-09-21&visited_year=2031",
     )
   })
 
   it("leaves the defaults out of the address", () => {
-    expect(panelHref(new URLSearchParams("visited=week:2026-09-21&visited_year=2027"), "visited", ALL_TIME)).toBe("/staff")
+    expect(panelHref(new URLSearchParams("visited=week:2026-09-21&visited_year=2027"), "visited", ALL_TIME)).toBe("/staff/reports")
   })
 })
 
@@ -78,7 +78,7 @@ describe("the Seats by class year", () => {
 
   it("changes the year and keeps every other panel's filters", () => {
     expect(seatsHref(new URLSearchParams("visited=month:2026-09-01&seats_year=2027"), 2031)).toBe(
-      "/staff?visited=month%3A2026-09-01&seats_year=2031",
+      "/staff/reports?visited=month%3A2026-09-01&seats_year=2031",
     )
   })
 })

@@ -5,7 +5,8 @@ import Link from "next/link"
 import { useEffect, useRef, useState, useTransition } from "react"
 
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
-import { agentRegistrationProblem, whatsappShareLink, type AgentDraft, type AgentField } from "@/lib/agent-registration"
+import { agentRegistrationProblem, type AgentDraft, type AgentField } from "@/lib/agent-registration"
+import { discountCodeShareLink } from "@/lib/discount-code-share"
 import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
 
@@ -334,6 +335,7 @@ function Confirmation({
   headingRef: React.RefObject<HTMLHeadingElement | null>
 }) {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
+  const shareHref = discountCodeShareLink(copy.shareText(done.code, done.link))
 
   async function copyLink() {
     try {
@@ -370,14 +372,16 @@ function Confirmation({
             {copied === "yes" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
             {copied === "yes" ? copy.copied : copy.copy}
           </button>
-          <a
-            href={whatsappShareLink(copy.shareText(done.code, done.link))}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex h-12 items-center justify-center rounded-full bg-orange-500 px-6 font-exo text-lg font-bold italic text-blue-600 shadow-md shadow-orange-500/20 outline-none transition hover:bg-orange-600 hover:text-blue-900 focus-visible:ring-3 focus-visible:ring-blue-600/40"
-          >
-            {copy.share}
-          </a>
+          {shareHref && (
+            <a
+              href={shareHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-12 items-center justify-center rounded-full bg-orange-500 px-6 font-exo text-lg font-bold italic text-blue-600 shadow-md shadow-orange-500/20 outline-none transition hover:bg-orange-600 hover:text-blue-900 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+            >
+              {copy.share}
+            </a>
+          )}
         </div>
         <p aria-live="polite" className={cn("mt-2 text-sm text-red-600", copied !== "failed" && "sr-only")}>
           {copied === "failed" ? copy.copyFailed : copied === "yes" ? copy.copied : ""}

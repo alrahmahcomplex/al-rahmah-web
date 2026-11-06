@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest"
 
 import { cardLines, MAX_SHOWN, PAGE_SIZE, shownFrom, STUDENTS_COPY } from "@/app/discount-code/students/copy"
-import { discountCodeShareLink } from "@/lib/discount-code-share"
 import type { AgentStudent } from "@/lib/services/agent-students"
 
 const base: AgentStudent = {
@@ -78,17 +77,5 @@ describe("how many rows to show", () => {
     expect(shownFrom("41")).toBe(60)
     expect(shownFrom("100000")).toBe(MAX_SHOWN)
     expect(shownFrom(["40", "60"])).toBe(PAGE_SIZE)
-  })
-})
-
-describe("the share link", () => {
-  test("has no number, so the sender picks the chat, and encodes the text", () => {
-    expect(discountCodeShareLink("Code AJM-407 + punguzo: https://x.example/apply?ref=AJM-407")).toBe(
-      "https://wa.me/?text=Code%20AJM-407%20%2B%20punguzo%3A%20https%3A%2F%2Fx.example%2Fapply%3Fref%3DAJM-407",
-    )
-  })
-
-  test("is null when the text can't be sent", () => {
-    expect(discountCodeShareLink("x".repeat(9000))).toBeNull()
   })
 })

@@ -67,8 +67,8 @@ const CLEARED = [
   "whatsapp_group_links",
 ]
 const KEPT = ["agent_access_settings", "audit_action_kinds", "audit_scopes", "permissions"]
-// Roles are user-created too: every role the migrations did not seed goes,
-// and the three seeded ones return to these sets, the ones
+// Roles are user-created too: every role goes, whatever a Manager named it,
+// and the three seeded ones are inserted fresh with these sets, the ones
 // 20260928000000_staff_members_and_roles.sql seeds plus the
 // group_links.manage that 20261113110100_whatsapp_group_links.sql adds to
 // the roles holding leads.edit.
@@ -144,10 +144,27 @@ async function counts(sql: Client): Promise<Record<string, number>> {
   return result
 }
 
-type Role = { name: string; retired: boolean; permissions: string[] }
+type Role = { id: string; name: string; retired: boolean; permissions: string[] }
 
 async function roles(sql: Client): Promise<Role[]> {
-  return (await sql.query<Role>("select name, retired, permissions from public.roles order by lower(name)")).rows
+  return (await sql.query<Role>("select id, name, retired, permissions from public.roles order by lower(name)")).rows
+}
+
+type RolesRecord = { before: number; removed_names: string[]; recreated: number }
+
+// The `roles` part of the reset record, the one `hosted_reset` audit row.
+async function rolesRecord(sql: Client): Promise<RolesRecord> {
+  const { rows } = await sql.query<{ roles: RolesRecord }>("select new_values -> 'roles' as roles from public.audit_log where action = 'hosted_reset'")
+  expect(rows).toHaveLength(1)
+  return rows[0].roles
+}
+
+function expectSeededRoles(found: Role[]): void {
+  expect(sorted(found.map((role) => role.name))).toEqual(sorted(Object.keys(SEEDED_ROLES)))
+  for (const role of found) {
+    expect(role.retired, role.name).toBe(false)
+    expect(sorted(role.permissions), role.name).toEqual(sorted(SEEDED_ROLES[role.name]))
+  }
 }
 
 async function disabledTriggers(sql: Client): Promise<string[]> {
@@ -390,14 +407,11 @@ describe("the hosted reset migration", () => {
         expect(pick(after, KEPT)).toEqual(pick(before, KEPT))
 
         // Restored: exactly the three seeded roles, unretired, with the
-        // permissions the migrations give them.
+        // permissions the migrations give them, as new rows.
         const rolesAfter = await roles(sql)
         expect(after.roles).toBe(3)
-        expect(sorted(rolesAfter.map((role) => role.name))).toEqual(sorted(Object.keys(SEEDED_ROLES)))
-        for (const role of rolesAfter) {
-          expect(role.retired, role.name).toBe(false)
-          expect(sorted(role.permissions), role.name).toEqual(sorted(SEEDED_ROLES[role.name]))
-        }
+        expectSeededRoles(rolesAfter)
+        expect(rolesAfter.filter((role) => rolesBefore.some((was) => was.id === role.id))).toEqual([])
 
         // Every refusal trigger is back on.
         expect(await disabledTriggers(sql)).toEqual([])
@@ -421,7 +435,7 @@ describe("the hosted reset migration", () => {
             cleared: Record<string, number>
             auth_users: number
             auth_identities: number
-            roles: { before: number; removed: number; removed_names: string[]; restored: number }
+            roles: RolesRecord
             agent_access: string
           }
         }>("select table_name, row_id, lead_id, action, scope, actor_kind, actor_staff_id, new_values from public.audit_log")
@@ -435,9 +449,8 @@ describe("the hosted reset migration", () => {
         expect(record.new_values.auth_identities).toBe(before["auth.identities"])
         expect({ ...record.new_values.roles, removed_names: sorted(record.new_values.roles.removed_names) }).toEqual({
           before: rolesBefore.length,
-          removed: customRoles.length,
-          removed_names: sorted(customRoles),
-          restored: 3,
+          removed_names: sorted(rolesBefore.map((role) => role.name)),
+          recreated: 3,
         })
 
         // A rerun finds the record and does nothing.
@@ -446,6 +459,43 @@ describe("the hosted reset migration", () => {
         expect(notices.filter((n) => n.includes("reset record already exists"))).toHaveLength(1)
         expect(await counts(sql)).toEqual(after)
         expect(await roles(sql)).toEqual(rolesAfter)
+      })
+    })
+
+    test("recreates the seeded roles whatever a Manager renamed them to, and the renamed rows go with the custom ones", async () => {
+      await inRolledBackTransaction(async (sql) => {
+        await holdTables(sql)
+
+        // rename_role is a supported Manager action on any role without
+        // staff.administer, so hosted may hold a seeded role under another
+        // name. These are the updates rename_role makes.
+        await sql.query("select public.set_audit_actor('system')")
+        await sql.query("update public.roles set name = 'Front desk' where name = 'Admissions Staff'")
+        await sql.query("update public.roles set name = 'Bursar' where name = 'Accountant'")
+        await sql.query("insert into public.roles (name, permissions) values ('Reset rename test role', array['leads.view'])")
+        const rolesBefore = await roles(sql)
+        const namesBefore = rolesBefore.map((role) => role.name)
+        expect(namesBefore).toEqual(expect.arrayContaining(["Admissions Manager", "Front desk", "Bursar", "Reset rename test role"]))
+        expect(namesBefore).not.toContain("Admissions Staff")
+        expect(namesBefore).not.toContain("Accountant")
+
+        await sql.query(migration(FUTURE_CUTOFF))
+
+        // The three defaults, with their sets, as new rows; nothing that was
+        // there before, renamed or custom, survives.
+        const rolesAfter = await roles(sql)
+        expectSeededRoles(rolesAfter)
+        expect(rolesAfter.filter((role) => rolesBefore.some((was) => was.id === role.id))).toEqual([])
+
+        // The record names every role that went, the renamed ones under the
+        // names they carried.
+        const record = await rolesRecord(sql)
+        expect({ ...record, removed_names: sorted(record.removed_names) }).toEqual({
+          before: rolesBefore.length,
+          removed_names: sorted(namesBefore),
+          recreated: 3,
+        })
+        expect(record.removed_names).toEqual(expect.arrayContaining(["Front desk", "Bursar", "Reset rename test role"]))
       })
     })
 

@@ -13,8 +13,9 @@ stay in the `0.x` range.
   appear in the system and its exports. Every test record goes: leads, families,
   interviews, follow-ups, payments, Marketing Agents and their logins, staff accounts
   and their logins, the academic year, fee schedules, class seats and WhatsApp group
-  links. Roles a Manager created go too, and Admissions Staff, Admissions Manager
-  and Accountant return to their original permissions. Agent access is switched off.
+  links. Every role goes too, whatever a Manager named it, and Admissions Staff,
+  Admissions Manager and Accountant come back with their original permissions.
+  Agent access is switched off.
   The reset refuses to run until its cutoff is set, and refuses if it finds a lead, a
   Marketing Agent or a staff member newer than that cutoff. It checks its own result
   and leaves one record of what it cleared under Staff and roles history. Afterwards

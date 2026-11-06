@@ -2,12 +2,12 @@
 -- 2026-11-06: "Don't keep anything. Wipe everything out: all the staff
 -- accounts, student data, and everything that is user created."). Every row
 -- a person made goes: test leads, families, interviews, payments, Marketing
--- Agents, staff members, every Supabase Auth login, and every role a Manager
--- created or changed. Only what migrations themselves create stays: the
+-- Agents, staff members, every Supabase Auth login, and every role, whatever
+-- a Manager named it. Only what migrations themselves create stays: the
 -- schema, permissions, the audit scope and action-kind lists, the agent
--- access switch row, set off, and the three seeded roles, returned to the
--- permissions the migrations give them. The one reviewed exception to ADR 4's
--- append-only history.
+-- access switch row, set off, and the three seeded roles, inserted fresh with
+-- the permissions the migrations give them. The one reviewed exception to
+-- ADR 4's append-only history.
 --
 -- A fresh, local or CI database is untouched: migrations run before seeds, so
 -- it finds no leads, agents or staff members and does nothing. On a database
@@ -20,20 +20,22 @@
 -- 3. stops when the cutoff below still holds the value checked in, and stops,
 --    with the counts, when any lead, agent or staff member is newer than it;
 -- 4. switches agent access off as `system`, which also frees the switch row's
---    reference to the staff member who last changed it, and returns the three
---    seeded roles to their migration-defined permissions;
+--    reference to the staff member who last changed it;
 -- 5. disables each cleared table's delete refusal by name, then deletes the
 --    rows, children before parents, never with truncate; the audit log goes
---    the same way, row by row; then every role the migrations did not seed;
+--    the same way, row by row; then every role, after which the three seeded
+--    roles are inserted fresh, Admissions Manager first, and the audit rows
+--    the inserts write are deleted too;
 -- 6. deletes every Supabase Auth identity and user;
 -- 7. turns the refusals back on, then checks that every cleared table is
 --    empty, every kept table's count is unchanged, exactly the three seeded
---    roles remain with their expected permissions, auth.users and
---    auth.identities are empty, every trigger in the exposed schemas is
+--    roles exist, as new rows with their expected permissions, auth.users
+--    and auth.identities are empty, every trigger in the exposed schemas is
 --    enabled and the switch is off; any failure raises and rolls everything
 --    back;
 -- 8. writes the one surviving audit row: the hosted reset record, as
---    `system`, with the count cleared from each table and the roles removed.
+--    `system`, with the count cleared from each table and the name of every
+--    role removed.
 --
 -- It changes no schema: the only DDL is disabling and re-enabling the named
 -- triggers inside its transaction.
@@ -81,10 +83,12 @@ declare
     -- The tables kept: rows only migrations write.
     kept constant text[] := array['agent_access_settings', 'audit_action_kinds', 'audit_scopes', 'permissions'];
 
-    -- The table restored: roles. ADR 3 lets Managers create roles and tick
-    -- permissions, so roles are user-created too. Every role the migrations
-    -- did not seed goes, and the three seeded ones get back the permissions
-    -- the migrations define as of this migration, unretired.
+    -- The table restored: roles. ADR 3 lets Managers create roles, rename
+    -- them and tick permissions, so roles are user-created too. Every role
+    -- goes, and the three seeded ones are inserted fresh with the permissions
+    -- the migrations define as of this migration, unretired. No row is
+    -- matched by name: a seeded role may carry whatever name rename_role
+    -- gave it.
     restored constant text[] := array['roles'];
 
     unclassified text[];
@@ -103,10 +107,10 @@ declare
     roles_before bigint;
     roles_removed bigint;
     removed_role_names text[];
+    removed_role_ids uuid[];
     wrong_roles text[];
     disabled text[] := '{}';
     still_disabled text[];
-    seeded record;
     t text;
     n bigint;
 begin
@@ -173,51 +177,20 @@ begin
     end loop;
     select count(*) into users_before from auth.users;
     select count(*) into identities_before from auth.identities;
-    select count(*),
-           array_agg(name order by lower(name)) filter (where lower(name) not in ('admissions staff', 'admissions manager', 'accountant'))
-    into roles_before, removed_role_names
+    select count(*), array_agg(name order by lower(name)), array_agg(id)
+    into roles_before, removed_role_names, removed_role_ids
     from public.roles;
 
     -- 4. Agent access off, as system. The switch row then references no
-    --    staff member, so the staff members can go. Then the seeded roles
-    --    back to the permissions the migrations define:
-    --    20260928000000_staff_members_and_roles.sql seeds the three, and
-    --    20261113110100_whatsapp_group_links.sql adds group_links.manage to
-    --    every role holding leads.edit. The audit rows these writes make go
-    --    with the rest of the audit log below. Admissions Manager goes first
-    --    so that refuse_no_administrator_left, still on, sees an administering
-    --    role while the other two lose any staff.administer a Manager gave
-    --    them; a database whose only administrators sit on another role stops
-    --    here as no_administrator_left, and the owner decides.
+    --    staff member, so the staff members can go. The audit row this
+    --    writes goes with the rest of the audit log below.
     perform public.set_audit_actor('system');
     perform public.set_agent_access(false);
-
-    for seeded in
-        select * from (values
-            ('Admissions Manager', array[
-                'academic_years.manage', 'agents.approve', 'discounts.approve', 'follow_ups.record',
-                'group_links.manage', 'interviews.record', 'leads.close', 'leads.create', 'leads.decline',
-                'leads.edit', 'leads.view', 'lifecycle.intervene', 'payments.view', 'reopenings.approve',
-                'results.send', 'staff.administer', 'visits.record']::text[]),
-            ('Admissions Staff', array[
-                'follow_ups.record', 'group_links.manage', 'interviews.record', 'leads.close', 'leads.create',
-                'leads.decline', 'leads.edit', 'leads.view', 'payments.view', 'results.send', 'visits.record']::text[]),
-            ('Accountant', array[
-                'interview_payments.record', 'leads.view', 'payments.record', 'payments.view']::text[])
-        ) as v(name, permissions)
-    loop
-        update public.roles
-        set permissions = seeded.permissions, retired = false
-        where lower(name) = lower(seeded.name);
-        if not found then
-            raise exception 'hosted_reset_seeded_role_missing' using detail = seeded.name;
-        end if;
-    end loop;
 
     select count(*) - (before_counts ->> 'audit_log')::bigint into reset_audit_rows from public.audit_log;
 
     -- 5. Each cleared table's delete refusal off, by name, for the length of
-    --    this transaction, and the roles table's for the roles removed. The
+    --    this transaction, and the roles table's. The
     --    truncate refusals stay on: nothing here truncates. All of them
     --    first, because a table with trigger events still queued cannot be
     --    altered.
@@ -241,11 +214,41 @@ begin
         cleared_counts := cleared_counts || jsonb_build_object(t, n);
     end loop;
 
-    -- Then every role the migrations did not seed, now that no staff member
-    -- references one.
-    delete from public.roles
-    where lower(name) not in ('admissions staff', 'admissions manager', 'accountant');
+    -- Then every role, now that no staff member references one, and the
+    -- three seeded roles fresh: 20260928000000_staff_members_and_roles.sql
+    -- seeds them, and 20261113110100_whatsapp_group_links.sql adds
+    -- group_links.manage to every role holding leads.edit. Admissions
+    -- Manager goes in first. Of the triggers on roles, only
+    -- normalize_role_permissions (before insert) and audit_row_change (after
+    -- insert) fire on these statements; the latter writes one audit row per
+    -- role, deleted just below while the audit log's refusal is still off.
+    -- refuse_no_administrator_left fires only on an update of a role's
+    -- retired or permissions, or of a staff member's active or role_id, and
+    -- this reset updates neither table, so that guard never fires, whatever
+    -- hosted holds.
+    delete from public.roles;
     get diagnostics roles_removed = row_count;
+
+    insert into public.roles (name, permissions, retired) values
+        ('Admissions Manager', array[
+            'academic_years.manage', 'agents.approve', 'discounts.approve', 'follow_ups.record',
+            'group_links.manage', 'interviews.record', 'leads.close', 'leads.create', 'leads.decline',
+            'leads.edit', 'leads.view', 'lifecycle.intervene', 'payments.view', 'reopenings.approve',
+            'results.send', 'staff.administer', 'visits.record']::text[], false),
+        ('Admissions Staff', array[
+            'follow_ups.record', 'group_links.manage', 'interviews.record', 'leads.close', 'leads.create',
+            'leads.decline', 'leads.edit', 'leads.view', 'payments.view', 'results.send', 'visits.record']::text[], false),
+        ('Accountant', array[
+            'interview_payments.record', 'leads.view', 'payments.record', 'payments.view']::text[], false);
+
+    delete from public.audit_log;
+    get diagnostics n = row_count;
+    if n <> 3 then
+        raise exception 'hosted_reset_count_mismatch'
+            using detail = format('audit_log: %s rows written by the three role inserts, 3 expected', n);
+    end if;
+    reset_audit_rows := reset_audit_rows + n;
+    cleared_counts := cleared_counts || jsonb_build_object('audit_log', (cleared_counts ->> 'audit_log')::bigint + n);
 
     -- 6. Every login. Sessions, refresh tokens and the other per-user auth
     --    rows cascade from auth.users.
@@ -285,12 +288,19 @@ begin
         end if;
     end loop;
 
-    -- Exactly the three seeded roles remain, each unretired with its
-    -- expected set.
+    -- Every role there was is gone, and exactly the three seeded roles
+    -- exist, each a new row, unretired, with its expected set.
     select count(*) into n from public.roles;
-    if n <> 3 or roles_removed <> roles_before - 3 then
-        raise exception 'hosted_reset_roles_not_restored'
-            using detail = format('%s roles remain, %s removed, %s before', n, roles_removed, roles_before);
+    if n <> 3 or roles_removed <> roles_before then
+        raise exception 'hosted_reset_roles_not_recreated'
+            using detail = format('%s roles exist, %s removed, %s before', n, roles_removed, roles_before);
+    end if;
+    select array_agg(r.name order by r.name) into wrong_roles
+    from public.roles r
+    where r.id = any (removed_role_ids);
+    if wrong_roles is not null then
+        raise exception 'hosted_reset_roles_not_recreated'
+            using detail = format('still the row from before the reset: %s', array_to_string(wrong_roles, ', '));
     end if;
     select array_agg(r.name order by r.name) into wrong_roles
     from public.roles r
@@ -311,7 +321,7 @@ begin
        or not (r.permissions @> v.permissions and r.permissions <@ v.permissions)
        or cardinality(r.permissions) <> cardinality(v.permissions);
     if wrong_roles is not null then
-        raise exception 'hosted_reset_roles_not_restored'
+        raise exception 'hosted_reset_roles_not_recreated'
             using detail = format('not a seeded role, retired, or not its permissions: %s', array_to_string(wrong_roles, ', '));
     end if;
 
@@ -350,16 +360,16 @@ begin
             -- The rows each table held before the reset, as an export taken
             -- before the merge counts them.
             'cleared', before_counts,
-            -- The switch's and the role restores' own audit rows, written
+            -- The switch's and the role inserts' own audit rows, written
             -- and deleted by this reset.
             'audit_rows_written_by_reset', reset_audit_rows,
             'auth_users', users_before,
             'auth_identities', identities_before,
+            -- Every role there was went, so removed_names holds all of them.
             'roles', jsonb_build_object(
                 'before', roles_before,
-                'removed', roles_removed,
                 'removed_names', coalesce(to_jsonb(removed_role_names), '[]'::jsonb),
-                'restored', 3
+                'recreated', 3
             ),
             'agent_access', 'off'
         ),
@@ -374,7 +384,7 @@ begin
 
     perform set_config('audit.actor_kind', '', true);
 
-    raise notice 'Hosted reset (#197): cleared % tables, % auth users and % identities; removed % roles and restored 3; agent access off',
+    raise notice 'Hosted reset (#197): cleared % tables, % auth users and % identities; removed % roles and recreated 3; agent access off',
         array_length(cleared, 1), users_before, identities_before, roles_removed;
 end;
 $$;

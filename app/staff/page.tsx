@@ -2,7 +2,7 @@ import { DoorOpenIcon, UserPlusIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import { formatLongDate, tanzaniaHour, tanzaniaToday } from "@/lib/school-calendar"
 import { countPendingDiscountRequests } from "@/lib/services/discounts"
 import { getFollowUpQueue } from "@/lib/services/follow-ups"
@@ -11,6 +11,7 @@ import { countUnreviewedReApplications } from "@/lib/services/re-applications"
 import { countPendingReopeningRequests } from "@/lib/services/reopening-requests"
 import { getMyNotices } from "@/lib/services/staff-admin"
 import { countResultsReadyToSend, listInterviewsOn, listLatestLeads } from "@/lib/services/today"
+import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { firstName, greeting } from "./_today/greeting"
@@ -79,28 +80,16 @@ export default async function TodayPage() {
         {(canView || canRegister) && (
           <div className="flex flex-wrap gap-2.5">
             {canView && (
-              <Button
-                variant="orange"
-                size="lg"
-                className="rounded-full px-4"
-                render={<Link href="/staff/check-in" />}
-                nativeButton={false}
-              >
-                <DoorOpenIcon />
+              <Link href="/staff/check-in" className={cn(buttonVariants({ variant: "orange", size: "lg" }), "rounded-full px-4")}>
+                <DoorOpenIcon aria-hidden />
                 Check in a family
-              </Button>
+              </Link>
             )}
             {canRegister && (
-              <Button
-                variant="outline"
-                size="lg"
-                className="rounded-full px-4"
-                render={<Link href="/staff/check-in/new" />}
-                nativeButton={false}
-              >
-                <UserPlusIcon />
+              <Link href="/staff/check-in/new" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full px-4")}>
+                <UserPlusIcon aria-hidden />
                 Register a student
-              </Button>
+              </Link>
             )}
           </div>
         )}

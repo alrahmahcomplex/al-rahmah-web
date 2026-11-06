@@ -9,8 +9,15 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getAgentAccess } from "@/lib/services/agent-access"
-import { listAgentsInAccountState } from "@/lib/services/agent-account-list"
+import { accountFilterStates, listAgentsInAccountState, listAgentsInBatchOutcome } from "@/lib/services/agent-account-list"
 import { getAgentImport } from "@/lib/services/agent-import"
+import {
+  BATCH_LIMIT,
+  getInviteBatchReport,
+  getInviteBudgetUsed,
+  readInviteBudgetConfig,
+  type BatchOutcome,
+} from "@/lib/services/agent-invite-batches"
 import { getAgentAccountCounts, getAgentInvites, type AgentInviteNote } from "@/lib/services/agent-invites"
 import { getPendingAgentCount, listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
 import { cn } from "@/lib/utils"
@@ -22,10 +29,18 @@ import { AccountStateBadge, AgentInviteActions } from "./agent-invite"
 import { AgentStatusActions } from "./agent-status-actions"
 import { ApproveAgent } from "./approve-agent"
 import { CreateAgent } from "./create-agent"
+import { SendInvites } from "./invite-batch"
+import { budgetLine } from "./invite-batch-outcome"
+import { InviteBatchReportPanel } from "./invite-batch-report"
 import { inviteLine, needsAttention } from "./invite-outcome"
 import { RecreateAgent } from "./recreate-agent"
 import { statusChangeLine } from "./outcome"
-import { accountParam, agentsHref, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
+import { accountParam, agentsHref, outcomeParam, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
+
+// Send invites runs as a Server Action of this page, one invite at a time,
+// and stops itself at BATCH_TIME_LIMIT_MS (45 s). Sixty seconds is within
+// Vercel Hobby's function limit with or without Fluid compute.
+export const maxDuration = 60
 
 export const metadata: Metadata = {
   title: "Marketing Agents · Al-Rahmah Complex",
@@ -45,8 +60,9 @@ const FILTERS: { status: AgentFilter; label: string }[] = [
   { status: "Retired", label: "Retired" },
 ]
 
-// The account-state filters (#191), each with its count.
+// The account-state filters (#191, #192), each with its count.
 const ACCOUNT_FILTERS = [
+  { account: "no_account", label: "Approved, no account yet" },
   { account: "invite_not_sent", label: "Invite not sent" },
   { account: "invite_expired", label: "Invited, link expired" },
 ] as const
@@ -75,18 +91,28 @@ export default async function MarketingAgentsPage({
 
   const search = parseAgentSearch(await searchParams, canApprove)
   const supabase = await createClient()
-  const [results, batch, access, counts, pendingCount] = await Promise.all([
-    search.account
-      ? listAgentsInAccountState(supabase, search.account, {
-          query: search.query,
-          page: search.page,
-          importBatchId: search.importBatchId,
-        })
-      : listAgents(supabase, search),
+  // "Approved, no account yet" shows the latest invite batch over the list it
+  // shows; a batch's own link shows that batch.
+  const showsBatches = search.account === "no_account" || search.batchId !== undefined
+  const budgetConfig = readInviteBudgetConfig()
+  const [results, batch, access, counts, pendingCount, inviteBatch, budgetUsed] = await Promise.all([
+    search.batchId && search.batchOutcome
+      ? listAgentsInBatchOutcome(supabase, search.batchId, search.batchOutcome, { query: search.query, page: search.page })
+      : search.account
+        ? listAgentsInAccountState(supabase, search.account, {
+            query: search.query,
+            page: search.page,
+            importBatchId: search.importBatchId,
+          })
+        : listAgents(supabase, search),
     search.importBatchId ? getAgentImport(supabase, search.importBatchId) : null,
     getAgentAccess(supabase),
     getAgentAccountCounts(supabase),
     canApprove ? getPendingAgentCount(supabase) : null,
+    showsBatches
+      ? getInviteBatchReport(supabase, search.batchId ? { batchId: search.batchId } : { importBatchId: search.importBatchId })
+      : null,
+    canApprove && search.account === "no_account" && budgetConfig ? getInviteBudgetUsed(supabase) : null,
   ])
   // The invite badge and line for each agent on this page.
   const invites = results.ok ? await getAgentInvites(supabase, results.data.agents.map((agent) => agent.id)) : null
@@ -113,6 +139,10 @@ export default async function MarketingAgentsPage({
         <Form key={agentsHref(search)} action="/staff/agents" role="search" className="flex max-w-xl flex-col gap-1.5">
           <input type="hidden" name="status" value={statusParam(search.status)} />
           {search.account && <input type="hidden" name="account" value={accountParam(search.account)} />}
+          {search.batchId && <input type="hidden" name="batch" value={search.batchId} />}
+          {search.batchId && search.batchOutcome && (
+            <input type="hidden" name="outcome" value={outcomeParam(search.batchOutcome)} />
+          )}
           {search.importBatchId && <input type="hidden" name="import" value={search.importBatchId} />}
           <Label htmlFor="agent-search">Search agents</Label>
           <div className="flex gap-2">
@@ -134,11 +164,17 @@ export default async function MarketingAgentsPage({
 
         <nav aria-label="Agent status" className="flex flex-wrap items-center gap-2">
           {FILTERS.map((filter) => {
-            const current = !search.account && filter.status === search.status
+            const current = !search.account && !search.batchOutcome && filter.status === search.status
             return (
               <Link
                 key={filter.status}
-                href={agentsHref(search, { status: filter.status, account: undefined, page: 1 })}
+                href={agentsHref(search, {
+                  status: filter.status,
+                  account: undefined,
+                  batchId: undefined,
+                  batchOutcome: undefined,
+                  page: 1,
+                })}
                 aria-current={current ? "page" : undefined}
                 className={buttonVariants({ variant: current ? "default" : "outline", size: "sm" })}
               >
@@ -148,16 +184,18 @@ export default async function MarketingAgentsPage({
           })}
           {counts.ok &&
             ACCOUNT_FILTERS.map((filter) => {
-              const current = search.account === filter.account
+              const current = search.account === filter.account && !search.batchOutcome
               return (
                 <Link
                   key={filter.account}
-                  href={agentsHref(search, { account: filter.account, page: 1 })}
+                  href={agentsHref(search, { account: filter.account, batchId: undefined, batchOutcome: undefined, page: 1 })}
                   aria-current={current ? "page" : undefined}
                   className={buttonVariants({ variant: current ? "default" : "outline", size: "sm" })}
                 >
                   {filter.label}
-                  <span className="tabular-nums">&nbsp;({counts.data[filter.account]})</span>
+                  <span className="tabular-nums">
+                    &nbsp;({accountFilterStates(filter.account).reduce((sum, state) => sum + counts.data[state], 0)})
+                  </span>
                 </Link>
               )
             })}
@@ -194,6 +232,36 @@ export default async function MarketingAgentsPage({
           >
             Show every agent
           </Link>
+        </div>
+      )}
+
+      {showsBatches && (
+        <div className="flex flex-col gap-3">
+          {canApprove && search.account === "no_account" && (
+            <div className="flex flex-col items-start gap-1">
+              <SendInvites
+                importBatchId={search.importBatchId ?? null}
+                batchLimit={BATCH_LIMIT}
+                budget={budgetLine(budgetConfig, budgetUsed?.ok ? budgetUsed.data : null)}
+                disabledReason={
+                  !budgetConfig
+                    ? budgetLine(null, null)
+                    : access.ok && !access.data.enabled
+                      ? "Agent access is off, so no invites can be sent."
+                      : null
+                }
+              />
+            </div>
+          )}
+          {inviteBatch && !inviteBatch.ok && (
+            <Alert variant="destructive">
+              <AlertDescription>The latest invite batch could not be loaded. Reload the page in a moment.</AlertDescription>
+            </Alert>
+          )}
+          {inviteBatch?.ok && inviteBatch.data && <InviteBatchReportPanel report={inviteBatch.data} search={search} />}
+          {inviteBatch?.ok && !inviteBatch.data && search.batchId && (
+            <p className="text-sm text-muted-foreground">That invite batch can&apos;t be found.</p>
+          )}
         </div>
       )}
 
@@ -237,7 +305,15 @@ function NeedsAttention({ attention, pending }: { attention: ReturnType<typeof n
   )
 }
 
+const BATCH_EMPTY: Record<BatchOutcome, string> = {
+  sent: "No invite went out in this batch.",
+  waiting: "No agent is waiting for an invite.",
+  no_email: "Every agent here has an email.",
+  failed: "No invite failed in this batch.",
+}
+
 const ACCOUNT_EMPTY: Record<NonNullable<AgentScreenSearch["account"]>, string> = {
+  no_account: "Every Approved agent has an account.",
   invite_not_sent: "Every Approved agent with an email has been sent an invite.",
   invite_expired: "No agent's invite link has expired.",
 }
@@ -257,7 +333,9 @@ function Results({
   const { agents, total, page, pageCount } = results
   const empty = search.query
     ? "No agent matches this search."
-    : search.account
+    : search.batchId && search.batchOutcome
+      ? BATCH_EMPTY[search.batchOutcome]
+      : search.account
       ? ACCOUNT_EMPTY[search.account]
       : EMPTY[search.status]
 

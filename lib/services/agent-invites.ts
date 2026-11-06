@@ -54,6 +54,10 @@ export type AgentInviteError =
   | { kind: "access-off" }
   // The email is no longer the one the Manager saw, so nothing was sent.
   | { kind: "email-changed" }
+  // In a batch: invited in the last 24 hours, since the batch chose them.
+  | { kind: "recently-invited" }
+  // In a batch: the batch is finished or isn't the caller's.
+  | { kind: "batch-closed" }
   | { kind: "unavailable" }
   | SendFailure
 
@@ -68,6 +72,8 @@ const PREPARE_REFUSALS: Record<string, AgentInviteError> = {
   no_email: { kind: "no-email" },
   already_joined: { kind: "already-joined" },
   email_changed: { kind: "email-changed" },
+  recently_invited: { kind: "recently-invited" },
+  batch_closed: { kind: "batch-closed" },
 }
 
 const RECORDED: Record<SendFailure["kind"], string> = {
@@ -94,17 +100,19 @@ export function classifySendFailure(error: { message: string; status?: number; c
 // failure as "Invite not sent" and offer Resend. With `expectedEmail`, the
 // address the Manager saw, nothing goes out if the email has changed since.
 // The database checks the agent and starts the attempt before the send, so
-// the result is recorded even if the agent is switched off meanwhile.
+// the result is recorded even if the agent is switched off meanwhile. With
+// `batchId` the attempt belongs to that batch (agent-invite-batches.ts).
 export async function sendAgentInvite(
   supabase: SupabaseClient,
   send: AgentInviteSender,
   agentId: string,
   redirectTo: string,
-  { expectedEmail }: { expectedEmail?: string } = {},
+  { expectedEmail, batchId }: { expectedEmail?: string; batchId?: string } = {},
 ): Promise<Result<SentInvite, AgentInviteError>> {
   const prepared = await supabase.rpc("prepare_agent_invite", {
     agent_id: agentId,
     expected_email: expectedEmail ?? null,
+    batch_id: batchId ?? null,
   })
   if (prepared.error) {
     const refusal = PREPARE_REFUSALS[prepared.error.message]
@@ -135,25 +143,6 @@ export async function sendAgentInvite(
 
   if (failure) return { ok: false, error: failure }
   return { ok: true, data: { email: row.email, resend: row.resend } }
-}
-
-export type InviteAttempt = { agentId: string; result: Result<SentInvite, AgentInviteError> }
-
-// Sends invites one at a time, stopping at the first rate limit: once Auth
-// refuses, every later send would be refused too and only cost the hour.
-export async function sendAgentInvites(
-  supabase: SupabaseClient,
-  send: AgentInviteSender,
-  agentIds: readonly string[],
-  redirectTo: string,
-): Promise<InviteAttempt[]> {
-  const attempts: InviteAttempt[] = []
-  for (const agentId of agentIds) {
-    const result = await sendAgentInvite(supabase, send, agentId, redirectTo)
-    attempts.push({ agentId, result })
-    if (!result.ok && result.error.kind === "rate-limited") break
-  }
-  return attempts
 }
 
 // ---------------------------------------------------------------------------

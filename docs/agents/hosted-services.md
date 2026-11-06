@@ -65,6 +65,19 @@ All of these live under Authentication in the Supabase dashboard.
 - **Hourly limit.** It is project-wide and counts every auth email. A 30-invite batch plus about 20 resends, resets and staff invites in the same hour fits under 50. Fifty is half of Resend's daily 100, so one hour can't spend the whole day. Two busy hours can, which is why agent invites also need a daily budget. Cap an invite batch at 30, so 20 an hour stay free for resets and staff invites. Staff invites can still use up the shared hourly limit, and so can anyone spending the public hourly budget; both are accepted risks. Locally `email_sent = 2` has no effect, because Supabase applies it only with custom SMTP, and local mail goes to Mailpit.
 - **Minimum interval.** Supabase refuses a second reset or confirmation email to the same address within 60 seconds. Whether it applies the gap to invites sent through the admin API hasn't been checked. Locally `max_frequency` is `1s`, so tests don't wait.
 
+### Invite batch budgets
+
+Agent invite batches (#192) send at most 30 (`BATCH_LIMIT` in `lib/services/agent-invite-batches.ts`), from the hourly limit above. Each batch stops itself after 45 seconds, and the Agents page sets `maxDuration` to 60 seconds. Vercel Hobby allows up to 60 seconds without Fluid compute and up to 300 with it, so 60 holds either way. Change those numbers in the code, together with this paragraph.
+
+The daily budget is configuration. Set both variables in Vercel for Production and Preview, server-only (never `NEXT_PUBLIC_`). Until both are set, Send invites is off and says why.
+
+| Variable | Value | Meaning |
+|---|---|---|
+| `EMAIL_DAILY_CAP` | 100 | Resend Free's daily cap, above. Change it if the plan changes. |
+| `STAFF_INVITE_RESERVE` | 20 | Emails a day kept for staff invites and password resets. |
+
+Agent batches send at most `EMAIL_DAILY_CAP − STAFF_INVITE_RESERVE` agent invite emails a day, 80 with these values. The count comes from the database's agent invite attempts since midnight UTC, Resend's day, which is 03:00 East Africa Time. A failed attempt doesn't count; an attempt cut off mid-send does. Single Send invite and Resend presses count towards the day too, but only batches stop at the budget. Staff invites and resets aren't counted, which is what the reserve is for.
+
 ### Rate limiting
 
 **The firewall rule.** `public-forms` is under Firewall → Rules in the Vercel project. The `@vercel/firewall` condition matches rate-limit ID `public-forms`. It uses a fixed window of 600 seconds, the longest the dashboard allows. The dashboard shows the keys as "API controlled", because the app supplies them. `checkRateLimit` reports a request as limited only when the firewall answers 429 or 403.

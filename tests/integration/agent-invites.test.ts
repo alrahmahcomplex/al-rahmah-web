@@ -13,7 +13,6 @@ import {
   getAgentAccountCounts,
   getAgentInvites,
   sendAgentInvite,
-  sendAgentInvites,
   setAgentEmail,
   type AgentInviteSender,
 } from "@/lib/services/agent-invites"
@@ -319,21 +318,6 @@ describe("sending an invite", () => {
 
     expect(answer).toEqual([{ outcome: "access_off", email: address, resend: false, attempt_id: null }])
     expect(recorded).toEqual([{ result: "access_off", email: address }])
-  })
-
-  test("a batch stops at the first rate limit and leaves the rest unsent", async () => {
-    const agents = [await approvedAgent(email("batch-1")), await approvedAgent(email("batch-2")), await approvedAgent(email("batch-3"))]
-    let calls = 0
-    const send = vi.fn<AgentInviteSender>(async () => {
-      calls += 1
-      return calls === 2 ? { error: { message: "Email rate limit exceeded", status: 429, code: "over_email_send_rate_limit" } } : { error: null }
-    })
-
-    const results = await sendAgentInvites(await manager(), send, agents.map((agent) => agent.id), REDIRECT)
-
-    expect(send).toHaveBeenCalledTimes(2)
-    expect(results.map((r) => (r.result.ok ? "sent" : r.result.error.kind))).toEqual(["sent", "rate-limited"])
-    expect(await events(agents[2].id)).toEqual([])
   })
 })
 

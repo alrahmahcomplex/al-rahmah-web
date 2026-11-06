@@ -100,6 +100,22 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: {},
     agent: { refused: "not_permitted" },
   },
+  // The agents behind one of an invite batch's counts (#192).
+  "public.agent_invite_batch_agents(batch_id uuid, outcome text)": {
+    roles: ["authenticated"],
+    args: { batch_id: "'b7b7b7b7-0000-4000-8000-000000000192'", outcome: "'waiting'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.agent_invite_batch_report(batch_id uuid, import_batch_id uuid)": {
+    roles: ["authenticated"],
+    args: { batch_id: "null", import_batch_id: "null" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.agent_invite_budget_used()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
   "public.agent_invites(agent_ids uuid[])": {
     roles: ["authenticated"],
     args: { agent_ids: "array['a4a4a4a4-0000-4000-8000-000000000002']::uuid[]" },
@@ -324,6 +340,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: { class_name: "'STD 2'" },
     agent: { returns: ["primary_lower"] },
+  },
+  // Finishes a batch the full-permission sample staff member started.
+  "public.finish_agent_invite_batch(batch_id uuid, stop_reason text)": {
+    roles: ["authenticated"],
+    setup:
+      "insert into public.agent_invite_batches (id, started_by, daily_cap, staff_reserve, batch_limit, used_today, waiting, skipped_recent) values ('b7b7b7b7-0000-4000-8000-000000000192', 'a1a1a1a1-0000-4000-8000-000000000001', 100, 20, 30, 0, 0, 0)",
+    args: { batch_id: "'b7b7b7b7-0000-4000-8000-000000000192'", stop_reason: "'done'" },
+    agent: { refused: "not_permitted" },
   },
   "public.find_family_by_phone(phone text, whatsapp text)": {
     roles: ["authenticated"],
@@ -588,10 +612,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000005'" },
     agent: { refused: "not_permitted" },
   },
-  "public.prepare_agent_invite(agent_id uuid, expected_email text)": {
+  "public.prepare_agent_invite(agent_id uuid, expected_email text, batch_id uuid)": {
     roles: ["authenticated"],
     setup: "update public.marketing_agents set email = 'surface-invite@example.test' where id = 'a4a4a4a4-0000-4000-8000-000000000002'",
-    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'", expected_email: "'surface-invite@example.test'" },
+    args: {
+      agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'",
+      expected_email: "'surface-invite@example.test'",
+      batch_id: "null",
+    },
     agent: { refused: "not_permitted" },
   },
   "public.record_action(kind text, lead_id uuid, details jsonb)": {
@@ -846,6 +874,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  "public.start_agent_invite_batch(import_batch_id uuid, daily_cap integer, staff_reserve integer, batch_limit integer)": {
+    roles: ["authenticated"],
+    args: { import_batch_id: "null", daily_cap: "100", staff_reserve: "20", batch_limit: "1" },
+    agent: { refused: "not_permitted" },
+  },
   "public.tanzania_today()": {
     roles: ["authenticated"],
     args: {},
@@ -897,6 +930,7 @@ export const RELATIONS: Record<string, RelationEntry> = {
   "public.agent_access_settings": { authenticated: [], anon: [] },
   "public.agent_detached_logins": { authenticated: [], anon: [] },
   "public.agent_events": { authenticated: [], anon: [] },
+  "public.agent_invite_batches": { authenticated: [], anon: [] },
   "public.agent_status_changes": {
     authenticated: ["select", "references", "trigger", "maintain"],
     anon: ["select", "references", "trigger", "maintain"],

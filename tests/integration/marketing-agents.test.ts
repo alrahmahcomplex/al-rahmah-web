@@ -6,23 +6,20 @@ vi.mock("server-only", () => ({}))
 
 import type { Client } from "pg"
 
-import {
-  approveAgent,
-  getPendingAgentCount,
-  listAgents,
-  registerAgent,
-  type MarketingAgent,
-} from "@/lib/services/marketing-agents"
+import { signUpAgent } from "@/lib/services/agent-sign-up"
+import { approveAgent, getPendingAgentCount, listAgents, type MarketingAgent } from "@/lib/services/marketing-agents"
 
 import { pendingAround } from "../support/agents"
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER } from "../support/fixtures"
 
-// The marketing-agent module against local Supabase: registration with the
-// secret key the Server Action will hold, and the list and approval signed in
-// as each seeded role. Each test registers agents of its own, with numbers
-// clear of the seeded +255 700 000 xxx fixtures. Agents are never deleted, so
-// each run adds some; `npm run db:reset` clears them.
+// The marketing-agent module against local Supabase: what public registration
+// makes of a record (through sign-up with the secret key the Server Action
+// holds; the sign-up decision table itself is tested in
+// agent-email-claims.test.ts), and the list and approval signed in as each
+// seeded role. Each test registers agents of its own, with numbers clear of
+// the seeded +255 700 000 xxx fixtures and example.test emails. Agents are
+// never deleted, so each run adds some; `npm run db:reset` clears them.
 
 const SEEDED_PENDING = { code: "ZNM-401", fullName: "Zawadi Neema Mwakasege", phone: "+255700000401" }
 const SEEDED_APPROVED = { code: "BJN-402", fullName: "Baraka Juma Njoroge", phone: "+255700000402" }
@@ -39,10 +36,22 @@ function agentName() {
   return `Tumaini Agent ${randomUUID().slice(0, 8)}`
 }
 
+// An email of the test's own, at a domain that never receives mail.
+function email() {
+  return `tumaini-${randomUUID().slice(0, 8)}@example.test`
+}
+
+// Signs up as the Discount code page does, without a code to claim.
+function signUp(fullName = agentName(), number = phone(), whatsapp: string | null = null, address = email()) {
+  return signUpAgent(secretClient(), { fullName, phone: number, whatsapp, email: address, hasCode: false, code: null })
+}
+
+// A new Pending agent of the test's own, with their code.
 async function register(fullName = agentName(), number = phone(), whatsapp: string | null = null) {
-  const registered = await registerAgent(secretClient(), { fullName, phone: number, whatsapp })
-  if (!registered.ok) throw new Error(`could not register ${fullName}: ${JSON.stringify(registered.error)}`)
-  return { code: registered.data.code, fullName, phone: number }
+  const signedUp = await signUp(fullName, number, whatsapp)
+  if (!signedUp.ok) throw new Error(`could not register ${fullName}: ${JSON.stringify(signedUp.error)}`)
+  if (signedUp.data.kind !== "registered") throw new Error(`sign-up for ${fullName} answered ${signedUp.data.kind}`)
+  return { code: signedUp.data.code, fullName, phone: number }
 }
 
 async function findAgent(code: string, as = MANAGER): Promise<MarketingAgent> {
@@ -91,40 +100,14 @@ describe("registration", () => {
   })
 
   test("a bad phone, WhatsApp number or name is refused with the field, and nothing is saved", async () => {
-    const client = secretClient()
     const name = agentName()
-    expect(await registerAgent(client, { fullName: name, phone: "12345" })).toEqual({
-      ok: false,
-      error: { kind: "invalid", field: "phone" },
-    })
-    expect(await registerAgent(client, { fullName: name, phone: "" })).toEqual({
-      ok: false,
-      error: { kind: "invalid", field: "phone" },
-    })
-    expect(await registerAgent(client, { fullName: name, phone: phone(), whatsapp: "+255 12" })).toEqual({
-      ok: false,
-      error: { kind: "invalid", field: "whatsapp" },
-    })
-    expect(await registerAgent(client, { fullName: " a ", phone: phone() })).toEqual({
-      ok: false,
-      error: { kind: "invalid", field: "full_name" },
-    })
-    expect(await registerAgent(client, { fullName: "x".repeat(101), phone: phone() })).toEqual({
-      ok: false,
-      error: { kind: "invalid", field: "full_name" },
-    })
+    expect(await signUp(name, "12345")).toEqual({ ok: false, error: { kind: "invalid", field: "phone" } })
+    expect(await signUp(name, "")).toEqual({ ok: false, error: { kind: "invalid", field: "phone" } })
+    expect(await signUp(name, phone(), "+255 12")).toEqual({ ok: false, error: { kind: "invalid", field: "whatsapp" } })
+    expect(await signUp(" a ", phone())).toEqual({ ok: false, error: { kind: "invalid", field: "full_name" } })
+    expect(await signUp("x".repeat(101), phone())).toEqual({ ok: false, error: { kind: "invalid", field: "full_name" } })
     const list = await listAgents(await signedIn(MANAGER), { query: name, page: 1 })
     expect(list.ok && list.data.total).toBe(0)
-  })
-
-  test("the same phone twice gives the same agent and code, whatever name the second time carries", async () => {
-    const number = phone()
-    const first = await register(agentName(), number)
-    const again = await registerAgent(secretClient(), { fullName: "Someone Else Entirely", phone: asE164(number) })
-    expect(again).toEqual({ ok: true, data: { code: first.code } })
-
-    const list = await listAgents(await signedIn(MANAGER), { query: number, page: 1 })
-    expect(list.ok && list.data.agents.map((a) => [a.code, a.fullName])).toEqual([[first.code, first.fullName]])
   })
 
   test("a code typed with spaces finds the agent", async () => {
@@ -135,12 +118,12 @@ describe("registration", () => {
     expect(list.ok && list.data.agents.map((a) => a.code)).toEqual([code])
   })
 
-  test("the same phone twice in parallel gives one agent and one code", async () => {
+  test("the same sign-up four times in parallel gives one agent and one code", async () => {
     const number = phone()
-    const results = await Promise.all(
-      Array.from({ length: 4 }, (_, i) => registerAgent(secretClient(), { fullName: `Parallel Agent ${i}`, phone: number })),
-    )
-    const codes = results.map((r) => (r.ok ? r.data.code : null))
+    const name = agentName()
+    const address = email()
+    const results = await Promise.all(Array.from({ length: 4 }, () => signUp(name, number, null, address)))
+    const codes = results.map((r) => (r.ok && r.data.kind === "registered" ? r.data.code : null))
     expect(codes.every((code) => code !== null && code === codes[0])).toBe(true)
 
     const list = await listAgents(await signedIn(MANAGER), { query: number, page: 1 })
@@ -163,7 +146,10 @@ describe("registration", () => {
       return asServiceRole(sql, async () => {
         const made: string[] = []
         for (let i = 0; i < 3; i++) {
-          const { rows } = await sql.query("select public.register_marketing_agent($1, $2, null) as code", [name, phone()])
+          const { rows } = await sql.query(
+            "select public.sign_up_marketing_agent($1, $2, null, $3, false, null) ->> 'code' as code",
+            [name, phone(), email()],
+          )
           made.push(rows[0].code)
         }
         return made
@@ -188,7 +174,10 @@ describe("registration", () => {
       )
       const { rows: before } = await sql.query("select code from public.marketing_agents where code like $1 || '-%'", [prefix])
       const made = await asServiceRole(sql, async () => {
-        const { rows } = await sql.query("select public.register_marketing_agent($1, $2, null) as code", [name, phone()])
+        const { rows } = await sql.query(
+          "select public.sign_up_marketing_agent($1, $2, null, $3, false, null) ->> 'code' as code",
+          [name, phone(), email()],
+        )
         return rows[0].code as string
       })
       return { code: made, taken: new Set(before.map((r) => r.code as string)) }
@@ -199,7 +188,9 @@ describe("registration", () => {
 
   test("only the secret key may register: visitors and staff are refused", async () => {
     for (const client of [anonClient(), await signedIn(MANAGER)]) {
-      const { error } = await client.rpc("register_marketing_agent", { full_name: agentName(), phone: phone(), whatsapp: null })
+      const { error } = await client.rpc("sign_up_marketing_agent", {
+        full_name: agentName(), phone: phone(), whatsapp: null, email: email(), has_code: false, code: null,
+      })
       expect(error).not.toBeNull()
     }
   })
@@ -275,8 +266,10 @@ describe("the agent list", () => {
     // agent rolled back, so agents other tests register, approve or retire
     // meanwhile don't move the numbers.
     const { before, after } = await pendingAround(MANAGER, async (sql) => {
-      await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
-      await sql.query("select public.register_marketing_agent($1, $2, null)", [`Pending Count ${randomUUID().slice(0, 8)}`, asE164(phone())])
+      await sql.query("select public.create_agent_record($1, $2, null, null, null, 'Pending', null)", [
+        `Pending Count ${randomUUID().slice(0, 8)}`,
+        asE164(phone()),
+      ])
     })
     expect(after - before).toBe(1)
 
@@ -287,14 +280,13 @@ describe("the agent list", () => {
   })
 
   test("the Pending count leaves out a retired Pending agent", async () => {
-    const registered = await registerAgent(secretClient(), { fullName: agentName(), phone: phone() })
-    if (!registered.ok) throw new Error(`could not register: ${JSON.stringify(registered.error)}`)
+    const registered = await register()
     const agentId = await asSystem(
       async (sql) =>
         (
           await sql.query<{ id: string }>(
             "select public.record_agent_status_change(a.id, 'retired', 'Duplicate record') is not null, a.id from public.marketing_agents a where a.code = $1 and a.retired_at is null",
-            [registered.data.code],
+            [registered.code],
           )
         ).rows[0].id,
     )

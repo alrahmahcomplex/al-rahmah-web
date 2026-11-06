@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 6, 2026 `v0.80.1`
+
+### IMPROVED
+
+- The Admission form still saves the family's Discount code and the version of the
+  notice they saw. The site no longer supports builds from before this release, and a
+  Vercel instant rollback to a build from before this release is unsafe. Fix forward
+  instead.
+
 ## November 6, 2026 `v0.80.0`
 
 ### IMPROVED

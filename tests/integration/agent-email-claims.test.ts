@@ -231,11 +231,18 @@ describe("the sign-up form", () => {
     const who = { fullName: `Baraka Tena ${randomUUID().slice(0, 6)}`, phone: phone(), email: email("again") }
     const first = await outcome(who)
     expect(first).toMatchObject({ kind: "registered", email: who.email })
+    if (first.kind !== "registered") throw new Error(`expected a new agent, got ${first.kind}`)
     expect(await outcome(who)).toEqual(first)
     expect(await agentsWithPhone(who.phone)).toHaveLength(1)
     // Another name or email on that phone is someone else's try: tick the box.
+    // Neither try touches the record: still one agent, with the first name,
+    // code and email. Checked after each try, so a write that the next try
+    // put back would show.
+    const untouched = [expect.objectContaining({ full_name: who.fullName, code: first.code, email: who.email })]
     expect(await outcome({ ...who, fullName: `${who.fullName} B` })).toEqual({ kind: "code_needed" })
+    expect(await agentsWithPhone(who.phone)).toEqual(untouched)
     expect(await outcome({ ...who, email: email("other") })).toEqual({ kind: "code_needed" })
+    expect(await agentsWithPhone(who.phone)).toEqual(untouched)
   })
 
   test("8. an unticked retry for an agent who has joined or was invited says so, reading no stored email once joined", async () => {

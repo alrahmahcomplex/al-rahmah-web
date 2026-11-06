@@ -6,6 +6,7 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
 import { setLeadReferralCode } from "@/lib/services/referral"
 
+import { registerPendingAgent as makePendingAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
@@ -47,9 +48,8 @@ async function registerPendingAgent() {
   const fullName = `Rehema Referral ${randomUUID().slice(0, 6)}`
   // A leading 7 keeps it clear of the seeded 700 000 numbers.
   const phone = `07${String(randomInt(10_000_000, 100_000_000))}`
-  const { data, error } = await secretClient().rpc("register_marketing_agent", { full_name: fullName, phone, whatsapp: null })
-  if (error) throw new Error(`could not register an agent: ${error.message}`)
-  return { fullName, code: data as string }
+  const { code } = await makePendingAgent({ fullName, phone })
+  return { fullName, code }
 }
 
 const panel = (page: Page) => page.getByRole("region", { name: "Referral code" })

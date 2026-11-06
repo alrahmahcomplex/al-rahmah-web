@@ -24,7 +24,7 @@ const missingFunction = { data: null, error: { message: "Could not find the func
 describe("putting the form's Discount code on a lead", () => {
   afterEach(() => vi.restoreAllMocks())
 
-  it("sends the notice version to the three-argument function", async () => {
+  it("sends the notice version with the one call it makes", async () => {
     const { supabase, calls } = client({ data: "BJN-402", error: null })
     await expect(applyFormDiscountCode(supabase, LEAD, "BJN-402", "form_v1")).resolves.toEqual({
       ok: true,
@@ -35,31 +35,39 @@ describe("putting the form's Discount code on a lead", () => {
     ])
   })
 
-  it("falls back to the two-argument function while the migration has not applied", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {})
+  it("sends a null version when the page showed no notice", async () => {
+    const { supabase, calls } = client({ data: "BJN-402", error: null })
+    await expect(applyFormDiscountCode(supabase, LEAD, "BJN-402", null)).resolves.toEqual({ ok: true, data: { code: "BJN-402" } })
+    expect(calls).toEqual([{ fn: "apply_form_discount_code", args: { lead_id: LEAD, code: "BJN-402", notice_version: null } }])
+  })
+
+  // The two-argument function is gone (#196). A missing function is a failure
+  // like any other, never a second call without the version.
+  it("does not call the two-argument version when the function is missing", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
     const { supabase, calls } = client(missingFunction, { data: "BJN-402", error: null })
     await expect(applyFormDiscountCode(supabase, LEAD, "BJN-402", "form_v1")).resolves.toEqual({
-      ok: true,
-      data: { code: "BJN-402" },
-    })
-    expect(calls[1]).toEqual({ fn: "apply_form_discount_code", args: { lead_id: LEAD, code: "BJN-402" } })
-  })
-
-  it("reads the fallback's errors the same way", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {})
-    const { supabase } = client(missingFunction, { data: null, error: { message: "lead_closed" } })
-    await expect(applyFormDiscountCode(supabase, LEAD, "BJN-402", null)).resolves.toEqual({
       ok: false,
-      error: "lead-closed",
+      error: "unavailable",
     })
+    expect(calls).toEqual([
+      { fn: "apply_form_discount_code", args: { lead_id: LEAD, code: "BJN-402", notice_version: "form_v1" } },
+    ])
+    expect(error).toHaveBeenCalledTimes(1)
   })
 
-  it("does not retry on any other error", async () => {
+  it("reads the function's refusals, and retries on none of them", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    for (const error of [{ message: "invalid" }, { message: "boom", code: "XX000" }]) {
+    const cases: Array<[Answer["error"], string]> = [
+      [{ message: "invalid" }, "invalid"],
+      [{ message: "lead_closed" }, "lead-closed"],
+      [{ message: "not_found" }, "not-found"],
+      [{ message: "boom", code: "22P02" }, "not-found"],
+      [{ message: "boom", code: "XX000" }, "unavailable"],
+    ]
+    for (const [error, expected] of cases) {
       const { supabase, calls } = client({ data: null, error })
-      const result = await applyFormDiscountCode(supabase, LEAD, "BJN-402", "form_v1")
-      expect(result.ok).toBe(false)
+      await expect(applyFormDiscountCode(supabase, LEAD, "BJN-402", "form_v1")).resolves.toEqual({ ok: false, error: expected })
       expect(calls).toHaveLength(1)
     }
   })

@@ -7,9 +7,10 @@ vi.mock("server-only", () => ({}))
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadHistory } from "@/lib/services/audit"
 import { createLead } from "@/lib/services/leads"
-import { approveAgent, listAgents, registerAgent } from "@/lib/services/marketing-agents"
+import { approveAgent, listAgents } from "@/lib/services/marketing-agents"
 import { findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
 
+import { registerPendingAgent } from "../support/agents"
 import { anonClient, asSystem, createThrowawayStaff, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -45,13 +46,9 @@ async function newLead(): Promise<string> {
 // A Pending agent of the test's own, with a number clear of the seeded ones.
 async function newAgent() {
   const fullName = `Rehema Referral ${randomUUID().slice(0, 6)}`
-  const registered = await registerAgent(secretClient(), {
-    fullName,
-    phone: `07${String(randomInt(10_000_000, 100_000_000))}`,
-  })
-  if (!registered.ok) throw new Error(`could not register: ${JSON.stringify(registered.error)}`)
-  const list = await listAgents(await signedIn(MANAGER), { status: "all", query: registered.data.code, page: 1 })
-  const agent = list.ok ? list.data.agents.find((a) => a.code === registered.data.code) : undefined
+  const { code } = await registerPendingAgent({ fullName, phone: `07${String(randomInt(10_000_000, 100_000_000))}` })
+  const list = await listAgents(await signedIn(MANAGER), { status: "all", query: code, page: 1 })
+  const agent = list.ok ? list.data.agents.find((a) => a.code === code) : undefined
   if (!agent) throw new Error("could not find the new agent")
   return agent
 }

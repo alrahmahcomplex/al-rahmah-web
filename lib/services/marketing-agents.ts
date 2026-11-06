@@ -68,45 +68,11 @@ export type AgentListSearch = {
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export type NewAgent = { fullName: string; phone: string; whatsapp?: string | null }
-export type AgentField = "full_name" | "phone" | "whatsapp"
-export type RegisterAgentError = { kind: "invalid"; field: AgentField } | { kind: "unavailable" }
 export type ApproveAgentError = "forbidden" | "not-found" | "no-change" | "unavailable"
 
-const AGENT_FIELDS = new Set<string>(["full_name", "phone", "whatsapp"])
-
-function refusedField(details: string | null | undefined): AgentField | null {
-  try {
-    const field = JSON.parse(details ?? "")?.field
-    return typeof field === "string" && AGENT_FIELDS.has(field) ? (field as AgentField) : null
-  } catch {
-    return null
-  }
-}
-
-// Registers a Marketing Agent and returns their code. Takes the secret-key
-// client: only the server may register, after its own checks. A phone that
-// already holds an agent returns that agent's code unchanged, so a retry
-// after a dropped connection never makes a second agent.
-export async function registerAgent(
-  supabase: SupabaseClient,
-  agent: NewAgent,
-): Promise<Result<{ code: string }, RegisterAgentError>> {
-  const { data, error } = await supabase.rpc("register_marketing_agent", {
-    full_name: agent.fullName,
-    phone: agent.phone,
-    whatsapp: agent.whatsapp ?? null,
-  })
-  if (error) {
-    if (error.message === "invalid") {
-      const field = refusedField(error.details)
-      if (field) return { ok: false, error: { kind: "invalid", field } }
-    }
-    console.error("Could not register a Marketing Agent", error)
-    return { ok: false, error: { kind: "unavailable" } }
-  }
-  return { ok: true, data: { code: data as string } }
-}
+// Public registration lives in lib/services/agent-sign-up.ts (#193): the
+// Discount code page signs an agent up with an email through
+// sign_up_marketing_agent. The earlier register_marketing_agent is gone (#196).
 
 type AgentRow = {
   id: string

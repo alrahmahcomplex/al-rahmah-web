@@ -9,16 +9,10 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadInterviews, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { declineLead, markLead } from "@/lib/services/lead-closure"
 import { createLead } from "@/lib/services/leads"
-import {
-  changeAgentStatus,
-  getAgentFeeImpact,
-  listAgents,
-  registerAgent,
-  type AgentStatusAction,
-} from "@/lib/services/marketing-agents"
+import { changeAgentStatus, getAgentFeeImpact, listAgents, type AgentStatusAction } from "@/lib/services/marketing-agents"
 import { estimateDiscountCode, findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
 
-import { pendingAround, registerApprovedAgent } from "../support/agents"
+import { pendingAround, registerApprovedAgent, registerPendingAgent } from "../support/agents"
 import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -41,16 +35,10 @@ type Agent = { id: string; code: string; fullName: string; phone: string }
 // one transaction, so it is never Pending where another test counts.
 async function newAgent({ approved = true, number = phone() } = {}): Promise<Agent> {
   const fullName = `Subira Status ${randomUUID().slice(0, 8)}`
-  if (approved) {
-    const { id, code } = await registerApprovedAgent(MANAGER, { fullName, phone: number })
-    return { id, code, fullName, phone: number }
-  }
-  const registered = await registerAgent(secretClient(), { fullName, phone: number })
-  if (!registered.ok) throw new Error(`could not register: ${JSON.stringify(registered.error)}`)
-  const list = await listAgents(await signedIn(MANAGER), { query: registered.data.code, page: 1 })
-  const row = list.ok ? list.data.agents.find((a) => a.code === registered.data.code) : undefined
-  if (!row) throw new Error("could not find the new agent")
-  return { id: row.id, code: row.code, fullName, phone: number }
+  const { id, code } = approved
+    ? await registerApprovedAgent(MANAGER, { fullName, phone: number })
+    : await registerPendingAgent({ fullName, phone: number })
+  return { id, code, fullName, phone: number }
 }
 
 // A Visited lead carrying `code`, registered for interview, its fee Not Paid.
@@ -136,9 +124,9 @@ describe("Seam 1: switching an agent off and on, and retiring them", () => {
     const agent = await newAgent({ number })
     expect(await change(agent.id, "retire", "Wrong name on the record")).toEqual({ ok: true, data: { feeChangeCount: 0 } })
 
-    const again = await registerAgent(secretClient(), { fullName: `${agent.fullName} Corrected`, phone: number })
-    expect(again.ok).toBe(true)
-    expect(again.ok && again.data.code).not.toBe(agent.code)
+    const again = await registerPendingAgent({ fullName: `${agent.fullName} Corrected`, phone: number })
+    expect(again.id).not.toBe(agent.id)
+    expect(again.code).not.toBe(agent.code)
     expect(await findReferralAgent(await signedIn(ADMISSIONS), agent.code)).toEqual({ ok: true, data: null })
     // Retiring is permanent.
     expect(await change(agent.id, "switch-on")).toEqual({ ok: false, error: "retired" })

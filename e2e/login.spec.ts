@@ -4,8 +4,8 @@ import { asSystem, createThrowawayStaff } from "../tests/support/db"
 import { ACCOUNTANT, DEACTIVATED, MANAGER } from "../tests/support/fixtures"
 
 // Al-Rahmah palette values from app/globals.css.
-const AL_RAHMAH_BLUE = "rgb(9, 0, 187)" // --color-blue-600: #0900bb
-const AL_RAHMAH_ORANGE = "rgb(245, 130, 32)" // --color-orange-500: #f58220
+const AL_RAHMAH_BLUE = "rgb(0, 58, 157)" // --color-blue-600: #003a9d
+const AL_RAHMAH_ORANGE = "rgb(253, 105, 20)" // --color-orange-500: #fd6914
 
 test.describe("staff sign-in page", () => {
   test("shows the Al-Rahmah logo and brand colours", async ({ page }) => {

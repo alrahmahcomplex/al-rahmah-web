@@ -4,8 +4,10 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { LanguageSwitch } from "@/components/language-switch"
+import { buttonVariants } from "@/components/ui/button"
 import { getLanguage, type Language } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
+import { cn } from "@/lib/utils"
 
 // The basic landing page a parent opens from a WhatsApp link. It reads no
 // Supabase and stays out of the proxy matcher, so it loads with Supabase down.
@@ -49,7 +51,7 @@ export default async function HomePage() {
   return (
     <main
       lang={language}
-      className="min-h-dvh flex flex-col items-center bg-gradient-to-br from-blue-100 via-blue-100/50 to-white px-4 py-4 sm:px-8 sm:py-6"
+      className="min-h-dvh flex flex-col items-center bg-gradient-to-br from-blue-50 via-blue-100/50 to-white px-4 py-4 sm:px-8 sm:py-6"
     >
       <LanguageSwitch language={language} className="self-end" />
 
@@ -81,7 +83,10 @@ export default async function HomePage() {
 
             <Link
               href="/apply"
-              className="mt-8 flex h-12 w-full items-center justify-center rounded-full bg-orange-500 font-exo text-lg font-bold italic text-blue-600 shadow-md shadow-orange-500/20 outline-none transition hover:-translate-y-0.5 hover:bg-orange-600 hover:text-blue-900 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-95"
+              className={cn(
+                buttonVariants({ variant: "orange" }),
+                "mt-8 h-12 w-full rounded-full font-exo text-lg italic shadow-md shadow-orange-500/20 transition hover:-translate-y-0.5 active:scale-95",
+              )}
             >
               {copy.apply}
             </Link>

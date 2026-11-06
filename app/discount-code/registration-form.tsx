@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState, useTransition } from "react"
 
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
+import { buttonVariants } from "@/components/ui/button"
 import { agentRegistrationProblem, type AgentDraft, type AgentField } from "@/lib/agent-registration"
 import { discountCodeShareLink } from "@/lib/discount-code-share"
 import type { Language } from "@/lib/language"
@@ -244,7 +245,10 @@ export function DiscountCodeForm({
         <button
           type="submit"
           disabled={sending}
-          className="mt-7 h-12 w-full rounded-full bg-orange-500 font-exo text-lg font-bold italic text-blue-600 shadow-md shadow-orange-500/20 outline-none transition hover:-translate-y-0.5 hover:bg-orange-600 hover:text-blue-900 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-95 disabled:translate-y-0 disabled:opacity-70"
+          className={cn(
+            buttonVariants({ variant: "orange" }),
+            "mt-7 h-12 w-full rounded-full font-exo text-lg italic shadow-md shadow-orange-500/20 transition hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:opacity-70",
+          )}
         >
           {sending ? copy.sending : copy.send}
         </button>
@@ -348,7 +352,7 @@ function Confirmation({
 
   return (
     <section className="rounded-[40px] bg-white px-5 py-8 text-center shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">
-      <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-orange-500 text-blue-600">
+      <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-orange-500 text-white">
         <Check className="size-8" strokeWidth={3} aria-hidden />
       </div>
       <h1 ref={headingRef} tabIndex={-1} className="mt-4 font-exo text-[1.75rem] font-extrabold italic leading-tight text-blue-600 outline-none">
@@ -377,7 +381,10 @@ function Confirmation({
               href={shareHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-12 items-center justify-center rounded-full bg-orange-500 px-6 font-exo text-lg font-bold italic text-blue-600 shadow-md shadow-orange-500/20 outline-none transition hover:bg-orange-600 hover:text-blue-900 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+              className={cn(
+                buttonVariants({ variant: "orange" }),
+                "h-12 rounded-full px-6 font-exo text-lg italic shadow-md shadow-orange-500/20",
+              )}
             >
               {copy.share}
             </a>

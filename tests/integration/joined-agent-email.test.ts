@@ -5,7 +5,7 @@ import { describe, expect, test, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import { setAgentEmail } from "@/lib/services/agent-invites"
-import { checkNewAgent, createAgent } from "@/lib/services/marketing-agents"
+import { checkNewAgent, createAgent, getRecreatePreview, recreateAgent } from "@/lib/services/marketing-agents"
 
 import { createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { MANAGER } from "../support/fixtures"
@@ -136,6 +136,45 @@ describe("a joined agent who changed their email in Auth", () => {
 
     expect((await setAgentEmail(await manager(), other.id, agent.before)).ok).toBe(true)
     expect(await storedEmail(other.id)).toBe(agent.before)
+  })
+
+  test("Recreate offers the address they sign in with, and works after the one they left went to a new agent", async () => {
+    const agent = await movedAgent("moved-recreate")
+    await createdAgent(agent.before)
+
+    const preview = await getRecreatePreview(await manager(), agent.id)
+    if (!preview.ok) throw new Error(JSON.stringify(preview))
+    expect(preview.data.agent.email).toBe(agent.after)
+
+    const { fullName, phone, email } = preview.data.agent
+    const done = await recreateAgent(await manager(), agent.id, { fullName, phone, email: email ?? "" }, "Name spelled wrong")
+    expect(done.ok).toBe(true)
+    // The new record keeps the login, which still signs in at the new address.
+    await signedIn({ email: agent.after, password: "fixture-password" })
+  })
+})
+
+describe("two current agents can't share a stored email", () => {
+  test("a write straight to the table is refused, while a moved agent's old address is free", async () => {
+    const taken = email("direct-taken")
+    await createdAgent(taken)
+    const agent = await movedAgent("direct-moved")
+
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      const insert = (address: string) =>
+        sql.query("insert into public.marketing_agents (full_name, phone, email, code) values ($1, $2, $3, $4)", [
+          name(),
+          `+2557${String(randomInt(10_000_000, 100_000_000)).padStart(8, "0")}`,
+          address,
+          `QDX${randomInt(100_000, 1_000_000)}`,
+        ])
+      await insert(agent.before)
+      await sql.query("savepoint second")
+      await expect(insert(taken)).rejects.toThrow("email_taken")
+      await sql.query("rollback to savepoint second")
+      await expect(insert(agent.after)).rejects.toThrow("email_taken")
+    })
   })
 })
 

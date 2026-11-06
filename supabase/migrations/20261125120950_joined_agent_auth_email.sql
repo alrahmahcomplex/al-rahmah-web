@@ -16,13 +16,16 @@
 --   lock_login_email as before, so two current agents still can't share
 --   one. create_agent_record's handler for that index can no longer fire;
 --   its earlier email_taken check gives the same answer.
+-- - agent_recreate_preview offers a joined agent's Auth email, the address
+--   the new record's login signs in with, rather than the stale stored one.
 
 -- ---------------------------------------------------------------------------
 -- Who holds an email.
 -- ---------------------------------------------------------------------------
 
 -- The non-retired agents holding `email`: a joined agent by their Auth email,
--- any other by the stored one. At most one, while guard_login holds.
+-- any other by the stored one. guard_login keeps it to one when a record is
+-- written; a joined agent changing their email in Auth isn't checked here.
 create function public.agent_email_holders(email text)
 returns table (agent_id uuid)
 language sql
@@ -251,5 +254,60 @@ begin
         delete from auth.users u where u.id = unused_login and coalesce(u.encrypted_password, '') = '';
     end if;
     return query select agent.email;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- agent_recreate_preview, re-created with its signature and grants
+-- unchanged. A joined agent's email is the one in Auth.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.agent_recreate_preview(agent_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+    agent public.marketing_agents;
+    students integer;
+    families jsonb;
+    sign_in_email text;
+begin
+    if auth.role() is distinct from 'authenticated'
+       or not public.has_permission('agents.approve')
+       or not public.has_permission('leads.view') then
+        raise exception 'not_permitted';
+    end if;
+
+    select * into agent from public.marketing_agents a where a.id = agent_recreate_preview.agent_id;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    if not public.agent_recreatable(agent) then
+        raise exception 'agent_retired';
+    end if;
+
+    if agent.user_id is not null and public.agent_joined(agent.user_id) then
+        select lower(u.email) into sign_in_email from auth.users u where u.id = agent.user_id;
+    end if;
+
+    families := public.agent_status_fee_impact(agent.id, 'recreated');
+    select count(*) into students from public.leads l where l.referral_code = agent.code;
+
+    return jsonb_build_object(
+        'agent', jsonb_build_object(
+            'id', agent.id,
+            'full_name', agent.full_name,
+            'phone', agent.phone,
+            'whatsapp', agent.whatsapp,
+            'email', coalesce(sign_in_email, agent.email),
+            'code', agent.code,
+            'retired', agent.retired_at is not null
+        ),
+        'student_count', students,
+        'families', families
+    );
 end;
 $$;

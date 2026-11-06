@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers"
 
-import { admissionYears, parseAdmissionForm } from "@/lib/admission-form"
+import { admissionContact, admissionYears, parseAdmissionForm } from "@/lib/admission-form"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { normalizeDiscountCode } from "@/lib/referral-link"
 import { submitAdmissionForm as saveAdmissionForm } from "@/lib/services/admission-form"
@@ -21,7 +21,10 @@ export async function submitAdmissionForm(
 ): Promise<AdmissionFormState> {
   const requestHeaders = await headers()
 
-  if ((await checkPublicFormLimit({ headers: requestHeaders, key: "admission" })) === "limited") {
+  // Counted per family as well as per IP, so families on one shared
+  // connection don't use up each other's tries.
+  const subject = admissionContact(formData.get("form"))
+  if ((await checkPublicFormLimit({ headers: requestHeaders, key: "admission", subject })) === "limited") {
     return { status: "rate-limited" }
   }
 

@@ -1,5 +1,8 @@
 import type { Metadata } from "next"
 
+import { currentSessionKind } from "@/lib/services/auth-session"
+import { createClient } from "@/utils/supabase/server"
+
 import { ConfirmForm } from "./confirm-form"
 
 export const metadata: Metadata = {
@@ -17,5 +20,9 @@ export default async function ConfirmInvitePage({
   const { token_hash: tokenHash, type } = await searchParams
   const usable = typeof tokenHash === "string" && tokenHash !== "" && type === "invite"
 
-  return <ConfirmForm tokenHash={usable ? tokenHash : null} />
+  // One account per browser: checked before the token is used, so an agent
+  // signed in here signs out first and the invite still works afterwards.
+  const session = usable ? await currentSessionKind(await createClient()) : null
+
+  return <ConfirmForm tokenHash={usable ? tokenHash : null} agentSession={session?.ok === true && session.data === "agent"} />
 }

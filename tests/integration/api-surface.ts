@@ -69,6 +69,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     // Local and CI databases run without pg_graphql. Row security would still
     // hide every row from an agent if it were enabled.
   },
+  // An agent row's account state (#191): null for anyone without leads.view.
+  "public.account_state(agent marketing_agents)": {
+    roles: ["authenticated"],
+    args: { agent: "(select a from public.marketing_agents a where a.id = 'a4a4a4a4-0000-4000-8000-000000000002')" },
+    agent: { returns: [null] },
+  },
   "public.adjust_school_fee_payment(payment_id uuid, reason text, voided boolean, payment_type text, amount numeric, paid_on date, note text, request_id uuid)":
     {
       roles: ["authenticated"],
@@ -87,6 +93,16 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.agent_access_status()": {
     roles: ["authenticated"],
     args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.agent_account_counts()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.agent_invites(agent_ids uuid[])": {
+    roles: ["authenticated"],
+    args: { agent_ids: "array['a4a4a4a4-0000-4000-8000-000000000002']::uuid[]" },
     agent: { refused: "not_permitted" },
   },
   "public.agent_recreate_preview(agent_id uuid)": {
@@ -220,6 +236,13 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: { name: "'Sample role'" },
     agent: { refused: "not_permitted" },
+  },
+  // The signed-in agent's own name, code and state (#191): their own record,
+  // never another agent's or any staff data. Staff and visitors get no row.
+  "public.current_agent_account()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [{ state: "active", full_name: "Saida Amina Mtei", code: "SAM-403" }] },
   },
   "public.current_staff_member()": {
     roles: ["authenticated"],
@@ -481,7 +504,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.mark_re_application_reviewed(re_application_id uuid)": {
     roles: ["authenticated"],
     args: {
-      re_application_id: "(select id from public.re_applications order by id limit 1)",
+      re_application_id: "(select id from public.re_applications where reviewed_at is null order by id limit 1)",
     },
     agent: { refused: "not_permitted" },
   },
@@ -565,6 +588,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000005'" },
     agent: { refused: "not_permitted" },
   },
+  "public.prepare_agent_invite(agent_id uuid, expected_email text)": {
+    roles: ["authenticated"],
+    setup: "update public.marketing_agents set email = 'surface-invite@example.test' where id = 'a4a4a4a4-0000-4000-8000-000000000002'",
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'", expected_email: "'surface-invite@example.test'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.record_action(kind text, lead_id uuid, details jsonb)": {
     roles: ["authenticated"],
     args: {
@@ -572,6 +601,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       lead_id: "'1ead0000-0000-4000-8000-000000000431'",
       details: "'{}'::jsonb",
     },
+    agent: { refused: "not_permitted" },
+  },
+  // The result of an invite attempt the Manager started.
+  "public.record_agent_invite(attempt_id uuid, result text, error_code text)": {
+    roles: ["authenticated"],
+    setup:
+      "insert into public.agent_events (id, agent_id, kind, result, email, created_by) values ('e7e7e7e7-0000-4000-8000-000000000192', 'a4a4a4a4-0000-4000-8000-000000000002', 'invite', 'started', 'surface-invite@example.test', 'a1a1a1a1-0000-4000-8000-000000000001')",
+    args: { attempt_id: "'e7e7e7e7-0000-4000-8000-000000000192'", result: "'sent'", error_code: "null" },
     agent: { refused: "not_permitted" },
   },
   "public.record_follow_up(lead_id uuid, follow_up_id uuid, comment text, method text, contacted_by uuid, contacted_at timestamp with time zone, outcome text, next_due_on date, next_note text, decline_reason text, decline_note text)":
@@ -781,6 +818,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  "public.set_marketing_agent_email(agent_id uuid, email text)": {
+    roles: ["authenticated"],
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'", email: "'surface-email@example.test'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.set_pre_form_one(lead_id uuid, ticked boolean)": {
     roles: ["authenticated"],
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000004'", ticked: "true" },
@@ -854,6 +896,7 @@ export const RELATIONS: Record<string, RelationEntry> = {
   "public.admission_submissions": { authenticated: [], anon: [] },
   "public.agent_access_settings": { authenticated: [], anon: [] },
   "public.agent_detached_logins": { authenticated: [], anon: [] },
+  "public.agent_events": { authenticated: [], anon: [] },
   "public.agent_status_changes": {
     authenticated: ["select", "references", "trigger", "maintain"],
     anon: ["select", "references", "trigger", "maintain"],

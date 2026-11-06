@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { admissionYears, childNameKey, parseAdmissionForm } from "@/lib/admission-form"
+import { admissionContact, admissionYears, childNameKey, parseAdmissionForm } from "@/lib/admission-form"
 
 const KEY = "3f2b7c1e-8d4a-4b6f-9a0e-1c2d3e4f5a6b"
 const YEARS = [2026, 2027]
@@ -132,5 +132,23 @@ describe("reading the posted Admission form", () => {
     ["a name far too long", JSON.stringify(form({ parent: { fullName: "x".repeat(201), relationship: "Mother", phone: "0700000900" } }))],
   ])("treats %s as an unreadable form", (_, raw) => {
     expect(parseAdmissionForm(raw, YEARS)).toEqual({ ok: false, error: { field: "payload", child: null } })
+  })
+})
+
+describe("admissionContact", () => {
+  const form = (phone: unknown) => JSON.stringify({ parent: { phone } })
+
+  it("reads the parent's phone in one form, however it was typed", () => {
+    expect(admissionContact(form("0700 000 900"))).toBe("+255700000900")
+    expect(admissionContact(form("+255 700-000-900"))).toBe("+255700000900")
+    expect(admissionContact(form("255700000900"))).toBe("+255700000900")
+  })
+
+  it("keeps any other number as its digits, and gives null when there is none to read", () => {
+    expect(admissionContact(form("+44 20 7946 0000"))).toBe("+442079460000")
+    expect(admissionContact(form(""))).toBeNull()
+    expect(admissionContact(form(12))).toBeNull()
+    expect(admissionContact("not json")).toBeNull()
+    expect(admissionContact(null)).toBeNull()
   })
 })

@@ -18,8 +18,13 @@ import {
   type FeeImpact,
   type RecreatePreview,
 } from "@/lib/services/marketing-agents"
+import { sendAgentInvite } from "@/lib/services/agent-invites"
 import { requirePermission } from "@/lib/services/staff-auth"
+import { agentInviteSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
+
+import { agentSetPasswordUrl } from "./invite-link"
+import { approvedWithInvite, type ApprovedOutcome } from "./invite-outcome"
 
 import {
   approveOutcome,
@@ -36,11 +41,14 @@ import {
 
 // Approves a Pending Marketing Agent. The name and code come from the row the
 // Manager confirmed, only to word the answer; the database decides by the id
-// and checks agents.approve itself.
+// and checks agents.approve itself. Then the invite goes to `email`, the
+// address the Manager saw in the dialog (#191); approval stands whatever the
+// email does.
 export async function approveMarketingAgent(
   agentId: string,
   agent: { fullName: string; code: string },
-): Promise<ApproveOutcome> {
+  email: string | null = null,
+): Promise<ApproveOutcome | ApprovedOutcome> {
   if (typeof agentId !== "string" || typeof agent?.fullName !== "string" || typeof agent?.code !== "string") {
     return approveOutcome({ ok: false, error: "not-found" }, { fullName: "", code: "" })
   }
@@ -55,7 +63,13 @@ export async function approveMarketingAgent(
   const result = await approveAgent(supabase, agentId)
   // The list and the Pending count in the navigation both change.
   if (result.ok || result.error === "no-change") revalidatePath("/staff", "layout")
-  return approveOutcome(result.ok ? { ok: true } : result, agent)
+  if (!result.ok) return approveOutcome(result, agent)
+
+  const invite =
+    typeof email === "string" && email.trim() !== ""
+      ? await sendAgentInvite(supabase, agentInviteSender(), agentId, await agentSetPasswordUrl(), { expectedEmail: email })
+      : ({ ok: false, error: { kind: "no-email" } } as const)
+  return approvedWithInvite(agent, invite)
 }
 
 function isAction(action: unknown): action is AgentStatusAction {

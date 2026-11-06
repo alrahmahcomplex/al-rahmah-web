@@ -4,7 +4,11 @@ vi.mock("server-only", () => ({}))
 const checkRateLimit = vi.hoisted(() => vi.fn())
 vi.mock("@vercel/firewall", () => ({ checkRateLimit }))
 
+import { createHash } from "node:crypto"
+
 import { checkPublicFormLimit } from "@/lib/rate-limit"
+
+const sha = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 32)
 
 function requestHeaders(ip: string | null = "198.51.100.7") {
   const headers = new Headers({ host: "alrahmah.example" })
@@ -86,5 +90,42 @@ describe("checkPublicFormLimit", () => {
     await expect(checkPublicFormLimit({ headers: requestHeaders(null), key: "admission" })).resolves.toBe("allowed")
     expect(checkRateLimit).not.toHaveBeenCalled()
     expect(console.warn).toHaveBeenCalled()
+  })
+
+  it("adds a hash of the person's normalised contact to the key, never the contact itself", async () => {
+    checkRateLimit.mockResolvedValue({ rateLimited: false })
+    const headers = requestHeaders()
+
+    await checkPublicFormLimit({ headers, key: "agent-sign-in", subject: "  Neema@Example.TEST " })
+
+    const { rateLimitKey } = checkRateLimit.mock.calls[0][1]
+    expect(rateLimitKey).toBe(`agent-sign-in:198.51.100.7:${sha("neema@example.test")}`)
+    expect(rateLimitKey).not.toContain("neema")
+  })
+
+  it("gives two people on one connection their own allowance, and one person the same one each time", async () => {
+    checkRateLimit.mockResolvedValue({ rateLimited: false })
+    const headers = requestHeaders()
+
+    await checkPublicFormLimit({ headers, key: "admission", subject: "+255700000900" })
+    await checkPublicFormLimit({ headers, key: "admission", subject: "+255700000901" })
+    await checkPublicFormLimit({ headers, key: "admission", subject: "+255700000900" })
+
+    const keys = checkRateLimit.mock.calls.map((call) => call[1].rateLimitKey)
+    expect(keys[0]).not.toBe(keys[1])
+    expect(keys[2]).toBe(keys[0])
+  })
+
+  it("falls back to the IP-only key when the contact is empty", async () => {
+    checkRateLimit.mockResolvedValue({ rateLimited: false })
+    const headers = requestHeaders()
+
+    await checkPublicFormLimit({ headers, key: "admission", subject: "   " })
+    await checkPublicFormLimit({ headers, key: "admission", subject: null })
+
+    expect(checkRateLimit.mock.calls.map((call) => call[1].rateLimitKey)).toEqual([
+      "admission:198.51.100.7",
+      "admission:198.51.100.7",
+    ])
   })
 })

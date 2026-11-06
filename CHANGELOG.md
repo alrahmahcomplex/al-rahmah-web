@@ -5,6 +5,30 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 6, 2026 `v0.75.0`
+
+### NEW
+
+- Marketing Agents can now join and sign in. The Admissions Manager adds or corrects an
+  agent's email and presses Send invite, and approving an agent with an email sends the
+  invite too. The agent sets a password from a Swahili and English email, lands on their
+  Discount code page, and signs in there later. A browser signed in as staff refuses agent
+  sign-in until it signs out, and the other way round.
+- The Agents screen shows each agent's account state, filters and counts agents whose
+  invite wasn't sent or whose link expired, and shows how many need attention.
+- Once an agent has joined, only they can change their email, through Supabase's own
+  change-email flow. The Agents screen shows the address they sign in with, and Edit email
+  is off for them, also after they are switched off or retired.
+
+### IMPROVED
+
+- Agent sign-in now has its own rate limit per connection and email, and says "too many
+  attempts" rather than "wrong password" when it is reached.
+- Families sending the Admission form from one shared connection now each get their own
+  allowance of tries.
+- Staff sign-in now says so when there are too many attempts, or when a login has been
+  closed, instead of reporting an outage.
+
 ## November 5, 2026 `v0.74.0`
 
 ### NEW

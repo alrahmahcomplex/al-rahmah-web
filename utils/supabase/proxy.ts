@@ -3,9 +3,19 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { supabaseEnv } from "./env"
 
+// Where a visitor with no session goes from a page that needs one.
+function signInPage(pathname: string): string | null {
+  if (pathname === "/staff" || pathname.startsWith("/staff/")) return "/login"
+  if (pathname === "/discount-code/students" || pathname.startsWith("/discount-code/students/")) {
+    return "/discount-code/sign-in"
+  }
+  return null
+}
+
 // Refreshes the Supabase session cookie on the auth-bound routes and sends visitors
-// with no session away from staff pages. The guard here is optimistic only:
-// the staff pages confirm the staff record themselves through getStaffUser.
+// with no session away from staff pages and the Discount code students page.
+// The guard here is optimistic only: the pages confirm the staff record or the
+// agent themselves, through getStaffUser and getAgentUser.
 export async function refreshSessionAndGuardStaffRoutes(request: NextRequest) {
   let response = NextResponse.next({ request })
   const { url, publishableKey } = supabaseEnv()
@@ -31,9 +41,10 @@ export async function refreshSessionAndGuardStaffRoutes(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user && request.nextUrl.pathname.startsWith("/staff")) {
+  const signInFor = !user ? signInPage(request.nextUrl.pathname) : null
+  if (signInFor) {
     const redirectTo = request.nextUrl.clone()
-    redirectTo.pathname = "/login"
+    redirectTo.pathname = signInFor
     redirectTo.search = ""
     return NextResponse.redirect(redirectTo)
   }

@@ -49,3 +49,7 @@ Every new function or table the API roles can reach needs an entry in the grant 
 The base checks now do two lookups by `user_id` instead of one, both on unique indexes.
 
 Turning agent access on or off is an owner step in the SQL editor until a screen exists for it.
+
+## Amendment, 2026-11-06: a joined agent's email lives in Auth only
+
+A joined agent's email is their sign-in credential, and it lives in Supabase Auth only. The app keeps no second copy in step with it and runs no reconcile. Only the agent changes it, through Auth's own change-email flow (`updateUser`, confirmed from both inboxes), which writes only to their own Auth user. The Admissions Manager may add or correct an agent's email only before the agent joins (owner decision 41). After that, `set_marketing_agent_email` refuses with `already_joined`, and the Agents screen reads the joined agent's email from `auth.users`. Email isn't how an agent is identified: the agent record and its Discount code are, and the agent can never change either. Agent sessions still write nothing to the app's tables, and `actor_kind` has no `agent` value.

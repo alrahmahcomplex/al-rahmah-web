@@ -1,5 +1,8 @@
 import type { Metadata } from "next"
 
+import { currentSessionKind } from "@/lib/services/auth-session"
+import { createClient } from "@/utils/supabase/server"
+
 import { LoginForm, type LoginNotice } from "./login-form"
 
 export const metadata: Metadata = {
@@ -16,5 +19,8 @@ export default async function LoginPage({
   const { error } = await searchParams
   const notice = NOTICES.find((n) => n === error) ?? null
 
-  return <LoginForm notice={notice} />
+  // One account per browser: an agent signed in here must sign out first.
+  const session = await currentSessionKind(await createClient())
+
+  return <LoginForm notice={notice} agentSession={session.ok && session.data === "agent"} />
 }

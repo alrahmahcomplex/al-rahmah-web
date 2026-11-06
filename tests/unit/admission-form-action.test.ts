@@ -82,7 +82,9 @@ describe("sending the Admission form", () => {
 
     expect(calls.order).toEqual(["rate-limit", "turnstile", "service"])
     expect(state).toEqual({ status: "confirmed", children: [{ fullName: "Zawadi Fixture", admissionNumber: "ADMSN-40719" }] })
-    expect(stubs.limit).toHaveBeenCalledWith(expect.objectContaining({ key: "admission" }))
+    // Per family on a shared connection: the parent's normalised phone, which
+    // lib/rate-limit.ts hashes into the key.
+    expect(stubs.limit).toHaveBeenCalledWith(expect.objectContaining({ key: "admission", subject: "+255700000900" }))
     expect(stubs.turnstile).toHaveBeenCalledWith({
       token: "token-from-widget",
       action: "admission",
@@ -185,7 +187,9 @@ describe("checking a Discount code", () => {
     expect(await checkDiscountCode(" bjn -402 ")).toEqual({ status: "approved", amount: 40000, discount: 10000 })
     expect(calls.order).toEqual(["rate-limit", "estimate", "discount"])
     expect(stubs.discount).toHaveBeenCalledWith({ secret: "client" })
+    // IP only: a code in the key would let one IP try every code.
     expect(stubs.limit).toHaveBeenCalledWith(expect.objectContaining({ key: "code-check" }))
+    expect(stubs.limit.mock.calls[0][0]).not.toHaveProperty("subject")
     expect(stubs.estimate).toHaveBeenCalledWith({ secret: "client" }, "BJN-402")
     expect(stubs.turnstile).not.toHaveBeenCalled()
   })

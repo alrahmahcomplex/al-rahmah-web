@@ -137,7 +137,8 @@ grant execute on function public.agent_invite_budget_used() to authenticated;
 -- Starting and finishing a batch
 -- ---------------------------------------------------------------------------
 
--- Needs agents.approve. Refuses `not_permitted`, `invalid` and `access_off`.
+-- Needs agents.approve and leads.view, which account_state reads with.
+-- Refuses `not_permitted`, `invalid` and `access_off`.
 -- Starts a batch over the Approved agents with no account yet, within one
 -- import when import_batch_id is given, and answers it with the agents to
 -- send to (at most batch_limit, oldest approval first) and their emails.
@@ -160,7 +161,7 @@ declare
     skipped integer;
     chosen jsonb;
 begin
-    if not public.has_permission('agents.approve') then
+    if not public.has_permission('agents.approve') or not public.has_permission('leads.view') then
         raise exception 'not_permitted';
     end if;
     if daily_cap is null or daily_cap < 0

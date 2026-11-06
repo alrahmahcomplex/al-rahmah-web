@@ -12,8 +12,9 @@ import type { Result } from "./result"
 // account_state column the database computes, within one import when the
 // screen shows one; or one page of the agents behind one of a batch's counts.
 // Same rows and order as the Approved list in marketing-agents.ts (which the
-// agent-record tickets own): the latest approval first. Agents in these
-// lists are never switched off or retired, so no status note applies.
+// agent-record tickets own): the latest approval first. No status note is
+// read: the account-state lists hold no switched-off or retired agent, and a
+// batch's sent and failed lists rarely do (only one changed since).
 
 // The states each filter shows. "Approved, no account yet" is every Approved
 // agent who hasn't joined. Awaiting email confirmation joins them with

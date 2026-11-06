@@ -100,6 +100,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: {},
     agent: { refused: "not_permitted" },
   },
+  // The "Awaiting email confirmation" queue (#193).
+  "public.agent_email_claim_queue()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
   // The agents behind one of an invite batch's counts (#192).
   "public.agent_invite_batch_agents(batch_id uuid, outcome text)": {
     roles: ["authenticated"],
@@ -124,6 +130,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.agent_recreate_preview(agent_id uuid)": {
     roles: ["authenticated"],
     args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'" },
+    agent: { refused: "not_permitted" },
+  },
+  // Typed codes a sign-up didn't adopt (#193).
+  "public.agent_sign_up_notes(agent_ids uuid[])": {
+    roles: ["authenticated"],
+    args: { agent_ids: "array['a4a4a4a4-0000-4000-8000-000000000002']::uuid[]" },
     agent: { refused: "not_permitted" },
   },
   "public.agent_status_fee_impact(agent_id uuid, kind text)": {
@@ -297,6 +309,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.deactivate_staff_member(staff_id uuid)": {
     roles: ["authenticated"],
     args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'" },
+    agent: { refused: "not_permitted" },
+  },
+  // Confirm or Reject an email claim (#193).
+  "public.decide_agent_email_claim(claim_id uuid, decision text, email text)": {
+    roles: ["authenticated"],
+    setup:
+      "insert into public.agent_email_claims (id, agent_id, outcome, full_name, email) values ('c1a10000-0000-4000-8000-000000000193', 'a4a4a4a4-0000-4000-8000-000000000002', 'pending', 'Surface Claim', 'surface-claim@example.test')",
+    args: { claim_id: "'c1a10000-0000-4000-8000-000000000193'", decision: "'reject'", email: "null" },
     agent: { refused: "not_permitted" },
   },
   "public.decide_discount(request_id uuid, decision text, reason text)": {
@@ -929,6 +949,7 @@ export const RELATIONS: Record<string, RelationEntry> = {
   "public.admission_submissions": { authenticated: [], anon: [] },
   "public.agent_access_settings": { authenticated: [], anon: [] },
   "public.agent_detached_logins": { authenticated: [], anon: [] },
+  "public.agent_email_claims": { authenticated: [], anon: [] },
   "public.agent_events": { authenticated: [], anon: [] },
   "public.agent_invite_batches": { authenticated: [], anon: [] },
   "public.agent_status_changes": {

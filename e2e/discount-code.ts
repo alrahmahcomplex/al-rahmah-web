@@ -7,9 +7,11 @@ import type { Page } from "@playwright/test"
 // local database keeps every agent the tests register.
 
 export function newcomer() {
+  const suffix = randomUUID().slice(0, 6)
   return {
-    name: `Rehema Majaribio ${randomUUID().slice(0, 6)}`,
+    name: `Rehema Majaribio ${suffix}`,
     phone: `07${String(randomInt(10_000_000, 100_000_000))}`,
+    email: `rehema-${suffix}@example.test`,
   }
 }
 
@@ -18,6 +20,9 @@ export const WORDS = {
     name: "Jina lako kamili",
     phone: "Namba ya simu",
     whatsapp: "Namba ya WhatsApp (si lazima)",
+    email: "Barua pepe",
+    hasCode: "Tayari una code?",
+    code: "Code yako ya Punguzo",
     heading: "Pata Code ya Punguzo",
     send: "Pata Code ya Punguzo",
     done: "Code yako ya Punguzo",
@@ -29,6 +34,9 @@ export const WORDS = {
     name: "Your full name",
     phone: "Phone number",
     whatsapp: "WhatsApp number (optional)",
+    email: "Email",
+    hasCode: "Already have a Discount code?",
+    code: "Your Discount code",
     heading: "Get a Discount code",
     send: "Get my Discount code",
     done: "Your Discount code",
@@ -45,6 +53,7 @@ export async function fillRegistration(page: Page, lang: Lang, who: ReturnType<t
   await page.getByLabel(t.name).fill(who.name)
   await page.getByLabel(t.phone, { exact: true }).fill(who.phone)
   if (whatsapp) await page.getByLabel(t.whatsapp).fill(whatsapp)
+  await page.getByLabel(t.email, { exact: true }).fill(who.email)
 }
 
 // Words the public pages never use (CONTEXT.md, Discount code).

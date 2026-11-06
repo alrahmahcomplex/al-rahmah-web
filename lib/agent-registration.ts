@@ -1,17 +1,28 @@
 import type { Result } from "@/lib/services/result"
 
-// The Discount code page's own rules: reading what a would-be Marketing Agent
-// typed, and the two links the confirmation hands them. Shared by the page
-// and its Server Action, so both check a draft the same way. The phone's
-// format is the database's to judge (`normalize_phone`), so here a phone only
-// has to be present and short enough to be one.
+// The Discount code page's own rules: reading what someone typed, and the two
+// links the confirmation hands them. Shared by the page and its Server
+// Action, so both check a draft the same way. The phone's format, and
+// whether a code is one, are the database's to judge (`normalize_phone`,
+// `normalize_referral_code`), so here they only have to be present and
+// short enough. An email is required (#193); the "Already have a Discount
+// code?" box makes the code required too.
 
-export type AgentField = "full_name" | "phone" | "whatsapp"
+export type AgentField = "full_name" | "phone" | "whatsapp" | "email" | "code"
 
-export type AgentDraft = { fullName: string; phone: string; whatsapp: string }
-export type AgentRegistration = { fullName: string; phone: string; whatsapp: string | null }
+export type AgentDraft = { fullName: string; phone: string; whatsapp: string; email: string; hasCode: boolean; code: string }
+export type AgentRegistration = {
+  fullName: string
+  phone: string
+  whatsapp: string | null
+  email: string
+  hasCode: boolean
+  code: string | null
+}
 
 const MAX_PHONE_LENGTH = 40
+const MAX_CODE_LENGTH = 40
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 function clean(value: string) {
   return value.trim().replace(/\s+/g, " ")
@@ -33,7 +44,13 @@ function read(draft: AgentDraft): Result<AgentRegistration, AgentField> {
   const whatsapp = draft.whatsapp.trim()
   if (whatsapp.length > MAX_PHONE_LENGTH) return { ok: false, error: "whatsapp" }
 
-  return { ok: true, data: { fullName, phone, whatsapp: whatsapp || null } }
+  const email = draft.email.trim().toLowerCase()
+  if (email.length > 254 || !EMAIL.test(email)) return { ok: false, error: "email" }
+
+  const code = draft.code.trim()
+  if (code.length > MAX_CODE_LENGTH || (draft.hasCode && !code)) return { ok: false, error: "code" }
+
+  return { ok: true, data: { fullName, phone, whatsapp: whatsapp || null, email, hasCode: draft.hasCode, code: code || null } }
 }
 
 // The page's check before sending: the field to fix, or null.
@@ -48,6 +65,9 @@ export function parseAgentRegistration(formData: FormData): Result<AgentRegistra
     fullName: text(formData.get("full_name")),
     phone: text(formData.get("phone")),
     whatsapp: text(formData.get("whatsapp")),
+    email: text(formData.get("email")),
+    hasCode: formData.get("has_code") === "yes",
+    code: text(formData.get("code")),
   })
 }
 

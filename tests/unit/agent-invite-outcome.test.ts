@@ -165,16 +165,18 @@ describe("editing an email", () => {
 
 describe("needs attention", () => {
   it("is the sum of the named counts, with a breakdown", () => {
-    expect(needsAttention(counts({ invite_not_sent: 3, invite_expired: 2, invited: 9, joined: 4 }))).toEqual({
-      total: 5,
+    expect(needsAttention(counts({ awaiting_confirmation: 4, invite_not_sent: 3, invite_expired: 2, invited: 9, joined: 4 }))).toEqual({
+      total: 9,
       parts: [
+        { state: "awaiting_confirmation", label: "awaiting email confirmation", count: 4 },
         { state: "invite_not_sent", label: "invite not sent", count: 3 },
         { state: "invite_expired", label: "link expired", count: 2 },
       ],
     })
   })
 
-  it("counts agents awaiting email confirmation once that state exists", () => {
+  it("names awaiting email confirmation even at zero", () => {
     expect(needsAttention(counts({ awaiting_confirmation: 1 })).total).toBe(1)
+    expect(needsAttention(counts({})).parts.map((part) => part.state)).toEqual(["awaiting_confirmation", "invite_not_sent", "invite_expired"])
   })
 })

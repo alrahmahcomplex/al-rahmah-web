@@ -37,11 +37,32 @@ import DiscountCodePage, { generateMetadata } from "@/app/discount-code/page"
 const FORBIDDEN = /agent|referral|approv|wakala|idhini/i
 
 const WORDS = {
-  sw: { name: "Jina lako kamili", phone: "Namba ya simu", whatsapp: "Namba ya WhatsApp (si lazima)", send: "Pata Code ya Punguzo" },
-  en: { name: "Your full name", phone: "Phone number", whatsapp: "WhatsApp number (optional)", send: "Get my Discount code" },
+  sw: {
+    name: "Jina lako kamili",
+    phone: "Namba ya simu",
+    whatsapp: "Namba ya WhatsApp (si lazima)",
+    email: "Barua pepe",
+    hasCode: "Tayari una code?",
+    code: "Code yako ya Punguzo",
+    send: "Pata Code ya Punguzo",
+  },
+  en: {
+    name: "Your full name",
+    phone: "Phone number",
+    whatsapp: "WhatsApp number (optional)",
+    email: "Email",
+    hasCode: "Already have a Discount code?",
+    code: "Your Discount code",
+    send: "Get my Discount code",
+  },
 } as const
 
-const REGISTERED = { status: "registered", code: "RJ-407", link: "https://alrahmah.example/apply?ref=RJ-407" }
+const REGISTERED = {
+  status: "registered",
+  code: "RJ-407",
+  link: "https://alrahmah.example/apply?ref=RJ-407",
+  email: "rehema@example.test",
+}
 
 beforeEach(() => {
   jar.values.clear()
@@ -57,6 +78,7 @@ async function fill(user: ReturnType<typeof userEvent.setup>, lang: "sw" | "en" 
   await user.type(screen.getByLabelText(t.name), "Rehema Juma")
   await user.type(screen.getByLabelText(t.phone, { exact: true }), "0712 345 678")
   if (whatsapp) await user.type(screen.getByLabelText(t.whatsapp), whatsapp)
+  await user.type(screen.getByLabelText(t.email), "rehema@example.test")
 }
 
 describe("the Discount code page", { timeout: 20_000 }, () => {
@@ -144,6 +166,8 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
     expect(sent.get("phone")).toBe("0712 345 678")
     expect(sent.get("whatsapp")).toBe("0754 000 111")
     expect(sent.get("cf-turnstile-response")).toBe("fake-token")
+    expect(sent.get("email")).toBe("rehema@example.test")
+    expect(sent.get("has_code")).toBe("no")
 
     expect(await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })).toHaveFocus()
     expect(screen.getByText("RJ-407")).toBeInTheDocument()
@@ -156,7 +180,8 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
     expect(text).toContain("RJ-407")
     expect(text.endsWith(REGISTERED.link)).toBe(true)
     expect(text).not.toMatch(FORBIDDEN)
-    expect(screen.getByText(/shule itakapothibitisha code yako/)).toHaveTextContent(/Shule itawasiliana nawe/)
+    expect(screen.getByText(/shule itakapothibitisha code yako\. Shule/)).toHaveTextContent(/Shule itawasiliana nawe/)
+    expect(screen.getByText(/barua pepe ya kuweka nenosiri kwenye rehema@example\.test/)).toHaveTextContent(/angalia spam/)
     expect(screen.getByRole("link", { name: "+255 700 000 001" })).toHaveAttribute("href", "tel:+255700000001")
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
     expect(stubs.reset).not.toHaveBeenCalled()
@@ -175,7 +200,8 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
     const text = decodeURIComponent(href.slice("https://wa.me/?text=".length))
     expect(text).toMatch(/Discount code RJ-407/)
     expect(text).not.toMatch(FORBIDDEN)
-    expect(screen.getByText(/once the school confirms your code/)).toHaveTextContent(/The school will contact you/)
+    expect(screen.getByText(/once the school confirms your code\. The school/)).toHaveTextContent(/The school will contact you/)
+    expect(screen.getByText(/email at rehema@example\.test to set your password/)).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
   })
 
@@ -235,5 +261,86 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
     expect(phone).toHaveAccessibleDescription(/Hatukuweza kusoma namba hii ya simu/)
     expect(phone).toHaveValue("0712 345 678")
     expect(stubs.reset).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the code box and the sign-in prompt apart, and links the sign-in page", async () => {
+    render(await DiscountCodePage())
+    expect(screen.getByRole("checkbox", { name: WORDS.sw.hasCode })).toHaveAccessibleDescription(
+      "Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Weka alama hapa",
+    )
+    expect(screen.getByText("Umeshaweka nenosiri?")).toContainElement(screen.getByRole("link", { name: "Ingia" }))
+    expect(screen.getByRole("link", { name: "Ingia" })).toHaveAttribute("href", "/discount-code/sign-in")
+  })
+
+  it("names a missing email, and a missing code once the box is ticked", async () => {
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await user.type(screen.getByLabelText(WORDS.sw.name), "Rehema Juma")
+    await user.type(screen.getByLabelText(WORDS.sw.phone, { exact: true }), "0712 345 678")
+    await user.click(screen.getByRole("button", { name: WORDS.sw.send }))
+    expect(screen.getByLabelText(WORDS.sw.email)).toHaveAccessibleDescription(/Andika barua pepe yako/)
+
+    await user.type(screen.getByLabelText(WORDS.sw.email), "rehema@example.test")
+    await user.click(screen.getByRole("checkbox", { name: WORDS.sw.hasCode }))
+    await user.click(screen.getByRole("button", { name: WORDS.sw.send }))
+    expect(screen.getByLabelText(WORDS.sw.code)).toHaveAccessibleDescription(/Andika Code yako ya Punguzo/)
+    expect(stubs.submit).not.toHaveBeenCalled()
+  })
+
+  it("sends a claim with the box and the code, then shows the claimed code and says to check spam", async () => {
+    stubs.submit.mockResolvedValue({ status: "claimed", code: "RJ-407", link: REGISTERED.link })
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await fill(user)
+    await user.click(screen.getByRole("checkbox", { name: WORDS.sw.hasCode }))
+    await user.type(screen.getByLabelText(WORDS.sw.code), "rj-407")
+    await user.click(screen.getByRole("button", { name: WORDS.sw.send }))
+
+    const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
+    expect(sent.get("has_code")).toBe("yes")
+    expect(sent.get("code")).toBe("rj-407")
+    expect(await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })).toHaveFocus()
+    expect(screen.getByText("RJ-407")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Shiriki kwenye WhatsApp" })).toBeInTheDocument()
+    expect(screen.getByText(/Shule itathibitisha barua pepe yako/)).toHaveTextContent(/angalia spam/)
+    expect(document.body.textContent).not.toMatch(FORBIDDEN)
+  })
+
+  it.each([
+    ["code-needed", "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.", /This number already has a Discount code/],
+    ["phone-mismatch", "Hatukuweza kulinganisha code na namba hii. Zihakiki, au piga simu ofisini.", /couldn't match the code with this number/],
+    ["no-match", "Hatukupata code hii. Ihakiki, au piga simu ofisini.", /couldn't find this code/],
+    ["claim-waiting", "Tumepokea ombi lako; shule itathibitisha.", /the school will confirm it/],
+    ["invited", "Tumekutumia barua pepe. Angalia spam, au tumia 'Tuma kiungo kipya'.", /Check spam, or use 'Send a new link'/],
+    ["joined", "Tayari una akaunti. Ingia.", /You already have an account/],
+    ["email-unusable", "Barua pepe hii haiwezi kutumika. Tumia nyingine au piga simu ofisini.", /This email can't be used/],
+    ["access-off", "Huduma hii imesimamishwa kwa muda.", /paused for now/],
+  ])("on %s, shows its own message in Swahili and English, keeping the entries", async (status, swahili, english) => {
+    stubs.submit.mockResolvedValue({ status })
+    const user = userEvent.setup()
+    const first = render(await DiscountCodePage())
+    await fill(user)
+    await user.click(screen.getByRole("button", { name: WORDS.sw.send }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(swahili)
+    expect(screen.getByLabelText(WORDS.sw.email)).toHaveValue("rehema@example.test")
+    expect(document.body.textContent).not.toMatch(FORBIDDEN)
+    first.unmount()
+
+    jar.values.set("lang", "en")
+    render(await DiscountCodePage())
+    await fill(user, "en")
+    await user.click(screen.getByRole("button", { name: WORDS.en.send }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(english)
+    expect(document.body.textContent).not.toMatch(FORBIDDEN)
+  })
+
+  it("on joined, links the sign-in page from the message", async () => {
+    stubs.submit.mockResolvedValue({ status: "joined" })
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await fill(user)
+    await user.click(screen.getByRole("button", { name: WORDS.sw.send }))
+    const alert = await screen.findByRole("alert")
+    expect(alert.querySelector('a[href="/discount-code/sign-in"]')).toHaveTextContent("Ingia")
   })
 })

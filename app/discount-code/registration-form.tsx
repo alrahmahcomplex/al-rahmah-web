@@ -1,6 +1,7 @@
 "use client"
 
 import { Check, Copy, Phone } from "lucide-react"
+import Link from "next/link"
 import { useEffect, useRef, useState, useTransition } from "react"
 
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
@@ -10,20 +11,40 @@ import { cn } from "@/lib/utils"
 
 import { registerAsAgent } from "./actions"
 import { COPY } from "./copy"
-import type { DiscountCodeState } from "./outcome"
+import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
 
 // The Discount code page's form and its confirmation. The entries live in this
 // component's state, so switching language (which re-renders the page around
-// it) or a refused send never loses one.
+// it) or a refused send never loses one. The "Already have a Discount code?"
+// box claims an existing code (#193); the code field is there either way,
+// and the box makes it required.
 
-const EMPTY: AgentDraft = { fullName: "", phone: "", whatsapp: "" }
+const EMPTY: AgentDraft = { fullName: "", phone: "", whatsapp: "", email: "", hasCode: false, code: "" }
 
 type Copy = (typeof COPY)[Language]
-type Registered = Extract<DiscountCodeState, { status: "registered" }>
-// A problem shown under its field. `server` marks a phone the database
-// couldn't read, which reads differently from an empty one.
+type Done = Extract<DiscountCodeState, { status: "registered" | "claimed" }>
+// A problem shown under its field. `server` marks a phone or code the
+// database couldn't read, which reads differently from an empty one.
 type Shown = { field: AgentField; server: boolean }
-type Notice = "check-pending" | "rate-limited" | "check-failed" | "unavailable" | null
+type Notice = "check-pending" | DiscountCodeMessage | null
+
+// Answers that aren't a problem with the form: shown calmly, in blue.
+const CALM = new Set<Notice>(["claim-waiting", "invited", "joined"])
+
+function noticeText(copy: Copy, notice: Exclude<Notice, null>): string {
+  switch (notice) {
+    case "check-pending":
+      return copy.checkPending
+    case "rate-limited":
+      return copy.rateLimited
+    case "check-failed":
+      return copy.checkFailed
+    case "unavailable":
+      return copy.unavailable
+    default:
+      return copy.messages[notice]
+  }
+}
 
 // `discount` is the interview discount in whole TZS, or null when the page
 // couldn't read it.
@@ -40,7 +61,7 @@ export function DiscountCodeForm({
   const [draft, setDraft] = useState<AgentDraft>(EMPTY)
   const [problem, setProblem] = useState<Shown | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
-  const [registered, setRegistered] = useState<Registered | null>(null)
+  const [done, setDone] = useState<Done | null>(null)
   const [sending, startSending] = useTransition()
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const heading = useRef<HTMLHeadingElement>(null)
@@ -52,7 +73,7 @@ export function DiscountCodeForm({
     moved.current = false
     const target = problem ? document.querySelector<HTMLElement>(`[data-field="${problem.field}"]`) : heading.current
     target?.focus()
-  }, [problem, registered])
+  }, [problem, done])
 
   function update(change: Partial<AgentDraft>) {
     setDraft((current) => ({ ...current, ...change }))
@@ -79,6 +100,9 @@ export function DiscountCodeForm({
     data.set("full_name", draft.fullName)
     data.set("phone", draft.phone)
     data.set("whatsapp", draft.whatsapp)
+    data.set("email", draft.email)
+    data.set("has_code", draft.hasCode ? "yes" : "no")
+    data.set("code", draft.code)
     setNotice(null)
     setProblem(null)
     startSending(async () => {
@@ -88,9 +112,9 @@ export function DiscountCodeForm({
       } catch {
         result = { status: "unavailable" }
       }
-      if (result.status === "registered") {
+      if (result.status === "registered" || result.status === "claimed") {
         moved.current = true
-        setRegistered(result)
+        setDone(result)
         return
       }
       // The token is spent once checked, so get a fresh one for the next try.
@@ -100,20 +124,16 @@ export function DiscountCodeForm({
     })
   }
 
-  if (registered) {
-    return <Confirmation copy={copy} registered={registered} officePhone={officePhone} headingRef={heading} />
+  if (done) {
+    return <Confirmation copy={copy} done={done} officePhone={officePhone} headingRef={heading} />
   }
 
   const message = (field: AgentField) => {
     if (problem?.field !== field) return null
     if (problem.server && field === "phone") return copy.problems.phone_unreadable
+    if (problem.server && field === "code") return copy.problems.code_unreadable
     return copy.problems[field]
   }
-  const noticeText = notice
-    ? { "check-pending": copy.checkPending, "rate-limited": copy.rateLimited, "check-failed": copy.checkFailed, unavailable: copy.unavailable }[
-        notice
-      ]
-    : null
 
   return (
     <section className="rounded-[40px] bg-white px-5 py-7 shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">
@@ -159,16 +179,65 @@ export function DiscountCodeForm({
             type="tel"
             error={message("whatsapp")}
           />
+          <TextField
+            id="email"
+            field="email"
+            label={copy.email}
+            hint={copy.emailHint}
+            value={draft.email}
+            onChange={(email) => update({ email })}
+            type="email"
+            autoComplete="email"
+            error={message("email")}
+          />
+          <div className="rounded-3xl bg-blue-50 px-4 py-4 ring-1 ring-blue-100">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={draft.hasCode}
+                onChange={(event) => update({ hasCode: event.target.checked })}
+                aria-describedby="has-code-hint"
+                className="mt-0.5 size-5 shrink-0 accent-blue-600"
+              />
+              <span className="text-sm font-semibold text-slate-800">{copy.hasCode}</span>
+            </label>
+            <p id="has-code-hint" className="mt-1 pl-8 text-sm text-slate-600">
+              {copy.hasCodeHint}
+            </p>
+            <div className="mt-4">
+              <TextField
+                id="code"
+                field="code"
+                label={draft.hasCode ? copy.code : `${copy.code} (${copy.optional})`}
+                hint={copy.codeHint}
+                value={draft.code}
+                onChange={(code) => update({ code })}
+                autoComplete="off"
+                error={message("code")}
+              />
+            </div>
+          </div>
           <div>
             <TurnstileWidget ref={turnstile} action="agent" language={language} />
             <p className="mt-1 text-center text-xs text-slate-500">{copy.securityNote}</p>
           </div>
         </div>
 
-        {noticeText && (
-          <p role="alert" className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-200">
-            {noticeText}
-          </p>
+        {notice && (
+          <div
+            role="alert"
+            className={cn(
+              "mt-5 rounded-2xl px-4 py-3 text-sm ring-1",
+              CALM.has(notice) ? "bg-blue-50 text-blue-950 ring-blue-200" : "bg-red-50 text-red-700 ring-red-200",
+            )}
+          >
+            <p>{noticeText(copy, notice)}</p>
+            {notice === "joined" && (
+              <Link href="/discount-code/sign-in" className="mt-1 inline-block font-semibold underline underline-offset-4">
+                {copy.signIn}
+              </Link>
+            )}
+          </div>
         )}
 
         <button
@@ -179,6 +248,18 @@ export function DiscountCodeForm({
           {sending ? copy.sending : copy.send}
         </button>
       </form>
+
+      {/* Kept apart from the box above: this one is for someone who has
+          already set a password. */}
+      <p className="mt-6 text-center text-sm text-slate-600">
+        {copy.signInPrompt}{" "}
+        <Link
+          href="/discount-code/sign-in"
+          className="font-semibold text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
+        >
+          {copy.signIn}
+        </Link>
+      </p>
     </section>
   )
 }
@@ -200,7 +281,7 @@ function TextField({
   hint?: string
   value: string
   onChange: (value: string) => void
-  type?: "text" | "tel"
+  type?: "text" | "tel" | "email"
   autoComplete?: string
   error: string | null
 }) {
@@ -220,10 +301,10 @@ function TextField({
         name={field}
         data-field={field}
         type={type}
-        inputMode={type === "tel" ? "tel" : undefined}
+        inputMode={type === "tel" ? "tel" : type === "email" ? "email" : undefined}
         autoComplete={autoComplete}
         value={value}
-        maxLength={200}
+        maxLength={type === "email" ? 254 : 200}
         onChange={(event) => onChange(event.target.value)}
         aria-invalid={error ? true : undefined}
         aria-describedby={described}
@@ -243,12 +324,12 @@ function TextField({
 
 function Confirmation({
   copy,
-  registered,
+  done,
   officePhone,
   headingRef,
 }: {
   copy: Copy
-  registered: Registered
+  done: Done
   officePhone: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
 }) {
@@ -256,7 +337,7 @@ function Confirmation({
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(registered.link)
+      await navigator.clipboard.writeText(done.link)
       setCopied("yes")
     } catch {
       setCopied("failed")
@@ -272,13 +353,13 @@ function Confirmation({
         {copy.doneTitle}
       </h1>
       <p className="mt-4 rounded-3xl bg-blue-50 px-4 py-5 font-mono text-[2.5rem] font-bold leading-tight tracking-wide text-blue-600 ring-1 ring-blue-100">
-        {registered.code}
+        {done.code}
       </p>
 
       <div className="mt-6 text-left">
         <p className="text-sm font-semibold text-slate-700">{copy.linkLabel}</p>
         <p className="mt-1.5 break-all rounded-2xl bg-slate-50 px-4 py-3 font-mono text-sm text-slate-800 ring-1 ring-slate-200 select-all">
-          {registered.link}
+          {done.link}
         </p>
         <div className="mt-3 flex flex-col gap-3">
           <button
@@ -290,7 +371,7 @@ function Confirmation({
             {copied === "yes" ? copy.copied : copy.copy}
           </button>
           <a
-            href={whatsappShareLink(copy.shareText(registered.code, registered.link))}
+            href={whatsappShareLink(copy.shareText(done.code, done.link))}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex h-12 items-center justify-center rounded-full bg-orange-500 px-6 font-exo text-lg font-bold italic text-blue-600 shadow-md shadow-orange-500/20 outline-none transition hover:bg-orange-600 hover:text-blue-900 focus-visible:ring-3 focus-visible:ring-blue-600/40"
@@ -303,7 +384,14 @@ function Confirmation({
         </p>
       </div>
 
-      <p className="mt-6 rounded-3xl bg-orange-50 px-4 py-3 text-base text-orange-950">{copy.confirmNote}</p>
+      {done.status === "registered" ? (
+        <>
+          <p className="mt-6 rounded-3xl bg-orange-50 px-4 py-3 text-base text-orange-950">{copy.confirmNote}</p>
+          <p className="mt-3 rounded-3xl bg-blue-50 px-4 py-3 text-base wrap-anywhere text-blue-950">{copy.emailNote(done.email)}</p>
+        </>
+      ) : (
+        <p className="mt-6 rounded-3xl bg-blue-50 px-4 py-3 text-base text-blue-950">{copy.claimNote}</p>
+      )}
 
       <p className="mt-6 text-sm text-slate-600">{copy.call}</p>
       <a

@@ -29,7 +29,7 @@ async function register(page: Page, lang: Lang, who: ReturnType<typeof newcomer>
 async function agentByPhone(phone: string) {
   const { data, error } = await secretClient()
     .from("marketing_agents")
-    .select("full_name, code, status, whatsapp")
+    .select("full_name, code, status, whatsapp, email")
     .eq("phone", `+255${phone.slice(1)}`)
     .single()
   if (error) throw new Error(error.message)
@@ -71,17 +71,34 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
     await expect(page.getByRole("link", { name: "+255 673 526 644" })).toHaveAttribute("href", "tel:+255673526644")
     expect(await page.locator("body").innerText()).not.toMatch(FORBIDDEN)
 
-    expect(await agentByPhone(who.phone)).toEqual({ full_name: who.name, code, status: "Pending", whatsapp: "+255754000111" })
+    await expect(page.getByText(who.email)).toBeVisible()
+    expect(await agentByPhone(who.phone)).toEqual({
+      full_name: who.name,
+      code,
+      status: "Pending",
+      whatsapp: "+255754000111",
+      email: who.email,
+    })
   })
 }
 
-test("registering again with the same phone shows the same code", async ({ page }) => {
+test("registering again with the same details shows the same code; another name on the phone is told to tick the box", async ({
+  page,
+}) => {
   const who = newcomer()
   const first = await register(page, "sw", who)
 
-  const second = await register(page, "sw", { ...who, name: `${who.name} Tena` })
+  const second = await register(page, "sw", who)
   expect(second).toBe(first)
   await expect(page.getByText(`${ORIGIN}/apply?ref=${first}`, { exact: true })).toBeVisible()
+
+  await page.goto("/discount-code")
+  await fillRegistration(page, "sw", { ...who, name: `${who.name} Tena` })
+  await waitForSecurityCheck(page)
+  await page.getByRole("button", { name: WORDS.sw.send }).click()
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.",
+  )
 })
 
 test("the new agent arrives Pending on the Marketing Agents screen", async ({ page }) => {

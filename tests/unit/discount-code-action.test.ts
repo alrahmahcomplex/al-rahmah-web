@@ -24,8 +24,8 @@ vi.mock("@/lib/turnstile", () => ({
   },
 }))
 vi.mock("@/utils/supabase/public-form", () => ({ publicFormClient: () => stubs.client() }))
-vi.mock("@/lib/services/marketing-agents", () => ({
-  registerAgent: (...args: unknown[]) => {
+vi.mock("@/lib/services/agent-sign-up", () => ({
+  signUpAgent: (...args: unknown[]) => {
     calls.order.push("service")
     return stubs.register(...args)
   },
@@ -39,6 +39,9 @@ function posted(fields: Record<string, string> = {}) {
   data.set("full_name", "Rehema Juma")
   data.set("phone", "0712 345 678")
   data.set("whatsapp", "")
+  data.set("email", "Rehema@Example.test")
+  data.set("has_code", "no")
+  data.set("code", "")
   for (const [name, value] of Object.entries(fields)) data.set(name, value)
   return data
 }
@@ -56,7 +59,7 @@ beforeEach(() => {
   stubs.limit.mockReset().mockResolvedValue("allowed")
   stubs.turnstile.mockReset().mockResolvedValue({ ok: true, data: null })
   stubs.client.mockReset().mockReturnValue({ secret: "client" })
-  stubs.register.mockReset().mockResolvedValue({ ok: true, data: { code: "RJ-407" } })
+  stubs.register.mockReset().mockResolvedValue({ ok: true, data: { kind: "registered", code: "RJ-407", email: "rehema@example.test" } })
 })
 
 describe("registering for a Discount code", () => {
@@ -64,15 +67,47 @@ describe("registering for a Discount code", () => {
     const state = await send(posted())
 
     expect(calls.order).toEqual(["rate-limit", "turnstile", "service"])
-    expect(state).toEqual({ status: "registered", code: "RJ-407", link: "https://alrahmah.example/apply?ref=RJ-407" })
-    expect(stubs.limit).toHaveBeenCalledWith({ headers: stubs.headers.value, key: "agent" })
+    expect(state).toEqual({
+      status: "registered",
+      code: "RJ-407",
+      link: "https://alrahmah.example/apply?ref=RJ-407",
+      email: "rehema@example.test",
+    })
+    expect(stubs.limit).toHaveBeenCalledWith({ headers: stubs.headers.value, key: "agent", subject: "Rehema@Example.test" })
     expect(stubs.turnstile).toHaveBeenCalledWith({
       token: "token-from-widget",
       action: "agent",
       remoteIp: "203.0.113.7",
       hostname: "alrahmah.example",
     })
-    expect(stubs.register).toHaveBeenCalledWith({ secret: "client" }, { fullName: "Rehema Juma", phone: "0712 345 678", whatsapp: null })
+    expect(stubs.register).toHaveBeenCalledWith(
+      { secret: "client" },
+      { fullName: "Rehema Juma", phone: "0712 345 678", whatsapp: null, email: "rehema@example.test", hasCode: false, code: null },
+    )
+  })
+
+  it("passes the box and the code on, and shows a claimed code with its link", async () => {
+    stubs.register.mockResolvedValue({ ok: true, data: { kind: "claimed", code: "RJ-407" } })
+    expect(await send(posted({ has_code: "yes", code: " rj-407 " }))).toEqual({
+      status: "claimed",
+      code: "RJ-407",
+      link: "https://alrahmah.example/apply?ref=RJ-407",
+    })
+    expect(stubs.register).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ hasCode: true, code: "rj-407" }))
+  })
+
+  it.each([
+    ["code_needed", "code-needed"],
+    ["phone_mismatch", "phone-mismatch"],
+    ["no_match", "no-match"],
+    ["claim_waiting", "claim-waiting"],
+    ["invited", "invited"],
+    ["joined", "joined"],
+    ["email_unusable", "email-unusable"],
+    ["access_off", "access-off"],
+  ])("answers the %s outcome as %s", async (kind, status) => {
+    stubs.register.mockResolvedValue({ ok: true, data: { kind } })
+    expect(await send(posted())).toEqual({ status })
   })
 
   it("passes the WhatsApp number on when there is one", async () => {
@@ -103,6 +138,9 @@ describe("registering for a Discount code", () => {
     ["full_name", { full_name: "R" }],
     ["phone", { phone: "" }],
     ["whatsapp", { whatsapp: "0".repeat(41) }],
+    ["email", { email: "" }],
+    ["email", { email: "not-an-email" }],
+    ["code", { has_code: "yes", code: " " }],
   ])("validates after both checks and names the %s field, writing nothing", async (field, fields) => {
     expect(await send(posted(fields))).toEqual({ status: "invalid", field })
     expect(calls.order).toEqual(["rate-limit", "turnstile"])

@@ -1005,8 +1005,12 @@ function StudentStep({
   const groupIds = { class_name: `${ids}-class`, enrollment_year: `${ids}-year`, day_or_boarding: `${ids}-mode` }
 
   // The visit date reads as a line until staff change it, or until the
-  // database refuses it, or when it is no longer today.
+  // database refuses it, or when it is no longer today. Choosing to change
+  // it puts the cursor in the field once it is on screen.
   const visitOpen = visitOpened || field === "visit_date" || details.visitDate !== today
+  useEffect(() => {
+    if (visitOpened) dateRef.current?.focus()
+  }, [visitOpened])
 
   function choiceError(choice: MissingChoice) {
     return missing === choice || field === choice ? MISSING_MESSAGE[choice] : null
@@ -1136,10 +1140,7 @@ function StudentStep({
               type="button"
               aria-label="Change visit date"
               className="rounded-sm font-medium text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
-              onClick={() => {
-                setVisitOpened(true)
-                queueMicrotask(() => dateRef.current?.focus())
-              }}
+              onClick={() => setVisitOpened(true)}
             >
               change
             </button>

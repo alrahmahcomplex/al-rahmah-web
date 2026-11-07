@@ -150,11 +150,11 @@ test.describe("registering a new family", () => {
     await startNewStudent(page)
     await fillParent(page, newFamily())
     await expect(page.getByText(/^Visit date: today, /)).toBeVisible()
-    await expect(page.getByLabel("Visit date")).toHaveCount(0)
+    await expect(page.getByLabel("Visit date", { exact: true })).toHaveCount(0)
     await page.getByRole("button", { name: "Change visit date" }).click()
-    await expect(page.getByLabel("Visit date")).toBeFocused()
-    await expect(page.getByLabel("Visit date")).toHaveValue(tanzaniaToday())
-    await expect(page.getByLabel("Visit date")).toHaveAttribute("max", tanzaniaToday())
+    await expect(page.getByLabel("Visit date", { exact: true })).toBeFocused()
+    await expect(page.getByLabel("Visit date", { exact: true })).toHaveValue(tanzaniaToday())
+    await expect(page.getByLabel("Visit date", { exact: true })).toHaveAttribute("max", tanzaniaToday())
   })
 })
 
@@ -358,7 +358,9 @@ test.describe("a family who gives the student's name", () => {
     await page.getByRole("button", { name: "Find" }).click()
   }
 
-  test("sees the matching students, closed ones marked and listed last, and picks one", async ({ page }) => {
+  test("sees the matching students, Declined and Archived ones marked, the Archived one last, and picks one", async ({
+    page,
+  }) => {
     await signIn(page, ADMISSIONS)
     await search(page, "fixture")
 
@@ -366,10 +368,12 @@ test.describe("a family who gives the student's name", () => {
     await expect(matches).toBeVisible()
     const rows = matches.getByRole("link")
     await expect(rows).toHaveCount(6)
-    await expect(rows.last()).toContainText("Rehema Fixture")
-    await expect(rows.last()).toContainText("Declined")
-    await expect(rows.nth(4)).toContainText("Archived")
-    await expect(rows.first()).toContainText("ADMSN-9000")
+    // Leads without a closure mark come first, by name, Declined among them;
+    // Inactive and Archived ones follow.
+    await expect(rows.first()).toContainText("Baraka Fixture")
+    await expect(rows.filter({ hasText: "Rehema Fixture" })).toContainText("Declined")
+    await expect(rows.last()).toContainText("Hamisi Fixture")
+    await expect(rows.last()).toContainText("Archived")
 
     await matches.getByRole("link", { name: /Baraka Fixture/ }).click()
     await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000002$/)

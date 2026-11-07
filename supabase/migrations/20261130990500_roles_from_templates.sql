@@ -741,7 +741,8 @@ as $$
       and public.manages_role(s.role_id);
 $$;
 
--- Invites only into a role in the caller's managed set.
+-- Invites only into a role in the caller's managed set. An email already on
+-- staff names its holder only to someone who manages the holder's role.
 create or replace function public.invite_staff_member(full_name text, email text, role_id uuid)
 returns jsonb
 language plpgsql
@@ -783,6 +784,11 @@ begin
     if found and public.hidden_staff_member(existing.id) then
         raise exception 'email_taken' using detail = jsonb_build_object('email', invited_email)::text;
     end if;
+    -- Someone outside the caller's managed set is not theirs to read: no
+    -- name and no status, just the refusal.
+    if found and not public.manages_role(existing.role_id) then
+        raise exception 'forbidden';
+    end if;
     if found then
         raise exception 'already_staff'
             using detail = jsonb_build_object('email', invited_email, 'name', existing.full_name, 'active', existing.active)::text;
@@ -800,8 +806,15 @@ begin
         values (invited_name, invited_email, invited_role.id)
         returning id into new_id;
     exception when unique_violation then
-        -- Two people inviting the same email at once: the second loses here.
+        -- Two people inviting the same email at once: the second loses here,
+        -- and learns who holds it only if they manage that person's role.
         select * into existing from public.staff_members s where s.email = invited_email;
+        if public.hidden_staff_member(existing.id) then
+            raise exception 'email_taken' using detail = jsonb_build_object('email', invited_email)::text;
+        end if;
+        if not public.manages_role(existing.role_id) then
+            raise exception 'forbidden';
+        end if;
         raise exception 'already_staff'
             using detail = jsonb_build_object('email', invited_email, 'name', existing.full_name, 'active', existing.active)::text;
     end;

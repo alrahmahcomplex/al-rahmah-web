@@ -309,6 +309,195 @@ describe("an Administrator manages Managers and Head Accountants, never roles", 
   })
 })
 
+// The five staff actions for every template role that manages anyone,
+// inside its managed set and outside it (#241). Each guard has a case that
+// turns red if it goes.
+describe("the five staff actions, inside and outside each managed set", () => {
+  type Scope = { label: string; holder: () => Person | FixtureStaff; inside: () => string[]; outside: () => string[] }
+  const SCOPES: Scope[] = [
+    {
+      label: "Admissions Manager",
+      holder: () => MANAGER,
+      inside: () => [ROLE.admissionsStaff],
+      outside: () => [ROLE.accountant, ROLE.admissionsManager],
+    },
+    {
+      label: "Head Accountant",
+      holder: () => headAccountant,
+      inside: () => [ROLE.accountant],
+      outside: () => [ROLE.admissionsStaff, headAccountantRole, administratorRole],
+    },
+    {
+      label: "Administrator",
+      holder: () => administrator,
+      inside: () => [ROLE.admissionsManager, headAccountantRole],
+      outside: () => [ROLE.admissionsStaff, ROLE.accountant, administratorRole],
+    },
+  ]
+
+  // Someone on `role` who has not opened their invite: a record with no login.
+  async function invitedOn(role: string): Promise<string> {
+    return asSystem(async (sql) => {
+      const { rows } = await sql.query<{ id: string }>(
+        "insert into public.staff_members (full_name, email, role_id) values ($1, $2, $3) returning id",
+        [unique("Invited"), newEmail(), role],
+      )
+      return rows[0].id
+    })
+  }
+
+  async function deactivatedOn(role: string): Promise<string> {
+    const person = await createThrowawayStaff([], { onRole: role })
+    await asSystem((sql) => sql.query("update public.staff_members set active = false where id = $1", [person.id]))
+    return person.id
+  }
+
+  for (const scope of SCOPES) {
+    describe(scope.label, () => {
+      test("invites into each role in the set, and is forbidden every other", async () => {
+        const client = await signedIn(scope.holder())
+        for (const role of scope.inside()) {
+          expect(code(await client.rpc("invite_staff_member", { full_name: "Inside", email: newEmail(), role_id: role })), role).toBeNull()
+        }
+        for (const role of scope.outside()) {
+          expect(code(await client.rpc("invite_staff_member", { full_name: "Outside", email: newEmail(), role_id: role })), role).toBe("forbidden")
+        }
+      })
+
+      test("resends an invite inside the set, and is forbidden outside it", async () => {
+        const client = await signedIn(scope.holder())
+        for (const role of scope.inside()) {
+          expect(code(await client.rpc("resendable_invite", { staff_id: await invitedOn(role) })), role).toBeNull()
+        }
+        for (const role of scope.outside()) {
+          expect(code(await client.rpc("resendable_invite", { staff_id: await invitedOn(role) })), role).toBe("forbidden")
+        }
+      })
+
+      test("deactivates inside the set, and is forbidden outside it", async () => {
+        const client = await signedIn(scope.holder())
+        for (const role of scope.inside()) {
+          const target = await createThrowawayStaff([], { onRole: role })
+          expect(code(await client.rpc("deactivate_staff_member", { staff_id: target.id })), role).toBeNull()
+        }
+        for (const role of scope.outside()) {
+          const target = await createThrowawayStaff([], { onRole: role })
+          expect(code(await client.rpc("deactivate_staff_member", { staff_id: target.id })), role).toBe("forbidden")
+        }
+      })
+
+      test("reactivates inside the set, and is forbidden outside it", async () => {
+        const client = await signedIn(scope.holder())
+        for (const role of scope.inside()) {
+          expect(code(await client.rpc("reactivate_staff_member", { staff_id: await deactivatedOn(role) })), role).toBeNull()
+        }
+        for (const role of scope.outside()) {
+          expect(code(await client.rpc("reactivate_staff_member", { staff_id: await deactivatedOn(role) })), role).toBe("forbidden")
+        }
+      })
+
+      test("reassigns only between roles in the set: never into it from outside, nor out of it", async () => {
+        const client = await signedIn(scope.holder())
+        const inside = scope.inside()
+        for (const from of inside) {
+          for (const to of scope.outside()) {
+            const target = await createThrowawayStaff([], { onRole: from })
+            expect(code(await client.rpc("assign_staff_role", { staff_id: target.id, role_id: to })), `${from} -> ${to}`).toBe("forbidden")
+          }
+        }
+        for (const from of scope.outside()) {
+          const target = await createThrowawayStaff([], { onRole: from })
+          expect(code(await client.rpc("assign_staff_role", { staff_id: target.id, role_id: inside[0] })), `${from} -> ${inside[0]}`).toBe(
+            "forbidden",
+          )
+        }
+        if (inside.length > 1) {
+          const target = await createThrowawayStaff([], { onRole: inside[0] })
+          expect(code(await client.rpc("assign_staff_role", { staff_id: target.id, role_id: inside[1] }))).toBeNull()
+        }
+      })
+    })
+  }
+})
+
+// A Manager who types an email already on staff learns who holds it only if
+// they manage that person's role (#241 review).
+describe("an invite never names someone outside the caller's managed set", () => {
+  test("an Accountant's email, invited into Admissions Staff by the Manager, is forbidden with no name or status", async () => {
+    const { error } = await (await signedIn(MANAGER)).rpc("invite_staff_member", {
+      full_name: "Same Email",
+      email: ACCOUNTANT.email.toUpperCase(),
+      role_id: ROLE.admissionsStaff,
+    })
+    expect(error?.message).toBe("forbidden")
+    expect(error?.details ?? "").not.toContain(ACCOUNTANT.name)
+    expect(error?.details ?? "").not.toContain("active")
+  })
+
+  test("an email inside the set still names its holder", async () => {
+    const { error } = await (await signedIn(MANAGER)).rpc("invite_staff_member", {
+      full_name: "Same Email",
+      email: ADMISSIONS.email,
+      role_id: ROLE.admissionsStaff,
+    })
+    expect(error?.message).toBe("already_staff")
+    expect(JSON.parse(error?.details ?? "{}")).toEqual({ email: ADMISSIONS.email, name: ADMISSIONS.name, active: true })
+  })
+
+  test("losing a race to an Accountant's record with the same email is forbidden too, with no name", async () => {
+    const email = newEmail()
+    const first = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    const manager = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await first.connect()
+    await manager.connect()
+    try {
+      // The Accountant's record is written and not yet committed...
+      await first.query("begin")
+      await first.query("select public.set_audit_actor('system')")
+      await first.query("insert into public.staff_members (full_name, email, role_id) values ('Racing Accountant', $1, $2)", [
+        email,
+        ROLE.accountant,
+      ])
+
+      // ...so the Manager's invite finds nobody, then waits on the unique email.
+      await manager.query("set statement_timeout = '15s'")
+      await manager.query("begin")
+      await manager.query("select set_config('request.jwt.claims', $1, true)", [
+        JSON.stringify({ sub: "11111111-1111-4111-8111-111111111111", role: "authenticated" }),
+      ])
+      const invite = manager
+        .query("select public.invite_staff_member('Racing Invitee', $1, $2)", [email, ROLE.admissionsStaff])
+        .then(
+          () => null,
+          (error: { message: string; detail?: string }) => error,
+        )
+      // Wait until the invite is blocked on the uncommitted record, so it is
+      // the unique index, not the first lookup, that refuses it.
+      await expect
+        .poll(async () =>
+          inRolledBackTransaction(async (sql) =>
+            (
+              await sql.query<{ waiting: boolean }>(
+                "select exists (select 1 from pg_stat_activity where pid <> pg_backend_pid() and query like '%Racing Invitee%' and wait_event_type = 'Lock') as waiting",
+              )
+            ).rows[0].waiting,
+          ),
+        )
+        .toBe(true)
+      await first.query("commit")
+
+      const error = await invite
+      expect(error?.message).toBe("forbidden")
+      expect(error?.detail ?? "").not.toContain("Racing Accountant")
+    } finally {
+      await first.query("rollback").catch(() => {})
+      await manager.query("rollback").catch(() => {})
+      await first.end()
+      await manager.end()
+    }
+  })
+})
+
 describe("a role with no managed set", () => {
   test("manages nobody: every staff write is not_permitted", async () => {
     const client = await signedIn(ACCOUNTANT)
@@ -352,6 +541,12 @@ describe("the refusals under the secret key, each on a fresh connection", () => 
     ["a pair under the Super Admin role", "insert into public.role_managed_roles (role_id, managed_role_id) values ($2, $1)", [ROLE.accountant, SUPER_ADMIN.roleId], "super_admin_frozen"],
     ["deleting a pair", "delete from public.role_managed_roles", [], "delete_refused"],
     ["truncating the pairs", "truncate public.role_managed_roles", [], "delete_refused"],
+    [
+      "an invite naming an Accountant's email",
+      "select public.invite_staff_member('Same Email', $1, $2)",
+      [ACCOUNTANT.email, ROLE.admissionsStaff],
+      "not_permitted",
+    ],
   ]
   for (const [what, statement, params, expected] of cases) {
     test(`${what} is refused with ${expected}`, async () => {

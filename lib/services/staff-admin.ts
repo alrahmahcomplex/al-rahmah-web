@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { RESERVED_PERMISSIONS, type Permission } from "@/lib/permissions"
+import { roleTemplate, templateLinks } from "@/lib/role-templates"
 
 import { recordAction } from "./audit"
 import type { Result } from "./result"
@@ -25,6 +26,7 @@ export type RefusalCode =
   | "not_found"
   | "role_not_retired"
   | "manages_itself"
+  | "unknown_template"
   | "role_has_active_holders"
   | "duplicate_role_name"
   | "role_name_required"
@@ -61,6 +63,7 @@ const MESSAGES: Record<RefusalCode, (names: RefusalNames) => string> = {
   name_required: () => "Enter the person's full name.",
   not_found: () => "That staff member or role no longer exists. Reload the page and try again.",
   role_not_retired: ({ role }) => `${role} is already a current role.`,
+  unknown_template: () => "That template no longer exists. Reload the page and try again.",
   manages_itself: ({ role }) => `${role} can't manage its own staff: its holders would manage each other.`,
   role_has_active_holders: ({ role, names = [] }) =>
     `${role} is still held by ${LIST.format(names)}. Move them to another role first.`,
@@ -169,6 +172,28 @@ export function reactivateRole(supabase: SupabaseClient, roleId: string) {
 // Adds `managedRoleId` to the role's managed set, or takes it out.
 export function setRoleManages(supabase: SupabaseClient, roleId: string, managedRoleId: string, manages: boolean) {
   return write<RoleNames>(supabase, "set_role_manages", { role_id: roleId, managed_role_id: managedRoleId, manages })
+}
+
+// A role from a template (lib/role-templates.ts), or blank without one. From
+// a template it takes the template's permissions, manages the current roles
+// its template manages, and joins the managed set of every current role
+// whose template manages it. The database checks that the caller is the
+// Super Admin.
+export async function createRoleFromTemplate(
+  supabase: SupabaseClient,
+  name: string,
+  templateName: string | null,
+): Promise<Result<RoleNames, Refusal>> {
+  if (!templateName) return createRole(supabase, name)
+  const template = roleTemplate(templateName)
+  if (!template) return { ok: false, error: refusal("unknown_template") }
+
+  const { data, error } = await supabase.from("roles").select("id, name, retired")
+  if (error) {
+    console.error("Could not read the roles to link a new role", error)
+    return { ok: false, error: refusal("unavailable") }
+  }
+  return createRole(supabase, name, { permissions: template.permissions, ...templateLinks(template, data ?? []) })
 }
 
 export function renameRole(supabase: SupabaseClient, roleId: string, name: string) {
@@ -301,7 +326,12 @@ export type StaffAndRoles = {
   // the staff above plus the signed-in Super Admin's own record, which the
   // list leaves out.
   actorNames?: ReadonlyMap<string, string>
+  // Every managed-set pair, switched on or off, by its id, so the history
+  // can name both roles when a pair is switched.
+  managedPairs?: ReadonlyMap<string, ManagedPair>
 }
+
+export type ManagedPair = { roleId: string; managedRoleId: string }
 
 type RoleRow = { id: string; name: string; permissions: Permission[]; retired: boolean }
 type StaffRow = { id: string; full_name: string; email: string; role_id: string; active: boolean }
@@ -313,7 +343,7 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
     // Row security returns the staff the caller manages, and their own record.
     supabase.from("staff_members").select("id, full_name, email, role_id, active").order("full_name"),
     supabase.rpc("invited_staff_members"),
-    supabase.from("role_managed_roles").select("role_id, managed_role_id").eq("active", true),
+    supabase.from("role_managed_roles").select("id, role_id, managed_role_id, active"),
   ])
   const error = permissions.error ?? roles.error ?? staff.error ?? invited.error ?? managed.error
   if (error) {
@@ -328,7 +358,7 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
   const readable = (staff.data ?? []) as StaffRow[]
   const staffRows = readable.filter((s) => roleRows.some((role) => role.id === s.role_id))
   const invitedIds = new Set((invited.data ?? []) as string[])
-  const pairs = (managed.data ?? []) as { role_id: string; managed_role_id: string }[]
+  const pairs = (managed.data ?? []) as { id: string; role_id: string; managed_role_id: string; active: boolean }[]
   return {
     ok: true,
     data: {
@@ -336,7 +366,7 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
       roles: roleRows.map((role) => ({
         ...role,
         activeHolders: staffRows.filter((s) => s.role_id === role.id && s.active).length,
-        manages: pairs.filter((pair) => pair.role_id === role.id).map((pair) => pair.managed_role_id),
+        manages: pairs.filter((pair) => pair.active && pair.role_id === role.id).map((pair) => pair.managed_role_id),
       })),
       staff: staffRows.map((s) => ({
         id: s.id,
@@ -347,6 +377,7 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
         invited: invitedIds.has(s.id),
       })),
       actorNames: new Map(readable.map((s) => [s.id, s.full_name])),
+      managedPairs: new Map(pairs.map((pair) => [pair.id, { roleId: pair.role_id, managedRoleId: pair.managed_role_id }])),
     },
   }
 }
@@ -383,6 +414,7 @@ export type HistoryLookup = {
   staffNames: ReadonlyMap<string, string>
   roleNames: ReadonlyMap<string, string>
   permissionLabels: ReadonlyMap<string, string>
+  managedPairs?: ReadonlyMap<string, ManagedPair>
 }
 
 const ACTOR_KINDS: Record<string, string> = {
@@ -467,13 +499,14 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
 
   let summary: string
   if (isPair) {
-    // A managed-set pair names both roles when it is made; an update carries
-    // only the switch, so it reads without them.
+    // A managed-set pair names both roles when it is made. An update carries
+    // only the switch, so the roles come from the pair itself, by row id.
     const on = newValues.active !== false
-    const manager = lookup.roleNames.get(String(newValues.role_id ?? "")) ?? "a role"
-    const managed = lookup.roleNames.get(String(newValues.managed_role_id ?? "")) ?? "a role"
+    const pair = lookup.managedPairs?.get(row.row_id ?? "")
+    const manager = lookup.roleNames.get(String(newValues.role_id ?? pair?.roleId ?? "")) ?? "a role"
+    const managed = lookup.roleNames.get(String(newValues.managed_role_id ?? pair?.managedRoleId ?? "")) ?? "a role"
     if (row.action === "insert") summary = on ? `let ${manager} manage the staff in ${managed}` : `recorded that ${manager} doesn't manage ${managed}`
-    else summary = on ? "put a role back in a managed set" : "took a role out of a managed set"
+    else summary = on ? `let ${manager} manage the staff in ${managed} again` : `stopped ${manager} managing the staff in ${managed}`
   } else if (row.action === "insert") summary = isStaff ? `added ${subject} to staff` : isRole ? `created the role ${subject}` : `added a ${row.table_name} row`
   else if (row.action === "update") summary = isRole ? `changed the role ${subject}` : isStaff ? `changed ${subject}` : `changed a ${row.table_name} row`
   else if (row.action === "invite_sent") summary = invitee ? `sent an invite to ${invitee}` : "sent an invite"
@@ -526,6 +559,7 @@ export async function getStaffAdminHistory(
     // The Super Admin role is left out of the roles; its own entries still name it.
     roleNames: new Map([[SUPER_ADMIN_ROLE_ID, "Super Admin"], ...staffAndRoles.roles.map((r): [string, string] => [r.id, r.name])]),
     permissionLabels: new Map(staffAndRoles.permissions.map((p) => [p.name, p.label])),
+    managedPairs: staffAndRoles.managedPairs,
   }
   return { ok: true, data: ((data ?? []) as AuditRow[]).map((row) => describeAuditRow(row, lookup)) }
 }

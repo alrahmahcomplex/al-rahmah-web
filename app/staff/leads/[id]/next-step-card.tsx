@@ -75,7 +75,7 @@ export async function NextStepCard({
       )}
     >
       <div className="flex min-w-0 flex-1 basis-72 flex-col gap-0.5">
-        <h2 className="font-semibold text-slate-900">
+        <h2 className="staff-section-heading">
           {text ? `Next step: ${text.title}` : "Next step"}
         </h2>
         <p className="text-sm text-muted-foreground">

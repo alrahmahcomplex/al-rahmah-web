@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 
+import { StatusChip } from "@/components/status-chip"
 import { Badge } from "@/components/ui/badge"
 import { formatDate } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
@@ -11,13 +12,13 @@ export function LeadSummary({ lead, nextStep }: { lead: Lead; nextStep?: ReactNo
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">{lead.studentName}</h1>
+        <h1 className="staff-heading">{lead.studentName}</h1>
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-mono text-lg font-semibold text-slate-900" aria-label="Admission Number">
             {lead.admissionNumber}
           </p>
-          <Badge variant="secondary">{lead.status}</Badge>
-          {lead.closure && <Badge variant="outline">{lead.closure}</Badge>}
+          <StatusChip status={lead.status} />
+          {lead.closure && <StatusChip status={lead.closure} />}
           {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
           {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
         </div>
@@ -26,14 +27,14 @@ export function LeadSummary({ lead, nextStep }: { lead: Lead; nextStep?: ReactNo
       {nextStep}
 
       <section aria-labelledby="lead-student" className="flex flex-col gap-2">
-        <h2 id="lead-student" className="text-sm font-semibold text-slate-900">
+        <h2 id="lead-student" className="staff-section-heading">
           Student
         </h2>
         <Details rows={studentRows(lead)} />
       </section>
 
       <section aria-labelledby="lead-parent" className="flex flex-col gap-2">
-        <h2 id="lead-parent" className="text-sm font-semibold text-slate-900">
+        <h2 id="lead-parent" className="staff-section-heading">
           Parent or guardian
         </h2>
         <Details rows={parentRows(lead)} />

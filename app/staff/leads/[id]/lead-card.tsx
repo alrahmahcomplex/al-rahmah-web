@@ -9,7 +9,7 @@ export const LEAD_CARD = "flex min-w-0 flex-col gap-3 rounded-xl border bg-card 
 export function CardHeading({ id, title, action }: { id: string; title: string; action?: ReactNode }) {
   return (
     <div className="flex min-h-7 items-center justify-between gap-3">
-      <h2 id={id} className="text-sm font-semibold text-slate-900">
+      <h2 id={id} className="staff-section-heading">
         {title}
       </h2>
       {action}

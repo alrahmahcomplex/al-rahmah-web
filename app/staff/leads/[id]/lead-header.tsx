@@ -2,6 +2,7 @@ import { HistoryIcon } from "lucide-react"
 import Link from "next/link"
 import type { ReactNode } from "react"
 
+import { StatusChip } from "@/components/status-chip"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/school-calendar"
@@ -36,10 +37,10 @@ export function LeadHeader({
         </span>
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h1 className="font-exo text-2xl font-extrabold italic break-words text-blue-600">{lead.studentName}</h1>
-            <Badge variant="secondary">{lead.status}</Badge>
+            <h1 className="staff-heading break-words">{lead.studentName}</h1>
+            <StatusChip status={lead.status} />
             {statusSince && <span className="text-sm text-muted-foreground">since {formatDate(statusSince)}</span>}
-            {lead.closure && <Badge variant="outline">{lead.closure}</Badge>}
+            {lead.closure && <StatusChip status={lead.closure} />}
             {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
             {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
           </div>

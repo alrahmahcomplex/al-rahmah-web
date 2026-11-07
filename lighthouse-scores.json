@@ -1,0 +1,86 @@
+{
+  "desktop": [
+    {
+      "step": "Check-in",
+      "accessibility": 100,
+      "failing": []
+    },
+    {
+      "step": "Check-in: name matches",
+      "accessibility": 96,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    },
+    {
+      "step": "Register: parent or guardian",
+      "accessibility": 97,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    },
+    {
+      "step": "Register: student",
+      "accessibility": 97,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    },
+    {
+      "step": "Register: review",
+      "accessibility": 97,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    },
+    {
+      "step": "Register: success",
+      "accessibility": 96,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    }
+  ],
+  "phone": [
+    {
+      "step": "Check-in",
+      "accessibility": 100,
+      "failing": []
+    },
+    {
+      "step": "Check-in: name matches",
+      "accessibility": 96,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    },
+    {
+      "step": "Register: parent or guardian",
+      "accessibility": 97,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    },
+    {
+      "step": "Register: student",
+      "accessibility": 97,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    },
+    {
+      "step": "Register: review",
+      "accessibility": 97,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    },
+    {
+      "step": "Register: success",
+      "accessibility": 96,
+      "failing": [
+        "color-contrast: Background and foreground colors do not have a sufficient contrast ratio."
+      ]
+    }
+  ]
+}

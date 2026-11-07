@@ -17,7 +17,6 @@ import { LeadHeader } from "./lead-header"
 import { LeadMoreMenu } from "./lead-more-menu"
 import { NextStepCard } from "./next-step-card"
 import { LEAD_PANELS } from "./panels"
-import { RecordVisit } from "./record-visit"
 import { canRaiseReopening } from "./reopening-outcome"
 import { nobodyHasAsked } from "./reopening-section"
 import { LEAD_TABS, leadTab, leadTabHref } from "./tabs"
@@ -50,8 +49,6 @@ export default async function LeadPage({
   }
 
   const open = !isClosed(lead.data)
-  // An open Applied lead is waiting for the family's first visit.
-  const canRecordVisit = open && lead.data.status === "Applied" && staff.permissions.includes("visits.record")
   const canRequestReopening = !open && canRaiseReopening(staff.permissions)
   // A mark is the one change a closed lead takes, so Mark inactive and Archive
   // follow the lead's mark rather than `open`.
@@ -79,19 +76,7 @@ export default async function LeadPage({
       />
 
       {open ? (
-        <NextStepCard
-          lead={lead.data}
-          staff={staff}
-          tab={tab}
-          recordVisit={
-            // Rendered for every lead the staff member could record a visit
-            // on, so the confirmation outlasts the refresh that removes the
-            // offer once the lead is Visited.
-            staff.permissions.includes("visits.record") && (
-              <RecordVisit key={lead.data.id} leadId={lead.data.id} canRecord={canRecordVisit} />
-            )
-          }
-        />
+        <NextStepCard lead={lead.data} staff={staff} tab={tab} />
       ) : (
         <ClosedLeadBanner lead={lead.data} canRequestReopening={canRequestReopening} />
       )}

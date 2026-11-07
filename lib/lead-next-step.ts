@@ -1,6 +1,7 @@
 import type { Permission } from "@/lib/permissions"
 import type { InterviewFeeStatus, InterviewResult, RegistrationKind } from "@/lib/services/interviews"
 import type { LeadClosure, LeadStatus } from "@/lib/services/leads"
+import type { ReopeningState } from "@/lib/services/reopening-requests"
 import type { ReleaseBlocker } from "@/lib/services/result-release"
 import type { SeatPriority } from "@/lib/services/school-fee-payments"
 
@@ -22,8 +23,9 @@ export type NextStepInput = {
   // Which interview registration the lead takes now: "retake" after a
   // reopening for a retaken interview. Null when none, or unreadable.
   registration: RegistrationKind | null
-  // The latest reopening from Declined approved enrolling without a retaken
-  // interview, so a Failed result no longer stands in the way.
+  // The lead's latest approved reopening chose enrolling without a retaken
+  // interview (enrolsWithoutRetake), so a Failed result no longer stands in
+  // the way of School fee payments.
   enrolWithoutRetake: boolean
   // Where the current result's release stands; null when it couldn't be read.
   release: { blocked: ReleaseBlocker | null; sent: boolean; changedSinceSent: boolean } | null
@@ -86,6 +88,19 @@ function schoolFeeStep(fee: NextStepInput["fee"]): NextStep {
   if (fee === null) return { kind: "school-fee-unknown" }
   if (fee.priority === null) return { kind: "record-deposit" }
   return { kind: "collect-school-fee", priority: fee.priority }
+}
+
+// Whether payments may go ahead despite a Failed result: the latest approved
+// reopening request chose Enrol without a retaken interview. A later approval
+// without that choice takes it away. The database's rule is
+// reopened_to_enrol, which check_school_fee_payment applies.
+export function enrolsWithoutRetake(
+  requests: readonly { state: ReopeningState; decidedAt: string | null; enrolWithoutRetake: boolean | null }[],
+): boolean {
+  const latest = requests
+    .filter((request) => request.state === "approved" && request.decidedAt !== null)
+    .reduce<(typeof requests)[number] | null>((newest, request) => (newest === null || request.decidedAt! > newest.decidedAt! ? request : newest), null)
+  return latest?.enrolWithoutRetake === true
 }
 
 export type NextStepTab = "overview" | "interview" | "school-fee" | "follow-ups"

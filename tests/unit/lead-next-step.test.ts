@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { nextStep, nextStepText, type NextStep, type NextStepInput } from "@/lib/lead-next-step"
+import { enrolsWithoutRetake, nextStep, nextStepText, type NextStep, type NextStepInput } from "@/lib/lead-next-step"
 import { formatDate } from "@/lib/school-calendar"
 
 const TODAY = "2026-11-07"
@@ -221,5 +221,28 @@ describe("the Next step card's text", () => {
       "6 Nov 2026",
     )
     expect(nextStepText({ kind: "wait-for-follow-up", dueOn: "2026-11-20" }, formatDate).title).toBe("Follow up on 20 Nov 2026")
+  })
+})
+
+describe("whether payments may go ahead despite a Failed result", () => {
+  const approved = (decidedAt: string, enrolWithoutRetake: boolean | null) =>
+    ({ state: "approved", decidedAt, enrolWithoutRetake }) as const
+
+  it("follows the latest approved reopening, as reopened_to_enrol does", () => {
+    expect(enrolsWithoutRetake([approved("2026-10-01T09:00:00Z", true)])).toBe(true)
+    // A later approval without the choice takes it away, in any order given.
+    expect(enrolsWithoutRetake([approved("2026-10-01T09:00:00Z", true), approved("2026-11-01T09:00:00Z", null)])).toBe(false)
+    expect(enrolsWithoutRetake([approved("2026-11-01T09:00:00Z", false), approved("2026-10-01T09:00:00Z", true)])).toBe(false)
+  })
+
+  it("ignores requests that were rejected or withdrawn, and a lead never reopened", () => {
+    expect(
+      enrolsWithoutRetake([
+        approved("2026-10-01T09:00:00Z", true),
+        { state: "rejected", decidedAt: "2026-11-01T09:00:00Z", enrolWithoutRetake: null },
+        { state: "withdrawn", decidedAt: "2026-11-02T09:00:00Z", enrolWithoutRetake: null },
+      ]),
+    ).toBe(true)
+    expect(enrolsWithoutRetake([])).toBe(false)
   })
 })

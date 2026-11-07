@@ -1,40 +1,35 @@
 import Link from "next/link"
-import type { ReactNode } from "react"
 
 import { buttonVariants } from "@/components/ui/button"
-import { nextStep, nextStepText } from "@/lib/lead-next-step"
+import { enrolsWithoutRetake, nextStep, nextStepText } from "@/lib/lead-next-step"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 import { cn } from "@/lib/utils"
 
-import { readClosure, readFee, readFollowUps, readInterviews, readRegistration, readRelease } from "./lead-reads"
+import { readFee, readFollowUps, readInterviews, readRegistration, readRelease, readReopenings } from "./lead-reads"
+import { RecordVisit } from "./record-visit"
 import { LEAD_TABS, leadTabHref, type LeadTab } from "./tabs"
 
 // The one thing that should happen next on an open lead (lib/lead-next-step),
 // under the header. Its button takes staff who may do it to the tab where it
 // is done; anyone else gets a plain link to that tab, unless it is the tab
-// already open. `recordVisit` is Record
-// visit, which works in place here: it is passed on every lead the staff
-// member may record visits on, so its confirmation outlasts the refresh that
-// moves the step on.
+// already open. Record visit works in place here.
 export async function NextStepCard({
   lead,
   staff,
   tab,
-  recordVisit,
 }: {
   lead: Lead
   staff: StaffMember
   // The tab open below the card.
   tab: LeadTab
-  recordVisit: ReactNode
 }) {
   const canSeeFee = staff.permissions.includes("payments.view")
-  const [interviews, registration, closure, release, fee, followUps] = await Promise.all([
+  const [interviews, registration, reopenings, release, fee, followUps] = await Promise.all([
     readInterviews(lead.id),
     readRegistration(lead.id),
-    readClosure(lead.id),
+    readReopenings(lead.id),
     readRelease(lead.id),
     canSeeFee ? readFee(lead.id) : null,
     readFollowUps(lead.id),
@@ -47,7 +42,7 @@ export async function NextStepCard({
         closure: lead.closure,
         interview: current && { feeStatus: current.feeStatus, amount: current.amount, result: current.result },
         registration: registration.ok ? registration.data : null,
-        enrolWithoutRetake: closure.ok && closure.data.reopenedAfterDecline?.enrolWithoutRetake === true,
+        enrolWithoutRetake: reopenings.ok && enrolsWithoutRetake(reopenings.data.decided),
         release: release.ok
           ? {
               blocked: release.data.blocked,
@@ -98,7 +93,12 @@ export async function NextStepCard({
           {mayAct ? action.label : `Open ${LEAD_TABS.find((each) => each.key === action.tab)?.label}`}
         </Link>
       )}
-      {recordVisit}
+      {staff.permissions.includes("visits.record") && (
+        // Mounted for everyone who may record visits, so its confirmation
+        // outlasts the refresh that moves the step on; it offers its button
+        // only while Record visit is the step.
+        <RecordVisit key={lead.id} leadId={lead.id} canRecord={step?.kind === "record-visit"} />
+      )}
     </section>
   )
 }

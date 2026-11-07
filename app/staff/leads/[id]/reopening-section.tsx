@@ -1,23 +1,22 @@
 import Link from "next/link"
-import { cache, type ReactNode } from "react"
+import type { ReactNode } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { getLeadClosure } from "@/lib/services/lead-closure"
 import type { Lead } from "@/lib/services/leads"
-import { getLeadReopenings, needsRetakeChoice, type ReopeningRequest } from "@/lib/services/reopening-requests"
+import { needsRetakeChoice, type ReopeningRequest } from "@/lib/services/reopening-requests"
 import { seatCheck } from "@/lib/services/seats"
 import { createClient } from "@/utils/supabase/server"
 
 import { DecideReopening } from "./decide-reopening"
+import { readReopenings } from "./lead-reads"
 import type { LeadPanelProps } from "./panels"
 import { approvalConsequence, approvalSeats, canDecideReopening, retakeChoiceText } from "./reopening-decision-outcome"
 import { canRaiseReopening, dayOf, SOURCE_LABELS, STATE_LABELS } from "./reopening-outcome"
 import { WithdrawReopening } from "./withdraw-reopening"
 
-// Read once per page render: the closed-lead banner and this panel both ask.
-const readReopenings = cache(async (leadId: string) => getLeadReopenings(await createClient(), leadId))
 
 // Whether Request reopening may be offered on the lead: no request is
 // Pending, as far as the requests can be read.

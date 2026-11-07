@@ -105,16 +105,6 @@ export async function unusedAdmissionNumber(): Promise<string> {
   })
 }
 
-// The Super Admin holds every permission, so once they have joined they
-// count as an administrator (#237). A test of the last-administrator guard
-// takes them out first, inside its own rolled-back transaction, lifting the
-// freeze by name the way a migration would.
-export async function withoutSuperAdmin(sql: Client): Promise<void> {
-  await sql.query("alter table public.staff_members disable trigger refuse_super_admin_holder_change")
-  await sql.query("update public.staff_members set active = false where role_id = '5a000000-0000-4000-8000-000000000001'")
-  await sql.query("alter table public.staff_members enable trigger refuse_super_admin_holder_change")
-}
-
 export function asSystem<T>(work: (sql: Client) => Promise<T>): Promise<T> {
   return committedAs("select public.set_audit_actor('system')", [], work)
 }
@@ -143,27 +133,33 @@ async function committedAs<T>(setActor: string, params: unknown[], work: (sql: C
 }
 
 // A staff member of their own, on a role of their own, for a test that
-// changes them. Staff rows are never deleted, so each run adds new ones;
-// `npm run db:reset` clears them.
-export async function createThrowawayStaff(permissions: string[]): Promise<FixtureStaff & { roleId: string }> {
+// changes them. With `onRole`, they join that existing role instead, so a
+// test can put someone inside or outside a managed set (#241). Staff rows are
+// never deleted, so each run adds new ones; `npm run db:reset` clears them.
+export async function createThrowawayStaff(
+  permissions: string[],
+  { onRole }: { onRole?: string } = {},
+): Promise<FixtureStaff & { roleId: string }> {
   const suffix = randomUUID().slice(0, 8)
   const email = `throwaway-${suffix}@example.test`
   const password = "fixture-password"
 
-  const { id, roleId } = await asSystem(async (sql) => {
-    const role = await sql.query<{ id: string }>(
-      "insert into public.roles (name, permissions) values ($1, $2) returning id",
-      [`Throwaway role ${suffix}`, permissions],
-    )
+  const { id, roleId, roleName } = await asSystem(async (sql) => {
+    const role = onRole
+      ? await sql.query<{ id: string; name: string }>("select id, name from public.roles where id = $1", [onRole])
+      : await sql.query<{ id: string; name: string }>(
+          "insert into public.roles (name, permissions) values ($1, $2) returning id, name",
+          [`Throwaway role ${suffix}`, permissions],
+        )
     const member = await sql.query<{ id: string }>(
       "insert into public.staff_members (full_name, email, role_id) values ($1, $2, $3) returning id",
       [`Throwaway ${suffix}`, email, role.rows[0].id],
     )
-    return { id: member.rows[0].id, roleId: role.rows[0].id }
+    return { id: member.rows[0].id, roleId: role.rows[0].id, roleName: role.rows[0].name }
   })
 
   const { error } = await secretClient().auth.admin.createUser({ email, password, email_confirm: true })
   if (error) throw new Error(`Could not create the account for ${email}: ${error.message}`)
 
-  return { id, roleId, name: `Throwaway ${suffix}`, email, roleName: `Throwaway role ${suffix}`, password }
+  return { id, roleId, name: `Throwaway ${suffix}`, email, roleName, password }
 }

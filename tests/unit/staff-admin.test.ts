@@ -5,11 +5,13 @@ import {
   assignRole,
   correctStaffName,
   createRole,
+  reactivateRole,
   deactivateStaff,
   describeAuditRow,
   reactivateStaff,
   renameRole,
   retireRole,
+  setRoleManages,
   setRolePermission,
   type AuditRow,
   type HistoryLookup,
@@ -50,24 +52,39 @@ describe("the staff-admin writes", () => {
     const { client, rpc } = fakeSupabase()
 
     await createRole(client, "Receptionist")
+    await createRole(client, "Head Accountant", { permissions: ["leads.view"], manages: ["role-2"], managedBy: ["role-3"] })
     await renameRole(client, "role-1", "Front desk")
     await setRolePermission(client, "role-1", "leads.view", true)
     await retireRole(client, "role-1")
+    await reactivateRole(client, "role-1")
+    await setRoleManages(client, "role-1", "role-2", false)
 
     expect(rpc.mock.calls).toEqual([
-      ["create_role", { name: "Receptionist" }],
+      ["create_role", { name: "Receptionist", permissions: [], manages: [], managed_by: [] }],
+      ["create_role", { name: "Head Accountant", permissions: ["leads.view"], manages: ["role-2"], managed_by: ["role-3"] }],
       ["rename_role", { role_id: "role-1", name: "Front desk" }],
       ["set_role_permission", { role_id: "role-1", permission: "leads.view", granted: true }],
       ["retire_role", { role_id: "role-1" }],
+      ["reactivate_role", { role_id: "role-1" }],
+      ["set_role_manages", { role_id: "role-1", managed_role_id: "role-2", manages: false }],
     ])
   })
 })
 
 describe("refusal messages", () => {
   const cases: [string, Record<string, unknown> | null, string][] = [
-    ["not_permitted", { role: "Accountant" }, 'Your role, Accountant, doesn\'t include "Administer staff and roles".'],
-    ["not_permitted", null, 'Your role doesn\'t include "Administer staff and roles".'],
-    ["own_role", null, "You can't change your own role. Another Manager has to do it."],
+    ["not_permitted", { role: "Accountant" }, "Your role, Accountant, doesn't manage any staff."],
+    ["not_permitted", null, "Your role doesn't manage any staff."],
+    [
+      "forbidden",
+      null,
+      "Your role can't make that change. Only the Super Admin changes roles, and you manage only the staff in the roles your role manages.",
+    ],
+    [
+      "own_role",
+      null,
+      "You can't change your own role. The Super Admin, or someone whose role manages yours, has to do it.",
+    ],
     ["own_account", null, "You can't deactivate yourself."],
     ["role_retired", { role: "Receptionist" }, '"Receptionist" is retired, so nobody can be given it.'],
     [
@@ -75,18 +92,13 @@ describe("refusal messages", () => {
       { name: "Salma Kombo", role: "Receptionist" },
       'Salma Kombo\'s role "Receptionist" was retired. Give them a current role first, then reactivate.',
     ],
-    ["no_administrator_left", null, "This would leave no one able to manage staff, so it isn't allowed."],
     ["same_role", { name: "Baraka Said", role: "Accountant" }, "Baraka Said already holds Accountant."],
     ["already_active", { name: "Baraka Said" }, "Baraka Said is already active."],
     ["already_deactivated", { name: "Baraka Said" }, "Baraka Said is already deactivated."],
     ["name_required", null, "Enter the person's full name."],
     ["not_found", null, "That staff member or role no longer exists. Reload the page and try again."],
-    ["role_you_hold", null, "You can't edit the role you hold. Another Manager has to do it."],
-    [
-      "administer_role_frozen",
-      null,
-      "Roles that can administer staff change only through a reviewed update to the system.",
-    ],
+    ["role_not_retired", { role: "Accountant" }, "Accountant is already a current role."],
+    ["manages_itself", { role: "Accountant" }, "Accountant can't manage its own staff: its holders would manage each other."],
     [
       "role_has_active_holders",
       { role: "Receptionist", names: ["Neema Mushi"] },
@@ -157,6 +169,21 @@ describe("describeAuditRow", () => {
       ...overrides,
     }
   }
+
+  it("summarises a managed-set pair and the seeded roles becoming templates (#241)", () => {
+    const pair = (overrides: Partial<AuditRow>) => describeAuditRow(row({ table_name: "role_managed_roles", row_id: "pair-1", ...overrides }), lookup)
+
+    expect(pair({ action: "insert", new_values: { role_id: "role-accountant", managed_role_id: "role-admissions", active: true } })).toMatchObject({
+      summary: "let Accountant manage the staff in Admissions Staff",
+      changes: [],
+    })
+    expect(pair({ old_values: { active: true }, new_values: { active: false } }).summary).toBe("took a role out of a managed set")
+    expect(pair({ old_values: { active: false }, new_values: { active: true } }).summary).toBe("put a role back in a managed set")
+    expect(
+      describeAuditRow(row({ table_name: null, row_id: null, action: "roles_became_templates", actor_kind: "system", actor_staff_id: null, new_values: { removed: ["Accountant"] } }), lookup)
+        .summary,
+    ).toBe("turned the seeded roles into templates")
+  })
 
   it("names the actor and shows a role change by role name", () => {
     expect(

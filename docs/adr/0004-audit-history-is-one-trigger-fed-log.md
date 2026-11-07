@@ -47,7 +47,7 @@ Scope-to-permission mapping depends on the permission list, which is decided sep
 
 ## Amendment, 2026-09-25: the permission names
 
-The permission list in `CONTEXT.md` fixes the names this ADR described in words. The read scopes map as `lead` to `leads.view`, `payment` to `payments.view` and `staff_admin` to `staff.administer`. The action kinds need `staff.administer` for `invite_sent` and `results.send` for `result_released`.
+The permission list in `CONTEXT.md` fixes the names this ADR described in words. The read scopes map as `lead` to `leads.view`, `payment` to `payments.view` and `staff_admin` to `staff.administer`. The action kinds need `staff.administer` for `invite_sent` and `results.send` for `result_released`. (Since #241 `staff.administer` is retired: `invite_sent` names no permission and is open to anyone who manages staff, and the read scopes are `audit.view` alone, per ADR 3's 2026-11-07 amendments.)
 
 ## Amendment, 2026-09-28: the `system` actor
 

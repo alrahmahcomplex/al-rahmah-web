@@ -13,18 +13,18 @@ import type { Result } from "./result"
 
 export type RefusalCode =
   | "not_permitted"
+  | "forbidden"
   | "own_role"
   | "own_account"
   | "role_retired"
   | "retired_role_on_reactivate"
-  | "no_administrator_left"
   | "same_role"
   | "already_active"
   | "already_deactivated"
   | "name_required"
   | "not_found"
-  | "role_you_hold"
-  | "administer_role_frozen"
+  | "role_not_retired"
+  | "manages_itself"
   | "role_has_active_holders"
   | "duplicate_role_name"
   | "role_name_required"
@@ -45,26 +45,23 @@ type RefusalNames = { name?: string; role?: string; names?: string[]; email?: st
 
 const LIST = new Intl.ListFormat("en-GB", { style: "long", type: "conjunction" })
 
-export const ADMINISTER_LABEL = "Administer staff and roles"
-
 const MESSAGES: Record<RefusalCode, (names: RefusalNames) => string> = {
   not_permitted: ({ role }) =>
-    role
-      ? `Your role, ${role}, doesn't include "${ADMINISTER_LABEL}".`
-      : `Your role doesn't include "${ADMINISTER_LABEL}".`,
-  own_role: () => "You can't change your own role. Another Manager has to do it.",
+    role ? `Your role, ${role}, doesn't manage any staff.` : "Your role doesn't manage any staff.",
+  forbidden: () =>
+    "Your role can't make that change. Only the Super Admin changes roles, and you manage only the staff in the roles your role manages.",
+  own_role: () => "You can't change your own role. The Super Admin, or someone whose role manages yours, has to do it.",
   own_account: () => "You can't deactivate yourself.",
   role_retired: ({ role }) => `"${role}" is retired, so nobody can be given it.`,
   retired_role_on_reactivate: ({ name, role }) =>
     `${name}'s role "${role}" was retired. Give them a current role first, then reactivate.`,
-  no_administrator_left: () => "This would leave no one able to manage staff, so it isn't allowed.",
   same_role: ({ name, role }) => `${name} already holds ${role}.`,
   already_active: ({ name }) => `${name} is already active.`,
   already_deactivated: ({ name }) => `${name} is already deactivated.`,
   name_required: () => "Enter the person's full name.",
   not_found: () => "That staff member or role no longer exists. Reload the page and try again.",
-  role_you_hold: () => "You can't edit the role you hold. Another Manager has to do it.",
-  administer_role_frozen: () => "Roles that can administer staff change only through a reviewed update to the system.",
+  role_not_retired: ({ role }) => `${role} is already a current role.`,
+  manages_itself: ({ role }) => `${role} can't manage its own staff: its holders would manage each other.`,
   role_has_active_holders: ({ role, names = [] }) =>
     `${role} is still held by ${LIST.format(names)}. Move them to another role first.`,
   duplicate_role_name: ({ role }) => `A role called "${role}" already exists.`,
@@ -149,9 +146,29 @@ export function correctStaffName(supabase: SupabaseClient, staffId: string, full
   return write(supabase, "correct_staff_name", { staff_id: staffId, full_name: fullName })
 }
 
-// A new role starts with no permissions.
-export function createRole(supabase: SupabaseClient, name: string) {
-  return write<RoleNames>(supabase, "create_role", { name })
+// A new role, blank or from a template: its permissions, the roles it
+// manages and the roles that manage it, all in one step.
+export type NewRole = {
+  permissions?: readonly Permission[]
+  manages?: readonly string[]
+  managedBy?: readonly string[]
+}
+
+export function createRole(
+  supabase: SupabaseClient,
+  name: string,
+  { permissions = [], manages = [], managedBy = [] }: NewRole = {},
+) {
+  return write<RoleNames>(supabase, "create_role", { name, permissions, manages, managed_by: managedBy })
+}
+
+export function reactivateRole(supabase: SupabaseClient, roleId: string) {
+  return write<RoleNames>(supabase, "reactivate_role", { role_id: roleId })
+}
+
+// Adds `managedRoleId` to the role's managed set, or takes it out.
+export function setRoleManages(supabase: SupabaseClient, roleId: string, managedRoleId: string, manages: boolean) {
+  return write<RoleNames>(supabase, "set_role_manages", { role_id: roleId, managed_role_id: managedRoleId, manages })
 }
 
 export function renameRole(supabase: SupabaseClient, roleId: string, name: string) {
@@ -188,15 +205,6 @@ export type InvitedNames = StaffNames & { id: string; email: string }
 // fail, and then the screen offers Resend invite.
 export type Invitation = InvitedNames & ({ sent: true } | { sent: false; failure: Refusal })
 
-async function requireAdministrator(supabase: SupabaseClient): Promise<Refusal | null> {
-  const { data, error } = await supabase.rpc("has_permission", { permission: "staff.administer" })
-  if (error) {
-    console.error("Could not check the permission to invite staff", error)
-    return refusal("unavailable")
-  }
-  return data === true ? null : refusal("not_permitted")
-}
-
 // What stopped the email. A confirmed account means they joined already.
 function sendFailure(error: { code?: string }, names: RefusalNames): Refusal {
   if (error.code === "email_exists") return refusal("already_joined", names)
@@ -230,9 +238,6 @@ export async function inviteStaff(
   details: InviteDetails,
   redirectTo: string,
 ): Promise<Result<Invitation, Refusal>> {
-  const refused = await requireAdministrator(supabase)
-  if (refused) return { ok: false, error: refused }
-
   const created = await write<InvitedNames>(supabase, "invite_staff_member", {
     full_name: details.fullName,
     email: details.email,
@@ -252,9 +257,6 @@ export async function resendInvite(
   staffId: string,
   redirectTo: string,
 ): Promise<Result<InvitedNames, Refusal>> {
-  const refused = await requireAdministrator(supabase)
-  if (refused) return { ok: false, error: refused }
-
   const invited = await write<InvitedNames>(supabase, "resendable_invite", { staff_id: staffId })
   if (!invited.ok) return invited
 
@@ -277,6 +279,8 @@ export type RoleSummary = {
   permissions: Permission[]
   retired: boolean
   activeHolders: number
+  // The role's managed set: the roles whose staff its holders manage.
+  manages: string[]
 }
 
 export type StaffSummary = {
@@ -303,13 +307,15 @@ type RoleRow = { id: string; name: string; permissions: Permission[]; retired: b
 type StaffRow = { id: string; full_name: string; email: string; role_id: string; active: boolean }
 
 export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result<StaffAndRoles, "unavailable">> {
-  const [permissions, roles, staff, invited] = await Promise.all([
+  const [permissions, roles, staff, invited, managed] = await Promise.all([
     supabase.from("permissions").select("name, label").order("position"),
     supabase.from("roles").select("id, name, permissions, retired").order("retired").order("name"),
+    // Row security returns the staff the caller manages, and their own record.
     supabase.from("staff_members").select("id, full_name, email, role_id, active").order("full_name"),
     supabase.rpc("invited_staff_members"),
+    supabase.from("role_managed_roles").select("role_id, managed_role_id").eq("active", true),
   ])
-  const error = permissions.error ?? roles.error ?? staff.error ?? invited.error
+  const error = permissions.error ?? roles.error ?? staff.error ?? invited.error ?? managed.error
   if (error) {
     console.error("Could not read staff and roles", error)
     return { ok: false, error: "unavailable" }
@@ -322,6 +328,7 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
   const readable = (staff.data ?? []) as StaffRow[]
   const staffRows = readable.filter((s) => roleRows.some((role) => role.id === s.role_id))
   const invitedIds = new Set((invited.data ?? []) as string[])
+  const pairs = (managed.data ?? []) as { role_id: string; managed_role_id: string }[]
   return {
     ok: true,
     data: {
@@ -329,6 +336,7 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
       roles: roleRows.map((role) => ({
         ...role,
         activeHolders: staffRows.filter((s) => s.role_id === role.id && s.active).length,
+        manages: pairs.filter((pair) => pair.role_id === role.id).map((pair) => pair.managed_role_id),
       })),
       staff: staffRows.map((s) => ({
         id: s.id,
@@ -443,6 +451,7 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
 
   const isStaff = row.table_name === "staff_members"
   const isRole = row.table_name === "roles"
+  const isPair = row.table_name === "role_managed_roles"
   const subject = isStaff
     ? (lookup.staffNames.get(row.row_id ?? "") ?? "a staff member")
     : isRole
@@ -457,15 +466,24 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
       : null
 
   let summary: string
-  if (row.action === "insert") summary = isStaff ? `added ${subject} to staff` : isRole ? `created the role ${subject}` : `added a ${row.table_name} row`
+  if (isPair) {
+    // A managed-set pair names both roles when it is made; an update carries
+    // only the switch, so it reads without them.
+    const on = newValues.active !== false
+    const manager = lookup.roleNames.get(String(newValues.role_id ?? "")) ?? "a role"
+    const managed = lookup.roleNames.get(String(newValues.managed_role_id ?? "")) ?? "a role"
+    if (row.action === "insert") summary = on ? `let ${manager} manage the staff in ${managed}` : `recorded that ${manager} doesn't manage ${managed}`
+    else summary = on ? "put a role back in a managed set" : "took a role out of a managed set"
+  } else if (row.action === "insert") summary = isStaff ? `added ${subject} to staff` : isRole ? `created the role ${subject}` : `added a ${row.table_name} row`
   else if (row.action === "update") summary = isRole ? `changed the role ${subject}` : isStaff ? `changed ${subject}` : `changed a ${row.table_name} row`
   else if (row.action === "invite_sent") summary = invitee ? `sent an invite to ${invitee}` : "sent an invite"
   else if (row.action === "hosted_reset") summary = "reset the database before launch"
+  else if (row.action === "roles_became_templates") summary = "turned the seeded roles into templates"
   else summary = row.action
 
   // The reset record's values are counts per table for the owner's checklist,
   // not field changes.
-  const changes = Object.keys(row.action === "hosted_reset" ? {} : newValues)
+  const changes = Object.keys(row.action === "hosted_reset" || isPair ? {} : newValues)
     .filter((key) => row.action !== "insert" || !HIDDEN_ON_INSERT.has(key))
     // The summary already names who an invite went to.
     .filter((key) => !(invitee && key === "staff_member_id"))

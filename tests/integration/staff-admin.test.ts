@@ -1,21 +1,18 @@
 import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { Client } from "pg"
-
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn, withoutSuperAdmin } from "../support/db"
-import { ACCOUNTANT, RETIRED_ROLE } from "../support/fixtures"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { ACCOUNTANT, MANAGER, RETIRED_ROLE, SUPER_ADMIN } from "../support/fixtures"
 
 // The guardrailed write functions behind the Staff and roles screen, called
 // the way the screen calls them: as a signed-in staff member with the
 // publishable key. Each test makes its own staff members so parallel tests
-// never change the same person.
+// never change the same person. The Super Admin manages every role's staff
+// (#241), so they make these changes; tests/integration/roles-v2.test.ts
+// covers the same writes scoped by a managed set.
 
-type Throwaway = Awaited<ReturnType<typeof createThrowawayStaff>>
-
-async function administrator(): Promise<{ person: Throwaway; client: SupabaseClient }> {
-  const person = await createThrowawayStaff(["staff.administer"])
-  return { person, client: await signedIn(person) }
+async function administrator(): Promise<{ person: typeof SUPER_ADMIN; client: SupabaseClient }> {
+  return { person: SUPER_ADMIN, client: await signedIn(SUPER_ADMIN) }
 }
 
 async function roleId(name: string): Promise<string> {
@@ -72,7 +69,7 @@ describe("who may call the write functions", () => {
     })
   }
 
-  test("not_permitted: a role without Administer staff and roles changes nobody", async () => {
+  test("not_permitted: a role that manages no staff changes nobody", async () => {
     const target = await createThrowawayStaff(["leads.view"])
     const client = await signedIn(ACCOUNTANT)
 
@@ -162,17 +159,6 @@ describe("assign_staff_role", () => {
     expect(await auditRows(target.id)).toHaveLength(before)
   })
 
-  test("one administrator can move another administrator off the administering role", async () => {
-    const { client } = await administrator()
-    const { person: other } = await administrator()
-    const admissions = await roleId("Admissions Staff")
-
-    const { error } = await client.rpc("assign_staff_role", { staff_id: other.id, role_id: admissions })
-
-    expect(error).toBeNull()
-    expect((await staffRow(other.id)).role_id).toBe(admissions)
-  })
-
   test("refuses an unknown staff member or role", async () => {
     const { client } = await administrator()
     const target = await createThrowawayStaff(["leads.view"])
@@ -220,16 +206,6 @@ describe("deactivate_staff_member", () => {
       name: target.name,
     })
     expect(await auditRows(target.id)).toHaveLength(before)
-  })
-
-  test("one administrator can deactivate another", async () => {
-    const { client } = await administrator()
-    const { person: other, client: otherClient } = await administrator()
-
-    const { error } = await client.rpc("deactivate_staff_member", { staff_id: other.id })
-
-    expect(error).toBeNull()
-    expect((await otherClient.rpc("has_permission", { permission: "staff.administer" })).data).toBe(false)
   })
 })
 
@@ -300,11 +276,11 @@ describe("correct_staff_name", () => {
     })
   })
 
-  test("an administrator may correct their own name", async () => {
-    const { person, client } = await administrator()
+  test("a Manager's own name is corrected by whoever manages their role, not by themselves", async () => {
+    const client = await signedIn(MANAGER)
 
-    expect((await client.rpc("correct_staff_name", { staff_id: person.id, full_name: "Fixed Name" })).error).toBeNull()
-    expect((await staffRow(person.id)).full_name).toBe("Fixed Name")
+    expectRefusal(await client.rpc("correct_staff_name", { staff_id: MANAGER.id, full_name: "Fixed Name" }), "forbidden")
+    expect((await staffRow(MANAGER.id)).full_name).toBe(MANAGER.name)
   })
 
   test("refuses an empty name", async () => {
@@ -316,85 +292,17 @@ describe("correct_staff_name", () => {
   })
 })
 
-describe("no_administrator_left", () => {
-  // Through the functions an administrator can never remove the last one,
-  // because they cannot move or deactivate themselves. The rule also covers
-  // the SQL editor and the secret key, where nothing else stops it.
-  test("a write that leaves nobody able to administer staff is refused, for the database owner too", async () => {
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      // Holds off concurrent tests adding administrators while this counts.
-      await lockExclusively(sql, ["public.staff_members"])
-      await withoutSuperAdmin(sql)
-
-      await expect(
-        sql.query(`update public.staff_members s set active = false
-                   from public.roles r
-                   where r.id = s.role_id and s.active and 'staff.administer' = any (r.permissions)`),
-      ).rejects.toThrow("no_administrator_left")
-    })
-  })
-
-  test("removing an administrator while another remains is allowed", async () => {
+describe("no last-administrator guard (#241)", () => {
+  // refuse_no_administrator_left is gone: the Super Admin always remains, so
+  // every other staff member may be deactivated, through SQL as well.
+  test("deactivating every staff member but the Super Admin goes through", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       await lockExclusively(sql, ["public.staff_members"])
-      const { rows } = await sql.query<{ id: string }>(
-        `select s.id from public.staff_members s join public.roles r on r.id = s.role_id
-         where s.active and 'staff.administer' = any (r.permissions) order by s.created_at`,
-      )
-      expect(rows.length).toBeGreaterThan(1)
 
-      await sql.query("update public.staff_members set active = false where id = any ($1)", [
-        rows.slice(1).map((row) => row.id),
-      ])
+      await sql.query("update public.staff_members set active = false where active and id <> $1", [SUPER_ADMIN.id])
+      const { rows } = await sql.query<{ n: number }>("select count(*)::int as n from public.staff_members where active")
+      expect(rows[0].n).toBe(1)
     })
-  })
-
-  // Two removals that each leave an administrator behind must not count at
-  // the same time, or both could pass and leave nobody. The second waits for
-  // the first to finish. Both roll back, so the seeded administrators are
-  // never actually removed while other tests run.
-  test("a second administrator removal waits for the first to finish before counting", async () => {
-    const [{ person: first }, { person: second }] = await Promise.all([administrator(), administrator()])
-    const connect = async () => {
-      const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
-      await sql.connect()
-      await sql.query("begin")
-      await sql.query("select public.set_audit_actor('system')")
-      return sql
-    }
-    const one = await connect()
-    const two = await connect()
-    try {
-      await one.query("update public.staff_members set active = false where id = $1", [first.id])
-
-      const { rows } = await two.query<{ pid: number }>("select pg_backend_pid() as pid")
-      let secondDone = false
-      const secondRemoval = two
-        .query("update public.staff_members set active = false where id = $1", [second.id])
-        .then(() => (secondDone = true))
-
-      const waiting = async () => {
-        const probe = await inRolledBackTransaction((sql) =>
-          sql.query<{ waiting: boolean }>(
-            "select exists (select 1 from pg_locks where pid = $1 and locktype = 'advisory' and not granted) as waiting",
-            [rows[0].pid],
-          ),
-        )
-        return probe.rows[0].waiting
-      }
-      await expect.poll(waiting).toBe(true)
-      expect(secondDone).toBe(false)
-
-      await one.query("rollback")
-      await secondRemoval
-      expect(secondDone).toBe(true)
-    } finally {
-      await one.query("rollback").catch(() => {})
-      await two.query("rollback").catch(() => {})
-      await one.end()
-      await two.end()
-    }
   })
 })

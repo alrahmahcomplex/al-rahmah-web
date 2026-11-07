@@ -3,15 +3,17 @@ import { randomUUID } from "node:crypto"
 import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, secretClient, signedIn, withoutSuperAdmin } from "../support/db"
-import { ACCOUNTANT, DEACTIVATED, INVITED, MANAGER, RETIRED_ROLE } from "../support/fixtures"
+import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { ACCOUNTANT, DEACTIVATED, INVITED, MANAGER, RETIRED_ROLE, SUPER_ADMIN } from "../support/fixtures"
 
 // The database side of inviting staff, called the way the invite service
 // calls it: as the signed-in Manager with the publishable key. Sending the
 // email is the secret key's job, so these tests use it only for that.
 
+// The Super Admin manages every role's staff (#241). The Manager manages
+// Admissions Staff only; tests/integration/roles-v2.test.ts covers that scope.
 async function administrator(): Promise<SupabaseClient> {
-  return signedIn(await createThrowawayStaff(["staff.administer"]))
+  return signedIn(SUPER_ADMIN)
 }
 
 async function roleId(name: string): Promise<string> {
@@ -62,14 +64,14 @@ describe("invite_staff_member", () => {
     expect(error).not.toBeNull()
   })
 
-  test("not_permitted: a role without Administer staff and roles invites nobody", async () => {
+  test("not_permitted: a role that manages no staff invites nobody", async () => {
     expectRefusal(await invite(await signedIn(ACCOUNTANT), "Zawadi Mrisho", newEmail()), "not_permitted", {
       role: "Accountant",
     })
   })
 
   test("creates an active staff member in the role, with no account, and one audit row naming the caller", async () => {
-    const manager = await createThrowawayStaff(["staff.administer"])
+    const manager = SUPER_ADMIN
     const client = await signedIn(manager)
     const email = newEmail()
 
@@ -131,8 +133,8 @@ describe("invite_staff_member", () => {
     )
   })
 
-  test("two Managers inviting the same email at once end with one record and one already_staff", async () => {
-    const [first, second] = await Promise.all([administrator(), administrator()])
+  test("the Manager and the Super Admin inviting the same email at once end with one record and one already_staff", async () => {
+    const [first, second] = await Promise.all([signedIn(MANAGER), administrator()])
     const email = newEmail()
 
     const results = await Promise.all([invite(first, "Zawadi Mrisho", email), invite(second, "Zawadi Mrisho", email)])
@@ -190,29 +192,7 @@ describe("who counts as Invited", () => {
   })
 })
 
-describe("an invited Manager and no_administrator_left", () => {
-  // Someone who has not accepted their invite can't sign in, so they can't
-  // administer anyone. Leaving only them would lock the school out.
-  test("removing every administrator who has joined is refused, even with an invited Manager waiting", async () => {
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await lockExclusively(sql, ["public.staff_members"])
-      await sql.query(
-        `insert into public.staff_members (full_name, email, role_id)
-         select 'Invited Manager', $1, id from public.roles where name = 'Admissions Manager'`,
-        [newEmail()],
-      )
-      await withoutSuperAdmin(sql)
-
-      await expect(
-        sql.query(`update public.staff_members s set active = false
-                   from public.roles r
-                   where r.id = s.role_id and s.active and s.user_id is not null
-                     and 'staff.administer' = any (r.permissions)`),
-      ).rejects.toThrow("no_administrator_left")
-    })
-  })
-
+describe("an invited Manager", () => {
   test("an invited Manager can still be deactivated while a joined one remains", async () => {
     const client = await administrator()
     const { data } = await invite(client, "Invited Manager", newEmail(), "Admissions Manager")

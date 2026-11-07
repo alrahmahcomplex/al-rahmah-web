@@ -5,7 +5,7 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
-## November 7, 2026 `v0.83.1`
+## Unreleased
 
 ### NEW
 
@@ -22,6 +22,11 @@ stay in the `0.x` range.
 - Event-by-event history is now the Super Admin's alone: a lead's History page and the
   Staff and roles history are hidden from every other role. The lead screen shows the
   date its status last changed instead.
+
+## November 7, 2026 `v0.83.1`
+
+### IMPROVED
+
 - Before launch the hosted database is reset once, so that only real families ever
   appear in the system and its exports. Every test record goes: leads, families,
   interviews, follow-ups, payments, Marketing Agents and their logins, staff accounts

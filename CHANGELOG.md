@@ -5,7 +5,7 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
-## Unreleased
+## November 7, 2026 `v0.86.0`
 
 ### IMPROVED
 
@@ -16,6 +16,7 @@ stay in the `0.x` range.
 - Buttons, fields and dropdowns on staff pages are taller and easier to tap on a
   tablet.
 - The sign-in fields use larger, upright text, so phones no longer zoom in on them.
+
 ## November 7, 2026 `v0.85.1`
 
 ### IMPROVED

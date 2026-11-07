@@ -7,7 +7,7 @@ import { getLeadHistory, type LeadHistory } from "@/lib/services/audit"
 import { createLead, getLead, updateGuardianContact, updateLeadDetails, type Lead } from "@/lib/services/leads"
 
 import { anonClient, asStaffActor, asSystem, createThrowawayStaff, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // A lead's history through the audit module, against local Supabase. Each test
 // registers its own family with invented names and numbers, and leaves the
@@ -36,7 +36,8 @@ async function walkInLead(contactId?: string): Promise<Lead> {
   return lead.data
 }
 
-async function historyOf(leadId: string, as = ADMISSIONS): Promise<LeadHistory> {
+// Only the Super Admin reads a lead's history (#237).
+async function historyOf(leadId: string, as: { email: string; password: string } = SUPER_ADMIN): Promise<LeadHistory> {
   const history = await getLeadHistory(await signedIn(as), leadId)
   if (!history.ok) throw new Error(`history refused: ${history.error}`)
   return history.data
@@ -172,16 +173,23 @@ describe("a lead's history", () => {
   })
 
   test("a lead that does not exist is not found", async () => {
-    const staff = await signedIn(ADMISSIONS)
+    const staff = await signedIn(SUPER_ADMIN)
     expect(await getLeadHistory(staff, randomUUID())).toEqual({ ok: false, error: "not-found" })
     expect(await getLeadHistory(staff, "not-a-uuid")).toEqual({ ok: false, error: "not-found" })
   })
 })
 
 describe("who may read a lead's history", () => {
-  test("the Accountant may, as anyone who may view leads", async () => {
+  test("the Super Admin may", async () => {
     const lead = await walkInLead()
-    expect((await historyOf(lead.id, ACCOUNTANT)).entries).toHaveLength(2)
+    expect((await historyOf(lead.id, SUPER_ADMIN)).entries).toHaveLength(2)
+  })
+
+  test("every seeded role is refused, though each may view the lead (#237)", async () => {
+    const lead = await walkInLead()
+    for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT]) {
+      expect(await getLeadHistory(await signedIn(person), lead.id), person.roleName).toEqual({ ok: false, error: "forbidden" })
+    }
   })
 
   test("a role that may not view leads is refused", async () => {

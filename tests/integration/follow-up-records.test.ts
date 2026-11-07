@@ -15,7 +15,7 @@ import {
 import { createLead } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, RETIRED_ROLE, SECOND_MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, RETIRED_ROLE, SECOND_MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Recording a contact on a lead (#91) through the follow-up module, against
 // local Supabase. Each test makes its own leads; the seeded ones are only
@@ -441,7 +441,7 @@ describe("records in the lead's history", () => {
     const recorded = await recordFollowUp(await signedIn(MANAGER), lead, contact(planned, { contactedBy: ADMISSIONS.id, method: "SMS" }))
     if (!recorded.ok) throw new Error("record failed")
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error("history failed")
     const entries = history.data.entries.filter((e) => e.record === "follow_up_records")
     expect(entries).toHaveLength(1)
@@ -463,7 +463,7 @@ describe("records in the lead's history", () => {
   test("a refused record leaves no history", async () => {
     const lead = await newLead()
     await recordFollowUp(await signedIn(ACCOUNTANT), lead, contact(null))
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     expect(history.ok && history.data.entries.filter((e) => e.record === "follow_up_records" || e.record === "follow_ups")).toEqual([])
   })
 })

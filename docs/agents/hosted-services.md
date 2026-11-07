@@ -14,17 +14,7 @@ The hosted Supabase project is `al-rahmah-web`, linked to this repo. The human o
 
 - **Migrations** reach the hosted database when their PR merges to `main`, through the Supabase GitHub integration. The agent confirms each version during the migration confirmation step in [Releasing](releasing.md).
 - **Vercel** needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in both Production and Preview. Next.js bakes `NEXT_PUBLIC_*` values in at build, so a changed value takes effect only after a redeploy. A Preview without them serves 500 on `/staff`, `/login` and `/auth`, and `before-and-after` then captures error pages.
-- **The first staff member** on a fresh database: the sign-up trigger refuses any auth user without an active staff record, and every write to staff members needs an audit actor, so the order is fixed. First run this in the SQL editor, with the person's name and lowercase email:
-
-  ```sql
-  begin;
-  select public.set_audit_actor('system');
-  insert into public.staff_members (full_name, email, role_id)
-  select 'Full Name', 'person@example.com', id from public.roles where name = 'Admissions Manager';
-  commit;
-  ```
-
-  Then invite the user under Authentication → Users. Their link lands on the site root, which forwards it to `/auth/confirm`. Everyone after them is invited from Staff and roles.
+- **The first staff member** is the **Super Admin** (#237). Migration `20261130990300_super_admin_role.sql` creates the role and its one holder's staff record, `alrahmahcomplex.tz@gmail.com`, with no login, so no SQL step is needed. Invite that email under Authentication → Users; the sign-up trigger accepts it because the record is active and has no account yet. The link lands on the site root, which forwards it to `/auth/confirm`. The Super Admin then invites the Admissions Manager and everyone else from Staff and roles. A second Super Admin, or a change to the holder's name or email, needs a reviewed migration that lifts the freeze triggers by name.
 - **Staff invites** from Staff and roles need, on the hosted project: custom SMTP (Authentication → SMTP Settings, with a verified sending domain; the built-in sender reaches only the project's team), the Site URL set to production, Redirect URLs allowing `/auth/confirm` on production and on `https://*-<vercel-team>.vercel.app/**`, the email templates below, and a named secret key. Vercel needs that key as `SUPABASE_SECRET_KEY`, unprefixed, in Production and Preview. Without the key the Manager's invite still creates the staff record, reports that the email wasn't sent, and offers Resend invite.
 - **Agent invites** (#191) use the same key and SMTP. Redirect URLs must also allow `/discount-code/set-password` and, for the agent's own reset (#194), `/discount-code/reset-password` on production and on the Preview pattern above; Supabase sends an address missing from the list to the Site URL, where the link fails.
 - **Email templates.** `supabase/templates/invite.html` (Invite user) and `supabase/templates/recovery.html` (Reset password) are the source of truth, with their subjects in `supabase/config.toml`. Each branches on `user_metadata.kind = "agent"` for the Discount code wording, Swahili first; staff wording is the default. Each carries a version marker on its second line (`al-rahmah-template: invite v4`). Paste both into Authentication → Email Templates whenever either changes, set the same subjects, and check the marker in the hosted editor matches the repo's.

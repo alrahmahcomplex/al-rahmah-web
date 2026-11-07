@@ -2,7 +2,7 @@ import { Client } from "pg"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 
 import { anonClient, signedIn } from "../support/db"
-import { MANAGER, SEEDED_AGENT } from "../support/fixtures"
+import { SEEDED_AGENT, SUPER_ADMIN } from "../support/fixtures"
 import { FUNCTIONS, POLICIES, RELATIONS, type AgentAnswer, type ApiRole } from "./api-surface"
 
 // The permanent security test (#188). It reads what the `anon` and
@@ -52,7 +52,7 @@ async function catalogFunctions(): Promise<CatalogFunction[]> {
 
 // Calls `fn` with its entry's sample arguments as `role`, in a transaction
 // that is rolled back. `authenticated` signs in as the seeded agent, or with
-// `asStaff` as the seeded Manager on a role holding every permission.
+// `asStaff` as the Super Admin, who holds every permission (#237).
 async function answer(fn: CatalogFunction, role: ApiRole, { asStaff = false } = {}): Promise<{ refused: string } | { returns: unknown[] }> {
   const entry = FUNCTIONS[fn.signature]
   const args = Object.values(entry.args)
@@ -68,13 +68,8 @@ async function answer(fn: CatalogFunction, role: ApiRole, { asStaff = false } = 
       : []
     let userId = SEEDED_AGENT.userId
     if (asStaff) {
-      userId = (await sql.query("select user_id from public.staff_members where id = $1", [MANAGER.id])).rows[0].user_id
-      await sql.query("select public.set_audit_actor('staff', $1)", [MANAGER.id])
-      await sql.query(
-        `update public.roles set permissions = array(select name from public.permissions)
-         where id = (select role_id from public.staff_members where id = $1)`,
-        [MANAGER.id],
-      )
+      userId = SUPER_ADMIN.userId
+      await sql.query("select public.set_audit_actor('staff', $1)", [SUPER_ADMIN.id])
     }
     const claims = role === "anon" ? { role: "anon" } : { sub: userId, role: "authenticated" }
     await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(claims)])
@@ -287,6 +282,75 @@ describe("policies", () => {
         if (expression === null) continue
         expect(expression, key).toMatch(/\b(has_permission|is_active_staff)\(/)
       }
+    }
+  })
+})
+
+// The Super Admin (#237) exists only through migrations. Named triggers, and
+// the delete refusals every audited table has, refuse each change for every
+// database role: the owner, the secret key's service_role and a signed-in
+// session. Only a migration that disables a trigger by name can make one.
+describe("the Super Admin's freeze", () => {
+  const ROLE = SUPER_ADMIN.roleId
+  const HOLDER = SUPER_ADMIN.id
+  const MANAGER_ID = "a1a1a1a1-0000-4000-8000-000000000001"
+  const REFUSALS: [string, string, string][] = [
+    ["renaming the role", `update public.roles set name = 'Renamed' where id = '${ROLE}'`, "super_admin_frozen"],
+    ["changing its permission set", `update public.roles set permissions = array['leads.view'] where id = '${ROLE}'`, "super_admin_frozen"],
+    ["retiring it", `update public.roles set retired = true where id = '${ROLE}'`, "super_admin_frozen"],
+    ["deleting it", `delete from public.roles where id = '${ROLE}'`, "delete_refused"],
+    [
+      "adding a second holder",
+      `insert into public.staff_members (full_name, email, role_id) values ('Second Holder', 'second-holder@example.test', '${ROLE}')`,
+      "super_admin_frozen",
+    ],
+    ["moving someone into the role", `update public.staff_members set role_id = '${ROLE}' where id = '${MANAGER_ID}'`, "super_admin_frozen"],
+    [
+      "moving the holder out of it",
+      `update public.staff_members set role_id = (select id from public.roles where name = 'Admissions Manager') where id = '${HOLDER}'`,
+      "super_admin_frozen",
+    ],
+    ["deactivating the holder", `update public.staff_members set active = false where id = '${HOLDER}'`, "super_admin_frozen"],
+    ["renaming the holder", `update public.staff_members set full_name = 'Someone Else' where id = '${HOLDER}'`, "super_admin_frozen"],
+    ["changing the holder's email", `update public.staff_members set email = 'other@example.test' where id = '${HOLDER}'`, "super_admin_frozen"],
+    ["deleting the holder", `delete from public.staff_members where id = '${HOLDER}'`, "delete_refused"],
+    ["giving a role audit.view", `update public.roles set permissions = permissions || array['audit.view'] where name = 'Admissions Manager'`, "audit_view_reserved"],
+    ["creating a role with audit.view", "insert into public.roles (name, permissions) values ('Auditor', array['audit.view'])", "audit_view_reserved"],
+  ]
+
+  async function refusedAs(dbRole: "postgres" | "service_role", statement: string): Promise<string> {
+    await sql.query("begin")
+    try {
+      await sql.query("select public.set_audit_actor('system')")
+      if (dbRole === "service_role") await sql.query("set local role service_role")
+      await sql.query(statement)
+      return "accepted"
+    } catch (error) {
+      return (error as Error).message
+    } finally {
+      await sql.query("rollback")
+    }
+  }
+
+  for (const [change, statement, code] of REFUSALS) {
+    for (const dbRole of ["postgres", "service_role"] as const) {
+      test(`${change} is refused for ${dbRole} with ${code}`, async () => {
+        expect(await refusedAs(dbRole, statement)).toBe(code)
+      })
+    }
+  }
+
+  test("the holder still takes their first login and dismisses notices", async () => {
+    await sql.query("begin")
+    try {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(`update public.staff_members set notices_seen_at = now() where id = '${HOLDER}'`)
+      const { rows } = await sql.query(`select user_id from public.staff_members where id = '${HOLDER}'`)
+      expect(rows[0].user_id).toBe(SUPER_ADMIN.userId)
+      // A login already linked stays linked.
+      await expect(sql.query(`update public.staff_members set user_id = null where id = '${HOLDER}'`)).rejects.toThrow("super_admin_frozen")
+    } finally {
+      await sql.query("rollback")
     }
   })
 })

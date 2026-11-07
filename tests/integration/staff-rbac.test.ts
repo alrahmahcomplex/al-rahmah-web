@@ -12,7 +12,7 @@ import {
   secretClient,
   signedIn,
 } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../support/fixtures"
 
 // What staff, roles and the audit log allow, tested through the same doors a
 // user, a server or an operator would use. See tests/support/db.ts.
@@ -100,8 +100,8 @@ describe("permissions and roles", () => {
     })
   }
 
-  test("the database holds the same 18 permissions as the app, each with a label", async () => {
-    const { data } = await (await signedIn(ADMISSIONS))
+  test("the database holds the same permissions as the app, each with a label", async () => {
+    const { data } = await (await signedIn(SUPER_ADMIN))
       .from("permissions")
       .select("name, label")
       .order("position")
@@ -109,6 +109,13 @@ describe("permissions and roles", () => {
     expect(data?.map((p) => p.name)).toEqual([...PERMISSIONS])
     expect(data?.find((p) => p.name === "staff.administer")?.label).toBe("Administer staff and roles")
     for (const permission of data ?? []) expect(permission.label).not.toBe("")
+  })
+
+  test("everyone but the Super Admin reads the list without audit.view (#237)", async () => {
+    for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT]) {
+      const { data } = await (await signedIn(person)).from("permissions").select("name").order("position")
+      expect(data?.map((p) => p.name), person.name).toEqual(PERMISSIONS.filter((p) => p !== "audit.view"))
+    }
   })
 
   test("the three starting roles hold the grants in CONTEXT.md", async () => {
@@ -145,6 +152,20 @@ describe("permissions and roles", () => {
       expect(await hasPermission(person, permission)).toBe(expected)
     })
   }
+
+  // The Super Admin (#237) answers true for every permission, including a
+  // name no migration has added yet, so a later migration grants nothing.
+  for (const permission of [...PERMISSIONS, "permission.added_later"]) {
+    test(`has_permission('${permission}') is true for the Super Admin`, async () => {
+      expect(await hasPermission(SUPER_ADMIN, permission)).toBe(true)
+    })
+  }
+
+  test("current_staff_member gives the Super Admin every permission on the list", async () => {
+    const { data } = await (await signedIn(SUPER_ADMIN)).rpc("current_staff_member").single<{ role_name: string; permissions: string[] }>()
+    expect(data?.permissions).toEqual([...PERMISSIONS])
+    expect(data?.role_name).toBe("Super Admin")
+  })
 
   test("has_permission is false for an unknown permission name", async () => {
     expect(await hasPermission(MANAGER, "leads.delete")).toBe(false)
@@ -441,7 +462,7 @@ describe("audit log", () => {
     })
   })
 
-  test("audit rows are readable only under their scope's permission", async () => {
+  test("audit rows are readable only by the Super Admin, in every scope (#237)", async () => {
     const marker = `scope-probe-${randomUUID().slice(0, 8)}`
     await asSystem((sql) =>
       sql.query(
@@ -452,15 +473,16 @@ describe("audit log", () => {
     )
     const paymentsOnly = await createThrowawayStaff(["payments.view"])
 
-    async function scopesSeenBy(person: FixtureStaff) {
+    async function scopesSeenBy(person: { email: string; password: string }) {
       const { data } = await (await signedIn(person)).from("audit_log").select("scope").eq("action", marker)
       return (data ?? []).map((row) => row.scope).sort()
     }
 
-    expect(await scopesSeenBy(MANAGER)).toEqual(["lead", "payment", "staff_admin"])
-    expect(await scopesSeenBy(ADMISSIONS)).toEqual(["lead", "payment"])
-    expect(await scopesSeenBy(ACCOUNTANT)).toEqual(["lead", "payment"])
-    expect(await scopesSeenBy(paymentsOnly)).toEqual(["payment"])
+    expect(await scopesSeenBy(SUPER_ADMIN)).toEqual(["lead", "payment", "staff_admin"])
+    expect(await scopesSeenBy(MANAGER)).toEqual([])
+    expect(await scopesSeenBy(ADMISSIONS)).toEqual([])
+    expect(await scopesSeenBy(ACCOUNTANT)).toEqual([])
+    expect(await scopesSeenBy(paymentsOnly)).toEqual([])
     expect(await scopesSeenBy(DEACTIVATED)).toEqual([])
   })
 })
@@ -488,7 +510,8 @@ describe("record_action", () => {
     })
     expect(error).toBeNull()
 
-    const { data } = await client
+    // Only the Super Admin reads the log back (#237).
+    const { data } = await (await signedIn(SUPER_ADMIN))
       .from("audit_log")
       .select("table_name, row_id, lead_id, action, new_values, scope, actor_kind, actor_staff_id")
       .eq("id", id)
@@ -521,7 +544,7 @@ describe("record_action", () => {
     const leadId = SEEDED_LEAD_ID
     const { data: id, error } = await client.rpc("record_action", { kind, lead_id: leadId })
     expect(error).toBeNull()
-    const { data } = await client.from("audit_log").select("lead_id, scope, actor_staff_id").eq("id", id)
+    const { data } = await (await signedIn(SUPER_ADMIN)).from("audit_log").select("lead_id, scope, actor_staff_id").eq("id", id)
     expect(data).toEqual([{ lead_id: leadId, scope: "lead", actor_staff_id: ADMISSIONS.id }])
   })
 

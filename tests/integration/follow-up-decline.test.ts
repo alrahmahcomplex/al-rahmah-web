@@ -16,7 +16,7 @@ import { getLeadClosure, isLeadClosed } from "@/lib/services/lead-closure"
 import { createLead } from "@/lib/services/leads"
 
 import { anonClient, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Declining the lead as the outcome of a recorded contact (#94), through the
 // follow-up module against local Supabase. The contact record and the
@@ -81,7 +81,7 @@ async function expectUnchanged(staff: SupabaseClient, leadId: string, followUpId
   expect(await getLeadFollowUps(staff, leadId)).toMatchObject({ ok: true, data: { open: { id: followUpId }, records: [] } })
   expect(await recordKinds(leadId)).toEqual([])
   expect(await isLeadClosed(staff, leadId)).toEqual({ ok: true, data: false })
-  const history = await getLeadHistory(staff, leadId)
+  const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
   expect(history.ok && history.data.entries.filter((e) => e.record === "follow_up_records" || e.record === "lead" && e.action === "update")).toEqual([])
 }
 
@@ -288,7 +288,7 @@ describe("the history of a decline outcome", () => {
     const recorded = await recordFollowUp(await signedIn(MANAGER), lead, declining(planned, { reason: "Family changed plans", note: null }))
     if (!recorded.ok) throw new Error("record failed")
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error("history failed")
     const contact = history.data.entries.filter((e) => e.record === "follow_up_records")
     expect(contact).toHaveLength(1)

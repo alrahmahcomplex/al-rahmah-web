@@ -7,8 +7,21 @@ stay in the `0.x` range.
 
 ## Unreleased
 
+### NEW
+
+- A Super Admin starts the system after the reset. The school's own account,
+  alrahmahcomplex.tz@gmail.com, exists from the start; the owner invites it from the
+  Supabase dashboard, and the Super Admin invites the Admissions Manager and everyone
+  else from Staff and roles. The Super Admin can do everything in the system, never
+  appears on Staff and roles, and cannot be changed or deactivated from the app.
+- An Audit screen for the Super Admin lists every recorded change and action across
+  leads, payments and staff administration, filtered by date, person, area and record.
+
 ### IMPROVED
 
+- Event-by-event history is now the Super Admin's alone: a lead's History page and the
+  Staff and roles history are hidden from every other role. The lead screen shows the
+  date its status last changed instead.
 - Before launch the hosted database is reset once, so that only real families ever
   appear in the system and its exports. Every test record goes: leads, families,
   interviews, follow-ups, payments, Marketing Agents and their logins, staff accounts

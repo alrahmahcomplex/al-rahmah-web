@@ -9,6 +9,7 @@ import { setLeadReferralCode } from "@/lib/services/referral"
 import { registerPendingAgent as makePendingAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // The Referral code panel on the lead screen (#80): Admissions Staff editing
 // and clearing a code, the Manager's approval lowering the fee, and the
@@ -106,7 +107,7 @@ test.describe("the Referral code panel", () => {
     await expect(panel(page)).toContainText("No referral code.")
 
     // Every change is in the lead's history, with the old and new code.
-    await page.getByRole("link", { name: "History" }).click()
+    await openLeadHistoryAsSuperAdmin(page)
     await expect(page.getByText("added a Referral code")).toBeVisible()
     await expect(page.getByText("changed the Referral code")).toBeVisible()
     await expect(page.getByText("cleared the Referral code")).toBeVisible()

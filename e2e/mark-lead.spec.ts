@@ -8,6 +8,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Marking a lead Inactive or Archived from the lead screen (#98). Each test
 // marks a lead of its own; the seeded ones are only read.
@@ -72,7 +73,7 @@ test.describe("marking a lead", () => {
     await expect(markButton(page, "Mark inactive")).toHaveCount(0)
     await expect(markButton(page, "Archive")).toBeVisible()
 
-    await page.getByRole("link", { name: "History" }).click()
+    await openLeadHistoryAsSuperAdmin(page)
     await expect(page.getByText("marked the lead Inactive").first()).toBeVisible()
   })
 

@@ -15,7 +15,7 @@ import {
   secretClient,
   signedIn,
 } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 import { claimInterviewSerialYear } from "../support/interview-serial-years"
 
 // Registering a lead for interview through the interview module, against
@@ -215,7 +215,7 @@ describe("registering a lead for interview", () => {
     const registered = await registerForInterview(staff, lead)
     if (!registered.ok) throw new Error("registration failed")
 
-    const history = await getLeadHistory(staff, lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error("history failed")
     const entry = history.data.entries.find((e) => e.record === "interviews")
     expect(entry).toMatchObject({ action: "insert", actor: ADMISSIONS.name, recordId: registered.data.interviewId })

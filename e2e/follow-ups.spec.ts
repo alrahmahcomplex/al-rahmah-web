@@ -8,6 +8,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // The Follow-ups panel on the lead screen: scheduling, changing the date with
 // a reason (#90), recording a contact (#91), and who sees the actions.
@@ -82,7 +83,7 @@ test.describe("the Follow-ups panel", () => {
     await expect(panel(page)).toContainText(`${formatDate(addDays(today, 1))} moved to ${formatDate(addDays(today, 5))}`)
     await expect(panel(page)).toContainText("Reason: The parent is travelling.")
 
-    await page.goto(`/staff/leads/${lead}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead)
     const history = page.getByRole("list", { name: "History" })
     await expect(history.getByText("changed the follow-up date")).toBeVisible()
     await expect(history).toContainText(`Follow-up date: ${formatDate(addDays(today, 1))} → ${formatDate(addDays(today, 5))}`)
@@ -146,7 +147,7 @@ test.describe("the Follow-ups panel", () => {
     await expect(contacts).toContainText(`Next follow-up: ${formatDate(addDays(today, 7))}`)
     await expect(contacts).not.toContainText("Unplanned")
 
-    await page.goto(`/staff/leads/${lead}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead)
     const history = page.getByRole("list", { name: "History" })
     await expect(history.getByText("recorded a follow-up")).toBeVisible()
     await expect(history).toContainText(`Made the contact: ${ADMISSIONS.name}`)
@@ -233,7 +234,7 @@ test.describe("the Follow-ups panel", () => {
     await expect(contacts).toContainText("Closed with the lead (Declined)")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
 
-    await page.goto(`/staff/leads/${lead}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead)
     const history = page.getByRole("list", { name: "History" })
     await expect(history.getByText("closed the follow-up with the lead")).toBeVisible()
     await expect(history).toContainText("Closed with the lead: Declined")

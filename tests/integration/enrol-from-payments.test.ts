@@ -14,7 +14,7 @@ import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-paym
 
 import { asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Enrolled from the payments (#108), through the fees, payments and lead
 // modules against local Supabase, signed in as each seeded role. Each test
@@ -267,7 +267,7 @@ describe("Enrolled from the payments", () => {
     await pay(id, 2_000_000, { type: "full_payment" })
     await saveSchedule(year, withStd2Day(2_100_000))
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), id)
     if (!history.ok) throw new Error(history.error)
     const enrolment = history.data.entries.filter(
       (entry) =>

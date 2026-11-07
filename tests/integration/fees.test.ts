@@ -13,7 +13,7 @@ import {
 import { LEAD_CLASSES } from "@/lib/services/leads"
 
 import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The Fee schedule through the fees module, against local Supabase, signed in
 // as each seeded role. Each test saves its own enrollment year, far from the
@@ -263,13 +263,15 @@ describe("history", () => {
       { table_name: "fee_band_amounts", old_values: { day_fee: 1_100_000 }, new_values: { day_fee: 1_200_000 } },
     ])
 
-    // Staff who may view payments read it; the history is not theirs otherwise.
-    const visible = await (await signedIn(ADMISSIONS))
+    // The Super Admin reads it; staff who view payments no longer do (#237).
+    const visible = await (await signedIn(SUPER_ADMIN))
       .from("audit_log")
       .select("id")
       .eq("table_name", "fee_schedules")
       .limit(1)
     expect(visible.data?.length).toBe(1)
+    const staff = await (await signedIn(ADMISSIONS)).from("audit_log").select("id").eq("table_name", "fee_schedules")
+    expect(staff.data ?? []).toEqual([])
     const hidden = await anonClient().from("audit_log").select("id").eq("table_name", "fee_schedules")
     expect(hidden.data ?? []).toEqual([])
   })

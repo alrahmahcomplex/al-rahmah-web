@@ -14,7 +14,7 @@ import {
 } from "@/lib/services/reopening-requests"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Raising and withdrawing a Reopening request (#99), against local Supabase.
 // Each test raises on leads of its own; the seeded ones are only read.
@@ -394,7 +394,7 @@ describe("the history of a request", () => {
     const request = await raised(await raiseReopeningRequest(staff, lead, { reason: "The family is back.", source: "lead" }))
     await withdrawReopeningRequest(staff, request)
 
-    const history = await getLeadHistory(staff, lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error(`history failed: ${history.error}`)
     const entries = history.data.entries.filter((entry) => entry.record === "reopening_requests")
     expect(entries).toEqual([

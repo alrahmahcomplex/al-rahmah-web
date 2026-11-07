@@ -18,7 +18,7 @@ import {
 import { createLead } from "@/lib/services/leads"
 
 import { asStaffActor, asSystem, signedIn } from "../support/db"
-import { ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // A lead's open follow-up closing with the lead (#93), against local
 // Supabase. The tests close leads from outside slice 7, as the database owner
@@ -229,7 +229,7 @@ describe("the lead's history", () => {
     const planned = await scheduled(lead)
     await close(lead, "declined", MANAGER.id)
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error("history failed")
     const entries = history.data.entries.filter((entry) => entry.record === "follow_up_records")
     expect(entries).toHaveLength(1)

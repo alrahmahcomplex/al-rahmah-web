@@ -8,7 +8,7 @@ import { changeFollowUpDate, getLeadFollowUps, scheduleFollowUp } from "@/lib/se
 import { createLead } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Scheduling a follow-up and changing its date through the follow-up module,
 // against local Supabase. Each test makes its own leads; the seeded ones are
@@ -414,7 +414,7 @@ describe("follow-ups in the lead's history", () => {
     })
     if (!changed.ok) throw new Error("change failed")
 
-    const history = await getLeadHistory(staff, lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error("history failed")
     const entries = history.data.entries.filter((e) => e.record === "follow_ups")
     expect(entries).toHaveLength(2)
@@ -439,7 +439,7 @@ describe("follow-ups in the lead's history", () => {
   test("a refused write leaves no history", async () => {
     const lead = await newLead()
     await scheduleFollowUp(await signedIn(ACCOUNTANT), lead, { dueOn: today })
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     expect(history.ok && history.data.entries.filter((e) => e.record === "follow_ups")).toEqual([])
   })
 })

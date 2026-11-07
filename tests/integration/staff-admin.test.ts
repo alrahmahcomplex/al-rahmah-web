@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { Client } from "pg"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn, withoutSuperAdmin } from "../support/db"
 import { ACCOUNTANT, RETIRED_ROLE } from "../support/fixtures"
 
 // The guardrailed write functions behind the Staff and roles screen, called
@@ -325,6 +325,7 @@ describe("no_administrator_left", () => {
       await sql.query("select public.set_audit_actor('system')")
       // Holds off concurrent tests adding administrators while this counts.
       await lockExclusively(sql, ["public.staff_members"])
+      await withoutSuperAdmin(sql)
 
       await expect(
         sql.query(`update public.staff_members s set active = false

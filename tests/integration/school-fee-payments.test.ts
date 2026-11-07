@@ -21,7 +21,7 @@ import {
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { claimFeeYear, noScheduleYear } from "../support/fee-years"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // School-fee payments and the Seat priority through the payments module,
 // against local Supabase, signed in as each seeded role. Each test makes
@@ -390,11 +390,11 @@ describe("who may do what", () => {
 })
 
 describe("the lead's history", () => {
-  test("shows each payment to staff who may view payments, and hides it from everyone else", async () => {
+  test("shows each payment to the Super Admin, and the history to no one else (#237)", async () => {
     const id = await lead(await yearWithSchedule())
     const { paymentId } = await pay(await signedIn(ACCOUNTANT), id, payment(300_000, { paidOn: yesterday }))
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), id)
     if (!history.ok) throw new Error(history.error)
     const entry = history.data.entries.find((e) => e.record === "school_fee_payments")
     expect(entry).toMatchObject({ actor: ACCOUNTANT.name, recordId: paymentId, action: "insert" })
@@ -406,10 +406,7 @@ describe("the lead's history", () => {
       ]),
     )
 
-    const viewer = await createThrowawayStaff(["leads.view"])
-    const hidden = await getLeadHistory(await signedIn(viewer), id)
-    if (!hidden.ok) throw new Error(hidden.error)
-    expect(hidden.data.entries.length).toBeGreaterThan(0)
-    expect(hidden.data.entries.filter((e) => e.record === "school_fee_payments")).toEqual([])
+    const viewer = await createThrowawayStaff(["leads.view", "payments.view"])
+    expect(await getLeadHistory(await signedIn(viewer), id)).toEqual({ ok: false, error: "forbidden" })
   })
 })

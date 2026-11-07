@@ -11,7 +11,7 @@ import { getLead, updateGuardianContact } from "@/lib/services/leads"
 import { applyReApplicationField } from "@/lib/services/re-application-apply"
 
 import { anonClient, asSystem, createThrowawayStaff, secretClient, signedIn, unusedAdmissionNumber } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Apply on a Re-application (#78), against local Supabase: it writes what the
 // family sent through the lead module's corrections. Each test records a lead
@@ -95,7 +95,7 @@ describe("Apply on a re-application", () => {
     const now = await stored(lead.id)
     expect(now.className).toBe("STD 4")
     expect(now.contact.phone).toBe(international(lead.phone))
-    const history = await getLeadHistory(await signedIn(MANAGER), lead.id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead.id)
     if (!history.ok) throw new Error(history.error)
     const [edit] = history.data.entries
     expect(edit).toMatchObject({ actor: ADMISSIONS.name, record: "lead", recordId: lead.id, action: "update" })
@@ -112,7 +112,7 @@ describe("Apply on a re-application", () => {
     const now = await stored(lead.id)
     expect(now.contact.phone).toBe(international(sentPhone))
     expect(now.className).toBe("STD 3")
-    const history = await getLeadHistory(await signedIn(MANAGER), lead.id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead.id)
     if (!history.ok) throw new Error(history.error)
     const [edit] = history.data.entries
     expect(edit).toMatchObject({ actor: MANAGER.name, record: "contact", recordId: lead.contactId, action: "update" })

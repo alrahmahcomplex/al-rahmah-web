@@ -21,6 +21,12 @@ export const PERMISSIONS = [
   "academic_years.manage",
   "staff.administer",
   "group_links.manage",
+  // The full audit history. No role can hold it: only the Super Admin, who
+  // answers true for every permission, has it (#237).
+  "audit.view",
 ] as const
+
+// Never offered on a role, so the Roles tab leaves it out.
+export const RESERVED_PERMISSIONS: readonly Permission[] = ["audit.view"]
 
 export type Permission = (typeof PERMISSIONS)[number]

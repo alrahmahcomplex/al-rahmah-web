@@ -6,10 +6,13 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
 
 import { signedIn } from "../tests/support/db"
-import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
-// Reading a lead's history on its own screen, as staff do. Each test registers
-// its own family, so the seeded leads other tests read stay as they are.
+// Reading a lead's history on its own screen. Only the Super Admin reads it
+// (#237); everyone else keeps the status and the day it last changed. Each
+// test registers its own family, so the seeded leads other tests read stay
+// as they are.
 
 const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
@@ -47,7 +50,7 @@ test.describe("a lead's history", () => {
     await form.getByRole("button", { name: "Save" }).click()
     await expect(page.getByRole("region", { name: "Student" }).getByRole("status")).toHaveText("Student details saved.")
 
-    await page.getByRole("link", { name: "History" }).click()
+    await openLeadHistoryAsSuperAdmin(page)
     await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}/history$`))
     await expect(page.getByText(`${lead.name} · ${lead.admissionNumber}`)).toBeVisible()
 
@@ -64,12 +67,17 @@ test.describe("a lead's history", () => {
     await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
   })
 
-  test("the Accountant reads it too", async ({ page }) => {
-    const lead = await walkInLead()
-    await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
-    await page.getByRole("link", { name: "History" }).click()
+  for (const person of [MANAGER, ACCOUNTANT]) {
+    test(`${person.roleName} sees the status and its date, no History link, and a forbidden History page`, async ({ page }) => {
+      const lead = await walkInLead()
+      await signIn(page, person)
+      await page.goto(`/staff/leads/${lead.id}`)
+      await expect(page.getByText(/^since \d{1,2} \w{3} \d{4}$/)).toBeVisible()
+      await expect(page.getByRole("link", { name: "History" })).toHaveCount(0)
 
-    await expect(page.getByRole("list", { name: "History" }).locator(":scope > li")).toHaveCount(2)
-  })
+      await page.goto(`/staff/leads/${lead.id}/history`)
+      await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
+      await expect(page.getByRole("list", { name: "History" })).toHaveCount(0)
+    })
+  }
 })

@@ -9,6 +9,7 @@ import {
   PhoneIcon,
   RepeatIcon,
   RotateCcwIcon,
+  ScrollTextIcon,
   ShieldCheckIcon,
   UserPlusIcon,
   UsersIcon,
@@ -79,6 +80,8 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
     alsoNeeds: "leads.view",
   },
   { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: ShieldCheckIcon, permission: "staff.administer" },
+  // The Super Admin's alone: no role can hold audit.view (#237).
+  { href: "/staff/audit", label: "Audit", group: "Admin", icon: ScrollTextIcon, permission: "audit.view" },
 ]
 
 export function navFor(

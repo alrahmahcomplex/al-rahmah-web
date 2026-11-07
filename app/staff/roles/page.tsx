@@ -39,7 +39,8 @@ export default async function StaffAndRolesPage({ searchParams }: { searchParams
     [requested, yourRoleId, overview.data.roles[0]?.id].find((id) => id && overview.data.roles.some((r) => r.id === id)) ??
     ""
   const role = roleView(overview.data, selectedId, staff.id)
-  const history = await getStaffAdminHistory(supabase, overview.data)
+  // The history is the Super Admin's alone (#237).
+  const history = staff.permissions.includes("audit.view") ? await getStaffAdminHistory(supabase, overview.data) : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,7 +49,7 @@ export default async function StaffAndRolesPage({ searchParams }: { searchParams
         <RoleRail roles={overview.data.roles} selectedId={selectedId} yourRoleId={yourRoleId ?? null} />
         {role && (
           <RolePane key={role.id} role={role} permissions={overview.data.permissions}>
-            <History result={history} />
+            {history && <History result={history} />}
           </RolePane>
         )}
       </div>

@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { asSystem, createThrowawayStaff, inRolledBackTransaction } from "../tests/support/db"
 import { ACCOUNTANT, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../tests/support/fixtures"
+import { openStaffHistoryAsSuperAdmin } from "./super-admin"
 
 // The Staff and roles screen, as a Manager uses it. Tests that change
 // someone change a throwaway staff member of their own, so parallel tests and
@@ -128,7 +129,7 @@ test.describe("changing staff members", () => {
     await expect(callout(page)).toHaveText(`Deactivated ${target.name}.`)
     await expect(row).toContainText("Deactivated")
 
-    await page.getByRole("button", { name: "History" }).click()
+    await openStaffHistoryAsSuperAdmin(page)
     // Other tests write history at the same time, so find this change by name.
     const change = page
       .getByRole("list", { name: "History" })
@@ -220,7 +221,7 @@ test.describe("shaping roles", () => {
     await expect(callout(page)).toHaveText(`${name} can now: View leads and their history.`)
     await expect(page.getByRole("checkbox", { name: "View leads and their history" })).toBeChecked()
 
-    await page.getByRole("button", { name: "History" }).click()
+    await openStaffHistoryAsSuperAdmin(page)
     const change = page
       .getByRole("list", { name: "History" })
       .getByRole("listitem")

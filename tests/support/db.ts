@@ -105,6 +105,16 @@ export async function unusedAdmissionNumber(): Promise<string> {
   })
 }
 
+// The Super Admin holds every permission, so once they have joined they
+// count as an administrator (#237). A test of the last-administrator guard
+// takes them out first, inside its own rolled-back transaction, lifting the
+// freeze by name the way a migration would.
+export async function withoutSuperAdmin(sql: Client): Promise<void> {
+  await sql.query("alter table public.staff_members disable trigger refuse_super_admin_holder_change")
+  await sql.query("update public.staff_members set active = false where role_id = '5a000000-0000-4000-8000-000000000001'")
+  await sql.query("alter table public.staff_members enable trigger refuse_super_admin_holder_change")
+}
+
 export function asSystem<T>(work: (sql: Client) => Promise<T>): Promise<T> {
   return committedAs("select public.set_audit_actor('system')", [], work)
 }

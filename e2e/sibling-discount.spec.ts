@@ -10,6 +10,7 @@ import { createLead } from "@/lib/services/leads"
 import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // The Sibling discount (#113): the seeded confirmed and unconfirmed Families
 // in supabase/seeds/90_fees.sql, read only, and the prior-sibling tick on a
@@ -133,7 +134,7 @@ test("Admissions Staff tick Has a sibling already at Al-Rahmah, which gives the 
   await expect(page.getByRole("region", { name: "Discounts" })).toContainText("Amina Older, STD 6")
 
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead}/history`)
+  await openLeadHistoryAsSuperAdmin(page, lead)
   await expect(page.getByText("ticked Has a sibling already at Al-Rahmah")).toBeVisible()
 
   await page.goto(`/staff/leads/${lead}`)

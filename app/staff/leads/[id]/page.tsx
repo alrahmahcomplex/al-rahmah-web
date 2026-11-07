@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
 import { enrollmentYears, tanzaniaToday } from "@/lib/school-calendar"
 import { getLead, isClosed, listContactChildren } from "@/lib/services/leads"
+import { getLeadStatusSince } from "@/lib/services/system-audit"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../session"
@@ -25,7 +26,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
 
   const { id } = await params
   const supabase = await createClient()
-  const lead = await getLead(supabase, id)
+  const [lead, statusSince] = await Promise.all([getLead(supabase, id), getLeadStatusSince(supabase, id)])
   if (!lead.ok && lead.error === "not-found") notFound()
   if (!lead.ok) {
     return (
@@ -53,6 +54,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     <div className="flex flex-col gap-6">
       <LeadSummary
         lead={lead.data}
+        statusSince={statusSince.ok ? statusSince.data : undefined}
         nextStep={
           !open ? (
             <ClosedLeadBanner
@@ -89,7 +91,10 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         <Panel key={key} lead={lead.data} staff={staff} open={open} />
       ))}
       <div className="flex flex-wrap gap-2">
-        <Link href={`/staff/leads/${lead.data.id}/history`} className={buttonVariants({ variant: "outline" })}>History</Link>
+        {/* The full history is the Super Admin's alone (#237). */}
+        {staff.permissions.includes("audit.view") && (
+          <Link href={`/staff/leads/${lead.data.id}/history`} className={buttonVariants({ variant: "outline" })}>History</Link>
+        )}
         <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>Back to Check-in</Link>
       </div>
     </div>

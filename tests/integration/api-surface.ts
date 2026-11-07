@@ -167,6 +167,20 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  // The system audit screen (#237): audit.view alone.
+  "public.audit_entries(from_day date, to_day date, actor text, area text, record text, page_limit integer, page_offset integer)": {
+    roles: ["authenticated"],
+    args: {
+      from_day: "null",
+      to_day: "null",
+      actor: "null",
+      area: "null",
+      record: "'ADMSN-90001'",
+      page_limit: "50",
+      page_offset: "0",
+    },
+    agent: { refused: "forbidden" },
+  },
   "public.assign_staff_role(staff_id uuid, role_id uuid)": {
     roles: ["authenticated"],
     args: {
@@ -348,9 +362,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.dismiss_notices(through bigint)": {
     roles: ["authenticated"],
     setup:
-      "select public.set_audit_actor('staff', 'a1a1a1a1-0000-4000-8000-000000000002'); update public.staff_members set active = false where id = 'a1a1a1a1-0000-4000-8000-000000000001'; update public.staff_members set active = true where id = 'a1a1a1a1-0000-4000-8000-000000000001'",
+      // The sample caller is the Super Admin, whose record is frozen (#237),
+      // so the notice is made with the freeze lifted by name.
+      "select public.set_audit_actor('staff', 'a1a1a1a1-0000-4000-8000-000000000002'); alter table public.staff_members disable trigger refuse_super_admin_holder_change; update public.staff_members set active = false where id = '5a000000-0000-4000-8000-000000000002'; update public.staff_members set active = true where id = '5a000000-0000-4000-8000-000000000002'; alter table public.staff_members enable trigger refuse_super_admin_holder_change",
     args: {
-      through: "(select max(a.id) from public.audit_log a where public.is_notice_for(a, 'a1a1a1a1-0000-4000-8000-000000000001'))",
+      through: "(select max(a.id) from public.audit_log a where public.is_notice_for(a, '5a000000-0000-4000-8000-000000000002'))",
     },
     agent: { refused: "not_staff" },
   },
@@ -373,7 +389,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.finish_agent_invite_batch(batch_id uuid, stop_reason text)": {
     roles: ["authenticated"],
     setup:
-      "insert into public.agent_invite_batches (id, started_by, daily_cap, staff_reserve, batch_limit, used_today, waiting, skipped_recent) values ('b7b7b7b7-0000-4000-8000-000000000192', 'a1a1a1a1-0000-4000-8000-000000000001', 100, 20, 30, 0, 0, 0)",
+      "insert into public.agent_invite_batches (id, started_by, daily_cap, staff_reserve, batch_limit, used_today, waiting, skipped_recent) values ('b7b7b7b7-0000-4000-8000-000000000192', '5a000000-0000-4000-8000-000000000002', 100, 20, 30, 0, 0, 0)",
     args: { batch_id: "'b7b7b7b7-0000-4000-8000-000000000192'", stop_reason: "'done'" },
     agent: { refused: "not_permitted" },
   },
@@ -502,10 +518,17 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "forbidden" },
   },
+  // audit.view alone (#237).
   "public.lead_history(lead_id uuid)": {
     roles: ["authenticated"],
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
-    agent: { refused: "not_permitted" },
+    agent: { refused: "forbidden" },
+  },
+  // When the lead's status last changed (#237): leads.view.
+  "public.lead_status_since(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "forbidden" },
   },
   "public.lead_is_closed(lead_id uuid)": {
     roles: ["authenticated"],
@@ -663,7 +686,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.record_agent_invite(attempt_id uuid, result text, error_code text)": {
     roles: ["authenticated"],
     setup:
-      "insert into public.agent_events (id, agent_id, kind, result, email, created_by) values ('e7e7e7e7-0000-4000-8000-000000000192', 'a4a4a4a4-0000-4000-8000-000000000002', 'invite', 'started', 'surface-invite@example.test', 'a1a1a1a1-0000-4000-8000-000000000001')",
+      "insert into public.agent_events (id, agent_id, kind, result, email, created_by) values ('e7e7e7e7-0000-4000-8000-000000000192', 'a4a4a4a4-0000-4000-8000-000000000002', 'invite', 'started', 'surface-invite@example.test', '5a000000-0000-4000-8000-000000000002')",
     args: { attempt_id: "'e7e7e7e7-0000-4000-8000-000000000192'", result: "'sent'", error_code: "null" },
     agent: { refused: "not_permitted" },
   },
@@ -942,7 +965,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.withdraw_reopening_request(request_id uuid)": {
     roles: ["authenticated"],
     setup:
-      "insert into public.reopening_requests (id, lead_id, source, reason, requested_by) values ('5e0e0000-0000-4000-8000-000000000188', '1ead0000-0000-4000-8000-000000000905', 'lead', 'A sample reason', 'a1a1a1a1-0000-4000-8000-000000000001')",
+      "insert into public.reopening_requests (id, lead_id, source, reason, requested_by) values ('5e0e0000-0000-4000-8000-000000000188', '1ead0000-0000-4000-8000-000000000905', 'lead', 'A sample reason', '5a000000-0000-4000-8000-000000000002')",
     args: { request_id: "'5e0e0000-0000-4000-8000-000000000188'" },
     agent: { refused: "not_permitted" },
   },
@@ -1077,11 +1100,11 @@ export const POLICIES: Record<string, PolicyEntry> = {
     using: "( SELECT is_active_staff() AS is_active_staff)",
     check: null,
   },
-  "public.audit_log: Staff read the history of what they may read": {
+  // The audit history is the Super Admin's alone (#237).
+  "public.audit_log: Only the Super Admin reads the audit history": {
     command: "SELECT",
     roles: ["authenticated"],
-    using:
-      "\nCASE scope\n    WHEN 'lead'::text THEN ( SELECT has_permission('leads.view'::text) AS has_permission)\n    WHEN 'payment'::text THEN ( SELECT has_permission('payments.view'::text) AS has_permission)\n    WHEN 'staff_admin'::text THEN ( SELECT has_permission('staff.administer'::text) AS has_permission)\n    ELSE false\nEND",
+    using: "( SELECT has_permission('audit.view'::text) AS has_permission)",
     check: null,
   },
   "public.audit_scopes: Active staff read the audit scopes": {
@@ -1168,10 +1191,12 @@ export const POLICIES: Record<string, PolicyEntry> = {
     using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
     check: null,
   },
-  "public.permissions: Active staff read the permission list": {
+  // audit.view only for the Super Admin, who alone holds it (#237).
+  "public.permissions: Active staff read the permission list, audit.view aside": {
     command: "SELECT",
     roles: ["authenticated"],
-    using: "( SELECT is_active_staff() AS is_active_staff)",
+    using:
+      "(( SELECT is_active_staff() AS is_active_staff) AND ((name <> 'audit.view'::text) OR ( SELECT has_permission('audit.view'::text) AS has_permission)))",
     check: null,
   },
   "public.re_applications: Staff who may view leads read re-applications": {
@@ -1186,10 +1211,11 @@ export const POLICIES: Record<string, PolicyEntry> = {
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
     check: null,
   },
-  "public.roles: Active staff read roles": {
+  // The Super Admin role is never returned, to anyone (#237).
+  "public.roles: Active staff read roles, never the Super Admin role": {
     command: "SELECT",
     roles: ["authenticated"],
-    using: "( SELECT is_active_staff() AS is_active_staff)",
+    using: "(( SELECT is_active_staff() AS is_active_staff) AND (id <> '5a000000-0000-4000-8000-000000000001'::uuid))",
     check: null,
   },
   "public.school_fee_payments: Staff who may view payments read school-fee payments": {
@@ -1198,11 +1224,12 @@ export const POLICIES: Record<string, PolicyEntry> = {
     using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
     check: null,
   },
-  "public.staff_members: Staff read their own record; administrators read everyone": {
+  // Administrators never read the Super Admin's record; the holder reads their own (#237).
+  "public.staff_members: Own record; administrators read all but the Super Admin": {
     command: "SELECT",
     roles: ["authenticated"],
     using:
-      "(((user_id = ( SELECT auth.uid() AS uid)) AND active) OR ( SELECT has_permission('staff.administer'::text) AS has_permission))",
+      "(((user_id = ( SELECT auth.uid() AS uid)) AND active) OR (( SELECT has_permission('staff.administer'::text) AS has_permission) AND (role_id <> '5a000000-0000-4000-8000-000000000001'::uuid)))",
     check: null,
   },
   "public.whatsapp_group_invitations: Staff who view leads read group invitations": {

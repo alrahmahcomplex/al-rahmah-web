@@ -29,7 +29,7 @@ export default async function ReopeningRequestsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Reopening requests</h1>
+        <h1 className="staff-heading">Reopening requests</h1>
         <p className="text-sm text-muted-foreground">
           Closed leads waiting for a decision, oldest first. Open a lead to approve or reject its request.
         </p>

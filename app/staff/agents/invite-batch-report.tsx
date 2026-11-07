@@ -18,7 +18,7 @@ export function InviteBatchReportPanel({ report, search }: { report: InviteBatch
   const skipped = skippedLine(report)
   return (
     <section aria-labelledby="invite-batch-heading" className="flex flex-col gap-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
-      <h2 id="invite-batch-heading" className="font-medium text-slate-900">
+      <h2 id="invite-batch-heading" className="staff-section-heading">
         Invite batch
       </h2>
       <p className="text-muted-foreground">{batchHeading(report)}</p>

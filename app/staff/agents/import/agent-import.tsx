@@ -157,7 +157,7 @@ function Upload({ onUpload, pending }: { onUpload: (form: FormData) => void; pen
   return (
     <>
       <section aria-labelledby="template-heading" className="flex max-w-2xl flex-col gap-3">
-        <h2 id="template-heading" className="text-lg font-semibold text-slate-900">
+        <h2 id="template-heading" className="staff-section-heading">
           1. Fill in the template
         </h2>
         <div>
@@ -186,7 +186,7 @@ function Upload({ onUpload, pending }: { onUpload: (form: FormData) => void; pen
       </section>
 
       <section aria-labelledby="upload-heading" className="flex max-w-2xl flex-col gap-3">
-        <h2 id="upload-heading" className="text-lg font-semibold text-slate-900">
+        <h2 id="upload-heading" className="staff-section-heading">
           2. Upload the file
         </h2>
         <form action={onUpload} className="flex flex-col gap-2">
@@ -233,7 +233,7 @@ function CheckScreen({
   return (
     <section aria-labelledby="check-heading" className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h2 id="check-heading" className="text-lg font-semibold wrap-anywhere text-slate-900">
+        <h2 id="check-heading" className="staff-section-heading wrap-anywhere">
           Check {check.fileName}
         </h2>
         <p className="text-sm text-slate-700">
@@ -341,7 +341,7 @@ function Result({ result, onStartOver }: { result: Extract<Step, { name: "done" 
   const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`
   return (
     <section aria-labelledby="result-heading" className="flex max-w-2xl flex-col gap-4">
-      <h2 id="result-heading" className="text-lg font-semibold wrap-anywhere text-slate-900">
+      <h2 id="result-heading" className="staff-section-heading wrap-anywhere">
         {result.fileName} is imported
       </h2>
       <ul className="list-disc pl-5 text-sm text-slate-800">

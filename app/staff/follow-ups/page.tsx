@@ -3,6 +3,7 @@ import Link from "next/link"
 import { forbidden } from "next/navigation"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { StatusChip } from "@/components/status-chip"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
@@ -40,7 +41,7 @@ export default async function FollowUpsPage({
 
   return (
     <div className="flex flex-col gap-8">
-      <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Follow-ups</h1>
+      <h1 className="staff-heading">Follow-ups</h1>
 
       <Section section="overdue" title="Overdue" result={overdue} search={search}>
         {(page) =>
@@ -106,7 +107,7 @@ function Section({
   const headingId = `follow-ups-${section}`
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+      <h2 id={headingId} className="flex items-center gap-2 staff-section-heading">
         {title}
         {result.ok && result.data.total > 0 && (
           <Badge variant={section === "overdue" ? "destructive" : "secondary"}>{result.data.total}</Badge>
@@ -164,7 +165,7 @@ function Row({ item, today }: { item: FollowUpQueueItem; today: string }) {
             {item.lead.studentName}
           </Link>
           <span className="font-mono text-xs text-muted-foreground">{item.lead.admissionNumber}</span>
-          <Badge variant="secondary">{item.lead.status}</Badge>
+          <StatusChip status={item.lead.status} />
         </p>
         <p className="text-muted-foreground">
           {item.lead.className} · {item.lead.enrollmentYear}

@@ -80,7 +80,7 @@ export default async function InterviewsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Interviews</h1>
+      <h1 className="staff-heading">Interviews</h1>
 
       <div className="flex flex-col gap-3">
         <FilterGroup

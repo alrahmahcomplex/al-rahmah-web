@@ -42,11 +42,40 @@ typography:
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
+  staff-heading:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "1.375rem"
+    fontWeight: 600
+    lineHeight: 1.27
+    letterSpacing: "-0.025em"
+  staff-section:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "0.9375rem"
+    fontWeight: 600
+    lineHeight: 1.33
+    letterSpacing: "-0.025em"
   staff-ui:
     fontFamily: "Geist, system-ui, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 500
     lineHeight: 1.43
+  staff-name:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "0.8125rem"
+    fontWeight: 600
+  caption:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 500
+  staff-eyebrow:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "0.6875rem"
+    fontWeight: 600
+    letterSpacing: "0.08em"
+  staff-count:
+    fontFamily: "Geist, system-ui, sans-serif"
+    fontSize: "0.625rem"
+    fontWeight: 600
 rounded:
   sm: "6px"
   md: "8px"
@@ -94,13 +123,64 @@ components:
     textColor: "{colors.paper}"
     typography: "{typography.staff-ui}"
     rounded: "{rounded.lg}"
-    height: "32px"
-    padding: "0 10px"
+    height: "40px"
+    padding: "0 12px"
   button-staff-outline:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.staff-ink}"
     rounded: "{rounded.lg}"
+    height: "40px"
+  button-staff-sm:
+    rounded: "{rounded.lg}"
     height: "32px"
+  input-staff:
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.staff-ink}"
+    rounded: "{rounded.lg}"
+    height: "40px"
+    padding: "0 12px"
+  chip-applied:
+    backgroundColor: "#f1f5f9"
+    textColor: "#314158"
+    typography: "{typography.caption}"
+    rounded: "{rounded.sm}"
+    height: "22px"
+  chip-visited:
+    backgroundColor: "{colors.lavender-whisper}"
+    textColor: "{colors.indigo-deep}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.sm}"
+    height: "22px"
+  chip-interviewed:
+    backgroundColor: "#fff4ec"
+    textColor: "#9f2d00"
+    typography: "{typography.caption}"
+    rounded: "{rounded.sm}"
+    height: "22px"
+  chip-enrolled:
+    backgroundColor: "#f0fdf4"
+    textColor: "#016630"
+    typography: "{typography.caption}"
+    rounded: "{rounded.sm}"
+    height: "22px"
+  chip-declined:
+    backgroundColor: "#fef2f2"
+    textColor: "#c10007"
+    typography: "{typography.caption}"
+    rounded: "{rounded.sm}"
+    height: "22px"
+  chip-inactive:
+    backgroundColor: "{colors.paper}"
+    textColor: "#45556c"
+    typography: "{typography.caption}"
+    rounded: "{rounded.sm}"
+    height: "22px"
+  chip-archived:
+    backgroundColor: "#e2e8f0"
+    textColor: "#314158"
+    typography: "{typography.caption}"
+    rounded: "{rounded.sm}"
+    height: "22px"
   card-staff:
     backgroundColor: "{colors.paper}"
     rounded: "{rounded.xl}"
@@ -154,7 +234,7 @@ A two-colour brand (indigo authority, orange warmth) on white and pale lavender,
 
 **The ShuleFasta Button Rule.** Every orange action is `orange-500` (`#fd6914`) with white semibold text, `orange-600` (`#e05a0e`) on hover and a `blue-600` focus ring, in the surface's own pill or 10 to 12px radius, through the `orange` variant of `components/ui/button.tsx`. White on `#fd6914` measures about 2.9:1, under WCAG AA's 4.5:1 for normal text and 3:1 for large text. The owner accepted this on 2026-11-06 to match ShuleFasta; it is a recorded risk, not a defect to fix. Do not add dark text or a darker orange to raise it. Keep labels short, semibold and at least 14px.
 
-**The Quiet Staff Rule.** Staff screens stay neutral. Rahmah Indigo may mark the page heading and the current navigation item; Sunrise Orange may mark one primary action and the waiting counts. Everything else is Staff Ink on Paper.
+**The Quiet Staff Rule.** Staff screens stay neutral. Rahmah Indigo may mark the current navigation item and links; Sunrise Orange may mark one primary action and the waiting counts; the status chips carry the lead lifecycle in soft tints. Everything else, page headings included, is Staff Ink on Paper.
 
 ## Typography
 
@@ -169,18 +249,24 @@ A two-colour brand (indigo authority, orange warmth) on white and pale lavender,
 - **Label band** (Exo 800 italic, 1rem, uppercase, 1px tracking): text inside an indigo name band, e.g. "AL-RAHMAH COMPLEX".
 - **Action** (Exo 600 italic, 1rem): white labels on orange action buttons.
 - **Body** (Geist 400, 1rem, 1.5): all reading text. Keep lines to 65–75ch.
+- **Staff heading** (Geist 600, 1.375rem/22px, tight tracking, Staff Ink): the one `<h1>` on every staff page, through the `staff-heading` utility in `app/globals.css`. Staff pages never use the Exo italic heading; sign-in keeps it, because it is the doorway.
+- **Staff section** (Geist 600, 0.9375rem/15px, tight tracking, Staff Ink): section and card headings on staff pages, through `staff-section-heading`.
 - **Staff UI** (Geist 500, 0.875rem): buttons, labels and table text in the staff portal.
+- **Staff name** (Geist 600, 0.8125rem/13px): the signed-in person's name in the account menu.
+- **Caption** (Geist 500, 0.75rem/12px): status chips, helper text, and small links and messages on sign-in.
+- **Staff eyebrow** (Geist 600, 0.6875rem/11px, uppercase, 0.08em tracking, Slate 500): sidebar group names, tab-bar labels and small section labels such as "Needs you today".
+- **Staff count** (Geist 600, 0.625rem/10px): the count on a folded sidebar rail icon, and nowhere else.
 
 ### Named Rules
 **The Lean Forward Rule.** Exo is always italic, and heavy (700–800) when it is a heading or band; an action label is 600, as The ShuleFasta Button Rule says. Upright Exo does not appear.
 
-**The Readable Field Rule.** Text a person types is at least 16px. The sign-in inputs currently use 12px light italic, which triggers zoom on iOS and strains older eyes; new forms must not copy it.
+**The Readable Field Rule.** Text a person types is at least 16px, upright Geist, so iOS does not zoom and older eyes can read it. The sign-in inputs follow it too, inside their pills with their icons.
 
 ## Layout
 
 Public surfaces are **single-column and phone-first**. Content sits in a centred stack with generous vertical gaps (20px between logo, band and heading; 12px between form fields). Hero cards are narrow (325px, capped at 90vw) and centred on the lavender wash, with 16px page padding on phones and 32px from the `sm` breakpoint (640px). Spacing steps come from Tailwind's 4px base; the steps in real use are 8, 12, 16, 20, 32 and 40px.
 
-Staff surfaces use shadcn's density: 32px controls, 16px card padding, 12px card padding in compact cards. They are designed first for a desktop or laptop at the admissions desk.
+Staff surfaces use shadcn's density with taller controls: buttons, inputs and selects are 40px tall, and 44px on a touch screen (`pointer-coarse`), so a tablet at the admissions desk gets a full touch target. The `sm` size stays 32px for secondary actions inside a card. Cards use 16px padding, 12px in compact cards. Staff screens are designed first for a desktop or laptop at the admissions desk.
 
 ## Elevation & Depth
 
@@ -205,7 +291,7 @@ Round, bold, eager.
 - **Shape:** full pill (9999px), 44px tall on public pages.
 - **Invite (primary public):** Sunrise Orange with a white semibold italic Exo label, Sun lift shadow, full width inside a hero card. It is the `orange` variant of `components/ui/button.tsx` in the surface's own shape; the same variant is every orange action on a Discount code page, in the Admission form and in the staff portal.
 - **Hover / Active:** darkens to Sunrise Ember and rises 2px; scales to 95% while pressed; 70% opacity and no lift while pending, with the label changed to show progress. Focus shows a 3px ring in Rahmah Indigo at 40%.
-- **Staff (default / outline):** shadcn Button, 32px tall, 10px corners, Geist 500 at 14px. Default is Staff Ink; outline is Paper with a 1px Staff Line border. Focus shows a 3px ring at 50% ring colour.
+- **Staff (default / outline):** shadcn Button, 40px tall (44px on a touch screen; `sm` is 32px), 10px corners, Geist 500 at 14px. Default is Staff Ink; outline is Paper with a 1px Staff Line border. Focus shows a 3px ring at 50% ring colour.
 
 ### Name band
 The flyer's signature capsule on screen. A full-width indigo pill, 44px tall, holding the name in uppercase bold italic Exo with 1px tracking. It sits under the logo on branded doorway screens such as sign-in.
@@ -216,11 +302,31 @@ The flyer's signature capsule on screen. A full-width indigo pill, 44px tall, ho
 
 ### Inputs / Fields
 - **Public pill input:** Paper, a 1px indigo border at 30%, full pill, 44px tall, with a 16px Slate Quiet line icon (stroke 1.5) inset on the left. On focus the border turns solid Rahmah Indigo. Each field has a label, visually hidden where the icon and placeholder carry the meaning.
-- **Staff input:** shadcn Input, 32px tall, 8px corners, a 1px neutral border and a 3px focus ring.
+- **Staff input:** shadcn Input or Select, 40px tall (44px on a touch screen), 10px corners, a 1px neutral border and a 3px focus ring. Typed text is 16px on phones and 14px from `md`.
 - **Error:** an inline Alert Red message below the fields with `role="alert"`, in plain words that say what to do next.
 
+### Status chips
+One component, `StatusChip` in `components/status-chip.tsx`, shows a lead's status or closure mark wherever staff see it: the Leads list, Today, Check-in, Follow-ups and Re-applications. It is 22px tall with 6px corners and a Caption label. Each status has one soft tint with dark text, all at least 4.5:1:
+
+| Chip | Background | Text | Contrast |
+|---|---|---|---|
+| Applied | `slate-100` | `slate-700` | 9.44:1 |
+| Visited | `blue-50` (Lavender Whisper) | `blue-700` (Indigo Deep) | 12.69:1 |
+| Interviewed | `orange-50` | `orange-800` | 6.80:1 |
+| Enrolled | `green-50` | `green-800` | 6.78:1 |
+| Declined | `red-50` | `red-700` | 5.88:1 |
+| Inactive (closure) | Paper, 1px `slate-300` ring | `slate-600` | 7.56:1 |
+| Archived (closure) | `slate-200` | `slate-700` | 8.40:1 |
+
+Other tags on a lead (Returning family, Initially declined, Seat priority) stay neutral shadcn badges, so the lifecycle colours mean only one thing.
+
 ### Navigation
-There is no navigation component yet. The public landing page and the staff portal shell will define it; the Quiet Staff Rule and the One Invitation Rule both apply.
+The staff shell (`app/staff/_shell/`) holds the navigation; the Quiet Staff Rule applies to all of it.
+- **Sidebar:** a white Paper sidebar, 240px wide, from `md` up, with a 1px Slate 200 line on its right. The logo and "Al-Rahmah Complex / Admissions" sit at the top, the account menu at the bottom.
+- **Groups:** the entries sit in five groups, in this order: Front desk, Admissions, Referrals, Money, Admin, each named in the Staff eyebrow style. A group with no entry the person may see is left out. An entry is 32px tall with an 18px lucide icon; the current entry is `blue-600` on `blue-50`, the rest Slate 700 with a Slate 100 hover. Waiting work shows as an orange count pill.
+- **Collapsed rail:** the toggle in the top bar folds the sidebar to a 72px rail of icons with tooltips and counts on the icons. A cookie keeps the choice, so a reload paints it folded from the start.
+- **Bottom tab bar:** on a phone the sidebar gives way to a fixed white tab bar with Today, Check-in and Leads (each only when the person may see it) and More, which opens a sheet with every other entry and Sign out. The current tab is `blue-600`.
+- **Logo:** rendered at its own aspect ratio with both width and height set, 36×28 in the sidebar and 32×24 in the phone top bar.
 
 ## Do's and Don'ts
 
@@ -237,4 +343,4 @@ There is no navigation component yet. The public landing page and the staff port
 - **Don't** bring flyer volume into the staff portal: no indigo sidebars, coloured stat tiles or glowing cards there.
 - **Don't** set typed input text below 16px.
 - **Don't** lift more than one surface per screen, and don't use grey drop shadows on public surfaces; lift is tinted.
-- **Don't** add colours outside the palette. Status colours for the lead lifecycle will be defined with the staff portal, from the palette's tints first.
+- **Don't** add colours outside the palette. The lead lifecycle colours are the status chips above; don't style a status ad hoc with a badge variant.

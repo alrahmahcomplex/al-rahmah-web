@@ -18,7 +18,7 @@ export default async function CheckInPage() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Who has arrived?</h1>
+        <h1 className="staff-heading">Who has arrived?</h1>
         <p className="max-w-prose text-sm text-slate-600">
           Ask the parent for the Admission Number, or search the student&apos;s name.
         </p>

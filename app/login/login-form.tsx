@@ -70,7 +70,7 @@ export function LoginForm({ notice, agentSession }: { notice: LoginNotice | null
                 type="email"
                 autoComplete="email"
                 placeholder="Email"
-                className="w-full bg-white border border-blue-600/30 rounded-full h-11 pl-10 pr-4 outline-none focus:border-blue-600 transition-colors font-exo font-light italic placeholder:text-slate-400 text-slate-800 text-[12px]"
+                className="w-full bg-white border border-blue-600/30 rounded-full h-11 pl-10 pr-4 outline-none focus:border-blue-600 transition-colors placeholder:text-slate-400 text-slate-800 text-base"
                 required
               />
             </div>
@@ -88,7 +88,7 @@ export function LoginForm({ notice, agentSession }: { notice: LoginNotice | null
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="Password"
-                className="w-full bg-white border border-blue-600/30 rounded-full h-11 pl-10 pr-10 outline-none focus:border-blue-600 transition-colors font-exo font-light italic placeholder:text-slate-400 text-slate-800 text-[12px]"
+                className="w-full bg-white border border-blue-600/30 rounded-full h-11 pl-10 pr-10 outline-none focus:border-blue-600 transition-colors placeholder:text-slate-400 text-slate-800 text-base"
                 required
                 minLength={6}
               />

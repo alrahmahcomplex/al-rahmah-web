@@ -56,7 +56,7 @@ export default async function ReApplicationPage({ params }: { params: Promise<{ 
         <Link href="/staff/re-applications" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
           Re-applications
         </Link>
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Re-application</h1>
+        <h1 className="staff-heading">Re-application</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Link
             href={`/staff/leads/${entry.leadId}`}
@@ -76,7 +76,7 @@ export default async function ReApplicationPage({ params }: { params: Promise<{ 
       {closed && <ClosedLead entry={entry} staff={staff} />}
 
       <section aria-labelledby="re-application-review" className="flex flex-col gap-2">
-        <h2 id="re-application-review" className="text-sm font-semibold text-slate-900">
+        <h2 id="re-application-review" className="staff-section-heading">
           Review
         </h2>
         {entry.reviewedAt ? (
@@ -159,7 +159,7 @@ async function Comparison({ entry, staff }: { entry: ReApplication; staff: Staff
 
   return (
     <section aria-labelledby="re-application-compare" className="flex flex-col gap-2">
-      <h2 id="re-application-compare" className="text-sm font-semibold text-slate-900">
+      <h2 id="re-application-compare" className="staff-section-heading">
         Compared with the lead
       </h2>
       {body}

@@ -33,7 +33,7 @@ export default async function ReApplicationsPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Re-applications</h1>
+        <h1 className="staff-heading">Re-applications</h1>
         <p className="text-sm text-muted-foreground">
 Admission forms that named a child already on file.</p>
       </div>

@@ -58,7 +58,7 @@ export function ChipGroup<T extends string>({ id: idProp, label, hint, error, op
               id={`${itemId}-label`}
               htmlFor={itemId}
               className={cn(
-                "relative inline-flex h-10 cursor-pointer items-center rounded-full border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-900 transition-colors select-none has-data-checked:border-blue-600 has-data-checked:bg-blue-600 has-data-checked:text-white has-focus-visible:ring-3 has-focus-visible:ring-blue-600/40",
+                "relative inline-flex h-10 cursor-pointer items-center rounded-full border border-slate-300 bg-white px-3.5 text-sm font-medium transition-colors select-none text-foreground has-data-checked:border-blue-600 has-data-checked:bg-blue-600 has-data-checked:text-white has-focus-visible:ring-3 has-focus-visible:ring-blue-600/40",
                 error && "border-destructive",
               )}
             >

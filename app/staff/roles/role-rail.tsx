@@ -24,7 +24,7 @@ export function RoleRail({
 }) {
   return (
     <nav aria-label="Roles" className="min-w-0 rounded-xl bg-card p-2 ring-1 ring-foreground/10">
-      <h2 className="px-2 pt-1 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">Roles</h2>
+      <h2 className="px-2 pt-1 pb-2 text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">Roles</h2>
       <ul className="flex gap-1 overflow-x-auto md:flex-col md:gap-0.5">
         {roles.map((role) => {
           const selected = role.id === selectedId

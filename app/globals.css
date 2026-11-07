@@ -149,3 +149,12 @@
     @apply font-sans;
     }
 }
+/* Staff typography (DESIGN.md, Staff headings). Exo italic stays on public
+   pages and the sign-in doorway; staff pages speak in Geist. */
+@utility staff-heading {
+  @apply font-sans text-[1.375rem]/7 font-semibold tracking-tight text-neutral-900;
+}
+
+@utility staff-section-heading {
+  @apply font-sans text-[0.9375rem]/5 font-semibold tracking-tight text-neutral-900;
+}

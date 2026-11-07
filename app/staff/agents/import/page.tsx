@@ -31,7 +31,7 @@ export default async function AgentImportPage() {
         <Link href="/staff/agents" className="text-sm font-medium text-slate-700 underline underline-offset-4">
           Marketing Agents
         </Link>
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Import agents</h1>
+        <h1 className="staff-heading">Import agents</h1>
         <p className="max-w-2xl text-sm text-slate-700">
           Add existing agents from a spreadsheet, keeping their codes. Imported agents start Approved. The import sends no email.
         </p>
@@ -41,7 +41,7 @@ export default async function AgentImportPage() {
 
       {imports.ok && imports.data.length > 0 && (
         <section aria-labelledby="earlier-heading" className="flex max-w-2xl flex-col gap-2">
-          <h2 id="earlier-heading" className="text-lg font-semibold text-slate-900">
+          <h2 id="earlier-heading" className="staff-section-heading">
             Earlier imports
           </h2>
           <ul className="flex flex-col gap-1 text-sm">

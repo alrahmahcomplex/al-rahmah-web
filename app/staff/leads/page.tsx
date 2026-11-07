@@ -3,6 +3,7 @@ import Link from "next/link"
 import { forbidden } from "next/navigation"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { StatusChip } from "@/components/status-chip"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { listGroupLinks } from "@/lib/services/group-links"
@@ -47,7 +48,7 @@ export default async function LeadsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Leads</h1>
+      <h1 className="staff-heading">Leads</h1>
       {/* Keyed on the URL, so the box shows the search the page is showing. */}
       <LeadSearchBar key={leadsHref(search)} search={search} groupYears={groupYears} />
 
@@ -121,8 +122,8 @@ function Results({
                   <td className="px-3 py-2">{lead.dayOrBoarding}</td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
-                      <Badge variant={lead.status === "Declined" ? "destructive" : "secondary"}>{lead.status}</Badge>
-                      {lead.closure && <Badge variant="outline">{lead.closure}</Badge>}
+                      <StatusChip status={lead.status} />
+                      {lead.closure && <StatusChip status={lead.closure} />}
                       {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
                       {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
                     </div>

@@ -24,7 +24,7 @@ export default async function StaffAndRolesPage({ searchParams }: { searchParams
 
   const supabase = await createClient()
   const overview = await getStaffAndRoles(supabase)
-  const heading = <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Staff and roles</h1>
+  const heading = <h1 className="staff-heading">Staff and roles</h1>
   if (!overview.ok) {
     return (
       <div className="flex flex-col gap-4">

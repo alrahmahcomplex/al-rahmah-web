@@ -8,13 +8,15 @@ import type { Result } from "@/lib/services/result"
 import {
   assignRole,
   correctStaffName,
-  createRole,
+  createRoleFromTemplate,
   deactivateStaff,
   inviteStaff,
+  reactivateRole,
   reactivateStaff,
   resendInvite,
   renameRole,
   retireRole,
+  setRoleManages,
   setRolePermission,
   type Refusal,
   type RoleNames,
@@ -56,11 +58,26 @@ export async function correctStaffMemberName(staffId: string, fullName: string) 
 }
 
 // A new role opens in the pane, so the outcome carries its id.
-export async function addRole(name: string): Promise<ChangeOutcome & { roleId?: string }> {
+export async function addRole(name: string, templateName: string | null): Promise<ChangeOutcome & { roleId?: string }> {
   const supabase = await createClient()
-  const result = await createRole(supabase, name)
-  const outcome = await settle<RoleNames>(result, ({ role }) => `Created ${role}. Tick what it can do.`)
+  const result = await createRoleFromTemplate(supabase, name, templateName)
+  const outcome = await settle<RoleNames>(result, ({ role }) =>
+    templateName ? `Created ${role} from the ${templateName} template.` : `Created ${role}. Tick what it can do.`,
+  )
   return result.ok ? { ...outcome, roleId: result.data.id } : outcome
+}
+
+export async function reactivateRoleNow(roleId: string) {
+  const supabase = await createClient()
+  return settle<RoleNames>(await reactivateRole(supabase, roleId), ({ role }) => `${role} is a current role again.`)
+}
+
+// Adds a role to this role's managed set, or takes it out.
+export async function setManagedRole(roleId: string, managedRoleId: string, manages: boolean) {
+  const supabase = await createClient()
+  return settle<RoleNames>(await setRoleManages(supabase, roleId, managedRoleId, manages), ({ role }) =>
+    manages ? `${role} now manages the staff in another role.` : `${role} no longer manages the staff in that role.`,
+  )
 }
 
 export async function renameRoleTo(roleId: string, name: string) {

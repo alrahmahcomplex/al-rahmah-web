@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
 import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
+import { SUPER_ADMIN } from "../tests/support/fixtures"
 import type { FixtureStaff } from "../tests/support/fixtures"
 
 // The notice a staff member sees on the staff home at sign-in when someone
@@ -35,7 +36,8 @@ const today = () =>
 const noticesBox = (page: Page) => page.getByRole("region", { name: "Changes to your account" })
 
 test("a role change by another Manager shows at next sign-in, and Dismiss clears it for good", async ({ page }) => {
-  const manager = await createThrowawayStaff(["staff.administer"])
+  // The Super Admin manages every role's staff (#241).
+  const manager = SUPER_ADMIN
   const person = await createThrowawayStaff(["leads.view"])
   const managerClient = await signedIn(manager)
   const { error } = await managerClient.rpc("assign_staff_role", { staff_id: person.id, role_id: await roleId("Accountant") })
@@ -57,7 +59,8 @@ test("a role change by another Manager shows at next sign-in, and Dismiss clears
 })
 
 test("a deactivation and reactivation by someone else show as two notices", async ({ page }) => {
-  const manager = await createThrowawayStaff(["staff.administer"])
+  // The Super Admin manages every role's staff (#241).
+  const manager = SUPER_ADMIN
   const person = await createThrowawayStaff(["leads.view"])
   const managerClient = await signedIn(manager)
   expect((await managerClient.rpc("deactivate_staff_member", { staff_id: person.id })).error).toBeNull()

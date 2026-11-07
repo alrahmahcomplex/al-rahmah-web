@@ -45,7 +45,8 @@ test("the Super Admin's Roles tab lists every other role and person, never their
   await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Staff and roles" }).click()
 
   const rail = page.getByRole("navigation", { name: "Roles" })
-  await expect(rail.getByRole("link", { name: /Admissions Manager/ })).toBeVisible()
+  // Other tests make roles named after the templates, so the seeded one is found by its id (#241).
+  await expect(rail.locator('a[href="/staff/roles?role=7e000000-0000-4000-8000-000000000002"]')).toBeVisible()
   await expect(rail.getByText("Super Admin", { exact: true })).toHaveCount(0)
   await expect(rail).not.toContainText("Your role")
   await expect(page.getByText(SUPER_ADMIN.email)).toHaveCount(0)

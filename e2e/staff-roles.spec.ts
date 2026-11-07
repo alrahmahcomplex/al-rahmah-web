@@ -3,12 +3,13 @@ import { randomUUID } from "node:crypto"
 import { expect, test, type Page } from "@playwright/test"
 
 import { asSystem, createThrowawayStaff, inRolledBackTransaction } from "../tests/support/db"
-import { ACCOUNTANT, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../tests/support/fixtures"
-import { openStaffHistoryAsSuperAdmin } from "./super-admin"
+import { ACCOUNTANT, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
+import { openStaffHistoryAsSuperAdmin, signInAsSuperAdmin } from "./super-admin"
 
-// The Staff and roles screen, as a Manager uses it. Tests that change
-// someone change a throwaway staff member of their own, so parallel tests and
-// the seeded fixtures never collide.
+// The Staff and roles screen (#241): the Super Admin shapes every role and
+// manages everyone; the seeded Manager manages the Admissions Staff and reads
+// the roles. Tests that change someone change a throwaway staff member of
+// their own, so parallel tests and the seeded fixtures never collide.
 
 async function signIn(page: Page, person: FixtureStaff) {
   await page.goto("/login")
@@ -32,7 +33,7 @@ function personRow(page: Page, name: string) {
 const callout = (page: Page) => page.locator("[data-slot=alert]")
 
 test.describe("who can open Staff and roles", () => {
-  test("administrators find it in the navigation", async ({ page }) => {
+  test("a Manager, whose role manages Admissions Staff, finds it in the navigation", async ({ page }) => {
     await signIn(page, MANAGER)
 
     await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Staff and roles" }).click()
@@ -41,7 +42,7 @@ test.describe("who can open Staff and roles", () => {
     await expect(page.getByRole("heading", { name: "Staff and roles", level: 1 })).toBeVisible()
   })
 
-  test("anyone else sees no link and gets the forbidden page at its URL", async ({ page }) => {
+  test("a role that manages nobody sees no link and gets the forbidden page at its URL", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
     await expect(page.getByRole("link", { name: "Staff and roles" })).toHaveCount(0)
 
@@ -53,40 +54,71 @@ test.describe("who can open Staff and roles", () => {
 })
 
 test.describe("the rail and pane", () => {
-  test("show each role's active holders, the viewer's role, retired roles and each person's status", async ({
+  test("the Super Admin sees each role's holders, its managed set, retired roles and each person's status", async ({
     page,
   }) => {
-    await signIn(page, MANAGER)
-    await page.goto("/staff/roles")
+    const managerRole = await roleId("Admissions Manager")
+    await signIn(page, SUPER_ADMIN)
+    await page.goto(`/staff/roles?role=${managerRole}`)
 
     const rail = page.getByRole("navigation", { name: "Roles" })
-    const yours = rail.getByRole("link", { name: /Admissions Manager/ })
-    await expect(yours).toHaveAttribute("aria-current", "page")
-    await expect(yours).toContainText("Your role")
+    // Other tests make roles named after the templates, so find this one by its link.
+    await expect(rail.locator(`a[href="/staff/roles?role=${managerRole}"]`)).toHaveAttribute("aria-current", "page")
     await expect(rail.getByRole("link", { name: /Receptionist/ })).toContainText("Retired")
 
     await expect(page.getByRole("heading", { name: "Admissions Manager", level: 2 })).toBeVisible()
-    await expect(page.getByText("This is your role. Another Manager has to change it.")).toBeVisible()
-    await expect(page.getByRole("checkbox", { name: "Administer staff and roles" })).toBeChecked()
+    await expect(page.getByText("Changes apply to everyone in this role immediately.")).toBeVisible()
+    await expect(page.getByRole("checkbox", { name: "Admissions Staff", exact: true })).toBeChecked()
+    await expect(page.getByRole("checkbox", { name: "Accountant", exact: true })).not.toBeChecked()
     await expect(personRow(page, "Second Manager")).toContainText("Active")
 
     await rail.getByRole("link", { name: /Receptionist/ }).click()
-    await expect(page.getByText("Retired. Kept for history.")).toBeVisible()
+    await expect(page.getByText("Retired. Kept for history. Reactivate it to give it to anyone again.")).toBeVisible()
     await expect(personRow(page, RETIRED_ROLE.name)).toContainText("Deactivated")
+  })
+
+  test("the Manager opens on the Admissions Staff, and reads every role without a control to change it", async ({ page }) => {
+    await signIn(page, MANAGER)
+    await page.goto("/staff/roles")
+
+    await expect(page.getByRole("heading", { name: "Admissions Staff", level: 2 })).toBeVisible()
+    await expect(page.getByText("You manage the staff in this role. Only the Super Admin changes what it can do.")).toBeVisible()
+    await expect(page.getByRole("list", { name: "People in Admissions Staff" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Send invite", exact: true })).toBeEnabled()
+
+    for (const name of ["Admissions Staff", "Admissions Manager", "Accountant"]) {
+      await page.goto(`/staff/roles?role=${await roleId(name)}`)
+      await expect(page.getByRole("heading", { name, level: 2 })).toBeVisible()
+      await expect(page.getByRole("list", { name: `What ${name} can do` })).toBeVisible()
+      await expect(page.getByRole("checkbox")).toHaveCount(0)
+      await expect(page.getByRole("button", { name: "Rename" })).toHaveCount(0)
+      await expect(page.getByRole("button", { name: /Retire role|Reactivate role/ })).toHaveCount(0)
+    }
+    await expect(page.getByRole("navigation", { name: "Roles" }).getByRole("form", { name: "New role" })).toHaveCount(0)
+
+    await page.goto(`/staff/roles?role=${await roleId("Admissions Manager")}`)
+    await expect(page.getByText("This is your role. Only the Super Admin changes it.")).toBeVisible()
+    await expect(page.getByRole("list", { name: /^People in / })).toHaveCount(0)
+
+    await page.goto(`/staff/roles?role=${await roleId("Accountant")}`)
+    await expect(page.getByText("Your role doesn't manage the staff in this role. Only the Super Admin changes roles.")).toBeVisible()
+    await expect(page.getByText(ACCOUNTANT.email)).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Send invite", exact: true })).toHaveCount(0)
   })
 })
 
 test.describe("changing staff members", () => {
   test("controls the screen can see are blocked are disabled, with the reason beside them", async ({ page }) => {
+    const target = await createThrowawayStaff([], { onRole: await roleId("Admissions Staff") })
     await signIn(page, MANAGER)
     await page.goto("/staff/roles")
 
-    const me = personRow(page, MANAGER.name)
-    await expect(me.getByRole("button", { name: "Move to…" })).toBeDisabled()
-    await expect(me.getByRole("button", { name: "Deactivate" })).toBeDisabled()
-    await expect(me).toContainText("You can't change your own role. Another Manager has to do it.")
-    await expect(me).toContainText("You can't deactivate yourself.")
+    // Admissions Staff is the only role the Manager manages.
+    const row = personRow(page, target.name)
+    await expect(row.getByRole("button", { name: "Move to…" })).toBeDisabled()
+    await expect(row).toContainText("There is no other current role you manage to move them to.")
 
+    await signInAsSuperAdmin(page)
     await page.goto(`/staff/roles?role=${await roleId("Receptionist")}`)
     const retired = personRow(page, RETIRED_ROLE.name)
     await expect(retired.getByRole("button", { name: "Reactivate" })).toBeDisabled()
@@ -96,9 +128,9 @@ test.describe("changing staff members", () => {
   })
 
   test("a refusal only the database can see shows in the callout at the top of the pane", async ({ page }) => {
-    const target = await createThrowawayStaff(["leads.view"])
+    const target = await createThrowawayStaff([], { onRole: await roleId("Admissions Staff") })
     await signIn(page, MANAGER)
-    await page.goto(`/staff/roles?role=${target.roleId}`)
+    await page.goto("/staff/roles")
 
     // Someone else deactivates them after this page loaded.
     await asSystem((sql) => sql.query("update public.staff_members set active = false where id = $1", [target.id]))
@@ -110,16 +142,16 @@ test.describe("changing staff members", () => {
     await expect(personRow(page, target.name)).toContainText("Deactivated")
   })
 
-  test("deactivating a fellow administrator asks first, naming the consequence", async ({ page }) => {
-    const target = await createThrowawayStaff(["staff.administer"])
-    await signIn(page, MANAGER)
+  test("deactivating someone who manages staff asks first, naming the consequence", async ({ page }) => {
+    const target = await createThrowawayStaff([], { onRole: await roleId("Admissions Manager") })
+    await signIn(page, SUPER_ADMIN)
     await page.goto(`/staff/roles?role=${target.roleId}`)
     const row = personRow(page, target.name)
 
     await row.getByRole("button", { name: "Deactivate" }).click()
     const dialog = page.getByRole("alertdialog")
     await expect(dialog.getByRole("heading")).toHaveText(`Deactivate ${target.name}?`)
-    await expect(dialog).toContainText('including "Administer staff and roles"')
+    await expect(dialog).toContainText("including managing staff")
     await dialog.getByRole("button", { name: "Cancel" }).click()
     await expect(row).toContainText("Active")
 
@@ -134,20 +166,21 @@ test.describe("changing staff members", () => {
     const change = page
       .getByRole("list", { name: "History" })
       .getByRole("listitem")
-      .filter({ hasText: `${MANAGER.name} changed ${target.name}` })
+      .filter({ hasText: `${SUPER_ADMIN.name} changed ${target.name}` })
+      .filter({ hasText: "Deactivated" })
     await expect(change).toContainText("status: Active → Deactivated")
   })
 
-  test("moving a fellow administrator off administering asks first", async ({ page }) => {
-    const target = await createThrowawayStaff(["staff.administer"])
-    await signIn(page, MANAGER)
+  test("moving someone who manages staff to a role that manages nobody asks first", async ({ page }) => {
+    const target = await createThrowawayStaff([], { onRole: await roleId("Admissions Manager") })
+    await signIn(page, SUPER_ADMIN)
     await page.goto(`/staff/roles?role=${target.roleId}`)
 
     await personRow(page, target.name).getByRole("button", { name: "Move to…" }).click()
     await page.getByRole("menuitem", { name: "Accountant", exact: true }).click()
     const dialog = page.getByRole("alertdialog")
     await expect(dialog.getByRole("heading")).toHaveText(`Move ${target.name} to Accountant?`)
-    await expect(dialog).toContainText('will lose "Administer staff and roles"')
+    await expect(dialog).toContainText("will no longer manage")
     await dialog.getByRole("button", { name: "Move" }).click()
 
     await expect(callout(page)).toHaveText(`Moved ${target.name} to Accountant.`)
@@ -160,7 +193,7 @@ test.describe("changing staff members", () => {
       await sql.query("update public.staff_members set active = false where id = $1", [target.id])
       await sql.query("update public.roles set retired = true where id = $1", [target.roleId])
     })
-    await signIn(page, MANAGER)
+    await signIn(page, SUPER_ADMIN)
     await page.goto(`/staff/roles?role=${target.roleId}`)
 
     await personRow(page, target.name).getByRole("button", { name: "Move to…" }).click()
@@ -176,10 +209,10 @@ test.describe("changing staff members", () => {
   })
 
   test("a name is corrected in a dialog", async ({ page }) => {
-    const target = await createThrowawayStaff(["leads.view"])
+    const target = await createThrowawayStaff([], { onRole: await roleId("Admissions Staff") })
     const corrected = `${target.name} Corrected`
     await signIn(page, MANAGER)
-    await page.goto(`/staff/roles?role=${target.roleId}`)
+    await page.goto("/staff/roles")
 
     await personRow(page, target.name).getByRole("button", { name: "Correct name" }).click()
     const dialog = page.getByRole("dialog")
@@ -191,10 +224,10 @@ test.describe("changing staff members", () => {
   })
 })
 
-test.describe("shaping roles", () => {
+test.describe("shaping roles, the Super Admin's alone", () => {
   const uniqueName = (prefix: string) => `${prefix} ${randomUUID().slice(0, 8)}`
 
-  // A role nobody holds, made by the system, so any Manager may edit it.
+  // A role nobody holds, made by the system.
   async function systemRole(name = uniqueName("Role")) {
     const { rows } = await asSystem((sql) =>
       sql.query<{ id: string }>("insert into public.roles (name) values ($1) returning id", [name]),
@@ -202,13 +235,13 @@ test.describe("shaping roles", () => {
     return { id: rows[0].id, name }
   }
 
-  test("a new role starts with nothing ticked, and ticking a permission saves it", async ({ page }) => {
+  test("a blank role starts with nothing ticked, and ticking a permission saves it", async ({ page }) => {
     const name = uniqueName("Front desk")
-    await signIn(page, MANAGER)
+    await signIn(page, SUPER_ADMIN)
     await page.goto("/staff/roles")
 
     const rail = page.getByRole("navigation", { name: "Roles" })
-    await rail.getByLabel("New role").fill(name)
+    await rail.getByLabel("Role name").fill(name)
     await rail.getByRole("button", { name: "Add" }).click()
 
     await expect(page.getByRole("heading", { name, level: 2 })).toBeVisible()
@@ -230,45 +263,34 @@ test.describe("shaping roles", () => {
   })
 
   test("a name another role has is refused under the field", async ({ page }) => {
-    await signIn(page, MANAGER)
+    await signIn(page, SUPER_ADMIN)
     await page.goto("/staff/roles")
 
     const rail = page.getByRole("navigation", { name: "Roles" })
-    await rail.getByLabel("New role").fill("accountant")
+    await rail.getByLabel("Role name").fill("accountant")
     await rail.getByRole("button", { name: "Add" }).click()
 
     await expect(rail.getByRole("alert")).toHaveText('A role called "accountant" already exists.')
   })
 
-  test("a role that administers staff is closed, and Administer staff and roles is never tickable", async ({
-    page,
-  }) => {
-    const administering = await createThrowawayStaff(["staff.administer", "leads.view"])
-    const open = await systemRole()
-    await signIn(page, MANAGER)
+  test("a role's managed set is ticked and unticked like its permissions", async ({ page }) => {
+    const role = await systemRole()
+    await signIn(page, SUPER_ADMIN)
+    await page.goto(`/staff/roles?role=${role.id}`)
 
-    await page.goto("/staff/roles")
-    await expect(page.getByText("This is your role. Another Manager has to change it.")).toBeVisible()
-    await expect(page.getByRole("button", { name: "Rename" })).toBeDisabled()
+    const accountants = page.getByRole("checkbox", { name: "Accountant", exact: true })
+    await accountants.click()
+    await expect(callout(page)).toHaveText(`${role.name} now manages the staff in another role.`)
+    await expect(accountants).toBeChecked()
 
-    await page.goto(`/staff/roles?role=${administering.roleId}`)
-    await expect(page.getByText("Only a reviewed update to the system can change this role.")).toBeVisible()
-    await expect(page.getByRole("button", { name: "Rename" })).toBeDisabled()
-    await expect(page.getByRole("button", { name: "Retire role" })).toBeDisabled()
-    for (const checkbox of await page.getByRole("checkbox").all()) await expect(checkbox).toBeDisabled()
-    await expect(page.getByRole("checkbox", { name: "Administer staff and roles" })).toBeChecked()
-
-    await page.goto(`/staff/roles?role=${open.id}`)
-    await expect(page.getByRole("checkbox", { name: "View leads and their history" })).toBeEnabled()
-    const administer = page.getByRole("checkbox", { name: "Administer staff and roles" })
-    await expect(administer).toBeDisabled()
-    await expect(administer).not.toBeChecked()
-    await expect(page.getByText("Only a reviewed update to the system can give or take this.")).toBeVisible()
+    await accountants.click()
+    await expect(callout(page)).toHaveText(`${role.name} no longer manages the staff in that role.`)
+    await expect(accountants).not.toBeChecked()
   })
 
   test("retiring a role active staff hold is refused, naming them", async ({ page }) => {
     const holder = await createThrowawayStaff(["leads.view"])
-    await signIn(page, MANAGER)
+    await signIn(page, SUPER_ADMIN)
     await page.goto(`/staff/roles?role=${holder.roleId}`)
 
     await expect(page.getByRole("button", { name: "Retire role" })).toBeDisabled()
@@ -282,7 +304,7 @@ test.describe("shaping roles", () => {
   }) => {
     const role = await systemRole()
     const holder = await createThrowawayStaff(["leads.view"])
-    await signIn(page, MANAGER)
+    await signIn(page, SUPER_ADMIN)
     await page.goto(`/staff/roles?role=${role.id}`)
 
     await asSystem((sql) =>
@@ -299,7 +321,7 @@ test.describe("shaping roles", () => {
 
   test("a refused rename keeps the dialog open with the typed name, to fix in place", async ({ page }) => {
     const role = await systemRole()
-    await signIn(page, MANAGER)
+    await signIn(page, SUPER_ADMIN)
     await page.goto(`/staff/roles?role=${role.id}`)
 
     await page.getByRole("button", { name: "Rename" }).click()
@@ -317,10 +339,10 @@ test.describe("shaping roles", () => {
     await expect(callout(page)).toHaveText(`Renamed the role to ${fixed}.`)
   })
 
-  test("a role is renamed, then retired", async ({ page }) => {
+  test("a role is renamed, retired, then reactivated", async ({ page }) => {
     const role = await systemRole()
     const renamed = uniqueName("Renamed")
-    await signIn(page, MANAGER)
+    await signIn(page, SUPER_ADMIN)
     await page.goto(`/staff/roles?role=${role.id}`)
 
     await page.getByRole("button", { name: "Rename" }).click()
@@ -335,9 +357,13 @@ test.describe("shaping roles", () => {
     await page.getByRole("alertdialog").getByRole("button", { name: "Retire role" }).click()
 
     await expect(callout(page)).toHaveText(`Retired ${renamed}. It stays in history.`)
-    await expect(page.getByText("Retired. Kept for history.")).toBeVisible()
+    await expect(page.getByText("Retired. Kept for history. Reactivate it to give it to anyone again.")).toBeVisible()
     await expect(
       page.getByRole("navigation", { name: "Roles" }).getByRole("link", { name: new RegExp(renamed) }),
     ).toContainText("Retired")
+
+    await page.getByRole("button", { name: "Reactivate role" }).click()
+    await expect(callout(page)).toHaveText(`${renamed} is a current role again.`)
+    await expect(page.getByText("Changes apply to everyone in this role immediately.")).toBeVisible()
   })
 })

@@ -69,7 +69,7 @@ export default async function FollowUpsPage({
             <>
               {dueToday.length > 0 && (
                 <div className="flex flex-col gap-2">
-                  <h3 id="follow-ups-today" className="text-sm font-semibold text-slate-900">
+                  <h3 id="follow-ups-today" className="staff-section-heading">
                     Today
                   </h3>
                   <Rows items={dueToday} today={today} labelledBy="follow-ups-today" />
@@ -77,7 +77,7 @@ export default async function FollowUpsPage({
               )}
               {later.length > 0 && (
                 <div className="flex flex-col gap-2">
-                  <h3 id="follow-ups-later" className="text-sm font-semibold text-slate-900">
+                  <h3 id="follow-ups-later" className="staff-section-heading">
                     Later
                   </h3>
                   <Rows items={later} today={today} labelledBy="follow-ups-later" />

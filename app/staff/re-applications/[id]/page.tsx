@@ -100,7 +100,7 @@ function ClosedLead({ entry, staff }: { entry: ReApplication; staff: StaffMember
   const title = `This lead is ${closedState(entry)}`
   return (
     <section aria-label={title} className="flex max-w-xl flex-col gap-3 rounded-lg border bg-card p-4 text-sm">
-      <h2 className="font-semibold text-slate-900">{title}</h2>
+      <h2 className="staff-section-heading">{title}</h2>
       <p className="text-muted-foreground">
         A closed lead is read-only, so what the family sent can&apos;t be applied. To work on it again, it has to be
         reopened, and a Manager approves that.

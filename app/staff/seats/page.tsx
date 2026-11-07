@@ -75,7 +75,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
           <>
             {overFull.length > 0 && (
               <section aria-labelledby="seats-over-capacity" className="flex flex-col gap-4">
-                <h2 id="seats-over-capacity" className="text-base font-semibold text-slate-900">
+                <h2 id="seats-over-capacity" className="staff-section-heading">
                   Over capacity
                 </h2>
                 {overFull.map((entry) => (
@@ -89,7 +89,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
             )}
 
             <section aria-labelledby="seats-by-class" className="flex flex-col gap-2">
-              <h2 id="seats-by-class" className="text-base font-semibold text-slate-900">
+              <h2 id="seats-by-class" className="staff-section-heading">
                 Seats by class
               </h2>
               <p className="text-sm text-muted-foreground">

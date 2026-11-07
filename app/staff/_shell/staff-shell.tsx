@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { currentNavHref, groupNav } from "../navigation"
 import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_RAIL_COOKIE } from "../shell-cookies"
 import { AccountMenu } from "./account-menu"
+import { HEADER_ACTIONS_ID } from "./header-actions"
 import { CountPill } from "./count-pill"
 import type { ShellItem, ShellPerson } from "./items"
 import { PhoneNav } from "./phone-nav"
@@ -112,6 +113,8 @@ export function StaffShell({
             <Image src="/Al-Rahmah_Official_Logo.svg" alt="Al-Rahmah Logo" width={31} height={24} className="h-6 w-8" />
           </Link>
           <p className="truncate text-sm font-medium text-slate-900">{title}</p>
+          {/* A page puts its own action here through HeaderActions. */}
+          <div id={HEADER_ACTIONS_ID} className="ml-auto flex shrink-0 items-center gap-2" />
         </header>
         <main className="mx-auto w-full max-w-5xl px-4 py-8 pb-28 md:pb-8">{children}</main>
       </div>

@@ -1,4 +1,4 @@
-import type { CreateLeadError, FamilyMatch, FindFamilyError, InvalidField } from "@/lib/services/leads"
+import type { CreateLeadError, FamilyMatch, FindFamilyError, InvalidField, LeadListItem } from "@/lib/services/leads"
 
 export type Step = "parent" | "student" | "review"
 
@@ -20,6 +20,18 @@ export type LookupOutcome =
   | { status: "found"; href: string }
   | { status: "not-found" }
   | { status: "refused"; message: string }
+
+// A lead a name search found, as the check-in list shows it.
+export type ArrivalMatch = Pick<
+  LeadListItem,
+  "id" | "admissionNumber" | "studentName" | "className" | "enrollmentYear" | "status" | "closure"
+>
+
+// What the check-in search is told: an Admission Number's lead, found or
+// not, as LookupOutcome has it; or the leads part of a student's name
+// matches, which may be none. `total` counts every match, `leads` holds
+// the first page of them.
+export type ArrivalOutcome = LookupOutcome | { status: "matches"; query: string; leads: ArrivalMatch[]; total: number }
 
 // The step each refused field belongs to, so staff land where they can fix it.
 const STEP_OF: Record<InvalidField, Step> = {

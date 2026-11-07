@@ -35,16 +35,16 @@ async function fillParent(page: Page, family: { parent: string; phone: string },
 
 async function fillStudent(page: Page, child: string) {
   await page.getByLabel("Student's full name").fill(child)
-  await page.getByLabel("Class").selectOption("STD 3")
-  await page.getByLabel("Enrollment year").selectOption(String(new Date().getFullYear() + 1))
-  await page.getByLabel("Boarding").check()
-  await page.getByRole("button", { name: "Review" }).click()
+  await page.getByRole("radio", { name: "STD 3" }).click()
+  await page.getByRole("radio", { name: String(new Date().getFullYear() + 1) }).click()
+  await page.getByRole("radio", { name: "Boarding" }).click()
+  await page.getByRole("button", { name: "Continue to review" }).click()
 }
 
 async function startNewStudent(page: Page) {
   await page.goto("/staff/check-in")
-  await page.getByRole("link", { name: "New Student" }).click()
-  await expect(page.getByRole("heading", { name: "New Student", level: 1 })).toBeVisible()
+  await page.getByRole("link", { name: "New family, never registered" }).click()
+  await expect(page.getByRole("heading", { name: "Who is the parent or guardian?", level: 1 })).toBeVisible()
 }
 
 test.describe("registering a new family", () => {
@@ -52,15 +52,15 @@ test.describe("registering a new family", () => {
     const family = newFamily()
     await signIn(page, ADMISSIONS)
     await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Check-in" }).click()
-    await page.getByRole("link", { name: "New Student" }).click()
+    await page.getByRole("link", { name: "New family, never registered" }).click()
 
     await fillParent(page, family)
     await fillStudent(page, family.child)
 
     // The review shows what will be saved, with the visit today.
-    await expect(page.getByRole("heading", { name: "Review", level: 2 })).toBeVisible()
-    await expect(page.getByText(family.child)).toBeVisible()
-    await expect(page.getByText("Boarding", { exact: true })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Check and register", level: 1 })).toBeVisible()
+    await expect(page.getByRole("region", { name: "Student" })).toContainText(family.child)
+    await expect(page.getByRole("region", { name: "Student" })).toContainText("Boarding")
 
     await page.getByRole("button", { name: "Register student" }).click()
 
@@ -69,7 +69,7 @@ test.describe("registering a new family", () => {
     await expect(page.getByRole("heading", { name: `${family.child} is registered` })).toBeVisible()
 
     const admissionNumber = (await number.textContent()) ?? ""
-    await page.getByRole("link", { name: "Open lead" }).click()
+    await page.getByRole("link", { name: `Open ${family.child}` }).click()
     await expect(page).toHaveURL(/\/staff\/leads\/[0-9a-f-]{36}$/)
     await expect(page.getByRole("heading", { name: family.child, level: 1 })).toBeVisible()
     await expect(page.getByLabel("Admission Number")).toHaveText(admissionNumber)
@@ -107,7 +107,7 @@ test.describe("registering a new family", () => {
     await fillParent(page, family, "12345")
 
     // The Family check reads the number before any child is typed.
-    await expect(page.getByRole("heading", { name: "Parent or guardian", level: 2 })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Who is the parent or guardian?", level: 1 })).toBeVisible()
     await expect(page.locator("[data-slot=alert]")).toContainText("That phone number can't be read")
     await expect(page.getByLabel("Full name")).toHaveValue(family.parent)
 
@@ -145,12 +145,16 @@ test.describe("registering a new family", () => {
     await expect(page.getByLabel("Admission Number")).toHaveText(/^ADMSN-\d{5}$/)
   })
 
-  test("the Visit date cannot be later than today", async ({ page }) => {
+  test("the Visit date reads as today until it is changed, and cannot be later than today", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await startNewStudent(page)
     await fillParent(page, newFamily())
-    await expect(page.getByLabel("Visit date")).toHaveValue(tanzaniaToday())
-    await expect(page.getByLabel("Visit date")).toHaveAttribute("max", tanzaniaToday())
+    await expect(page.getByText(/^Visit date: today, /)).toBeVisible()
+    await expect(page.getByLabel("Visit date", { exact: true })).toHaveCount(0)
+    await page.getByRole("button", { name: "Change visit date" }).click()
+    await expect(page.getByLabel("Visit date", { exact: true })).toBeFocused()
+    await expect(page.getByLabel("Visit date", { exact: true })).toHaveValue(tanzaniaToday())
+    await expect(page.getByLabel("Visit date", { exact: true })).toHaveAttribute("max", tanzaniaToday())
   })
 })
 
@@ -205,7 +209,7 @@ test.describe("a family who gives their Admission Number", () => {
   async function lookUp(page: Page, typed: string) {
     await page.goto("/staff/check-in")
     await page.getByLabel("Admission Number").fill(typed)
-    await page.getByRole("button", { name: "Continue" }).click()
+    await page.getByRole("button", { name: "Find" }).click()
   }
 
   test("goes straight to their lead, however the number is typed", async ({ page }) => {
@@ -252,13 +256,13 @@ test.describe("a family who gives their Admission Number", () => {
     await expect(page.getByRole("heading", { name: "Zawadi Fixture", level: 1 })).toBeVisible()
   })
 
-  test("a number that matches nothing offers New Student, which starts the registration", async ({ page }) => {
+  test("a number that matches nothing offers a new family, which starts the registration", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await lookUp(page, (await unusedAdmissionNumber()).slice("ADMSN-".length))
 
-    await page.locator("[data-slot=alert]").getByRole("link", { name: "New Student" }).click()
-    await expect(page.getByRole("heading", { name: "New Student", level: 1 })).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Parent or guardian", level: 2 })).toBeVisible()
+    await page.locator("[data-slot=alert]").getByRole("link", { name: "New family, never registered" }).click()
+    await expect(page.getByRole("heading", { name: "Who is the parent or guardian?", level: 1 })).toBeVisible()
+    await expect(page.getByText("Step 1 of 3")).toBeVisible()
   })
 
   test("a lookup that never comes back says so, not that there is no lead, and the field stays locked meanwhile", async ({
@@ -283,9 +287,9 @@ test.describe("a family who gives their Admission Number", () => {
 
     const field = page.getByLabel("Admission Number")
     await field.fill("ADMSN-90002")
-    await page.getByRole("button", { name: "Continue" }).click()
+    await page.getByRole("button", { name: "Find" }).click()
     await expect(field).toHaveAttribute("readonly")
-    await expect(page.getByRole("button", { name: "Continue" })).toBeDisabled()
+    await expect(page.getByRole("button", { name: "Find" })).toBeDisabled()
     release()
 
     const refusal = page.locator("[data-slot=alert]")
@@ -294,7 +298,7 @@ test.describe("a family who gives their Admission Number", () => {
     await expect(field).not.toHaveAttribute("readonly")
     await expect(field).toHaveValue("ADMSN-90002")
 
-    await page.getByRole("button", { name: "Continue" }).click()
+    await page.getByRole("button", { name: "Find" }).click()
     await expect(page.getByRole("heading", { name: "Baraka Fixture", level: 1 })).toBeVisible()
   })
 
@@ -310,17 +314,17 @@ test.describe("a family who gives their Admission Number", () => {
     const notFound = page.locator("[data-slot=alert]")
     await expect(notFound).toContainText("No lead with this Admission Number")
     await expect(notFound.getByRole("button", { name: "Try again" })).toBeVisible()
-    await expect(notFound.getByRole("link", { name: "New Student" })).toHaveCount(0)
+    await expect(notFound.getByRole("link", { name: "New family, never registered" })).toHaveCount(0)
   })
 })
 
 test.describe("who sees what", () => {
-  test("an Accountant sees Check-in, but no New Student button, and cannot open the form", async ({ page }) => {
+  test("an Accountant sees Check-in, but no new-family button, and cannot open the form", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
     await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Check-in" }).click()
 
-    await expect(page.getByRole("heading", { name: "Check-in", level: 1 })).toBeVisible()
-    await expect(page.getByRole("link", { name: "New Student" })).toHaveCount(0)
+    await expect(page.getByRole("heading", { name: "Who has arrived?", level: 1 })).toBeVisible()
+    await expect(page.getByRole("link", { name: "New family, never registered" })).toHaveCount(0)
 
     await page.goto("/staff/check-in/new")
     await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
@@ -344,5 +348,159 @@ test.describe("who sees what", () => {
   test("someone signed out is sent to sign in", async ({ page }) => {
     await page.goto("/staff/check-in")
     await expect(page).toHaveURL(/\/login/)
+  })
+})
+
+test.describe("a family who gives the student's name", () => {
+  async function search(page: Page, typed: string) {
+    await page.goto("/staff/check-in")
+    await page.getByLabel("Admission Number").fill(typed)
+    await page.getByRole("button", { name: "Find" }).click()
+  }
+
+  test("sees the matching students, Declined and Archived ones marked, the Archived one last, and picks one", async ({
+    page,
+  }) => {
+    await signIn(page, ADMISSIONS)
+    await search(page, "fixture")
+
+    const matches = page.getByRole("region", { name: /students match “fixture”/ })
+    await expect(matches).toBeVisible()
+    const rows = matches.getByRole("link")
+    await expect(rows).toHaveCount(6)
+    // Leads without a closure mark come first, by name, Declined among them;
+    // Inactive and Archived ones follow.
+    await expect(rows.first()).toContainText("Baraka Fixture")
+    await expect(rows.filter({ hasText: "Rehema Fixture" })).toContainText("Declined")
+    await expect(rows.last()).toContainText("Hamisi Fixture")
+    await expect(rows.last()).toContainText("Archived")
+
+    await matches.getByRole("link", { name: /Baraka Fixture/ }).click()
+    await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000002$/)
+    await expect(page.getByRole("heading", { name: "Baraka Fixture", level: 1 })).toBeVisible()
+  })
+
+  test("a name that matches nothing says so, and offers a new family", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await search(page, "nobody of this name")
+
+    const nothing = page.locator("[data-slot=alert]")
+    await expect(nothing).toContainText("No student matches “nobody of this name”")
+    await expect(nothing.getByRole("button", { name: "Try again" })).toBeVisible()
+    await expect(nothing.getByRole("link", { name: "New family, never registered" })).toBeVisible()
+    await expect(page.getByRole("link", { name: "New family, never registered" })).toHaveCount(1)
+  })
+})
+
+test.describe("registering without a mouse", () => {
+  test("Tab reaches each chip group and the cards, Space selects, and the arrow keys move along", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await startNewStudent(page)
+    // The Cancel for the whole registration sits in the top bar.
+    await expect(page.getByRole("banner").getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/staff/check-in")
+    await fillParent(page, newFamily())
+    await expect(page.getByRole("heading", { name: "Who is the student?", level: 1 })).toBeFocused()
+
+    await page.getByLabel("Student's full name").fill(`Child ${randomUUID().slice(0, 6)}`)
+    await page.keyboard.press("Tab")
+    await expect(page.getByRole("radio", { name: "DAY CARE" })).toBeFocused()
+    await page.keyboard.press("Space")
+    await expect(page.getByRole("radio", { name: "DAY CARE" })).toBeChecked()
+    await page.keyboard.press("ArrowRight")
+    await expect(page.getByRole("radio", { name: "KG 1" })).toBeFocused()
+    await expect(page.getByRole("radio", { name: "KG 1" })).toBeChecked()
+
+    await page.keyboard.press("Tab")
+    const year = page.getByRole("radiogroup", { name: "Enrollment year" }).getByRole("radio").first()
+    await expect(year).toBeFocused()
+    await page.keyboard.press("Space")
+    await expect(year).toBeChecked()
+
+    await page.keyboard.press("Tab")
+    await expect(page.getByRole("radio", { name: "Day", exact: true })).toBeFocused()
+    await page.keyboard.press("Space")
+    await expect(page.getByRole("radio", { name: "Day", exact: true })).toBeChecked()
+    await expect(page.getByRole("radio", { name: "Day", exact: true })).toHaveAccessibleDescription("Goes home after school each day.")
+
+    await page.getByRole("button", { name: "Continue to review" }).focus()
+    await page.keyboard.press("Enter")
+    await expect(page.getByRole("heading", { name: "Check and register", level: 1 })).toBeFocused()
+    await expect(page.getByRole("region", { name: "Student" })).toContainText("KG 1")
+  })
+
+  test("the rail shows what was entered, and Change goes back to that step with it kept", async ({ page }) => {
+    const family = newFamily()
+    await signIn(page, ADMISSIONS)
+    await startNewStudent(page)
+    await fillParent(page, family)
+
+    const rail = page.getByRole("list", { name: "Steps" })
+    await expect(rail).toContainText(`${family.parent} · Mother`)
+    await expect(rail).toContainText(family.phone)
+    await expect(page.getByRole("progressbar", { name: "Step 2 of 3" })).toHaveAttribute("aria-valuenow", "2")
+
+    await rail.getByRole("button", { name: "Change parent or guardian" }).click()
+    await expect(page.getByRole("heading", { name: "Who is the parent or guardian?", level: 1 })).toBeFocused()
+    await expect(page.getByLabel("Full name")).toHaveValue(family.parent)
+    await expect(page.getByText("Step 1 of 3")).toBeVisible()
+
+    // Review's own Change links lead back too.
+    await page.getByRole("button", { name: "Continue" }).click()
+    await fillStudent(page, family.child)
+    await page.getByRole("region", { name: "Student" }).getByRole("button", { name: "Change student" }).click()
+    await expect(page.getByRole("heading", { name: "Who is the student?", level: 1 })).toBeFocused()
+    await expect(page.getByLabel("Student's full name")).toHaveValue(family.child)
+    await expect(page.getByRole("radio", { name: "STD 3" })).toBeChecked()
+  })
+
+  test("Register another child keeps the parent, and the Family check then lists the child just registered", async ({
+    page,
+  }) => {
+    const family = newFamily()
+    const sibling = `Sibling ${randomUUID().slice(0, 6)}`
+    await signIn(page, ADMISSIONS)
+    await startNewStudent(page)
+    await fillParent(page, family)
+    await fillStudent(page, family.child)
+    await page.getByRole("button", { name: "Register student" }).click()
+    await expect(page.getByRole("heading", { name: `${family.child} is registered`, level: 1 })).toBeFocused()
+    await expect(page.getByText(`Tell the parent: “${family.child}'s Admission Number is`)).toBeVisible()
+
+    await page.getByRole("button", { name: "Register another child" }).click()
+    await expect(page.getByRole("heading", { name: "Who is the parent or guardian?", level: 1 })).toBeVisible()
+    await expect(page.getByLabel("Full name")).toHaveValue(family.parent)
+    await page.getByRole("button", { name: "Continue" }).click()
+
+    await page.getByRole("group", { name: family.parent }).getByRole("button", { name: "Same person" }).click()
+    await expect(page.getByRole("row", { name: new RegExp(family.child) })).toBeVisible()
+    await page.getByRole("button", { name: "Register a new sibling" }).click()
+    await expect(page.getByLabel("Student's full name")).toHaveValue("")
+    await fillStudent(page, sibling)
+    await expect(page.getByRole("region", { name: "Parent or guardian" })).toContainText("Returning family")
+    await page.getByRole("button", { name: "Register student" }).click()
+    await expect(page.getByRole("heading", { name: `${sibling} is registered`, level: 1 })).toBeVisible()
+  })
+})
+
+test.describe("on a phone", () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+
+  test("check-in and every registration screen fit the width", async ({ page }) => {
+    const family = newFamily()
+    const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/check-in")
+    await expect(page.getByRole("heading", { name: "Who has arrived?", level: 1 })).toBeVisible()
+    expect(await fits()).toBe(true)
+
+    await page.getByRole("link", { name: "New family, never registered" }).click()
+    await expect(page.getByRole("heading", { name: "Who is the parent or guardian?", level: 1 })).toBeVisible()
+    expect(await fits()).toBe(true)
+    await fillParent(page, family)
+    await expect(page.getByRole("heading", { name: "Who is the student?", level: 1 })).toBeVisible()
+    expect(await fits()).toBe(true)
+    await fillStudent(page, family.child)
+    await expect(page.getByRole("heading", { name: "Check and register", level: 1 })).toBeVisible()
+    expect(await fits()).toBe(true)
   })
 })

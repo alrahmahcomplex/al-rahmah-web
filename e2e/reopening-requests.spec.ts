@@ -86,7 +86,7 @@ test.describe("raising a reopening request", () => {
     await signIn(page, ADMISSIONS)
     await page.goto("/staff/check-in/new")
     await page.getByLabel("Full name").fill("Someone typed")
-    await page.getByLabel("Relationship to the student").selectOption("Mother")
+    await page.getByRole("radio", { name: "Mother" }).click()
     await page.getByLabel("Phone", { exact: true }).fill(lead.phone)
     await page.getByRole("button", { name: "Continue" }).click()
 

@@ -8,7 +8,9 @@ import {
   findFamilyByPhone,
   findLeadByAdmissionNumber,
   LEAD_CLASSES,
+  parseAdmissionNumber,
   RELATIONSHIPS,
+  searchLeads,
   updateGuardianContact,
   type NewContact,
   type NewStudent,
@@ -21,6 +23,7 @@ import { correctionOutcome, type CorrectionOutcome } from "../leads/[id]/correct
 import {
   familyRefusal,
   refusalOutcome,
+  type ArrivalOutcome,
   type FamilyOutcome,
   type LookupOutcome,
   type ReferralCodeResult,
@@ -40,6 +43,42 @@ export async function lookUpAdmissionNumber(typed: string): Promise<LookupOutcom
   if (result.ok) return { status: "found", href: `/staff/leads/${result.data}` }
   if (result.error === "not-found") return { status: "not-found" }
   return { status: "refused", message: "The lookup could not be completed. Try again in a moment." }
+}
+
+// The longest name anyone searches for. Longer input is not a name.
+const NAME_SEARCH_MAX = 100
+
+// What staff typed at check-in. An Admission Number finds its lead exactly as
+// lookUpAdmissionNumber does. Anything else is part of a student's name, and
+// lists the leads it matches through the Leads screen's search: active
+// leads first, then Inactive and Archived ones, for anyone who may view
+// leads.
+export async function findArrival(typed: string): Promise<ArrivalOutcome> {
+  if (typeof typed !== "string") return { status: "not-found" }
+  const query = typed.trim()
+  if (parseAdmissionNumber(query)) return lookUpAdmissionNumber(query)
+  if (query === "" || query.length > NAME_SEARCH_MAX) return { status: "matches", query, leads: [], total: 0 }
+
+  const supabase = await createClient()
+  const allowed = await requirePermission(supabase, "leads.view")
+  if (!allowed.ok) return { status: "refused", message: "Your role can't look up leads." }
+
+  const result = await searchLeads(supabase, { query, page: 1 })
+  if (!result.ok) return { status: "refused", message: "The search could not be completed. Try again in a moment." }
+  return {
+    status: "matches",
+    query,
+    total: result.data.total,
+    leads: result.data.leads.map(({ id, admissionNumber, studentName, className, enrollmentYear, status, closure }) => ({
+      id,
+      admissionNumber,
+      studentName,
+      className,
+      enrollmentYear,
+      status,
+      closure,
+    })),
+  }
 }
 
 // The parent of a walk-in: a contact staff confirmed as the same person, with

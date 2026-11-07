@@ -66,7 +66,7 @@ test.describe("recording the visit of an Applied family", () => {
     await signIn(page, ADMISSIONS)
     await page.goto("/staff/check-in")
     await page.getByLabel("Admission Number").fill(SEEDED_APPLIED.number)
-    await page.getByRole("button", { name: "Continue" }).click()
+    await page.getByRole("button", { name: "Find" }).click()
 
     await expect(page).toHaveURL(new RegExp(`/staff/leads/${SEEDED_APPLIED.id}$`))
     await expect(page.getByRole("heading", { name: SEEDED_APPLIED.name, level: 1 })).toBeVisible()

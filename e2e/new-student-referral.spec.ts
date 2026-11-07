@@ -20,13 +20,13 @@ async function toStudentStep(page: Page) {
   await page.getByLabel("Full name").fill(`Parent ${randomUUID().slice(0, 6)}`)
   await page.getByLabel("Phone", { exact: true }).fill(`0 7${String(randomInt(0, 100_000_000)).padStart(8, "0")}`)
   await page.getByRole("button", { name: "Continue" }).click()
-  await expect(page.getByRole("heading", { name: "Student", level: 2 })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Who is the student?", level: 1 })).toBeVisible()
 
   const child = `Child ${randomUUID().slice(0, 6)}`
   await page.getByLabel("Student's full name").fill(child)
-  await page.getByLabel("Class").selectOption("STD 3")
-  await page.getByLabel("Enrollment year").selectOption(String(new Date().getFullYear() + 1))
-  await page.getByLabel("Day", { exact: true }).check()
+  await page.getByRole("radio", { name: "STD 3" }).click()
+  await page.getByRole("radio", { name: String(new Date().getFullYear() + 1) }).click()
+  await page.getByRole("radio", { name: "Day", exact: true }).click()
   return child
 }
 
@@ -35,14 +35,15 @@ test.describe("a Referral code at New Student", () => {
     await signIn(page, ADMISSIONS)
     const child = await toStudentStep(page)
 
-    // The agent is named as the code is typed, however it is typed.
+    // The agent is named as the code is typed, however it is typed, with the
+    // fee the family will pay, from interview_discount().
     const code = page.getByLabel("Referral code (optional)")
     await code.fill(" bjn -402")
-    await expect(page.getByText("Baraka Juma Njoroge · Approved")).toBeVisible()
-    await page.getByRole("button", { name: "Review" }).click()
+    await expect(page.getByText("Baraka Juma Njoroge · interview fee becomes TZS 40,000")).toBeVisible()
+    await page.getByRole("button", { name: "Continue to review" }).click()
 
     // The review shows the code and the agent's name.
-    await expect(page.getByRole("heading", { name: "Review", level: 2 })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Check and register", level: 1 })).toBeVisible()
     const student = page.getByRole("region", { name: "Student" })
     await expect(student).toContainText("Referral codeBJN-402")
     await expect(student).toContainText("Marketing AgentBaraka Juma Njoroge")
@@ -52,7 +53,7 @@ test.describe("a Referral code at New Student", () => {
     await expect(page.getByText("the referral code wasn't saved")).toHaveCount(0)
 
     // The lead carries the code.
-    await page.getByRole("link", { name: "Open lead" }).click()
+    await page.getByRole("link", { name: `Open ${child}` }).click()
     const panel = page.getByRole("region", { name: "Referral code" })
     await expect(panel.getByLabel("Code", { exact: true })).toHaveText("BJN-402")
     await expect(panel).toContainText("Marketing Agent: Baraka Juma Njoroge")
@@ -75,14 +76,14 @@ test.describe("a Referral code at New Student", () => {
     await expect(code).toHaveAttribute("aria-invalid", "true")
 
     // Review stays on the student step until the code is corrected or cleared.
-    await page.getByRole("button", { name: "Review" }).click()
-    await expect(page.getByRole("heading", { name: "Student", level: 2 })).toBeVisible()
+    await page.getByRole("button", { name: "Continue to review" }).click()
+    await expect(page.getByRole("heading", { name: "Who is the student?", level: 1 })).toBeVisible()
     await expect(page.getByText("Correct it, or clear the field to register without one.")).toBeVisible()
     await expect(code).toBeFocused()
 
     await code.fill("")
-    await page.getByRole("button", { name: "Review" }).click()
-    await expect(page.getByRole("heading", { name: "Review", level: 2 })).toBeVisible()
+    await page.getByRole("button", { name: "Continue to review" }).click()
+    await expect(page.getByRole("heading", { name: "Check and register", level: 1 })).toBeVisible()
     await expect(page.getByRole("region", { name: "Student" })).not.toContainText("Referral code")
   })
 })

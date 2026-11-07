@@ -61,8 +61,10 @@ export type ResultReleaseView = {
   canSend: boolean
   // Present only when the result can go now and the caller may send it.
   offer: ReleaseOffer | null
-  // The current interview's releases, newest first.
-  releases: ResultReleaseRecord[]
+  // The current interview's newest release, and how many it has had. The
+  // full list is the Super Admin's (#237).
+  latestRelease: ResultReleaseRecord | null
+  releaseCount: number
   // Whether the interview's result or score differs from what the last
   // release carried, so staff know to send the corrected result. Known only
   // with an offer: false while the result can't go or the caller can't send.
@@ -129,7 +131,42 @@ function messageInput(values: MessageValues, channel: ResultChannel, officePhone
   }
 }
 
-// An interview's releases, newest first. Needs leads.view.
+function toRecord(row: ReleaseRow): ResultReleaseRecord {
+  return {
+    releasedAt: row.released_at,
+    releasedBy: row.released_by ?? "A former staff member",
+    channel: row.channel,
+    numberUsed: row.number_used,
+    result: row.result,
+    score: Number(row.score),
+    templateId: row.template_id,
+  }
+}
+
+export type LatestRelease = { latest: ResultReleaseRecord | null; count: number }
+
+// An interview's newest release and how many it has had: what the Result
+// release section shows and the send guard compares. Needs leads.view.
+export async function getLatestResultRelease(
+  supabase: SupabaseClient,
+  interviewId: string,
+): Promise<Result<LatestRelease, CommonError>> {
+  const { data, error } = await supabase.rpc("latest_result_release", { interview_id: interviewId })
+  if (error) {
+    const known = commonError(error)
+    if (known) return { ok: false, error: known }
+    console.error("Could not read an interview's latest result release", error)
+    return { ok: false, error: "unavailable" }
+  }
+  const [row] = (data ?? []) as (ReleaseRow & { released_at: string | null; release_count: number | string })[]
+  return {
+    ok: true,
+    data: { latest: row?.released_at ? toRecord(row) : null, count: Number(row?.release_count ?? 0) },
+  }
+}
+
+// An interview's releases, newest first: an event-by-event history, so it
+// needs audit.view, which only the Super Admin holds (#237).
 export async function getResultReleases(
   supabase: SupabaseClient,
   interviewId: string,
@@ -143,15 +180,7 @@ export async function getResultReleases(
   }
   return {
     ok: true,
-    data: ((data ?? []) as ReleaseRow[]).map((row) => ({
-      releasedAt: row.released_at,
-      releasedBy: row.released_by ?? "A former staff member",
-      channel: row.channel,
-      numberUsed: row.number_used,
-      result: row.result,
-      score: Number(row.score),
-      templateId: row.template_id,
-    })),
+    data: ((data ?? []) as ReleaseRow[]).map(toRecord),
   }
 }
 
@@ -178,9 +207,9 @@ export async function getResultRelease(
   const first = await readReleaseState(supabase, leadId)
   if (!first.ok) return first
   let row = first.data
-  let releases: ResultReleaseRecord[] = []
+  let releases: LatestRelease = { latest: null, count: 0 }
   if (row.interview_id) {
-    const read = await getResultReleases(supabase, row.interview_id)
+    const read = await getLatestResultRelease(supabase, row.interview_id)
     if (!read.ok) return read
     releases = read.data
   }
@@ -191,7 +220,7 @@ export async function getResultRelease(
   // were read leaves the page short of one, so its own send is refused as
   // sent_meanwhile. If the current interview changed between the reads, the
   // section shows the first read, as it would have a moment earlier.
-  if (releases.length > 0) {
+  if (releases.count > 0) {
     const again = await readReleaseState(supabase, leadId)
     if (!again.ok) return again
     if (again.data.interview_id === row.interview_id) row = again.data
@@ -220,7 +249,7 @@ export async function getResultRelease(
   // score (interview_release_status), in the same read the offer's message
   // was built from, so the lead screen and the Interviews screen apply one
   // rule.
-  const changedSinceSent = offer !== null && releases.length > 0 && row.changed_since_sent === true
+  const changedSinceSent = offer !== null && releases.count > 0 && row.changed_since_sent === true
 
   return {
     ok: true,
@@ -230,7 +259,8 @@ export async function getResultRelease(
       amountOwed: row.amount_owed,
       canSend: row.can_send,
       offer,
-      releases,
+      latestRelease: releases.latest,
+      releaseCount: releases.count,
       changedSinceSent,
     },
   }
@@ -339,9 +369,9 @@ export async function releaseResult(
   { officePhone, seenReleases }: { officePhone: string; seenReleases?: number },
 ): Promise<Result<ReleasedResult, ReleaseError>> {
   if (seenReleases !== undefined) {
-    const releases = await getResultReleases(supabase, interviewId)
+    const releases = await getLatestResultRelease(supabase, interviewId)
     if (!releases.ok) return releases
-    if (releases.data.length > seenReleases) return { ok: false, error: "sent_meanwhile" }
+    if (releases.data.count > seenReleases) return { ok: false, error: "sent_meanwhile" }
   }
 
   const { data, error } = await supabase.rpc("release_result", { interview_id: interviewId, channel })

@@ -482,7 +482,15 @@ export async function getStaffAdminHistory(
   supabase: SupabaseClient,
   staffAndRoles: StaffAndRoles,
   limit = 100,
-): Promise<Result<HistoryEntry[], "unavailable">> {
+): Promise<Result<HistoryEntry[], "forbidden" | "unavailable">> {
+  // Row security would answer anyone else with no rows; say forbidden instead.
+  const allowed = await supabase.rpc("has_permission", { permission: "audit.view" })
+  if (allowed.error) {
+    console.error("Could not check the permission to read the staff and roles history", allowed.error)
+    return { ok: false, error: "unavailable" }
+  }
+  if (allowed.data !== true) return { ok: false, error: "forbidden" }
+
   const { data, error } = await supabase
     .from("audit_log")
     .select("id, table_name, row_id, action, old_values, new_values, actor_kind, actor_staff_id, created_at")

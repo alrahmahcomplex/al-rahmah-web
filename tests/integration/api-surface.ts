@@ -519,6 +519,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     agent: { refused: "forbidden" },
   },
   // audit.view alone (#237).
+  // The newest release and the count (#237): leads.view.
+  "public.latest_result_release(interview_id uuid)": {
+    roles: ["authenticated"],
+    args: { interview_id: "'1e7e0000-0000-4000-8000-000000000501'" },
+    agent: { refused: "forbidden" },
+  },
   "public.lead_history(lead_id uuid)": {
     roles: ["authenticated"],
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
@@ -813,6 +819,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "forbidden" },
   },
+  // Every release: the Super Admin's alone (#237).
   "public.result_releases(interview_id uuid)": {
     roles: ["authenticated"],
     args: { interview_id: "'1e7e0000-0000-4000-8000-000000000501'" },
@@ -1088,10 +1095,11 @@ export const RELATIONS: Record<string, RelationEntry> = {
 }
 
 export const POLICIES: Record<string, PolicyEntry> = {
-  "public.agent_status_changes: Staff who may view leads read agent status changes": {
+  // The full history is the Super Admin's (#237).
+  "public.agent_status_changes: Only the Super Admin reads agent status changes": {
     command: "SELECT",
     roles: ["authenticated"],
-    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    using: "( SELECT has_permission('audit.view'::text) AS has_permission)",
     check: null,
   },
   "public.audit_action_kinds: Active staff read the action kinds": {

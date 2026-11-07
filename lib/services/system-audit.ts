@@ -102,8 +102,16 @@ function actorLabel(row: Pick<AuditRow, "actor_kind" | "actor_name">): string {
   return SYSTEM_ACTORS.find((actor) => actor.value === row.actor_kind)?.label ?? row.actor_kind
 }
 
+// The page asked for. The total comes with the rows, so a page past the last
+// one (an old link, or entries that no longer match) shows the first page
+// rather than "Nothing matches".
 export async function getAuditPage(supabase: SupabaseClient, filters: AuditFilters): Promise<Result<AuditPage, AuditError>> {
-  const page = filters.page ?? 1
+  const read = await readAuditPage(supabase, filters, filters.page ?? 1)
+  if (read.ok && read.data.entries.length === 0 && read.data.page > 1) return readAuditPage(supabase, filters, 1)
+  return read
+}
+
+async function readAuditPage(supabase: SupabaseClient, filters: AuditFilters, page: number): Promise<Result<AuditPage, AuditError>> {
   const { data, error } = await supabase.rpc("audit_entries", {
     from_day: filters.from ?? null,
     to_day: filters.to ?? null,

@@ -10,7 +10,7 @@ import { createLead } from "@/lib/services/leads"
 import { getResultRelease, getResultReleases, listReleaseStatus, releaseResult } from "@/lib/services/result-release"
 
 import { anonClient, asSystem, createThrowawayStaff, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 import { claimInterviewYear, type InterviewYearClaim } from "../support/interview-years"
 
 // Release status for many interviews at once (#89): listReleaseStatus and the
@@ -103,7 +103,7 @@ describe("listReleaseStatus", () => {
     const { interviewId } = await interviewedLead()
     await send(interviewId)
     await send(interviewId)
-    const releases = await getResultReleases(await signedIn(ADMISSIONS), interviewId)
+    const releases = await getResultReleases(await signedIn(SUPER_ADMIN), interviewId)
     if (!releases.ok) throw new Error(releases.error)
 
     const read = (await status([interviewId])).get(interviewId)

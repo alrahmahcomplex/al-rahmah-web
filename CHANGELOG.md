@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 7, 2026 `v0.85.1`
+
+### IMPROVED
+
+- "View reports" now comes with "View leads and their history", since every Reports count
+  needs it. Ticking View reports on a role ticks View leads too, and unticking View leads
+  unticks View reports. The role's history shows both in the same change.
+
 ## November 7, 2026 `v0.85.0`
 
 ### NEW

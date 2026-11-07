@@ -28,6 +28,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { impliedChanges, PERMISSION_NEEDS } from "@/lib/permissions"
 import { refusal, type PermissionOption } from "@/lib/services/staff-admin"
 import { cn } from "@/lib/utils"
 
@@ -75,6 +76,8 @@ export function RolePane({
   const retireReasonId = useId()
   const permissionIdPrefix = useId()
   const managedIdPrefix = useId()
+
+  const labelOf = (name: string) => permissions.find((p) => p.name === name)?.label ?? name
 
   const run: Run = (change) => {
     startTransition(async () => {
@@ -169,6 +172,9 @@ export function RolePane({
             {permissions.map((permission) => {
               const held = role.permissions.includes(permission.name)
               const checkboxId = `${permissionIdPrefix}-${permission.name}`
+              const needed = PERMISSION_NEEDS[permission.name]
+              const neededLabel = needed && labelOf(needed)
+              const noteId = `${checkboxId}-note`
               return (
                 <li key={permission.name} className="flex items-start gap-2 py-1 text-sm">
                   <Checkbox
@@ -177,22 +183,34 @@ export function RolePane({
                     className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
                     checked={held}
                     disabled={pending || !role.editable}
+                    aria-describedby={neededLabel ? noteId : undefined}
                     onCheckedChange={(granted) =>
                       run(async () => {
+                        // The database ticks or unticks the paired permission
+                        // in the same change; the message names it.
+                        const implied = impliedChanges(role.permissions, permission.name, granted).map(labelOf)
                         const outcome = await setPermission(role.id, permission.name, granted)
                         if (!outcome.ok) return outcome
-                        return {
-                          ok: true,
-                          message: granted
-                            ? `${role.name} can now: ${permission.label}.`
-                            : `${role.name} can no longer: ${permission.label}.`,
-                        }
+                        const main = granted
+                          ? `${role.name} can now: ${permission.label}.`
+                          : `${role.name} can no longer: ${permission.label}.`
+                        const also = implied.map((label) =>
+                          granted ? ` “${label}” is ticked too, since Reports need it.` : ` “${label}” went with it.`,
+                        )
+                        return { ok: true, message: main + also.join("") }
                       })
                     }
                   />
-                  <Label htmlFor={checkboxId} className={cn("font-normal", !held && "text-muted-foreground")}>
-                    {permission.label}
-                  </Label>
+                  <div className="flex flex-col gap-0.5">
+                    <Label htmlFor={checkboxId} className={cn("font-normal", !held && "text-muted-foreground")}>
+                      {permission.label}
+                    </Label>
+                    {neededLabel && (
+                      <p id={noteId} className="text-xs text-muted-foreground">
+                        Reports need “{neededLabel}”. Ticking this ticks it too, and unticking it unticks this.
+                      </p>
+                    )}
+                  </div>
                 </li>
               )
             })}

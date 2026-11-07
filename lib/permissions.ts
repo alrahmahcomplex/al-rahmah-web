@@ -32,3 +32,24 @@ export const PERMISSIONS = [
 export const RESERVED_PERMISSIONS: readonly Permission[] = ["audit.view"]
 
 export type Permission = (typeof PERMISSIONS)[number]
+
+// A permission that is useless without another (#244): every Reports count is
+// answered only under leads.view. The database keeps each pair together
+// (supabase/migrations/20261130990700_reports_imply_leads.sql); the role
+// screen uses this to tick and untick them together and say why.
+export const PERMISSION_NEEDS: Readonly<Partial<Record<Permission, Permission>>> = {
+  "reports.view": "leads.view",
+}
+
+// The other permissions that change when `permission` is ticked or unticked
+// on a role holding `held`: ticking adds what it needs, unticking takes away
+// what needs it. Matches the database trigger.
+export function impliedChanges(held: readonly string[], permission: Permission, granted: boolean): Permission[] {
+  if (granted) {
+    const needed = PERMISSION_NEEDS[permission]
+    return needed && !held.includes(needed) ? [needed] : []
+  }
+  return (Object.entries(PERMISSION_NEEDS) as [Permission, Permission][])
+    .filter(([dependent, needed]) => needed === permission && held.includes(dependent))
+    .map(([dependent]) => dependent)
+}

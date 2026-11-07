@@ -95,7 +95,7 @@ describe("roles become templates", () => {
     expect(rows).toEqual([{ permissions: 0, roles: 0, kind: null }])
   })
 
-  test("reports.view is an ordinary permission the Super Admin grants (#241)", async () => {
+  test("reports.view is an ordinary permission the Super Admin grants, with leads.view (#241, #244)", async () => {
     const { data: listed } = await (await signedIn(MANAGER)).from("permissions").select("name, label").eq("name", "reports.view")
     expect(listed).toEqual([{ name: "reports.view", label: "View reports" }])
 
@@ -105,7 +105,7 @@ describe("roles become templates", () => {
     const { rows } = await inRolledBackTransaction((sql) =>
       sql.query<{ permissions: string[] }>("select permissions from public.roles where name = $1", [name]),
     )
-    expect(rows).toEqual([{ permissions: ["reports.view"] }])
+    expect(rows).toEqual([{ permissions: ["leads.view", "reports.view"] }])
   })
 
   test("the legacy guards are gone", async () => {

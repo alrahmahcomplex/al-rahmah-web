@@ -165,8 +165,10 @@ The permissions are:
 | `discounts.approve` | Granting or refusing a **Staff child** or **Qualified orphan** discount. |
 | `academic_years.manage` | Setting the **Academic-year start** and the seats in each class, and releasing a seat with **No seat available**. |
 | `group_links.manage` | Saving or replacing the admissions WhatsApp group link for an Enrollment year. |
-| `reports.view` | Opening **Reports**, the lead and seat statistics. Each count still needs `leads.view`, and Seats by class needs `payments.view`. |
+| `reports.view` | Opening **Reports**, the lead and seat statistics. Every count is answered under `leads.view`, so `reports.view` implies it: a role given `reports.view` gets `leads.view` with it, and a role that loses `leads.view` loses `reports.view` too. Seats by class still needs `payments.view`. |
 | `audit.view` | Reading the audit history: every lead's History page, the Staff and roles history and the system-wide **Audit** screen. Held only by the **Super Admin**; no role may be given it. |
+
+No role holds `reports.view` without `leads.view`. The database keeps the pair together on every write and records the implied change in the same audit entry as the role change; it is the only dependency between permissions.
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
 

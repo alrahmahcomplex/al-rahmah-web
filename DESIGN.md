@@ -266,7 +266,7 @@ A two-colour brand (indigo authority, orange warmth) on white and pale lavender,
 
 Public surfaces are **single-column and phone-first**. Content sits in a centred stack with generous vertical gaps (20px between logo, band and heading; 12px between form fields). Hero cards are narrow (325px, capped at 90vw) and centred on the lavender wash, with 16px page padding on phones and 32px from the `sm` breakpoint (640px). Spacing steps come from Tailwind's 4px base; the steps in real use are 8, 12, 16, 20, 32 and 40px.
 
-Staff surfaces use shadcn's density with taller controls: buttons, inputs and selects are 40px tall, and 44px on a touch screen (`pointer-coarse`), so a tablet at the admissions desk gets a full touch target. The `sm` size stays 32px for secondary actions inside a card. Cards use 16px padding, 12px in compact cards. Staff screens are designed first for a desktop or laptop at the admissions desk.
+Staff surfaces use shadcn's density with taller controls: buttons, inputs and selects are 40px tall, and 44px on a touch screen (the `staff-touch` variant: `pointer: coarse` inside the staff shell, so public pages keep their own heights), so a tablet at the admissions desk gets a full touch target. The `sm` size stays 32px for secondary actions inside a card. Cards use 16px padding, 12px in compact cards. Staff screens are designed first for a desktop or laptop at the admissions desk.
 
 ## Elevation & Depth
 

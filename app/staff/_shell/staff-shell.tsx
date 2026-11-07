@@ -47,7 +47,7 @@ export function StaffShell({
   }
 
   return (
-    <div className="flex min-h-screen bg-white">
+    <div data-staff-shell className="flex min-h-screen bg-white">
       <TooltipProvider delay={300}>
         <aside
           id="staff-sidebar"

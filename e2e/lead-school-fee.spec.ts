@@ -10,6 +10,8 @@ import { asSystem, createThrowawayStaff, signedIn } from "../tests/support/db"
 import { claimFeeYear, noScheduleYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
+import { leadUrl, openLeadTab } from "./lead-page"
+
 // The School fee section on the lead screen. A test that needs a schedule
 // claims a year of its own and saves one (tests/support/fee-years.ts), so no
 // other test's schedule changes what it sees; "no schedule" cases share the
@@ -80,7 +82,7 @@ test.describe("a lead's School fee", () => {
 
     await page.setViewportSize({ width: 375, height: 812 })
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${id}`)
+    await page.goto(leadUrl(id, "School fee"))
 
     const section = page.getByRole("region", { name: "School fee" })
     await expect(section.getByText("Primary STD 1 to STD 4, Day")).toBeVisible()
@@ -94,12 +96,17 @@ test.describe("a lead's School fee", () => {
     // Phone width: nothing runs off the side of the screen.
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
 
+    // The Overview's summary agrees, and the class is corrected there.
+    await openLeadTab(page, "Overview")
+    await expect(page.getByRole("region", { name: "School fee summary" })).toContainText("2,000,000")
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
     await page.getByRole("button", { name: "Edit student" }).click()
     const form = page.getByRole("form", { name: "Edit student" })
     await form.getByLabel("Class").selectOption("FORM 2")
     await form.getByRole("button", { name: "Save" }).click()
     await expect(page.getByRole("region", { name: "Student" }).getByRole("status")).toHaveText("Student details saved.")
 
+    await openLeadTab(page, "School fee")
     await expect(section.getByText("Secondary, Day")).toBeVisible()
     await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 2,800,000")
     await expect(rows.nth(3)).toHaveText(/Third\s*1 Jun 2027\s*560,000/)
@@ -110,7 +117,7 @@ test.describe("a lead's School fee", () => {
     const id = await leadIn(year)
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${id}`)
+    await page.goto(leadUrl(id, "School fee"))
     const section = page.getByRole("region", { name: "School fee" })
     await expect(section).toContainText(`No fee schedule for ${year} yet.`)
     await expect(section).not.toContainText("TZS")
@@ -123,6 +130,9 @@ test.describe("a lead's School fee", () => {
     await signIn(page, viewer)
     await page.goto(`/staff/leads/${id}`)
     await expect(page.getByRole("region", { name: "Student" })).toBeVisible()
+    // Neither the Overview's summary nor the School fee tab's panel.
+    await expect(page.getByRole("region", { name: "School fee" })).toHaveCount(0)
+    await openLeadTab(page, "School fee")
     await expect(page.getByRole("region", { name: "School fee" })).toHaveCount(0)
   })
 })

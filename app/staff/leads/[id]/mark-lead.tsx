@@ -32,12 +32,14 @@ const LOST_REQUEST: MarkOutcome = {
 type MarkLeadProps = {
   lead: { id: string; studentName: string; admissionNumber: string; status: LeadStatus }
   mark: MarkMove
+  // Opened from the lead's More menu, which holds whether it is open.
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 // Mark inactive or Archive: choose the reason, add a note if it helps, and
 // send. A mark that lands refreshes the page into the closed-lead banner.
-export function MarkLead({ lead, mark }: MarkLeadProps) {
-  const [open, setOpen] = useState(false)
+export function MarkLead({ lead, mark, open, onOpenChange: setOpen }: MarkLeadProps) {
   const [reason, setReason] = useState<ClosureReason | "">("")
   const [note, setNote] = useState("")
   const [missing, setMissing] = useState(false)
@@ -77,74 +79,69 @@ export function MarkLead({ lead, mark }: MarkLeadProps) {
   }
 
   return (
-    <>
-      <Button type="button" variant="outline" onClick={() => changeOpen(true)}>
-        {label}
-      </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form className="grid gap-4" onSubmit={send} noValidate>
-            <DialogHeader>
-              <DialogTitle>{markTitle(mark, lead.studentName)}</DialogTitle>
-              <DialogDescription>
-                {lead.admissionNumber}. {markConsequence(mark, lead.status)}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-1.5">
-              <Label htmlFor={reasonId}>Reason</Label>
-              <select
-                id={reasonId}
-                className={SELECT_CLASS}
-                value={reason}
-                onChange={(event) => {
-                  setReason(event.target.value as ClosureReason | "")
-                  setMissing(false)
-                }}
-                aria-invalid={missing || undefined}
-                aria-describedby={missing ? errorId : undefined}
-              >
-                <option value="" disabled>
-                  Choose a reason
-                </option>
-                {CLOSURE_REASONS.map((choice) => (
-                  <option key={choice}>{choice}</option>
-                ))}
-              </select>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={noteId}>Note</Label>
-              <Textarea
-                id={noteId}
-                value={note}
-                maxLength={CLOSURE_NOTE_MAX}
-                onChange={(event) => setNote(event.target.value)}
-                aria-describedby={hintId}
-              />
-              <p id={hintId} className="text-xs text-muted-foreground">
-                Optional. Anything the reason alone doesn&apos;t say.
-              </p>
-            </div>
-            {missing && (
-              <p id={errorId} role="alert" className="text-sm text-destructive">
-                Choose a reason.
-              </p>
-            )}
-            {refusal && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{refusal}</AlertDescription>
-              </Alert>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="destructive" disabled={pending}>
-                {pending ? "Saving…" : label}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent className="sm:max-w-md">
+        <form className="grid gap-4" onSubmit={send} noValidate>
+          <DialogHeader>
+            <DialogTitle>{markTitle(mark, lead.studentName)}</DialogTitle>
+            <DialogDescription>
+              {lead.admissionNumber}. {markConsequence(mark, lead.status)}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor={reasonId}>Reason</Label>
+            <select
+              id={reasonId}
+              className={SELECT_CLASS}
+              value={reason}
+              onChange={(event) => {
+                setReason(event.target.value as ClosureReason | "")
+                setMissing(false)
+              }}
+              aria-invalid={missing || undefined}
+              aria-describedby={missing ? errorId : undefined}
+            >
+              <option value="" disabled>
+                Choose a reason
+              </option>
+              {CLOSURE_REASONS.map((choice) => (
+                <option key={choice}>{choice}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor={noteId}>Note</Label>
+            <Textarea
+              id={noteId}
+              value={note}
+              maxLength={CLOSURE_NOTE_MAX}
+              onChange={(event) => setNote(event.target.value)}
+              aria-describedby={hintId}
+            />
+            <p id={hintId} className="text-xs text-muted-foreground">
+              Optional. Anything the reason alone doesn&apos;t say.
+            </p>
+          </div>
+          {missing && (
+            <p id={errorId} role="alert" className="text-sm text-destructive">
+              Choose a reason.
+            </p>
+          )}
+          {refusal && (
+            <Alert variant="destructive" role="alert">
+              <AlertDescription>{refusal}</AlertDescription>
+            </Alert>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="destructive" disabled={pending}>
+              {pending ? "Saving…" : label}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

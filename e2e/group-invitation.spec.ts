@@ -13,6 +13,7 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { claimGroupInvitationYear, currentGroupLink, type GroupInvitationYearClaim } from "../tests/support/group-invitation-years"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // Sending the admissions WhatsApp group invitation from a lead's screen
 // (#186). Each test moves its leads to an Enrollment year it claims (see
@@ -99,7 +100,7 @@ test.describe("the group invitation on a lead's screen", () => {
       const number = whatsapp ?? lead.phone
 
       await signIn(page, ADMISSIONS)
-      await page.goto(`/staff/leads/${lead.id}`)
+      await page.goto(leadUrl(lead.id, "Interview"))
       await expect(panel(page)).toContainText("No invitation sent yet.")
       await expect(panel(page)).toContainText(
         channel === "whatsapp" ? `To the WhatsApp number ${spaced(number)}.` : `To the direct phone ${spaced(number)},`,
@@ -110,7 +111,7 @@ test.describe("the group invitation on a lead's screen", () => {
 
       const expected = buildWhatsAppLink(message(year, link), `255${number.slice(1)}`)
       if (!expected.ok) throw new Error("the expected link could not be built")
-      const leadUrl = page.url()
+      const leadPage = page.url()
       const opened = page.waitForEvent("popup")
       await panel(page).getByRole("button", { name: "Send WhatsApp group invitation" }).click()
       const tab = await opened
@@ -120,7 +121,7 @@ test.describe("the group invitation on a lead's screen", () => {
       await expect(panel(page).getByRole("status")).toHaveText("Recorded as sent. WhatsApp opened in a new tab: press send there.")
       await expect(panel(page)).toContainText(`${sentToday(year)}.`)
       await expect(panel(page)).not.toContainText(/received|joined/i)
-      expect(page.url()).toBe(leadUrl)
+      expect(page.url()).toBe(leadPage)
       await expect(panel(page).getByRole("button", { name: "Send WhatsApp group invitation" })).toBeVisible()
 
       await openLeadHistoryAsSuperAdmin(page, lead.id)
@@ -140,7 +141,7 @@ test.describe("the group invitation on a lead's screen", () => {
     )
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(panel(page)).toContainText("No WhatsApp number on file. Copy the invitation to send it yourself.")
     await expect(panel(page).getByRole("button", { name: "Send WhatsApp group invitation" })).toHaveCount(0)
 
@@ -157,7 +158,7 @@ test.describe("the group invitation on a lead's screen", () => {
     const lead = await visitedLead(year)
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(panel(page).getByRole("button", { name: "Send WhatsApp group invitation" })).toHaveCount(0)
     await panel(page).getByRole("link", { name: `No group link saved for ${year}: save one` }).click()
     await expect(page).toHaveURL(`/staff/group-links?year=${year}`)
@@ -175,7 +176,7 @@ test.describe("the group invitation on a lead's screen", () => {
     if (!sent.ok) throw new Error(`send failed: ${sent.error}`)
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${sibling.id}`)
+    await page.goto(leadUrl(sibling.id, "Interview"))
     await expect(panel(page)).toContainText(`${sentToday(year)} (with ${sender.studentName}).`)
     await expect(panel(page)).not.toContainText("Sent with an earlier link")
 
@@ -184,7 +185,7 @@ test.describe("the group invitation on a lead's screen", () => {
 
     await saveLink(year, inviteLink(), first)
     for (const id of [sibling.id, sender.id]) {
-      await page.goto(`/staff/leads/${id}`)
+      await page.goto(leadUrl(id, "Interview"))
       await expect(panel(page)).toContainText("Sent with an earlier link. Send it again to give the family the current one.")
     }
 
@@ -197,7 +198,7 @@ test.describe("the group invitation on a lead's screen", () => {
     await expect(page.getByRole("link", { name: sibling.studentName })).toBeVisible()
 
     await page.screenshot({ path: "test-results/186-earlier-link-filter.png", fullPage: true })
-    await page.goto(`/staff/leads/${sender.id}`)
+    await page.goto(leadUrl(sender.id, "Interview"))
     await page.screenshot({ path: "test-results/186-lead-invitation-desktop.png", fullPage: true })
     await page.setViewportSize({ width: 390, height: 844 })
     await page.screenshot({ path: "test-results/186-lead-invitation-mobile.png", fullPage: true })

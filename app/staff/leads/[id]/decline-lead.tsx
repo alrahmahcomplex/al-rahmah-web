@@ -38,19 +38,20 @@ type DeclineLeadProps = {
   // The reasons this staff member may pick: No seat available only for those
   // who may set the seats.
   reasons: readonly DeclinedReason[]
+  // Opened from the lead's More menu, which holds whether it is open.
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 // Decline, in two steps: choose the reason (and explain it, for Other), then
 // confirm against the lead's name and number. A decline that lands refreshes
-// the page into the closed-lead banner, which replaces this panel. A link
-// with a reason (from Seats, for No seat available) opens it with that reason
-// chosen.
-export function DeclineLead({ lead, reasons }: DeclineLeadProps) {
+// the page into the closed-lead banner. A link with a reason (from Seats, for
+// No seat available) has the More menu open it with that reason chosen.
+export function DeclineLead({ lead, reasons, open, onOpenChange: setOpen }: DeclineLeadProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
   const linked = linkedDeclineReason(searchParams.get(DECLINE_PARAM), reasons)
-  const [open, setOpen] = useState(linked !== null)
   const [step, setStep] = useState<"choose" | "confirm">("choose")
   const [reason, setReason] = useState<DeclinedReason | "">(linked ?? "")
   const [explanation, setExplanation] = useState("")
@@ -110,109 +111,104 @@ export function DeclineLead({ lead, reasons }: DeclineLeadProps) {
     missing === "reason" ? "Choose a reason." : missing === "explanation" ? "Write an explanation for Other." : null
 
   return (
-    <>
-      <Button type="button" variant="outline" onClick={() => changeOpen(true)}>
-        Decline
-      </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent className="sm:max-w-md">
-          {step === "choose" ? (
-            <form className="grid gap-4" onSubmit={review} noValidate>
-              <DialogHeader>
-                <DialogTitle>Decline {lead.studentName}</DialogTitle>
-                <DialogDescription>
-                  {lead.admissionNumber} · {lead.status}. Say why the family or the school won&apos;t go ahead.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-1.5">
-                <Label htmlFor={reasonId}>Reason</Label>
-                <select
-                  id={reasonId}
-                  className={SELECT_CLASS}
-                  value={reason}
-                  onChange={(event) => {
-                    setReason(event.target.value as DeclinedReason | "")
-                    setMissing(null)
-                  }}
-                  aria-invalid={missing === "reason" || undefined}
-                  aria-describedby={missing === "reason" ? errorId : undefined}
-                >
-                  <option value="" disabled>
-                    Choose a reason
-                  </option>
-                  {reasons.map((choice) => (
-                    <option key={choice}>{choice}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor={explanationId}>Explanation</Label>
-                <Textarea
-                  id={explanationId}
-                  value={explanation}
-                  maxLength={DECLINE_EXPLANATION_MAX}
-                  onChange={(event) => {
-                    setExplanation(event.target.value)
-                    if (missing === "explanation") setMissing(null)
-                  }}
-                  aria-invalid={missing === "explanation" || undefined}
-                  aria-describedby={missing === "explanation" ? `${hintId} ${errorId}` : hintId}
-                />
-                <p id={hintId} className="text-xs text-muted-foreground">
-                  {reason === "Other" ? "Required for Other." : "Optional. Anything the reason alone doesn't say."}
-                </p>
-              </div>
-              {error && (
-                <p id={errorId} role="alert" className="text-sm text-destructive">
-                  {error}
-                </p>
-              )}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => changeOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Continue</Button>
-              </DialogFooter>
-            </form>
-          ) : (
-            <div className="grid gap-4">
-              <DialogHeader>
-                <DialogTitle>Decline {lead.studentName}?</DialogTitle>
-                <DialogDescription>{DECLINE_CONSEQUENCE}</DialogDescription>
-              </DialogHeader>
-              <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-muted-foreground">Lead</dt>
-                <dd className="text-slate-900">
-                  {lead.studentName}, <span className="font-mono whitespace-nowrap">{lead.admissionNumber}</span>
-                </dd>
-                <dt className="text-muted-foreground">Status now</dt>
-                <dd className="text-slate-900">{lead.status}</dd>
-                <dt className="text-muted-foreground">Reason</dt>
-                <dd className="text-slate-900">{reason}</dd>
-                {note && (
-                  <>
-                    <dt className="text-muted-foreground">Explanation</dt>
-                    <dd className="whitespace-pre-line break-words text-slate-900">{note}</dd>
-                  </>
-                )}
-              </dl>
-              {refusal && (
-                <Alert variant="destructive" role="alert">
-                  <AlertDescription>{refusal}</AlertDescription>
-                </Alert>
-              )}
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setStep("choose")} disabled={pending}>
-                  Back
-                </Button>
-                <Button type="button" variant="destructive" onClick={decline} disabled={pending}>
-                  {pending ? "Declining…" : "Decline lead"}
-                </Button>
-              </DialogFooter>
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent className="sm:max-w-md">
+        {step === "choose" ? (
+          <form className="grid gap-4" onSubmit={review} noValidate>
+            <DialogHeader>
+              <DialogTitle>Decline {lead.studentName}</DialogTitle>
+              <DialogDescription>
+                {lead.admissionNumber} · {lead.status}. Say why the family or the school won&apos;t go ahead.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-1.5">
+              <Label htmlFor={reasonId}>Reason</Label>
+              <select
+                id={reasonId}
+                className={SELECT_CLASS}
+                value={reason}
+                onChange={(event) => {
+                  setReason(event.target.value as DeclinedReason | "")
+                  setMissing(null)
+                }}
+                aria-invalid={missing === "reason" || undefined}
+                aria-describedby={missing === "reason" ? errorId : undefined}
+              >
+                <option value="" disabled>
+                  Choose a reason
+                </option>
+                {reasons.map((choice) => (
+                  <option key={choice}>{choice}</option>
+                ))}
+              </select>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+            <div className="grid gap-1.5">
+              <Label htmlFor={explanationId}>Explanation</Label>
+              <Textarea
+                id={explanationId}
+                value={explanation}
+                maxLength={DECLINE_EXPLANATION_MAX}
+                onChange={(event) => {
+                  setExplanation(event.target.value)
+                  if (missing === "explanation") setMissing(null)
+                }}
+                aria-invalid={missing === "explanation" || undefined}
+                aria-describedby={missing === "explanation" ? `${hintId} ${errorId}` : hintId}
+              />
+              <p id={hintId} className="text-xs text-muted-foreground">
+                {reason === "Other" ? "Required for Other." : "Optional. Anything the reason alone doesn't say."}
+              </p>
+            </div>
+            {error && (
+              <p id={errorId} role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => changeOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Continue</Button>
+            </DialogFooter>
+          </form>
+        ) : (
+          <div className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>Decline {lead.studentName}?</DialogTitle>
+              <DialogDescription>{DECLINE_CONSEQUENCE}</DialogDescription>
+            </DialogHeader>
+            <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+              <dt className="text-muted-foreground">Lead</dt>
+              <dd className="text-slate-900">
+                {lead.studentName}, <span className="font-mono whitespace-nowrap">{lead.admissionNumber}</span>
+              </dd>
+              <dt className="text-muted-foreground">Status now</dt>
+              <dd className="text-slate-900">{lead.status}</dd>
+              <dt className="text-muted-foreground">Reason</dt>
+              <dd className="text-slate-900">{reason}</dd>
+              {note && (
+                <>
+                  <dt className="text-muted-foreground">Explanation</dt>
+                  <dd className="whitespace-pre-line break-words text-slate-900">{note}</dd>
+                </>
+              )}
+            </dl>
+            {refusal && (
+              <Alert variant="destructive" role="alert">
+                <AlertDescription>{refusal}</AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setStep("choose")} disabled={pending}>
+                Back
+              </Button>
+              <Button type="button" variant="destructive" onClick={decline} disabled={pending}>
+                {pending ? "Declining…" : "Decline lead"}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

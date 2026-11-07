@@ -9,6 +9,7 @@ import { createLead } from "@/lib/services/leads"
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { chooseMore, moreActions } from "./lead-page"
 
 // Marking a lead Inactive or Archived from the lead screen (#98). Each test
 // marks a lead of its own; the seeded ones are only read.
@@ -44,8 +45,6 @@ async function newLead() {
   return { id: created.data.leadId, name, admissionNumber: created.data.admissionNumber }
 }
 
-const panel = (page: Page) => page.getByRole("region", { name: "Inactive or Archived", exact: true })
-const markButton = (page: Page, name: "Mark inactive" | "Archive") => panel(page).getByRole("button", { name, exact: true })
 
 test.describe("marking a lead", () => {
   test("Admissions Staff mark an open lead inactive, and then only Archive is left", async ({ page }) => {
@@ -53,8 +52,8 @@ test.describe("marking a lead", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${lead.id}`)
 
-    await expect(markButton(page, "Archive")).toBeVisible()
-    await markButton(page, "Mark inactive").click()
+    expect(await moreActions(page)).toEqual(["Mark inactive", "Archive", "Decline"])
+    await chooseMore(page, "Mark inactive")
     const dialog = page.getByRole("dialog", { name: `Mark ${lead.name} inactive`, exact: true })
     await expect(dialog).toContainText("keeps its status, Visited")
     await dialog.getByRole("button", { name: "Mark inactive" }).click()
@@ -70,8 +69,7 @@ test.describe("marking a lead", () => {
     await expect(banner).toContainText(ADMISSIONS.name)
     await expect(page.getByText("Visited", { exact: true }).first()).toBeVisible()
     await expect(page.getByRole("button", { name: "Edit student" })).toHaveCount(0)
-    await expect(markButton(page, "Mark inactive")).toHaveCount(0)
-    await expect(markButton(page, "Archive")).toBeVisible()
+    expect(await moreActions(page)).toEqual(["Request reopening", "Archive"])
 
     await openLeadHistoryAsSuperAdmin(page)
     await expect(page.getByText("marked the lead Inactive").first()).toBeVisible()
@@ -84,8 +82,8 @@ test.describe("marking a lead", () => {
     await page.goto(`/staff/leads/${lead.id}`)
 
     await expect(page.getByRole("region", { name: "This lead is Declined" })).toBeVisible()
-    await expect(markButton(page, "Mark inactive")).toBeVisible()
-    await markButton(page, "Archive").click()
+    expect(await moreActions(page)).toEqual(expect.arrayContaining(["Mark inactive", "Archive"]))
+    await chooseMore(page, "Archive")
     const dialog = page.getByRole("dialog", { name: `Archive ${lead.name}`, exact: true })
     await dialog.getByLabel("Reason").selectOption("Admission cycle ended")
     await dialog.getByRole("button", { name: "Archive" }).click()
@@ -94,7 +92,7 @@ test.describe("marking a lead", () => {
     await expect(banner).toContainText("Enrolled elsewhere")
     await expect(banner).toContainText("Admission cycle ended")
     await expect(banner).toContainText(MANAGER.name)
-    await expect(panel(page)).toHaveCount(0)
+    expect(await moreActions(page)).not.toContain("Archive")
   })
 
   test("Cancel leaves the lead as it was", async ({ page }) => {
@@ -102,13 +100,13 @@ test.describe("marking a lead", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${lead.id}`)
 
-    await markButton(page, "Archive").click()
+    await chooseMore(page, "Archive")
     const dialog = page.getByRole("dialog", { name: `Archive ${lead.name}`, exact: true })
     await dialog.getByLabel("Reason").selectOption("Duplicate record")
     await dialog.getByRole("button", { name: "Cancel" }).click()
 
     await page.reload()
-    await expect(markButton(page, "Archive")).toBeVisible()
+    expect(await moreActions(page)).toContain("Archive")
     await expect(page.getByRole("region", { name: /^This lead is/ })).toHaveCount(0)
   })
 
@@ -117,14 +115,16 @@ test.describe("marking a lead", () => {
     await signIn(page, ACCOUNTANT)
     await page.goto(`/staff/leads/${lead.id}`)
     await expect(page.getByRole("heading", { name: lead.name })).toBeVisible()
-    await expect(panel(page)).toHaveCount(0)
+    expect(await moreActions(page)).toEqual([])
 
     await page.context().clearCookies()
     await signIn(page, ADMISSIONS)
     for (const id of [ARCHIVED, DECLINED_AND_ARCHIVED]) {
       await page.goto(`/staff/leads/${id}`)
       await expect(page.getByRole("region", { name: /^This lead is .*Archived$/ })).toBeVisible()
-      await expect(panel(page)).toHaveCount(0)
+      const offered = await moreActions(page)
+      expect(offered).not.toContain("Mark inactive")
+      expect(offered).not.toContain("Archive")
     }
   })
 
@@ -136,7 +136,8 @@ test.describe("marking a lead", () => {
     await expect(banner).toContainText("waiting to hear about a job transfer")
     await expect(banner).toContainText(ADMISSIONS.name)
     await expect(banner).toContainText(/18 Sept? 2026/)
-    await expect(markButton(page, "Archive")).toBeVisible()
-    await expect(markButton(page, "Mark inactive")).toHaveCount(0)
+    const offered = await moreActions(page)
+    expect(offered).toContain("Archive")
+    expect(offered).not.toContain("Mark inactive")
   })
 })

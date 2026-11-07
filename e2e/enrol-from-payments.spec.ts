@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/school-calendar"
 
 import { ACCOUNTANT, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // A lead Enrolled from its payments (#108): the lead screen says what
 // enrolled it and when, and the history says why. Reads the seeded lead only.
@@ -22,8 +23,10 @@ async function signIn(page: Page, person: FixtureStaff) {
 
 test("a lead paid in Full shows Enrolled, the payment that enrolled it, and why in its history", async ({ page }) => {
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${SEEDED_FULL}`)
+  await page.goto(leadUrl(SEEDED_FULL, "School fee"))
 
+  // Nothing is left to do on an Enrolled lead.
+  await expect(page.getByRole("region", { name: "Next step" })).toContainText("Next step: Nothing is waiting")
   const fee = page.getByRole("region", { name: "School fee" })
   await expect(fee.getByText("By the Full payment of TZS 2,000,000")).toBeVisible()
   await expect(fee.getByText(`On ${formatDate("2026-09-26")}`)).toBeVisible()

@@ -11,6 +11,7 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // Recording school-fee payments on the lead screen, and the Seat priority on
 // the lead and the lead list. A test that records claims a year of its own
@@ -98,7 +99,7 @@ test.describe("recording a school-fee payment", () => {
     const lead = await interviewedLead(await yearWithSchedule(), "Passed")
 
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "School fee"))
     const section = page.getByRole("region", { name: "School fee" })
     await expect(feeDetail(page, "Seat priority")).toHaveText("None yet")
     await expect(section.getByText("No payments recorded yet.")).toBeVisible()
@@ -148,7 +149,7 @@ test.describe("recording a school-fee payment", () => {
     const lead = await interviewedLead(await yearWithSchedule(), "Failed")
 
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "School fee"))
     const section = page.getByRole("region", { name: "School fee" })
     await section.getByRole("button", { name: "Record payment" }).click()
     const form = page.getByRole("form", { name: "Record payment" })
@@ -167,7 +168,7 @@ test.describe("recording a school-fee payment", () => {
     expect(archived.ok && archived.data.closure).toBe("Archived")
 
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${ARCHIVED}`)
+    await page.goto(leadUrl(ARCHIVED, "School fee"))
     const section = page.getByRole("region", { name: "School fee" })
     await expect(feeDetail(page, "Annual fee")).toBeVisible()
     await expect(section.getByRole("region", { name: "Payments" })).toBeVisible()
@@ -179,7 +180,7 @@ test.describe("staff who can't record payments", () => {
   test("Admissions Staff see the fee, the payments and the Seat priority, but no Record payment", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 })
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${SEEDED_DEPOSIT}`)
+    await page.goto(leadUrl(SEEDED_DEPOSIT, "School fee"))
 
     const section = page.getByRole("region", { name: "School fee" })
     await expect(feeDetail(page, "Total paid")).toHaveText("TZS 300,000")

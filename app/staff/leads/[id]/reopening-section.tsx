@@ -19,13 +19,19 @@ import { WithdrawReopening } from "./withdraw-reopening"
 // Read once per page render: the closed-lead banner and this panel both ask.
 const readReopenings = cache(async (leadId: string) => getLeadReopenings(await createClient(), leadId))
 
+// Whether Request reopening may be offered on the lead: no request is
+// Pending, as far as the requests can be read.
+export async function nobodyHasAsked(leadId: string): Promise<boolean> {
+  const reopenings = await readReopenings(leadId)
+  return reopenings.ok && !reopenings.data.pending
+}
+
 // Request reopening, for the closed-lead banner, while nobody has asked yet.
 // With a Pending request the panel below says who asked instead. If the
 // requests can't be read, one may already be Pending, so nothing is offered;
 // the panel reports the error.
 export async function RequestReopeningLink({ leadId }: { leadId: string }) {
-  const reopenings = await readReopenings(leadId)
-  if (!reopenings.ok || reopenings.data.pending) return null
+  if (!(await nobodyHasAsked(leadId))) return null
   return (
     <div>
       <Link href={`/staff/leads/${leadId}/reopen?source=lead`} className={buttonVariants({ size: "sm" })}>

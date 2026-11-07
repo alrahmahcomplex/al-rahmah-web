@@ -5,29 +5,9 @@ import { formatDate } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 
 // The lead as read-only fields: the student, the parent or guardian, and where
-// the lead stands. Used by the lead screen and the reopening hand-off. The
-// lead screen wraps a section's fields to offer corrections to them, and puts
-// the lead's next step, such as Record visit, under its heading.
-export function LeadSummary({
-  lead,
-  student = (fields) => fields,
-  parent = (fields) => fields,
-  nextStep,
-  statusSince,
-}: {
-  lead: Lead
-  // The day the status last changed (YYYY-MM-DD), which every lead reader
-  // keeps once the history is the Super Admin's (#237).
-  statusSince?: string
-  student?: (fields: ReactNode) => ReactNode
-  parent?: (fields: ReactNode) => ReactNode
-  nextStep?: ReactNode
-}) {
-  const relationship =
-    lead.contact.relationship === "Other" && lead.contact.relationshipDescription
-      ? `Other: ${lead.contact.relationshipDescription}`
-      : lead.contact.relationship
-
+// the lead stands, for the reopening hand-off, with the step it offers under
+// the heading. The lead page shows the same rows in its Overview cards.
+export function LeadSummary({ lead, nextStep }: { lead: Lead; nextStep?: ReactNode }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -37,7 +17,6 @@ export function LeadSummary({
             {lead.admissionNumber}
           </p>
           <Badge variant="secondary">{lead.status}</Badge>
-          {statusSince && <span className="text-sm text-muted-foreground">since {formatDate(statusSince)}</span>}
           {lead.closure && <Badge variant="outline">{lead.closure}</Badge>}
           {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
           {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
@@ -50,39 +29,43 @@ export function LeadSummary({
         <h2 id="lead-student" className="text-sm font-semibold text-slate-900">
           Student
         </h2>
-        {student(
-          <Details
-            rows={[
-              ["Class", lead.className],
-              ["Enrollment year", String(lead.enrollmentYear)],
-              ["Day or boarding", lead.dayOrBoarding],
-              ["Status", lead.status],
-              ["Visit date", lead.visitDate ? formatDate(lead.visitDate) : "Not visited yet"],
-            ]}
-          />,
-        )}
+        <Details rows={studentRows(lead)} />
       </section>
 
       <section aria-labelledby="lead-parent" className="flex flex-col gap-2">
         <h2 id="lead-parent" className="text-sm font-semibold text-slate-900">
           Parent or guardian
         </h2>
-        {parent(
-          <Details
-            rows={[
-              ["Full name", lead.contact.fullName],
-              ["Relationship", relationship],
-              ["Phone", lead.contact.phone],
-              ["WhatsApp", lead.contact.whatsapp ?? "Same as phone"],
-            ]}
-          />,
-        )}
+        <Details rows={parentRows(lead)} />
       </section>
     </div>
   )
 }
 
-function Details({ rows }: { rows: [string, string][] }) {
+export function studentRows(lead: Lead): [string, string][] {
+  return [
+    ["Class", lead.className],
+    ["Enrollment year", String(lead.enrollmentYear)],
+    ["Day or boarding", lead.dayOrBoarding],
+    ["Status", lead.status],
+    ["Visit date", lead.visitDate ? formatDate(lead.visitDate) : "Not visited yet"],
+  ]
+}
+
+export function parentRows(lead: Lead): [string, string][] {
+  const relationship =
+    lead.contact.relationship === "Other" && lead.contact.relationshipDescription
+      ? `Other: ${lead.contact.relationshipDescription}`
+      : lead.contact.relationship
+  return [
+    ["Full name", lead.contact.fullName],
+    ["Relationship", relationship],
+    ["Phone", lead.contact.phone],
+    ["WhatsApp", lead.contact.whatsapp ?? "Same as phone"],
+  ]
+}
+
+export function Details({ rows }: { rows: [string, string][] }) {
   return (
     <dl className="grid max-w-xl grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
       {rows.map(([term, value]) => (

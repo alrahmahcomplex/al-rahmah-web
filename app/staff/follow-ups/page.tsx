@@ -10,6 +10,7 @@ import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getFollowUpQueue, type FollowUpQueueItem, type FollowUpQueuePage, type FollowUpQueueSection } from "@/lib/services/follow-ups"
 import { createClient } from "@/utils/supabase/server"
 
+import { leadTabHref } from "../leads/[id]/tabs"
 import { displayPhone } from "../re-applications/format"
 import { requireStaff } from "../session"
 import { lastContactText, rowDue, splitToday } from "./queue-format"
@@ -159,7 +160,7 @@ function Row({ item, today }: { item: FollowUpQueueItem; today: string }) {
       <div className="flex min-w-0 flex-col gap-1">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Link
-            href={`/staff/leads/${item.lead.id}#lead-follow-ups`}
+            href={leadTabHref(item.lead.id, "follow-ups", "lead-follow-ups")}
             className="font-medium text-slate-900 underline-offset-4 after:absolute after:inset-0 hover:underline"
           >
             {item.lead.studentName}

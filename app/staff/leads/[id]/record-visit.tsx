@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input"
 import { recordArrival, visitDateToday } from "./actions"
 import { Field, Refusal, Saved, useCorrection } from "./lead-editors"
 
-// Record visit, for an Applied family who has come to campus. The Visit date
-// starts at today in Tanzania, asked of the server as the form opens: a screen
-// left open past midnight, or a device whose clock is wrong, still offers the
-// day the database accepts. Once saved the lead is Visited and the screen
-// refreshes without this offer, so the confirmation stays in its place.
+// Record visit, in the lead's Next step card, for an Applied family who has
+// come to campus. The Visit date starts at today in Tanzania, asked of the
+// server as the form opens: a screen left open past midnight, or a device
+// whose clock is wrong, still offers the day the database accepts. Once
+// saved the lead is Visited and the screen refreshes without this offer, so
+// the confirmation stays in its place.
 export function RecordVisit({ leadId, canRecord }: { leadId: string; canRecord: boolean }) {
   // Today in Tanzania while the form is open, else null.
   const [recording, setRecording] = useState<string | null>(null)
@@ -46,24 +47,19 @@ export function RecordVisit({ leadId, canRecord }: { leadId: string; canRecord: 
     )
   }
 
-  if (!canRecord) return saved ? <Saved message={saved} /> : null
+  if (!canRecord) return saved ? <div className="basis-full"><Saved message={saved} /></div> : null
 
   return (
-    <div className="flex max-w-xl flex-col gap-3 rounded-lg border p-4">
-      <p className="text-sm text-slate-900">
-        This family applied through the Admission form and hasn&apos;t visited yet. When they arrive, record the visit.
-      </p>
-      <div>
-        <Button type="button" onClick={open} disabled={opening}>
-          {opening ? "Opening…" : "Record visit"}
-        </Button>
-      </div>
+    <>
+      <Button type="button" variant="orange" size="lg" className="h-10 px-4" onClick={open} disabled={opening}>
+        {opening ? "Opening…" : "Record visit"}
+      </Button>
       {unopened && (
-        <Alert variant="destructive" role="alert">
+        <Alert variant="destructive" role="alert" className="basis-full">
           <AlertDescription>Record visit could not open. Check your connection and try again.</AlertDescription>
         </Alert>
       )}
-    </div>
+    </>
   )
 }
 
@@ -82,7 +78,7 @@ function RecordVisitForm({
   return (
     <form
       aria-label="Record visit"
-      className="flex max-w-xl flex-col gap-4 rounded-lg border p-4"
+      className="flex max-w-xl basis-full flex-col gap-4 rounded-lg border p-4"
       onSubmit={(event) => {
         event.preventDefault()
         save(() => recordArrival(leadId, visitDate))

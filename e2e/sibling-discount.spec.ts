@@ -11,6 +11,7 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl, openLeadTab } from "./lead-page"
 
 // The Sibling discount (#113): the seeded confirmed and unconfirmed Families
 // in supabase/seeds/90_fees.sql, read only, and the prior-sibling tick on a
@@ -90,15 +91,15 @@ test("a confirmed Family's second child shows the Sibling discount; the first ch
 }) => {
   await signIn(page, ADMISSIONS)
 
-  await page.goto(`/staff/leads/${FURAHA}`)
+  await page.goto(leadUrl(FURAHA, "School fee"))
   await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 1,800,000")
   await expect(page.getByRole("region", { name: "School fee" })).toContainText("Sibling discount, 10% off TZS 2,000,000")
 
-  await page.goto(`/staff/leads/${BAHATI}`)
+  await page.goto(leadUrl(BAHATI, "School fee"))
   await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 2,100,000")
   await expect(page.getByRole("region", { name: "School fee" })).not.toContainText("discount")
 
-  await page.goto(`/staff/leads/${ZUBERI}`)
+  await page.goto(leadUrl(ZUBERI, "School fee"))
   await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 1,100,000")
   await expect(page.getByRole("region", { name: "School fee" })).not.toContainText("discount")
 })
@@ -107,7 +108,7 @@ test("Admissions Staff tick Has a sibling already at Al-Rahmah, which gives the 
   const lead = await passedLead()
 
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead}`)
+  await page.goto(leadUrl(lead, "Discounts"))
   const panel = page.getByRole("region", { name: "Discounts" })
   const tick = panel.getByRole("checkbox", { name: "Has a sibling already at Al-Rahmah" })
   await expect(tick).not.toBeChecked()
@@ -122,12 +123,13 @@ test("Admissions Staff tick Has a sibling already at Al-Rahmah, which gives the 
   await expect(form).toHaveCount(0)
   await expect(tick).toBeChecked()
   await expect(panel).toContainText("Amina Older, STD 6")
+  await openLeadTab(page, "School fee")
   await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 1,800,000")
   await expect(page.getByRole("region", { name: "School fee" })).toContainText("Sibling discount, 10% off TZS 2,000,000")
 
   // Staff without leads.edit see the tick and the sibling, and can't change them.
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${lead}`)
+  await page.goto(leadUrl(lead, "Discounts"))
   const readOnly = page.getByRole("region", { name: "Discounts" }).getByRole("checkbox", { name: "Has a sibling already at Al-Rahmah" })
   await expect(readOnly).toBeChecked()
   await expect(readOnly).toBeDisabled()
@@ -139,8 +141,9 @@ test("Admissions Staff tick Has a sibling already at Al-Rahmah, which gives the 
 
   // Admissions Staff clear it.
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead}`)
+  await page.goto(leadUrl(lead, "Discounts"))
   await page.getByRole("region", { name: "Discounts" }).getByRole("checkbox", { name: "Has a sibling already at Al-Rahmah" }).click()
-  await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 2,000,000")
   await expect(page.getByRole("region", { name: "Discounts" })).not.toContainText("Amina Older")
+  await openLeadTab(page, "School fee")
+  await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 2,000,000")
 })

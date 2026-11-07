@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- A student's page starts with who the student is and one Next step: what should happen
+  next on the lead, such as collecting the interview fee or sending the result, with a
+  button for staff who may do it. An Enrolled student shows that nothing is waiting, and
+  a closed lead shows its closed banner instead.
+- The page's sections sit on tabs (Overview, Interview, School fee, Follow-ups and
+  Discounts), two cards to a row on a wide screen. The Overview adds a School fee summary
+  and, for the Super Admin, the latest history entries. Links from the Follow-ups queue
+  open the Follow-ups tab.
+- Decline, Mark inactive, Archive and Request reopening moved into a More menu in the
+  page header. Each opens the same dialog as before, for the same staff.
+
 ## November 7, 2026 `v0.86.0`
 
 ### IMPROVED

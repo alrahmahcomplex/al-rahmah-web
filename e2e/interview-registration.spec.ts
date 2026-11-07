@@ -8,6 +8,7 @@ import { createLead } from "@/lib/services/leads"
 import { asSystem, secretClient } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // Registering a lead for interview on the lead screen's interview panel.
 
@@ -47,7 +48,7 @@ test.describe("registering a lead for interview", () => {
   test("Admissions Staff register a lead and see its S/N, apart from the Admission Number", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
 
     await panel(page).getByRole("button", { name: "Register for interview" }).click()
 
@@ -68,7 +69,7 @@ test.describe("registering a lead for interview", () => {
   test("a registration someone else made first is refused in a plain sentence", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
 
     // Another member of staff registers it while this screen is open.
     await asSystem(async (sql) => {
@@ -95,16 +96,16 @@ test.describe("who is offered Register for interview", () => {
     const lead = await newLead()
     await signIn(page, ACCOUNTANT)
 
-    await page.goto(`/staff/leads/${REGISTERED}`)
+    await page.goto(leadUrl(REGISTERED, "Interview"))
     await expect(panel(page).getByLabel("Interview S/N")).toHaveText("1")
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(panel(page)).toContainText("Not registered for interview.")
     await expect(page.getByRole("button", { name: "Register for interview" })).toHaveCount(0)
   })
 
   test("a closed lead offers no registration", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${DECLINED}`)
+    await page.goto(leadUrl(DECLINED, "Interview"))
     await expect(panel(page)).toContainText("Not registered for interview.")
     await expect(page.getByRole("button", { name: "Register for interview" })).toHaveCount(0)
   })

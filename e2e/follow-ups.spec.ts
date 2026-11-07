@@ -9,6 +9,7 @@ import { createLead } from "@/lib/services/leads"
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // The Follow-ups panel on the lead screen: scheduling, changing the date with
 // a reason (#90), recording a contact (#91), and who sees the actions.
@@ -53,7 +54,7 @@ test.describe("the Follow-ups panel", () => {
   test("Admissions Staff schedule a follow-up, then change its date with a reason that shows in history", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
 
     await expect(panel(page)).toContainText("No follow-up scheduled.")
     await panel(page).getByRole("button", { name: "Schedule follow-up" }).click()
@@ -94,7 +95,7 @@ test.describe("the Follow-ups panel", () => {
   test("a refused date is explained in a plain sentence", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
 
     await panel(page).getByRole("button", { name: "Schedule follow-up" }).click()
     const schedule = page.getByRole("dialog", { name: "Schedule follow-up" })
@@ -108,14 +109,14 @@ test.describe("the Follow-ups panel", () => {
 
   test("shows an overdue follow-up as overdue", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${BARAKA}`)
+    await page.goto(leadUrl(BARAKA, "Follow-ups"))
     // Seeded four days before the seed ran.
     await expect(panel(page)).toContainText(/Overdue by \d+ days/)
   })
 
   test("the Accountant sees the follow-up and its earlier date, with no actions", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${SALMA}`)
+    await page.goto(leadUrl(SALMA, "Follow-ups"))
     await expect(panel(page).getByLabel("Follow-up date")).toBeVisible()
     await expect(panel(page)).toContainText("Reason: The parent is travelling until next week.")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
@@ -126,7 +127,7 @@ test.describe("the Follow-ups panel", () => {
     const planned = await scheduleFollowUp(await signedIn(MANAGER), lead, { dueOn: today, note: "Ask about the bus." })
     if (!planned.ok) throw new Error("schedule failed")
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
 
     await panel(page).getByRole("button", { name: "Record follow-up" }).click()
     const record = page.getByRole("dialog", { name: "Record follow-up" })
@@ -162,7 +163,7 @@ test.describe("the Follow-ups panel", () => {
       sql.query("update public.leads set status = 'Enrolled', visit_date = public.tanzania_today() where id = $1", [lead]),
     )
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
 
     await expect(panel(page)).toContainText("No follow-up scheduled.")
     await panel(page).getByRole("button", { name: "Record follow-up" }).click()
@@ -183,7 +184,7 @@ test.describe("the Follow-ups panel", () => {
   test("a follow-up planned by someone else while the form was open is refused, with a reload", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
     await panel(page).getByRole("button", { name: "Record follow-up" }).click()
     const record = page.getByRole("dialog", { name: "Record follow-up" })
     await record.getByLabel("Comment").fill("Called about the uniform list.")
@@ -200,7 +201,7 @@ test.describe("the Follow-ups panel", () => {
 
   test("a deactivated colleague's past contact keeps their name", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${BARAKA}`)
+    await page.goto(leadUrl(BARAKA, "Follow-ups"))
     const contacts = panel(page).getByRole("list", { name: "Contacts" })
     await expect(contacts).toContainText("Phone call by Deactivated Staff")
     // Entered a day after the call.
@@ -209,7 +210,7 @@ test.describe("the Follow-ups panel", () => {
 
   test("a closed lead's follow-up shows as Closed with the lead, with no actions", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${ARCHIVED}`)
+    await page.goto(leadUrl(ARCHIVED, "Follow-ups"))
     await expect(panel(page)).toContainText("No follow-up scheduled.")
     const contacts = panel(page).getByRole("list", { name: "Contacts" })
     // Planned 20 days before the seed ran.
@@ -228,7 +229,7 @@ test.describe("the Follow-ups panel", () => {
     )
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
     const contacts = panel(page).getByRole("list", { name: "Contacts" })
     await expect(contacts).toContainText(`Planned for ${formatDate(addDays(today, 3))}`)
     await expect(contacts).toContainText("Closed with the lead (Declined)")

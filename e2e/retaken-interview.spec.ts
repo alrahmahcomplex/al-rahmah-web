@@ -110,9 +110,16 @@ test("the seeded leads: Register retaken interview for the Retake one only, and 
   await page.goto(leadUrl(SEEDED_RETAKE, "Interview"))
   await expect(panel(page).getByRole("button", { name: "Register retaken interview" })).toBeVisible()
   await expect(panel(page)).toContainText("This lead was reopened to retake the interview.")
+  const nextStep = page.getByRole("region", { name: "Next step" })
+  // A reopened lead's follow-up date comes first; the retake registration
+  // follows it (tests/unit/lead-next-step.test.ts).
+  await expect(nextStep).toContainText("Next step: Set the next follow-up date")
 
   await page.goto(leadUrl(SEEDED_ENROL_WITHOUT_RETAKE, "Interview"))
   await expect(current(page)).toContainText("Failed")
+  // Approved to enrol without a retake: the old Failed result asks for nothing.
+  await expect(nextStep).not.toContainText("Register")
+  await expect(nextStep).not.toContainText("did not pass")
   await expect(panel(page).getByRole("button", { name: /^Register/ })).toHaveCount(0)
 
   await page.context().clearCookies()

@@ -8,7 +8,7 @@ import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 import { cn } from "@/lib/utils"
 
-import { readFee, readFollowUps, readInterviews, readRelease } from "./lead-reads"
+import { readClosure, readFee, readFollowUps, readInterviews, readRegistration, readRelease } from "./lead-reads"
 import { LEAD_TABS, leadTabHref, type LeadTab } from "./tabs"
 
 // The one thing that should happen next on an open lead (lib/lead-next-step),
@@ -31,8 +31,10 @@ export async function NextStepCard({
   recordVisit: ReactNode
 }) {
   const canSeeFee = staff.permissions.includes("payments.view")
-  const [interviews, release, fee, followUps] = await Promise.all([
+  const [interviews, registration, closure, release, fee, followUps] = await Promise.all([
     readInterviews(lead.id),
+    readRegistration(lead.id),
+    readClosure(lead.id),
     readRelease(lead.id),
     canSeeFee ? readFee(lead.id) : null,
     readFollowUps(lead.id),
@@ -44,6 +46,8 @@ export async function NextStepCard({
         status: lead.status,
         closure: lead.closure,
         interview: current && { feeStatus: current.feeStatus, amount: current.amount, result: current.result },
+        registration: registration.ok ? registration.data : null,
+        enrolWithoutRetake: closure.ok && closure.data.reopenedAfterDecline?.enrolWithoutRetake === true,
         release: release.ok
           ? {
               blocked: release.data.blocked,

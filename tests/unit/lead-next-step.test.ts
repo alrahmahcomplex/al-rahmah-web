@@ -11,6 +11,8 @@ function lead(overrides: Partial<NextStepInput> = {}): NextStepInput {
     status: "Visited",
     closure: null,
     interview: null,
+    registration: null,
+    enrolWithoutRetake: false,
     release: null,
     fee: { priority: null },
     followUps: { dueOn: null, needsDate: false },
@@ -46,7 +48,7 @@ describe("the next step on a lead", () => {
   })
 
   it("leaves a follow-up still to come for later", () => {
-    expect(nextStep(lead({ followUps: { dueOn: "2026-11-08", needsDate: false } }))).toEqual({ kind: "register-interview" })
+    expect(nextStep(lead({ followUps: { dueOn: "2026-11-08", needsDate: false } }))).toEqual({ kind: "register-interview", retake: false })
   })
 
   it("asks a reopened lead for a follow-up date", () => {
@@ -61,7 +63,28 @@ describe("the next step on a lead", () => {
   })
 
   it("registers a Visited lead with no interview", () => {
-    expect(nextStep(lead())).toEqual({ kind: "register-interview" })
+    expect(nextStep(lead())).toEqual({ kind: "register-interview", retake: false })
+  })
+
+  it("registers the retaken interview after a reopening for a retake, whatever the old interview says", () => {
+    const reopened = lead({
+      status: "Interviewed",
+      interview: FAILED,
+      registration: "retake",
+      release: SENT,
+      followUps: { dueOn: "2026-11-20", needsDate: false },
+    })
+    expect(nextStep(reopened)).toEqual({ kind: "register-interview", retake: true })
+  })
+
+  it("goes straight to the School fee once enrolling without a retaken interview is approved", () => {
+    const approved = { status: "Interviewed", interview: FAILED, release: SENT, enrolWithoutRetake: true } as const
+    const planned = { dueOn: "2026-11-20", needsDate: false }
+    expect(nextStep(lead({ ...approved, followUps: planned }))).toEqual({ kind: "record-deposit" })
+    expect(nextStep(lead({ ...approved, fee: { priority: "Deposit" } }))).toEqual({
+      kind: "collect-school-fee",
+      priority: "Deposit",
+    })
   })
 
   it("collects the interview fee before anything else on the interview, with the amount", () => {
@@ -124,7 +147,7 @@ describe("the next step on a lead", () => {
   })
 
   it("treats unreadable follow-ups as none due", () => {
-    expect(nextStep(lead({ followUps: null }))).toEqual({ kind: "register-interview" })
+    expect(nextStep(lead({ followUps: null }))).toEqual({ kind: "register-interview", retake: false })
   })
 })
 
@@ -136,7 +159,8 @@ describe("the Next step card's text", () => {
     { kind: "schedule-follow-up", reason: "reopened" },
     { kind: "schedule-follow-up", reason: "failed" },
     { kind: "record-visit" },
-    { kind: "register-interview" },
+    { kind: "register-interview", retake: false },
+    { kind: "register-interview", retake: true },
     { kind: "collect-interview-fee", amount: 50000 },
     { kind: "record-result" },
     { kind: "send-result", corrected: false },
@@ -182,6 +206,13 @@ describe("the Next step card's text", () => {
       "record-deposit": "school-fee payments.record",
       "collect-school-fee": "school-fee payments.record",
       "school-fee-unknown": null,
+    })
+  })
+
+  it("names a retaken interview's registration", () => {
+    expect(nextStepText({ kind: "register-interview", retake: true }, formatDate)).toMatchObject({
+      title: "Register the retaken interview",
+      action: { label: "Register retaken interview", tab: "interview" },
     })
   })
 

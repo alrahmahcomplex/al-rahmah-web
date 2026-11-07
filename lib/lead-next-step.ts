@@ -1,5 +1,5 @@
 import type { Permission } from "@/lib/permissions"
-import type { InterviewFeeStatus, InterviewResult } from "@/lib/services/interviews"
+import type { InterviewFeeStatus, InterviewResult, RegistrationKind } from "@/lib/services/interviews"
 import type { LeadClosure, LeadStatus } from "@/lib/services/leads"
 import type { ReleaseBlocker } from "@/lib/services/result-release"
 import type { SeatPriority } from "@/lib/services/school-fee-payments"
@@ -19,6 +19,12 @@ export type NextStepInput = {
     amount: number
     result: InterviewResult | null
   } | null
+  // Which interview registration the lead takes now: "retake" after a
+  // reopening for a retaken interview. Null when none, or unreadable.
+  registration: RegistrationKind | null
+  // The latest reopening from Declined approved enrolling without a retaken
+  // interview, so a Failed result no longer stands in the way.
+  enrolWithoutRetake: boolean
   // Where the current result's release stands; null when it couldn't be read.
   release: { blocked: ReleaseBlocker | null; sent: boolean; changedSinceSent: boolean } | null
   // The School fee's Seat priority; null when the fee can't be read, as for
@@ -38,7 +44,7 @@ export type NextStep =
   | { kind: "record-follow-up"; dueOn: string; overdue: boolean }
   | { kind: "schedule-follow-up"; reason: "reopened" | "failed" }
   | { kind: "record-visit" }
-  | { kind: "register-interview" }
+  | { kind: "register-interview"; retake: boolean }
   | { kind: "collect-interview-fee"; amount: number }
   | { kind: "record-result" }
   | { kind: "send-result"; corrected: boolean }
@@ -49,7 +55,7 @@ export type NextStep =
   | { kind: "school-fee-unknown" }
 
 export function nextStep(input: NextStepInput): NextStep {
-  const { status, closure, interview, release, fee, followUps, today } = input
+  const { status, closure, interview, registration, enrolWithoutRetake, release, fee, followUps, today } = input
   if (status === "Declined" || closure !== null) return { kind: "closed" }
   if (status === "Enrolled") return { kind: "enrolled" }
 
@@ -59,7 +65,11 @@ export function nextStep(input: NextStepInput): NextStep {
   if (followUps?.needsDate) return { kind: "schedule-follow-up", reason: "reopened" }
 
   if (status === "Applied") return { kind: "record-visit" }
-  if (interview === null) return { kind: "register-interview" }
+  if (interview === null || registration === "retake") {
+    return { kind: "register-interview", retake: registration === "retake" }
+  }
+  // Approved to enrol without a retaken interview: straight to the School fee.
+  if (enrolWithoutRetake) return schoolFeeStep(fee)
   if (interview.feeStatus !== "Paid") return { kind: "collect-interview-fee", amount: interview.amount }
   if (interview.result === null) return { kind: "record-result" }
   if (release !== null && release.blocked === null && (!release.sent || release.changedSinceSent)) {
@@ -69,6 +79,10 @@ export function nextStep(input: NextStepInput): NextStep {
   if (interview.result === "Failed") {
     return dueOn !== null ? { kind: "wait-for-follow-up", dueOn } : { kind: "schedule-follow-up", reason: "failed" }
   }
+  return schoolFeeStep(fee)
+}
+
+function schoolFeeStep(fee: NextStepInput["fee"]): NextStep {
   if (fee === null) return { kind: "school-fee-unknown" }
   if (fee.priority === null) return { kind: "record-deposit" }
   return { kind: "collect-school-fee", priority: fee.priority }
@@ -119,11 +133,17 @@ export function nextStepText(step: Exclude<NextStep, { kind: "closed" }>, format
         action: { label: "Record visit", tab: "overview", anchor: "lead-next-step", permission: "visits.record" },
       }
     case "register-interview":
-      return {
-        title: "Register for interview",
-        detail: "The family has visited. Registering gives the student an S/N on the interview list.",
-        action: { label: "Register for interview", tab: "interview", anchor: "lead-interview", permission: "interviews.record" },
-      }
+      return step.retake
+        ? {
+            title: "Register the retaken interview",
+            detail: "The lead was reopened for a retaken interview. Registering gives the student a new S/N.",
+            action: { label: "Register retaken interview", tab: "interview", anchor: "lead-interview", permission: "interviews.record" },
+          }
+        : {
+            title: "Register for interview",
+            detail: "The family has visited. Registering gives the student an S/N on the interview list.",
+            action: { label: "Register for interview", tab: "interview", anchor: "lead-interview", permission: "interviews.record" },
+          }
     case "collect-interview-fee":
       return {
         title: `Collect the interview fee, ${tzs(step.amount)}`,
@@ -153,7 +173,7 @@ export function nextStepText(step: Exclude<NextStep, { kind: "closed" }>, format
     case "record-deposit":
       return {
         title: "Collect the Initial deposit",
-        detail: "The student passed. The deposit gives the student a Seat priority.",
+        detail: "The student may enrol. The deposit gives the student a Seat priority.",
         action: { label: "Record payment", tab: "school-fee", anchor: "lead-school-fee", permission: "payments.record" },
       }
     case "collect-school-fee":
@@ -168,7 +188,7 @@ export function nextStepText(step: Exclude<NextStep, { kind: "closed" }>, format
     case "school-fee-unknown":
       return {
         title: "Collect the School fee",
-        detail: "The student passed. Staff who see payments can tell how much is paid.",
+        detail: "The student may enrol. Staff who see payments can tell how much is paid.",
         action: null,
       }
   }

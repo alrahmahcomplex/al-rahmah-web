@@ -9,6 +9,7 @@ import { createClient } from "@/utils/supabase/server"
 import { DecideDiscount } from "../leads/[id]/decide-discount"
 import { canDecideDiscount, discountLabel } from "../leads/[id]/discount-outcome"
 import { dayOf } from "../leads/[id]/reopening-outcome"
+import { leadTabHref } from "../leads/[id]/tabs"
 import { requireStaff } from "../session"
 
 export const metadata: Metadata = {
@@ -50,7 +51,7 @@ export default async function DiscountRequestsPage() {
             >
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <Link
-                  href={`/staff/leads/${request.leadId}`}
+                  href={leadTabHref(request.leadId, "discounts", "lead-discounts")}
                   className="font-mono text-sm font-medium text-blue-600 underline-offset-4 hover:underline"
                 >
                   {request.admissionNumber}

@@ -4,12 +4,11 @@ import { revalidatePath } from "next/cache"
 import { headers } from "next/headers"
 
 import type { Permission } from "@/lib/permissions"
-import { roleTemplate, templateLinks } from "@/lib/role-templates"
 import type { Result } from "@/lib/services/result"
 import {
   assignRole,
   correctStaffName,
-  createRole,
+  createRoleFromTemplate,
   deactivateStaff,
   inviteStaff,
   reactivateRole,
@@ -19,7 +18,6 @@ import {
   retireRole,
   setRoleManages,
   setRolePermission,
-  refusal,
   type Refusal,
   type RoleNames,
 } from "@/lib/services/staff-admin"
@@ -59,31 +57,12 @@ export async function correctStaffMemberName(staffId: string, fullName: string) 
   return settle(await correctStaffName(supabase, staffId, fullName), ({ name }) => `Name corrected to ${name}.`)
 }
 
-// A new role opens in the pane, so the outcome carries its id. From a
-// template it takes the template's permissions, manages the current roles
-// its template manages, and joins the managed set of every current role
-// whose template manages it (lib/role-templates.ts). The database checks
-// that the caller is the Super Admin.
+// A new role opens in the pane, so the outcome carries its id.
 export async function addRole(name: string, templateName: string | null): Promise<ChangeOutcome & { roleId?: string }> {
   const supabase = await createClient()
-  const template = templateName ? roleTemplate(templateName) : undefined
-  if (templateName && !template) {
-    return { ok: false, message: "That template no longer exists. Reload the page and try again." }
-  }
-
-  let links: { manages: string[]; managedBy: string[] } = { manages: [], managedBy: [] }
-  if (template) {
-    const { data, error } = await supabase.from("roles").select("id, name, retired")
-    if (error) {
-      console.error("Could not read the roles to link a new role", error)
-      return { ok: false, message: refusal("unavailable").message }
-    }
-    links = templateLinks(template, data ?? [])
-  }
-
-  const result = await createRole(supabase, name, { permissions: template?.permissions ?? [], ...links })
+  const result = await createRoleFromTemplate(supabase, name, templateName)
   const outcome = await settle<RoleNames>(result, ({ role }) =>
-    template ? `Created ${role} from the ${template.name} template.` : `Created ${role}. Tick what it can do.`,
+    templateName ? `Created ${role} from the ${templateName} template.` : `Created ${role}. Tick what it can do.`,
   )
   return result.ok ? { ...outcome, roleId: result.data.id } : outcome
 }

@@ -5,6 +5,7 @@ import {
   assignRole,
   correctStaffName,
   createRole,
+  createRoleFromTemplate,
   reactivateRole,
   deactivateStaff,
   describeAuditRow,
@@ -68,6 +69,50 @@ describe("the staff-admin writes", () => {
       ["reactivate_role", { role_id: "role-1" }],
       ["set_role_manages", { role_id: "role-1", managed_role_id: "role-2", manages: false }],
     ])
+  })
+})
+
+describe("createRoleFromTemplate", () => {
+  function fakeWithRoles(roles: { id: string; name: string; retired: boolean }[], readError: { message: string } | null = null) {
+    const rpc = vi.fn().mockResolvedValue({ data: { id: "new-role", role: "Made" }, error: null })
+    const select = vi.fn().mockResolvedValue({ data: readError ? null : roles, error: readError })
+    const from = vi.fn(() => ({ select }))
+    return { client: { rpc, from } as unknown as SupabaseClient, rpc, from }
+  }
+
+  it("creates a blank role without reading the roles", async () => {
+    const { client, rpc, from } = fakeWithRoles([])
+    await createRoleFromTemplate(client, "Front desk", null)
+    expect(from).not.toHaveBeenCalled()
+    expect(rpc).toHaveBeenCalledWith("create_role", { name: "Front desk", permissions: [], manages: [], managed_by: [] })
+  })
+
+  it("brings a template's permissions and links the current roles by name, both ways", async () => {
+    const { client, rpc } = fakeWithRoles([
+      { id: "staff", name: "Admissions Staff", retired: false },
+      { id: "admin", name: "Administrator", retired: false },
+      { id: "old", name: "Accountant", retired: true },
+    ])
+    expect(await createRoleFromTemplate(client, "Front office lead", "Admissions Manager")).toEqual({
+      ok: true,
+      data: { id: "new-role", role: "Made" },
+    })
+    expect(rpc).toHaveBeenCalledWith("create_role", {
+      name: "Front office lead",
+      permissions: expect.arrayContaining(["agents.approve", "leads.view"]),
+      manages: ["staff"],
+      managed_by: ["admin"],
+    })
+  })
+
+  it("refuses an unknown template and fails closed when the roles can't be read, creating nothing", async () => {
+    const unknown = fakeWithRoles([])
+    expect(await createRoleFromTemplate(unknown.client, "X", "Chief Everything")).toMatchObject({ ok: false, error: { code: "unknown_template" } })
+    const down = fakeWithRoles([], { message: "fetch failed" })
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    expect(await createRoleFromTemplate(down.client, "X", "Accountant")).toMatchObject({ ok: false, error: { code: "unavailable" } })
+    expect(unknown.rpc).not.toHaveBeenCalled()
+    expect(down.rpc).not.toHaveBeenCalled()
   })
 })
 
@@ -177,8 +222,20 @@ describe("describeAuditRow", () => {
       summary: "let Accountant manage the staff in Admissions Staff",
       changes: [],
     })
-    expect(pair({ old_values: { active: true }, new_values: { active: false } }).summary).toBe("took a role out of a managed set")
-    expect(pair({ old_values: { active: false }, new_values: { active: true } }).summary).toBe("put a role back in a managed set")
+    // An update carries only the switch; the pair, found by its row id, names both roles.
+    const withPairs: HistoryLookup = {
+      ...lookup,
+      managedPairs: new Map([["pair-1", { roleId: "role-accountant", managedRoleId: "role-admissions" }]]),
+    }
+    const switched = (active: boolean) =>
+      describeAuditRow(
+        row({ table_name: "role_managed_roles", row_id: "pair-1", old_values: { active: !active }, new_values: { active } }),
+        withPairs,
+      ).summary
+    expect(switched(false)).toBe("stopped Accountant managing the staff in Admissions Staff")
+    expect(switched(true)).toBe("let Accountant manage the staff in Admissions Staff again")
+    // A pair the reader can't resolve still reads as a sentence.
+    expect(pair({ old_values: { active: true }, new_values: { active: false } }).summary).toBe("stopped a role managing the staff in a role")
     expect(
       describeAuditRow(row({ table_name: null, row_id: null, action: "roles_became_templates", actor_kind: "system", actor_staff_id: null, new_values: { removed: ["Accountant"] } }), lookup)
         .summary,

@@ -5,7 +5,7 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
-## November 7, 2026 `v0.84.0`
+## November 7, 2026 `v0.85.0`
 
 ### NEW
 
@@ -18,6 +18,21 @@ stay in the `0.x` range.
   invite to, deactivate, reactivate and move between. An Admissions Manager manages the
   Admissions Staff, a Head Accountant the Accountants, and an Administrator the Managers
   and Head Accountants. Someone whose role manages nobody no longer sees Staff and roles.
+- Reports has its own permission, "View reports". The Admissions Manager, Head
+  Accountant and Administrator templates include it, and the Super Admin can tick it on
+  any role.
+
+### IMPROVED
+
+- Only the Super Admin changes roles: creating, renaming, retiring, reactivating, ticking
+  permissions and setting managed sets. A Manager reads every role's name and
+  permissions with no controls to change them. The Admissions Manager role is no longer
+  locked, and the "Administer staff and roles" permission is gone.
+
+## November 7, 2026 `v0.84.0`
+
+### NEW
+
 - A Super Admin starts the system after the reset. The school's own account,
   alrahmahcomplex.tz@gmail.com, exists from the start; the owner invites it from the
   Supabase dashboard, and the Super Admin invites the Admissions Manager and everyone
@@ -28,10 +43,6 @@ stay in the `0.x` range.
 
 ### IMPROVED
 
-- Only the Super Admin changes roles: creating, renaming, retiring, reactivating, ticking
-  permissions and setting managed sets. A Manager reads every role's name and
-  permissions with no controls to change them. The Admissions Manager role is no longer
-  locked, and the "Administer staff and roles" permission is gone.
 - Event-by-event history is now the Super Admin's alone: a lead's History page and the
   Staff and roles history are hidden from every other role. The lead screen shows the
   date its status last changed instead.

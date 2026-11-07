@@ -34,6 +34,11 @@ export function ArrivalSearch({ canRegister }: { canRegister: boolean }) {
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setOutcome(null)
+    // Spaces alone pass the field's own check but are nothing to look for.
+    if (typed.trim() === "") {
+      inputRef.current?.focus()
+      return
+    }
     startTransition(async () => {
       let result: ArrivalOutcome
       try {
@@ -93,7 +98,7 @@ export function ArrivalSearch({ canRegister }: { canRegister: boolean }) {
           </Button>
         </div>
         <p id="arrival-search-hint" className="text-xs text-muted-foreground">
-          With or without ADMSN-, for example 40719.
+          With or without ADMSN-, for example 40719, or any part of the student&apos;s name.
         </p>
       </form>
 

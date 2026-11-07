@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -163,6 +163,39 @@ describe("the registration screens", () => {
     expect(date).toHaveValue("2026-10-06")
     expect(date).toHaveAttribute("max", "2026-10-06")
     expect(date).toHaveFocus()
+  })
+
+  it("holds the rail's Change links while the registration runs", async () => {
+    let finish: (outcome: unknown) => void = () => {}
+    stubs.register.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const user = userEvent.setup()
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false, interviewDiscount: null })
+    await fillStudent(user)
+    await user.click(screen.getByRole("button", { name: "Continue to review" }))
+    await user.click(await screen.findByRole("button", { name: "Register student" }))
+
+    const rail = within(screen.getByRole("list", { name: "Steps" }))
+    expect(rail.getByRole("button", { name: "Change student" })).toBeDisabled()
+    expect(rail.getByRole("button", { name: "Change parent or guardian" })).toBeDisabled()
+    expect(within(screen.getByRole("region", { name: "Student" })).getByRole("button", { name: "Change student" })).toBeDisabled()
+    finish({ status: "created", leadId: LEAD, admissionNumber: "ADMSN-12345", referralCode: "none" })
+    expect(await screen.findByLabelText("Admission Number")).toHaveTextContent("ADMSN-12345")
+  })
+
+  it("retires the duplicate refusal once the rail's Change leaves Review", async () => {
+    stubs.register.mockResolvedValue({ status: "duplicate", admissionNumber: "ADMSN-55555", href: "/staff/leads/x" })
+    const user = userEvent.setup()
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false, interviewDiscount: null })
+    await fillStudent(user)
+    await user.click(screen.getByRole("button", { name: "Continue to review" }))
+    await user.click(await screen.findByRole("button", { name: "Register student" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("Already registered")
+
+    await user.click(within(screen.getByRole("list", { name: "Steps" })).getByRole("button", { name: "Change student" }))
+    await user.type(screen.getByLabelText("Student's full name"), " Junior")
+    await user.click(screen.getByRole("button", { name: "Continue to review" }))
+    expect(await screen.findByRole("button", { name: "Register student" })).toBeInTheDocument()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   })
 
   it("Register another child keeps the parent and starts the Family check again", async () => {

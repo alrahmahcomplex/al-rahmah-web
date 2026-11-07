@@ -126,6 +126,9 @@ export function NewStudentForm({
   function goTo(next: Screen, withNotice: Notice | null = null) {
     setScreen(next)
     setNotice(withNotice)
+    // A refusal is about what was sent; leaving Review to change anything
+    // retires it.
+    setDuplicate(null)
     // Keep keyboard and screen reader users at the top of the new screen.
     queueMicrotask(() => headingRef.current?.focus())
   }
@@ -346,7 +349,7 @@ export function NewStudentForm({
       </HeaderActions>
       <Progress step={stepNumber} of={steps.length} />
       <div className="grid gap-6 md:grid-cols-[13.5rem_minmax(0,1fr)] md:gap-12">
-        <StepRail steps={rail} currentIndex={currentIndex} onChange={(key) => goTo(key)} />
+        <StepRail steps={rail} currentIndex={currentIndex} pending={pending} onChange={(key) => goTo(key)} />
         <div className="flex min-w-0 flex-col gap-5">
           <div className="flex flex-col gap-1">
             <h1 ref={headingRef} tabIndex={-1} className={HEADING}>
@@ -432,18 +435,9 @@ export function NewStudentForm({
               referralAgent={referralAgent}
               pending={pending}
               duplicate={duplicate}
-              onChangeParent={() => {
-                setDuplicate(null)
-                goTo("parent")
-              }}
-              onChangeStudent={() => {
-                setDuplicate(null)
-                goTo("student")
-              }}
-              onBack={() => {
-                setDuplicate(null)
-                goTo("student")
-              }}
+              onChangeParent={() => goTo("parent")}
+              onChangeStudent={() => goTo("student")}
+              onBack={() => goTo("student")}
               onSubmit={submit}
             />
           )}
@@ -517,8 +511,19 @@ function Progress({ step, of }: { step: number; of: number }) {
 type RailStep = { key: Screen; label: string; hint: string; done: string[] }
 
 // The steps beside the form (above it on a phone): a completed step shows
-// what was entered and a Change link back to it.
-function StepRail({ steps, currentIndex, onChange }: { steps: RailStep[]; currentIndex: number; onChange: (key: Screen) => void }) {
+// what was entered and a Change link back to it. While a request runs the
+// links wait, so what was sent and what is shown stay the same.
+function StepRail({
+  steps,
+  currentIndex,
+  pending,
+  onChange,
+}: {
+  steps: RailStep[]
+  currentIndex: number
+  pending: boolean
+  onChange: (key: Screen) => void
+}) {
   return (
     <ol aria-label="Steps" className="flex flex-col md:pt-1">
       {steps.map((step, index) => {
@@ -557,8 +562,9 @@ function StepRail({ steps, currentIndex, onChange }: { steps: RailStep[]; curren
                 <button
                   type="button"
                   onClick={() => onChange(step.key)}
+                  disabled={pending}
                   aria-label={`Change ${step.label.toLowerCase()}`}
-                  className="w-fit rounded-sm text-xs font-medium text-blue-600 underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-blue-600/40"
+                  className="w-fit rounded-sm text-xs font-medium text-blue-600 underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-blue-600/40 disabled:opacity-50"
                 >
                   Change
                 </button>

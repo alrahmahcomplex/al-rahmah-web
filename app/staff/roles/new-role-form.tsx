@@ -85,7 +85,7 @@ export function NewRoleForm() {
           required
           autoComplete="off"
           placeholder="Role name"
-          className="h-8 min-w-0"
+          className="h-8 min-w-0 staff-touch:h-8"
           value={name}
           onChange={(event) => setName(event.target.value)}
           aria-invalid={error ? true : undefined}

@@ -46,7 +46,7 @@ export default async function FeeSchedulePage({ params }: { params: Promise<{ ye
         <Link href="/staff/fees" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
           All years
         </Link>
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Fee schedule {year}</h1>
+        <h1 className="staff-heading">Fee schedule {year}</h1>
       </div>
 
       {schedule === null ? (
@@ -72,7 +72,7 @@ export default async function FeeSchedulePage({ params }: { params: Promise<{ ye
 
       {schedule?.ok && (
         <section aria-labelledby="fees-academic-year" className="flex flex-col gap-4 border-t pt-6">
-          <h2 id="fees-academic-year" className="text-base font-semibold text-slate-900">
+          <h2 id="fees-academic-year" className="staff-section-heading">
             Academic year and seats
           </h2>
           {canSetYear ? (

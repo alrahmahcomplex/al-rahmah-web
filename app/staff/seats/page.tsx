@@ -29,7 +29,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
   if (!staff.permissions.includes("payments.view")) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Seats</h1>
+        <h1 className="staff-heading">Seats</h1>
         <p className="text-sm text-slate-700">Seats are shown only to staff who can view payments.</p>
       </div>
     )
@@ -45,7 +45,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Seats{year !== null && ` ${year}`}</h1>
+      <h1 className="staff-heading">Seats{year !== null && ` ${year}`}</h1>
 
       {years.length > 0 && (
         <nav aria-label="Enrollment years" className="flex flex-wrap gap-2 text-sm">
@@ -75,7 +75,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
           <>
             {overFull.length > 0 && (
               <section aria-labelledby="seats-over-capacity" className="flex flex-col gap-4">
-                <h2 id="seats-over-capacity" className="text-base font-semibold text-slate-900">
+                <h2 id="seats-over-capacity" className="staff-section-heading">
                   Over capacity
                 </h2>
                 {overFull.map((entry) => (
@@ -89,7 +89,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
             )}
 
             <section aria-labelledby="seats-by-class" className="flex flex-col gap-2">
-              <h2 id="seats-by-class" className="text-base font-semibold text-slate-900">
+              <h2 id="seats-by-class" className="staff-section-heading">
                 Seats by class
               </h2>
               <p className="text-sm text-muted-foreground">

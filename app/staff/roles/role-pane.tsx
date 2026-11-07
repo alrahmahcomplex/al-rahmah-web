@@ -114,7 +114,7 @@ export function RolePane({
 
       <header className="flex flex-wrap items-start gap-x-4 gap-y-2">
         <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
-          <h2 id="role-heading" className={cn("text-lg font-semibold break-words", role.retired && "text-muted-foreground")}>
+          <h2 id="role-heading" className={cn("staff-section-heading break-words", role.retired && "text-muted-foreground!")}>
             {role.name}
           </h2>
           <p id={subtitleId} className="text-sm text-muted-foreground">

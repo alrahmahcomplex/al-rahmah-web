@@ -4,6 +4,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* A touch screen inside the staff portal, portals included: staff controls
+   grow to 44px there (DESIGN.md, Layout). Public pages set their own heights. */
+@custom-variant staff-touch {
+  @media (pointer: coarse) {
+    :where(html:has([data-staff-shell])) & {
+      @slot;
+    }
+  }
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans);
@@ -148,4 +158,13 @@
   html {
     @apply font-sans;
     }
+}
+/* Staff typography (DESIGN.md, Staff headings). Exo italic stays on public
+   pages and the sign-in doorway; staff pages speak in Geist. */
+@utility staff-heading {
+  @apply font-sans text-[1.375rem]/7 font-semibold tracking-tight text-neutral-900;
+}
+
+@utility staff-section-heading {
+  @apply font-sans text-[0.9375rem]/5 font-semibold tracking-tight text-neutral-900;
 }

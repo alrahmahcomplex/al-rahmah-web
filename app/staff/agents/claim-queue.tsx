@@ -51,7 +51,7 @@ function ClaimCard({ entry, canApprove }: { entry: QueueEntry; canApprove: boole
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-lg p-4 ring-1 ring-foreground/10">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id={headingId} className="font-medium text-slate-900">
+        <h2 id={headingId} className="staff-section-heading">
           {entry.fullName} <span className="font-mono text-sm text-muted-foreground">{entry.code}</span>
         </h2>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

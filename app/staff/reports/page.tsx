@@ -26,7 +26,7 @@ export default async function ReportsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Reports</h1>
+      <h1 className="staff-heading">Reports</h1>
       <Dashboard
         supabase={supabase}
         searchParams={await searchParams}

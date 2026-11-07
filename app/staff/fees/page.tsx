@@ -37,7 +37,7 @@ export default async function FeeSchedulesPage({ searchParams }: { searchParams:
   if (!canSeeFeeAmounts(staff.permissions)) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Fee schedule</h1>
+        <h1 className="staff-heading">Fee schedule</h1>
         <p className="text-sm text-slate-700">{NOT_SHOWN_WITHOUT_PAYMENTS_VIEW}</p>
       </div>
     )
@@ -48,7 +48,7 @@ export default async function FeeSchedulesPage({ searchParams }: { searchParams:
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Fee schedule</h1>
+      <h1 className="staff-heading">Fee schedule</h1>
 
       {!schedules.ok ? (
         <Alert variant="destructive">
@@ -77,7 +77,7 @@ export default async function FeeSchedulesPage({ searchParams }: { searchParams:
 
       {canEdit && (
         <form action="/staff/fees" className="flex max-w-sm flex-col gap-2" aria-label="New schedule">
-          <h2 className="text-sm font-semibold text-slate-900">New schedule</h2>
+          <h2 className="staff-section-heading">New schedule</h2>
           <Label htmlFor="new-schedule-year">Enrollment year</Label>
           <div className="flex gap-2">
             <Input

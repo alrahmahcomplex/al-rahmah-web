@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-import { Badge } from "@/components/ui/badge"
+import { StatusChip } from "@/components/status-chip"
 import type { LatestLead } from "@/lib/services/today"
 import type { Result } from "@/lib/services/result"
 
@@ -47,8 +47,8 @@ export function LatestRegistrations({ leads }: { leads: Result<LatestLead[], "un
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-wrap justify-end gap-1">
-                  <Badge variant={lead.status === "Declined" ? "destructive" : "secondary"}>{lead.status}</Badge>
-                  {lead.closure && <Badge variant="outline">{lead.closure}</Badge>}
+                  <StatusChip status={lead.status} />
+                  {lead.closure && <StatusChip status={lead.closure} />}
                 </span>
               </Link>
             </li>

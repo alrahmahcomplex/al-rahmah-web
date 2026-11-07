@@ -131,7 +131,7 @@ export default async function MarketingAgentsPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Marketing Agents</h1>
+        <h1 className="staff-heading">Marketing Agents</h1>
         {canApprove && (
           <div className="flex flex-wrap gap-2">
             <Link href="/staff/agents/import" className={buttonVariants({ variant: "outline" })}>

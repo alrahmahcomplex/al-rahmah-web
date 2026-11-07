@@ -26,7 +26,7 @@ export const metadata: Metadata = {
 }
 
 const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
+  "h-10 w-full min-w-0 staff-touch:h-11 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
 
 // The school is in Tanzania, so times read in East Africa Time.
 const WHEN = new Intl.DateTimeFormat("en-GB", {
@@ -51,7 +51,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Audit</h1>
+        <h1 className="staff-heading">Audit</h1>
         <p className="text-sm text-muted-foreground">Every recorded change and action, newest first. Only you can see this page.</p>
       </div>
 

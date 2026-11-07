@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
+import { StatusChip } from "@/components/status-chip"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -174,8 +174,8 @@ function Matches({ query, leads, total }: { query: string; leads: ArrivalMatch[]
                 </span>
               </span>
               <span className="flex shrink-0 flex-wrap justify-end gap-1">
-                <Badge variant={lead.status === "Declined" ? "destructive" : "secondary"}>{lead.status}</Badge>
-                {lead.closure && <Badge variant="outline">{lead.closure}</Badge>}
+                <StatusChip status={lead.status} />
+                {lead.closure && <StatusChip status={lead.closure} />}
               </span>
             </Link>
           </li>

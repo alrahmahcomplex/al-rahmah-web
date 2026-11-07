@@ -17,7 +17,7 @@ export function RankedClass({ entry, canDecline }: { entry: ClassSeats; canDecli
   const seats = entry.seats ?? 0
   return (
     <section aria-label={`${name} ranking`} className="flex flex-col gap-2 rounded-xl p-4 ring-1 ring-foreground/10">
-      <h3 className="text-sm font-semibold text-slate-900">
+      <h3 className="staff-section-heading">
         {name}: {entry.taken} leads for {seats} {seats === 1 ? "seat" : "seats"}
       </h3>
       <ol aria-label={`${name} leads ranked`} className="flex flex-col divide-y text-sm">

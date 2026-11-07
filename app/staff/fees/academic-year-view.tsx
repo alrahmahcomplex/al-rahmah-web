@@ -17,7 +17,7 @@ export function AcademicYearView({ schedule }: { schedule: FeeSchedule }) {
       </dl>
 
       <section aria-labelledby="fees-seats" className="flex flex-col gap-2">
-        <h3 id="fees-seats" className="text-sm font-semibold text-slate-900">
+        <h3 id="fees-seats" className="staff-section-heading">
           Seats
         </h3>
         <Table>

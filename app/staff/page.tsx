@@ -69,7 +69,7 @@ export default async function TodayPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">
+          <h1 className="staff-heading">
             {greeting(tanzaniaHour())}, {firstName(staff.name)}
           </h1>
           <p className="text-sm text-slate-600" data-testid="today-summary">

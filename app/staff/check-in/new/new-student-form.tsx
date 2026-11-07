@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useEffect, useId, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { StatusChip } from "@/components/status-chip"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,7 +51,7 @@ const LOST_UPDATE_MESSAGE =
 const PRIMARY = "h-11 rounded-full px-5 text-sm"
 const BACK = "h-11 rounded-full px-4 text-sm text-slate-700"
 
-const HEADING = "font-exo text-2xl font-extrabold italic text-blue-600 outline-none"
+const HEADING = "staff-heading outline-none"
 
 // The screens of New Student. The Family screens appear only when the
 // parent's number is already on file.
@@ -819,8 +820,8 @@ function FamilyChildrenStep({
                     <td className="px-3 py-2">{child.enrollmentYear}</td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
-                        <Badge variant={child.status === "Declined" ? "destructive" : "secondary"}>{child.status}</Badge>
-                        {child.closure && <Badge variant="outline">{child.closure}</Badge>}
+                        <StatusChip status={child.status} />
+                        {child.closure && <StatusChip status={child.closure} />}
                         {child.unconfirmed && <Badge variant="outline">Unconfirmed</Badge>}
                       </div>
                     </td>
@@ -1274,7 +1275,7 @@ function ReviewCard({
   return (
     <section aria-labelledby={id} className="flex flex-col gap-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
       <div className="flex items-center justify-between gap-3">
-        <h2 id={id} className="text-sm font-semibold text-slate-900">
+        <h2 id={id} className="staff-section-heading">
           {title}
         </h2>
         <button

@@ -27,7 +27,7 @@ export default async function DiscountRequestsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Discount requests</h1>
+        <h1 className="staff-heading">Discount requests</h1>
         <p className="text-sm text-muted-foreground">
           Staff child and Qualified orphan discounts waiting for a decision, oldest first. Check the supporting documents outside the
           system.

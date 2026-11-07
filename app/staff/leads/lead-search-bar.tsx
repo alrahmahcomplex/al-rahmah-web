@@ -12,7 +12,7 @@ import { LEAD_STATUSES, type ClosureFilter, type LeadSearch, type LeadStatus } f
 import { leadsHref } from "./search-params"
 
 const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
+  "h-10 w-full min-w-0 staff-touch:h-11 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
 
 const CLOSURE_LABELS: Record<ClosureFilter, string> = {
   open: "Without a closure mark",

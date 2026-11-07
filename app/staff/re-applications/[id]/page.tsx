@@ -56,7 +56,7 @@ export default async function ReApplicationPage({ params }: { params: Promise<{ 
         <Link href="/staff/re-applications" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
           Re-applications
         </Link>
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">Re-application</h1>
+        <h1 className="staff-heading">Re-application</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Link
             href={`/staff/leads/${entry.leadId}`}
@@ -76,7 +76,7 @@ export default async function ReApplicationPage({ params }: { params: Promise<{ 
       {closed && <ClosedLead entry={entry} staff={staff} />}
 
       <section aria-labelledby="re-application-review" className="flex flex-col gap-2">
-        <h2 id="re-application-review" className="text-sm font-semibold text-slate-900">
+        <h2 id="re-application-review" className="staff-section-heading">
           Review
         </h2>
         {entry.reviewedAt ? (
@@ -100,7 +100,7 @@ function ClosedLead({ entry, staff }: { entry: ReApplication; staff: StaffMember
   const title = `This lead is ${closedState(entry)}`
   return (
     <section aria-label={title} className="flex max-w-xl flex-col gap-3 rounded-lg border bg-card p-4 text-sm">
-      <h2 className="font-semibold text-slate-900">{title}</h2>
+      <h2 className="staff-section-heading">{title}</h2>
       <p className="text-muted-foreground">
         A closed lead is read-only, so what the family sent can&apos;t be applied. To work on it again, it has to be
         reopened, and a Manager approves that.
@@ -159,7 +159,7 @@ async function Comparison({ entry, staff }: { entry: ReApplication; staff: Staff
 
   return (
     <section aria-labelledby="re-application-compare" className="flex flex-col gap-2">
-      <h2 id="re-application-compare" className="text-sm font-semibold text-slate-900">
+      <h2 id="re-application-compare" className="staff-section-heading">
         Compared with the lead
       </h2>
       {body}

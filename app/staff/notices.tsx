@@ -27,7 +27,7 @@ export function Notices({ notices }: { notices: Notice[] }) {
 
   return (
     <section aria-labelledby="notices-heading" className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
-      <h2 id="notices-heading" className="flex items-center gap-2 font-medium">
+      <h2 id="notices-heading" className="flex items-center gap-2 staff-section-heading">
         <BellIcon aria-hidden className="size-4 text-muted-foreground" />
         Changes to your account
       </h2>

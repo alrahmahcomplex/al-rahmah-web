@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 7, 2026 `v0.86.0`
+
+### IMPROVED
+
+- Staff pages use one calm heading style in place of the slanted blue flyer type, which
+  stays on the public pages and the sign-in screen.
+- A lead's status now has its own colour wherever staff see it: Applied, Visited,
+  Interviewed, Enrolled and Declined, plus the Inactive and Archived marks.
+- Buttons, fields and dropdowns on staff pages are taller and easier to tap on a
+  tablet.
+- The sign-in fields use larger, upright text, so phones no longer zoom in on them.
+
 ## November 7, 2026 `v0.85.1`
 
 ### IMPROVED

@@ -9,7 +9,7 @@ export function ScheduleView({ schedule }: { schedule: FeeSchedule }) {
   return (
     <div className="flex flex-col gap-6">
       <section aria-labelledby="fees-annual" className="flex flex-col gap-2">
-        <h2 id="fees-annual" className="text-sm font-semibold text-slate-900">
+        <h2 id="fees-annual" className="staff-section-heading">
           Annual school fees
         </h2>
         <Table>
@@ -36,7 +36,7 @@ export function ScheduleView({ schedule }: { schedule: FeeSchedule }) {
       </section>
 
       <section aria-labelledby="fees-instalments" className="flex flex-col gap-2">
-        <h2 id="fees-instalments" className="text-sm font-semibold text-slate-900">
+        <h2 id="fees-instalments" className="staff-section-heading">
           Instalments
         </h2>
         <Table>
@@ -60,7 +60,7 @@ export function ScheduleView({ schedule }: { schedule: FeeSchedule }) {
       </section>
 
       <section aria-labelledby="fees-other" className="flex flex-col gap-2">
-        <h2 id="fees-other" className="text-sm font-semibold text-slate-900">
+        <h2 id="fees-other" className="staff-section-heading">
           Deposit and programmes
         </h2>
         <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">

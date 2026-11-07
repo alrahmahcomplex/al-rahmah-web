@@ -27,7 +27,7 @@ export default async function GroupLinksPage({ searchParams }: { searchParams: P
   const warning = families?.ok ? familiesWarning(families.data) : null
   const saved = links.ok ? links.data.find((link) => link.year === year) : null
   return <div className="flex flex-col gap-6">
-    <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">WhatsApp groups</h1>
+    <h1 className="staff-heading">WhatsApp groups</h1>
     <p className="max-w-xl text-sm text-muted-foreground">Save the admissions WhatsApp group link for each Enrollment year, even before its Fee schedule is ready.</p>
     <form action="/staff/group-links" className="flex max-w-sm flex-col gap-2" aria-label="Choose year">
       <Label htmlFor="group-year">Enrollment year</Label>
@@ -36,7 +36,7 @@ export default async function GroupLinksPage({ searchParams }: { searchParams: P
     {year === null ? <p role="alert" className="text-sm text-destructive">Enter an Enrollment year from 2000 to 2999.</p> : !links.ok ?
       <p role="alert" className="text-sm text-destructive">The group links could not be loaded. Reload the page to try again.</p> :
       <section aria-label={`Group ${year}`} className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold">Admissions {year}</h2>
+        <h2 className="staff-section-heading">Admissions {year}</h2>
         {saved ? <div className="flex max-w-xl flex-col items-start gap-2">
           <p className="break-all text-sm">{saved.url}</p>
           <p className="text-sm text-muted-foreground">Set by {saved.setByName} on <time dateTime={saved.setAt}>{new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Dar_es_Salaam", dateStyle: "medium", timeStyle: "short" }).format(new Date(saved.setAt))}</time> (Tanzania)</p>

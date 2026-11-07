@@ -53,7 +53,7 @@ declare
     -- moment hosted acceptance finished and hosted writes were frozen, and
     -- nothing else. tests/integration/hosted-test-data-reset.test.ts reads
     -- the value from the marked line.
-    cutoff constant timestamptz := '2020-01-01 00:00:00+00'; -- SET AT MERGE (#197): cutoff
+    cutoff constant timestamptz := '2026-11-07 14:04:40+00'; -- SET AT MERGE (#197): cutoff
     -- The literal as checked in. A cutoff still equal to it was never set,
     -- and step 3 then stops before any delete: the placeholder is no guard
     -- on its own, since data dated before 2020 would pass it.

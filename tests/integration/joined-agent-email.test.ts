@@ -7,7 +7,7 @@ vi.mock("server-only", () => ({}))
 import { setAgentEmail } from "@/lib/services/agent-invites"
 import { checkNewAgent, createAgent, getRecreatePreview, recreateAgent } from "@/lib/services/marketing-agents"
 
-import { createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { MANAGER } from "../support/fixtures"
 
 // A joined agent's email lives in Supabase Auth and only they change it
@@ -64,7 +64,7 @@ async function staffRoleId() {
 }
 
 async function inviteStaff(address: string) {
-  const administrator = await signedIn(await createThrowawayStaff(["staff.administer"]))
+  const administrator = await signedIn(MANAGER)
   return administrator.rpc("invite_staff_member", { full_name: "Staff Moved", email: address, role_id: await staffRoleId() })
 }
 

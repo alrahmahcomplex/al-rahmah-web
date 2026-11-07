@@ -282,10 +282,16 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
-  "public.create_role(name text)": {
+  // Role writes are the Super Admin's alone (#241): everyone else is forbidden.
+  "public.create_role(name text, permissions text[], manages uuid[], managed_by uuid[])": {
     roles: ["authenticated"],
-    args: { name: "'Sample role'" },
-    agent: { refused: "not_permitted" },
+    args: {
+      name: "'Sample role'",
+      permissions: "array['leads.view']",
+      manages: "array[(select id from public.roles where name = 'Admissions Staff')]",
+      managed_by: "array[(select id from public.roles where name = 'Admissions Manager')]",
+    },
+    agent: { refused: "forbidden" },
   },
   // The signed-in agent's own name, code and state (#191): their own record,
   // never another agent's or any staff data. Staff and visitors get no row.
@@ -485,6 +491,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: {},
     agent: { returns: [] },
+  },
+  // Whether the caller manages staff on a role (#241): false for an agent.
+  "public.manages_role(role_id uuid)": {
+    roles: ["authenticated"],
+    args: { role_id: "(select id from public.roles where name = 'Admissions Staff')" },
+    agent: { returns: [false] },
   },
   "public.is_active_staff()": {
     roles: ["authenticated"],
@@ -790,7 +802,13 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       role_id: "(select id from public.roles where name = 'Admissions Staff')",
       name: "'Sample role'",
     },
-    agent: { refused: "not_permitted" },
+    agent: { refused: "forbidden" },
+  },
+  "public.reactivate_role(role_id uuid)": {
+    roles: ["authenticated"],
+    setup: "insert into public.roles (id, name, retired) values ('b0b0b0b0-0000-4000-8000-000000000241', 'Sample retired role', true)",
+    args: { role_id: "'b0b0b0b0-0000-4000-8000-000000000241'" },
+    agent: { refused: "forbidden" },
   },
   "public.request_discount(lead_id uuid, kind text, note text, request_id uuid)": {
     roles: ["authenticated"],
@@ -831,7 +849,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: {
       role_id: "'b0b0b0b0-0000-4000-8000-000000000188'",
     },
-    agent: { refused: "not_permitted" },
+    agent: { refused: "forbidden" },
   },
   "public.save_fee_schedule(schedule_year integer, amounts jsonb)": {
     roles: ["authenticated"],
@@ -923,6 +941,15 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  "public.set_role_manages(role_id uuid, managed_role_id uuid, manages boolean)": {
+    roles: ["authenticated"],
+    args: {
+      role_id: "(select id from public.roles where name = 'Accountant')",
+      managed_role_id: "(select id from public.roles where name = 'Admissions Staff')",
+      manages: "true",
+    },
+    agent: { refused: "forbidden" },
+  },
   "public.set_role_permission(role_id uuid, permission text, granted boolean)": {
     roles: ["authenticated"],
     args: {
@@ -930,7 +957,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       permission: "'leads.view'",
       granted: "true",
     },
-    agent: { refused: "not_permitted" },
+    agent: { refused: "forbidden" },
   },
   "public.start_agent_invite_batch(import_batch_id uuid, daily_cap integer, staff_reserve integer, batch_limit integer)": {
     roles: ["authenticated"],
@@ -1069,6 +1096,10 @@ export const RELATIONS: Record<string, RelationEntry> = {
     anon: ["select", "references", "trigger", "maintain"],
   },
   "public.reopening_requests": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
+  "public.role_managed_roles": {
     authenticated: ["select", "references", "trigger", "maintain"],
     anon: ["select", "references", "trigger", "maintain"],
   },
@@ -1219,6 +1250,14 @@ export const POLICIES: Record<string, PolicyEntry> = {
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
     check: null,
   },
+  // Managed sets (#241) are read by every active staff member; only the
+  // Super Admin writes them, through set_role_manages and create_role.
+  "public.role_managed_roles: Active staff read the managed sets": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT is_active_staff() AS is_active_staff)",
+    check: null,
+  },
   // The Super Admin role is never returned, to anyone (#237).
   "public.roles: Active staff read roles, never the Super Admin role": {
     command: "SELECT",
@@ -1232,12 +1271,13 @@ export const POLICIES: Record<string, PolicyEntry> = {
     using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
     check: null,
   },
-  // Administrators never read the Super Admin's record; the holder reads their own (#237).
-  "public.staff_members: Own record; administrators read all but the Super Admin": {
+  // The staff in the caller's managed set, every one for the Super Admin
+  // (#241); never the Super Admin's record but to the holder (#237).
+  "public.staff_members: Own record, and the staff the caller manages": {
     command: "SELECT",
     roles: ["authenticated"],
     using:
-      "(((user_id = ( SELECT auth.uid() AS uid)) AND active) OR (( SELECT has_permission('staff.administer'::text) AS has_permission) AND (role_id <> '5a000000-0000-4000-8000-000000000001'::uuid)))",
+      "(((user_id = ( SELECT auth.uid() AS uid)) AND active) OR ((role_id <> '5a000000-0000-4000-8000-000000000001'::uuid) AND manages_role(role_id)))",
     check: null,
   },
   "public.whatsapp_group_invitations: Staff who view leads read group invitations": {

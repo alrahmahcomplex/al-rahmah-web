@@ -5,18 +5,22 @@ import type { RoleSummary } from "@/lib/services/staff-admin"
 import { cn } from "@/lib/utils"
 
 import { NewRoleForm } from "./new-role-form"
+import { managesRole, type Viewer } from "./view"
 
-// Every role, with how many active staff hold it. Selecting one opens it in
-// the pane beside the rail. On a phone the rail is a strip that scrolls
+// Every role, with how many active staff hold it where the viewer manages
+// that role's staff. Selecting one opens it in the pane beside the rail.
+// Only the Super Admin gets New role (#241). On a phone the rail is a strip that scrolls
 // sideways, so the selected role's pane stays in view below it.
 export function RoleRail({
   roles,
   selectedId,
   yourRoleId,
+  viewer,
 }: {
   roles: RoleSummary[]
   selectedId: string
   yourRoleId: string | null
+  viewer: Viewer
 }) {
   return (
     <nav aria-label="Roles" className="min-w-0 rounded-xl bg-card p-2 ring-1 ring-foreground/10">
@@ -42,15 +46,17 @@ export function RoleRail({
                   )}
                 </span>
                 {role.retired && <Badge variant="ghost">Retired</Badge>}
-                <Badge variant="secondary" aria-label={`${role.activeHolders} active`}>
-                  {role.activeHolders}
-                </Badge>
+                {managesRole(viewer, role.id) && (
+                  <Badge variant="secondary" aria-label={`${role.activeHolders} active`}>
+                    {role.activeHolders}
+                  </Badge>
+                )}
               </Link>
             </li>
           )
         })}
       </ul>
-      <NewRoleForm />
+      {viewer.superAdmin && <NewRoleForm />}
     </nav>
   )
 }

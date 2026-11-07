@@ -19,11 +19,13 @@ export const PERMISSIONS = [
   "payments.record",
   "discounts.approve",
   "academic_years.manage",
-  "staff.administer",
   "group_links.manage",
   // The full audit history. No role can hold it: only the Super Admin, who
   // answers true for every permission, has it (#237).
   "audit.view",
+  // The Reports page (#241), once shown to holders of the retired
+  // staff.administer.
+  "reports.view",
 ] as const
 
 // Never offered on a role, so the Roles tab leaves it out.

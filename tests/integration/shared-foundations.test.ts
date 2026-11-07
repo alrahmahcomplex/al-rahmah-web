@@ -28,7 +28,7 @@ describe("the closure guard", () => {
   })
 
   test("lead_is_closed is forbidden to staff who may not view leads", async () => {
-    const outsider = await signedIn(await createThrowawayStaff(["staff.administer"]))
+    const outsider = await signedIn(await createThrowawayStaff([]))
     expect((await outsider.rpc("lead_is_closed", { lead_id: ARCHIVED })).error?.message).toBe("forbidden")
   })
 
@@ -80,7 +80,7 @@ describe("the expected interview amount stand-in", () => {
   })
 
   test("is refused as forbidden without leads.view, as not_found for a missing lead, and to anon", async () => {
-    const outsider = await signedIn(await createThrowawayStaff(["staff.administer"]))
+    const outsider = await signedIn(await createThrowawayStaff([]))
     expect((await outsider.rpc("expected_interview_amount", { lead_id: OPEN })).error?.message).toBe("forbidden")
 
     const staff = await signedIn(ADMISSIONS)

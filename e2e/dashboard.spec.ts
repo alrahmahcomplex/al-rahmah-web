@@ -203,7 +203,7 @@ test("changing the Leads by enrollment class filters leaves the Visited leads ti
   await expect(classes.getByTestId("classes-period")).toHaveText("All time · All years")
 })
 
-test("a role that does not administer staff is refused the Reports page", async ({ page }) => {
+test("a role that reads leads and payments but lacks reports.view sees no statistics", async ({ page }) => {
   const person = await createThrowawayStaff(["leads.view", "payments.view"])
   await page.goto("/login")
   await page.getByLabel("Email").fill(person.email)
@@ -287,8 +287,21 @@ test("Seats by class opens on the latest year with a Fee schedule and keeps a ch
   await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2027")
 })
 
-test("a role that administers staff but may not view leads is refused the Reports page too", async ({ page }) => {
-  const person = await createThrowawayStaff(["staff.administer"])
+test("a role holding reports.view finds Reports in the sidebar and opens it (#241)", async ({ page }) => {
+  const person = await createThrowawayStaff(["leads.view", "reports.view"])
+  await page.goto("/login")
+  await page.getByLabel("Email").fill(person.email)
+  await page.getByLabel("Password", { exact: true }).fill(person.password)
+  await page.getByRole("button", { name: "Log In" }).click()
+  await expect(page).toHaveURL(/\/staff$/)
+  await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" }).click()
+  await expect(page).toHaveURL(/\/staff\/reports$/)
+  await expect(page.getByRole("heading", { name: "Reports", level: 1 })).toBeVisible()
+  await expect(visitedPanel(page)).toBeVisible()
+})
+
+test("a role without reports.view is refused the Reports page, however much else it reads", async ({ page }) => {
+  const person = await createThrowawayStaff(["leads.view", "payments.view", "academic_years.manage"])
   await page.goto("/login")
   await page.getByLabel("Email").fill(person.email)
   await page.getByLabel("Password", { exact: true }).fill(person.password)
@@ -300,8 +313,8 @@ test("a role that administers staff but may not view leads is refused the Report
   await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" })).toHaveCount(0)
 })
 
-test("an administrator who does not manage academic years sees Seats by class without the Seats screen link", async ({ page }) => {
-  const person = await createThrowawayStaff(["leads.view", "payments.view", "staff.administer"])
+test("a Reports reader who does not manage academic years sees Seats by class without the Seats screen link", async ({ page }) => {
+  const person = await createThrowawayStaff(["leads.view", "payments.view", "reports.view"])
   await signIn(page, person)
   await page.goto("/staff/reports?seats_year=2031")
   await expect(seatsRow(page, "STD 2 Day").getByTestId("seats-left")).toHaveText("Over by 1")
@@ -309,7 +322,7 @@ test("an administrator who does not manage academic years sees Seats by class wi
 })
 
 test("staff without payments.view see the dashboard without Seats by class", async ({ page }) => {
-  const person = await createThrowawayStaff(["leads.view", "staff.administer"])
+  const person = await createThrowawayStaff(["leads.view", "reports.view"])
   await signIn(page, person)
 
   await expect(visitedPanel(page)).toBeVisible()

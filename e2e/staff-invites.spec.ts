@@ -5,7 +5,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test"
 import { firstName } from "@/app/staff/_today/greeting"
 
 import { inRolledBackTransaction } from "../tests/support/db"
-import { INVITED, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../tests/support/fixtures"
+import { INVITED, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { openStaffHistoryAsSuperAdmin } from "./super-admin"
 
 // Inviting staff end to end: the Manager invites from Staff and roles, the
@@ -97,12 +97,14 @@ async function setPassword(page: Page, password = "invitee-password") {
 
 const EXPIRED = "This invite link has expired or was already used. Ask an Admissions Manager to send a new one."
 
-test("a Manager invites someone, who sets a password from the email and lands on the staff side with the role's powers", async ({
+// The Super Admin invites the Admissions Manager, who manages staff in turn
+// (#241). Managers invite Admissions Staff in the tests below.
+test("the Super Admin invites a Manager, who sets a password from the email and lands on the staff side with the role's powers", async ({
   page,
   browser,
 }) => {
   const invitee = newInvitee()
-  await signIn(page, MANAGER)
+  await signIn(page, SUPER_ADMIN)
 
   await invite(page, "Admissions Manager", invitee)
 
@@ -141,7 +143,7 @@ test("a Manager invites someone, who sets a password from the email and lands on
   await openStaffHistoryAsSuperAdmin(page)
   await expect(
     page.getByRole("list", { name: "History" }).getByRole("listitem").filter({ hasText: `sent an invite to ${invitee.name}` }),
-  ).toContainText(MANAGER.name)
+  ).toContainText(SUPER_ADMIN.name)
 })
 
 test("an invite link that was already used says so and asks for a new one", async ({ page, browser }) => {
@@ -264,7 +266,7 @@ test("inviting an email already on staff is refused in the callout, and nothing 
 })
 
 test("the invite box is closed on a retired role, with the reason", async ({ page }) => {
-  await signIn(page, MANAGER)
+  await signIn(page, SUPER_ADMIN)
   await page.goto(`/staff/roles?role=${await roleId(RETIRED_ROLE.roleName)}`)
 
   await expect(page.getByRole("button", { name: "Send invite", exact: true })).toBeDisabled()

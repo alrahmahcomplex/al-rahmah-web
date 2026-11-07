@@ -20,7 +20,7 @@ import { findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/s
 
 import { registerApprovedAgent } from "../support/agents"
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Creating an agent and recreating a retired one (#189), through the
 // Manager's actions, against local Supabase. Every agent and lead is the
@@ -668,7 +668,7 @@ describe("an email belongs to one login: staff or agent", () => {
     const email = `agent-${randomUUID().slice(0, 8)}@example.test`
     const created = await createAgent(await signedIn(MANAGER), { fullName: name(), phone: phone(), email })
     expect(created.ok && created.data.kind).toBe("created")
-    const administrator = await signedIn(await createThrowawayStaff(["staff.administer"]))
+    const administrator = await signedIn(SUPER_ADMIN)
     const roleId = await inviteRoleId()
 
     const refused = await administrator.rpc("invite_staff_member", { full_name: "Staff Clash", email: email.toUpperCase(), role_id: roleId })
@@ -690,7 +690,7 @@ describe("an email belongs to one login: staff or agent", () => {
 
   test("an agent create and a staff invite of one email at once: the second waits and is refused", async () => {
     const roleId = await inviteRoleId()
-    const inviter = await createThrowawayStaff(["staff.administer"])
+    const inviter = SUPER_ADMIN
     for (const first of ["agent", "staff"] as const) {
       const email = `race-${randomUUID().slice(0, 8)}@example.test`
       const manager = await sessionOf(MANAGER)

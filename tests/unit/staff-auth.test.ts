@@ -9,7 +9,9 @@ const MANAGER_ROW = {
   email: "manager@example.test",
   active: true,
   role_name: "Admissions Manager",
-  permissions: ["leads.view", "staff.administer"],
+  permissions: ["leads.view", "agents.approve"],
+  super_admin: false,
+  managed_role_ids: ["7e000000-0000-4000-8000-000000000001"],
 }
 
 const MANAGER = {
@@ -17,7 +19,9 @@ const MANAGER = {
   name: "Test Manager",
   email: "manager@example.test",
   roleName: "Admissions Manager",
-  permissions: ["leads.view", "staff.administer"],
+  permissions: ["leads.view", "agents.approve"],
+  superAdmin: false,
+  managedRoleIds: ["7e000000-0000-4000-8000-000000000001"],
 }
 
 type StaffRecordResponse = { data: unknown; error: { message: string; code?: string } | null }
@@ -289,7 +293,7 @@ describe("requirePermission", () => {
   it("returns the staff member when their role holds the permission", async () => {
     const { client } = fakeSupabase()
 
-    expect(await requirePermission(client, "staff.administer")).toEqual({ ok: true, data: MANAGER })
+    expect(await requirePermission(client, "agents.approve")).toEqual({ ok: true, data: MANAGER })
   })
 
   it("is forbidden when their role does not hold the permission", async () => {

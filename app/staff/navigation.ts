@@ -26,15 +26,16 @@ export const NAV_GROUPS = ["Front desk", "Admissions", "Referrals", "Money", "Ad
 export type StaffNavGroup = (typeof NAV_GROUPS)[number]
 
 // An entry needs one permission, or any one of several, and also
-// `alsoNeeds` when its page shows nothing without it.
+// `alsoNeeds` when its page shows nothing without it. Staff and roles needs
+// no permission: it shows to the Super Admin and to holders of a role that
+// manages other roles' staff (#241), marked `managesStaff`.
 export type StaffNavEntry = {
   href: string
   label: string
   group: StaffNavGroup
   icon: LucideIcon
-  permission: Permission | readonly Permission[]
   alsoNeeds?: Permission
-}
+} & ({ permission: Permission | readonly Permission[]; managesStaff?: never } | { managesStaff: true; permission?: never })
 
 // The staff home. Everyone signed in sees it, so it needs no permission and
 // sits outside STAFF_NAV; the shell puts it first in Front desk.
@@ -80,8 +81,8 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
     permission: "reopenings.approve",
     alsoNeeds: "leads.view",
   },
-  { href: "/staff/reports", label: "Reports", group: "Admin", icon: ChartColumnIcon, permission: "staff.administer", alsoNeeds: "leads.view" },
-  { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: ShieldCheckIcon, permission: "staff.administer" },
+  { href: "/staff/reports", label: "Reports", group: "Admin", icon: ChartColumnIcon, permission: "reports.view" },
+  { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: ShieldCheckIcon, managesStaff: true },
   // The Super Admin's alone: no role can hold audit.view (#237).
   { href: "/staff/audit", label: "Audit", group: "Admin", icon: ScrollTextIcon, permission: "audit.view" },
 ]
@@ -89,8 +90,10 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
 export function navFor(
   permissions: readonly Permission[],
   entries: readonly StaffNavEntry[] = STAFF_NAV,
+  { managesStaff = false }: { managesStaff?: boolean } = {},
 ): StaffNavEntry[] {
   return entries.filter((entry) => {
+    if (entry.managesStaff) return managesStaff
     const accepted: readonly Permission[] = typeof entry.permission === "string" ? [entry.permission] : entry.permission
     if (entry.alsoNeeds && !permissions.includes(entry.alsoNeeds)) return false
     return accepted.some((permission) => permissions.includes(permission))

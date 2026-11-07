@@ -17,7 +17,6 @@ function fakes(answers: Record<string, RpcAnswer> = {}, sendAnswers: SendAnswer[
   const log: string[] = []
   const rpcArgs: Record<string, unknown> = {}
   const defaults: Record<string, RpcAnswer> = {
-    has_permission: { data: true },
     invite_staff_member: { data: INVITED },
     resendable_invite: { data: INVITED },
     record_action: { data: 1 },
@@ -42,14 +41,13 @@ beforeEach(() => {
 })
 
 describe("inviteStaff", () => {
-  it("checks the permission, creates the record, sends the invite, then records invite_sent", async () => {
+  it("creates the record, sends the invite, then records invite_sent", async () => {
     const { client, send, log, rpcArgs } = fakes()
 
     const result = await inviteStaff(client, send, details, REDIRECT)
 
     expect(result).toEqual({ ok: true, data: { ...INVITED, sent: true } })
-    expect(log).toEqual(["has_permission", "invite_staff_member", "send", "record_action"])
-    expect(rpcArgs.has_permission).toEqual({ permission: "staff.administer" })
+    expect(log).toEqual(["invite_staff_member", "send", "record_action"])
     expect(rpcArgs.invite_staff_member).toEqual({ full_name: "Zawadi Mrisho", email: "zawadi@example.test", role_id: "role-1" })
     expect(send).toHaveBeenCalledWith("zawadi@example.test", REDIRECT)
     expect(rpcArgs.record_action).toEqual({
@@ -59,25 +57,26 @@ describe("inviteStaff", () => {
     })
   })
 
-  it("stops before anything else when the caller cannot administer staff", async () => {
-    const { client, send, log } = fakes({ has_permission: { data: false } })
+  it("sends nothing when the caller manages no staff, or not that role's (#241)", async () => {
+    for (const [message, code] of [
+      ["not_permitted", "not_permitted"],
+      ["forbidden", "forbidden"],
+    ]) {
+      const { client, send, log } = fakes({ invite_staff_member: { error: { message } } })
 
-    const result = await inviteStaff(client, send, details, REDIRECT)
-
-    expect(result).toEqual({
-      ok: false,
-      error: { code: "not_permitted", message: `Your role doesn't include "Administer staff and roles".` },
-    })
-    expect(log).toEqual(["has_permission"])
+      expect(await inviteStaff(client, send, details, REDIRECT)).toMatchObject({ ok: false, error: { code } })
+      expect(log).toEqual(["invite_staff_member"])
+      expect(send).not.toHaveBeenCalled()
+    }
   })
 
-  it("fails closed when the permission check can't run", async () => {
-    const { client, send, log } = fakes({ has_permission: { error: { message: "fetch failed" } } })
+  it("fails closed when the database can't be reached", async () => {
+    const { client, send, log } = fakes({ invite_staff_member: { error: { message: "fetch failed" } } })
 
     const result = await inviteStaff(client, send, details, REDIRECT)
 
     expect(result).toMatchObject({ ok: false, error: { code: "unavailable" } })
-    expect(log).toEqual(["has_permission"])
+    expect(log).toEqual(["invite_staff_member"])
   })
 
   it("sends nothing when the database refuses the record", async () => {
@@ -99,7 +98,7 @@ describe("inviteStaff", () => {
         message: "amina@example.test already belongs to Amina Juma. Reactivate them instead of inviting again.",
       },
     })
-    expect(log).toEqual(["has_permission", "invite_staff_member"])
+    expect(log).toEqual(["invite_staff_member"])
   })
 
   it("says an active staff member already holds the email without asking to reactivate them", async () => {
@@ -131,7 +130,7 @@ describe("inviteStaff", () => {
         message: "amina@example.test belongs to a Marketing Agent. Staff and agents can't share an email, so use another one.",
       },
     })
-    expect(log).toEqual(["has_permission", "invite_staff_member"])
+    expect(log).toEqual(["invite_staff_member"])
   })
 
   it("keeps the record and reports the failure when the email can't be sent, recording no invite", async () => {
@@ -147,7 +146,7 @@ describe("inviteStaff", () => {
         failure: { code: "invite_not_sent", message: "The invite email could not be sent." },
       },
     })
-    expect(log).toEqual(["has_permission", "invite_staff_member", "send"])
+    expect(log).toEqual(["invite_staff_member", "send"])
   })
 
   it("reports the hourly email limit in words", async () => {
@@ -174,25 +173,25 @@ describe("inviteStaff", () => {
 })
 
 describe("resendInvite", () => {
-  it("checks the permission, looks up the Invited member, sends again, then records invite_sent", async () => {
+  it("looks up the Invited member, sends again, then records invite_sent", async () => {
     const { client, send, log, rpcArgs } = fakes()
 
     const result = await resendInvite(client, send, "staff-9", REDIRECT)
 
     expect(result).toEqual({ ok: true, data: INVITED })
-    expect(log).toEqual(["has_permission", "resendable_invite", "send", "record_action"])
+    expect(log).toEqual(["resendable_invite", "send", "record_action"])
     expect(rpcArgs.resendable_invite).toEqual({ staff_id: "staff-9" })
     expect(send).toHaveBeenCalledWith("zawadi@example.test", REDIRECT)
   })
 
-  it("sends nothing when the caller cannot administer staff", async () => {
-    const { client, send, log } = fakes({ has_permission: { data: false } })
+  it("sends nothing when the member is outside the caller's managed set", async () => {
+    const { client, send, log } = fakes({ resendable_invite: { error: { message: "forbidden" } } })
 
     expect(await resendInvite(client, send, "staff-9", REDIRECT)).toMatchObject({
       ok: false,
-      error: { code: "not_permitted" },
+      error: { code: "forbidden" },
     })
-    expect(log).toEqual(["has_permission"])
+    expect(log).toEqual(["resendable_invite"])
   })
 
   it("reports email_exists as already joined", async () => {
@@ -216,7 +215,7 @@ describe("resendInvite", () => {
       ok: false,
       error: { code: "invite_deactivated", message: "Zawadi Mrisho is deactivated. Reactivate them before resending the invite." },
     })
-    expect(log).toEqual(["has_permission", "resendable_invite"])
+    expect(log).toEqual(["resendable_invite"])
   })
 
   it("works after a failed first send", async () => {

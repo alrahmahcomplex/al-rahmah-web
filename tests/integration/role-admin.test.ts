@@ -3,19 +3,16 @@ import { randomUUID } from "node:crypto"
 import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn, withoutSuperAdmin } from "../support/db"
-import { ACCOUNTANT } from "../support/fixtures"
+import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { ACCOUNTANT, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The guardrailed role functions behind the Staff and roles screen, called
-// the way the screen calls them: as a signed-in administrator with the
-// publishable key. Each test makes its own roles, so parallel tests never
-// change the same one.
+// the way the screen calls them: as the signed-in Super Admin, the only one
+// who changes roles (#241), with the publishable key. Each test makes its
+// own roles, so parallel tests never change the same one.
 
-type Throwaway = Awaited<ReturnType<typeof createThrowawayStaff>>
-
-async function administrator(): Promise<{ person: Throwaway; client: SupabaseClient }> {
-  const person = await createThrowawayStaff(["staff.administer"])
-  return { person, client: await signedIn(person) }
+async function administrator(): Promise<{ person: typeof SUPER_ADMIN; client: SupabaseClient }> {
+  return { person: SUPER_ADMIN, client: await signedIn(SUPER_ADMIN) }
 }
 
 const uniqueName = (prefix: string) => `${prefix} ${randomUUID().slice(0, 8)}`
@@ -87,20 +84,20 @@ describe("who may call the role functions", () => {
     })
   }
 
-  test("not_permitted: a role without Administer staff and roles changes no role", async () => {
-    const { client: manager } = await administrator()
-    const role = await newRole(manager)
-    const client = await signedIn(ACCOUNTANT)
+  test("forbidden: nobody but the Super Admin changes a role, the Admissions Manager included (#241)", async () => {
+    const { client: superAdmin } = await administrator()
+    const role = await newRole(superAdmin)
 
-    expectRefusal(await client.rpc("create_role", { name: uniqueName("Refused") }), "not_permitted", {
-      role: "Accountant",
-    })
-    expectRefusal(await client.rpc("rename_role", { role_id: role.id, name: "Changed" }), "not_permitted")
-    expectRefusal(
-      await client.rpc("set_role_permission", { role_id: role.id, permission: "leads.view", granted: true }),
-      "not_permitted",
-    )
-    expectRefusal(await client.rpc("retire_role", { role_id: role.id }), "not_permitted")
+    for (const person of [ACCOUNTANT, MANAGER]) {
+      const client = await signedIn(person)
+      expectRefusal(await client.rpc("create_role", { name: uniqueName("Refused") }), "forbidden")
+      expectRefusal(await client.rpc("rename_role", { role_id: role.id, name: "Changed" }), "forbidden")
+      expectRefusal(
+        await client.rpc("set_role_permission", { role_id: role.id, permission: "leads.view", granted: true }),
+        "forbidden",
+      )
+      expectRefusal(await client.rpc("retire_role", { role_id: role.id }), "forbidden")
+    }
     expect(await roleRow(role.id)).toEqual({ name: role.name, permissions: [], retired: false })
   })
 
@@ -198,22 +195,13 @@ describe("rename_role", () => {
     expect((await roleRow(role.id)).name).toBe(role.name)
   })
 
-  test("role_you_hold: nobody renames the role they hold", async () => {
-    const { person, client } = await administrator()
-
-    // Their role administers staff too, so it is frozen as well. The
-    // database reports the role you hold first, since that is what the
-    // person can act on.
-    expectRefusal(await client.rpc("rename_role", { role_id: person.roleId, name: "Mine now" }), "role_you_hold")
-    expect((await roleRow(person.roleId)).name).toBe(person.roleName)
-  })
-
-  test("administer_role_frozen: a role that administers staff is not renamed", async () => {
+  test("the Admissions Manager role is ordinary data: renaming it is refused only for a taken name", async () => {
     const { client } = await administrator()
 
     expectRefusal(
-      await client.rpc("rename_role", { role_id: await roleId("Admissions Manager"), name: "Head of Admissions" }),
-      "administer_role_frozen",
+      await client.rpc("rename_role", { role_id: await roleId("Admissions Manager"), name: "Accountant" }),
+      "duplicate_role_name",
+      { role: "Accountant" },
     )
   })
 
@@ -289,44 +277,20 @@ describe("set_role_permission", () => {
     expect((await roleRow(role.id)).permissions).toEqual(["leads.view"])
   })
 
-  test("administer_role_frozen: Administer staff and roles is never granted on the screen", async () => {
-    const { client } = await administrator()
-    const role = await newRole(client)
-
-    expectRefusal(
-      await client.rpc("set_role_permission", { role_id: role.id, permission: "staff.administer", granted: true }),
-      "administer_role_frozen",
-    )
-    expect((await roleRow(role.id)).permissions).toEqual([])
-  })
-
-  test("administer_role_frozen: a role that administers staff keeps its permissions", async () => {
+  test("the Admissions Manager role takes permission changes like any other (#241)", async () => {
     const { client } = await administrator()
     const manager = await roleId("Admissions Manager")
     const before = (await roleRow(manager)).permissions
 
-    expectRefusal(
-      await client.rpc("set_role_permission", { role_id: manager, permission: "staff.administer", granted: false }),
-      "administer_role_frozen",
-    )
-    expectRefusal(
-      await client.rpc("set_role_permission", { role_id: manager, permission: "leads.view", granted: false }),
-      "administer_role_frozen",
-    )
-    expectRefusal(
-      await client.rpc("set_role_permission", { role_id: manager, permission: "payments.record", granted: true }),
-      "administer_role_frozen",
-    )
+    // Ticking one it already holds goes through and changes nothing, so the
+    // shared fixture is left as it was.
+    expect((await client.rpc("set_role_permission", { role_id: manager, permission: "leads.view", granted: true })).error).toBeNull()
     expect((await roleRow(manager)).permissions).toEqual(before)
   })
 
-  test("role_you_hold and role_retired", async () => {
-    const { person, client } = await administrator()
+  test("role_retired", async () => {
+    const { client } = await administrator()
 
-    expectRefusal(
-      await client.rpc("set_role_permission", { role_id: person.roleId, permission: "leads.view", granted: true }),
-      "role_you_hold",
-    )
     expectRefusal(
       await client.rpc("set_role_permission", {
         role_id: await roleId("Receptionist"),
@@ -409,43 +373,20 @@ describe("retire_role", () => {
     expect(await auditRows(role.id)).toHaveLength(before)
   })
 
-  test("role_you_hold and administer_role_frozen", async () => {
-    const { person, client } = await administrator()
+  test("the Admissions Manager role is retired like any other, once nobody active holds it", async () => {
+    const { client } = await administrator()
 
-    expectRefusal(await client.rpc("retire_role", { role_id: person.roleId }), "role_you_hold")
-    expectRefusal(
-      await client.rpc("retire_role", { role_id: await roleId("Admissions Manager") }),
-      "administer_role_frozen",
-    )
-    expect((await roleRow(person.roleId)).retired).toBe(false)
+    expectRefusal(await client.rpc("retire_role", { role_id: await roleId("Admissions Manager") }), "role_has_active_holders")
   })
 })
 
-describe("no_administrator_left on roles", () => {
-  // The app can never reach this, because roles that administer staff are
-  // frozen there. The rule still covers the SQL editor and the secret key.
-  test("taking Administer staff and roles off every role that holds it is refused, for the database owner too", async () => {
+describe("no last-administrator guard on roles (#241)", () => {
+  test("retiring every role but the Super Admin's goes through in SQL", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       await lockExclusively(sql, ["public.staff_members", "public.roles"])
-      await withoutSuperAdmin(sql)
 
-      await expect(
-        sql.query(`update public.roles set permissions = array_remove(permissions, 'staff.administer')
-                   where 'staff.administer' = any (permissions)`),
-      ).rejects.toThrow("no_administrator_left")
-    })
-  })
-
-  test("retiring every role that administers staff is refused too", async () => {
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await lockExclusively(sql, ["public.staff_members", "public.roles"])
-      await withoutSuperAdmin(sql)
-
-      await expect(
-        sql.query("update public.roles set retired = true where 'staff.administer' = any (permissions)"),
-      ).rejects.toThrow("no_administrator_left")
+      await sql.query("update public.roles set retired = true where id <> $1", [SUPER_ADMIN.roleId])
     })
   })
 })

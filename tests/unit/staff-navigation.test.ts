@@ -12,7 +12,7 @@ import {
 } from "@/app/staff/navigation"
 
 const ENTRIES: StaffNavEntry[] = [
-  { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: STAFF_HOME.icon, permission: "staff.administer" },
+  { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: STAFF_HOME.icon, permission: "academic_years.manage" },
   { href: "/staff/leads", label: "Leads", group: "Admissions", icon: STAFF_HOME.icon, permission: "leads.view" },
 ]
 
@@ -36,14 +36,14 @@ const ADMISSIONS_MANAGER = [
   "agents.approve",
   "discounts.approve",
   "academic_years.manage",
-  "staff.administer",
+  "reports.view",
 ] as const
 const ACCOUNTANT = ["leads.view", "interview_payments.record", "payments.view", "payments.record"] as const
 
 describe("navFor", () => {
   it("shows only the entries whose permission the staff member holds, in order", () => {
     expect(navFor(["leads.view", "payments.view"], ENTRIES)).toEqual([ENTRIES[1]])
-    expect(navFor(["staff.administer", "leads.view"], ENTRIES)).toEqual(ENTRIES)
+    expect(navFor(["academic_years.manage", "leads.view"], ENTRIES)).toEqual(ENTRIES)
   })
 
   it("shows nothing to a role with no matching permission", () => {
@@ -60,7 +60,16 @@ describe("navFor", () => {
     }
     expect(navFor(["payments.view"], [either])).toEqual([either])
     expect(navFor(["leads.view"], [either])).toEqual([either])
-    expect(navFor(["staff.administer"], [either])).toEqual([])
+    expect(navFor(["academic_years.manage"], [either])).toEqual([])
+  })
+
+  it("shows Staff and roles to whoever manages staff, whatever their permissions (#241)", () => {
+    const roles = STAFF_NAV.find((entry) => entry.label === "Staff and roles")
+    expect(roles).toMatchObject({ href: "/staff/roles", group: "Admin", managesStaff: true })
+    expect(roles).not.toHaveProperty("permission")
+    expect(navFor([...ADMISSIONS_MANAGER])).not.toContain(roles)
+    expect(navFor([...ADMISSIONS_MANAGER], undefined, { managesStaff: false })).not.toContain(roles)
+    expect(navFor([], undefined, { managesStaff: true })).toEqual([roles])
   })
 })
 
@@ -137,11 +146,13 @@ describe("the staff navigation", () => {
     expect(navFor(["leads.view", "payments.view", "payments.record"])).not.toContain(reopenings)
   })
 
-  it("shows Reports, the old dashboard, to staff who administer the staff side and may view leads", () => {
+  it("shows Reports, the old dashboard, to holders of reports.view alone (#241)", () => {
     const reports = STAFF_NAV.find((entry) => entry.label === "Reports")
-    expect(reports).toMatchObject({ href: "/staff/reports", group: "Admin", permission: "staff.administer", alsoNeeds: "leads.view" })
+    expect(reports).toMatchObject({ href: "/staff/reports", group: "Admin", permission: "reports.view" })
+    expect(reports?.alsoNeeds).toBeUndefined()
     expect(navFor(ADMISSIONS_MANAGER)).toContain(reports)
-    expect(navFor(["staff.administer"])).not.toContain(reports)
+    expect(navFor(["reports.view"])).toContain(reports)
+    expect(navFor(["leads.view"])).not.toContain(reports)
     expect(navFor(ADMISSIONS_STAFF)).not.toContain(reports)
     expect(navFor(ACCOUNTANT)).not.toContain(reports)
   })
@@ -151,7 +162,7 @@ describe("groupNav", () => {
   const names = (groups: { name: StaffNavGroup }[]) => groups.map((group) => group.name)
 
   it("keeps the sidebar's group order and each group's entries in the order given", () => {
-    const grouped = groupNav([STAFF_HOME, ...navFor(ADMISSIONS_MANAGER)])
+    const grouped = groupNav([STAFF_HOME, ...navFor(ADMISSIONS_MANAGER, undefined, { managesStaff: true })])
     expect(names(grouped)).toEqual(["Front desk", "Admissions", "Referrals", "Money", "Admin"])
     expect(grouped[0].entries.map((entry) => entry.label)).toEqual(["Today", "Check-in", "Register a student"])
     expect(grouped[4].entries.map((entry) => entry.label)).toEqual(["Discount requests", "Reopening requests", "Reports", "Staff and roles"])

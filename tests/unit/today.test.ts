@@ -25,7 +25,7 @@ const ADMISSIONS_MANAGER = [
   "agents.approve",
   "discounts.approve",
   "academic_years.manage",
-  "staff.administer",
+  "reports.view",
 ] as const
 const ACCOUNTANT = ["leads.view", "interview_payments.record", "payments.view", "payments.record"] as const
 

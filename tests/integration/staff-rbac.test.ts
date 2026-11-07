@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import { describe, expect, test } from "vitest"
 
 import { PERMISSIONS } from "@/lib/permissions"
+import { roleTemplate, ROLE_TEMPLATES } from "@/lib/role-templates"
 
 import {
   anonClient,
@@ -26,46 +27,22 @@ const SLICE_ONE_TABLES = [
   "audit_action_kinds",
 ] as const
 
-// The starting roles' grants, from the table in CONTEXT.md.
-const STARTING_GRANTS: Record<string, string[]> = {
-  "Admissions Staff": [
-    "follow_ups.record",
-    "group_links.manage",
-    "interviews.record",
-    "leads.close",
-    "leads.create",
-    "leads.decline",
-    "leads.edit",
-    "leads.view",
-    "payments.view",
-    "results.send",
-    "visits.record",
-  ],
-  "Admissions Manager": [
-    "academic_years.manage",
-    "agents.approve",
-    "discounts.approve",
-    "follow_ups.record",
-    "group_links.manage",
-    "interviews.record",
-    "leads.close",
-    "leads.create",
-    "leads.decline",
-    "leads.edit",
-    "leads.view",
-    "lifecycle.intervene",
-    "payments.view",
-    "reopenings.approve",
-    "results.send",
-    "staff.administer",
-    "visits.record",
-  ],
-  Accountant: ["interview_payments.record", "leads.view", "payments.record", "payments.view"],
-}
+// The three roles the local seed recreates, with their templates' grants
+// (#241, lib/role-templates.ts). Hosted starts with none of them.
+const STARTING_GRANTS: Record<string, string[]> = Object.fromEntries(
+  ["Admissions Staff", "Admissions Manager", "Accountant"].map((name) => [name, [...roleTemplate(name)!.permissions].sort()]),
+)
 
 // A lead from supabase/seeds/00_base.sql. audit_log.lead_id references leads, so a lead id
 // in the log must name one that exists.
 const SEEDED_LEAD_ID = "1ead0000-0000-4000-8000-000000000001"
+
+// supabase/seeds/00_base.sql recreates the three roles under fixed ids.
+const SEEDED_ROLE_IDS: Record<string, string> = {
+  "Admissions Staff": "7e000000-0000-4000-8000-000000000001",
+  "Admissions Manager": "7e000000-0000-4000-8000-000000000002",
+  Accountant: "7e000000-0000-4000-8000-000000000003",
+}
 
 async function hasPermission(person: FixtureStaff, permission: string) {
   const { data, error } = await (await signedIn(person)).rpc("has_permission", { permission })
@@ -107,7 +84,8 @@ describe("permissions and roles", () => {
       .order("position")
 
     expect(data?.map((p) => p.name)).toEqual([...PERMISSIONS])
-    expect(data?.find((p) => p.name === "staff.administer")?.label).toBe("Administer staff and roles")
+    // Retired with roles v2 (#241): the managed set grants staff management.
+    expect(data?.map((p) => p.name)).not.toContain("staff.administer")
     for (const permission of data ?? []) expect(permission.label).not.toBe("")
   })
 
@@ -118,7 +96,7 @@ describe("permissions and roles", () => {
     }
   })
 
-  test("the three starting roles hold the grants in CONTEXT.md", async () => {
+  test("the three seeded roles hold their templates' grants", async () => {
     const { data } = await (await signedIn(ACCOUNTANT))
       .from("roles")
       .select("name, permissions")
@@ -138,10 +116,14 @@ describe("permissions and roles", () => {
   })
 
   const cases: [FixtureStaff, string, boolean][] = [
-    [MANAGER, "staff.administer", true],
+    [MANAGER, "agents.approve", true],
     [MANAGER, "payments.record", false],
+    [MANAGER, "staff.administer", false],
+    [MANAGER, "reports.view", true],
+    [ADMISSIONS, "reports.view", false],
+    [ACCOUNTANT, "reports.view", false],
     [ADMISSIONS, "leads.create", true],
-    [ADMISSIONS, "staff.administer", false],
+    [ADMISSIONS, "agents.approve", false],
     [ACCOUNTANT, "payments.record", true],
     [ACCOUNTANT, "leads.edit", false],
     [DEACTIVATED, "leads.view", false],
@@ -181,6 +163,8 @@ describe("permissions and roles", () => {
       active: true,
       role_name: "Accountant",
       permissions: STARTING_GRANTS.Accountant,
+      super_admin: false,
+      managed_role_ids: [],
     })
   })
 
@@ -197,19 +181,36 @@ describe("permissions and roles", () => {
     expect((await client.from("staff_members").select("id")).data).toEqual([])
   })
 
-  test("staff without Administer staff and roles read only their own staff record", async () => {
+  test("staff whose role manages nobody read only their own staff record", async () => {
     const { data } = await (await signedIn(ADMISSIONS)).from("staff_members").select("id")
 
     expect(data).toEqual([{ id: ADMISSIONS.id }])
   })
 
-  test("administrators read every staff record, deactivated ones included", async () => {
+  test("the Manager reads their own record and the Admissions Staff they manage, deactivated ones included (#241)", async () => {
     const { data } = await (await signedIn(MANAGER)).from("staff_members").select("id")
     const ids = data?.map((row) => row.id) ?? []
 
-    for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT, DEACTIVATED, RETIRED_ROLE]) {
+    for (const person of [MANAGER, ADMISSIONS, DEACTIVATED]) expect(ids).toContain(person.id)
+    for (const person of [ACCOUNTANT, RETIRED_ROLE, SUPER_ADMIN]) expect(ids).not.toContain(person.id)
+  })
+
+  test("the Super Admin reads every staff record, their own included", async () => {
+    const { data } = await (await signedIn(SUPER_ADMIN)).from("staff_members").select("id")
+    const ids = data?.map((row) => row.id) ?? []
+
+    for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT, DEACTIVATED, RETIRED_ROLE, SUPER_ADMIN]) {
       expect(ids).toContain(person.id)
     }
+  })
+
+  test("current_staff_member names the Super Admin and each role's managed set", async () => {
+    type Row = { super_admin: boolean; managed_role_ids: string[] }
+    const asSuperAdmin = await (await signedIn(SUPER_ADMIN)).rpc("current_staff_member").single<Row>()
+    const asManager = await (await signedIn(MANAGER)).rpc("current_staff_member").single<Row>()
+
+    expect(asSuperAdmin.data).toMatchObject({ super_admin: true, managed_role_ids: [] })
+    expect(asManager.data).toMatchObject({ super_admin: false, managed_role_ids: [SEEDED_ROLE_IDS["Admissions Staff"]] })
   })
 
   test("has_permission turns false on the next request after deactivation", async () => {
@@ -552,5 +553,62 @@ describe("record_action", () => {
     const { error } = await (await signedIn(MANAGER)).rpc("record_action", { kind: "made_up" })
 
     expect(error?.message).toBe("unknown_action_kind")
+  })
+})
+
+// Roles v2 (#241): only the Super Admin changes roles, and does each change.
+// The refusals for everyone else are in tests/integration/roles-v2.test.ts
+// and the api-surface test.
+describe("the Super Admin changes every role", () => {
+  const unique = (name: string) => `${name} ${randomUUID().slice(0, 8)}`
+
+  test("creates a role from each template in one call, with its permissions and managed set", async () => {
+    const client = await signedIn(SUPER_ADMIN)
+    const made: Record<string, string> = {}
+    for (const template of ROLE_TEMPLATES) {
+      const manages = template.manages.map((name) => made[name])
+      const { data, error } = await client.rpc("create_role", {
+        name: unique(template.name),
+        permissions: template.permissions,
+        manages,
+        managed_by: [],
+      })
+      expect(error, template.name).toBeNull()
+      made[template.name] = data.id
+    }
+
+    const { rows } = await inRolledBackTransaction((sql) =>
+      sql.query<{ id: string; permissions: string[]; manages: string[] }>(
+        `select r.id, r.permissions,
+                array(select m.managed_role_id::text from public.role_managed_roles m where m.role_id = r.id and m.active order by 1) as manages
+         from public.roles r where r.id = any ($1)`,
+        [Object.values(made)],
+      ),
+    )
+    for (const template of ROLE_TEMPLATES) {
+      const row = rows.find((r) => r.id === made[template.name])!
+      expect(row.permissions, template.name).toEqual([...template.permissions].sort())
+      expect(row.manages, template.name).toEqual(template.manages.map((name) => made[name]).sort())
+    }
+  })
+
+  test("edits the permissions of a role, retires it, reactivates it and changes its managed set", async () => {
+    const client = await signedIn(SUPER_ADMIN)
+    const role = (await client.rpc("create_role", { name: unique("Edited role") })).data as { id: string }
+
+    expect((await client.rpc("set_role_permission", { role_id: role.id, permission: "leads.view", granted: true })).error).toBeNull()
+    expect((await client.rpc("set_role_manages", { role_id: role.id, managed_role_id: SEEDED_ROLE_IDS.Accountant, manages: true })).error).toBeNull()
+    expect((await client.rpc("set_role_manages", { role_id: role.id, managed_role_id: SEEDED_ROLE_IDS.Accountant, manages: false })).error).toBeNull()
+    expect((await client.rpc("retire_role", { role_id: role.id })).error).toBeNull()
+    expect((await client.rpc("reactivate_role", { role_id: role.id })).error).toBeNull()
+
+    const { rows } = await inRolledBackTransaction((sql) =>
+      sql.query(
+        `select r.permissions, r.retired, m.active as manages
+         from public.roles r left join public.role_managed_roles m on m.role_id = r.id where r.id = $1`,
+        [role.id],
+      ),
+    )
+    expect(rows).toEqual([{ permissions: ["leads.view"], retired: false, manages: false }])
   })
 })

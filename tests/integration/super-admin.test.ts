@@ -79,10 +79,14 @@ describe("the Super Admin is invisible", () => {
       ["correct_staff_name", { staff_id: SUPER_ADMIN.id, full_name: "Someone Else" }, "not_found"],
       ["resendable_invite", { staff_id: SUPER_ADMIN.id }, "not_found"],
       ["invite_staff_member", { full_name: "Into Super Admin", email: newEmail(), role_id: SUPER_ADMIN.roleId }, "not_found"],
-      ["invite_staff_member", { full_name: "Same Email", email: SUPER_ADMIN.email, role_id: managerRole }, "email_taken"],
-      ["rename_role", { role_id: SUPER_ADMIN.roleId, name: "Renamed" }, "not_found"],
-      ["set_role_permission", { role_id: SUPER_ADMIN.roleId, permission: "leads.view", granted: false }, "not_found"],
-      ["retire_role", { role_id: SUPER_ADMIN.roleId }, "not_found"],
+      ["invite_staff_member", { full_name: "Same Email", email: SUPER_ADMIN.email, role_id: await roleId("Admissions Staff") }, "email_taken"],
+      // Role writes are the Super Admin's alone (#241), so a Manager is
+      // refused before the role is even looked up.
+      ["rename_role", { role_id: SUPER_ADMIN.roleId, name: "Renamed" }, "forbidden"],
+      ["set_role_permission", { role_id: SUPER_ADMIN.roleId, permission: "leads.view", granted: false }, "forbidden"],
+      ["retire_role", { role_id: SUPER_ADMIN.roleId }, "forbidden"],
+      ["reactivate_role", { role_id: SUPER_ADMIN.roleId }, "forbidden"],
+      ["set_role_manages", { role_id: managerRole, managed_role_id: SUPER_ADMIN.roleId, manages: true }, "forbidden"],
     ]
     for (const [fn, args, code] of calls) {
       const { error } = await client.rpc(fn, args)
@@ -97,17 +101,31 @@ describe("the Super Admin is invisible", () => {
     expect(result).toEqual({ ok: false, error: { kind: "email-taken", holder: "login", name: null, code: null } })
   })
 
-  test("audit.view reads as an unknown permission on any role", async () => {
-    const created = await (await signedIn(SUPER_ADMIN)).rpc("create_role", { name: `Audit probe ${randomUUID().slice(0, 8)}` })
-    expect(created.error).toBeNull()
-    for (const person of [MANAGER, SUPER_ADMIN]) {
-      const { error } = await (await signedIn(person)).rpc("set_role_permission", {
-        role_id: created.data.id,
-        permission: "audit.view",
-        granted: true,
-      })
-      expect(error?.message, person.name).toBe("unknown_permission")
+  test("the Super Admin's own role reads as not_found to the Super Admin's role writes", async () => {
+    const client = await signedIn(SUPER_ADMIN)
+    const managerRole = await roleId("Admissions Manager")
+    const calls: [string, Record<string, unknown>][] = [
+      ["rename_role", { role_id: SUPER_ADMIN.roleId, name: "Renamed" }],
+      ["set_role_permission", { role_id: SUPER_ADMIN.roleId, permission: "leads.view", granted: false }],
+      ["retire_role", { role_id: SUPER_ADMIN.roleId }],
+      ["reactivate_role", { role_id: SUPER_ADMIN.roleId }],
+      ["set_role_manages", { role_id: managerRole, managed_role_id: SUPER_ADMIN.roleId, manages: true }],
+      ["set_role_manages", { role_id: SUPER_ADMIN.roleId, managed_role_id: managerRole, manages: true }],
+      ["create_role", { name: `Over the top ${randomUUID().slice(0, 8)}`, managed_by: [SUPER_ADMIN.roleId] }],
+    ]
+    for (const [fn, args] of calls) {
+      expect((await client.rpc(fn, args)).error?.message, `${fn} ${JSON.stringify(args)}`).toBe("not_found")
     }
+  })
+
+  test("audit.view reads as an unknown permission on any role", async () => {
+    const client = await signedIn(SUPER_ADMIN)
+    const created = await client.rpc("create_role", { name: `Audit probe ${randomUUID().slice(0, 8)}` })
+    expect(created.error).toBeNull()
+    const { error } = await client.rpc("set_role_permission", { role_id: created.data.id, permission: "audit.view", granted: true })
+    expect(error?.message).toBe("unknown_permission")
+    const withIt = await client.rpc("create_role", { name: `Audit probe ${randomUUID().slice(0, 8)}`, permissions: ["audit.view"] })
+    expect(withIt.error?.message).toBe("unknown_permission")
   })
 })
 
@@ -190,15 +208,17 @@ describe("the Super Admin administers everything", () => {
     }
   })
 
-  test("creates a role and ticks its permissions, but leaves the Admissions Manager role to migrations (decision 1)", async () => {
+  test("creates a role and ticks its permissions, and edits the Admissions Manager role like any other (#241)", async () => {
     const client = await signedIn(SUPER_ADMIN)
     const created = await client.rpc("create_role", { name: `Made role ${randomUUID().slice(0, 8)}` })
     expect(created.error).toBeNull()
     expect((await client.rpc("set_role_permission", { role_id: created.data.id, permission: "leads.view", granted: true })).error).toBeNull()
 
+    // Ticking a permission the role holds already changes nothing, so the
+    // shared fixture stays as it was; the point is that it isn't refused.
     const managerRole = await roleId("Admissions Manager")
-    const { error } = await client.rpc("set_role_permission", { role_id: managerRole, permission: "leads.view", granted: false })
-    expect(error?.message).toBe("administer_role_frozen")
+    const { error } = await client.rpc("set_role_permission", { role_id: managerRole, permission: "leads.view", granted: true })
+    expect(error).toBeNull()
   })
 
   test("deactivates and reactivates an Admissions Manager, and moves them to another role", async () => {

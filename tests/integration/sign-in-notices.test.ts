@@ -3,14 +3,13 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { Client } from "pg"
 
 import { anonClient, asStaffActor, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { SUPER_ADMIN } from "../support/fixtures"
 
 // Sign-in notices (ADR 4): the changes to someone's own role or active state
 // that another actor made since they last dismissed their notices. Read and
 // dismissed the way the staff home does it, as the signed-in person with the
 // publishable key. Each test makes its own staff members so parallel tests
 // never change the same person.
-
-type Throwaway = Awaited<ReturnType<typeof createThrowawayStaff>>
 
 type NoticeRow = {
   id: number
@@ -22,9 +21,10 @@ type NoticeRow = {
   active: boolean | null
 }
 
-async function administrator(): Promise<{ person: Throwaway; client: SupabaseClient }> {
-  const person = await createThrowawayStaff(["staff.administer"])
-  return { person, client: await signedIn(person) }
+// The Super Admin manages every role's staff (#241), so they make the
+// changes these notices are about.
+async function administrator(): Promise<{ person: typeof SUPER_ADMIN; client: SupabaseClient }> {
+  return { person: SUPER_ADMIN, client: await signedIn(SUPER_ADMIN) }
 }
 
 async function roleId(name: string): Promise<string> {

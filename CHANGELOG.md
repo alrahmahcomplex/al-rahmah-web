@@ -5,6 +5,30 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 7, 2026 `v0.85.0`
+
+### NEW
+
+- The Super Admin creates every role from five templates: Admissions Staff, Admissions
+  Manager, Accountant, Head Accountant and Administrator. New role on Staff and roles
+  offers each one; the new role arrives with the template's permissions and with the
+  roles it manages, and the Super Admin can change any of it afterwards. After the reset
+  no role exists until the Super Admin creates it.
+- Each role has a managed set: the roles whose staff its holders may invite, resend an
+  invite to, deactivate, reactivate and move between. An Admissions Manager manages the
+  Admissions Staff, a Head Accountant the Accountants, and an Administrator the Managers
+  and Head Accountants. Someone whose role manages nobody no longer sees Staff and roles.
+- Reports has its own permission, "View reports". The Admissions Manager, Head
+  Accountant and Administrator templates include it, and the Super Admin can tick it on
+  any role.
+
+### IMPROVED
+
+- Only the Super Admin changes roles: creating, renaming, retiring, reactivating, ticking
+  permissions and setting managed sets. A Manager reads every role's name and
+  permissions with no controls to change them. The Admissions Manager role is no longer
+  locked, and the "Administer staff and roles" permission is gone.
+
 ## November 7, 2026 `v0.84.0`
 
 ### NEW

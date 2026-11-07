@@ -28,7 +28,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ADMINISTER_LABEL, refusal, type PermissionOption } from "@/lib/services/staff-admin"
+import { refusal, type PermissionOption } from "@/lib/services/staff-admin"
 import { cn } from "@/lib/utils"
 
 import {
@@ -36,10 +36,12 @@ import {
   deactivateStaffMember,
   inviteStaffMember,
   moveStaffMember,
+  reactivateRoleNow,
   reactivateStaffMember,
   renameRoleTo,
   resendStaffInvite,
   retireRoleNow,
+  setManagedRole,
   setPermission,
   type ChangeOutcome,
 } from "./actions"
@@ -48,8 +50,8 @@ import type { PersonView, RoleOption, RoleView } from "./view"
 type Run = (change: () => Promise<ChangeOutcome>) => void
 type Track = (change: () => Promise<ChangeOutcome>) => Promise<ChangeOutcome>
 
-// A change that takes "Administer staff and roles" from a fellow Manager, or
-// retires a role, waits here until the person confirms it.
+// A change that stops someone managing staff, or retires a role, waits here
+// until the person confirms it.
 type PendingConfirmation = { title: string; description: string; action: string; change: () => Promise<ChangeOutcome> }
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
@@ -71,8 +73,8 @@ export function RolePane({
   const [pending, startTransition] = useTransition()
   const subtitleId = useId()
   const retireReasonId = useId()
-  const administerNoteId = useId()
   const permissionIdPrefix = useId()
+  const managedIdPrefix = useId()
 
   const run: Run = (change) => {
     startTransition(async () => {
@@ -116,33 +118,41 @@ export function RolePane({
             {role.subtitle}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={pending || !role.editable}
-            aria-describedby={role.editable ? undefined : subtitleId}
-            onClick={() => setRenaming(true)}
-          >
-            Rename
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={pending || !role.editable || role.retireBlocked !== null}
-            aria-describedby={role.editable ? (role.retireBlocked ? retireReasonId : undefined) : subtitleId}
-            onClick={() =>
-              setConfirmation({
-                title: `Retire ${role.name}?`,
-                description: `Nobody can be given ${role.name} once it is retired, and it can't be brought back. It stays in history, with the people who held it.`,
-                action: "Retire role",
-                change: () => retireRoleNow(role.id),
-              })
-            }
-          >
-            Retire role
-          </Button>
-        </div>
+        {role.canEditRoles && (
+          <div className="flex flex-wrap items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pending || !role.editable}
+              aria-describedby={role.editable ? undefined : subtitleId}
+              onClick={() => setRenaming(true)}
+            >
+              Rename
+            </Button>
+            {role.retired ? (
+              <Button variant="outline" size="sm" disabled={pending} onClick={() => run(() => reactivateRoleNow(role.id))}>
+                Reactivate role
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pending || role.retireBlocked !== null}
+                aria-describedby={role.retireBlocked ? retireReasonId : undefined}
+                onClick={() =>
+                  setConfirmation({
+                    title: `Retire ${role.name}?`,
+                    description: `Nobody can be given ${role.name} while it is retired. It stays in history, with the people who held it, and you can reactivate it later.`,
+                    action: "Retire role",
+                    change: () => retireRoleNow(role.id),
+                  })
+                }
+              >
+                Retire role
+              </Button>
+            )}
+          </div>
+        )}
         {role.retireBlocked && (
           <p id={retireReasonId} className="basis-full text-xs text-muted-foreground">
             {role.retireBlocked}
@@ -150,79 +160,132 @@ export function RolePane({
         )}
       </header>
 
-      <fieldset aria-describedby={role.editable ? undefined : subtitleId}>
-        <legend className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          What this role can do
-        </legend>
-        <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
-          {permissions.map((permission) => {
-            const held = role.permissions.includes(permission.name)
-            const administer = permission.name === "staff.administer"
-            const checkboxId = `${permissionIdPrefix}-${permission.name}`
-            return (
-              <li key={permission.name} className="flex items-start gap-2 py-1 text-sm">
-                <Checkbox
-                  id={checkboxId}
-                  // Base UI marks a disabled checkbox with data-disabled, not :disabled.
-                  className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
-                  checked={held}
-                  disabled={pending || !role.editable || administer}
-                  aria-describedby={administer ? administerNoteId : undefined}
-                  onCheckedChange={(granted) =>
-                    run(async () => {
-                      const outcome = await setPermission(role.id, permission.name, granted)
-                      if (!outcome.ok) return outcome
-                      return {
-                        ok: true,
-                        message: granted
-                          ? `${role.name} can now: ${permission.label}.`
-                          : `${role.name} can no longer: ${permission.label}.`,
-                      }
-                    })
-                  }
-                />
-                <span className="flex flex-col gap-0.5">
-                  <Label
-                    htmlFor={checkboxId}
-                    className={cn("font-normal", !held && "text-muted-foreground")}
-                  >
+      {role.canEditRoles ? (
+        <fieldset aria-describedby={role.editable ? undefined : subtitleId}>
+          <legend className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            What this role can do
+          </legend>
+          <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+            {permissions.map((permission) => {
+              const held = role.permissions.includes(permission.name)
+              const checkboxId = `${permissionIdPrefix}-${permission.name}`
+              return (
+                <li key={permission.name} className="flex items-start gap-2 py-1 text-sm">
+                  <Checkbox
+                    id={checkboxId}
+                    // Base UI marks a disabled checkbox with data-disabled, not :disabled.
+                    className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
+                    checked={held}
+                    disabled={pending || !role.editable}
+                    onCheckedChange={(granted) =>
+                      run(async () => {
+                        const outcome = await setPermission(role.id, permission.name, granted)
+                        if (!outcome.ok) return outcome
+                        return {
+                          ok: true,
+                          message: granted
+                            ? `${role.name} can now: ${permission.label}.`
+                            : `${role.name} can no longer: ${permission.label}.`,
+                        }
+                      })
+                    }
+                  />
+                  <Label htmlFor={checkboxId} className={cn("font-normal", !held && "text-muted-foreground")}>
                     {permission.label}
                   </Label>
-                  {administer && (
-                    <span id={administerNoteId} className="text-xs text-muted-foreground">
-                      Only a reviewed update to the system can give or take this.
-                    </span>
-                  )}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      </fieldset>
-
-      <div>
-        <SectionHeading>People in this role</SectionHeading>
-        {role.people.length === 0 ? (
-          <p className="rounded-lg border px-3 py-3 text-sm text-muted-foreground">Nobody holds this role.</p>
-        ) : (
-          <ul aria-label={`People in ${role.name}`} className="divide-y rounded-lg border">
-            {role.people.map((person) => (
-              <PersonRow
-                key={person.id}
-                person={person}
-                roleName={role.name}
-                pending={pending}
-                run={run}
-                track={track}
-                report={setOutcome}
-                confirm={setConfirmation}
-              />
-            ))}
+                </li>
+              )
+            })}
           </ul>
-        )}
-      </div>
+        </fieldset>
+      ) : (
+        <div>
+          <SectionHeading>What this role can do</SectionHeading>
+          {role.permissions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing yet.</p>
+          ) : (
+            <ul aria-label={`What ${role.name} can do`} className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+              {permissions
+                .filter((permission) => role.permissions.includes(permission.name))
+                .map((permission) => (
+                  <li key={permission.name} className="py-1">
+                    {permission.label}
+                  </li>
+                ))}
+            </ul>
+          )}
+        </div>
+      )}
 
-      <InviteForm role={role} pending={pending} run={run} />
+      {role.canEditRoles ? (
+        <fieldset aria-describedby={`${managedIdPrefix}-note`}>
+          <legend className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Manages the staff in
+          </legend>
+          <p id={`${managedIdPrefix}-note`} className="mb-2 text-xs text-muted-foreground">
+            People in {role.name} can invite, deactivate, reactivate and move the staff in the roles ticked here, between
+            those roles only. They never change roles themselves.
+          </p>
+          {role.managedOptions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">There is no other role yet.</p>
+          ) : (
+            <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+              {role.managedOptions.map((option) => {
+                const checkboxId = `${managedIdPrefix}-${option.id}`
+                return (
+                  <li key={option.id} className="flex items-start gap-2 py-1 text-sm">
+                    <Checkbox
+                      id={checkboxId}
+                      className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
+                      checked={option.checked}
+                      // A retired role can only be taken out of the set.
+                      disabled={pending || role.retired || (option.retired && !option.checked)}
+                      onCheckedChange={(manages) => run(() => setManagedRole(role.id, option.id, manages))}
+                    />
+                    <Label htmlFor={checkboxId} className={cn("font-normal", !option.checked && "text-muted-foreground")}>
+                      {option.name}
+                      {option.retired && " (retired)"}
+                    </Label>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </fieldset>
+      ) : (
+        role.managesNames.length > 0 && (
+          <div>
+            <SectionHeading>Manages the staff in</SectionHeading>
+            <p className="text-sm">{role.managesNames.join(", ")}</p>
+          </div>
+        )
+      )}
+
+      {role.managed && (
+        <div>
+          <SectionHeading>People in this role</SectionHeading>
+          {role.people.length === 0 ? (
+            <p className="rounded-lg border px-3 py-3 text-sm text-muted-foreground">Nobody holds this role.</p>
+          ) : (
+            <ul aria-label={`People in ${role.name}`} className="divide-y rounded-lg border">
+              {role.people.map((person) => (
+                <PersonRow
+                  key={person.id}
+                  person={person}
+                  roleName={role.name}
+                  pending={pending}
+                  run={run}
+                  track={track}
+                  report={setOutcome}
+                  confirm={setConfirmation}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {role.managed && <InviteForm role={role} pending={pending} run={run} />}
 
       {children}
 
@@ -284,10 +347,10 @@ function PersonRow({
 
   const move = (target: RoleOption) => {
     const change = () => moveStaffMember(person.id, target.id)
-    if (person.administers && !target.administers) {
+    if (person.managesStaff && !target.managesStaff) {
       confirm({
         title: `Move ${person.name} to ${target.name}?`,
-        description: `${person.name} will lose "${ADMINISTER_LABEL}" and can no longer manage staff or roles. The change applies on their next click.`,
+        description: `${person.name} will no longer manage anyone's staff in ${target.name}. The change applies on their next click.`,
         action: "Move",
         change,
       })
@@ -298,10 +361,10 @@ function PersonRow({
 
   const deactivate = () => {
     const change = () => deactivateStaffMember(person.id)
-    if (person.administers) {
+    if (person.managesStaff) {
       confirm({
         title: `Deactivate ${person.name}?`,
-        description: `${person.name} will lose access to the staff side on their next click, including "${ADMINISTER_LABEL}". Their name stays on everything they recorded.`,
+        description: `${person.name} will lose access to the staff side on their next click, including managing staff. Their name stays on everything they recorded.`,
         action: "Deactivate",
         change,
       })

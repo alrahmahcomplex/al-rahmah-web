@@ -12,6 +12,7 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl, openLeadTab } from "./lead-page"
 
 // Requesting, granting and refusing a Staff child or Qualified orphan
 // discount, and recording Fee waived (#112). Each test makes its own Passed
@@ -87,7 +88,7 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   const lead = await passedLead()
 
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(leadUrl(lead.id, "Discounts"))
   await expect(page.getByRole("link", { name: /Discount requests/ })).toHaveCount(0)
   const panel = page.getByRole("region", { name: "Discounts" })
   await panel.getByRole("button", { name: "Request discount" }).click()
@@ -112,6 +113,11 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   const row = page.getByRole("listitem", { name: new RegExp(lead.admissionNumber) })
   await expect(row).toContainText("Staff child (25% off)")
   await expect(row).toContainText(`Requested by ${ADMISSIONS.name}`)
+  // The request links to the lead's Discounts tab.
+  await expect(row.getByRole("link", { name: lead.admissionNumber })).toHaveAttribute(
+    "href",
+    `/staff/leads/${lead.id}?tab=discounts#lead-discounts`,
+  )
   await row.getByRole("button", { name: "Grant" }).click()
   const grant = page.getByRole("dialog")
   await grant.getByRole("button", { name: "Grant discount" }).click()
@@ -121,9 +127,10 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   await expect(grant).toHaveCount(0)
   await expect(row).toHaveCount(0)
 
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(leadUrl(lead.id, "School fee"))
   await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 1,500,000")
   await expect(page.getByRole("region", { name: "School fee" })).toContainText("Staff child discount, 25% off TZS 2,000,000")
+  await openLeadTab(page, "Discounts")
   await expect(page.getByRole("region", { name: "Discounts" })).toContainText(`Granted by ${MANAGER.name}`)
 
   await openLeadHistoryAsSuperAdmin(page, lead.id)
@@ -137,7 +144,7 @@ test("the Manager refuses a request on the lead with a reason, which the request
   if (!made.ok) throw new Error(JSON.stringify(made.error))
 
   await signIn(page, MANAGER)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(leadUrl(lead.id, "Discounts"))
   const panel = page.getByRole("region", { name: "Discounts" })
   await panel.getByRole("button", { name: "Refuse" }).click()
   const dialog = page.getByRole("dialog")
@@ -148,13 +155,14 @@ test("the Manager refuses a request on the lead with a reason, which the request
   await expect(dialog).toHaveCount(0)
 
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(leadUrl(lead.id, "Discounts"))
   const decided = page.getByRole("region", { name: "Discounts" })
   await expect(decided).toContainText(`Refused by ${MANAGER.name}`)
   await expect(decided).toContainText("Reason for refusing: The bus is run by a contractor.")
-  await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 2,000,000")
   // A new request may follow the refusal.
   await expect(decided.getByRole("button", { name: "Request discount" })).toBeVisible()
+  await openLeadTab(page, "School fee")
+  await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 2,000,000")
 })
 
 test("the Accountant records Fee waived on a lead with a granted Qualified orphan discount", async ({ page }) => {
@@ -164,7 +172,7 @@ test("the Accountant records Fee waived on a lead with a granted Qualified orpha
   if (!(await decideDiscount(await signedIn(MANAGER), made.data, { decision: "grant" })).ok) throw new Error("grant failed")
 
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(leadUrl(lead.id, "School fee"))
   await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 0")
   const section = page.getByRole("region", { name: "School fee" })
   await section.getByRole("button", { name: "Record payment" }).click()

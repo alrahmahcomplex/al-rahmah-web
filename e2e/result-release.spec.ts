@@ -12,6 +12,7 @@ import { getLatestResultRelease, releaseResult } from "@/lib/services/result-rel
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // Releasing an interview result through WhatsApp or by SMS from the lead
 // screen's interview panel. The wa.me tab is checked by its address and never reaches
@@ -79,7 +80,7 @@ test.describe("releasing a result through WhatsApp", () => {
     await context.route("https://wa.me/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>wa.me</title>" }))
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(release(page)).toContainText("Not sent yet.")
     await expect(release(page)).toContainText("The result can't be sent until the interview fee is Paid. The family owes TZS 50,000.")
     await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
@@ -106,7 +107,7 @@ test.describe("releasing a result through WhatsApp", () => {
     await expect(release(page)).toContainText(`By WhatsApp to +255 ${lead.whatsapp.slice(1, 4)} ${lead.whatsapp.slice(4, 7)} ${lead.whatsapp.slice(7)}.`)
     await expect(release(page).getByRole("group", { name: "Message preview" })).toHaveText(message.data.text, { useInnerText: true })
 
-    const leadUrl = page.url()
+    const leadPage = page.url()
     const opened = page.waitForEvent("popup")
     await release(page).getByRole("button", { name: "Send through WhatsApp" }).click()
     const tab = await opened
@@ -116,7 +117,7 @@ test.describe("releasing a result through WhatsApp", () => {
     await expect(release(page).getByRole("status")).toHaveText("Recorded as sent. WhatsApp opened in a new tab: press send there.")
     await expect(release(page)).toContainText(sentToday)
     // The message never lands in our own address.
-    expect(page.url()).toBe(leadUrl)
+    expect(page.url()).toBe(leadPage)
 
     await openLeadHistoryAsSuperAdmin(page, lead.id)
     await expect(page.getByText("sent the result by WhatsApp: Passed, 81.5%")).toBeVisible()
@@ -129,13 +130,13 @@ test.describe("releasing a result through WhatsApp", () => {
     if (!released.ok) throw new Error(`release failed: ${released.error}`)
 
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(release(page)).toContainText(sentToday)
     await expect(page.getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
     await expect(page.getByRole("group", { name: "Message preview" })).toHaveCount(0)
 
     // A Paid result nobody has sent yet.
-    await page.goto(`/staff/leads/${SEEDED_PAID}`)
+    await page.goto(leadUrl(SEEDED_PAID, "Interview"))
     await expect(release(page)).toContainText("Not sent yet.")
     await expect(page.getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
     await expect(page.getByRole("group", { name: "Message preview" })).toHaveCount(0)
@@ -166,7 +167,7 @@ test.describe("releasing a result by SMS", () => {
     if (!sms.ok) throw new Error("the expected SMS could not be rendered")
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(release(page)).toContainText("None of the parent's numbers can take a WhatsApp link, so the result goes by SMS.")
     await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
     await expect(release(page).getByRole("button", { name: "Send SMS instead" })).toHaveCount(0)
@@ -198,7 +199,7 @@ test.describe("releasing a result by SMS", () => {
     await markPaid(lead.interviewId)
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toBeVisible()
     await expect(release(page).getByRole("group", { name: "Message preview" })).toBeVisible()
     await expect(release(page)).toContainText("By WhatsApp to")
@@ -229,7 +230,7 @@ test.describe("releasing a result by SMS", () => {
     const note = /^The SMS text takes \d+ messages, more than the usual two\.$/
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(release(page)).toContainText("The names on this lead make the message too long for WhatsApp, so it goes by SMS.")
     await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
     await expect(release(page).getByRole("group", { name: "Message preview" })).toHaveCount(0)
@@ -274,7 +275,7 @@ test.describe("sending a result again", () => {
     context.on("page", () => tabs++)
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     const warning = release(page).getByRole("note", { name: "Changed since sent" })
     await expect(warning).toHaveText(
       "The result or score has been corrected since it was last sent, as Passed, 81.5%. Send it again so the family has the corrected result.",
@@ -335,7 +336,7 @@ test.describe("a send from a stale page", () => {
     await context.route("https://wa.me/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>wa.me</title>" }))
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
     await expect(release(page)).toContainText("Not sent yet.")
 
     // Someone else sends it while this page is open.

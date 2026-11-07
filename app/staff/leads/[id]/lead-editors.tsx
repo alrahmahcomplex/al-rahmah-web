@@ -1,5 +1,6 @@
 "use client"
 
+import { PencilIcon } from "lucide-react"
 import Link from "next/link"
 import { useId, useState, useTransition } from "react"
 
@@ -20,6 +21,7 @@ import {
 } from "@/lib/services/leads"
 
 import { correctContact, correctStudent, correctVisit } from "./actions"
+import { CardHeading } from "./lead-card"
 import type { CorrectionOutcome } from "./correction-outcome"
 
 export const SELECT_CLASS =
@@ -125,7 +127,7 @@ function FormButtons({ pending, onCancel }: { pending: boolean; onCancel: () => 
   )
 }
 
-// The Student section: its details, and in their place the form to correct
+// The Student card: its details, and in their place the form to correct
 // them or the Visit date, for staff whose role may.
 export function StudentEditor({
   lead,
@@ -150,50 +152,47 @@ export function StudentEditor({
     setEditing(form)
   }
 
-  if (editing === "details") {
-    return (
-      <StudentDetailsForm
-        lead={lead}
-        years={years}
-        onDone={(message) => {
-          setEditing(null)
-          setSaved(message)
-        }}
-      />
-    )
-  }
-  if (editing === "visit") {
-    return (
-      <VisitDateForm
-        lead={lead}
-        today={today}
-        onDone={(message) => {
-          setEditing(null)
-          setSaved(message)
-        }}
-      />
-    )
+  function done(message: string | null) {
+    setEditing(null)
+    setSaved(message)
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {children}
-      {(canEditDetails || canCorrectVisit) && (
-        <div className="flex flex-wrap gap-2">
-          {canEditDetails && (
-            <Button type="button" variant="outline" size="sm" onClick={() => open("details")}>
-              Edit student
-            </Button>
-          )}
+    <section aria-labelledby="lead-student" className="flex flex-col gap-3">
+      <CardHeading
+        id="lead-student"
+        title="Student"
+        action={editing === null && canEditDetails && <EditButton label="Edit student" onClick={() => open("details")} />}
+      />
+      {editing === "details" ? (
+        <StudentDetailsForm lead={lead} years={years} onDone={done} />
+      ) : editing === "visit" ? (
+        <VisitDateForm lead={lead} today={today} onDone={done} />
+      ) : (
+        <>
+          {children}
           {canCorrectVisit && (
-            <Button type="button" variant="outline" size="sm" onClick={() => open("visit")}>
-              Correct Visit date
-            </Button>
+            <div>
+              <Button type="button" variant="outline" size="sm" onClick={() => open("visit")}>
+                Correct Visit date
+              </Button>
+            </div>
           )}
-        </div>
+          <Saved message={saved} />
+        </>
       )}
-      <Saved message={saved} />
-    </div>
+    </section>
+  )
+}
+
+// The one Edit in a card's heading. `label` names what it edits for screen
+// readers and tests; the button shows "Edit".
+function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <Button type="button" variant="ghost" size="sm" className="text-blue-700" aria-label={label} onClick={onClick}>
+      <PencilIcon aria-hidden="true" />
+      Edit
+    </Button>
   )
 }
 
@@ -348,39 +347,40 @@ export function ContactEditor({
   const [editing, setEditing] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
 
-  if (editing) {
-    return (
-      <ContactForm
-        lead={lead}
-        siblings={siblings}
-        onDone={(message) => {
-          setEditing(false)
-          setSaved(message)
-        }}
-      />
-    )
-  }
-
   return (
-    <div className="flex flex-col gap-3">
-      {children}
-      {canEdit && (
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setSaved(null)
-              setEditing(true)
-            }}
-          >
-            Edit parent or guardian
-          </Button>
-        </div>
+    <section aria-labelledby="lead-parent" className="flex flex-col gap-3">
+      <CardHeading
+        id="lead-parent"
+        title="Parent or guardian"
+        action={
+          !editing &&
+          canEdit && (
+            <EditButton
+              label="Edit parent or guardian"
+              onClick={() => {
+                setSaved(null)
+                setEditing(true)
+              }}
+            />
+          )
+        }
+      />
+      {editing ? (
+        <ContactForm
+          lead={lead}
+          siblings={siblings}
+          onDone={(message) => {
+            setEditing(false)
+            setSaved(message)
+          }}
+        />
+      ) : (
+        <>
+          {children}
+          <Saved message={saved} />
+        </>
       )}
-      <Saved message={saved} />
-    </div>
+    </section>
   )
 }
 

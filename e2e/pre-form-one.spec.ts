@@ -11,6 +11,8 @@ import { asSystem, createThrowawayStaff, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
+import { leadUrl } from "./lead-page"
+
 // The Pre-Form One programme (#114): the seeded lead whose tick no longer
 // applies in supabase/seeds/90_fees.sql, read only, and Passed Day leads of
 // the test's own, in a year it claims with a schedule of its own
@@ -89,7 +91,7 @@ test("Admissions Staff tick the programme on a FORM 1 lead, and the Accountant r
   const lead = await passedLead("FORM 1")
 
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead}`)
+  await page.goto(leadUrl(lead, "School fee"))
   const programme = page.getByRole("region", { name: "Pre-Form One programme" })
   const tick = programme.getByRole("checkbox", { name: "Pre-Form One programme" })
   await expect(tick).not.toBeChecked()
@@ -99,7 +101,7 @@ test("Admissions Staff tick the programme on a FORM 1 lead, and the Accountant r
   await expect(detail(page, "Pre-Form One programme", "Pre-Form One balance")).toHaveText("TZS 450,000")
 
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${lead}`)
+  await page.goto(leadUrl(lead, "School fee"))
   // The Accountant can't edit leads, so sees the tick without changing it.
   await expect(page.getByRole("region", { name: "Pre-Form One programme" }).getByRole("checkbox")).toBeDisabled()
   await page.getByRole("button", { name: "Record payment" }).click()
@@ -126,7 +128,7 @@ test("staff who edit leads but can't view payments still tick the programme, and
   const editor = await createThrowawayStaff(["leads.view", "leads.edit"])
 
   await signIn(page, editor)
-  await page.goto(`/staff/leads/${lead}`)
+  await page.goto(leadUrl(lead, "School fee"))
   await expect(page.getByRole("region", { name: "School fee" })).toHaveCount(0)
   const programme = page.getByRole("region", { name: "Pre-Form One programme" })
   const tick = programme.getByRole("checkbox", { name: "Pre-Form One programme" })
@@ -142,18 +144,18 @@ test("the programme isn't offered on another class, and a tick kept after a clas
   const lead = await passedLead("STD 2")
 
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead}`)
+  await page.goto(leadUrl(lead, "School fee"))
   await expect(page.getByRole("region", { name: "School fee" })).toBeVisible()
   await expect(page.getByRole("checkbox", { name: "Pre-Form One programme" })).toHaveCount(0)
 
-  await page.goto(`/staff/leads/${SABRA}`)
+  await page.goto(leadUrl(SABRA, "School fee"))
   const programme = page.getByRole("region", { name: "Pre-Form One programme" })
   await expect(programme.getByRole("checkbox", { name: "Pre-Form One programme" })).toBeChecked()
   await expect(programme).toContainText("Doesn't apply: this lead's class is no longer FORM 1.")
 
   // The Accountant isn't offered the Pre-Form One fee while it doesn't apply.
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${SABRA}`)
+  await page.goto(leadUrl(SABRA, "School fee"))
   await page.getByRole("button", { name: "Record payment" }).click()
   await expect(page.getByRole("form", { name: "Record payment" }).getByLabel("Payment type").locator("option", { hasText: "Pre-Form One fee" })).toHaveCount(0)
 })

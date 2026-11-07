@@ -13,6 +13,8 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
+import { leadUrl } from "./lead-page"
+
 // Seats (#111): the Accountant records a payment into a full class through
 // the warning, and the Manager sees the class ranked on the Seats screen. The
 // test claims a year of its own (tests/support/fee-years.ts), so the seeded
@@ -103,7 +105,7 @@ test("a payment into a full class is recorded through the warning, and Seats ran
   const lead = await passedLead(year)
 
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(leadUrl(lead.id, "School fee"))
   const section = page.getByRole("region", { name: "School fee" })
   await section.getByRole("button", { name: "Record payment" }).click()
   const form = page.getByRole("form", { name: "Record payment" })

@@ -9,6 +9,7 @@ import { createLead } from "@/lib/services/leads"
 import { createThrowawayStaff, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // Declining the lead as the outcome of a recorded contact (#94), from the
 // Follow-ups panel. Each test makes a lead of its own.
@@ -56,7 +57,7 @@ test.describe("declining the lead from Record follow-up", () => {
   test("Admissions Staff record the call and decline the lead together, and both show in history", async ({ page }) => {
     const lead = await leadWithFollowUp()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
 
     const record = await openRecord(page)
     await record.getByLabel("Comment").fill("The father says they have chosen a school nearer home.")
@@ -97,7 +98,7 @@ test.describe("declining the lead from Record follow-up", () => {
   test("the Manager may pick No seat available", async ({ page }) => {
     const lead = await leadWithFollowUp()
     await signIn(page, MANAGER)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
 
     const record = await openRecord(page)
     await record.getByLabel("Comment").fill("The class is full for this year.")
@@ -112,7 +113,7 @@ test.describe("declining the lead from Record follow-up", () => {
     const recorder = await createThrowawayStaff(["leads.view", "follow_ups.record"])
     const lead = await leadWithFollowUp()
     await signIn(page, recorder)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Follow-ups"))
 
     const record = await openRecord(page)
     await expect(record.getByText(DECLINE_OUTCOME)).toHaveCount(0)

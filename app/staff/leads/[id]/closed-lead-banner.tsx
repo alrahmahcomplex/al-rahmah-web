@@ -13,7 +13,7 @@ export function ClosedLeadBanner({ lead, canRequestReopening }: { lead: Lead; ca
   return (
     <section
       aria-label={title}
-      className="flex max-w-xl flex-col gap-3 rounded-lg border bg-card p-4 text-sm"
+      className="flex flex-col gap-3 rounded-xl border border-l-4 border-l-slate-400 bg-card p-4 text-sm"
     >
       <h2 className="font-semibold text-slate-900">{title}</h2>
       <ClosedLeadDetails leadId={lead.id} />

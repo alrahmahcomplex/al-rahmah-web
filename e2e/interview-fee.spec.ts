@@ -9,6 +9,7 @@ import { createLead } from "@/lib/services/leads"
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl, openLeadTab } from "./lead-page"
 
 // Marking the interview fee Paid or Not Paid on the lead screen's interview
 // panel.
@@ -17,6 +18,8 @@ const thisYear = Number(tanzaniaToday().slice(0, 4))
 
 // Slice 5's seeded Passed lead, Neema Interview, whose fee is Paid.
 const PAID = "1ead0000-0000-4000-8000-000000000503"
+// ADMSN-90918 Rukia Maandalizi (seeds/90_fees.sql): Passed, fee Not Paid.
+const RUKIA = "1ead0000-0000-4000-8000-000000000918"
 
 async function signIn(page: Page, person: FixtureStaff) {
   await page.goto("/login")
@@ -56,6 +59,7 @@ test.describe("the interview fee", () => {
     await page.getByRole("button", { name: "Search" }).click()
     await page.getByRole("link", { name: lead.name }).click()
     await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
+    await openLeadTab(page, "Interview")
 
     // The fee as it comes to now, before any interview has happened.
     await expect(panel(page)).toContainText("No result yet")
@@ -86,9 +90,28 @@ test.describe("the interview fee", () => {
     await expect(page.getByText("marked the interview fee Not Paid")).toBeVisible()
   })
 
+  test("the Next step on a Visited lead whose fee is Not Paid takes the Accountant to the fee", async ({ page }) => {
+    await signIn(page, ACCOUNTANT)
+    await page.goto(leadUrl(RUKIA))
+    await expect(page.getByRole("region", { name: "Next step" })).toContainText(
+      "Next step: Collect the interview fee, TZS 50,000",
+    )
+    await page.getByRole("link", { name: "Record interview fee" }).click()
+    await expect(page).toHaveURL(new RegExp(`/staff/leads/${RUKIA}\\?tab=interview#lead-interview$`))
+    await expect(panel(page).getByRole("button", { name: "Mark paid" })).toBeVisible()
+
+    // Admissions Staff, who can't mark it, are pointed at the tab instead.
+    await page.context().clearCookies()
+    await signIn(page, ADMISSIONS)
+    await page.goto(leadUrl(RUKIA))
+    await expect(page.getByRole("region", { name: "Next step" })).toContainText("Collect the interview fee")
+    await expect(page.getByRole("link", { name: "Record interview fee" })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Open Interview" })).toBeVisible()
+  })
+
   test("Admissions Staff see the fee and the amount paid, with no control to change it", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${PAID}`)
+    await page.goto(leadUrl(PAID, "Interview"))
 
     await expect(panel(page)).toContainText("Paid")
     await expect(panel(page)).toContainText("Amount paid")
@@ -98,6 +121,7 @@ test.describe("the interview fee", () => {
 
     // The Referral code panel agrees with the amount paid, not the fee as it
     // would come to now.
+    await openLeadTab(page, "Overview")
     const referral = page.getByRole("region", { name: "Referral code" })
     await expect(referral.getByLabel("Interview fee paid")).toHaveText("TZS 50,000")
     await expect(referral.getByLabel("Expected interview fee")).toHaveCount(0)
@@ -107,7 +131,7 @@ test.describe("the interview fee", () => {
     const lead = await registeredLead()
     await asSystem((sql) => sql.query("update public.leads set closure = 'Archived', closure_reason = 'Duplicate record' where id = $1", [lead.id]))
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(leadUrl(lead.id, "Interview"))
 
     await expect(panel(page)).toContainText("Not Paid")
     await expect(page.getByRole("button", { name: "Mark paid" })).toHaveCount(0)

@@ -11,6 +11,7 @@ import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // A retaken interview after a Retake reopening (#71), on the lead screen's
 // interview panel. The test that registers and records a retake reopens a
@@ -67,7 +68,7 @@ const current = (page: Page) => panel(page).getByRole("group", { name: "Current 
 test("Admissions Staff register and record a retaken interview, and the earlier one stays below it", async ({ page }) => {
   const lead = await reopenedForRetake()
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(leadUrl(lead.id, "Interview"))
 
   await expect(current(page).getByLabel("Interview S/N")).toHaveText(String(lead.firstSerial))
   await panel(page).getByRole("button", { name: "Register retaken interview" }).click()
@@ -106,17 +107,24 @@ test("Admissions Staff register and record a retaken interview, and the earlier 
 
 test("the seeded leads: Register retaken interview for the Retake one only, and never for the Accountant", async ({ page }) => {
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${SEEDED_RETAKE}`)
+  await page.goto(leadUrl(SEEDED_RETAKE, "Interview"))
   await expect(panel(page).getByRole("button", { name: "Register retaken interview" })).toBeVisible()
   await expect(panel(page)).toContainText("This lead was reopened to retake the interview.")
+  const nextStep = page.getByRole("region", { name: "Next step" })
+  // A reopened lead's follow-up date comes first; the retake registration
+  // follows it (tests/unit/lead-next-step.test.ts).
+  await expect(nextStep).toContainText("Next step: Set the next follow-up date")
 
-  await page.goto(`/staff/leads/${SEEDED_ENROL_WITHOUT_RETAKE}`)
+  await page.goto(leadUrl(SEEDED_ENROL_WITHOUT_RETAKE, "Interview"))
   await expect(current(page)).toContainText("Failed")
+  // Approved to enrol without a retake: the old Failed result asks for nothing.
+  await expect(nextStep).not.toContainText("Register")
+  await expect(nextStep).not.toContainText("did not pass")
   await expect(panel(page).getByRole("button", { name: /^Register/ })).toHaveCount(0)
 
   await page.context().clearCookies()
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${SEEDED_RETAKE}`)
+  await page.goto(leadUrl(SEEDED_RETAKE, "Interview"))
   await expect(current(page)).toContainText("Failed")
   await expect(panel(page).getByRole("button", { name: /^Register/ })).toHaveCount(0)
 })

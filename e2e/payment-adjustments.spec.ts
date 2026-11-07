@@ -12,6 +12,7 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // Adjusting and voiding school-fee payments on the lead screen (#110). The
 // test that adjusts claims a year of its own with a schedule of its own
@@ -95,7 +96,7 @@ test("the Accountant adjusts one payment and voids a duplicate, and each shows i
   const id = await leadWithDuplicatePayment()
 
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${id}`)
+  await page.goto(leadUrl(id, "School fee"))
   const section = page.getByRole("region", { name: "School fee" })
   await expect(feeDetail(page, "Total paid")).toHaveText("TZS 600,000")
   const payments = section.getByRole("list", { name: "Payments" }).locator(":scope > li")
@@ -158,14 +159,14 @@ test("the Accountant adjusts one payment and voids a duplicate, and each shows i
 
 test("a Declined lead's payment offers Adjust to the Accountant, and Admissions Staff see no Adjust", async ({ page }) => {
   await signIn(page, ACCOUNTANT)
-  await page.goto(`/staff/leads/${SEEDED_DECLINED}`)
+  await page.goto(leadUrl(SEEDED_DECLINED, "School fee"))
   const section = page.getByRole("region", { name: "School fee" })
   await expect(section.getByRole("button", { name: "Record payment" })).toHaveCount(0)
   await expect(section.getByRole("list", { name: "Payments" }).getByRole("button", { name: "Adjust" })).toHaveCount(1)
 
   await page.context().clearCookies()
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${SEEDED_DECLINED}`)
+  await page.goto(leadUrl(SEEDED_DECLINED, "School fee"))
   await expect(page.getByRole("region", { name: "School fee" }).getByRole("list", { name: "Payments" })).toBeVisible()
   await expect(page.getByRole("button", { name: "Adjust" })).toHaveCount(0)
 })

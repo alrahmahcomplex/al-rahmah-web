@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { closedState } from "../leads/[id]/closed-state"
+import { leadTabHref } from "../leads/[id]/tabs"
 import { requireStaff } from "../session"
 import { defaultInterviewYear, interviewsHref, parseInterviewSearch } from "./search-params"
 
@@ -216,7 +217,7 @@ function Results({
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <Link
-                        href={`/staff/leads/${interview.lead.id}`}
+                        href={leadTabHref(interview.lead.id, "interview", "lead-interview")}
                         className={cn(
                           "font-medium underline-offset-4 hover:underline",
                           interview.lead.closed ? "text-muted-foreground" : "text-slate-900",

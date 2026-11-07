@@ -8,6 +8,7 @@ import { createLead } from "@/lib/services/leads"
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { chooseMore, moreActions } from "./lead-page"
 
 // Declining a lead from the lead screen (#97). Each test declines a lead of
 // its own; the seeded ones are only read.
@@ -42,16 +43,13 @@ async function newLead() {
   return { id: created.data.leadId, name, admissionNumber: created.data.admissionNumber }
 }
 
-const declineButton = (page: Page) =>
-  page.getByRole("region", { name: "Decline", exact: true }).getByRole("button", { name: "Decline", exact: true })
-
 test.describe("declining a lead", () => {
   test("Admissions Staff decline with Other, explained, after confirming, and the banner tells the story", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${lead.id}`)
 
-    await declineButton(page).click()
+    await chooseMore(page, "Decline")
     const dialog = page.getByRole("dialog", { name: `Decline ${lead.name}`, exact: true })
     await dialog.getByLabel("Reason").selectOption("Other")
     await dialog.getByRole("button", { name: "Continue" }).click()
@@ -72,7 +70,7 @@ test.describe("declining a lead", () => {
     await expect(banner).toContainText("The family is moving to Arusha.")
     await expect(banner).toContainText(ADMISSIONS.name)
     await expect(banner).toContainText("Visited")
-    await expect(page.getByRole("region", { name: "Decline", exact: true })).toHaveCount(0)
+    expect(await moreActions(page)).not.toContain("Decline")
     await expect(page.getByRole("button", { name: "Edit student" })).toHaveCount(0)
 
     await openLeadHistoryAsSuperAdmin(page)
@@ -84,7 +82,7 @@ test.describe("declining a lead", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${lead.id}`)
 
-    await declineButton(page).click()
+    await chooseMore(page, "Decline")
     const dialog = page.getByRole("dialog", { name: `Decline ${lead.name}`, exact: true })
     await dialog.getByLabel("Reason").selectOption("Fees or cost")
     await dialog.getByRole("button", { name: "Continue" }).click()
@@ -93,7 +91,7 @@ test.describe("declining a lead", () => {
     await dialog.getByRole("button", { name: "Cancel" }).click()
 
     await page.reload()
-    await expect(declineButton(page)).toBeVisible()
+    expect(await moreActions(page)).toContain("Decline")
     await expect(page.getByRole("region", { name: /^This lead is/ })).toHaveCount(0)
   })
 
@@ -101,7 +99,7 @@ test.describe("declining a lead", () => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${lead.id}`)
-    await declineButton(page).click()
+    await chooseMore(page, "Decline")
     const options = page.getByRole("dialog").getByLabel("Reason").locator("option")
     await expect(options).toContainText(["Fees or cost", "Other"])
     await expect(options.filter({ hasText: "No seat available" })).toHaveCount(0)
@@ -109,7 +107,7 @@ test.describe("declining a lead", () => {
     await page.context().clearCookies()
     await signIn(page, MANAGER)
     await page.goto(`/staff/leads/${lead.id}`)
-    await declineButton(page).click()
+    await chooseMore(page, "Decline")
     await expect(page.getByRole("dialog").getByLabel("Reason").locator("option", { hasText: "No seat available" })).toHaveCount(1)
   })
 
@@ -118,13 +116,13 @@ test.describe("declining a lead", () => {
     await signIn(page, ACCOUNTANT)
     await page.goto(`/staff/leads/${lead.id}`)
     await expect(page.getByRole("heading", { name: lead.name })).toBeVisible()
-    await expect(page.getByRole("button", { name: "Decline", exact: true })).toHaveCount(0)
+    expect(await moreActions(page)).not.toContain("Decline")
 
     await page.context().clearCookies()
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${ARCHIVED}`)
     await expect(page.getByRole("region", { name: "This lead is Archived" })).toBeVisible()
-    await expect(page.getByRole("button", { name: "Decline", exact: true })).toHaveCount(0)
+    expect(await moreActions(page)).not.toContain("Decline")
   })
 
   test("a lead declined after its interview shows its reason, explanation, who and when", async ({ page }) => {

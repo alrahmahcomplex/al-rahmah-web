@@ -45,7 +45,7 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">History</h1>
+        <h1 className="staff-heading">History</h1>
         {lead.ok && (
           <p className="text-sm text-slate-900">
             {lead.data.studentName} · <span className="font-mono font-semibold">{lead.data.admissionNumber}</span>

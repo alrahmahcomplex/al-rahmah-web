@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
+import { moreActions, openLeadTab } from "./lead-page"
+
 // A closed lead on the lead screen (#96). Reads the seeded leads only:
 // ADMSN-90005 Archived, ADMSN-90006 Declined, and ADMSN-90081, an open child
 // whose parent is shared with a Declined sister.
@@ -34,7 +36,14 @@ test.describe("a closed lead", () => {
 
     const banner = page.getByRole("region", { name: "This lead is Archived" })
     await expect(banner).toContainText("read-only")
+    // The banner stands in for the Next step.
+    await expect(page.getByRole("region", { name: "Next step" })).toHaveCount(0)
     for (const name of WORK_ACTIONS) await expect(page.getByRole("button", { name })).toHaveCount(0)
+    await openLeadTab(page, "Interview")
+    await expect(page.getByRole("region", { name: "Interview" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Register for interview" })).toHaveCount(0)
+    await openLeadTab(page, "Overview")
+    expect(await moreActions(page)).toEqual(["Request reopening"])
 
     await banner.getByRole("link", { name: "Request reopening" }).click()
     await expect(page).toHaveURL(new RegExp(`/staff/leads/${ARCHIVED}/reopen\\?source=lead$`))
@@ -46,6 +55,7 @@ test.describe("a closed lead", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${DECLINED}`)
     await expect(page.getByRole("region", { name: "This lead is Declined" })).toBeVisible()
+    await expect(page.getByRole("region", { name: "Next step" })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Edit student" })).toHaveCount(0)
   })
 

@@ -1,31 +1,36 @@
 import Link from "next/link"
-import { cache, type ReactNode } from "react"
+import type { ReactNode } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { getLeadClosure } from "@/lib/services/lead-closure"
 import type { Lead } from "@/lib/services/leads"
-import { getLeadReopenings, needsRetakeChoice, type ReopeningRequest } from "@/lib/services/reopening-requests"
+import { needsRetakeChoice, type ReopeningRequest } from "@/lib/services/reopening-requests"
 import { seatCheck } from "@/lib/services/seats"
 import { createClient } from "@/utils/supabase/server"
 
 import { DecideReopening } from "./decide-reopening"
+import { readReopenings } from "./lead-reads"
 import type { LeadPanelProps } from "./panels"
 import { approvalConsequence, approvalSeats, canDecideReopening, retakeChoiceText } from "./reopening-decision-outcome"
 import { canRaiseReopening, dayOf, SOURCE_LABELS, STATE_LABELS } from "./reopening-outcome"
 import { WithdrawReopening } from "./withdraw-reopening"
 
-// Read once per page render: the closed-lead banner and this panel both ask.
-const readReopenings = cache(async (leadId: string) => getLeadReopenings(await createClient(), leadId))
+
+// Whether Request reopening may be offered on the lead: no request is
+// Pending, as far as the requests can be read.
+export async function nobodyHasAsked(leadId: string): Promise<boolean> {
+  const reopenings = await readReopenings(leadId)
+  return reopenings.ok && !reopenings.data.pending
+}
 
 // Request reopening, for the closed-lead banner, while nobody has asked yet.
 // With a Pending request the panel below says who asked instead. If the
 // requests can't be read, one may already be Pending, so nothing is offered;
 // the panel reports the error.
 export async function RequestReopeningLink({ leadId }: { leadId: string }) {
-  const reopenings = await readReopenings(leadId)
-  if (!reopenings.ok || reopenings.data.pending) return null
+  if (!(await nobodyHasAsked(leadId))) return null
   return (
     <div>
       <Link href={`/staff/leads/${leadId}/reopen?source=lead`} className={buttonVariants({ size: "sm" })}>

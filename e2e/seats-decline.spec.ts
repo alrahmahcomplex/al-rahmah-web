@@ -13,6 +13,8 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
+import { moreActions } from "./lead-page"
+
 // Declining a ranked lead from Seats with No seat available (#115). The test
 // claims a year of its own (tests/support/fee-years.ts), so the seeded 2027
 // seats are left alone.
@@ -141,6 +143,7 @@ test("a decline link opens nothing for staff who can't use its reason", async ({
   // Admissions Staff may decline, but not with No seat available.
   await signIn(page, ADMISSIONS)
   await page.goto(`/staff/leads/${lead.id}?decline=No+seat+available`)
-  await expect(page.getByRole("region", { name: "Decline", exact: true })).toBeVisible()
+  await expect(page.getByRole("heading", { name: lead.name })).toBeVisible()
   await expect(page.getByRole("dialog")).toHaveCount(0)
+  expect(await moreActions(page)).toContain("Decline")
 })

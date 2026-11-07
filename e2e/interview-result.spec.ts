@@ -9,6 +9,7 @@ import { createLead } from "@/lib/services/leads"
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { leadUrl } from "./lead-page"
 
 // Recording and correcting an interview result on the lead screen's
 // interview panel.
@@ -49,7 +50,7 @@ test.describe("recording an interview result", () => {
   test("Admissions Staff record a result on an Applied lead, then correct it", async ({ page }) => {
     const lead = await registeredLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Interview"))
     await expect(panel(page)).toContainText("No result yet")
 
     // The first recording: the date starts at today in Tanzania.
@@ -89,7 +90,7 @@ test.describe("recording an interview result", () => {
   test("a refusal reads as a plain sentence", async ({ page }) => {
     const lead = await registeredLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Interview"))
     await panel(page).getByRole("button", { name: "Record result" }).click()
     const form = panel(page).getByRole("form", { name: "Record result" })
     await form.getByLabel("Failed").check()
@@ -106,7 +107,7 @@ test.describe("recording an interview result", () => {
 test.describe("who is offered Record result", () => {
   test("the Accountant sees the result and Next action but cannot record or correct", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${PASSED}`)
+    await page.goto(leadUrl(PASSED, "Interview"))
 
     await expect(panel(page).getByText("78.5%", { exact: true })).toBeVisible()
     await expect(panel(page).getByText("Complete enrollment", { exact: true })).toBeVisible()
@@ -118,7 +119,7 @@ test.describe("who is offered Record result", () => {
     const lead = await registeredLead()
     await asSystem((sql) => sql.query("update public.leads set closure = 'Archived', closure_reason = 'Duplicate record' where id = $1", [lead]))
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(leadUrl(lead, "Interview"))
 
     await expect(panel(page)).toContainText("No result yet")
     await expect(page.getByRole("button", { name: "Record result" })).toHaveCount(0)

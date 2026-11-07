@@ -13,7 +13,7 @@ import { estimateDiscountCode, findReferralAgent, getLeadReferral, setLeadReferr
 
 import { registerPendingAgent } from "../support/agents"
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // One current agent per Discount code (#184): agent_for_code, the cached
 // status columns and their history, and partial uniqueness. No screen retires
@@ -541,9 +541,15 @@ describe("the cached status columns and their history", () => {
     })
     expect(audit).toEqual([{ action: "insert", actor_kind: "system", scope: "lead" }])
 
+    // The table is the Super Admin's history (#237); the Manager reads the
+    // newest change through marketing_agent_status_notes.
+    const history = await (await signedIn(SUPER_ADMIN)).from("agent_status_changes").select("kind").eq("agent_id", agent.id)
+    expect(history).toMatchObject({ error: null, data: [{ kind: "switched_off" }] })
     const manager = await signedIn(MANAGER)
     const read = await manager.from("agent_status_changes").select("kind").eq("agent_id", agent.id)
-    expect(read).toMatchObject({ error: null, data: [{ kind: "switched_off" }] })
+    expect(read).toMatchObject({ error: null, data: [] })
+    const note = await manager.rpc("marketing_agent_status_notes", { agent_ids: [agent.id] })
+    expect(note).toMatchObject({ error: null, data: [{ agent_id: agent.id, kind: "switched_off" }] })
     const insert = await manager.from("agent_status_changes").insert({ agent_id: agent.id, kind: "switched_on", reason: "x" })
     expect(insert.error).not.toBeNull()
     const rpc = await manager.rpc("record_agent_status_change", { agent_id: agent.id, kind: "switched_on", reason: "x", new_agent_id: null })
@@ -552,11 +558,11 @@ describe("the cached status columns and their history", () => {
     expect(secret.error).not.toBeNull()
   })
 
-  test("staff without leads.view and visitors not signed in read no history", async () => {
+  test("every seeded role, staff without leads.view and visitors not signed in read no history", async () => {
     const agent = await newAgent()
     await asSystem((sql) => changeStatus(sql, agent.id, "switched_off"))
     const outsider = await signedIn(await createThrowawayStaff(["payments.view"]))
-    for (const client of [outsider, anonClient()]) {
+    for (const client of [outsider, anonClient(), await signedIn(MANAGER), await signedIn(ADMISSIONS), await signedIn(ACCOUNTANT)]) {
       const read = await client.from("agent_status_changes").select("kind").eq("agent_id", agent.id)
       expect(read.data ?? []).toEqual([])
     }

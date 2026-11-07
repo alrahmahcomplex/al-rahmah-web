@@ -21,7 +21,7 @@ import { SendResult } from "./result-release-send"
 // ahead of it.
 export async function ResultReleaseSection({ leadId }: { leadId: string }) {
   const view = await getResultRelease(await createClient(), leadId, { officePhone: OFFICE_PHONE })
-  const last = view.ok ? view.data.releases[0] : undefined
+  const last = view.ok ? (view.data.latestRelease ?? undefined) : undefined
   const changed = view.ok && view.data.changedSinceSent
   const repeat = last ? repeatSendText(last, changed) : null
 
@@ -38,7 +38,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
         <>
           {view.data.interviewId !== null && (
             <p className="text-sm text-slate-900">
-              {view.data.releases[0] ? releaseLine(view.data.releases[0]) : "Not sent yet."}
+              {view.data.latestRelease ? releaseLine(view.data.latestRelease) : "Not sent yet."}
             </p>
           )}
           {changed && last && (
@@ -56,7 +56,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
               leadId={leadId}
               interviewId={view.data.interviewId}
               smsNote={smsNote(view.data.offer.smsMessage)}
-              seenReleases={view.data.releases.length}
+              seenReleases={view.data.releaseCount}
               repeat={repeat}
               whatsappPreview={
                 <>
@@ -87,7 +87,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
                 leadId={leadId}
                 interviewId={view.data.interviewId}
                 smsNote={smsNote(view.data.offer.smsMessage)}
-                seenReleases={view.data.releases.length}
+                seenReleases={view.data.releaseCount}
                 repeat={repeat}
               />
             </>

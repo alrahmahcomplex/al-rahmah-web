@@ -15,7 +15,7 @@ const WHEN = new Intl.DateTimeFormat("en-GB", {
 
 // Every staff-and-role change and invite, newest first. Collapsed by default,
 // because it answers "who did this?" and is not part of every visit.
-export function History({ result }: { result: Result<HistoryEntry[], "unavailable"> }) {
+export function History({ result }: { result: Result<HistoryEntry[], "forbidden" | "unavailable"> }) {
   return (
     <Collapsible className="border-t pt-4">
       <CollapsibleTrigger render={<Button variant="ghost" size="sm" className="group -ml-2.5" />}>

@@ -7,7 +7,7 @@ import { buildWhatsAppLink } from "@/lib/whatsapp"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { recordInterviewResult, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
-import { getResultReleases, releaseResult } from "@/lib/services/result-release"
+import { getLatestResultRelease, releaseResult } from "@/lib/services/result-release"
 
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
@@ -265,9 +265,9 @@ test.describe("sending a result again", () => {
     })
     if (!corrected.ok) throw new Error(`correction failed: ${corrected.error}`)
     const releases = async () => {
-      const read = await getResultReleases(await signedIn(ADMISSIONS), lead.interviewId)
+      const read = await getLatestResultRelease(await signedIn(ADMISSIONS), lead.interviewId)
       if (!read.ok) throw new Error(read.error)
-      return read.data.length
+      return read.data.count
     }
     await context.route("https://wa.me/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>wa.me</title>" }))
     let tabs = 0
@@ -352,8 +352,8 @@ test.describe("a send from a stale page", () => {
     await expect.poll(() => tab.isClosed()).toBe(true)
     await expect(release(page).getByRole("status")).toHaveCount(0)
 
-    const read = await getResultReleases(await signedIn(ADMISSIONS), lead.interviewId)
+    const read = await getLatestResultRelease(await signedIn(ADMISSIONS), lead.interviewId)
     if (!read.ok) throw new Error(read.error)
-    expect(read.data.length).toBe(1)
+    expect(read.data.count).toBe(1)
   })
 })

@@ -1,12 +1,19 @@
-import { randomUUID } from "node:crypto"
+import { randomInt, randomUUID } from "node:crypto"
 
-import { describe, expect, test } from "vitest"
+import { Client } from "pg"
+import { describe, expect, test, vi } from "vitest"
 
+vi.mock("server-only", () => ({}))
+
+import { tanzaniaToday } from "@/lib/school-calendar"
+import { setAgentEmail } from "@/lib/services/agent-invites"
 import { getLeadHistory } from "@/lib/services/audit"
+import { createLead, updateGuardianContact } from "@/lib/services/leads"
+import { getResultReleases } from "@/lib/services/result-release"
 import { getStaffAdminHistory, getStaffAndRoles } from "@/lib/services/staff-admin"
 import { getAuditPage, getLeadStatusSince } from "@/lib/services/system-audit"
 
-import { asSystem, signedIn } from "../support/db"
+import { asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The Super Admin (#237): a role that exists only through a migration, holds
@@ -21,6 +28,11 @@ const SEEDED_LEAD = { id: "1ead0000-0000-4000-8000-000000000001", admissionNumbe
 function newEmail() {
   return `super-admin-${randomUUID().slice(0, 8)}@example.test`
 }
+
+// An Approved agent with no login, for the email check (supabase/seeds/40_agents.sql).
+const UNJOINED_AGENT = "a4a4a4a4-0000-4000-8000-000000000002"
+// A seeded interview; the permission check answers before anything is read.
+const SEEDED_INTERVIEW = "1e7e0000-0000-4000-8000-000000000501"
 
 async function roleId(name: string): Promise<string> {
   return asSystem(async (sql) => (await sql.query<{ id: string }>("select id from public.roles where name = $1", [name])).rows[0].id)
@@ -80,6 +92,11 @@ describe("the Super Admin is invisible", () => {
     }
   })
 
+  test("an agent email the Super Admin holds reads as another sign-in, with no name", async () => {
+    const result = await setAgentEmail(await signedIn(MANAGER), UNJOINED_AGENT, SUPER_ADMIN.email.toUpperCase())
+    expect(result).toEqual({ ok: false, error: { kind: "email-taken", holder: "login", name: null, code: null } })
+  })
+
   test("audit.view reads as an unknown permission on any role", async () => {
     const created = await (await signedIn(SUPER_ADMIN)).rpc("create_role", { name: `Audit probe ${randomUUID().slice(0, 8)}` })
     expect(created.error).toBeNull()
@@ -91,6 +108,75 @@ describe("the Super Admin is invisible", () => {
       })
       expect(error?.message, person.name).toBe("unknown_permission")
     }
+  })
+})
+
+describe("the Super Admin's freeze under the secret key", () => {
+  // The secret key's writes run as service_role, which may not execute
+  // super_admin_role_id(); the freeze triggers run with the writer's rights,
+  // so they must not call it. Each case opens a fresh connection.
+  async function asServiceRole<T>(work: (sql: Client) => Promise<T>): Promise<T> {
+    const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await sql.connect()
+    try {
+      await sql.query("begin")
+      await sql.query("set local role service_role")
+      await sql.query("select public.set_audit_actor('system')")
+      return await work(sql)
+    } finally {
+      await sql.query("rollback").catch(() => {})
+      await sql.end()
+    }
+  }
+
+  test("an ordinary staff update goes through", async () => {
+    await asServiceRole(async (sql) => {
+      const { rowCount } = await sql.query("update public.staff_members set notices_seen_at = now() where id = $1", [MANAGER.id])
+      expect(rowCount).toBe(1)
+    })
+  })
+
+  test("deactivating the holder is refused as super_admin_frozen, not a permission error", async () => {
+    await asServiceRole(async (sql) => {
+      await expect(sql.query("update public.staff_members set active = false where id = $1", [SUPER_ADMIN.id])).rejects.toThrow(
+        "super_admin_frozen",
+      )
+    })
+  })
+
+  test("renaming the role is refused as super_admin_frozen", async () => {
+    await asServiceRole(async (sql) => {
+      await expect(sql.query("update public.roles set name = 'Renamed' where id = $1", [SUPER_ADMIN.roleId])).rejects.toThrow(
+        "super_admin_frozen",
+      )
+    })
+  })
+})
+
+describe("an inactive Super Admin", () => {
+  // Lifts the freeze by name inside a rolled-back transaction, as only a
+  // migration could, then asks has_permission as the holder.
+  async function answerWhen(change: string): Promise<boolean[]> {
+    return inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("alter table public.staff_members disable trigger refuse_super_admin_holder_change")
+      await sql.query("alter table public.roles disable trigger refuse_super_admin_role_change")
+      await sql.query(change)
+      await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: SUPER_ADMIN.userId, role: "authenticated" })])
+      await sql.query("set local role authenticated")
+      const { rows } = await sql.query<{ a: boolean; b: boolean }>(
+        "select public.has_permission('leads.view') as a, public.has_permission('permission.added_later') as b",
+      )
+      return [rows[0].a, rows[0].b]
+    })
+  }
+
+  test("a deactivated holder is refused every permission", async () => {
+    expect(await answerWhen(`update public.staff_members set active = false where id = '${SUPER_ADMIN.id}'`)).toEqual([false, false])
+  })
+
+  test("a holder whose role is retired is refused every permission", async () => {
+    expect(await answerWhen(`update public.roles set retired = true where id = '${SUPER_ADMIN.roleId}'`)).toEqual([false, false])
   })
 })
 
@@ -140,7 +226,10 @@ describe("the audit history is the Super Admin's", () => {
       expect(await getLeadHistory(client, SEEDED_LEAD.id), person.roleName).toEqual({ ok: false, error: "forbidden" })
       expect(await getAuditPage(client, {}), person.roleName).toEqual({ ok: false, error: "forbidden" })
       const overview = await getStaffAndRoles(client)
-      if (overview.ok) expect(await getStaffAdminHistory(client, overview.data), person.roleName).toEqual({ ok: true, data: [] })
+      if (!overview.ok) throw new Error("Staff and roles could not be read")
+      expect(await getStaffAdminHistory(client, overview.data), person.roleName).toEqual({ ok: false, error: "forbidden" })
+      expect(await getResultReleases(client, SEEDED_INTERVIEW), person.roleName).toEqual({ ok: false, error: "forbidden" })
+      expect((await client.from("agent_status_changes").select("id").limit(5)).data, person.roleName).toEqual([])
     }
   })
 
@@ -162,7 +251,10 @@ describe("the audit history is the Super Admin's", () => {
     const byRecord = await getAuditPage(client, { record: SEEDED_LEAD.admissionNumber.toLowerCase() })
     if (!byRecord.ok) throw new Error(byRecord.error)
     expect(byRecord.data.total).toBeGreaterThan(0)
-    for (const entry of byRecord.data.entries) expect([entry.leadId, entry.recordId]).toContain(SEEDED_LEAD.id)
+    // The lead's own rows, and its parent or guardian contact's.
+    for (const entry of byRecord.data.entries) {
+      if (entry.table !== "guardian_contacts") expect([entry.leadId, entry.recordId]).toContain(SEEDED_LEAD.id)
+    }
 
     const staffAdmin = await getAuditPage(client, { area: "staff_admin", actor: "system", record: SUPER_ADMIN.roleId })
     if (!staffAdmin.ok) throw new Error(staffAdmin.error)
@@ -178,6 +270,47 @@ describe("the audit history is the Super Admin's", () => {
     expect(future).toEqual({ ok: true, data: { entries: [], total: 0, page: 1, pageCount: 1 } })
 
     expect(await getAuditPage(client, { record: "not a record" })).toEqual({ ok: false, error: "invalid" })
+  })
+
+  test("the Super Admin reads the Staff and roles history and every release", async () => {
+    const client = await signedIn(SUPER_ADMIN)
+    const overview = await getStaffAndRoles(client)
+    if (!overview.ok) throw new Error("Staff and roles could not be read")
+    expect((await getStaffAdminHistory(client, overview.data)).ok).toBe(true)
+    expect((await getResultReleases(client, SEEDED_INTERVIEW)).ok).toBe(true)
+  })
+
+  test("a page past the last shows the first page, with the total", async () => {
+    const client = await signedIn(SUPER_ADMIN)
+    const page = await getAuditPage(client, { record: SEEDED_LEAD.admissionNumber, page: 999 })
+    if (!page.ok) throw new Error(page.error)
+    expect(page.data.page).toBe(1)
+    expect(page.data.total).toBeGreaterThan(0)
+    expect(page.data.entries.length).toBeGreaterThan(0)
+  })
+
+  test("an Admission Number also finds changes to the student's parent or guardian", async () => {
+    const admissions = await signedIn(ADMISSIONS)
+    const thisYear = Number(tanzaniaToday().slice(0, 4))
+    const phone = `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
+    const created = await createLead(admissions, {
+      guardian: { contact: { fullName: "Audit Parent", relationship: "Mother", phone } },
+      student: { fullName: `Audit Pupil ${randomUUID().slice(0, 8)}`, className: "STD 2", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
+      start: { kind: "walk-in", visitDate: tanzaniaToday() },
+    })
+    if (!created.ok) throw new Error(JSON.stringify(created.error))
+    const contactId = await asSystem(async (sql) =>
+      (await sql.query<{ id: string }>("select guardian_contact_id as id from public.leads where id = $1", [created.data.leadId])).rows[0].id,
+    )
+    expect((await updateGuardianContact(admissions, contactId, { fullName: "Audit Parent Renamed" })).ok).toBe(true)
+
+    const page = await getAuditPage(await signedIn(SUPER_ADMIN), { record: created.data.admissionNumber })
+    if (!page.ok) throw new Error(page.error)
+    const contactRows = page.data.entries.filter((entry) => entry.table === "guardian_contacts")
+    expect(contactRows.map((entry) => [entry.action, entry.recordId])).toEqual([
+      ["update", contactId],
+      ["insert", contactId],
+    ])
   })
 
   test("names the Super Admin as the actor of what they did", async () => {

@@ -180,7 +180,9 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 4. The freeze. Deletes are already refused for every row of both tables
 --    (refuse_delete, refuse_truncate). These refuse the rest, the SQL editor
---    and the secret key included.
+--    and the secret key included. Trigger functions run with the writer's
+--    rights, so they spell the role id out: super_admin_role_id() is not
+--    executable by service_role or the API roles.
 -- ---------------------------------------------------------------------------
 
 create function public.refuse_super_admin_role_change()
@@ -189,7 +191,7 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-    if old.id = public.super_admin_role_id() or new.id = public.super_admin_role_id() then
+    if old.id = '5a000000-0000-4000-8000-000000000001'::uuid or new.id = '5a000000-0000-4000-8000-000000000001'::uuid then
         raise exception 'super_admin_frozen' using detail = 'role';
     end if;
     return new;
@@ -213,13 +215,13 @@ set search_path = ''
 as $$
 begin
     if tg_op = 'INSERT' then
-        if new.role_id = public.super_admin_role_id() then
+        if new.role_id = '5a000000-0000-4000-8000-000000000001'::uuid then
             raise exception 'super_admin_frozen' using detail = 'holder';
         end if;
         return new;
     end if;
 
-    if old.role_id <> public.super_admin_role_id() and new.role_id <> public.super_admin_role_id() then
+    if old.role_id <> '5a000000-0000-4000-8000-000000000001'::uuid and new.role_id <> '5a000000-0000-4000-8000-000000000001'::uuid then
         return new;
     end if;
     if new.role_id is distinct from old.role_id
@@ -672,7 +674,9 @@ $$;
 -- optional: days in East Africa Time from and to (inclusive), the actor (a
 -- staff id, or `system`, `public_form`, `workbook_import`), the area
 -- (`lead`, `payment`, `staff_admin`) and the record (an Admission Number, or
--- a record id matched against the row and the lead). `total` repeats the
+-- a record id matched against the row and the lead). A record that is a lead
+-- also matches every parent or guardian contact it is or was linked to, as
+-- lead_history does, since those rows carry the contact's id and no lead. `total` repeats the
 -- number of matching rows on every row. Refusal codes: `forbidden`, and
 -- `invalid` for a bad page or filter.
 create function public.audit_entries(
@@ -712,6 +716,7 @@ declare
     record_text text := nullif(btrim(coalesce(audit_entries.record, '')), '');
     record_id uuid;
     record_lead uuid;
+    related_contacts uuid[] := '{}';
 begin
     if not public.has_permission('audit.view') then
         raise exception 'forbidden';
@@ -744,7 +749,24 @@ begin
             exception when invalid_text_representation then
                 raise exception 'invalid';
             end;
+            select l.id into record_lead from public.leads l where l.id = record_id;
         end if;
+    end if;
+
+    if record_lead is not null then
+        select coalesce(array_agg(distinct c.contact_id), '{}') into related_contacts
+        from (
+            select l.guardian_contact_id as contact_id from public.leads l where l.id = record_lead
+            union
+            select (a.new_values ->> 'guardian_contact_id')::uuid
+            from public.audit_log a
+            where a.table_name = 'leads' and a.row_id = record_lead and a.new_values ? 'guardian_contact_id'
+            union
+            select (a.old_values ->> 'guardian_contact_id')::uuid
+            from public.audit_log a
+            where a.table_name = 'leads' and a.row_id = record_lead and a.old_values ? 'guardian_contact_id'
+        ) c
+        where c.contact_id is not null;
     end if;
 
     return query
@@ -759,7 +781,8 @@ begin
       and (actor_kind_filter is null or a.actor_kind = actor_kind_filter)
       and (actor_staff_filter is null or a.actor_staff_id = actor_staff_filter)
       and (audit_entries.area is null or a.scope = audit_entries.area)
-      and (record_id is null or a.row_id = record_id or a.lead_id = record_id)
+      and (record_id is null or a.row_id = record_id or a.lead_id = record_id
+           or (a.table_name = 'guardian_contacts' and a.row_id = any (related_contacts)))
     order by a.created_at desc, a.id desc
     limit page_limit offset page_offset;
 end;

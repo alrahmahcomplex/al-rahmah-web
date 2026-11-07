@@ -5,14 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
-## Unreleased
+## November 7, 2026 `v0.83.0`
 
 ### IMPROVED
 
 - Check-in now asks "Who has arrived?" with one search field that takes an Admission
   Number or part of the student's name. A name lists the matching students to pick from,
-  Inactive, Archived and Declined ones marked and last. Staff who may register see New
-  family, never registered under it.
+  Declined, Inactive and Archived ones marked and the closed ones last. Staff who may
+  register see New family, never registered under it.
 - Registering a student asks one question per screen, with a step rail beside the form
   (above it on a phone) that shows what was entered and a Change link back to each step,
   and a thin progress bar. The class, year and relationship are chips, day or boarding

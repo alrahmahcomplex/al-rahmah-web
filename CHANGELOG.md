@@ -9,6 +9,15 @@ stay in the `0.x` range.
 
 ### NEW
 
+- The Super Admin creates every role from five templates: Admissions Staff, Admissions
+  Manager, Accountant, Head Accountant and Administrator. New role on Staff and roles
+  offers each one; the new role arrives with the template's permissions and with the
+  roles it manages, and the Super Admin can change any of it afterwards. After the reset
+  no role exists until the Super Admin creates it.
+- Each role has a managed set: the roles whose staff its holders may invite, resend an
+  invite to, deactivate, reactivate and move between. An Admissions Manager manages the
+  Admissions Staff, a Head Accountant the Accountants, and an Administrator the Managers
+  and Head Accountants. Someone whose role manages nobody no longer sees Staff and roles.
 - A Super Admin starts the system after the reset. The school's own account,
   alrahmahcomplex.tz@gmail.com, exists from the start; the owner invites it from the
   Supabase dashboard, and the Super Admin invites the Admissions Manager and everyone
@@ -19,6 +28,10 @@ stay in the `0.x` range.
 
 ### IMPROVED
 
+- Only the Super Admin changes roles: creating, renaming, retiring, reactivating, ticking
+  permissions and setting managed sets. A Manager reads every role's name and
+  permissions with no controls to change them. The Admissions Manager role is no longer
+  locked, and the "Administer staff and roles" permission is gone.
 - Event-by-event history is now the Super Admin's alone: a lead's History page and the
   Staff and roles history are hidden from every other role. The lead screen shows the
   date its status last changed instead.

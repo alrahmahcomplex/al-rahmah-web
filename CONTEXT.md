@@ -126,13 +126,19 @@ The sum of a lead's effective school-fee payments. The lead shows its **School f
 ## Roles
 
 **Staff member**:
-A person with an account on the staff side of the system. Every staff member holds exactly one **Role**. A staff member joins by **Invite**: an Admissions Manager enters their name and email into a role, and they are **Invited** until they open the email and set a password. An invite can be resent while they are Invited, and it can't be sent to an email already on any staff record. A staff member who leaves is **Deactivated**, never deleted: they lose access, their name stays on everything they recorded, and they may be reactivated later.
+A person with an account on the staff side of the system. Every staff member holds exactly one **Role**. A staff member joins by **Invite**: the Super Admin, or someone whose role manages that role, enters their name and email into it, and they are **Invited** until they open the email and set a password. An invite can be resent while they are Invited, and it can't be sent to an email already on any staff record. A staff member who leaves is **Deactivated**, never deleted: they lose access, their name stays on everything they recorded, and they may be reactivated later.
 
 **Role**:
-A named set of **Permissions** held by staff members. The system starts with three roles: **Admissions Manager**, **Admissions Staff**, and **Accountant**. The Admissions Manager may create further roles, rename them and change which permissions they hold, except the role they hold themselves and any role able to administer staff and roles. Nobody may give that permission to a role or take it away from one. Nobody may change their own role or deactivate their own account; another staff member able to administer staff must do it. The Admissions Manager role therefore changes only through a reviewed change to the system itself, however many Managers there are. One Manager may change another Manager's role or deactivate them, after confirming the consequence; the affected Manager is told at their next sign-in. The system always keeps at least one active staff member able to administer staff and roles. A role still held by an active staff member cannot be retired; deactivated staff members do not count as holding it. A deactivated staff member whose role has been retired must be given a current role before they can be reactivated.
+A named set of **Permissions** held by staff members, with a **Managed set**. Roles are data the **Super Admin** makes and changes; nobody else creates a role, renames one, changes its permissions or managed set, or retires or reactivates it. Apart from the Super Admin's own role, no role exists until the Super Admin makes it. The quick way is a **Role template**. Nobody may change their own role or deactivate their own account. Whoever moves or deactivates someone who manages staff confirms it first, and the affected person is told at their next sign-in. A role still held by an active staff member cannot be retired; deactivated staff members do not count as holding it. A retired role can be reactivated. A deactivated staff member whose role has been retired must be given a current role before they can be reactivated.
+
+**Role template**:
+A starting point the Super Admin creates a role from in one step: a name, a set of permissions and a managed set. The role it makes is ordinary role data, edited like any other. The templates are **Admissions Staff**; **Admissions Manager**, managing Admissions Staff; **Accountant**; **Head Accountant**, managing Accountants; and **Administrator**, managing Admissions Managers and Head Accountants. A new role from a template manages the current roles its template names, and joins the managed set of every current role whose template manages it, so the order the roles are made in does not matter. Matching goes by role name, so a renamed role is not matched.
+
+**Managed set**:
+The roles whose staff a role's holders manage: they may invite people into those roles, resend an invite, deactivate, reactivate and correct the name of anyone holding one, and move people between roles in the set. Anything outside the set is refused, and so is every change to roles themselves. A role with an empty managed set manages nobody and does not see **Staff and roles**. A role with one sees the people in its managed set and reads every role's name and permissions, with no control to change them. An "administrator" is just a role whose managed set holds managerial roles; it manages people, never roles, and does not read the audit history.
 
 **Super Admin**:
-The one role that exists only through a reviewed change to the system, never as data a person edits. It holds every permission, including any added later, administers every other role and staff member, Admissions Managers included, and alone reads the audit history. It never appears on Staff and roles, in any role list or count, or among the people listed there; its holder's name shows only where they acted. It has one holder, created with it: the school's own account, which starts the system after the hosted reset and invites everyone else. Nobody can rename, retire or change the role, move anyone into or out of it, or deactivate its holder. The Super Admin may not edit the Admissions Manager role either: that role still changes only through a reviewed change.
+The one role that exists only through a reviewed change to the system, never as data a person edits. It holds every permission, including any added later, alone creates and changes every other role, manages every staff member, and alone reads the audit history. It never appears on Staff and roles, in any role list or count, or among the people listed there; its holder's name shows only where they acted. It has one holder, created with it: the school's own account, which starts the system after the hosted reset and invites everyone else. Nobody can rename, retire or change the role, put it in a managed set, move anyone into or out of it, or deactivate its holder.
 
 **Permission**:
 A single capability in the system, such as recording a school-fee payment or approving a Marketing Agent. Permissions are fixed by the system; roles only choose among them.
@@ -158,13 +164,12 @@ The permissions are:
 | `payments.record` | Recording school-fee payments and payment adjustments, and maintaining the fee amounts in the **Fee schedule**. |
 | `discounts.approve` | Granting or refusing a **Staff child** or **Qualified orphan** discount. |
 | `academic_years.manage` | Setting the **Academic-year start** and the seats in each class, and releasing a seat with **No seat available**. |
-| `staff.administer` | Inviting, deactivating and reactivating staff members, assigning their roles, and defining roles. This is the permission the role guardrails protect. |
 | `group_links.manage` | Saving or replacing the admissions WhatsApp group link for an Enrollment year. |
 | `audit.view` | Reading the audit history: every lead's History page, the Staff and roles history and the system-wide **Audit** screen. Held only by the **Super Admin**; no role may be given it. |
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
 
-The three starting roles hold:
+The templates hold these permissions. Head Accountant has the Accountant's; Administrator has `leads.view` and `payments.view` only.
 
 | Permission | Admissions Staff | Admissions Manager | Accountant |
 |---|:-:|:-:|:-:|
@@ -185,7 +190,6 @@ The three starting roles hold:
 | `payments.record` | | | ✓ |
 | `discounts.approve` | | ✓ | |
 | `academic_years.manage` | | ✓ | |
-| `staff.administer` | | ✓ | |
 | `group_links.manage` | ✓ | ✓ | |
 
 **Audit history**:
@@ -195,7 +199,7 @@ Every change and action the system records is visible, event by event, to the **
 
 Admissions Staff may edit interview results and percentage scores directly. Every edit preserves the previous value, the new value, the staff member who made the edit, and the audit history.
 
-**Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. They grant **Staff child** and **Qualified orphan** discounts and set each year's **Academic-year start** and class seats. The Admissions Manager also administers the staff side: adding and removing staff members, assigning each one's role, and defining roles.
+**Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. They grant **Staff child** and **Qualified orphan** discounts and set each year's **Academic-year start** and class seats. The Admissions Manager template also manages the Admissions Staff: inviting, deactivating and reactivating them. Roles themselves are the Super Admin's.
 
 **Accountant** records school-fee payments and payment adjustments, maintains the fee amounts, and marks the interview fee **Paid** or **Not Paid**. School-fee payment records are the source of the system-derived **Enrolled** status. The Accountant reads leads to find the student being paid for, but does not change them.
 

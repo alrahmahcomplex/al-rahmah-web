@@ -12,6 +12,17 @@ export type StaffMember = {
   email: string
   roleName: string
   permissions: Permission[]
+  // The Super Admin (#237), who creates and changes every role (#241).
+  superAdmin: boolean
+  // The roles whose staff this person manages: their role's managed set.
+  // Empty for the Super Admin, who manages everyone.
+  managedRoleIds: string[]
+}
+
+// Staff and roles is open to the Super Admin and to anyone whose role
+// manages another role's staff.
+export function managesStaff(staff: Pick<StaffMember, "superAdmin" | "managedRoleIds">): boolean {
+  return staff.superAdmin || staff.managedRoleIds.length > 0
 }
 
 // Why someone with a valid session still may not use the staff side.
@@ -28,6 +39,8 @@ type StaffMemberRow = {
   active: boolean
   role_name: string
   permissions: Permission[]
+  super_admin: boolean
+  managed_role_ids: string[] | null
 }
 
 function readStaffRecord(supabase: SupabaseClient) {
@@ -54,6 +67,8 @@ async function loadStaffMember(supabase: SupabaseClient): Promise<Result<StaffMe
       email: data.email,
       roleName: data.role_name,
       permissions: data.permissions,
+      superAdmin: data.super_admin === true,
+      managedRoleIds: data.managed_role_ids ?? [],
     },
   }
 }

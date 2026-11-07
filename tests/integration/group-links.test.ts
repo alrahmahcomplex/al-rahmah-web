@@ -9,7 +9,6 @@ import {
   asSystem,
   createThrowawayStaff,
   inRolledBackTransaction,
-  lockExclusively,
   secretClient,
   signedIn,
 } from "../support/db"
@@ -76,37 +75,6 @@ describe("the group-link permission on a fresh database", () => {
     // audit.view (#237) came after it.
     expect(data?.find((p) => p.name === "group_links.manage")).toEqual({ name: "group_links.manage", position: 19 })
     expect(data?.at(-1)).toEqual({ name: "audit.view", position: 20 })
-  })
-
-  // A fresh database has no staff yet, so nobody administers. Changing the
-  // Manager's role then used to be refused as no_administrator_left; a change
-  // that leaves the role administering is now allowed, and one that takes the
-  // power away is still refused.
-  test("a role update that keeps staff.administer passes with no administrator left; removing it does not", async () => {
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await lockExclusively(sql, ["public.staff_members", "public.roles"])
-      await sql.query("set local session_replication_role = replica")
-      await sql.query("update public.staff_members set active = false")
-      await sql.query("set local session_replication_role = origin")
-      const { rows } = await sql.query<{ count: number }>("select public.administrator_count() as count")
-      expect(Number(rows[0].count)).toBe(0)
-
-      await sql.query(
-        `update public.roles set permissions = array_remove(permissions, 'group_links.manage')
-         where name = 'Admissions Manager'`,
-      )
-      await sql.query(
-        `update public.roles set permissions = array_append(permissions, 'group_links.manage')
-         where name = 'Admissions Manager'`,
-      )
-      await expect(
-        sql.query(
-          `update public.roles set permissions = array_remove(permissions, 'staff.administer')
-           where name = 'Admissions Manager'`,
-        ),
-      ).rejects.toThrow("no_administrator_left")
-    })
   })
 })
 

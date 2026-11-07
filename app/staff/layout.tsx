@@ -1,5 +1,7 @@
 import { cookies } from "next/headers"
 
+import { managesStaff } from "@/lib/services/staff-auth"
+
 import { StaffShell, type ShellItem } from "./_shell/staff-shell"
 import { navCounts } from "./nav-counts"
 import { navFor, STAFF_HOME } from "./navigation"
@@ -12,7 +14,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
 
   // The icons are rendered here: an icon component can't be handed to the
   // client shell, but what it renders can.
-  const items: ShellItem[] = [STAFF_HOME, ...navFor(staff.permissions)].map((entry) => {
+  const items: ShellItem[] = [STAFF_HOME, ...navFor(staff.permissions, undefined, { managesStaff: managesStaff(staff) })].map((entry) => {
     const Icon = entry.icon
     return {
       href: entry.href,

@@ -19,8 +19,27 @@ begin;
 -- Staff and roles are audited, and an audited write needs an actor.
 select public.set_audit_actor('system');
 
-insert into public.roles (name, permissions) values
-    ('Receptionist', array['leads.view', 'leads.create']);
+-- The three roles hosted no longer seeds (#241): the Super Admin creates
+-- them from the templates in lib/role-templates.ts. Locally they come back
+-- with those templates' permissions under fixed ids, and the Admissions
+-- Manager manages Admissions Staff, as the template says.
+-- tests/unit/role-templates.test.ts and tests/integration/roles-v2.test.ts
+-- check that these match the templates.
+insert into public.roles (id, name, permissions) values
+    ('7e000000-0000-4000-8000-000000000001', 'Admissions Staff', array[
+        'follow_ups.record', 'group_links.manage', 'interviews.record', 'leads.close', 'leads.create',
+        'leads.decline', 'leads.edit', 'leads.view', 'payments.view', 'results.send', 'visits.record']),
+    ('7e000000-0000-4000-8000-000000000002', 'Admissions Manager', array[
+        'academic_years.manage', 'agents.approve', 'discounts.approve', 'follow_ups.record',
+        'group_links.manage', 'interviews.record', 'leads.close', 'leads.create', 'leads.decline',
+        'leads.edit', 'leads.view', 'lifecycle.intervene', 'payments.view', 'reopenings.approve',
+        'results.send', 'visits.record']),
+    ('7e000000-0000-4000-8000-000000000003', 'Accountant', array[
+        'interview_payments.record', 'leads.view', 'payments.record', 'payments.view']),
+    ('7e000000-0000-4000-8000-000000000004', 'Receptionist', array['leads.view', 'leads.create']);
+
+insert into public.role_managed_roles (role_id, managed_role_id) values
+    ('7e000000-0000-4000-8000-000000000002', '7e000000-0000-4000-8000-000000000001');
 
 insert into public.staff_members (id, full_name, email, role_id)
 select s.id, s.full_name, s.email, r.id

@@ -280,7 +280,7 @@ describe("policies", () => {
     for (const [key, policy] of Object.entries(POLICIES)) {
       for (const expression of [policy.using, policy.check]) {
         if (expression === null) continue
-        expect(expression, key).toMatch(/\b(has_permission|is_active_staff)\(/)
+        expect(expression, key).toMatch(/\b(has_permission|is_active_staff|manages_role)\(/)
       }
     }
   })
@@ -316,6 +316,22 @@ describe("the Super Admin's freeze", () => {
     ["deleting the holder", `delete from public.staff_members where id = '${HOLDER}'`, "delete_refused"],
     ["giving a role audit.view", `update public.roles set permissions = permissions || array['audit.view'] where name = 'Admissions Manager'`, "audit_view_reserved"],
     ["creating a role with audit.view", "insert into public.roles (name, permissions) values ('Auditor', array['audit.view'])", "audit_view_reserved"],
+    // Roles v2 (#241): the role neither manages nor is managed.
+    [
+      "putting the role in a managed set",
+      `insert into public.role_managed_roles (role_id, managed_role_id) values ((select id from public.roles where name = 'Admissions Manager'), '${ROLE}')`,
+      "super_admin_frozen",
+    ],
+    [
+      "giving the role a managed set",
+      `insert into public.role_managed_roles (role_id, managed_role_id) values ('${ROLE}', (select id from public.roles where name = 'Admissions Staff'))`,
+      "super_admin_frozen",
+    ],
+    [
+      "deleting a managed-set pair",
+      "delete from public.role_managed_roles",
+      "delete_refused",
+    ],
   ]
 
   async function refusedAs(dbRole: "postgres" | "service_role", statement: string): Promise<string> {

@@ -534,13 +534,13 @@ function StepRail({ steps, currentIndex, onChange }: { steps: RailStep[]; curren
                   ? "border-blue-600 bg-blue-600 text-white"
                   : state === "current"
                     ? "border-blue-600 text-blue-600"
-                    : "border-slate-200 text-slate-400",
+                    : "border-slate-300 text-slate-500",
               )}
             >
               {state === "done" ? <CheckIcon className="size-4" /> : index + 1}
             </span>
             <div className="flex min-w-0 flex-col gap-0.5 pt-1">
-              <p className={cn("text-sm font-semibold", state === "upcoming" ? "text-slate-400" : "text-slate-900")}>
+              <p className={cn("text-sm font-semibold", state === "upcoming" ? "text-slate-500" : "text-slate-900")}>
                 {state === "done" && <span className="sr-only">Done: </span>}
                 {step.label}
               </p>

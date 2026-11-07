@@ -16,7 +16,7 @@ import { createLead, getLead } from "@/lib/services/leads"
 import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 
 import { anonClient, asStaffActor, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 import { claimInterviewSerialYear } from "../support/interview-serial-years"
 
 // A retaken interview after a Retake reopening (#71), through the interview,
@@ -304,7 +304,7 @@ describe("the retaken interview's result and fee", () => {
     const { lead, first, retake } = await retaken()
     await recordInterviewResult(await signedIn(ADMISSIONS), retake.interviewId, { interviewDate: today, result: "Passed", score: 73 })
 
-    const history = await getLeadHistory(await signedIn(MANAGER), lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error(`history failed: ${history.error}`)
     const interviewEntries = history.data.entries.filter((entry) => entry.record === "interviews")
 

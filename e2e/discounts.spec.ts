@@ -11,6 +11,7 @@ import { createLead, getLead } from "@/lib/services/leads"
 import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Requesting, granting and refusing a Staff child or Qualified orphan
 // discount, and recording Fee waived (#112). Each test makes its own Passed
@@ -125,7 +126,7 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   await expect(page.getByRole("region", { name: "School fee" })).toContainText("Staff child discount, 25% off TZS 2,000,000")
   await expect(page.getByRole("region", { name: "Discounts" })).toContainText(`Granted by ${MANAGER.name}`)
 
-  await page.goto(`/staff/leads/${lead.id}/history`)
+  await openLeadHistoryAsSuperAdmin(page, lead.id)
   await expect(page.getByText("requested a Staff child discount")).toBeVisible()
   await expect(page.getByText("granted the discount request")).toBeVisible()
 })

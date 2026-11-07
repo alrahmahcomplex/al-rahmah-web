@@ -3,6 +3,7 @@ import { randomInt, randomUUID } from "node:crypto"
 import { expect, test, type Page } from "@playwright/test"
 
 import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // A Referral code entered at New Student (#81). Every run invents its own
 // child and phone number; the codes are slice 4's seeded agents.
@@ -60,7 +61,7 @@ test.describe("a Referral code at New Student", () => {
     await expect(panel.getByLabel("Expected interview fee")).toHaveText("TZS 40,000")
 
     // Its history shows the staff member who added it.
-    await page.getByRole("link", { name: "History" }).click()
+    await openLeadHistoryAsSuperAdmin(page)
     const entries = page.getByRole("list", { name: "History" }).locator(":scope > li")
     await expect(entries.filter({ hasText: "added a Referral code" })).toContainText(ADMISSIONS.name)
     await expect(entries.filter({ hasText: "added a Referral code" })).toContainText("BJN-402")

@@ -108,6 +108,13 @@ describe("the staff navigation", () => {
     expect(navFor(["payments.view"])).not.toContain(leads)
   })
 
+  it("shows Audit only to the Super Admin, the one holder of audit.view (#237)", () => {
+    const audit = STAFF_NAV.find((entry) => entry.label === "Audit")
+    expect(audit).toMatchObject({ href: "/staff/audit", group: "Admin", permission: "audit.view" })
+    expect(navFor([...ADMISSIONS_MANAGER])).not.toContain(audit)
+    expect(navFor(["audit.view"])).toContain(audit)
+  })
+
   it("shows Re-applications to anyone who may view leads, and to no one else", () => {
     const reApplications = STAFF_NAV.find((entry) => entry.label === "Re-applications")
     expect(reApplications).toMatchObject({ href: "/staff/re-applications", group: "Admissions", permission: "leads.view" })

@@ -10,6 +10,7 @@ import { createLead, getLead } from "@/lib/services/leads"
 import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Recording school-fee payments on the lead screen, and the Seat priority on
 // the lead and the lead list. A test that records claims a year of its own
@@ -139,7 +140,7 @@ test.describe("recording a school-fee payment", () => {
     await expect(row.locator("td").last()).toHaveText("First instalment")
 
     // The payment is in the lead's history.
-    await page.goto(`/staff/leads/${lead.id}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead.id)
     await expect(page.getByText("recorded a school-fee payment")).toBeVisible()
   })
 

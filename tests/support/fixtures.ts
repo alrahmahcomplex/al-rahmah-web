@@ -34,6 +34,15 @@ export const RETIRED_ROLE = staff(
 // password works for them.
 export const INVITED = staff("a1a1a1a1-0000-4000-8000-000000000007", "Invited Staff", "invited@example.test", "Admissions Staff")
 
+// The Super Admin (#237): the staff record comes from
+// supabase/migrations/20261130990300_super_admin_role.sql, the local login
+// from supabase/seeds/00_base.sql. The role is hidden from every reader.
+export const SUPER_ADMIN = {
+  ...staff("5a000000-0000-4000-8000-000000000002", "Al-Rahmah Complex", "alrahmahcomplex.tz@gmail.com", "Super Admin"),
+  userId: "99999999-9999-4999-8999-999999999999",
+  roleId: "5a000000-0000-4000-8000-000000000001",
+}
+
 // The Marketing Agent with a login, from the end of supabase/seeds/40_agents.sql:
 // Approved, switched on, with a confirmed email and the shared fixture
 // password. Seeding them turns agent access on. Local fixtures only.

@@ -10,6 +10,9 @@
 --   deactivated@example.test    Admissions Staff, deactivated
 --   retired-role@example.test   Receptionist (a retired role), deactivated
 --   invited@example.test        Admissions Staff, invited, with no account yet
+--
+-- The Super Admin's staff record comes from a migration, not from here (#237);
+-- this file gives it a local login with the same password.
 
 begin;
 
@@ -63,6 +66,34 @@ select
     'email', now(), now(), now()
 from auth.users u
 where u.email like '%@example.test';
+
+-- The Super Admin (#237). Migration 20261130990300_super_admin_role.sql
+-- creates the staff record with the school's own address, as on hosted;
+-- locally it gets a login with the fixture password, so tests can sign in.
+insert into auth.users (
+    instance_id, id, aud, role, email, encrypted_password,
+    email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at,
+    confirmation_token, email_change, email_change_token_new, recovery_token
+)
+select
+    '00000000-0000-0000-0000-000000000000', '99999999-9999-4999-8999-999999999999', 'authenticated', 'authenticated',
+    s.email, extensions.crypt('fixture-password', extensions.gen_salt('bf')),
+    now(), '{"provider":"email","providers":["email"]}', '{}',
+    now(), now(),
+    '', '', '', ''
+from public.staff_members s
+where s.id = '5a000000-0000-4000-8000-000000000002';
+
+insert into auth.identities (
+    provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+)
+select
+    u.id::text, u.id,
+    jsonb_build_object('sub', u.id::text, 'email', u.email, 'email_verified', true),
+    'email', now(), now(), now()
+from auth.users u
+where u.id = '99999999-9999-4999-8999-999999999999';
 
 -- They keep working passwords but have left: deactivated, and the
 -- Receptionist role retired once nobody active held it.

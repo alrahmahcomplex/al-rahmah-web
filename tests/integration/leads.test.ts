@@ -6,7 +6,7 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, findLeadByAdmissionNumber, getLead, type CreateLeadInput, type NewContact, type NewStudent } from "@/lib/services/leads"
 
 import { anonClient, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber, withoutLockWaits } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The lead module against local Supabase, signed in as each seeded role. Each
 // test invents its own names and numbers, so runs never collide with one
@@ -549,12 +549,14 @@ describe("audit history", () => {
     ])
   })
 
-  test("the same history is readable by a staff member who may view leads, and by no one else", async () => {
+  test("the same history is readable by the Super Admin, and by no one else (#237)", async () => {
     const created = await createLead(await signedIn(ADMISSIONS), walkIn())
     if (!created.ok) throw new Error("setup failed")
 
-    const viewed = await (await signedIn(ACCOUNTANT)).from("audit_log").select("id").eq("lead_id", created.data.leadId)
+    const viewed = await (await signedIn(SUPER_ADMIN)).from("audit_log").select("id").eq("lead_id", created.data.leadId)
     expect(viewed.data).toHaveLength(1)
+    const staff = await (await signedIn(ACCOUNTANT)).from("audit_log").select("id").eq("lead_id", created.data.leadId)
+    expect(staff.data).toEqual([])
     const visitor = await anonClient().from("audit_log").select("id").eq("lead_id", created.data.leadId)
     expect(visitor.data).toEqual([])
   })

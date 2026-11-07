@@ -44,3 +44,13 @@ Guardrail 1 stops a Manager editing the role they hold, but on its own it does n
 So the database adds a rule, `administer_role_frozen`. Nobody edits, renames or retires a role that holds `staff.administer` through the app, and nobody grants or removes `staff.administer` on any role. The screen shows the "Administer staff and roles" checkbox on every role but never lets it be ticked or unticked. Those roles, and the permission itself, change only through a reviewed migration.
 
 A side effect: a role edit made in the app can never be the change that leaves no administrator, because no role edit there touches a role that administers. Guardrail 2 still covers the SQL editor and the secret key.
+
+## Amendment, 2026-11-07: the Super Admin, a role that is not data
+
+Owner decision 43 (2026-11-06, #237) adds one role that migrations alone create and change. After the hosted reset (#197) nobody can sign in; the Super Admin is the first account, and invites everyone else.
+
+- Migration `20261130990300_super_admin_role.sql` inserts the role under a fixed id and its one holder's staff record. The role carries no permissions of its own: `has_permission()` answers true for its active holder whatever the name, so a permission a later migration adds needs no grant. `current_staff_member()` lists every permission for the holder.
+- Named triggers freeze it for every database role: `refuse_super_admin_role_change` refuses any update of the role row, and `refuse_super_admin_holder_change` refuses a second holder, a move into or out of the role, and any change to the holder's active state, name or email. The holder's row still takes its first login and its notices time. Deletes were already refused for both tables. Only a migration that disables a trigger by name can change the role or the holder.
+- The role is invisible: row security hides it from every reader and hides the holder from administrators, and the staff write functions treat both as not found for anyone else. The holder's name still shows wherever they acted.
+- The Super Admin holds `staff.administer` like any administrator and counts toward guardrail 2 once joined. Guardrail 1 applies to them. `administer_role_frozen` applies too (decision 1): the Admissions Manager role still changes only through a migration.
+- **Audit visibility.** A new permission, `audit.view`, gates every audit read: the `audit_log` read policy, `lead_history()`, the Staff and roles history and the new `audit_entries()` behind the Audit screen. `refuse_audit_view_grant` refuses any role that lists it, so only the Super Admin holds it. This replaces ADR 4's scope-to-permission read mapping. Everyone else keeps the per-screen facts in `CONTEXT.md` (Audit history).

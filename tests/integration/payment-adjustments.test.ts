@@ -13,7 +13,7 @@ import { listPayments, listSeatPriorities, recordPayment, type PaymentInput, typ
 
 import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Payment adjustments (#110) through the payments and adjustments modules,
 // against local Supabase, signed in as each seeded role. Each test makes
@@ -412,7 +412,7 @@ describe("the history", () => {
     const paymentId = await pay(id, 2_000_000, { type: "full_payment" })
     await adjust(paymentId, VOID)
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), id)
     if (!history.ok) throw new Error(history.error)
     // Newest first, all in the adjustment's one transaction.
     const [priority, status, profile, adjustment] = history.data.entries

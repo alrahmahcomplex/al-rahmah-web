@@ -9,6 +9,7 @@ import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 
 import { signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Raising and withdrawing a Reopening request (#99). Each test raises on a
 // Declined lead of its own; the seeded Pending request on ADMSN-90080, raised
@@ -77,7 +78,7 @@ test.describe("raising a reopening request", () => {
     // Asked once is enough: the banner stops offering it.
     await expect(banner(page).getByRole("link", { name: "Request reopening" })).toHaveCount(0)
 
-    await page.getByRole("link", { name: "History" }).click()
+    await openLeadHistoryAsSuperAdmin(page)
     await expect(page.getByText("requested reopening").first()).toBeVisible()
   })
 
@@ -152,7 +153,7 @@ test.describe("withdrawing a reopening request", () => {
     )
     await expect(panel(page)).toContainText(`Withdrawn by ${ADMISSIONS.name}`)
 
-    await page.getByRole("link", { name: "History" }).click()
+    await openLeadHistoryAsSuperAdmin(page)
     await expect(page.getByText("withdrew the reopening request")).toBeVisible()
   })
 })

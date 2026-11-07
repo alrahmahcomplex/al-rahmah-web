@@ -10,7 +10,7 @@ import { createLead } from "@/lib/services/leads"
 import { getResultRelease, getResultReleases, releaseResult } from "@/lib/services/result-release"
 
 import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Releasing an interview result through the result-release module, against
 // local Supabase. The seeded slice 6 leads are only read, and refusals record
@@ -377,7 +377,7 @@ describe("the record", () => {
     const { leadId, interviewId } = await interviewedLead({ phone, whatsapp, result: "Passed", score: 66.5 })
     expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
 
-    const history = await getLeadHistory(await signedIn(ACCOUNTANT), leadId)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
     if (!history.ok) throw new Error(history.error)
     const entry = history.data.entries.find((e) => e.action === "result_released")
     expect(entry).toMatchObject({ actor: ADMISSIONS.name, record: null })
@@ -471,7 +471,7 @@ describe("sending by SMS", () => {
       },
     })
 
-    const history = await getLeadHistory(await signedIn(ACCOUNTANT), leadId)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
     if (!history.ok) throw new Error(history.error)
     const entry = history.data.entries.find((e) => e.action === "result_released")
     expect(entry).toMatchObject({ actor: ADMISSIONS.name, record: null })

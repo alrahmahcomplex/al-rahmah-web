@@ -7,6 +7,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Declining a lead from the lead screen (#97). Each test declines a lead of
 // its own; the seeded ones are only read.
@@ -74,7 +75,7 @@ test.describe("declining a lead", () => {
     await expect(page.getByRole("region", { name: "Decline", exact: true })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Edit student" })).toHaveCount(0)
 
-    await page.getByRole("link", { name: "History" }).click()
+    await openLeadHistoryAsSuperAdmin(page)
     await expect(page.getByText("declined the lead").first()).toBeVisible()
   })
 

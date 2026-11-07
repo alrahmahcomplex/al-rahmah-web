@@ -12,7 +12,7 @@ import { findReferralAgent, getLeadReferral, setLeadReferralCode } from "@/lib/s
 
 import { registerPendingAgent } from "../support/agents"
 import { anonClient, asSystem, createThrowawayStaff, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // A lead's Referral code through the referral module, against local Supabase,
 // signed in as each seeded role. Tests that change a code make their own
@@ -187,7 +187,7 @@ describe("setting a lead's Referral code", () => {
     await setLeadReferralCode(await signedIn(MANAGER), lead, APPROVED.code)
     await setLeadReferralCode(await signedIn(ADMISSIONS), lead, null)
 
-    const history = await getLeadHistory(await signedIn(ACCOUNTANT), lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error("history failed")
     const changes = history.data.entries
       .filter((e) => e.record === "lead" && e.action === "update")

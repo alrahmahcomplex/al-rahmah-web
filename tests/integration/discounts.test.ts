@@ -21,7 +21,7 @@ import { previewPayment, recordPayment, type PaymentInput } from "@/lib/services
 
 import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Staff child and Qualified orphan discounts, and Fee waived (#112), through
 // the fees module against local Supabase, signed in as each seeded role. Each
@@ -279,7 +279,7 @@ describe("deciding a discount", () => {
     )
     expect(cause.rows[0]).toEqual({ recompute_cause: "discount" })
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), id)
     if (!history.ok) throw new Error(history.error)
     const requests = history.data.entries.filter((entry) => entry.record === "discount_requests")
     expect(requests.map((entry) => [entry.action, entry.actor])).toEqual([

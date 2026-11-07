@@ -63,6 +63,10 @@ The starting roles are seeded before the audit triggers are attached, so they ha
 
 Marketing Agents sign in as a separate principal (ADR 5). The trigger still reads the actor through `audit_actor`, which now finds the staff member through `current_principal()`. An agent session has no actor, even when the transaction sets one, so the trigger refuses any audited write it would make. No `agent` value is added to `actor_kind`. The agent access switch is audited in the `staff_admin` scope.
 
+## Amendment, 2026-11-07: reading is the Super Admin's
+
+The read scopes no longer decide who reads. Every audit read needs `audit.view`, which only the Super Admin holds (ADR 3, amendment of 2026-11-07); `lead_history()` refuses everyone else with `forbidden`. The scopes stay on each row for the Audit screen's area filter. Writing is unchanged.
+
 ## Amendment, 2026-11-06: one reviewed reset before launch
 
 Owner decision 42 (2026-11-06) asked for a complete reset of the hosted database before real use: every row a person made goes, test leads, agents, staff members, every Supabase Auth login and every role included, and only what migrations create stays: the schema, permissions, the audit scope and action-kind lists, the agent access switch row, set off, and the three seeded roles, inserted fresh with the permissions the migrations give them. "Nothing is deleted or rewritten" gets its single exception in migration `20261130990100_hosted_test_data_reset.sql` (#197).

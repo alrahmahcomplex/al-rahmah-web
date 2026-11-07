@@ -11,6 +11,7 @@ import { getResultReleases, releaseResult } from "@/lib/services/result-release"
 
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Releasing an interview result through WhatsApp or by SMS from the lead
 // screen's interview panel. The wa.me tab is checked by its address and never reaches
@@ -117,7 +118,7 @@ test.describe("releasing a result through WhatsApp", () => {
     // The message never lands in our own address.
     expect(page.url()).toBe(leadUrl)
 
-    await page.goto(`/staff/leads/${lead.id}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead.id)
     await expect(page.getByText("sent the result by WhatsApp: Passed, 81.5%")).toBeVisible()
   })
 
@@ -188,7 +189,7 @@ test.describe("releasing a result by SMS", () => {
     await release(page).getByRole("button", { name: "Copy text" }).click()
     await expect.poll(clipboard).toBe(sms.data.text)
 
-    await page.goto(`/staff/leads/${lead.id}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead.id)
     await expect(page.getByText("sent the result by SMS: Failed, 45%")).toBeVisible()
   })
 

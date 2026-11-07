@@ -131,6 +131,9 @@ A person with an account on the staff side of the system. Every staff member hol
 **Role**:
 A named set of **Permissions** held by staff members. The system starts with three roles: **Admissions Manager**, **Admissions Staff**, and **Accountant**. The Admissions Manager may create further roles, rename them and change which permissions they hold, except the role they hold themselves and any role able to administer staff and roles. Nobody may give that permission to a role or take it away from one. Nobody may change their own role or deactivate their own account; another staff member able to administer staff must do it. The Admissions Manager role therefore changes only through a reviewed change to the system itself, however many Managers there are. One Manager may change another Manager's role or deactivate them, after confirming the consequence; the affected Manager is told at their next sign-in. The system always keeps at least one active staff member able to administer staff and roles. A role still held by an active staff member cannot be retired; deactivated staff members do not count as holding it. A deactivated staff member whose role has been retired must be given a current role before they can be reactivated.
 
+**Super Admin**:
+The one role that exists only through a reviewed change to the system, never as data a person edits. It holds every permission, including any added later, administers every other role and staff member, Admissions Managers included, and alone reads the audit history. It never appears on Staff and roles, in any role list or count, or among the people listed there; its holder's name shows only where they acted. It has one holder, created with it: the school's own account, which starts the system after the hosted reset and invites everyone else. Nobody can rename, retire or change the role, move anyone into or out of it, or deactivate its holder. The Super Admin may not edit the Admissions Manager role either: that role still changes only through a reviewed change.
+
 **Permission**:
 A single capability in the system, such as recording a school-fee payment or approving a Marketing Agent. Permissions are fixed by the system; roles only choose among them.
 
@@ -138,7 +141,7 @@ The permissions are:
 
 | Permission | Allows |
 |---|---|
-| `leads.view` | Finding and reading leads and their history, the dashboard, and the follow-up queue. |
+| `leads.view` | Finding and reading leads, the date each lead's status last changed, the dashboard, and the follow-up queue. |
 | `leads.create` | Entering a new lead. A lead matching an existing record becomes a reopening request instead. |
 | `leads.edit` | Correcting a lead's details, parent/guardian contacts, class, enrollment year, day or boarding, **Pre-Form One programme** and referral code, requesting a **Staff child** or **Qualified orphan** discount, reviewing re-applications, and sending the admissions WhatsApp group invitation. |
 | `visits.record` | Recording a campus visit. |
@@ -157,6 +160,7 @@ The permissions are:
 | `academic_years.manage` | Setting the **Academic-year start** and the seats in each class, and releasing a seat with **No seat available**. |
 | `staff.administer` | Inviting, deactivating and reactivating staff members, assigning their roles, and defining roles. This is the permission the role guardrails protect. |
 | `group_links.manage` | Saving or replacing the admissions WhatsApp group link for an Enrollment year. |
+| `audit.view` | Reading the audit history: every lead's History page, the Staff and roles history and the system-wide **Audit** screen. Held only by the **Super Admin**; no role may be given it. |
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
 
@@ -183,6 +187,9 @@ The three starting roles hold:
 | `academic_years.manage` | | ✓ | |
 | `staff.administer` | | ✓ | |
 | `group_links.manage` | ✓ | ✓ | |
+
+**Audit history**:
+Every change and action the system records is visible, event by event, to the **Super Admin** alone. Everyone else keeps only the facts their screen needs: a lead's current status and the date it last changed, who declined a lead and why, who marked it Inactive or Archived and why, the newest result release, an agent's "Retired by [name] on [date]", and the notice of a change someone made to their own role or account.
 
 **Admissions Staff** may create and update leads, record visits, record interviews, add follow-ups, mark leads **Declined**, and send interview results. They see school-fee payments but may not record them, mark the interview fee paid, reopen leads, or perform lifecycle interventions.
 

@@ -96,7 +96,8 @@ function toEntry(row: LeadHistoryRow): LeadHistoryEntry {
   }
 }
 
-// Reads a lead's history. Needs leads.view, as reading the lead does.
+// Reads a lead's history. Needs audit.view, which only the Super Admin
+// holds (#237).
 export async function getLeadHistory(
   supabase: SupabaseClient,
   leadId: string,
@@ -104,7 +105,7 @@ export async function getLeadHistory(
   const { data, error } = await supabase.rpc("lead_history", { lead_id: leadId })
   if (error) {
     // Refused by the function, or by the grant for visitors not signed in.
-    if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
+    if (error.message === "forbidden" || error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
     // A malformed id is a missing lead, not an outage.
     if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not-found" }
     console.error("Could not read a lead's history", error)

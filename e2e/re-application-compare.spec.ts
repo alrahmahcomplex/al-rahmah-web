@@ -5,6 +5,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { admissionYears } from "../lib/admission-form"
 import { secretClient } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Comparing a Re-application with its lead and acting on it (#78): the side by
 // side view with its highlights, Apply on a differing class and phone, and
@@ -100,7 +101,7 @@ test.describe("comparing a re-application with its lead", () => {
     // member's edits.
     await page.goto(`/staff/leads/${mine.leadId}`)
     await expect(page.getByRole("region", { name: "Student" })).toContainText("STD 4")
-    await page.getByRole("link", { name: "History" }).click()
+    await openLeadHistoryAsSuperAdmin(page)
     const entries = page.getByRole("list", { name: "History" }).locator(":scope > li")
     await expect(entries.nth(0)).toContainText(ADMISSIONS.name)
     await expect(entries.nth(0)).toContainText(mine.newPhone.replaceAll(" ", ""))

@@ -15,7 +15,7 @@ import { previewPayment, recordPayment, type PaymentInput } from "@/lib/services
 
 import { asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Where slice 9 meets slice 8's reopening (#115), through the payments, lead
 // closure and reopening modules against local Supabase, signed in as each
@@ -173,7 +173,7 @@ describe("Enrolled after a reopening", () => {
 
     // Newest first: the reopening enrolled the lead again, after the
     // approval brought it back as Interviewed.
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error(history.error)
     const statuses = history.data.entries
       .filter((entry) => entry.record === "lead")

@@ -15,7 +15,7 @@ import { createLead, getLead, type LeadStatus } from "@/lib/services/leads"
 import { getLeadReopenings, raiseReopeningRequest, withdrawReopeningRequest } from "@/lib/services/reopening-requests"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER, type FixtureStaff } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER, type FixtureStaff, SUPER_ADMIN } from "../support/fixtures"
 
 // Approving and rejecting a Reopening request (#101), through the lead
 // closure module against local Supabase, signed in as each seeded role. Each
@@ -356,7 +356,7 @@ describe("the history", () => {
     const approved = await requested(lead)
     await approveReopeningRequest(manager, approved)
 
-    const history = await getLeadHistory(manager, lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error(history.error)
     const entries = history.data.entries
 

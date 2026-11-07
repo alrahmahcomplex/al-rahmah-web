@@ -13,7 +13,7 @@ import { createLead, getLead, getLeadFamily } from "@/lib/services/leads"
 import { tanzaniaToday } from "@/lib/school-calendar"
 
 import { anonClient, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ADMISSIONS } from "../support/fixtures"
+import { ADMISSIONS, SUPER_ADMIN } from "../support/fixtures"
 
 // The admission-form service against local Supabase, with the secret key the
 // Server Action holds, read back as seeded staff. Each test invents its own
@@ -86,7 +86,7 @@ describe("the Admission form service", () => {
     expect(result.ok).toBe(true)
 
     const [item] = await leadsNamed(sent.children[0].fullName)
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), item.id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), item.id)
     expect(history.ok && history.data.entries.map((e) => [e.record, e.action, e.actor])).toEqual([
       ["lead", "insert", "Admission form"],
       ["contact", "insert", "Admission form"],

@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { formatDate } from "@/lib/school-calendar"
 
 import { ACCOUNTANT, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // A lead Enrolled from its payments (#108): the lead screen says what
 // enrolled it and when, and the history says why. Reads the seeded lead only.
@@ -27,7 +28,7 @@ test("a lead paid in Full shows Enrolled, the payment that enrolled it, and why 
   await expect(fee.getByText("By the Full payment of TZS 2,000,000")).toBeVisible()
   await expect(fee.getByText(`On ${formatDate("2026-09-26")}`)).toBeVisible()
 
-  await page.goto(`/staff/leads/${SEEDED_FULL}/history`)
+  await openLeadHistoryAsSuperAdmin(page, SEEDED_FULL)
   await expect(page.getByText("enrolled the lead, because a school-fee payment was recorded")).toBeVisible()
   await expect(page.getByText("recorded what enrolled the lead")).toBeVisible()
 })

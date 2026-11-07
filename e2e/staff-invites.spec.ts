@@ -6,6 +6,7 @@ import { firstName } from "@/app/staff/_today/greeting"
 
 import { inRolledBackTransaction } from "../tests/support/db"
 import { INVITED, MANAGER, RETIRED_ROLE, type FixtureStaff } from "../tests/support/fixtures"
+import { openStaffHistoryAsSuperAdmin } from "./super-admin"
 
 // Inviting staff end to end: the Manager invites from Staff and roles, the
 // email lands in local Mailpit, and the invited person sets a password on
@@ -137,7 +138,7 @@ test("a Manager invites someone, who sets a password from the email and lands on
   await page.reload()
   await expect(personRow(page, invitee.name)).toContainText("Active")
   await expect(personRow(page, invitee.name).getByRole("button", { name: "Resend invite" })).toHaveCount(0)
-  await page.getByRole("button", { name: "History" }).click()
+  await openStaffHistoryAsSuperAdmin(page)
   await expect(
     page.getByRole("list", { name: "History" }).getByRole("listitem").filter({ hasText: `sent an invite to ${invitee.name}` }),
   ).toContainText(MANAGER.name)

@@ -13,7 +13,7 @@ import {
   secretClient,
   signedIn,
 } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The WhatsApp group link for each Enrollment year (#183), through the
 // group-links service against local Supabase, signed in as each seeded role.
@@ -73,7 +73,9 @@ describe("the group-link permission on a fresh database", () => {
 
   test("takes the next position in the permission list", async () => {
     const { data } = await secretClient().from("permissions").select("name, position").order("position")
-    expect(data?.at(-1)).toEqual({ name: "group_links.manage", position: 19 })
+    // audit.view (#237) came after it.
+    expect(data?.find((p) => p.name === "group_links.manage")).toEqual({ name: "group_links.manage", position: 19 })
+    expect(data?.at(-1)).toEqual({ name: "audit.view", position: 20 })
   })
 
   // A fresh database has no staff yet, so nobody administers. Changing the
@@ -172,7 +174,7 @@ describe("setting a year's group link", () => {
       const { data: row, error: rowError } = await admissions.from("whatsapp_group_links")
         .select("id").eq("enrollment_year", year).single()
       expect(rowError).toBeNull()
-      const { data: history, error } = await admissions.from("audit_log")
+      const { data: history, error } = await (await signedIn(SUPER_ADMIN)).from("audit_log")
         .select("action, actor_staff_id, old_values, new_values")
         .eq("table_name", "whatsapp_group_links").eq("row_id", row!.id).order("id")
       expect(error).toBeNull()
@@ -323,14 +325,14 @@ describe("the links table", () => {
     ).rejects.toThrow()
   })
 
-  test("each change is in the audit log under the lead scope, for staff who view leads", async () => {
+  test("each change is in the audit log under the lead scope, for the Super Admin (#237)", async () => {
     const year = await unusedYear()
     const first = inviteLink()
     const second = inviteLink()
     await setGroupLink(await signedIn(ADMISSIONS), year, first, null)
     await setGroupLink(await signedIn(MANAGER), year, second, first)
 
-    const { data } = await (await signedIn(ADMISSIONS))
+    const { data } = await (await signedIn(SUPER_ADMIN))
       .from("audit_log")
       .select("action, scope, actor_staff_id, old_values, new_values")
       .eq("table_name", "whatsapp_group_links")
@@ -342,7 +344,7 @@ describe("the links table", () => {
       .select("id")
       .eq("enrollment_year", year)
       .single()
-    const { data: history } = await (await signedIn(ADMISSIONS))
+    const { data: history } = await (await signedIn(SUPER_ADMIN))
       .from("audit_log")
       .select("action, scope, actor_staff_id, old_values, new_values")
       .eq("table_name", "whatsapp_group_links")

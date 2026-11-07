@@ -10,16 +10,17 @@ export const metadata: Metadata = {
   title: "Reports · Al-Rahmah Complex",
 }
 
-// The statistics that were the staff home until #226, for staff who
-// administer the staff side. The dashboard reads leads, so the page needs
-// leads.view as well, as the sidebar entry does.
+// The statistics that were the staff home until #226, for holders of
+// reports.view (#241). The database still answers each count only under
+// leads.view and Seats by class only under payments.view, so the page shows
+// nobody more than their role reads elsewhere.
 export default async function ReportsPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("staff.administer") || !staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("reports.view")) forbidden()
 
   const supabase = await createClient()
 

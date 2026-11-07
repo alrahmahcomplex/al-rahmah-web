@@ -81,7 +81,7 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
     permission: "reopenings.approve",
     alsoNeeds: "leads.view",
   },
-  { href: "/staff/reports", label: "Reports", group: "Admin", icon: ChartColumnIcon, permission: "staff.administer", alsoNeeds: "leads.view" },
+  { href: "/staff/reports", label: "Reports", group: "Admin", icon: ChartColumnIcon, permission: "reports.view" },
   { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: ShieldCheckIcon, managesStaff: true },
   // The Super Admin's alone: no role can hold audit.view (#237).
   { href: "/staff/audit", label: "Audit", group: "Admin", icon: ScrollTextIcon, permission: "audit.view" },

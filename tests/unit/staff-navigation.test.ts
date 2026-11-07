@@ -36,6 +36,7 @@ const ADMISSIONS_MANAGER = [
   "agents.approve",
   "discounts.approve",
   "academic_years.manage",
+  "reports.view",
 ] as const
 const ACCOUNTANT = ["leads.view", "interview_payments.record", "payments.view", "payments.record"] as const
 
@@ -145,11 +146,13 @@ describe("the staff navigation", () => {
     expect(navFor(["leads.view", "payments.view", "payments.record"])).not.toContain(reopenings)
   })
 
-  it("shows Reports, the old dashboard, to staff who administer the staff side and may view leads", () => {
+  it("shows Reports, the old dashboard, to holders of reports.view alone (#241)", () => {
     const reports = STAFF_NAV.find((entry) => entry.label === "Reports")
-    expect(reports).toMatchObject({ href: "/staff/reports", group: "Admin", permission: "staff.administer", alsoNeeds: "leads.view" })
+    expect(reports).toMatchObject({ href: "/staff/reports", group: "Admin", permission: "reports.view" })
+    expect(reports?.alsoNeeds).toBeUndefined()
     expect(navFor(ADMISSIONS_MANAGER)).toContain(reports)
-    expect(navFor(["staff.administer"])).not.toContain(reports)
+    expect(navFor(["reports.view"])).toContain(reports)
+    expect(navFor(["leads.view"])).not.toContain(reports)
     expect(navFor(ADMISSIONS_STAFF)).not.toContain(reports)
     expect(navFor(ACCOUNTANT)).not.toContain(reports)
   })

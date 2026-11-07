@@ -32,7 +32,7 @@ insert into public.roles (id, name, permissions) values
     ('7e000000-0000-4000-8000-000000000002', 'Admissions Manager', array[
         'academic_years.manage', 'agents.approve', 'discounts.approve', 'follow_ups.record',
         'group_links.manage', 'interviews.record', 'leads.close', 'leads.create', 'leads.decline',
-        'leads.edit', 'leads.view', 'lifecycle.intervene', 'payments.view', 'reopenings.approve',
+        'leads.edit', 'leads.view', 'lifecycle.intervene', 'payments.view', 'reopenings.approve', 'reports.view',
         'results.send', 'visits.record']),
     ('7e000000-0000-4000-8000-000000000003', 'Accountant', array[
         'interview_payments.record', 'leads.view', 'payments.record', 'payments.view']),

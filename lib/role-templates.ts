@@ -54,6 +54,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       "discounts.approve",
       "lifecycle.intervene",
       "reopenings.approve",
+      "reports.view",
     ],
     manages: ["Admissions Staff"],
   },
@@ -65,14 +66,14 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   },
   {
     name: "Head Accountant",
-    summary: "An Accountant who also manages the Accountants.",
-    permissions: ACCOUNTANT,
+    summary: "An Accountant who also manages the Accountants and sees Reports.",
+    permissions: [...ACCOUNTANT, "reports.view"],
     manages: ["Accountant"],
   },
   {
     name: "Administrator",
-    summary: "Manages Admissions Managers and Head Accountants. Reads leads and payments; changes neither.",
-    permissions: ["leads.view", "payments.view"],
+    summary: "Manages Admissions Managers and Head Accountants. Reads leads, payments and Reports; changes neither.",
+    permissions: ["leads.view", "payments.view", "reports.view"],
     manages: ["Admissions Manager", "Head Accountant"],
   },
 ]

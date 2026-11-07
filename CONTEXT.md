@@ -165,11 +165,12 @@ The permissions are:
 | `discounts.approve` | Granting or refusing a **Staff child** or **Qualified orphan** discount. |
 | `academic_years.manage` | Setting the **Academic-year start** and the seats in each class, and releasing a seat with **No seat available**. |
 | `group_links.manage` | Saving or replacing the admissions WhatsApp group link for an Enrollment year. |
+| `reports.view` | Opening **Reports**, the lead and seat statistics. Each count still needs `leads.view`, and Seats by class needs `payments.view`. |
 | `audit.view` | Reading the audit history: every lead's History page, the Staff and roles history and the system-wide **Audit** screen. Held only by the **Super Admin**; no role may be given it. |
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
 
-The templates hold these permissions. Head Accountant has the Accountant's; Administrator has `leads.view` and `payments.view` only.
+The templates hold these permissions. Head Accountant has the Accountant's plus `reports.view`; Administrator has `leads.view`, `payments.view` and `reports.view` only.
 
 | Permission | Admissions Staff | Admissions Manager | Accountant |
 |---|:-:|:-:|:-:|
@@ -191,6 +192,7 @@ The templates hold these permissions. Head Accountant has the Accountant's; Admi
 | `discounts.approve` | | ✓ | |
 | `academic_years.manage` | | ✓ | |
 | `group_links.manage` | ✓ | ✓ | |
+| `reports.view` | | ✓ | |
 
 **Audit history**:
 Every change and action the system records is visible, event by event, to the **Super Admin** alone. Everyone else keeps only the facts their screen needs: a lead's current status and the date it last changed, who declined a lead and why, who marked it Inactive or Archived and why, the newest result release, an agent's "Retired by [name] on [date]", and the notice of a change someone made to their own role or account.

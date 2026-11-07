@@ -95,6 +95,19 @@ describe("roles become templates", () => {
     expect(rows).toEqual([{ permissions: 0, roles: 0, kind: null }])
   })
 
+  test("reports.view is an ordinary permission the Super Admin grants (#241)", async () => {
+    const { data: listed } = await (await signedIn(MANAGER)).from("permissions").select("name, label").eq("name", "reports.view")
+    expect(listed).toEqual([{ name: "reports.view", label: "View reports" }])
+
+    const name = unique("Reports reader")
+    const created = await (await signedIn(SUPER_ADMIN)).rpc("create_role", { name, permissions: ["reports.view"] })
+    expect(created.error).toBeNull()
+    const { rows } = await inRolledBackTransaction((sql) =>
+      sql.query<{ permissions: string[] }>("select permissions from public.roles where name = $1", [name]),
+    )
+    expect(rows).toEqual([{ permissions: ["reports.view"] }])
+  })
+
   test("the legacy guards are gone", async () => {
     const { rows } = await inRolledBackTransaction((sql) =>
       sql.query<{ name: string }>(

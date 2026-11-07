@@ -10,6 +10,7 @@ import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // A retaken interview after a Retake reopening (#71), on the lead screen's
 // interview panel. The test that registers and records a retake reopens a
@@ -97,7 +98,7 @@ test("Admissions Staff register and record a retaken interview, and the earlier 
   await expect(earlier).toContainText("39%")
 
   // The history names both interviews.
-  await page.goto(`/staff/leads/${lead.id}/history`)
+  await openLeadHistoryAsSuperAdmin(page, lead.id)
   await expect(page.getByText(`registered the lead for a retaken interview (S/N ${serial})`)).toBeVisible()
   await expect(page.getByText(`recorded the interview result (S/N ${serial})`)).toBeVisible()
   await expect(page.getByText(`recorded the interview result (S/N ${lead.firstSerial})`)).toBeVisible()

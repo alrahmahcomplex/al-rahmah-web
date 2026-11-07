@@ -25,7 +25,7 @@ import {
   signedIn,
   unusedAdmissionNumber,
 } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Reviewing Re-applications (#77), against local Supabase: the queue, a
 // lead's list, and Mark reviewed. Each test records re-applications of its
@@ -323,7 +323,7 @@ describe("Mark reviewed", () => {
     const id = await reApply(lead)
     expect((await markReApplicationReviewed(await signedIn(ADMISSIONS), id)).ok).toBe(true)
 
-    const history = await getLeadHistory(await signedIn(MANAGER), lead.id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead.id)
     if (!history.ok) throw new Error(history.error)
     const [review] = history.data.entries
     expect(review).toMatchObject({ actor: ADMISSIONS.name, record: "re_applications", recordId: id, action: "update" })

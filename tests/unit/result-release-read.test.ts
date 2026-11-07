@@ -43,12 +43,13 @@ function release(score: number) {
 }
 
 // Answers each result_release_state call with the next row, and every
-// result_releases call with the releases.
+// latest_result_release call with the newest of the releases and their count.
 function client(states: object[], releases: object[]) {
   const answers = [...states]
+  const latest = [{ released_at: null, ...releases[0], release_count: releases.length }]
   return {
     rpc: async (name: string) =>
-      name === "result_release_state" ? { data: answers.shift() ?? states.at(-1), error: null } : { data: releases, error: null },
+      name === "result_release_state" ? { data: answers.shift() ?? states.at(-1), error: null } : { data: latest, error: null },
   } as unknown as SupabaseClient
 }
 

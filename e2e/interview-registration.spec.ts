@@ -7,6 +7,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { asSystem, secretClient } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Registering a lead for interview on the lead screen's interview panel.
 
@@ -60,7 +61,7 @@ test.describe("registering a lead for interview", () => {
     // It stays after a reload, and the history shows it.
     await page.reload()
     await expect(panel(page).getByLabel("Interview S/N")).toHaveText(serial)
-    await page.goto(`/staff/leads/${lead.id}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead.id)
     await expect(page.getByText("registered the lead for interview")).toBeVisible()
   })
 

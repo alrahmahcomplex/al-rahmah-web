@@ -13,7 +13,7 @@ import { submitAdmissionForm } from "@/lib/services/admission-form"
 import { applyFormDiscountCode, estimateDiscountCode, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
 
 import { anonClient, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The Discount code on the Admission form (#83) against local Supabase: the
 // form's estimate, and the code reaching every lead the form creates, through
@@ -56,7 +56,7 @@ async function codeOf(name: string): Promise<string | null> {
 }
 
 async function codeChanges(leadId: string) {
-  const history = await getLeadHistory(await signedIn(ADMISSIONS), leadId)
+  const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
   if (!history.ok) throw new Error("history failed")
   return history.data.entries
     .filter((e) => e.record === "lead" && e.action === "update" && e.changes.some((c) => c.field === "referral_code"))

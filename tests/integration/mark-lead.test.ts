@@ -15,7 +15,7 @@ import {
 import { createLead, updateLeadDetails, type LeadClosure, type LeadStatus } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Marking a lead Inactive or Archived through the lead closure module (#98),
 // against local Supabase. Each test marks leads of its own; the seeded ones
@@ -319,7 +319,7 @@ describe("the history of a mark", () => {
     const lead = await newLead()
     await markLead(staff, lead, { mark: "archived", reason: "Record created in error", note: "Entered twice." })
 
-    const history = await getLeadHistory(staff, lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error(`history failed: ${history.error}`)
     const [latest] = history.data.entries
     expect(latest).toMatchObject({ actor: ADMISSIONS.name, record: "lead", action: "update" })

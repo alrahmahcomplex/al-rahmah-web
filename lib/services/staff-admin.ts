@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { Permission } from "@/lib/permissions"
+import { RESERVED_PERMISSIONS, type Permission } from "@/lib/permissions"
 
 import { recordAction } from "./audit"
 import type { Result } from "./result"
@@ -266,6 +266,9 @@ export async function resendInvite(
 // Reads for the Staff and roles screen.
 // ---------------------------------------------------------------------------
 
+// The migration-made role (#237). No reader returns it; the history names it.
+export const SUPER_ADMIN_ROLE_ID = "5a000000-0000-4000-8000-000000000001"
+
 export type PermissionOption = { name: Permission; label: string }
 
 export type RoleSummary = {
@@ -290,6 +293,10 @@ export type StaffAndRoles = {
   permissions: PermissionOption[]
   roles: RoleSummary[]
   staff: StaffSummary[]
+  // Every name the caller may read, by staff id, for the history's actors:
+  // the staff above plus the signed-in Super Admin's own record, which the
+  // list leaves out.
+  actorNames?: ReadonlyMap<string, string>
 }
 
 type RoleRow = { id: string; name: string; permissions: Permission[]; retired: boolean }
@@ -308,13 +315,18 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
     return { ok: false, error: "unavailable" }
   }
 
-  const staffRows = (staff.data ?? []) as StaffRow[]
+  // The database never returns the Super Admin role (#237). The Super Admin
+  // still reads their own staff record, on that role, so the list leaves out
+  // anyone whose role it did not return.
+  const roleRows = (roles.data ?? []) as RoleRow[]
+  const readable = (staff.data ?? []) as StaffRow[]
+  const staffRows = readable.filter((s) => roleRows.some((role) => role.id === s.role_id))
   const invitedIds = new Set((invited.data ?? []) as string[])
   return {
     ok: true,
     data: {
-      permissions: (permissions.data ?? []) as PermissionOption[],
-      roles: ((roles.data ?? []) as RoleRow[]).map((role) => ({
+      permissions: ((permissions.data ?? []) as PermissionOption[]).filter((p) => !RESERVED_PERMISSIONS.includes(p.name)),
+      roles: roleRows.map((role) => ({
         ...role,
         activeHolders: staffRows.filter((s) => s.role_id === role.id && s.active).length,
       })),
@@ -326,12 +338,14 @@ export async function getStaffAndRoles(supabase: SupabaseClient): Promise<Result
         active: s.active,
         invited: invitedIds.has(s.id),
       })),
+      actorNames: new Map(readable.map((s) => [s.id, s.full_name])),
     },
   }
 }
 
 // ---------------------------------------------------------------------------
 // History: staff-and-role changes and invites, newest first, as sentences.
+// The audit log is the Super Admin's alone (#237); anyone else reads no rows.
 // Names are looked up when read, so a corrected name shows everywhere.
 // ---------------------------------------------------------------------------
 
@@ -468,7 +482,15 @@ export async function getStaffAdminHistory(
   supabase: SupabaseClient,
   staffAndRoles: StaffAndRoles,
   limit = 100,
-): Promise<Result<HistoryEntry[], "unavailable">> {
+): Promise<Result<HistoryEntry[], "forbidden" | "unavailable">> {
+  // Row security would answer anyone else with no rows; say forbidden instead.
+  const allowed = await supabase.rpc("has_permission", { permission: "audit.view" })
+  if (allowed.error) {
+    console.error("Could not check the permission to read the staff and roles history", allowed.error)
+    return { ok: false, error: "unavailable" }
+  }
+  if (allowed.data !== true) return { ok: false, error: "forbidden" }
+
   const { data, error } = await supabase
     .from("audit_log")
     .select("id, table_name, row_id, action, old_values, new_values, actor_kind, actor_staff_id, created_at")
@@ -482,8 +504,9 @@ export async function getStaffAdminHistory(
   }
 
   const lookup: HistoryLookup = {
-    staffNames: new Map(staffAndRoles.staff.map((s) => [s.id, s.name])),
-    roleNames: new Map(staffAndRoles.roles.map((r) => [r.id, r.name])),
+    staffNames: staffAndRoles.actorNames ?? new Map(staffAndRoles.staff.map((s) => [s.id, s.name])),
+    // The Super Admin role is left out of the roles; its own entries still name it.
+    roleNames: new Map([[SUPER_ADMIN_ROLE_ID, "Super Admin"], ...staffAndRoles.roles.map((r): [string, string] => [r.id, r.name])]),
     permissionLabels: new Map(staffAndRoles.permissions.map((p) => [p.name, p.label])),
   }
   return { ok: true, data: ((data ?? []) as AuditRow[]).map((row) => describeAuditRow(row, lookup)) }

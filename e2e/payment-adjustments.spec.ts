@@ -11,6 +11,7 @@ import { recordPayment } from "@/lib/services/school-fee-payments"
 import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Adjusting and voiding school-fee payments on the lead screen (#110). The
 // test that adjusts claims a year of its own with a schedule of its own
@@ -149,7 +150,7 @@ test("the Accountant adjusts one payment and voids a duplicate, and each shows i
   await form.getByRole("button", { name: "Cancel" }).click()
 
   // The history says what each adjustment did.
-  await page.goto(`/staff/leads/${id}/history`)
+  await openLeadHistoryAsSuperAdmin(page, id)
   await expect(page.getByText("voided a school-fee payment")).toBeVisible()
   await expect(page.getByText("adjusted a school-fee payment")).toBeVisible()
   await expect(page.getByText("changed the Seat priority, because a payment was adjusted")).toBeVisible()

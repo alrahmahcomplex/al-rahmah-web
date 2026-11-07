@@ -22,7 +22,7 @@ import {
   signedIn,
   unusedAdmissionNumber,
 } from "../support/db"
-import { ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Re-applications (#76): an Admission form child who is already on file,
 // against local Supabase. Each test makes its own leads, with invented names
@@ -309,7 +309,7 @@ describe("the re-application in the lead's history", () => {
     const lead = await onFile()
     expect((await submitAdmissionForm(secretClient(), form(lead.parent, [sameChild(lead, { className: "STD 4" })]))).ok).toBe(true)
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), lead.id)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead.id)
     if (!history.ok) throw new Error(history.error)
     const [flag, recorded] = history.data.entries
     expect([recorded.record, recorded.action, recorded.actor]).toEqual(["re_applications", "insert", "Admission form"])

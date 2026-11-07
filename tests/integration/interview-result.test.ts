@@ -13,7 +13,7 @@ import {
 import { createLead, type LeadStatus } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Recording and correcting an interview result through the interview module,
 // against local Supabase. Each test registers leads of its own; the seeded
@@ -77,7 +77,7 @@ async function stored(interviewId: string): Promise<Stored> {
 }
 
 async function interviewHistory(leadId: string) {
-  const history = await getLeadHistory(await signedIn(MANAGER), leadId)
+  const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
   if (!history.ok) throw new Error("history failed")
   return history.data.entries
 }

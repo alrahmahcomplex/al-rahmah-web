@@ -13,8 +13,12 @@ export function LeadSummary({
   student = (fields) => fields,
   parent = (fields) => fields,
   nextStep,
+  statusSince,
 }: {
   lead: Lead
+  // The day the status last changed (YYYY-MM-DD), which every lead reader
+  // keeps once the history is the Super Admin's (#237).
+  statusSince?: string
   student?: (fields: ReactNode) => ReactNode
   parent?: (fields: ReactNode) => ReactNode
   nextStep?: ReactNode
@@ -33,6 +37,7 @@ export function LeadSummary({
             {lead.admissionNumber}
           </p>
           <Badge variant="secondary">{lead.status}</Badge>
+          {statusSince && <span className="text-sm text-muted-foreground">since {formatDate(statusSince)}</span>}
           {lead.closure && <Badge variant="outline">{lead.closure}</Badge>}
           {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
           {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}

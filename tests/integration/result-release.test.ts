@@ -7,10 +7,10 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadHistory } from "@/lib/services/audit"
 import { recordInterviewResult, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
-import { getResultRelease, getResultReleases, releaseResult } from "@/lib/services/result-release"
+import { getLatestResultRelease, getResultRelease, getResultReleases, releaseResult } from "@/lib/services/result-release"
 
 import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Releasing an interview result through the result-release module, against
 // local Supabase. The seeded slice 6 leads are only read, and refusals record
@@ -111,7 +111,7 @@ async function snapshot(leadId: string) {
 }
 
 async function releaseCount(interviewId: string) {
-  const releases = await getResultReleases(await signedIn(MANAGER), interviewId)
+  const releases = await getResultReleases(await signedIn(SUPER_ADMIN), interviewId)
   if (!releases.ok) throw new Error(releases.error)
   return releases.data.length
 }
@@ -127,7 +127,8 @@ describe("the gate", () => {
         amountOwed: null,
         canSend: true,
         offer: null,
-        releases: [],
+        latestRelease: null,
+        releaseCount: 0,
         changedSinceSent: false,
       },
     })
@@ -204,7 +205,7 @@ describe("who may send", () => {
     const view = await getResultRelease(accountant, leadId, OFFICE)
     expect(view).toMatchObject({
       ok: true,
-      data: { interviewId, blocked: null, canSend: false, offer: null, releases: [{ channel: "whatsapp", releasedBy: ADMISSIONS.name }] },
+      data: { interviewId, blocked: null, canSend: false, offer: null, latestRelease: { channel: "whatsapp", releasedBy: ADMISSIONS.name }, releaseCount: 1 },
     })
     // Nothing of the message or the numbers reaches a caller who can't send.
     expect(JSON.stringify(view)).not.toMatch(/Assalaam|\+255/)
@@ -213,11 +214,18 @@ describe("who may send", () => {
     expect(await releaseCount(interviewId)).toBe(1)
   })
 
+  test("every seeded role is refused the full list of releases, which is the Super Admin's (#237)", async () => {
+    for (const person of [MANAGER, ADMISSIONS, ACCOUNTANT]) {
+      expect(await getResultReleases(await signedIn(person), SEEDED.whatsapp.interview), person.roleName).toEqual({ ok: false, error: "forbidden" })
+    }
+  })
+
   test("a deactivated staff member is refused everything", async () => {
     const deactivated = await signedIn(DEACTIVATED)
     expect(await getResultRelease(deactivated, SEEDED.whatsapp.lead, OFFICE)).toEqual({ ok: false, error: "forbidden" })
     expect(await releaseResult(deactivated, SEEDED.whatsapp.interview, "whatsapp", OFFICE)).toEqual({ ok: false, error: "forbidden" })
     expect(await getResultReleases(deactivated, SEEDED.whatsapp.interview)).toEqual({ ok: false, error: "forbidden" })
+    expect(await getLatestResultRelease(deactivated, SEEDED.whatsapp.interview)).toEqual({ ok: false, error: "forbidden" })
     expect(await releaseCount(SEEDED.whatsapp.interview)).toBe(0)
   })
 
@@ -232,7 +240,7 @@ describe("who may send", () => {
         await sql.query<{ fn: string; anon: boolean; authenticated: boolean }>(
           `select f as fn, has_function_privilege('anon', f, 'execute') as anon,
                   has_function_privilege('authenticated', f, 'execute') as authenticated
-           from unnest(array['public.release_result(uuid, text)', 'public.result_releases(uuid)',
+           from unnest(array['public.release_result(uuid, text)', 'public.result_releases(uuid)', 'public.latest_result_release(uuid)',
                              'public.result_release_state(uuid)', 'public.result_release_channel(uuid)',
                              'public.result_message_fits(text, text)']) f`,
         )
@@ -241,6 +249,7 @@ describe("who may send", () => {
     expect(granted).toEqual([
       { fn: "public.release_result(uuid, text)", anon: false, authenticated: true },
       { fn: "public.result_releases(uuid)", anon: false, authenticated: true },
+      { fn: "public.latest_result_release(uuid)", anon: false, authenticated: true },
       { fn: "public.result_release_state(uuid)", anon: false, authenticated: true },
       { fn: "public.result_release_channel(uuid)", anon: false, authenticated: false },
       { fn: "public.result_message_fits(text, text)", anon: false, authenticated: false },
@@ -270,7 +279,8 @@ describe("the message and the channel", () => {
         blocked: null,
         canSend: true,
         offer: { channel: "whatsapp", whatsappPhone: "+255700000602", directPhone: "+255700000601" },
-        releases: [],
+        latestRelease: null,
+        releaseCount: 0,
       },
     })
     expect(view.ok && view.data.offer?.whatsappMessage).toBe(expected.ok && expected.data.text)
@@ -295,7 +305,7 @@ describe("the message and the channel", () => {
     expect(decodeURIComponent(released.data.link.split("?text=")[1])).toBe(released.data.text)
     expect(released.data.text).toContain(`*${studentName}*`)
 
-    expect(await getResultReleases(await signedIn(ADMISSIONS), interviewId)).toMatchObject({
+    expect(await getResultReleases(await signedIn(SUPER_ADMIN), interviewId)).toMatchObject({
       ok: true,
       data: [{ channel: "whatsapp", numberUsed: "whatsapp" }],
     })
@@ -309,7 +319,7 @@ describe("the message and the channel", () => {
       new RegExp(`^https://wa\\.me/255${phone.slice(1)}\\?text=`),
     )
     expect(released.ok && released.data.text).toContain("*Alama:* 40.5%")
-    const releases = await getResultReleases(await signedIn(MANAGER), interviewId)
+    const releases = await getResultReleases(await signedIn(SUPER_ADMIN), interviewId)
     expect(releases).toMatchObject({ ok: true, data: [{ channel: "whatsapp", numberUsed: "direct", result: "Failed", score: 40.5 }] })
   })
 
@@ -377,7 +387,7 @@ describe("the record", () => {
     const { leadId, interviewId } = await interviewedLead({ phone, whatsapp, result: "Passed", score: 66.5 })
     expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
 
-    const history = await getLeadHistory(await signedIn(ACCOUNTANT), leadId)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
     if (!history.ok) throw new Error(history.error)
     const entry = history.data.entries.find((e) => e.action === "result_released")
     expect(entry).toMatchObject({ actor: ADMISSIONS.name, record: null })
@@ -403,7 +413,7 @@ describe("the record", () => {
     expect(await releaseCount(interviewId)).toBe(1)
   })
 
-  test("the release shows on the lead's section, newest first", async () => {
+  test("the newest release shows on the lead's section, with the count", async () => {
     const { leadId, interviewId } = await interviewedLead()
     expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
     expect((await releaseResult(await signedIn(MANAGER), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
@@ -411,10 +421,8 @@ describe("the record", () => {
     expect(view).toMatchObject({
       ok: true,
       data: {
-        releases: [
-          { releasedBy: MANAGER.name, channel: "whatsapp", result: "Passed", score: 78, templateId: "whatsapp_passed_v1" },
-          { releasedBy: ADMISSIONS.name, channel: "whatsapp" },
-        ],
+        latestRelease: { releasedBy: MANAGER.name, channel: "whatsapp", result: "Passed", score: 78, templateId: "whatsapp_passed_v1" },
+        releaseCount: 2,
       },
     })
   })
@@ -471,7 +479,7 @@ describe("sending by SMS", () => {
       },
     })
 
-    const history = await getLeadHistory(await signedIn(ACCOUNTANT), leadId)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
     if (!history.ok) throw new Error(history.error)
     const entry = history.data.entries.find((e) => e.action === "result_released")
     expect(entry).toMatchObject({ actor: ADMISSIONS.name, record: null })
@@ -487,7 +495,7 @@ describe("sending by SMS", () => {
     expect(JSON.stringify(entry)).not.toContain(phone.slice(1))
     expect(await getResultRelease(staff, leadId, OFFICE)).toMatchObject({
       ok: true,
-      data: { releases: [{ channel: "sms", numberUsed: "direct", releasedBy: ADMISSIONS.name, templateId: "sms_failed_v1" }] },
+      data: { latestRelease: { channel: "sms", numberUsed: "direct", releasedBy: ADMISSIONS.name, templateId: "sms_failed_v1" }, releaseCount: 1 },
     })
   })
 
@@ -504,7 +512,7 @@ describe("sending by SMS", () => {
     expect(await releaseCount(interviewId)).toBe(0)
 
     expect(await releaseResult(staff, interviewId, "sms", OFFICE)).toMatchObject({ ok: true, data: { channel: "sms" } })
-    expect(await getResultReleases(staff, interviewId)).toMatchObject({ ok: true, data: [{ channel: "sms", numberUsed: "direct" }] })
+    expect(await getResultReleases(await signedIn(SUPER_ADMIN), interviewId)).toMatchObject({ ok: true, data: [{ channel: "sms", numberUsed: "direct" }] })
   })
 
   test("sms is allowed where WhatsApp is offered, and goes to the direct phone, not the WhatsApp number", async () => {
@@ -517,7 +525,7 @@ describe("sending by SMS", () => {
     const released = await releaseResult(staff, interviewId, "sms", OFFICE)
     expect(released).toMatchObject({ ok: true, data: { channel: "sms", phone: `+255${phone.slice(1)}` } })
     expect(released.ok && released.data.text).not.toContain("*")
-    expect(await getResultReleases(staff, interviewId)).toMatchObject({
+    expect(await getResultReleases(await signedIn(SUPER_ADMIN), interviewId)).toMatchObject({
       ok: true,
       data: [{ channel: "sms", numberUsed: "direct", result: "Passed", score: 78, templateId: "sms_passed_v1" }],
     })
@@ -537,7 +545,7 @@ describe("sending by SMS", () => {
     expect(await releaseResult(staff, interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "too_long" })
     expect(await releaseCount(interviewId)).toBe(0)
     expect(await releaseResult(staff, interviewId, "sms", OFFICE)).toMatchObject({ ok: true, data: { channel: "sms" } })
-    expect(await getResultReleases(staff, interviewId)).toMatchObject({ ok: true, data: [{ channel: "sms", numberUsed: "direct" }] })
+    expect(await getResultReleases(await signedIn(SUPER_ADMIN), interviewId)).toMatchObject({ ok: true, data: [{ channel: "sms", numberUsed: "direct" }] })
   })
 
   test("an SMS release passes the same gate: closed, Not Paid and earlier interviews are refused and nothing is recorded", async () => {
@@ -579,7 +587,7 @@ describe("sending again", () => {
 
   test("a result never sent is not changed since sent", async () => {
     const { leadId } = await interviewedLead()
-    expect(await view(leadId)).toMatchObject({ releases: [], changedSinceSent: false })
+    expect(await view(leadId)).toMatchObject({ latestRelease: null, releaseCount: 0, changedSinceSent: false })
   })
 
   test("a repeat release by either channel is recorded again, newest first, and nothing has changed", async () => {
@@ -589,7 +597,10 @@ describe("sending again", () => {
     expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
 
     const read = await view(leadId)
-    expect(read.releases.map((r) => [r.channel, r.releasedBy])).toEqual([
+    expect(read).toMatchObject({ latestRelease: { channel: "whatsapp", releasedBy: ADMISSIONS.name }, releaseCount: 3 })
+    // The full list is the Super Admin's (#237).
+    const all = await getResultReleases(await signedIn(SUPER_ADMIN), interviewId)
+    expect(all.ok && all.data.map((r) => [r.channel, r.releasedBy])).toEqual([
       ["whatsapp", ADMISSIONS.name],
       ["sms", MANAGER.name],
       ["whatsapp", ADMISSIONS.name],
@@ -604,13 +615,13 @@ describe("sending again", () => {
     await correct(interviewId, { result: "Passed", score: 87.5 })
 
     const changed = await view(leadId)
-    expect(changed).toMatchObject({ changedSinceSent: true, releases: [{ result: "Passed", score: 78 }] })
+    expect(changed).toMatchObject({ changedSinceSent: true, latestRelease: { result: "Passed", score: 78 }, releaseCount: 1 })
     // The warning never blocks: the corrected result can still go.
     expect(changed.offer?.whatsappMessage).toContain("87.5%")
 
     const resent = await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)
     expect(resent.ok && resent.data.text).toContain("87.5%")
-    expect(await view(leadId)).toMatchObject({ changedSinceSent: false, releases: [{ score: 87.5 }, { score: 78 }] })
+    expect(await view(leadId)).toMatchObject({ changedSinceSent: false, latestRelease: { score: 87.5 }, releaseCount: 2 })
   })
 
   test("a result corrected after the last release is changed since sent, by SMS as by WhatsApp", async () => {
@@ -618,9 +629,9 @@ describe("sending again", () => {
     expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "sms", OFFICE)).ok).toBe(true)
     await correct(interviewId, { result: "Failed", score: 60 })
 
-    expect(await view(leadId)).toMatchObject({ changedSinceSent: true, releases: [{ channel: "sms", result: "Passed" }] })
+    expect(await view(leadId)).toMatchObject({ changedSinceSent: true, latestRelease: { channel: "sms", result: "Passed" }, releaseCount: 1 })
     expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "sms", OFFICE)).ok).toBe(true)
-    expect(await view(leadId)).toMatchObject({ changedSinceSent: false, releases: [{ result: "Failed" }, { result: "Passed" }] })
+    expect(await view(leadId)).toMatchObject({ changedSinceSent: false, latestRelease: { result: "Failed" }, releaseCount: 2 })
   })
 
   test("a correction that ends where the release was is not changed since sent", async () => {
@@ -632,13 +643,13 @@ describe("sending again", () => {
     expect(await view(leadId)).toMatchObject({ changedSinceSent: false })
   })
 
-  test("staff who can't send see the releases but not whether the result changed, nor the current message", async () => {
+  test("staff who can't send see the newest release but not whether the result changed, nor the current message", async () => {
     const { leadId, interviewId } = await interviewedLead({ score: 78 })
     expect((await releaseResult(await signedIn(ADMISSIONS), interviewId, "whatsapp", OFFICE)).ok).toBe(true)
     await correct(interviewId, { result: "Passed", score: 91 })
 
     const accountant = await view(leadId, ACCOUNTANT)
-    expect(accountant).toMatchObject({ canSend: false, offer: null, changedSinceSent: false, releases: [{ score: 78 }] })
+    expect(accountant).toMatchObject({ canSend: false, offer: null, changedSinceSent: false, latestRelease: { score: 78 }, releaseCount: 1 })
     expect(JSON.stringify(accountant)).not.toMatch(/Assalaam|\+255|:91[,}]/)
     expect(await releaseResult(await signedIn(ACCOUNTANT), interviewId, "whatsapp", OFFICE)).toEqual({ ok: false, error: "forbidden" })
     expect(await releaseCount(interviewId)).toBe(1)

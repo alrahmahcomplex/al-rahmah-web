@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn, withoutSuperAdmin } from "../support/db"
 import { ACCOUNTANT } from "../support/fixtures"
 
 // The guardrailed role functions behind the Staff and roles screen, called
@@ -428,6 +428,7 @@ describe("no_administrator_left on roles", () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       await lockExclusively(sql, ["public.staff_members", "public.roles"])
+      await withoutSuperAdmin(sql)
 
       await expect(
         sql.query(`update public.roles set permissions = array_remove(permissions, 'staff.administer')
@@ -440,6 +441,7 @@ describe("no_administrator_left on roles", () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       await lockExclusively(sql, ["public.staff_members", "public.roles"])
+      await withoutSuperAdmin(sql)
 
       await expect(
         sql.query("update public.roles set retired = true where 'staff.administer' = any (permissions)"),

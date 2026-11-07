@@ -10,6 +10,7 @@ import { createLead } from "@/lib/services/leads"
 import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // The Sibling discount (#113): the seeded confirmed and unconfirmed Families
 // in supabase/seeds/90_fees.sql, read only, and the prior-sibling tick on a
@@ -132,10 +133,12 @@ test("Admissions Staff tick Has a sibling already at Al-Rahmah, which gives the 
   await expect(readOnly).toBeDisabled()
   await expect(page.getByRole("region", { name: "Discounts" })).toContainText("Amina Older, STD 6")
 
-  await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead}/history`)
+  // The history is the Super Admin's (#237).
+  await openLeadHistoryAsSuperAdmin(page, lead)
   await expect(page.getByText("ticked Has a sibling already at Al-Rahmah")).toBeVisible()
 
+  // Admissions Staff clear it.
+  await signIn(page, ADMISSIONS)
   await page.goto(`/staff/leads/${lead}`)
   await page.getByRole("region", { name: "Discounts" }).getByRole("checkbox", { name: "Has a sibling already at Al-Rahmah" }).click()
   await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 2,000,000")

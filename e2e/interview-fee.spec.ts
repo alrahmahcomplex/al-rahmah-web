@@ -8,6 +8,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Marking the interview fee Paid or Not Paid on the lead screen's interview
 // panel.
@@ -80,7 +81,7 @@ test.describe("the interview fee", () => {
     await expect(panel(page)).toContainText("Amount to pay")
     await expect(panel(page).getByRole("button", { name: "Mark paid" })).toBeVisible()
 
-    await page.goto(`/staff/leads/${lead.id}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead.id)
     await expect(page.getByText("marked the interview fee Paid")).toBeVisible()
     await expect(page.getByText("marked the interview fee Not Paid")).toBeVisible()
   })

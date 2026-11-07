@@ -26,9 +26,10 @@ const WHEN = new Intl.DateTimeFormat("en-GB", {
 
 // Every change to a lead and to the parent or guardian it is or was linked
 // to, newest first: who made it, when, and each field's old and new value.
+// For the Super Admin alone (#237).
 export default async function LeadHistoryPage({ params }: { params: Promise<{ id: string }> }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("audit.view")) forbidden()
 
   const { id } = await params
   const supabase = await createClient()

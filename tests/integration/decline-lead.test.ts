@@ -8,7 +8,7 @@ import { DECLINED_REASONS, declineLead, getLeadClosure, type DeclinedReason } fr
 import { createLead, updateLeadDetails, type LeadStatus } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Declining a lead through the lead closure module (#97), against local
 // Supabase. Each test declines leads of its own; the seeded ones are only
@@ -286,7 +286,7 @@ describe("the history of a decline", () => {
     const lead = await newLead()
     await declineLead(staff, lead, { reason: "Unreachable after follow-up", explanation: "No answer for three weeks." })
 
-    const history = await getLeadHistory(staff, lead)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead)
     if (!history.ok) throw new Error(`history failed: ${history.error}`)
     const [latest] = history.data.entries
     expect(latest).toMatchObject({ actor: ADMISSIONS.name, record: "lead", action: "update" })

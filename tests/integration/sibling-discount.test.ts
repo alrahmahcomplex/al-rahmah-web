@@ -26,7 +26,7 @@ import { getPriorSibling, setPriorSibling } from "@/lib/services/sibling-discoun
 
 import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The Sibling discount within a confirmed Family (#113), through the fees and
 // leads modules against local Supabase, signed in as each seeded role. Each
@@ -264,7 +264,7 @@ describe("the cascade", () => {
     expect(await feeOf(first)).toMatchObject({ schoolFee: FULL, discount: null, balance: 0 })
     expect(await profileOf(first)).toMatchObject({ sibling_kept: false })
 
-    const history = await getLeadHistory(await signedIn(ADMISSIONS), second)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), second)
     if (!history.ok) throw new Error(history.error)
     const enrolled = history.data.entries.find(
       (entry) => entry.record === "lead" && entry.changes.some((c) => c.field === "status" && c.to === "Enrolled"),
@@ -353,9 +353,9 @@ describe("the prior-sibling tick", () => {
     expect(await profileOf(child)).toMatchObject({ recompute_cause: null })
 
     // The same tick again changes nothing.
-    const before = await getLeadHistory(admissions, child)
+    const before = await getLeadHistory(await signedIn(SUPER_ADMIN), child)
     expect(await setPriorSibling(admissions, child, { name: "Amina Older", className: "STD 6" })).toEqual({ ok: true, data: null })
-    const after = await getLeadHistory(admissions, child)
+    const after = await getLeadHistory(await signedIn(SUPER_ADMIN), child)
     expect(after.ok && after.data.entries.length).toBe(before.ok && before.data.entries.length)
 
     expect(await setPriorSibling(admissions, child, null)).toEqual({ ok: true, data: null })

@@ -8,6 +8,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Recording and correcting an interview result on the lead screen's
 // interview panel.
@@ -78,7 +79,7 @@ test.describe("recording an interview result", () => {
     await expect(panel(page).getByText("Contact the admissions office", { exact: true })).toBeVisible()
 
     // The history keeps both, and the visit the first recording made.
-    await page.goto(`/staff/leads/${lead}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead)
     await expect(page.getByText("recorded the interview result")).toBeVisible()
     await expect(page.getByText("corrected the interview result")).toBeVisible()
     await expect(page.getByText("recorded a visit")).toBeVisible()

@@ -9,6 +9,7 @@ import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 
 import { asSystem, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Approving and rejecting a Reopening request from the lead (#101). Each test
 // decides a request on a Declined lead of its own, raised by Test Admissions.
@@ -85,7 +86,7 @@ test("a Manager approves from the lead, choosing to enrol without a retaken inte
   await expect(row.getByText("Interviewed", { exact: true })).toBeVisible()
   await expect(row.getByText("Initially declined", { exact: true })).toBeVisible()
 
-  await page.goto(`/staff/leads/${lead.id}/history`)
+  await openLeadHistoryAsSuperAdmin(page, lead.id)
   await expect(page.getByText("reopened the lead from Declined").first()).toBeVisible()
   await expect(page.getByText("approved the reopening request").first()).toBeVisible()
 })

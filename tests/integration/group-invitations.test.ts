@@ -9,7 +9,7 @@ import { setGroupLink } from "@/lib/services/group-links"
 import { createLead, searchLeads } from "@/lib/services/leads"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 import { claimGroupInvitationYear, currentGroupLink, type GroupInvitationYearClaim } from "../support/group-invitation-years"
 
 // Sending the admissions WhatsApp group invitation (#186), through the
@@ -115,7 +115,7 @@ describe("sending", () => {
     })
     expect(new Date(rows[0].sent_at).getTime()).toBeGreaterThanOrEqual(before - 60_000)
 
-    const { data: history } = await (await signedIn(ADMISSIONS))
+    const { data: history } = await (await signedIn(SUPER_ADMIN))
       .from("audit_log")
       .select("action, scope, lead_id, actor_staff_id")
       .eq("table_name", "whatsapp_group_invitations")

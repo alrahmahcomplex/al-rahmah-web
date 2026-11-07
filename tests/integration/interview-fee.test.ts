@@ -9,7 +9,7 @@ import { getLeadInterviews, recordInterviewResult, registerForInterview, setInte
 import { createLead } from "@/lib/services/leads"
 
 import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, type FixtureStaff } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, type FixtureStaff, SUPER_ADMIN } from "../support/fixtures"
 
 // Marking the interview fee Paid or Not Paid through the interview module,
 // against local Supabase. Each test registers a lead of its own; the seeded
@@ -220,7 +220,7 @@ describe("marking the interview fee Not Paid", () => {
     const { leadId, interviewId } = await registeredLead()
     const accountant = await signedIn(ACCOUNTANT)
     const historyLength = async () => {
-      const history = await getLeadHistory(await signedIn(MANAGER), leadId)
+      const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
       if (!history.ok) throw new Error("history failed")
       return history.data.entries.length
     }
@@ -241,7 +241,7 @@ describe("the interview fee in the lead's history", () => {
     await setInterviewFeeStatus(accountant, interviewId, "paid")
     await setInterviewFeeStatus(accountant, interviewId, "not_paid")
 
-    const history = await getLeadHistory(await signedIn(MANAGER), leadId)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), leadId)
     if (!history.ok) throw new Error("history failed")
     const changes = history.data.entries.filter((e) => e.record === "interviews" && e.action === "update")
     // Newest first.
@@ -325,7 +325,7 @@ describe("the seeded fee", () => {
   })
 
   test("shows in the Paid lead's history as marked Paid by the Accountant", async () => {
-    const history = await getLeadHistory(await signedIn(MANAGER), PAID)
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), PAID)
     if (!history.ok) throw new Error("history failed")
     const payments = history.data.entries.filter(
       (e) => e.record === "interviews" && e.action === "update" && e.changes.some((c) => c.field === "fee_status"),

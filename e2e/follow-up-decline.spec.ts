@@ -8,6 +8,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { createThrowawayStaff, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Declining the lead as the outcome of a recorded contact (#94), from the
 // Follow-ups panel. Each test makes a lead of its own.
@@ -86,7 +87,7 @@ test.describe("declining the lead from Record follow-up", () => {
     await expect(contacts).not.toContainText("Closed with the lead")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
 
-    await page.goto(`/staff/leads/${lead}/history`)
+    await openLeadHistoryAsSuperAdmin(page, lead)
     const history = page.getByRole("list", { name: "History" })
     await expect(history.getByText("recorded a follow-up")).toBeVisible()
     await expect(history.getByText("declined the lead")).toBeVisible()

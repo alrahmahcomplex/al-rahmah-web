@@ -12,6 +12,7 @@ import { buildWhatsAppLink } from "@/lib/whatsapp"
 import { asSystem, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { claimGroupInvitationYear, currentGroupLink, type GroupInvitationYearClaim } from "../tests/support/group-invitation-years"
+import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Sending the admissions WhatsApp group invitation from a lead's screen
 // (#186). Each test moves its leads to an Enrollment year it claims (see
@@ -122,7 +123,7 @@ test.describe("the group invitation on a lead's screen", () => {
       expect(page.url()).toBe(leadUrl)
       await expect(panel(page).getByRole("button", { name: "Send WhatsApp group invitation" })).toBeVisible()
 
-      await page.goto(`/staff/leads/${lead.id}/history`)
+      await openLeadHistoryAsSuperAdmin(page, lead.id)
       await expect(page.getByText("sent the WhatsApp group invitation")).toBeVisible()
     })
   }

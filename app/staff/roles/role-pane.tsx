@@ -41,6 +41,7 @@ import {
   reactivateStaffMember,
   renameRoleTo,
   resendStaffInvite,
+  sendStaffResetLink,
   retireRoleNow,
   setManagedRole,
   setPermission,
@@ -450,6 +451,11 @@ function PersonRow({
           {person.canResendInvite && (
             <Button variant="ghost" size="sm" disabled={pending} onClick={() => run(() => resendStaffInvite(person.id))}>
               Resend invite
+            </Button>
+          )}
+          {person.canSendReset && (
+            <Button variant="ghost" size="sm" disabled={pending} onClick={() => run(() => sendStaffResetLink(person.id))}>
+              Send reset link
             </Button>
           )}
           <Button variant="ghost" size="sm" disabled={pending} onClick={() => setRenaming(true)}>

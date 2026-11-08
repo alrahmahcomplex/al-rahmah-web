@@ -6,22 +6,39 @@ import { describe, expect, test, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import { getAgentInvites, sendAgentInvite, type AgentInviteSender } from "@/lib/services/agent-invites"
-import { decideAgentLink, sendAgentLink, type LinkDecision, type LinkLimits, type LinkToSend } from "@/lib/services/agent-link-requests"
+import {
+  decidePasswordLink,
+  sendPasswordLink,
+  type LinkDecision,
+  type LinkLimits,
+  type LinkSenders,
+  type LinkToSend,
+} from "@/lib/services/password-link-requests"
 import { changeAgentStatus, createAgent } from "@/lib/services/marketing-agents"
 
 import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
 import { MANAGER, SEEDED_AGENT } from "../support/fixtures"
 
-// Public password-link requests (#194) against local Supabase: who gets a
-// reset or a new invite, the per-email limit, the hourly budget and the
-// access switch. Senders are stubbed unless a test needs a real login. Every
-// agent is the test's own, with invented names and example.test emails.
+// Public password-link requests (#194, #265) against local Supabase: which
+// agent or staff member gets a reset or a new invite, the per-email limit,
+// the hourly budget and the access switch. Senders are stubbed unless a test
+// needs a real login. Every agent is the test's own, with invented names and
+// example.test emails.
 
 // Limits high enough that tests running alongside never reach them.
 const OPEN: LinkLimits = { perEmailLimit: 1_000, hourlyBudget: 1_000_000 }
 const REDIRECTS = {
-  reset: "http://localhost:3100/discount-code/reset-password",
-  invite: "http://localhost:3100/discount-code/set-password",
+  agent: { reset: "http://localhost:3100/login/reset-password", invite: "http://localhost:3100/discount-code/set-password" },
+  staff: { reset: "http://localhost:3100/login/reset-password", invite: "http://localhost:3100/auth/confirm" },
+}
+
+const refuse: AgentInviteSender = async () => {
+  throw new Error("this sender should not be called")
+}
+
+// Agent senders, with staff senders that must not be called.
+function agentSenders(reset: AgentInviteSender, invite: AgentInviteSender): LinkSenders {
+  return { agent: { reset, invite }, staff: { reset: refuse, invite: refuse } }
 }
 
 function email(label: string) {
@@ -57,7 +74,7 @@ const realInvite: AgentInviteSender = async (address, redirectTo) => {
 async function invitedAgent(label: string) {
   const address = email(label)
   const agent = await approvedAgent(address)
-  const sent = await sendAgentInvite(await manager(), realInvite, agent.id, REDIRECTS.invite)
+  const sent = await sendAgentInvite(await manager(), realInvite, agent.id, REDIRECTS.agent.invite)
   if (!sent.ok) throw new Error(`could not invite: ${JSON.stringify(sent)}`)
   return { ...agent, address }
 }
@@ -72,7 +89,7 @@ async function joinedAgent(label: string) {
 }
 
 async function decide(address: string, limits: LinkLimits = OPEN): Promise<LinkDecision> {
-  const decided = await decideAgentLink(secretClient(), address, limits)
+  const decided = await decidePasswordLink(secretClient(), address, limits)
   if (!decided.ok) throw new Error(decided.error)
   return decided.data
 }
@@ -88,10 +105,10 @@ async function events(agentId: string, kind: string) {
   })
 }
 
-// request_agent_link inside `sql`'s transaction, as the secret key calls it.
+// request_password_link inside `sql`'s transaction, as the secret key calls it.
 async function requestInTransaction(sql: Client, address: string, perEmailLimit: number, hourlyBudget: number) {
   await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
-  const { rows } = await sql.query<{ outcome: string }>("select outcome from public.request_agent_link($1, $2, $3)", [
+  const { rows } = await sql.query<{ outcome: string }>("select outcome from public.request_password_link($1, $2, $3)", [
     address,
     perEmailLimit,
     hourlyBudget,
@@ -103,14 +120,14 @@ describe("who gets an email", () => {
   test("an active agent who has joined gets a reset to the reset page, recorded as sent", async () => {
     const agent = await joinedAgent("joined")
     const decided = await decide(`  ${agent.address.toUpperCase()} `)
-    expect(decided).toEqual({ kind: "reset", email: agent.address, attemptId: expect.any(String) })
+    expect(decided).toEqual({ kind: "reset", principal: "agent", email: agent.address, attemptId: expect.any(String) })
 
     const reset = vi.fn<AgentInviteSender>(async () => ({ error: null }))
     const invite = vi.fn<AgentInviteSender>(async () => ({ error: null }))
-    const sent = await sendAgentLink(secretClient(), { reset, invite }, REDIRECTS, decided as LinkToSend)
+    const sent = await sendPasswordLink(secretClient(), agentSenders(reset, invite), REDIRECTS, decided as LinkToSend)
 
     expect(sent).toEqual({ ok: true, data: null })
-    expect(reset).toHaveBeenCalledWith(agent.address, REDIRECTS.reset)
+    expect(reset).toHaveBeenCalledWith(agent.address, REDIRECTS.agent.reset)
     expect(invite).not.toHaveBeenCalled()
     expect(await events(agent.id, "reset")).toEqual([
       { result: "started", email: agent.address, created_by: null },
@@ -123,7 +140,7 @@ describe("who gets an email", () => {
     const decided = (await decide(agent.address)) as LinkToSend
     const reset = vi.fn<AgentInviteSender>(async () => ({ error: { message: "Too many", status: 429, code: "over_email_send_rate_limit" } }))
 
-    const sent = await sendAgentLink(secretClient(), { reset, invite: reset }, REDIRECTS, decided)
+    const sent = await sendPasswordLink(secretClient(), agentSenders(reset, reset), REDIRECTS, decided)
 
     expect(sent).toEqual({ ok: false, error: { kind: "rate-limited" } })
     expect((await events(agent.id, "reset")).map((e) => e.result)).toEqual(["started", "rate_limited"])
@@ -132,10 +149,10 @@ describe("who gets an email", () => {
   test("Tuma kiungo kipya: an agent invited but not joined gets a new invite through Auth, and stays invited", async () => {
     const agent = await invitedAgent("invited")
     const decided = await decide(agent.address)
-    expect(decided).toEqual({ kind: "invite", email: agent.address, attemptId: expect.any(String) })
+    expect(decided).toEqual({ kind: "invite", principal: "agent", email: agent.address, attemptId: expect.any(String) })
 
     const reset = vi.fn<AgentInviteSender>(async () => ({ error: null }))
-    const sent = await sendAgentLink(secretClient(), { reset, invite: realInvite }, REDIRECTS, decided as LinkToSend)
+    const sent = await sendPasswordLink(secretClient(), agentSenders(reset, realInvite), REDIRECTS, decided as LinkToSend)
 
     expect(sent).toEqual({ ok: true, data: null })
     expect(reset).not.toHaveBeenCalled()
@@ -162,7 +179,7 @@ describe("who gets an email", () => {
 
     const decided = await decide(agent.address)
     expect(decided.kind).toBe("invite")
-    const sent = await sendAgentLink(secretClient(), { reset: realInvite, invite: realInvite }, REDIRECTS, decided as LinkToSend)
+    const sent = await sendPasswordLink(secretClient(), agentSenders(realInvite, realInvite), REDIRECTS, decided as LinkToSend)
 
     expect(sent).toEqual({ ok: true, data: null })
     const logins = await inRolledBackTransaction(async (sql) => {
@@ -188,7 +205,7 @@ describe("who gets an email", () => {
       )
     })
 
-    expect(await decide(waiting.address)).toEqual({ kind: "reset", email: waiting.address, attemptId: expect.any(String) })
+    expect(await decide(waiting.address)).toEqual({ kind: "reset", principal: "agent", email: waiting.address, attemptId: expect.any(String) })
     expect(await events(joined.id, "reset")).toHaveLength(1)
   })
 
@@ -214,7 +231,6 @@ describe("who gets an email", () => {
       expect((await changeAgentStatus(await manager(), agent.id, "retire", "Testing resets")).ok).toBe(true)
       return agent.address
     }],
-    ["a staff member", async () => MANAGER.email],
   ])("%s gets nothing, and the request still counts", async (_label, address) => {
     const typed = await address()
     expect(await decide(typed)).toEqual({ kind: "none" })
@@ -228,14 +244,18 @@ describe("who gets an email", () => {
     expect(counted).toBeGreaterThanOrEqual(1)
   })
 
-  test("nothing goes out while agent access is off, and nothing is counted", async () => {
+  // #265: staff resets work with agent access off, so an agent's email gets
+  // the stranger's answer then; a separate one would say it isn't staff's.
+  test("nothing goes out to an agent while agent access is off, and the request counts like any other", async () => {
     const agent = await joinedAgent("access-off")
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       await sql.query("select public.set_agent_access(false)")
-      expect(await requestInTransaction(sql, agent.address, 1_000, 1_000_000)).toBe("access_off")
+      expect(await requestInTransaction(sql, agent.address, 1_000, 1_000_000)).toBe("none")
       const { rows } = await sql.query("select 1 from public.agent_link_requests where email_hash = $1", [hashOf(agent.address)])
-      expect(rows).toEqual([])
+      expect(rows).toHaveLength(1)
+      const { rows: started } = await sql.query("select 1 from public.agent_events where agent_id = $1 and kind = 'reset'", [agent.id])
+      expect(started).toEqual([])
     })
   })
 })
@@ -333,7 +353,7 @@ describe("the limits", () => {
 describe("who may call it", () => {
   test("only the secret key: a visitor and the seeded agent are refused", async () => {
     for (const client of [anonClient(), await signedIn(SEEDED_AGENT)]) {
-      const requested = await client.rpc("request_agent_link", { email: SEEDED_AGENT.email, per_email_limit: 1, hourly_budget: 1 })
+      const requested = await client.rpc("request_password_link", { email: SEEDED_AGENT.email, per_email_limit: 1, hourly_budget: 1 })
       expect(requested.error?.code).toMatch(/42501|PGRST202/)
       const recorded = await client.rpc("record_agent_link", { attempt_id: randomUUID(), result: "sent", error_code: null })
       expect(recorded.error?.code).toMatch(/42501|PGRST202/)

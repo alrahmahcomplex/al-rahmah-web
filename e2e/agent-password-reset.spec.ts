@@ -4,17 +4,19 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { secretClient, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // Agents reset their own password (#194) end to end, against local Supabase
 // with Turnstile's always-pass test keys: "Umesahau nenosiri?" sends a reset
-// email to local Mailpit, the reset page sets the new password, and an
-// expired link's "Tuma kiungo kipya" sends an invited agent a new invite.
+// email to local Mailpit, the shared reset page (#265) sets the new password,
+// and an expired link's "Tuma kiungo kipya" sends an invited agent a new
+// invite.
 // Each test makes its own agent with an example.test email.
 
 const MAILPIT = "http://127.0.0.1:55424"
 const PASSWORD = "agent-reset-password"
 const SENT =
-  "Kama barua pepe hii ina akaunti ya Code ya Punguzo, tumeitumia kiungo. Angalia barua pepe zako, pamoja na spam. Kiungo kinatumika mara moja tu, ndani ya saa 24."
+  "Kama barua pepe hii ina akaunti, tumeitumia kiungo. Angalia barua pepe zako, pamoja na spam. Kiungo kinatumika mara moja tu, ndani ya saa 24."
 
 type Email = { subject: string; html: string; link: string }
 
@@ -109,17 +111,23 @@ test("Umesahau nenosiri? emails a reset link; the reset page sets the new passwo
   // The same card as sign-in, without the old security-check line (#264).
   await expect(page.getByText("AL-RAHMAH COMPLEX", { exact: true })).toBeVisible()
   await expect(page.getByText(/Ukaguzi mfupi wa usalama/)).toHaveCount(0)
-  await expect(page.getByText("Mfanyakazi? Mwombe anayesimamia akaunti yako akuwekee nenosiri jipya.")).toBeVisible()
+  // Staff reset here too now (#265), so #264's note for them is gone.
+  await expect(page.getByText(/Mfanyakazi\?/)).toHaveCount(0)
   await requestLink(page, agent.address)
 
   const [email] = await waitForEmails(agent.address, 1)
   expect(email.subject).toBe("Reset your Al-Rahmah Admissions Portal password")
-  expect(email.link).toMatch(/^http:\/\/localhost:3100\/discount-code\/reset-password\?token_hash=[^&]+&type=recovery$/)
+  expect(email.link).toMatch(/^http:\/\/localhost:3100\/login\/reset-password\?token_hash=[^&]+&type=recovery$/)
   expect(email.html).toContain("Nenosiri jipya")
 
   await page.goto(email.link)
   await expect(page.getByRole("heading", { name: "Weka nenosiri jipya" })).toBeVisible()
   await setPassword(page)
+  await expect(page).toHaveURL(/\/discount-code\/students$/)
+
+  // The new password signs in on /login.
+  await page.context().clearCookies()
+  await logIn(page, agent.address, PASSWORD)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
 
   // The link is spent: opening it again leads with "Tuma kiungo kipya".
@@ -159,8 +167,21 @@ test("an expired invite link's Tuma kiungo kipya sends an invited agent a new in
   await expect(page).toHaveURL(/\/discount-code\/students$/)
 })
 
+test("a reset link sent before #265, to the old reset page, still works", async ({ page }) => {
+  const agent = await joinedAgent()
+  await page.goto("/login/forgot-password")
+  await requestLink(page, agent.address)
+  const [email] = await waitForEmails(agent.address, 1)
+  const old = email.link.replace("/login/reset-password", "/discount-code/reset-password")
+
+  await page.goto(old)
+  await expect(page).toHaveURL(email.link)
+  await setPassword(page)
+  await expect(page).toHaveURL(/\/discount-code\/students$/)
+})
+
 test("the reset page without a link offers a new one", async ({ page }) => {
-  await page.goto("/discount-code/reset-password")
+  await page.goto("/login/reset-password")
   await expect(page.getByRole("heading", { name: "Kiungo kimeisha muda" })).toBeVisible()
   await expect(page.getByLabel("Barua pepe")).toBeVisible()
 })

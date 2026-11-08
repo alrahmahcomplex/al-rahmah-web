@@ -27,6 +27,8 @@ export type PersonView = {
   // Invited until they accept their invite and set a password.
   status: PersonStatus
   canResendInvite: boolean
+  // Active and joined (#265). The database checks the Managed set again.
+  canSendReset: boolean
   isYou: boolean
   // Manages other staff right now, so moving them to a role that manages
   // nobody, or deactivating them, asks for confirmation first.
@@ -113,6 +115,8 @@ export function roleView(data: StaffAndRoles, roleId: string, viewer: Viewer): R
             active: s.active,
             status: !s.active ? "Deactivated" : s.invited ? "Invited" : "Active",
             canResendInvite: s.active && s.invited,
+            // Someone resetting their own password uses the sign-in page.
+            canSendReset: s.active && !s.invited && !isYou,
             isYou,
             managesStaff: s.active && managesOthers(role),
             moveTargets,

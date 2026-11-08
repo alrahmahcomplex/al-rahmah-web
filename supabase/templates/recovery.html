@@ -1,7 +1,8 @@
 <!doctype html>
-<!-- al-rahmah-template: recovery v3 (2026-11-06, #234). Paste into hosted Supabase: Authentication > Email Templates > Reset password. -->
+<!-- al-rahmah-template: recovery v4 (2026-11-08, #265). Paste into hosted Supabase: Authentication > Email Templates > Reset password. -->
+{{/* Every reset, staff's and agents', links to the shared reset page (/login/reset-password) with the token; the page spends it only when the new password is saved. kind: agent picks the wording only. */}}
 {{ $agent := eq (printf "%v" .Data.kind) "agent" }}
-{{ $link := .ConfirmationURL }}{{ if $agent }}{{ $link = printf "%s?token_hash=%s&type=recovery" .RedirectTo .TokenHash }}{{ end }}
+{{ $link := printf "%s?token_hash=%s&type=recovery" .RedirectTo .TokenHash }}
 <html lang="{{ if $agent }}sw{{ else }}en{{ end }}" dir="ltr" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
   <head>
     <meta charset="utf-8">
@@ -53,7 +54,7 @@
                   Reset your password
                 </h1>
                 <p style="margin:0 0 28px; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:15px; font-style:italic; font-weight:400; line-height:24px; color:#334155;">
-                  Someone asked to reset the password of your Al-Rahmah Admissions Portal account. Set a new one, then sign in with this email address.
+                  Someone asked to reset the password of your Al-Rahmah Admissions Portal account. Set a new one, then sign in with this email address at <a href="{{ .SiteURL }}/login" style="color:#0900bb;">{{ .SiteURL }}/login</a>.
                 </p>
                 {{ end }}
 
@@ -75,7 +76,7 @@
                 {{ if $agent }}
                 <p style="margin:24px 0 0; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:13px; font-style:italic; font-weight:400; line-height:21px; color:#334155;">
                   Baadaye, ingia kwa barua pepe hii na nenosiri lako hapa:<br>
-                  <a href="{{ .SiteURL }}/discount-code/sign-in" style="color:#0900bb;">{{ .SiteURL }}/discount-code/sign-in</a>
+                  <a href="{{ .SiteURL }}/login" style="color:#0900bb;">{{ .SiteURL }}/login</a>
                 </p>
                 <p lang="en" style="margin:6px 0 0; font-family:'Exo', 'Trebuchet MS', Arial, sans-serif; font-size:12px; font-style:italic; font-weight:300; line-height:19px; color:#64748b;">
                   Later, sign in there with this email and your password.

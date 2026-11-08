@@ -4,10 +4,11 @@ import { headers } from "next/headers"
 import { after } from "next/server"
 
 import { requestOrigin } from "@/lib/agent-registration"
+import { RESET_PATH } from "@/lib/password-reset"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
-import { decideAgentLink, readLinkLimits, sendAgentLink } from "@/lib/services/agent-link-requests"
+import { decidePasswordLink, readLinkLimits, sendPasswordLink } from "@/lib/services/password-link-requests"
 import { verifyTurnstile } from "@/lib/turnstile"
-import { agentInviteSender, agentResetSender } from "@/utils/supabase/admin"
+import { agentInviteSender, inviteSender, passwordResetSender } from "@/utils/supabase/admin"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
 import type { LinkRequestStatus } from "./link-request-copy"
@@ -16,15 +17,15 @@ import type { LinkRequestStatus } from "./link-request-copy"
 const FORMS = new Set(["agent-reset", "agent-new-link"])
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-// "Umesahau nenosiri?" and "Tuma kiungo kipya" (#194). In this order:
-// Turnstile, the firewall key (`<form>:<ip>:<email hash>`), then the
-// database's access switch, per-email limit and hourly budget. Supabase's
-// own 60-second gap per address applies to the send. If the firewall check
-// fails open, the database limits still hold.
+// "Umesahau nenosiri?" and "Tuma kiungo kipya" (#194), for staff and agents
+// (#265). In this order: Turnstile, the firewall key
+// (`<form>:<ip>:<email hash>`), then the database's per-email limit and
+// hourly budget. Supabase's own 60-second gap per address applies to the
+// send. If the firewall check fails open, the database limits still hold.
 //
 // Any outcome that might send gets the same reply, and the email goes out
 // after the reply, so neither the words nor the wait tell a stranger whether
-// the email has an account.
+// the email has an account, or whose it is.
 export async function requestPasswordLink(formData: FormData): Promise<{ status: LinkRequestStatus }> {
   const form = String(formData.get("form") ?? "")
   if (!FORMS.has(form)) return { status: "unavailable" }
@@ -53,12 +54,10 @@ export async function requestPasswordLink(formData: FormData): Promise<{ status:
     return { status: "unavailable" }
   }
 
-  const decided = await decideAgentLink(supabase, email, readLinkLimits())
+  const decided = await decidePasswordLink(supabase, email, readLinkLimits())
   if (!decided.ok) return { status: "unavailable" }
   const decision = decided.data
   switch (decision.kind) {
-    case "access-off":
-      return { status: "access-off" }
     case "limited":
     case "busy":
       return { status: "rate-limited" }
@@ -66,10 +65,18 @@ export async function requestPasswordLink(formData: FormData): Promise<{ status:
       return { status: "sent" }
   }
 
-  const redirects = { reset: `${origin}/discount-code/reset-password`, invite: `${origin}/discount-code/set-password` }
+  const reset = `${origin}${RESET_PATH}`
+  const redirects = {
+    agent: { reset, invite: `${origin}/discount-code/set-password` },
+    staff: { reset, invite: `${origin}/auth/confirm` },
+  }
+  const senders = {
+    agent: { reset: passwordResetSender(), invite: agentInviteSender() },
+    staff: { reset: passwordResetSender(), invite: inviteSender() },
+  }
   after(async () => {
     try {
-      await sendAgentLink(supabase, { reset: agentResetSender(), invite: agentInviteSender() }, redirects, decision)
+      await sendPasswordLink(supabase, senders, redirects, decision)
     } catch (error) {
       console.error("Password link: sending failed", error)
     }

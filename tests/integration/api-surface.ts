@@ -691,6 +691,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  "public.prepare_staff_reset(staff_id uuid, hourly_budget integer)": {
+    roles: ["authenticated"],
+    args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000003'", hourly_budget: "1000000" },
+    agent: { refused: "not_permitted" },
+  },
   "public.record_action(kind text, lead_id uuid, details jsonb)": {
     roles: ["authenticated"],
     args: {

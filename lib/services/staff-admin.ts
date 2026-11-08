@@ -39,6 +39,10 @@ export type RefusalCode =
   | "already_joined"
   | "invite_rate_limited"
   | "invite_not_sent"
+  | "reset_deactivated"
+  | "reset_not_joined"
+  | "reset_rate_limited"
+  | "reset_not_sent"
   | "unavailable"
 
 export type Refusal = { code: RefusalCode; message: string }
@@ -82,6 +86,11 @@ const MESSAGES: Record<RefusalCode, (names: RefusalNames) => string> = {
   already_joined: ({ name }) => `${name} has already joined and signs in with their own password.`,
   invite_rate_limited: () => "Too many emails have gone out in the last hour. Try resending the invite later.",
   invite_not_sent: () => "The invite email could not be sent.",
+  reset_deactivated: ({ name }) => `${name} is deactivated. Reactivate them before sending a reset link.`,
+  reset_not_joined: ({ name }) => `${name} hasn't joined yet. Use Resend invite instead.`,
+  // The database's hourly budget, or Supabase's own email limit.
+  reset_rate_limited: () => "Too many emails have gone out in the last hour. Try sending the reset link later.",
+  reset_not_sent: () => "The reset email could not be sent.",
   unavailable: () => "The change could not be saved. Try again in a moment.",
 }
 
@@ -90,7 +99,7 @@ export function refusal(code: RefusalCode, names: RefusalNames = {}): Refusal {
 }
 
 // Codes that come from the invite email, not the database.
-const SEND_CODES = new Set<RefusalCode>(["invite_rate_limited", "invite_not_sent", "unavailable"])
+const SEND_CODES = new Set<RefusalCode>(["invite_rate_limited", "invite_not_sent", "reset_not_sent", "unavailable"])
 
 const DATABASE_CODES = new Set<string>(
   (Object.keys(MESSAGES) as RefusalCode[]).filter((code) => !SEND_CODES.has(code)),
@@ -288,6 +297,27 @@ export async function resendInvite(
 
   const failure = await sendAndRecord(supabase, send, invited.data, redirectTo)
   return failure ? { ok: false, error: failure } : invited
+}
+
+// A Manager's "Send reset link" (#265) for an active staff member who has
+// joined. The database checks the Managed set, counts the send against the
+// public hourly budget and records the password_reset_sent Action event, all
+// before the email goes out, so no reset leaves without its event.
+export async function sendResetLink(
+  supabase: SupabaseClient,
+  send: SendInvite,
+  staffId: string,
+  hourlyBudget: number,
+  redirectTo: string,
+): Promise<Result<InvitedNames, Refusal>> {
+  const target = await write<InvitedNames>(supabase, "prepare_staff_reset", { staff_id: staffId, hourly_budget: hourlyBudget })
+  if (!target.ok) return target
+
+  const { error } = await send(target.data.email, redirectTo)
+  if (!error) return target
+  if (error.code === "over_email_send_rate_limit") return { ok: false, error: refusal("reset_rate_limited") }
+  console.error("The reset email could not be sent", error)
+  return { ok: false, error: refusal("reset_not_sent") }
 }
 
 // ---------------------------------------------------------------------------
@@ -494,7 +524,7 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
   const newValues = row.new_values ?? {}
   const oldValues = row.old_values ?? {}
   const invitee =
-    row.action === "invite_sent" && newValues.staff_member_id
+    (row.action === "invite_sent" || row.action === "password_reset_sent") && newValues.staff_member_id
       ? (lookup.staffNames.get(String(newValues.staff_member_id)) ?? null)
       : null
 
@@ -511,6 +541,7 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
   } else if (row.action === "insert") summary = isStaff ? `added ${subject} to staff` : isRole ? `created the role ${subject}` : `added a ${row.table_name} row`
   else if (row.action === "update") summary = isRole ? `changed the role ${subject}` : isStaff ? `changed ${subject}` : `changed a ${row.table_name} row`
   else if (row.action === "invite_sent") summary = invitee ? `sent an invite to ${invitee}` : "sent an invite"
+  else if (row.action === "password_reset_sent") summary = invitee ? `sent a password reset link to ${invitee}` : "sent a password reset link"
   else if (row.action === "hosted_reset") summary = "reset the database before launch"
   else if (row.action === "roles_became_templates") summary = "turned the seeded roles into templates"
   else summary = row.action

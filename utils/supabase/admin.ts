@@ -59,10 +59,12 @@ export function agentInviteSender(): AgentInviteSender {
   }
 }
 
-// The agent's own reset (#194): Supabase's recovery email, whose template
-// builds the token_hash link to redirectTo for a login marked `kind: agent`.
-// Only called for an active agent who has joined (agent-link-requests.ts).
-export function agentResetSender(): AgentInviteSender {
+// Supabase's one recovery email, for staff and agents alike (#194, #265). The
+// template builds the token_hash link to redirectTo for everyone; a login
+// marked `kind: agent` only gets the Discount code wording. Called for an
+// active staff member or agent who has joined (password-link-requests.ts),
+// and for a Manager's "Send reset link" (staff-admin.ts).
+export function passwordResetSender(): AgentInviteSender {
   const client = secretClient()
   if (!client) return async () => ({ error: { message: MISSING_KEY, code: "secret_key_missing" } })
   return async (email, redirectTo) => {

@@ -16,7 +16,7 @@ describe("proxy matcher", () => {
     "/login",
     "/auth/callback",
     "/discount-code/set-password",
-    "/discount-code/reset-password",
+    "/login/reset-password",
     "/discount-code/students",
   ])(
     "runs on the auth-bound route %s",

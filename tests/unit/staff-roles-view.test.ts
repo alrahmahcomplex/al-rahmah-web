@@ -41,15 +41,15 @@ describe("roleView for the Super Admin", () => {
     ])
   })
 
-  it("shows each person as Active, Invited or Deactivated, and offers a resend only to the Invited", () => {
+  it("shows each person as Active, Invited or Deactivated, offering a resend only to the Invited and a reset only to the Active", () => {
     const people = roleView(DATA, "staff", SUPER_ADMIN)!.people
     const salma = roleView(DATA, "receptionist", SUPER_ADMIN)!.people[0]
 
-    expect(people.map((p) => [p.name, p.status, p.canResendInvite])).toEqual([
-      ["Juma Ali", "Invited", true],
-      ["Rehema Ali", "Active", false],
+    expect(people.map((p) => [p.name, p.status, p.canResendInvite, p.canSendReset])).toEqual([
+      ["Juma Ali", "Invited", true, false],
+      ["Rehema Ali", "Active", false, true],
     ])
-    expect([salma.status, salma.canResendInvite]).toEqual(["Deactivated", false])
+    expect([salma.status, salma.canResendInvite, salma.canSendReset]).toEqual(["Deactivated", false, false])
   })
 
   it("moves anyone to any other current role, confirming when they stop managing staff", () => {

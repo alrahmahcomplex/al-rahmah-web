@@ -14,6 +14,7 @@ import {
   reactivateRole,
   reactivateStaff,
   resendInvite,
+  sendResetLink,
   renameRole,
   retireRole,
   setRoleManages,
@@ -21,7 +22,9 @@ import {
   type Refusal,
   type RoleNames,
 } from "@/lib/services/staff-admin"
-import { inviteSender } from "@/utils/supabase/admin"
+import { RESET_PATH } from "@/lib/password-reset"
+import { readLinkLimits } from "@/lib/services/password-link-requests"
+import { inviteSender, passwordResetSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
 
 // What the pane shows in its callout after a change.
@@ -101,11 +104,14 @@ export async function retireRoleNow(roleId: string) {
 // is using, so a Preview's invites come back to that Preview. Next.js has
 // already checked that a Server Action's Origin matches its Host. Supabase
 // sends any address missing from its allow-list to the Site URL instead.
-async function confirmUrl() {
+async function siteOrigin() {
   const request = await headers()
   const host = request.get("x-forwarded-host") ?? request.get("host")
-  const origin = request.get("origin") ?? `${request.get("x-forwarded-proto") ?? "https"}://${host}`
-  return `${origin}/auth/confirm`
+  return request.get("origin") ?? `${request.get("x-forwarded-proto") ?? "https"}://${host}`
+}
+
+async function confirmUrl() {
+  return `${await siteOrigin()}/auth/confirm`
 }
 
 // The record is kept even when the email fails, so the outcome says which
@@ -136,5 +142,16 @@ export async function resendStaffInvite(staffId: string) {
   return settle(
     await resendInvite(supabase, inviteSender(), staffId, await confirmUrl()),
     ({ name, email }) => `Sent ${name} a new invite at ${email}. The earlier link no longer works.`,
+  )
+}
+
+// "Send reset link" (#265): Supabase's recovery email, landing on the shared
+// reset page. It counts against the public hourly budget, so a Manager can't
+// use up the emails invites need either.
+export async function sendStaffResetLink(staffId: string) {
+  const supabase = await createClient()
+  return settle(
+    await sendResetLink(supabase, passwordResetSender(), staffId, readLinkLimits().hourlyBudget, `${await siteOrigin()}${RESET_PATH}`),
+    ({ name, email }) => `Sent ${name} a reset link at ${email}. It works once, for 24 hours.`,
   )
 }

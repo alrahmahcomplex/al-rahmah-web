@@ -160,8 +160,9 @@ site_url = "http://127.0.0.1:3000"
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 # /auth/callback takes password-reset links and /auth/confirm takes invite links. The Discount
-# code invite (#191) lands on /discount-code/set-password, and the Discount code reset (#194) on
-# /discount-code/reset-password. Port 3100 is the Playwright server.
+# code invite (#191) lands on /discount-code/set-password. Every password reset, staff's and agents'
+# (#265), lands on /login/reset-password; /discount-code/reset-password stays for links sent before
+# #265. Port 3100 is the Playwright server.
 additional_redirect_urls = [
   "http://127.0.0.1:3000/auth/callback",
   "http://localhost:3000/auth/callback",
@@ -174,6 +175,9 @@ additional_redirect_urls = [
   "http://127.0.0.1:3000/discount-code/reset-password",
   "http://localhost:3000/discount-code/reset-password",
   "http://localhost:3100/discount-code/reset-password",
+  "http://127.0.0.1:3000/login/reset-password",
+  "http://localhost:3000/login/reset-password",
+  "http://localhost:3100/login/reset-password",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600

@@ -40,7 +40,7 @@ export default async function AgentSetPasswordPage({
           back={`/discount-code/set-password?token_hash=${encodeURIComponent(tokenHash)}&type=invite`}
         />
       ) : (
-        <SetPasswordForm language={language} tokenHash={usable ? tokenHash : null} linkType="invite" officePhone={OFFICE_PHONE} />
+        <SetPasswordForm language={language} tokenHash={usable ? tokenHash : null} officePhone={OFFICE_PHONE} />
       )}
     </AuthCard>
   )

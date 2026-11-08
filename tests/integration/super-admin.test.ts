@@ -172,14 +172,17 @@ describe("the Super Admin's freeze under the secret key", () => {
 })
 
 describe("an inactive Super Admin", () => {
-  // Lifts the freeze by name inside a rolled-back transaction, as only a
-  // migration could, then asks has_permission as the holder.
+  // Lifts the freeze inside a rolled-back transaction, as only a migration
+  // could, then asks has_permission as the holder. Replica mode skips the
+  // refusal triggers for this transaction only. ALTER TABLE ... DISABLE
+  // TRIGGER would take an ACCESS EXCLUSIVE lock on both tables and deadlock
+  // with test files writing to them in parallel (#245).
   async function answerWhen(change: string): Promise<boolean[]> {
     return inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query("alter table public.staff_members disable trigger refuse_super_admin_holder_change")
-      await sql.query("alter table public.roles disable trigger refuse_super_admin_role_change")
+      await sql.query("set local session_replication_role = replica")
       await sql.query(change)
+      await sql.query("set local session_replication_role = origin")
       await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: SUPER_ADMIN.userId, role: "authenticated" })])
       await sql.query("set local role authenticated")
       const { rows } = await sql.query<{ a: boolean; b: boolean }>(

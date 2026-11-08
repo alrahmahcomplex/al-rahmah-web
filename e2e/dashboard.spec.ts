@@ -4,6 +4,7 @@ import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 
 import { createThrowawayStaff } from "../tests/support/db"
 import { MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { signInAsSuperAdmin } from "./super-admin"
 
 // The dashboard on the Reports page (/staff/reports since #226). Counts are
 // read for Enrollment year 2031,
@@ -294,6 +295,14 @@ test("a role holding reports.view finds Reports in the sidebar and opens it (#24
   await page.getByLabel("Password", { exact: true }).fill(person.password)
   await page.getByRole("button", { name: "Log In" }).click()
   await expect(page).toHaveURL(/\/staff$/)
+  await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" }).click()
+  await expect(page).toHaveURL(/\/staff\/reports$/)
+  await expect(page.getByRole("heading", { name: "Reports", level: 1 })).toBeVisible()
+  await expect(visitedPanel(page)).toBeVisible()
+})
+
+test("the Super Admin finds Reports in the sidebar and opens the dashboard (#245)", async ({ page }) => {
+  await signInAsSuperAdmin(page)
   await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" }).click()
   await expect(page).toHaveURL(/\/staff\/reports$/)
   await expect(page.getByRole("heading", { name: "Reports", level: 1 })).toBeVisible()

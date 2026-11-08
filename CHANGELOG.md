@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- After a result or score is corrected, the Next step tells every staff member that the
+  corrected result still has to be sent, not only those who may send it. Staff who can't
+  send it get a link to the Interview tab.
+
 ## November 7, 2026 `v0.87.0`
 
 ### IMPROVED

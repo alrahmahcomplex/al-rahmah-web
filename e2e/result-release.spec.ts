@@ -141,6 +141,26 @@ test.describe("releasing a result through WhatsApp", () => {
     await expect(page.getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
     await expect(page.getByRole("group", { name: "Message preview" })).toHaveCount(0)
   })
+
+  test("the Accountant's Next step says a corrected result is waiting, and only opens the Interview tab", async ({ page }) => {
+    const lead = await interviewedLead({ score: 81.5 })
+    await markPaid(lead.interviewId)
+    const released = await releaseResult(await signedIn(ADMISSIONS), lead.interviewId, "whatsapp", { officePhone: OFFICE_PHONE })
+    if (!released.ok) throw new Error(`release failed: ${released.error}`)
+    const corrected = await recordInterviewResult(await signedIn(ADMISSIONS), lead.interviewId, {
+      interviewDate: today,
+      result: "Passed",
+      score: 90,
+    })
+    if (!corrected.ok) throw new Error(`correction failed: ${corrected.error}`)
+
+    await signIn(page, ACCOUNTANT)
+    await page.goto(leadUrl(lead.id))
+    const nextStep = page.getByRole("region", { name: "Next step" })
+    await expect(nextStep).toContainText("Next step: Send the corrected result")
+    await expect(nextStep.getByRole("link", { name: "Send result" })).toHaveCount(0)
+    await expect(nextStep.getByRole("link", { name: "Open Interview" })).toBeVisible()
+  })
 })
 
 test.describe("releasing a result by SMS", () => {

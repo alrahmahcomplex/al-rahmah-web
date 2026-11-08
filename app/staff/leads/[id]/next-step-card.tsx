@@ -1,13 +1,13 @@
 import Link from "next/link"
 
 import { buttonVariants } from "@/components/ui/button"
-import { enrolsWithoutRetake, nextStep, nextStepText } from "@/lib/lead-next-step"
+import { enrolsWithoutRetake, nextStep, nextStepText, releaseInput } from "@/lib/lead-next-step"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 import { cn } from "@/lib/utils"
 
-import { readFee, readFollowUps, readInterviews, readRegistration, readRelease, readReopenings } from "./lead-reads"
+import { readFee, readFollowUps, readInterviews, readRegistration, readRelease, readReleaseStatus, readReopenings } from "./lead-reads"
 import { RecordVisit } from "./record-visit"
 import { LEAD_TABS, leadTabHref, type LeadTab } from "./tabs"
 
@@ -35,6 +35,10 @@ export async function NextStepCard({
     readFollowUps(lead.id),
   ])
 
+  // Once a result has gone, whether it changed since comes from the status
+  // every viewer reads, not only those who may send it (#248).
+  const sentFor = release.ok && release.data.latestRelease !== null ? release.data.interviewId : null
+  const status = sentFor ? await readReleaseStatus(sentFor) : null
   const current = interviews.ok ? (interviews.data[0] ?? null) : null
   const step = interviews.ok
     ? nextStep({
@@ -44,11 +48,7 @@ export async function NextStepCard({
         registration: registration.ok ? registration.data : null,
         enrolWithoutRetake: reopenings.ok && enrolsWithoutRetake(reopenings.data.decided),
         release: release.ok
-          ? {
-              blocked: release.data.blocked,
-              sent: release.data.latestRelease !== null,
-              changedSinceSent: release.data.changedSinceSent,
-            }
+          ? releaseInput(release.data, status?.ok && sentFor ? (status.data.get(sentFor) ?? null) : null)
           : null,
         fee: fee?.ok && fee.data.kind === "fee" ? { priority: fee.data.priority } : null,
         followUps: followUps.ok

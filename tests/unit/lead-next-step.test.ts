@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { enrolsWithoutRetake, nextStep, nextStepText, type NextStep, type NextStepInput } from "@/lib/lead-next-step"
+import { enrolsWithoutRetake, nextStep, nextStepText, releaseInput, type NextStep, type NextStepInput } from "@/lib/lead-next-step"
 import { formatDate } from "@/lib/school-calendar"
 
 const TODAY = "2026-11-07"
@@ -221,6 +221,48 @@ describe("the Next step card's text", () => {
       "6 Nov 2026",
     )
     expect(nextStepText({ kind: "wait-for-follow-up", dueOn: "2026-11-20" }, formatDate).title).toBe("Follow up on 20 Nov 2026")
+  })
+})
+
+describe("where the release stands for the next step", () => {
+  const LAST = {
+    releasedAt: "2026-11-05T09:00:00Z",
+    releasedBy: "Admissions Officer",
+    channel: "sms",
+    numberUsed: "direct",
+    result: "Passed",
+    score: 78,
+    templateId: "result_passed_sms_v1",
+  } as const
+  // What getResultRelease tells staff without results.send, such as the
+  // Accountant: no offer, so never changed since sent.
+  const accountantView = { blocked: null, latestRelease: LAST, changedSinceSent: false }
+
+  it("tells staff without results.send that a corrected result is waiting", () => {
+    const release = releaseInput(accountantView, { changedSinceSent: true })
+    expect(release).toEqual({ blocked: null, sent: true, changedSinceSent: true })
+    expect(nextStep(lead({ status: "Interviewed", interview: PASSED, release }))).toEqual({
+      kind: "send-result",
+      corrected: true,
+    })
+  })
+
+  it("moves on once the corrected result has gone", () => {
+    const release = releaseInput(accountantView, { changedSinceSent: false })
+    expect(nextStep(lead({ status: "Interviewed", interview: PASSED, release }))).toEqual({ kind: "record-deposit" })
+  })
+
+  it("falls back to the view when the status couldn't be read", () => {
+    expect(releaseInput({ ...accountantView, changedSinceSent: true }, null)).toMatchObject({ changedSinceSent: true })
+    expect(releaseInput(accountantView, null)).toMatchObject({ changedSinceSent: false })
+  })
+
+  it("is never changed before anything was sent, and keeps a blocker", () => {
+    expect(releaseInput({ blocked: "not_paid", latestRelease: null, changedSinceSent: false }, { changedSinceSent: true })).toEqual({
+      blocked: "not_paid",
+      sent: false,
+      changedSinceSent: false,
+    })
   })
 })
 

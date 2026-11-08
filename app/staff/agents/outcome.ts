@@ -1,3 +1,4 @@
+import { emailTakenMessage } from "@/lib/email-in-use"
 import type {
   AgentDraftField,
   AgentRef,
@@ -178,9 +179,8 @@ const FIELD_HINTS: Record<AgentDraftField, string> = {
 
 export const AGENT_LOST = "The agent could not be confirmed as saved. Check your connection, reload the page and search for the agent's phone before trying again."
 
-const CREATE_REFUSED: Record<Exclude<CreateAgentError["kind"], "invalid"> | "signed-out", string> = {
+const CREATE_REFUSED: Record<Exclude<CreateAgentError["kind"], "invalid" | "email-taken"> | "signed-out", string> = {
   forbidden: "You don't have permission to add Marketing Agents.",
-  "email-taken": "This email already belongs to another agent or a staff member.",
   unavailable: "The agent could not be checked just now. Nothing was saved. Try again in a moment.",
   uncertain: AGENT_LOST,
   "signed-out": "Your session has ended. Sign in again, then add the agent.",
@@ -190,7 +190,7 @@ export type DraftRefusal = { message: string; field?: AgentDraftField }
 
 export function createRefusal(error: CreateAgentError | { kind: "signed-out" }): DraftRefusal {
   if (error.kind === "invalid") return { message: FIELD_HINTS[error.field], field: error.field }
-  if (error.kind === "email-taken") return { message: CREATE_REFUSED[error.kind], field: "email" }
+  if (error.kind === "email-taken") return { message: emailTakenMessage(error), field: "email" }
   return { message: CREATE_REFUSED[error.kind] }
 }
 
@@ -198,11 +198,10 @@ export function createdMessage(agent: { fullName: string; code: string }): strin
   return `${agent.fullName} (${agent.code}) is added and Approved.`
 }
 
-const RECREATE_REFUSED: Record<Exclude<RecreateError["kind"], "invalid" | "phone-taken"> | "signed-out", string> = {
+const RECREATE_REFUSED: Record<Exclude<RecreateError["kind"], "invalid" | "phone-taken" | "email-taken"> | "signed-out", string> = {
   forbidden: "You don't have permission to recreate a Marketing Agent.",
   "not-found": "This agent could not be found. Reload the page and try again.",
   retired: "This record can't be recreated: its code already belongs to a current agent. Reload the page to see the agents as they are now.",
-  "email-taken": CREATE_REFUSED["email-taken"],
   unavailable: "The record could not be read just now. Try again in a moment.",
   uncertain: "The Recreate could not be confirmed. Check your connection, reload the page and see whether the agent was recreated.",
   "signed-out": "Your session has ended. Sign in again, then try again.",
@@ -214,7 +213,7 @@ export function recreateRefusal(error: RecreateError | { kind: "signed-out" }): 
     return { message: FIELD_HINTS[error.field], field: error.field }
   }
   if (error.kind === "phone-taken") return { message: `${phoneTakenLine(error.agent)}. Nothing was changed.`, field: "phone" }
-  if (error.kind === "email-taken") return { message: RECREATE_REFUSED[error.kind], field: "email" }
+  if (error.kind === "email-taken") return { message: emailTakenMessage(error), field: "email" }
   return { message: RECREATE_REFUSED[error.kind] }
 }
 

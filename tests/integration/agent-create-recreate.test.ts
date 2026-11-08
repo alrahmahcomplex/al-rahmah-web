@@ -252,11 +252,11 @@ describe("Seam 1: the Manager creates an agent", () => {
     const email = `${randomUUID().slice(0, 8)}@example.test`
     const manager = await signedIn(MANAGER)
     expect((await createAgent(manager, { fullName: name(), phone: phone(), email })).ok).toBe(true)
-    expect(await createAgent(manager, { fullName: name(), phone: phone(), email: email.toUpperCase() })).toEqual({
+    expect(await createAgent(manager, { fullName: name(), phone: phone(), email: email.toUpperCase() })).toMatchObject({
       ok: false,
       error: { kind: "email-taken" },
     })
-    expect(await createAgent(manager, { fullName: name(), phone: phone(), email: ADMISSIONS.email })).toEqual({
+    expect(await createAgent(manager, { fullName: name(), phone: phone(), email: ADMISSIONS.email })).toMatchObject({
       ok: false,
       error: { kind: "email-taken" },
     })
@@ -672,7 +672,7 @@ describe("an email belongs to one login: staff or agent", () => {
     const roleId = await inviteRoleId()
 
     const refused = await administrator.rpc("invite_staff_member", { full_name: "Staff Clash", email: email.toUpperCase(), role_id: roleId })
-    expect(refused.error?.message).toBe("agent_email")
+    expect(refused.error?.message).toBe("email_in_use")
     expect(JSON.parse(refused.error?.details ?? "{}")).toEqual({ email })
 
     if (created.ok && created.data.kind === "created") await retire(created.data.agent.id)
@@ -682,7 +682,7 @@ describe("an email belongs to one login: staff or agent", () => {
 
   test("a staff email can't be given to an agent", async () => {
     const staff = await createThrowawayStaff([])
-    expect(await createAgent(await signedIn(MANAGER), { fullName: name(), phone: phone(), email: staff.email })).toEqual({
+    expect(await createAgent(await signedIn(MANAGER), { fullName: name(), phone: phone(), email: staff.email })).toMatchObject({
       ok: false,
       error: { kind: "email-taken" },
     })
@@ -704,7 +704,7 @@ describe("an email belongs to one login: staff or agent", () => {
           const inviting = inviteSql()
           expect(await stillWaiting(inviting)).toBe(true)
           await manager.query("commit")
-          await expect(inviting).rejects.toThrow("agent_email")
+          await expect(inviting).rejects.toThrow("email_in_use")
         } else {
           await inviteSql()
           const creating = createAgentSql()

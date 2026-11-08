@@ -5,6 +5,18 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 8, 2026 `v0.87.4`
+
+### IMPROVED
+
+- When an email you type already belongs to someone you can't see, the app now says only
+  "{email} is already in use at Al-Rahmah. Use another email." This covers inviting staff
+  (staff outside the roles you manage, the Super Admin or a Marketing Agent) and the
+  Agents screen (a staff member or the Super Admin). It no longer names the staff member
+  or says what kind of account holds the email. Staff you manage are still named.
+- Create agent and Recreate agent now name the other agent when the email is already
+  theirs, as the other agent screens do.
+
 ## November 8, 2026 `v0.87.3`
 
 ### FIXED

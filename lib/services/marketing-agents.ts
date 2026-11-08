@@ -2,6 +2,8 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { emailTakenFrom, type EmailTaken } from "@/lib/email-in-use"
+
 import type { Result } from "./result"
 
 // The marketing-agent module: every read and write of Marketing Agents goes
@@ -435,7 +437,7 @@ export type CreatedAgent = { kind: "created"; agent: { id: string; fullName: str
 export type CreateAgentError =
   | { kind: "forbidden" }
   | { kind: "invalid"; field: AgentDraftField }
-  | { kind: "email-taken" }
+  | EmailTaken
   | { kind: "unavailable" }
   | { kind: "uncertain" }
 
@@ -447,7 +449,7 @@ export type RecreateError =
   | { kind: "retired" }
   | { kind: "invalid"; field: AgentDraftField | "reason" }
   | { kind: "phone-taken"; agent: AgentRef }
-  | { kind: "email-taken" }
+  | EmailTaken
   | { kind: "unavailable" }
   | { kind: "uncertain" }
 
@@ -487,10 +489,10 @@ function draftArgs(draft: Omit<AgentDraft, "code">) {
 }
 
 // A refusal the database gave, or null when the error is something else.
-function createRefusal(error: DbError): CreateAgentError | null {
+function createRefusal(error: DbError, email: unknown): CreateAgentError | null {
   // 42501: the function isn't granted to the caller at all, as for someone signed out.
   if (error.message === "not_permitted" || error.code === "42501") return { kind: "forbidden" }
-  if (error.message === "email_taken") return { kind: "email-taken" }
+  if (error.message === "email_taken") return emailTakenFrom(error.details, text(email))
   const field = draftField(error)
   if (field && field !== "reason") return { kind: "invalid", field }
   return null
@@ -520,7 +522,7 @@ function conflictOf(row: OutcomeRow): AgentConflict | null {
 export async function checkNewAgent(supabase: SupabaseClient, draft: AgentDraft): Promise<Result<AgentCheck, CreateAgentError>> {
   const { data, error } = await supabase.rpc("check_marketing_agent", { ...draftArgs(draft), code: text(draft.code) })
   if (error) {
-    const refused = createRefusal(error)
+    const refused = createRefusal(error, draft.email)
     if (refused) return { ok: false, error: refused }
     console.error("Could not check a new Marketing Agent", error)
     return { ok: false, error: { kind: "unavailable" } }
@@ -555,7 +557,7 @@ export async function createAgent(
 ): Promise<Result<CreatedAgent | AgentConflict, CreateAgentError>> {
   const { data, error } = await supabase.rpc("create_marketing_agent", { ...draftArgs(draft), code: text(draft.code) })
   if (error) {
-    const refused = createRefusal(error)
+    const refused = createRefusal(error, draft.email)
     if (refused) return { ok: false, error: refused }
     console.error("Could not create a Marketing Agent", error)
     return { ok: false, error: { kind: "uncertain" } }
@@ -573,12 +575,12 @@ export async function createAgent(
   }
 }
 
-function recreateRefusal(error: DbError): RecreateError | null {
+function recreateRefusal(error: DbError, email: unknown = null): RecreateError | null {
   if (error.message === "not_permitted" || error.code === "42501") return { kind: "forbidden" }
   // A malformed id is no agent at all.
   if (error.message === "not_found" || error.code === "22P02") return { kind: "not-found" }
   if (error.message === "agent_retired") return { kind: "retired" }
-  if (error.message === "email_taken") return { kind: "email-taken" }
+  if (error.message === "email_taken") return emailTakenFrom(error.details, text(email))
   if (error.message === "phone_taken") {
     try {
       return { kind: "phone-taken", agent: agentRef(JSON.parse(error.details ?? "") as AgentRefRow) }
@@ -643,7 +645,7 @@ export async function recreateAgent(
     reason: text(reason),
   })
   if (error) {
-    const refused = recreateRefusal(error)
+    const refused = recreateRefusal(error, draft.email)
     if (refused) return { ok: false, error: refused }
     console.error("Could not recreate a Marketing Agent", error)
     return { ok: false, error: { kind: "uncertain" } }

@@ -79,7 +79,7 @@ describe("the Super Admin is invisible", () => {
       ["correct_staff_name", { staff_id: SUPER_ADMIN.id, full_name: "Someone Else" }, "not_found"],
       ["resendable_invite", { staff_id: SUPER_ADMIN.id }, "not_found"],
       ["invite_staff_member", { full_name: "Into Super Admin", email: newEmail(), role_id: SUPER_ADMIN.roleId }, "not_found"],
-      ["invite_staff_member", { full_name: "Same Email", email: SUPER_ADMIN.email, role_id: await roleId("Admissions Staff") }, "email_taken"],
+      ["invite_staff_member", { full_name: "Same Email", email: SUPER_ADMIN.email, role_id: await roleId("Admissions Staff") }, "email_in_use"],
       // Role writes are the Super Admin's alone (#241), so a Manager is
       // refused before the role is even looked up.
       ["rename_role", { role_id: SUPER_ADMIN.roleId, name: "Renamed" }, "forbidden"],
@@ -96,9 +96,9 @@ describe("the Super Admin is invisible", () => {
     }
   })
 
-  test("an agent email the Super Admin holds reads as another sign-in, with no name", async () => {
+  test("an agent email the Super Admin holds reads as in use, with no name", async () => {
     const result = await setAgentEmail(await signedIn(MANAGER), UNJOINED_AGENT, SUPER_ADMIN.email.toUpperCase())
-    expect(result).toEqual({ ok: false, error: { kind: "email-taken", holder: "login", name: null, code: null } })
+    expect(result).toEqual({ ok: false, error: { kind: "email-taken", email: SUPER_ADMIN.email, agent: null } })
   })
 
   test("the Super Admin's own role reads as not_found to the Super Admin's role writes", async () => {

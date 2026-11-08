@@ -14,7 +14,7 @@ import { setLeadReferralCode } from "@/lib/services/referral"
 import { tanzaniaToday } from "@/lib/school-calendar"
 
 import { asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Sign-up with an email and claiming an existing Discount code (#193), Seam 1:
 // the services against local Supabase, every row of the decision table, the
@@ -427,12 +427,36 @@ describe("the Manager's queue", () => {
     expect(list.ok && list.data.agents.map((a) => a.id)).toEqual([])
   })
 
-  test("Confirm refuses an email someone else now holds, naming them", async () => {
+  test("Confirm refuses a staff member's email without naming them", async () => {
     const { agent } = await claimed()
     const [claim] = (await queueEntry(agent.id))!.claims
-    expect(await confirmEmailClaim(await signedIn(MANAGER), claim.id, MANAGER.email)).toMatchObject({
+    expect(await confirmEmailClaim(await signedIn(MANAGER), claim.id, MANAGER.email)).toEqual({
       ok: false,
-      error: { kind: "email-taken", holder: "staff", name: MANAGER.name },
+      error: { kind: "email-taken", email: MANAGER.email, agent: null },
+    })
+    expect(await storedEmail(agent.id)).toBeNull()
+  })
+
+  test("Confirm sends no name for the Super Admin's email, and names another agent holding one", async () => {
+    const { agent } = await claimed()
+    const [claim] = (await queueEntry(agent.id))!.claims
+    const manager = await signedIn(MANAGER)
+    const decide = (address: string) => manager.rpc("decide_agent_email_claim", { claim_id: claim.id, decision: "confirm", email: address })
+
+    const hidden = await decide(SUPER_ADMIN.email)
+    expect(hidden.error?.message).toBe("email_taken")
+    expect(JSON.parse(hidden.error?.details ?? "{}")).toEqual({ email: SUPER_ADMIN.email })
+
+    const otherAddress = email("claim-other")
+    const other = await createAgent(manager, { fullName: `Other Dai ${randomUUID().slice(0, 6)}`, phone: phone(), email: otherAddress })
+    if (!other.ok || other.data.kind !== "created") throw new Error(JSON.stringify(other))
+    const named = await decide(otherAddress)
+    expect(named.error?.message).toBe("email_taken")
+    expect(JSON.parse(named.error?.details ?? "{}")).toEqual({
+      email: otherAddress,
+      holder: "agent",
+      name: other.data.agent.fullName,
+      code: other.data.agent.code,
     })
     expect(await storedEmail(agent.id)).toBeNull()
   })

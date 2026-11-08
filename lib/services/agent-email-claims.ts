@@ -2,6 +2,8 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { emailTakenFrom, type EmailTaken } from "@/lib/email-in-use"
+
 import type { Result } from "./result"
 
 // The Manager's "Awaiting email confirmation" queue (#193). A claim is an
@@ -77,7 +79,7 @@ export type ClaimDecisionError =
   | { kind: "has-email" }
   | { kind: "already-joined" }
   | { kind: "email-invalid" }
-  | { kind: "email-taken"; holder: "staff" | "agent" | "login"; name: string | null; code: string | null }
+  | EmailTaken
   | { kind: "unavailable" }
 
 const REFUSALS: Record<string, ClaimDecisionError> = {
@@ -91,18 +93,6 @@ const REFUSALS: Record<string, ClaimDecisionError> = {
   email_invalid: { kind: "email-invalid" },
 }
 
-function takenBy(details: string | null | undefined): ClaimDecisionError {
-  try {
-    const parsed = JSON.parse(details ?? "") as { holder?: string; name?: string | null; code?: string | null }
-    if (parsed.holder === "staff" || parsed.holder === "agent" || parsed.holder === "login") {
-      return { kind: "email-taken", holder: parsed.holder, name: parsed.name ?? null, code: parsed.code ?? null }
-    }
-  } catch {
-    // Falls through: guard_login's refusal names no holder.
-  }
-  return { kind: "email-taken", holder: "login", name: null, code: null }
-}
-
 async function decide(
   supabase: SupabaseClient,
   claimId: string,
@@ -113,7 +103,7 @@ async function decide(
   if (error) {
     const refusal = REFUSALS[error.message]
     if (refusal) return { ok: false, error: refusal }
-    if (error.message === "email_taken") return { ok: false, error: takenBy(error.details) }
+    if (error.message === "email_taken") return { ok: false, error: emailTakenFrom(error.details, email) }
     // 22P02: a malformed id is no claim. 42501: not granted, as for a visitor.
     if (error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
     if (error.code === "42501") return { ok: false, error: { kind: "forbidden" } }

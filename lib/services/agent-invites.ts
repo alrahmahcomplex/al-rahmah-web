@@ -2,6 +2,8 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { emailTakenFrom, type EmailTaken } from "@/lib/email-in-use"
+
 import type { Result } from "./result"
 
 // Agent invites, account states and email edits (#191). The database checks
@@ -222,8 +224,6 @@ export async function getAgentAccountCounts(
 // Adding or correcting an agent's email.
 // ---------------------------------------------------------------------------
 
-export type EmailHolder = "staff" | "agent" | "login"
-
 export type SetEmailError =
   | { kind: "forbidden" }
   | { kind: "not-found" }
@@ -232,7 +232,7 @@ export type SetEmailError =
   | { kind: "already-joined" }
   | { kind: "email-invalid" }
   | { kind: "no-change" }
-  | { kind: "email-taken"; holder: EmailHolder; name: string | null; code: string | null }
+  | EmailTaken
   | { kind: "unavailable" }
 
 export type EmailChange = { email: string; previousEmail: string | null }
@@ -246,24 +246,12 @@ const EMAIL_REFUSALS: Record<string, SetEmailError> = {
   no_change: { kind: "no-change" },
 }
 
-function takenBy(details: string | null | undefined): SetEmailError {
-  try {
-    const parsed = JSON.parse(details ?? "") as { holder?: EmailHolder; name?: string | null; code?: string | null }
-    if (parsed.holder === "staff" || parsed.holder === "agent" || parsed.holder === "login") {
-      return { kind: "email-taken", holder: parsed.holder, name: parsed.name ?? null, code: parsed.code ?? null }
-    }
-  } catch {
-    // Falls through: guard_login's refusal names no holder.
-  }
-  return { kind: "email-taken", holder: "login", name: null, code: null }
-}
-
-function emailRefusal(error: { message: string; code?: string; details?: string | null }): SetEmailError | null {
+function emailRefusal(error: { message: string; code?: string; details?: string | null }, email: string): SetEmailError | null {
   const refusal = EMAIL_REFUSALS[error.message]
   if (refusal) return refusal
-  if (error.message === "email_taken") return takenBy(error.details)
+  if (error.message === "email_taken") return emailTakenFrom(error.details, email)
   // 23505: another agent saved the same email a moment earlier.
-  if (error.code === "23505") return { kind: "email-taken", holder: "agent", name: null, code: null }
+  if (error.code === "23505") return { ...emailTakenFrom(null, email), agent: { name: null, code: null } }
   if (error.code === "22P02") return { kind: "not-found" }
   if (error.code === "42501") return { kind: "forbidden" }
   return null
@@ -280,7 +268,7 @@ export async function setAgentEmail(
 ): Promise<Result<EmailChange, SetEmailError>> {
   const { data, error } = await supabase.rpc("set_marketing_agent_email", { agent_id: agentId, email })
   if (error) {
-    const refusal = emailRefusal(error)
+    const refusal = emailRefusal(error, email)
     if (refusal) return { ok: false, error: refusal }
     console.error("Could not save an agent's email", error)
     return { ok: false, error: { kind: "unavailable" } }

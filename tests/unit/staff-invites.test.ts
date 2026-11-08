@@ -116,9 +116,9 @@ describe("inviteStaff", () => {
     expect(result).toMatchObject({ ok: false, error: { message: "amina@example.test already belongs to Amina Juma." } })
   })
 
-  it("refuses an email a Marketing Agent holds and sends nothing", async () => {
+  it("says only that an email held by someone the caller can't see is in use, and sends nothing", async () => {
     const { client, send, log } = fakes({
-      invite_staff_member: { error: { message: "agent_email", details: JSON.stringify({ email: "amina@example.test" }) } },
+      invite_staff_member: { error: { message: "email_in_use", details: JSON.stringify({ email: "amina@example.test" }) } },
     })
 
     const result = await inviteStaff(client, send, details, REDIRECT)
@@ -126,8 +126,8 @@ describe("inviteStaff", () => {
     expect(result).toEqual({
       ok: false,
       error: {
-        code: "agent_email",
-        message: "amina@example.test belongs to a Marketing Agent. Staff and agents can't share an email, so use another one.",
+        code: "email_in_use",
+        message: "amina@example.test is already in use at Al-Rahmah. Use another email.",
       },
     })
     expect(log).toEqual(["invite_staff_member"])

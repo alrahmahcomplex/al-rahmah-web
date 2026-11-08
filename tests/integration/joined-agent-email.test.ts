@@ -90,7 +90,7 @@ describe("a joined agent who changed their email in Auth", () => {
     const agent = await movedAgent("moved-staff")
 
     const refused = await inviteStaff(agent.after)
-    expect(refused.error?.message).toBe("agent_email")
+    expect(refused.error?.message).toBe("email_in_use")
     expect(JSON.parse(refused.error?.details ?? "{}")).toEqual({ email: agent.after })
 
     expect((await inviteStaff(agent.before)).error).toBeNull()
@@ -101,11 +101,11 @@ describe("a joined agent who changed their email in Auth", () => {
   test("the address they left can be given to a new agent, and the one they moved to can't", async () => {
     const agent = await movedAgent("moved-agent")
 
-    expect(await checkNewAgent(await manager(), { fullName: name(), phone: phone(), email: agent.after })).toEqual({
+    expect(await checkNewAgent(await manager(), { fullName: name(), phone: phone(), email: agent.after })).toMatchObject({
       ok: false,
       error: { kind: "email-taken" },
     })
-    expect(await createAgent(await manager(), { fullName: name(), phone: phone(), email: agent.after })).toEqual({
+    expect(await createAgent(await manager(), { fullName: name(), phone: phone(), email: agent.after })).toMatchObject({
       ok: false,
       error: { kind: "email-taken" },
     })
@@ -118,8 +118,8 @@ describe("a joined agent who changed their email in Auth", () => {
     expect(await storedEmail(second.id)).toBe(agent.before)
 
     // Once the new agent holds it, the address is theirs again.
-    expect((await inviteStaff(agent.before)).error?.message).toBe("agent_email")
-    expect(await createAgent(await manager(), { fullName: name(), phone: phone(), email: agent.before })).toEqual({
+    expect((await inviteStaff(agent.before)).error?.message).toBe("email_in_use")
+    expect(await createAgent(await manager(), { fullName: name(), phone: phone(), email: agent.before })).toMatchObject({
       ok: false,
       error: { kind: "email-taken" },
     })
@@ -183,8 +183,8 @@ describe("an agent who hasn't joined", () => {
     const address = email("not-joined")
     await createdAgent(address)
 
-    expect((await inviteStaff(address)).error?.message).toBe("agent_email")
-    expect(await createAgent(await manager(), { fullName: name(), phone: phone(), email: address })).toEqual({
+    expect((await inviteStaff(address)).error?.message).toBe("email_in_use")
+    expect(await createAgent(await manager(), { fullName: name(), phone: phone(), email: address })).toMatchObject({
       ok: false,
       error: { kind: "email-taken" },
     })
@@ -199,8 +199,8 @@ describe("an agent who hasn't joined", () => {
     if (login.error || !login.data.user) throw new Error(`could not create the login: ${login.error?.message}`)
     await secretClient().auth.admin.updateUserById(login.data.user.id, { email: email("invited-elsewhere"), email_confirm: true })
 
-    expect((await inviteStaff(address)).error?.message).toBe("agent_email")
-    expect(await createAgent(await manager(), { fullName: name(), phone: phone(), email: address })).toEqual({
+    expect((await inviteStaff(address)).error?.message).toBe("email_in_use")
+    expect(await createAgent(await manager(), { fullName: name(), phone: phone(), email: address })).toMatchObject({
       ok: false,
       error: { kind: "email-taken" },
     })

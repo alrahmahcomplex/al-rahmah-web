@@ -23,7 +23,8 @@ export function LoginForm({ language, notice }: { language: Language; notice: Lo
   const copy = LOGIN_COPY[language]
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const [state, formAction, pending] = useActionState(async (previous: SignInState, data: FormData): Promise<SignInState> => {
-    if (!data.get("cf-turnstile-response")) return { error: "check-pending" }
+    // A check that needs a click says so itself, next to Ingia.
+    if (!data.get("cf-turnstile-response")) return turnstile.current?.reveal() ? null : { error: "check-pending" }
     const answer = await signIn(previous, data)
     // Supabase may have spent the token, so get a fresh one for the next try.
     if (answer?.error) turnstile.current?.reset()
@@ -49,9 +50,10 @@ export function LoginForm({ language, notice }: { language: Language; notice: Lo
           toggleLabels={{ show: copy.showPassword, hide: copy.hidePassword }}
         />
 
-        <TurnstileWidget ref={turnstile} action="sign-in" language={language} />
-
         {message && <LoginMessageView language={language} message={message} />}
+
+        {/* Invisible unless Cloudflare needs a click, and then right above Ingia. */}
+        <TurnstileWidget ref={turnstile} action="sign-in" language={language} />
 
         <button disabled={pending} type="submit" className={AUTH_SUBMIT}>
           {pending ? copy.processing : copy.logIn}

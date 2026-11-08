@@ -2,17 +2,18 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const stubs = vi.hoisted(() => ({ signIn: vi.fn(), reset: vi.fn(), token: "XXXX.DUMMY.TOKEN.XXXX" }))
+const stubs = vi.hoisted(() => ({ signIn: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), token: "XXXX.DUMMY.TOKEN.XXXX" }))
 
 vi.mock("@/app/login/actions", () => ({ signIn: stubs.signIn }))
 
 // Turnstile's widget, as far as the form sees it: the hidden token field it
-// adds, empty while the check is still running, and its reset.
+// adds, empty while the check is still running, its reset, and reveal, which
+// says whether the check is showing its own message.
 vi.mock("@/components/turnstile-widget", async () => {
   const { useImperativeHandle } = await import("react")
   return {
-    TurnstileWidget: ({ action, ref }: { action: string; ref?: React.Ref<{ reset(): void }> }) => {
-      useImperativeHandle(ref, () => ({ reset: stubs.reset }))
+    TurnstileWidget: ({ action, ref }: { action: string; ref?: React.Ref<{ reset(): void; reveal(): boolean }> }) => {
+      useImperativeHandle(ref, () => ({ reset: stubs.reset, reveal: stubs.reveal }))
       return <input type="hidden" name="cf-turnstile-response" data-action={action} value={stubs.token} readOnly />
     },
   }
@@ -23,6 +24,7 @@ import { LoginForm } from "@/app/login/login-form"
 beforeEach(() => {
   stubs.signIn.mockReset().mockResolvedValue({ error: "invalid-credentials" })
   stubs.reset.mockReset()
+  stubs.reveal.mockReset().mockReturnValue(false)
   stubs.token = "XXXX.DUMMY.TOKEN.XXXX"
 })
 
@@ -92,6 +94,18 @@ describe("the one sign-in form", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Subiri ukaguzi wa usalama ukamilike, kisha uingie.")
     expect(stubs.signIn).not.toHaveBeenCalled()
     expect(stubs.reset).not.toHaveBeenCalled()
+  })
+
+  it("lets a check that needs a click speak for itself, and sends nothing", async () => {
+    stubs.token = ""
+    stubs.reveal.mockReturnValue(true)
+    render(<LoginForm language="sw" notice={null} />)
+
+    await submit("neema@example.test", "a-password", "Ingia")
+
+    expect(stubs.reveal).toHaveBeenCalled()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(stubs.signIn).not.toHaveBeenCalled()
   })
 
   it("shows a refused security check as a check message, not a wrong password, and gets a fresh token", async () => {

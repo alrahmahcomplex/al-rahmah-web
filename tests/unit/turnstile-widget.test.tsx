@@ -81,6 +81,37 @@ describe("TurnstileWidget", () => {
     expect(lastOptions().size).toBe("flexible")
   })
 
+  it("draws the check again at the size that fits when the space crosses 300px", async () => {
+    let resized = () => {}
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resized = callback
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(340)
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+    expect(lastOptions().size).toBe("flexible")
+
+    // A width change that keeps the same size draws nothing new.
+    width.mockReturnValue(320)
+    act(() => resized())
+    expect(turnstile.render).toHaveBeenCalledTimes(1)
+
+    width.mockReturnValue(261)
+    act(() => resized())
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
+    expect(turnstile.remove).toHaveBeenCalledWith("widget-1")
+    expect(lastOptions().size).toBe("compact")
+    vi.unstubAllGlobals()
+  })
+
   it("says in words when the check needs a click, and brings it into view on send", async () => {
     const scroll = vi.fn()
     Element.prototype.scrollIntoView = scroll

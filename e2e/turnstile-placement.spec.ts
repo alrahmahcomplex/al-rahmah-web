@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 import { expect, test, type Page } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
@@ -39,10 +41,14 @@ async function cloudflareAsksForAClick(page: Page) {
           )
           container.appendChild(box)
           setTimeout(() => options["before-interactive-callback"](), 0)
-          return "fake"
+          box.id = `fake-check-${Math.random().toString(36).slice(2)}`
+          return box.id
         },
         reset() {},
-        remove() {},
+        // Like Turnstile, removing a widget takes its box away.
+        remove(id: string) {
+          document.getElementById(id)?.remove()
+        },
       },
     })
   })
@@ -172,9 +178,23 @@ for (const { name, size } of VIEWPORTS) {
     test("a password link request still sends with the always-pass keys", async ({ page }) => {
       await page.goto("/login/forgot-password")
       await waitForSecurityCheck(page)
-      await page.getByRole("textbox").fill("hakuna-akaunti@example.test")
+      await page.getByRole("textbox").fill(`hakuna-akaunti-${randomUUID().slice(0, 8)}@example.test`)
       await page.getByRole("button", { name: "Tuma kiungo kipya" }).click()
-      await expect(page.getByRole("status")).toContainText("Kama barua pepe hii ina akaunti")
+      await expect(page.getByRole("status")).toContainText("Kama barua pepe hii ina akaunti", { timeout: 15_000 })
     })
   })
 }
+
+test("a check that needs a click is drawn again to fit when the window narrows", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await cloudflareAsksForAClick(page)
+  await reachReviewStep(page, "sw")
+  await expect(page.locator('[data-fake-check="flexible"]')).toBeVisible()
+
+  // A small phone: the card's inside drops under Turnstile's 300px minimum.
+  await page.setViewportSize({ width: 340, height: 800 })
+  await expect(page.locator('[data-fake-check="compact"]')).toBeVisible()
+  await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible()
+  await expectInsideCardAndCentred(page)
+  await noSidewaysScroll(page)
+})

@@ -123,6 +123,10 @@ export function TurnstileWidget({
   const widget = useRef<{ turnstile: Turnstile; id: string } | null>(null)
   const [state, setState] = useState<CheckState>("hidden")
   const stateRef = useRef<CheckState>("hidden")
+  // Measured before the widget is drawn, and again when the space crosses
+  // 300px (a phone turning, a window narrowing): the widget is then drawn
+  // again at the size that fits.
+  const [size, setSize] = useState<"flexible" | "compact" | null>(null)
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
   function show(next: CheckState) {
@@ -143,6 +147,18 @@ export function TurnstileWidget({
   }))
 
   useEffect(() => {
+    const box = container.current
+    if (!box) return
+    const measure = () => setSize(box.clientWidth < FLEXIBLE_MIN_WIDTH ? "compact" : "flexible")
+    measure()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(measure)
+    observer.observe(box)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!size) return
     if (!siteKey) {
       console.error("Turnstile: NEXT_PUBLIC_TURNSTILE_SITE_KEY is not set, so the form can't be sent")
       return
@@ -158,7 +174,7 @@ export function TurnstileWidget({
           sitekey: siteKey,
           action,
           // The sign-in card is narrower than flexible's minimum.
-          size: container.current.clientWidth < FLEXIBLE_MIN_WIDTH ? "compact" : "flexible",
+          size,
           theme: "auto",
           // Invisible unless Cloudflare needs the person to click: a
           // box near the fee read like a payment confirmation.
@@ -189,8 +205,10 @@ export function TurnstileWidget({
         widget.current.turnstile.remove(widget.current.id)
         widget.current = null
       }
+      // A widget drawn again starts with no message.
+      show("hidden")
     }
-  }, [siteKey, action, language])
+  }, [siteKey, action, language, size])
 
   const text = state === "hidden" ? "" : COPY[language][state]
 

@@ -194,6 +194,7 @@ test("a check that needs a click is drawn again to fit when the window narrows",
   // A small phone: the card's inside drops under Turnstile's 300px minimum.
   await page.setViewportSize({ width: 340, height: 800 })
   await expect(page.locator('[data-fake-check="compact"]')).toBeVisible()
+  await expect(page.locator('[data-fake-check="flexible"]')).toHaveCount(0)
   await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible()
   await expectInsideCardAndCentred(page)
   await noSidewaysScroll(page)

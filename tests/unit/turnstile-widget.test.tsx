@@ -9,7 +9,8 @@ const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render
 type RenderOptions = Record<string, unknown> & {
   callback?: () => void
   "before-interactive-callback"?: () => void
-  "error-callback"?: () => boolean
+  "error-callback"?: (code: string) => boolean
+  "unsupported-callback"?: () => void
   "expired-callback"?: () => void
 }
 
@@ -104,8 +105,11 @@ describe("TurnstileWidget", () => {
     act(() => resized())
     expect(turnstile.render).toHaveBeenCalledTimes(1)
 
+    act(() => lastOptions()["before-interactive-callback"]!())
     width.mockReturnValue(261)
     act(() => resized())
+    // The widget drawn again starts with no message until Cloudflare asks.
+    expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
     expect(turnstile.remove).toHaveBeenCalledWith("widget-1")
     expect(lastOptions().size).toBe("compact")
@@ -142,7 +146,8 @@ describe("TurnstileWidget", () => {
     expect(widget.current!.reveal()).toBe(false)
   })
 
-  it("reads out a check that fails to load", async () => {
+  it("reads out a check that fails, and logs Cloudflare's error code", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
     const TurnstileWidget = await loadWidget()
     const widget = createRef<TurnstileWidgetHandle>()
     render(<TurnstileWidget ref={widget} action="admission" language="en" />)
@@ -150,15 +155,41 @@ describe("TurnstileWidget", () => {
 
     let handled = false
     act(() => {
-      handled = lastOptions()["error-callback"]!()
+      handled = lastOptions()["error-callback"]!("110200")
     })
 
     expect(handled).toBe(true)
-    expect(screen.getByText("The security check couldn't load. Reload the page and try again.")).toHaveAttribute(
-      "aria-live",
-      "assertive",
-    )
-    expect(widget.current!.reveal()).toBe(true)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("110200"))
+    const alert = screen.getByRole("alert")
+    expect(alert).toHaveTextContent("The security check couldn't load. Reload the page and try again.")
+    act(() => {
+      widget.current!.reveal()
+    })
+    expect(alert).toHaveFocus()
+  })
+
+  it("points a browser Turnstile doesn't support to another browser or the office", async () => {
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="sw" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+
+    act(() => lastOptions()["unsupported-callback"]!())
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Jaribu kivinjari kingine, au piga simu ofisini.")
+  })
+
+  it("keeps its spacing after a tick, while Cloudflare's box still shows success", async () => {
+    const TurnstileWidget = await loadWidget()
+    const { container } = render(<TurnstileWidget action="admission" language="en" className="mt-5" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    expect(container.firstChild).not.toHaveClass("mt-5")
+
+    act(() => lastOptions()["before-interactive-callback"]!())
+    expect(container.firstChild).toHaveClass("mt-5")
+
+    act(() => lastOptions().callback!())
+    expect(container.firstChild).toHaveClass("mt-5")
+    expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
   })
 
   it("falls back to the visitor's browser language for Swahili, which Turnstile doesn't offer", async () => {
@@ -232,6 +263,7 @@ describe("TurnstileWidget", () => {
       document.querySelector(`script[src="${SCRIPT_SRC}"]`)!.dispatchEvent(new Event("load"))
     })
     expect(document.querySelectorAll(`script[src="${SCRIPT_SRC}"]`)).toHaveLength(0)
+    expect(screen.getByRole("alert")).toHaveTextContent("Ukaguzi wa usalama haukuweza kufunguka.")
     first.unmount()
 
     render(<TurnstileWidget action="admission" language="sw" />)

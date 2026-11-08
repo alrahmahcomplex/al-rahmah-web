@@ -34,7 +34,7 @@ type RenderOptions = {
   language: string
   callback: () => void
   "before-interactive-callback": () => void
-  "error-callback": () => boolean
+  "error-callback": (code: string) => boolean
   "unsupported-callback": () => void
   "expired-callback": () => void
   "timeout-callback": () => void
@@ -56,14 +56,18 @@ declare global {
 // compact size (150px wide) fits instead.
 const FLEXIBLE_MIN_WIDTH = 300
 
-const COPY: Record<Language, Record<"needsClick" | "failed", string>> = {
+type CheckState = "hidden" | "needsClick" | "failed" | "unsupported"
+
+const COPY: Record<Language, Record<Exclude<CheckState, "hidden">, string>> = {
   sw: {
     needsClick: "Weka alama kwenye ukaguzi wa usalama hapa chini, kisha utume.",
     failed: "Ukaguzi wa usalama haukuweza kufunguka. Pakia ukurasa upya kisha ujaribu tena.",
+    unsupported: "Kivinjari hiki hakiwezi kufanya ukaguzi wa usalama. Jaribu kivinjari kingine, au piga simu ofisini.",
   },
   en: {
     needsClick: "Tick the security check below, then send.",
     failed: "The security check couldn't load. Reload the page and try again.",
+    unsupported: "This browser can't run the security check. Try another browser, or call the office.",
   },
 }
 
@@ -101,8 +105,6 @@ export type TurnstileWidgetHandle = {
   reveal(): boolean
 }
 
-type CheckState = "hidden" | "needsClick" | "failed"
-
 export function TurnstileWidget({
   action,
   language,
@@ -119,10 +121,14 @@ export function TurnstileWidget({
 }) {
   const wrapper = useRef<HTMLDivElement>(null)
   const container = useRef<HTMLDivElement>(null)
-  const message = useRef<HTMLParagraphElement>(null)
+  const prompt = useRef<HTMLParagraphElement>(null)
+  const alert = useRef<HTMLParagraphElement>(null)
   const widget = useRef<{ turnstile: Turnstile; id: string } | null>(null)
   const [state, setState] = useState<CheckState>("hidden")
   const stateRef = useRef<CheckState>("hidden")
+  // Once Cloudflare has shown the box, its spacing stays until the widget is
+  // drawn again: the box stays on screen after a tick, showing success.
+  const [shown, setShown] = useState(false)
   // Measured before the widget is drawn, and again when the space crosses
   // 300px (a phone turning, a window narrowing): the widget is then drawn
   // again at the size that fits.
@@ -132,6 +138,7 @@ export function TurnstileWidget({
   function show(next: CheckState) {
     stateRef.current = next
     setState(next)
+    if (next !== "hidden") setShown(true)
   }
 
   useImperativeHandle(ref, () => ({
@@ -141,7 +148,8 @@ export function TurnstileWidget({
     reveal() {
       if (stateRef.current === "hidden") return false
       wrapper.current?.scrollIntoView({ block: "center", behavior: "smooth" })
-      message.current?.focus({ preventScroll: true })
+      const message = stateRef.current === "needsClick" ? prompt.current : alert.current
+      message?.focus({ preventScroll: true })
       return true
     },
   }))
@@ -182,13 +190,15 @@ export function TurnstileWidget({
           language: WIDGET_LANGUAGES.has(language) ? language : "auto",
           callback: () => show("hidden"),
           "before-interactive-callback": () => show("needsClick"),
-          // Returning true tells Turnstile the error is handled; it still
+          // Returning true tells Turnstile the error is handled, which also
+          // stops it logging the code, so log it here. Turnstile still
           // retries on its own, and a later success clears the message.
-          "error-callback": () => {
+          "error-callback": (code: string) => {
+            console.error(`Turnstile error ${code}`)
             show("failed")
             return true
           },
-          "unsupported-callback": () => show("failed"),
+          "unsupported-callback": () => show("unsupported"),
           "expired-callback": reset,
           "timeout-callback": reset,
         })
@@ -205,24 +215,32 @@ export function TurnstileWidget({
         widget.current.turnstile.remove(widget.current.id)
         widget.current = null
       }
-      // A widget drawn again starts with no message.
+      // A widget drawn again starts with no message and no spacing.
       show("hidden")
+      setShown(false)
     }
   }, [siteKey, action, language, size])
 
-  const text = state === "hidden" ? "" : COPY[language][state]
+  const needsClick = state === "needsClick"
+  const problem = state === "failed" || state === "unsupported"
 
-  // The live region is always there, so a message added later is read out.
+  // The polite region is always there, so a prompt added later is read out.
+  // A problem is added as role="alert", which is announced when it appears.
   return (
-    <div ref={wrapper} className={cn("flex w-full flex-col items-center gap-2", state !== "hidden" && className)}>
+    <div ref={wrapper} className={cn("flex w-full flex-col items-center gap-2", shown && className)}>
       <p
-        ref={message}
+        ref={prompt}
         tabIndex={-1}
-        aria-live={state === "failed" ? "assertive" : "polite"}
-        className={cn("text-center text-sm outline-none", state === "failed" ? "text-red-700" : "text-slate-700", !text && "sr-only")}
+        aria-live="polite"
+        className={cn("text-center text-sm text-slate-700 outline-none", !needsClick && "sr-only")}
       >
-        {text}
+        {needsClick ? COPY[language].needsClick : ""}
       </p>
+      {problem && (
+        <p ref={alert} tabIndex={-1} role="alert" className="text-center text-sm text-red-700 outline-none">
+          {COPY[language][state]}
+        </p>
+      )}
       <div ref={container} data-turnstile-box className="flex w-full justify-center" />
     </div>
   )

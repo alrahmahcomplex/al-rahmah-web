@@ -13,8 +13,10 @@
 --   inside the managed set still answer `already_staff` with name and status.
 -- - email_in_use_detail(email, except_agent): what an Agents screen refusal
 --   may say about the holder. Another current agent is named with their
---   code, since whoever manages agents sees them all. Anyone else, staff,
---   the Super Admin or another sign-in, gets only the email.
+--   code to a caller who can read agents (leads.view, the agent list's
+--   permission; agents.approve alone doesn't grant it). Anyone else, staff,
+--   the Super Admin or another sign-in, gets only the email, and so does a
+--   caller who can't read agents.
 -- - set_marketing_agent_email (and so decide_agent_email_claim, which saves
 --   through it) sends that detail with `email_taken`, never a staff name.
 -- - check_marketing_agent, create_marketing_agent and
@@ -26,7 +28,8 @@
 -- no audit row.
 
 -- ---------------------------------------------------------------------------
--- What an Agents screen refusal may say about an email's holder.
+-- What an Agents screen refusal may say about an email's holder: another
+-- agent's name and code only to a caller who reads agents.
 -- ---------------------------------------------------------------------------
 
 create function public.email_in_use_detail(email text, except_agent uuid default null)
@@ -45,6 +48,7 @@ as $$
             from public.agent_email_holders(email_in_use_detail.email) h
             join public.marketing_agents a on a.id = h.agent_id
             where a.id is distinct from email_in_use_detail.except_agent
+              and public.has_permission('leads.view')
             order by a.id
             limit 1
         ),

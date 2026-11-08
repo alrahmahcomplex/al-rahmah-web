@@ -169,6 +169,20 @@ describe("the Agents screen and an email already in use", () => {
     expect(detail(error)).toEqual({ email: otherEmail, holder: "agent", name: other.fullName, code: other.code })
   })
 
+  test("a caller with agents.approve but not leads.view, who can't read agents, isn't told the agent's name", async () => {
+    const approver = await signedIn(await createThrowawayStaff(["agents.approve"]))
+    const otherEmail = newEmail("unread-other")
+    await agentWith(otherEmail)
+    const target = await agentWith(newEmail("unread-target"))
+
+    const set = await approver.rpc("set_marketing_agent_email", { agent_id: target.id, email: otherEmail })
+    expect(set.error?.message).toBe("email_taken")
+    expect(detail(set.error)).toEqual({ email: otherEmail })
+    const checked = await approver.rpc("check_marketing_agent", { full_name: name(), phone: phone(), whatsapp: null, email: otherEmail, code: null })
+    expect(checked.error?.message).toBe("email_taken")
+    expect(detail(checked.error)).toEqual({ email: otherEmail })
+  })
+
   test("Create agent names another agent holding the email, and says only in use for staff", async () => {
     const client = await signedIn(MANAGER)
     const otherEmail = newEmail("create-other")

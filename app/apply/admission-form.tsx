@@ -64,6 +64,14 @@ function stepUrl(step: Step): string {
 // Back button can step back through history rather than add to it.
 const PUSHED = "admissionFormStep"
 
+// Whether every step after `to`, up to `from`, has an entry this form pushed,
+// so `history.go(to - from)` lands on `to`'s own entry instead of leaving a
+// later step's entry behind it.
+function unwinds(pushed: ReadonlySet<Step>, from: Step, to: Step): boolean {
+  for (let later = to + 1; later <= from; later++) if (!pushed.has(later as Step)) return false
+  return true
+}
+
 // A random key per form, kept until a confirmation shows, so sending the same
 // form twice creates nothing new. Falls back to getRandomValues where
 // randomUUID is missing (a page served over plain http).
@@ -169,6 +177,9 @@ export function AdmissionFormSteps({
   // survives a reload, but Next.js rewrites the entry's state when a Server
   // Action (the language switch) refreshes the page, so both are checked.
   const pushedSteps = useRef(new Set<Step>())
+  // Sent back to an earlier step's own entry: the problems to show once its
+  // popstate arrives, and whether to refresh the page then (a year closed).
+  const arriving = useRef<{ step: Step; shown: Shown[]; refresh: boolean } | null>(null)
   // After adding or removing a card: the card to put the reader at, and
   // whether at its name (a new card) or on the card itself, which reads out
   // its legend (where a removed card was).
@@ -225,15 +236,29 @@ export function AdmissionFormSteps({
       if (confirmed) return
       const want = stepFromUrl()
       const opened = reachable(want, parent, children, years)
-      if (opened !== want) window.history.replaceState(null, "", stepUrl(opened))
+      // A step the entries don't allow yet goes back to the allowed step's
+      // own entry when this form pushed the ones in between, so the form's
+      // Back from there still steps back through history. Otherwise the
+      // entry is replaced, and is no longer one this form pushed.
+      const unwinding = opened !== want && unwinds(pushedSteps.current, want, opened)
+      const arrival = arriving.current
+      if (!unwinding) arriving.current = null
+      if (unwinding) window.history.go(opened - want)
+      else if (opened !== want) {
+        pushedSteps.current.delete(opened)
+        window.history.replaceState(null, "", stepUrl(opened))
+      }
       setNotice(null)
       moved.current = true
-      setProblems([])
+      setProblems(arrival?.step === opened ? arrival.shown : [])
       setStep(opened)
+      // After Next.js has handled this popstate too, so the refresh doesn't
+      // race its restore of the entry.
+      if (arrival?.refresh && !unwinding) setTimeout(() => router.refresh(), 0)
     }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
-  }, [confirmed, parent, children, years])
+  }, [confirmed, parent, children, years, router])
 
   // After a step change, put the reader at the new step's heading, or at the
   // first field to fix.
@@ -279,15 +304,29 @@ export function AdmissionFormSteps({
   }
 
   // Opens a step. `push` gives it a new history entry (moving forward),
-  // `replace` swaps the current one (sent back to fix something).
-  function go(next: Step, shown: Shown[] = [], history: "push" | "replace" = "replace") {
+  // `replace` sends the parent back to fix something: to that step's own
+  // entry when this form pushed the ones after it, so the phone's Back from
+  // there leaves the form, else by swapping the current entry. `refresh`
+  // re-renders the page once the step is open.
+  function go(next: Step, shown: Shown[] = [], history: "push" | "replace" = "replace", refresh = false) {
+    // The entry the browser is on now, which after the phone's Back during a
+    // send is no longer the step the send started from.
+    const at = stepFromUrl()
+    const unwinding = history === "replace" && next < at && unwinds(pushedSteps.current, at, next)
+    if (unwinding) {
+      // The popstate opens the step and shows these problems.
+      arriving.current = { step: next, shown, refresh }
+      window.history.go(next - at)
+      return
+    }
     moved.current = true
     setProblems(shown)
     setStep(next)
+    if (refresh) router.refresh()
     if (history === "push") {
       pushedSteps.current.add(next)
       window.history.pushState({ [PUSHED]: true }, "", stepUrl(next))
-    } else if (next !== step) {
+    } else if (next !== at) {
       // Problems on the step already open leave its history entry alone, so
       // the form's Back still steps back through history.
       pushedSteps.current.delete(next)
@@ -375,7 +414,8 @@ export function AdmissionFormSteps({
   }
 
   function onSend(form: HTMLFormElement) {
-    if (sending) return
+    // Also while going back to an earlier step, until its popstate arrives.
+    if (sending || arriving.current) return
     const parentFound = parentProblems(asParent(parent))
     if (parentFound.length) return go(0, parentFound.map((shown) => ({ ...shown, server: false })))
     const childFound = childrenProblems(children.map(asChild), years)
@@ -416,6 +456,8 @@ export function AdmissionFormSteps({
         // drops its step, so a reload opens an empty form.
         clearDraft()
         window.history.replaceState(null, "", stepUrl(0))
+        // The entries after this one belong to the form just sent.
+        pushedSteps.current.clear()
         moved.current = true
         setConfirmed(result.children)
         setAlreadySent(result.status === "already-sent" ? (result.complete ? "all" : "some") : null)
@@ -427,10 +469,11 @@ export function AdmissionFormSteps({
         if (result.field === "submission_key") setSubmissionKey(newSubmissionKey())
         // The year turned since the page loaded: render the new year chips.
         // The entries are client state, so a refresh keeps them.
-        if (result.field === "enrollment_year") router.refresh()
+        const refresh = result.field === "enrollment_year"
         const shown: Shown = { field: result.field, child: result.child, server: true }
-        if (PARENT_FIELDS.has(result.field)) return go(0, [shown])
-        if (CHILD_FIELDS.has(result.field)) return go(1, [shown])
+        if (PARENT_FIELDS.has(result.field)) return go(0, [shown], "replace", refresh)
+        if (CHILD_FIELDS.has(result.field)) return go(1, [shown], "replace", refresh)
+        if (refresh) router.refresh()
         moved.current = true
         setProblems([shown])
         return

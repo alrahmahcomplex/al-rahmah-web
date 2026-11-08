@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 8, 2026 `v0.88.1`
+
+### FIXED
+
+- On the Admission form, when the school can't read the parent's phone number after
+  Send application, the phone's Back from the parent step now leaves the form instead of
+  jumping forward to Children. Entries are kept.
+- Using the phone's Forward to return to the review after clearing a child's name keeps
+  the parent on Children, and the form's Back button then opens the parent step in one
+  press instead of two.
+
 ## November 8, 2026 `v0.88.0`
 
 ### IMPROVED

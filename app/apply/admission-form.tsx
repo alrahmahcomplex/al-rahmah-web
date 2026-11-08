@@ -309,19 +309,24 @@ export function AdmissionFormSteps({
   // there leaves the form, else by swapping the current entry. `refresh`
   // re-renders the page once the step is open.
   function go(next: Step, shown: Shown[] = [], history: "push" | "replace" = "replace", refresh = false) {
+    // The entry the browser is on now, which after the phone's Back during a
+    // send is no longer the step the send started from.
+    const at = stepFromUrl()
+    const unwinding = history === "replace" && next !== at && unwinds(pushedSteps.current, at, next)
+    if (unwinding) {
+      // The popstate opens the step and shows these problems.
+      arriving.current = { step: next, shown, refresh }
+      window.history.go(next - at)
+      return
+    }
     moved.current = true
     setProblems(shown)
     setStep(next)
-    const unwinding = history === "replace" && next !== step && unwinds(pushedSteps.current, step, next)
-    if (refresh && !unwinding) router.refresh()
+    if (refresh) router.refresh()
     if (history === "push") {
       pushedSteps.current.add(next)
       window.history.pushState({ [PUSHED]: true }, "", stepUrl(next))
-    } else if (unwinding) {
-      // The popstate opens the step again; these problems stay on show.
-      arriving.current = { step: next, shown, refresh }
-      window.history.go(next - step)
-    } else if (next !== step) {
+    } else if (next !== at) {
       // Problems on the step already open leave its history entry alone, so
       // the form's Back still steps back through history.
       pushedSteps.current.delete(next)
@@ -450,6 +455,8 @@ export function AdmissionFormSteps({
         // drops its step, so a reload opens an empty form.
         clearDraft()
         window.history.replaceState(null, "", stepUrl(0))
+        // The entries after this one belong to the form just sent.
+        pushedSteps.current.clear()
         moved.current = true
         setConfirmed(result.children)
         setAlreadySent(result.status === "already-sent" ? (result.complete ? "all" : "some") : null)

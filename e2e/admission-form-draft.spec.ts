@@ -205,8 +205,14 @@ test("a phone the server can't read opens the parent step, and the phone's Back 
   await expect(heading(page, 0)).toBeVisible()
   await expect(page).toHaveURL("/apply")
   await expect(page.getByText("Hatukuweza kusoma namba hii ya simu.", { exact: false })).toBeVisible()
-  await expect(page.getByLabel(t.phone, { exact: true })).toBeFocused()
+  const phone = page.getByLabel(t.phone, { exact: true })
+  await expect(phone).toBeFocused()
   await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
+  // Typing clears the server's problem and leaves the parent in the field.
+  await phone.press("End")
+  await phone.pressSequentially("34")
+  await expect(phone).toBeFocused()
+  await expect(phone).toHaveValue("1234")
 
   await page.goBack()
   await expect(page).toHaveURL("/")
@@ -214,7 +220,7 @@ test("a phone the server can't read opens the parent step, and the phone's Back 
   await page.goForward()
   await expect(heading(page, 0)).toBeVisible()
   await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
-  await expect(page.getByLabel(t.phone, { exact: true })).toHaveValue("12")
+  await expect(page.getByLabel(t.phone, { exact: true })).toHaveValue("1234")
 })
 
 test("Forward to a step the entries no longer allow stays put, and the form's Back then opens the parent step", async ({ page }) => {

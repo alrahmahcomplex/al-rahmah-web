@@ -39,7 +39,7 @@ Supabase's CAPTCHA protection (#268) asks for a Turnstile token on password sign
   3. An agent checks production again: sign-in works, "Umesahau nenosiri?" sends, and a direct `/recover` with the publishable key and no token gets `captcha_failed`. No hosted doc says the secret key skips the check, so this production check is what proves the reset forms still send.
 - **Rollback.** Which fix works depends on how sign-in fails.
   - Sign-in fails with "Ukaguzi wa usalama haukukamilika. Jaribu tena." (`captcha_failed`) after CAPTCHA was turned on. Turn Enable CAPTCHA protection off. Supabase then ignores the token and sign-in works again.
-  - The widget never gives a token, so people stay stuck on "Subiri ukaguzi wa usalama ukamilike, kisha uingie." Turning CAPTCHA off doesn't help, because the app refuses to send without a token. Use Vercel Instant Rollback to the previous production deployment, or revert the PR.
+  - The widget never gives a token, so people stay stuck on "Subiri ukaguzi wa usalama ukamilike, kisha uingie." Turning CAPTCHA off doesn't help, because the app refuses to send without a token. Fix the cause first: check the widget's hostname list in Cloudflare and `NEXT_PUBLIC_TURNSTILE_SITE_KEY` in Vercel, then redeploy. If that can't be done quickly, use Vercel Instant Rollback to the previous production deployment, or revert the PR. If Enable CAPTCHA protection is already on, turn it off first: the previous deployment sends no token, so with CAPTCHA on it would refuse every sign-in too.
 
 ## Plans, email, rate limits and logs
 

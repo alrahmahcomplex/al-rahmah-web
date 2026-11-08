@@ -3,12 +3,10 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { RESET_PATH } from "@/lib/password-reset"
+import { RESET_PATH, RESET_VERIFIED_COOKIE as VERIFIED_COOKIE, retryFor } from "@/lib/password-reset"
 import { resetPasswordFromLink, type ResetPasswordError } from "@/lib/services/password-reset"
 import { HOME } from "@/lib/services/sign-in"
 import { createClient } from "@/utils/supabase/server"
-
-const VERIFIED_COOKIE = "reset-link-verified"
 
 export type ResetPasswordState = { error: ResetPasswordError | "password-mismatch" } | null
 
@@ -23,8 +21,8 @@ export async function resetPassword(_previous: ResetPasswordState, formData: For
   if (password !== String(formData.get("confirm") ?? "")) return { error: "password-mismatch" }
 
   const jar = await cookies()
-  const [verifiedToken, verifiedUserId] = (jar.get(VERIFIED_COOKIE)?.value ?? "").split(" ")
-  const retrying = verifiedToken === tokenHash && Boolean(verifiedUserId)
+  const verifiedUserId = retryFor(jar.get(VERIFIED_COOKIE)?.value, tokenHash)
+  const retrying = verifiedUserId !== null
 
   const result = await resetPasswordFromLink(await createClient(), tokenHash, password, retrying ? { verifiedUserId } : {})
   if (!result.ok) {

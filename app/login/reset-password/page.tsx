@@ -1,11 +1,12 @@
 import type { Metadata } from "next"
+import { cookies } from "next/headers"
 
 import { SignOutNotice } from "@/app/discount-code/account-message"
 import { LINK_REQUEST_COPY } from "@/app/discount-code/link-request-copy"
 import { AuthCard } from "@/components/auth-card"
 import { getLanguage } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
-import { RESET_PATH } from "@/lib/password-reset"
+import { RESET_PATH, RESET_VERIFIED_COOKIE, retryFor } from "@/lib/password-reset"
 import { currentSessionKind } from "@/lib/services/auth-session"
 import { createClient } from "@/utils/supabase/server"
 
@@ -23,7 +24,9 @@ export async function generateMetadata(): Promise<Metadata> {
 // template's token_hash link. Loading leaves the token alone, so an email
 // link scanner can't use it up. A browser already signed in, as anyone,
 // signs out first, so one browser never holds two accounts' sessions. An
-// expired or used link offers "Tuma kiungo kipya".
+// expired or used link offers "Tuma kiungo kipya". The one session it keeps
+// is the one this link signed in when saving the password failed: the link
+// is spent by then, so the retry needs that session.
 export default async function ResetPasswordPage({
   searchParams,
 }: {
@@ -31,11 +34,15 @@ export default async function ResetPasswordPage({
 }) {
   const [language, { token_hash: tokenHash, type }] = await Promise.all([getLanguage(), searchParams])
   const usable = typeof tokenHash === "string" && tokenHash !== "" && type === "recovery"
-  const session = usable ? await currentSessionKind(await createClient()) : null
+  const supabase = usable ? await createClient() : null
+  const session = supabase ? await currentSessionKind(supabase) : null
+  const retryUserId = usable ? retryFor((await cookies()).get(RESET_VERIFIED_COOKIE)?.value, tokenHash) : null
+  const retrying =
+    retryUserId !== null && supabase !== null && (await supabase.auth.getUser()).data.user?.id === retryUserId
 
   return (
     <AuthCard language={language}>
-      {usable && session?.ok && session.data !== "none" ? (
+      {usable && !retrying && session?.ok && session.data !== "none" ? (
         <SignOutNotice
           language={language}
           message={LINK_REQUEST_COPY[language].signedIn}

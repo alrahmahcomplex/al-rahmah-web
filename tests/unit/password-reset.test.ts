@@ -99,3 +99,13 @@ describe("the shared reset page", () => {
     expect(await resetPasswordFromLink(client, "token", PASSWORD)).toEqual({ ok: false, error: "password-not-saved", userId: "user-1" })
   })
 })
+
+describe("the retry cookie", () => {
+  it("allows a retry only for the same link, naming the account it signed in", async () => {
+    const { retryFor } = await import("@/lib/password-reset")
+    expect(retryFor("token-a user-1", "token-a")).toBe("user-1")
+    expect(retryFor("token-a user-1", "token-b")).toBeNull()
+    expect(retryFor("token-a", "token-a")).toBeNull()
+    expect(retryFor(undefined, "token-a")).toBeNull()
+  })
+})

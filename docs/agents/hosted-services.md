@@ -28,7 +28,7 @@ Checked in the signed-in in-app browser on 2026-11-05. Recheck a value in its da
 Vercel is on Hobby. Supabase is on Free, in eu-west-1. On 2026-11-03 the owner chose to stay on the free plans and accepted these risks:
 
 - **Hobby is for non-commercial use** under Vercel's terms, and a school's admissions site may not qualify.
-- **One firewall rule.** Hobby allows one custom rule, so every public form shares `public-forms` and its single threshold. Rate limiting below has the details, including the accepted gap in the agent sign-in key.
+- **One firewall rule.** Hobby allows one custom rule, so every public form shares `public-forms` and its single threshold. Rate limiting below has the details, including the accepted gap in the sign-in key.
 - **Supabase Free pauses an inactive project.** A paused project takes the staff portal, sign-in and every form that writes down until someone restores it from the Supabase dashboard. Check that the project isn't paused before a launch step or after a quiet period.
 - **No point-in-time recovery.** A bad migration or deletion can't be rolled back to a moment in time.
 
@@ -100,13 +100,13 @@ Because one rule has one threshold, each form gets its own allowance through its
 | Admission form submission | `admission:<ip>:<contact hash>` | Live |
 | Discount-code check on the Admission form | `code-check:<ip>` | Live |
 | Agent registration | `agent:<ip>` | Live |
-| Agent sign-in | `agent-sign-in:<ip>:<email hash>` | Live (#191) |
+| Sign-in, staff and agents (`/login`) | `sign-in:<ip>:<email hash>` | Live (#191; staff added in #264) |
 | Agent reset ("Umesahau nenosiri?") | `agent-reset:<ip>:<email hash>` | Live (#194) |
 | "Tuma kiungo kipya" on an expired link | `agent-new-link:<ip>:<email hash>` | Live (#194) |
 
 A hash is the first 32 hex characters of the SHA-256 of the trimmed, lowercased value, never the value itself. The contact is the parent's phone from the Admission form, in one form however it was typed (`0700 000 900` and `+255 700 000 900` give the same hash). With it in the key, families sending the form from one shared connection each get their own 20 tries. A form whose phone can't be read falls back to `admission:<ip>`. The code check stays IP-only: a code in the key would give each code its own allowance and let one IP try every code, so it relies on the higher threshold instead.
 
-Agent sign-in and reset keep the IP plus an email hash. Sign-in is sized for shared school Wi-Fi, where many people share one IP: each agent gets 20 tries in 10 minutes rather than 20 for the whole school. The same key lets one IP try any number of different addresses. #191 accepts that gap rather than adding an IP-only sign-in key, because Hobby has one rule and so one threshold, and an IP-only key at 20 would lock out a school's Wi-Fi. Supabase's token limiter (below) still bounds password guessing from Vercel as a whole, and a limited try never reaches Supabase. A limited sign-in shows "Majaribio ni mengi mno. Subiri dakika chache, kisha ujaribu tena." ("Too many attempts. Wait a few minutes, then try again."), not the wrong-password message. Reset also relies on Turnstile, Supabase's 60-second gap per address, the public reset counter and the project-wide hourly budget for public emails, so it is still limited if the firewall check fails open. Staff `/login` isn't on the rule.
+Sign-in and agent reset keep the IP plus an email hash. Since #264 one sign-in form serves staff and agents, so both share the `sign-in` key. Sign-in is sized for shared school Wi-Fi, where many people share one IP: each person gets 20 tries in 10 minutes rather than 20 for the whole school. The same key lets one IP try any number of different addresses. #191 accepts that gap rather than adding an IP-only sign-in key, because Hobby has one rule and so one threshold, and an IP-only key at 20 would lock out a school's Wi-Fi. Supabase's token limiter (below) still bounds password guessing from Vercel as a whole, and a limited try never reaches Supabase. A limited sign-in shows "Majaribio ni mengi mno. Subiri dakika chache, kisha ujaribu tena." ("Too many attempts. Wait a few minutes, then try again."), not the wrong-password message. Reset also relies on Turnstile, Supabase's 60-second gap per address, the public reset counter and the project-wide hourly budget for public emails, so it is still limited if the firewall check fails open.
 
 **Supabase sees Vercel's IP, not the user's.** The app calls Supabase Auth from the server, and IP address forwarding is off. On 2026-11-05 a failed sign-in on a Preview with a placeholder address reached the Auth logs from an AWS address, where Vercel runs its functions, not the tester's Tanzanian ISP address. Supabase's per-IP limits therefore count all users together, for as long as their requests leave Vercel from the same address.
 

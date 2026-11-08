@@ -27,18 +27,22 @@ vi.mock("@/lib/turnstile", () => ({
   },
 }))
 vi.mock("@/utils/supabase/public-form", () => ({ publicFormClient: () => stubs.client() }))
-vi.mock("@/utils/supabase/admin", () => ({ agentResetSender: () => "reset-sender", agentInviteSender: () => "invite-sender" }))
-vi.mock("@/lib/services/agent-link-requests", async (original) => ({
-  ...(await original<typeof import("@/lib/services/agent-link-requests")>()),
-  decideAgentLink: (...args: unknown[]) => {
+vi.mock("@/utils/supabase/admin", () => ({
+  passwordResetSender: () => "reset-sender",
+  agentInviteSender: () => "agent-invite-sender",
+  inviteSender: () => "staff-invite-sender",
+}))
+vi.mock("@/lib/services/password-link-requests", async (original) => ({
+  ...(await original<typeof import("@/lib/services/password-link-requests")>()),
+  decidePasswordLink: (...args: unknown[]) => {
     calls.order.push("database")
     return stubs.decide(...args)
   },
-  sendAgentLink: (...args: unknown[]) => stubs.send(...args),
+  sendPasswordLink: (...args: unknown[]) => stubs.send(...args),
 }))
 
 import { requestPasswordLink } from "@/app/discount-code/link-request-actions"
-import { DEFAULT_LINK_LIMITS, readLinkLimits } from "@/lib/services/agent-link-requests"
+import { DEFAULT_LINK_LIMITS, readLinkLimits } from "@/lib/services/password-link-requests"
 
 function posted(fields: Record<string, string> = {}) {
   const data = new FormData()
@@ -77,15 +81,17 @@ describe("requesting a password link", () => {
 
   it.each([
     ["nobody to send to", { kind: "none" }],
-    ["a reset", { kind: "reset", email: "amani@example.test", attemptId: "a1" }],
-    ["a new invite", { kind: "invite", email: "amani@example.test", attemptId: "a2" }],
+    ["an agent's reset", { kind: "reset", principal: "agent", email: "amani@example.test", attemptId: "a1" }],
+    ["an agent's new invite", { kind: "invite", principal: "agent", email: "amani@example.test", attemptId: "a2" }],
+    ["a staff member's reset", { kind: "reset", principal: "staff", email: "amani@example.test", attemptId: null }],
+    ["a staff member's new invite", { kind: "invite", principal: "staff", email: "amani@example.test", attemptId: null }],
   ])("answers the same for %s", async (_label, decision) => {
     stubs.decide.mockResolvedValue({ ok: true, data: decision })
     expect(await requestPasswordLink(posted())).toEqual({ status: "sent" })
   })
 
   it("sends after the reply, to the page for the link's kind on the request's own site", async () => {
-    const decision = { kind: "reset", email: "amani@example.test", attemptId: "a1" }
+    const decision = { kind: "reset", principal: "staff", email: "amani@example.test", attemptId: null }
     stubs.decide.mockResolvedValue({ ok: true, data: decision })
 
     await requestPasswordLink(posted())
@@ -94,10 +100,16 @@ describe("requesting a password link", () => {
 
     expect(stubs.send).toHaveBeenCalledWith(
       { secret: "client" },
-      { reset: "reset-sender", invite: "invite-sender" },
       {
-        reset: "https://alrahmah.example/discount-code/reset-password",
-        invite: "https://alrahmah.example/discount-code/set-password",
+        agent: { reset: "reset-sender", invite: "agent-invite-sender" },
+        staff: { reset: "reset-sender", invite: "staff-invite-sender" },
+      },
+      {
+        agent: {
+          reset: "https://alrahmah.example/login/reset-password",
+          invite: "https://alrahmah.example/discount-code/set-password",
+        },
+        staff: { reset: "https://alrahmah.example/login/reset-password", invite: "https://alrahmah.example/auth/confirm" },
       },
       decision,
     )
@@ -111,7 +123,6 @@ describe("requesting a password link", () => {
   it.each([
     ["the per-email limit", { kind: "limited" }, "rate-limited"],
     ["the hourly budget", { kind: "busy" }, "rate-limited"],
-    ["the access switch", { kind: "access-off" }, "access-off"],
   ])("refuses at %s", async (_label, decision, status) => {
     stubs.decide.mockResolvedValue({ ok: true, data: decision })
     expect(await requestPasswordLink(posted())).toEqual({ status })

@@ -13,9 +13,12 @@ const root = join(__dirname, "..", "..")
 const read = (path: string) => readFileSync(join(root, path), "utf8")
 const config = read("supabase/config.toml")
 
+// signIn: where the email tells the holder to sign in later. The reset
+// email names the one sign-in page (#264, #265); the invite's older address
+// redirects there.
 const TEMPLATES = [
-  { name: "invite", path: "supabase/templates/invite.html" },
-  { name: "recovery", path: "supabase/templates/recovery.html" },
+  { name: "invite", path: "supabase/templates/invite.html", signIn: "/discount-code/sign-in" },
+  { name: "recovery", path: "supabase/templates/recovery.html", signIn: "/login" },
 ] as const
 
 // The branch between `{{ if $agent }}` and its `{{ else }}`, every time.
@@ -31,7 +34,7 @@ function words(html: string): string {
   return html.replace(/<[^>]+>/g, " ").replace(/\{\{[^}]*\}\}/g, " ")
 }
 
-describe.each(TEMPLATES)("the $name template", ({ name, path }) => {
+describe.each(TEMPLATES)("the $name template", ({ name, path, signIn }) => {
   const html = read(path)
 
   it("carries a version marker on its second line", () => {
@@ -55,7 +58,7 @@ describe.each(TEMPLATES)("the $name template", ({ name, path }) => {
   it("is Swahili first, with English, and states the sign-in address", () => {
     const agent = agentBranches(html)
     expect(agent.indexOf("nenosiri")).toBeLessThan(agent.indexOf("password"))
-    expect(agent).toContain("{{ .SiteURL }}/discount-code/sign-in")
+    expect(agent).toContain(`{{ .SiteURL }}${signIn}"`)
   })
 
   it("states the link lifetime the project uses, in both languages", () => {
@@ -77,18 +80,23 @@ describe("the links", () => {
     expect(html.match(/href="\{\{ \.RedirectTo \}\}\?token_hash=\{\{ \.TokenHash \}\}&amp;type=invite"/g)).toHaveLength(2)
   })
 
-  it("a Discount code reset carries a token_hash; a staff reset keeps the confirmation link", () => {
+  // #265: one recovery template for the project, so staff and agent resets
+  // both land on the shared reset page, which spends the token only when the
+  // new password is saved.
+  it("every reset, staff's and agents', carries a token_hash back to the address it was sent with", () => {
     const html = read("supabase/templates/recovery.html")
-    expect(html).toContain(
-      `{{ $link := .ConfirmationURL }}{{ if $agent }}{{ $link = printf "%s?token_hash=%s&type=recovery" .RedirectTo .TokenHash }}{{ end }}`,
-    )
+    expect(html).toContain(`{{ $link := printf "%s?token_hash=%s&type=recovery" .RedirectTo .TokenHash }}`)
+    expect(html).not.toContain(".ConfirmationURL")
     expect(html.match(/href="\{\{ \$link \}\}"/g)).toHaveLength(2)
   })
 
-  it("the Discount code set-password page is an allowed redirect locally", () => {
-    expect(config).toContain(`"http://localhost:3100/discount-code/set-password"`)
-    expect(config).toContain(`"http://localhost:3000/discount-code/set-password"`)
-  })
+  it.each(["/discount-code/set-password", "/login/reset-password", "/discount-code/reset-password"])(
+    "%s is an allowed redirect locally",
+    (path) => {
+      expect(config).toContain(`"http://localhost:3100${path}"`)
+      expect(config).toContain(`"http://localhost:3000${path}"`)
+    },
+  )
 
   it("the database's invite lifetime matches the link expiry", () => {
     const migration = read("supabase/migrations/20261124120600_agent_invites.sql")

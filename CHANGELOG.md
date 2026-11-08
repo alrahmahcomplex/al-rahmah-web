@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 8, 2026 `v0.90.0`
+
+### NEW
+
+- Staff can now reset a forgotten password themselves at `/login/forgot-password`, the
+  same way Discount code holders do. A staff member who was invited but never set a
+  password gets a fresh invite there instead. Everyone sees the same reply, whether or
+  not an email was sent.
+- Staff and roles has a "Send reset link" button for anyone you manage who has already
+  joined. Each send shows in the history as "asked for a password reset link for …".
+
+### IMPROVED
+
+- Every password reset email, for staff and Discount code holders, now opens one page in
+  the sign-in card. After you save the new password it takes you to your own side.
+  Reset links sent before this change still work.
+
 ## November 8, 2026 `v0.89.0`
 
 ### IMPROVED

@@ -10,7 +10,6 @@ import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 
 import { ACCOUNT_COPY } from "../account-copy"
 import { AccountMessageView } from "../account-message"
-import { LINK_REQUEST_COPY } from "../link-request-copy"
 import { ExpiredLink } from "../link-request-form"
 import { setAgentPassword, type SetAgentPasswordState } from "./actions"
 
@@ -19,21 +18,18 @@ type ErrorKey = NonNullable<SetAgentPasswordState>["error"]
 // Errors after which the link is spent or can't be used here, so the form goes away.
 const FINAL = new Set<ErrorKey>(["invalid-link", "switched-off", "retired", "access-off", "not-agent", "joined-unavailable"])
 
-// For the invite link (`invite`) and, from #194, the reset link (`recovery`).
-// A link that has expired or was used shows "Tuma kiungo kipya" instead.
+// For the invite link. Reset links land on the shared reset page (#265). A
+// link that has expired or was used shows "Tuma kiungo kipya" instead.
 export function SetPasswordForm({
   language,
   tokenHash,
-  linkType,
   officePhone,
 }: {
   language: Language
   tokenHash: string | null
-  linkType: "invite" | "recovery"
   officePhone: string
 }) {
   const copy = ACCOUNT_COPY[language]
-  const reset = LINK_REQUEST_COPY[language]
   const [state, formAction, pending] = useActionState(setAgentPassword, null)
   const [shown, setShown] = useState(false)
   const error: ErrorKey | null = !tokenHash ? "invalid-link" : (state?.error ?? null)
@@ -44,14 +40,11 @@ export function SetPasswordForm({
 
   return (
     <div className="flex flex-col">
-      <AuthHeading intro={showForm ? (linkType === "recovery" ? reset.resetIntro : copy.setPasswordIntro) : undefined}>
-        {linkType === "recovery" ? reset.resetHeading : copy.setPasswordHeading}
-      </AuthHeading>
+      <AuthHeading intro={showForm ? copy.setPasswordIntro : undefined}>{copy.setPasswordHeading}</AuthHeading>
 
       {showForm ? (
         <form action={formAction} className="flex flex-col gap-3">
           <input type="hidden" name="token_hash" value={tokenHash ?? ""} />
-          <input type="hidden" name="type" value={linkType} />
           <PasswordField
             id="password"
             label={copy.newPassword}

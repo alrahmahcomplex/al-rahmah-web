@@ -25,11 +25,11 @@ An agent login must never reach staff functions or staff tables. Admissions staf
 - an active staff member with no login yet;
 - an Approved, switched-on, non-retired agent with no login yet and a confirmed email, while agent access is on. An email stored on an agent record is confirmed by whoever stored it.
 
-`user_metadata.kind` chooses email wording only. The triggers never read it, and it never grants access.
+`user_metadata.kind` chooses email wording only. The triggers never read it, and it never grants access. Supabase has one recovery template, so since #265 every reset link, staff's and agents', opens the same page, `/login/reset-password`; the database then says whose login it is, as `/login` does, and the page lands each person on their own side.
 
 **Agents write nothing.** An agent session has no audit actor, even when the transaction sets one, so the audit trigger refuses any audited write it would make. There is no `agent` actor kind.
 
-**The access switch.** `agent_access_settings` holds one row, off from setup and audited in `staff_admin`. `agent_access()` is its one reader: every agent sign-up, claim, sign-in, invite, reset and portal read checks it. Only the database owner changes it, through `set_agent_access(enabled)` in the SQL editor or a migration, after naming the actor with `set_audit_actor`. Fees never read it. The Agents screen shows its state and who last changed it.
+**The access switch.** `agent_access_settings` holds one row, off from setup and audited in `staff_admin`. `agent_access()` is its one reader: every agent sign-up, claim, sign-in, invite, reset and portal read checks it. The public reset request is shared with staff (#265), so it checks the switch only once the email is known not to be staff's, and then answers `none`, as for a stranger: a separate answer would tell anyone which emails are staff's. Only the database owner changes it, through `set_agent_access(enabled)` in the SQL editor or a migration, after naming the actor with `set_audit_actor`. Fees never read it. The Agents screen shows its state and who last changed it.
 
 **A retired agent's login is closed.** Retiring an agent detaches their login (#189). The detached auth user is then banned, signed out, and given the address `<user id>@retired.invalid`, so the email is free in Supabase Auth for a corrected record. Recreate moves the login to the new record instead.
 

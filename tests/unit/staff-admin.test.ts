@@ -360,4 +360,21 @@ describe("describeAuditRow", () => {
       changes: [{ field: "email", from: null, to: "baraka@example.test" }],
     })
   })
+
+  it("names who a Manager sent a password reset link to (#265)", () => {
+    expect(
+      describeAuditRow(
+        row({
+          table_name: null,
+          row_id: null,
+          action: "password_reset_sent",
+          new_values: { staff_member_id: "baraka", email: "baraka@example.test" },
+        }),
+        lookup,
+      ),
+    ).toMatchObject({
+      summary: "asked for a password reset link for Baraka Said",
+      changes: [{ field: "email", from: null, to: "baraka@example.test" }],
+    })
+  })
 })

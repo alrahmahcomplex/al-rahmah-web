@@ -18,6 +18,13 @@ describe("the site root", () => {
     expect(getRedirectUrl(response)).toBe("https://school.example/auth/confirm?token_hash=abc123&type=invite")
   })
 
+  it("forwards a reset link to the shared reset page, query and all (#265)", async () => {
+    const response = await open("https://school.example/?token_hash=abc123&type=recovery")
+
+    expect(response.status).toBe(307)
+    expect(getRedirectUrl(response)).toBe("https://school.example/login/reset-password?token_hash=abc123&type=recovery")
+  })
+
   it("serves the home page to everyone else", async () => {
     for (const url of ["https://school.example/", "https://school.example/?type=invite", "https://school.example/?token_hash=abc"]) {
       expect(getRedirectUrl(await open(url))).toBeNull()
@@ -31,6 +38,8 @@ describe("the old Discount code sign-in addresses", () => {
   it.each([
     ["/discount-code/sign-in", "/login"],
     ["/discount-code/forgot-password", "/login/forgot-password"],
+    // Reset links sent before #265, token and all.
+    ["/discount-code/reset-password?token_hash=a&type=recovery", "/login/reset-password?token_hash=a&type=recovery"],
   ])("permanently forward %s to %s", async (from, to) => {
     const response = await open(`https://school.example${from}`)
 
@@ -39,7 +48,7 @@ describe("the old Discount code sign-in addresses", () => {
   })
 
   it("keep the pages the email links open where they are", async () => {
-    for (const path of ["/discount-code/set-password?token_hash=a&type=invite", "/discount-code/reset-password?token_hash=a&type=recovery"]) {
+    for (const path of ["/discount-code/set-password?token_hash=a&type=invite", "/login/reset-password?token_hash=a&type=recovery"]) {
       expect(getRedirectUrl(await open(`https://school.example${path}`))).toBeNull()
     }
   })

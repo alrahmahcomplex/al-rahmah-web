@@ -2,7 +2,7 @@ import type { Permission } from "@/lib/permissions"
 import type { InterviewFeeStatus, InterviewResult, RegistrationKind } from "@/lib/services/interviews"
 import type { LeadClosure, LeadStatus } from "@/lib/services/leads"
 import type { ReopeningState } from "@/lib/services/reopening-requests"
-import type { ReleaseBlocker } from "@/lib/services/result-release"
+import type { ReleaseBlocker, ReleaseStatus, ResultReleaseView } from "@/lib/services/result-release"
 import type { SeatPriority } from "@/lib/services/school-fee-payments"
 
 // The one thing that should happen next on a lead, read from its lifecycle
@@ -82,6 +82,22 @@ export function nextStep(input: NextStepInput): NextStep {
     return dueOn !== null ? { kind: "wait-for-follow-up", dueOn } : { kind: "schedule-follow-up", reason: "failed" }
   }
   return schoolFeeStep(fee)
+}
+
+// Where the current result's release stands, for nextStep. The Result
+// release view knows whether the result changed since it was sent only for
+// staff who may send it, so the interview's release status, which everyone
+// with leads.view reads, decides that when it could be read (#248).
+export function releaseInput(
+  view: Pick<ResultReleaseView, "blocked" | "latestRelease" | "changedSinceSent">,
+  status: Pick<ReleaseStatus, "changedSinceSent"> | null,
+): NonNullable<NextStepInput["release"]> {
+  const sent = view.latestRelease !== null
+  return {
+    blocked: view.blocked,
+    sent,
+    changedSinceSent: sent && (status?.changedSinceSent ?? view.changedSinceSent),
+  }
 }
 
 function schoolFeeStep(fee: NextStepInput["fee"]): NextStep {

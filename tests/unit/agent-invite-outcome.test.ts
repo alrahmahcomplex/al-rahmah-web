@@ -136,15 +136,13 @@ describe("approving with the invite", () => {
 })
 
 describe("editing an email", () => {
-  it("says whose the address is when it is taken", () => {
-    expect(emailOutcome({ ok: false, error: { kind: "email-taken", holder: "staff", name: "Asha Staff", code: null } }).message).toBe(
-      "This email belongs to staff member Asha Staff. Staff and agents can't share an email.",
-    )
+  it("names another agent holding the address, and nobody else", () => {
     expect(
-      emailOutcome({ ok: false, error: { kind: "email-taken", holder: "agent", name: "Juma Agent", code: "JUMA-02" } }).message,
+      emailOutcome({ ok: false, error: { kind: "email-taken", email: "juma@example.test", agent: { name: "Juma Agent", code: "JUMA-02" } } })
+        .message,
     ).toBe("This email belongs to agent Juma Agent (JUMA-02).")
-    expect(emailOutcome({ ok: false, error: { kind: "email-taken", holder: "login", name: null, code: null } }).message).toBe(
-      "This email is already used by another sign-in.",
+    expect(emailOutcome({ ok: false, error: { kind: "email-taken", email: "asha@example.test", agent: null } }).message).toBe(
+      "asha@example.test is already in use at Al-Rahmah. Use another email.",
     )
   })
 

@@ -114,7 +114,7 @@ describe("one email per login", () => {
     })
     const invited = await inviteStaff(await signedIn(MANAGER), send, { fullName: "Stray Staff", email: address, roleId: role }, "http://localhost/auth")
     // The joined agent holds the address their login moved to (#219).
-    expect(invited).toMatchObject({ ok: false, error: { code: "agent_email" } })
+    expect(invited).toMatchObject({ ok: false, error: { code: "email_in_use" } })
     expect(send).not.toHaveBeenCalled()
   })
 

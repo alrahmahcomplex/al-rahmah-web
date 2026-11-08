@@ -113,6 +113,21 @@ test.describe("adding an agent", () => {
     await expect(page.getByRole("row", { name: new RegExp(existing.fullName) })).toBeVisible()
     await expect(page.getByText("1 agent", { exact: true })).toBeVisible()
   })
+
+  test("a staff member's email is only in use, with no name", async ({ page }) => {
+    await signIn(page, MANAGER)
+    await page.goto("/staff/agents")
+    await page.getByRole("button", { name: "Add agent" }).click()
+
+    const dialog = page.getByRole("dialog")
+    await dialog.getByLabel("Full name").fill(`Someone Else ${randomUUID().slice(0, 6)}`)
+    await dialog.getByLabel("Mobile").fill(mobile())
+    await dialog.getByLabel("Email").fill(ADMISSIONS.email)
+    await dialog.getByRole("button", { name: "Check details" }).click()
+
+    await expect(dialog.getByText(`${ADMISSIONS.email} is already in use at Al-Rahmah. Use another email.`)).toBeVisible()
+    await expect(dialog).not.toContainText(ADMISSIONS.name)
+  })
 })
 
 test.describe("Recreate", () => {

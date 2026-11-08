@@ -29,10 +29,12 @@ describe("after Confirm", () => {
 })
 
 describe("a refused decision", () => {
-  it("names whoever holds the email", () => {
-    expect(claimRefusal({ kind: "email-taken", holder: "staff", name: "Test Manager", code: null })).toMatch(/staff member Test Manager/)
-    expect(claimRefusal({ kind: "email-taken", holder: "agent", name: "Neema", code: "NE-101" })).toBe(
+  it("names an agent holding the email, and says only that anyone else's is in use", () => {
+    expect(claimRefusal({ kind: "email-taken", email: "neema@example.test", agent: { name: "Neema", code: "NE-101" } })).toBe(
       "This email belongs to agent Neema (NE-101).",
+    )
+    expect(claimRefusal({ kind: "email-taken", email: "manager@example.test", agent: null })).toBe(
+      "manager@example.test is already in use at Al-Rahmah. Use another email.",
     )
   })
 

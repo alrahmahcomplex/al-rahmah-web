@@ -261,4 +261,20 @@ describe("creating an agent and Recreate (#189)", () => {
     expect(createRefusal({ kind: "invalid", field: "phone" })).toEqual({ field: "phone", message: expect.stringMatching(/mobile/) })
     expect(recreateRefusal({ kind: "invalid", field: "reason" })).toEqual({ message: expect.stringMatching(/reason/) })
   })
+
+  it("names another agent holding the email on Create and Recreate, and says only that anyone else's is in use", async () => {
+    const agentHolds = { message: "email_taken", details: JSON.stringify({ email: "neema@example.test", holder: "agent", name: "Neema", code: "NE-101" }) }
+    const someoneElse = { message: "email_taken", details: JSON.stringify({ email: "manager@example.test" }) }
+    const created = await createAgent(client({ error: agentHolds }), { fullName: "x", phone: "y", email: "Neema@Example.test" })
+    expect(created).toEqual({ ok: false, error: { kind: "email-taken", email: "neema@example.test", agent: { name: "Neema", code: "NE-101" } } })
+    const recreated = await recreateAgent(client({ error: someoneElse }), "old", { fullName: "x", phone: "y", email: "manager@example.test" }, "Wrong")
+    expect(recreated).toEqual({ ok: false, error: { kind: "email-taken", email: "manager@example.test", agent: null } })
+
+    if (created.ok || recreated.ok) throw new Error("expected refusals")
+    expect(createRefusal(created.error)).toEqual({ field: "email", message: "This email belongs to agent Neema (NE-101)." })
+    expect(recreateRefusal(recreated.error)).toEqual({
+      field: "email",
+      message: "manager@example.test is already in use at Al-Rahmah. Use another email.",
+    })
+  })
 })

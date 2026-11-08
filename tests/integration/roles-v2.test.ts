@@ -434,17 +434,17 @@ describe("the five staff actions, inside and outside each managed set", () => {
 })
 
 // A Manager who types an email already on staff learns who holds it only if
-// they manage that person's role (#241 review).
+// they manage that person's role (#241 review); anyone else's is just in use
+// (#250).
 describe("an invite never names someone outside the caller's managed set", () => {
-  test("an Accountant's email, invited into Admissions Staff by the Manager, is forbidden with no name or status", async () => {
+  test("an Accountant's email, invited into Admissions Staff by the Manager, is in use with no name or status", async () => {
     const { error } = await (await signedIn(MANAGER)).rpc("invite_staff_member", {
       full_name: "Same Email",
       email: ACCOUNTANT.email.toUpperCase(),
       role_id: ROLE.admissionsStaff,
     })
-    expect(error?.message).toBe("forbidden")
-    expect(error?.details ?? "").not.toContain(ACCOUNTANT.name)
-    expect(error?.details ?? "").not.toContain("active")
+    expect(error?.message).toBe("email_in_use")
+    expect(JSON.parse(error?.details ?? "{}")).toEqual({ email: ACCOUNTANT.email })
   })
 
   test("an email inside the set still names its holder", async () => {
@@ -457,7 +457,7 @@ describe("an invite never names someone outside the caller's managed set", () =>
     expect(JSON.parse(error?.details ?? "{}")).toEqual({ email: ADMISSIONS.email, name: ADMISSIONS.name, active: true })
   })
 
-  test("losing a race to an Accountant's record with the same email is forbidden too, with no name", async () => {
+  test("losing a race to an Accountant's record with the same email is in use too, with no name", async () => {
     const email = newEmail()
     const first = new Client({ connectionString: process.env.SUPABASE_DB_URL })
     const manager = new Client({ connectionString: process.env.SUPABASE_DB_URL })
@@ -502,8 +502,8 @@ describe("an invite never names someone outside the caller's managed set", () =>
       await first.query("commit")
 
       const error = await invite
-      expect(error?.message).toBe("forbidden")
-      expect(error?.detail ?? "").not.toContain("Racing Accountant")
+      expect(error?.message).toBe("email_in_use")
+      expect(JSON.parse(error?.detail ?? "{}")).toEqual({ email })
     } finally {
       await first.query("rollback").catch(() => {})
       await manager.query("rollback").catch(() => {})

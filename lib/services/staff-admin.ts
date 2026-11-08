@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { emailInUseMessage } from "@/lib/email-in-use"
 import { RESERVED_PERMISSIONS, type Permission } from "@/lib/permissions"
 import { roleTemplate, templateLinks } from "@/lib/role-templates"
 
@@ -32,8 +33,7 @@ export type RefusalCode =
   | "role_name_required"
   | "unknown_permission"
   | "already_staff"
-  | "agent_email"
-  | "email_taken"
+  | "email_in_use"
   | "email_invalid"
   | "invite_deactivated"
   | "already_joined"
@@ -74,8 +74,9 @@ const MESSAGES: Record<RefusalCode, (names: RefusalNames) => string> = {
     active
       ? `${email} already belongs to ${name}.`
       : `${email} already belongs to ${name}. Reactivate them instead of inviting again.`,
-  agent_email: ({ email }) => `${email} belongs to a Marketing Agent. Staff and agents can't share an email, so use another one.`,
-  email_taken: ({ email }) => `${email} already has a login of its own. Use another email.`,
+  // Held by someone the caller can't see: staff outside their managed set,
+  // the Super Admin, a Marketing Agent or another sign-in. Nothing more is said.
+  email_in_use: ({ email }) => emailInUseMessage(email ?? "This email"),
   email_invalid: () => "Enter a valid email address.",
   invite_deactivated: ({ name }) => `${name} is deactivated. Reactivate them before resending the invite.`,
   already_joined: ({ name }) => `${name} has already joined and signs in with their own password.`,

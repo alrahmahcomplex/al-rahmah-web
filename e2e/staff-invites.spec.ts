@@ -5,7 +5,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test"
 import { firstName } from "@/app/staff/_today/greeting"
 
 import { inRolledBackTransaction } from "../tests/support/db"
-import { INVITED, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
+import { ACCOUNTANT, INVITED, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { openStaffHistoryAsSuperAdmin } from "./super-admin"
 
 // Inviting staff end to end: the Manager invites from Staff and roles, the
@@ -263,6 +263,14 @@ test("inviting an email already on staff is refused in the callout, and nothing 
 
   await expect(callout(page)).toHaveText(`${INVITED.email} already belongs to ${INVITED.name}.`)
   await expect(page.getByLabel("Full name")).toHaveValue("Someone Else")
+})
+
+test("inviting an email held by someone outside the managed set says only that it is in use", async ({ page }) => {
+  await signIn(page, MANAGER)
+
+  await invite(page, "Admissions Staff", { name: "Someone Else", email: ACCOUNTANT.email })
+
+  await expect(callout(page)).toHaveText(`${ACCOUNTANT.email} is already in use at Al-Rahmah. Use another email.`)
 })
 
 test("the invite box is closed on a retired role, with the reason", async ({ page }) => {

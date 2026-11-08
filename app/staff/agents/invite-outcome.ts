@@ -7,6 +7,7 @@ import type {
   SentInvite,
   SetEmailError,
 } from "@/lib/services/agent-invites"
+import { emailTakenMessage } from "@/lib/email-in-use"
 import type { Result } from "@/lib/services/result"
 
 import { ACCESS_OFF_CODE } from "./access-banner"
@@ -153,17 +154,7 @@ export function emailOutcome(result: Result<EmailChange, SetEmailError | { kind:
   const error = result.error
   if (error.kind === "signed-out") return { status: "refused", message: "Your session has ended. Sign in again, then try again." }
   if (error.kind !== "email-taken") return { status: "refused", message: EMAIL_REFUSALS[error.kind] }
-  if (error.holder === "staff") {
-    return {
-      status: "refused",
-      message: `This email belongs to staff member ${error.name ?? "on the staff list"}. Staff and agents can't share an email.`,
-    }
-  }
-  if (error.holder === "agent" && error.name) {
-    return { status: "refused", message: `This email belongs to agent ${error.name}${error.code ? ` (${error.code})` : ""}.` }
-  }
-  if (error.holder === "agent") return { status: "refused", message: "This email belongs to another agent." }
-  return { status: "refused", message: "This email is already used by another sign-in." }
+  return { status: "refused", message: emailTakenMessage(error) }
 }
 
 const ATTENTION_LABELS: { state: AccountState; label: string; always: boolean }[] = [

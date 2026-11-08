@@ -452,12 +452,12 @@ describe("the Agents screen's account-state filters", () => {
 })
 
 describe("editing an agent's email", () => {
-  test("a staff member's email can't be used for an agent", async () => {
+  test("a staff member's email can't be used for an agent, and they aren't named", async () => {
     const agent = await approvedAgent(email("staff-clash"))
 
     const result = await setAgentEmail(await manager(), agent.id, ADMISSIONS.email)
 
-    expect(result).toEqual({ ok: false, error: { kind: "email-taken", holder: "staff", name: ADMISSIONS.name, code: null } })
+    expect(result).toEqual({ ok: false, error: { kind: "email-taken", email: ADMISSIONS.email, agent: null } })
   })
 
   test("another current agent's email is refused, naming them", async () => {
@@ -467,7 +467,10 @@ describe("editing an agent's email", () => {
 
     const result = await setAgentEmail(await manager(), agent.id, holderAddress.toUpperCase())
 
-    expect(result).toMatchObject({ ok: false, error: { kind: "email-taken", holder: "agent", code: holder.code } })
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "email-taken", email: holderAddress, agent: { name: holder.fullName, code: holder.code } },
+    })
   })
 
   test("before joining, the unused login goes and the next invite goes to the new address", async () => {

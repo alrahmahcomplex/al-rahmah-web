@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const jar = vi.hoisted(() => ({ values: new Map<string, string>() }))
-const stubs = vi.hoisted(() => ({ submit: vi.fn(), reset: vi.fn(), token: "fake-token", client: vi.fn(), discount: vi.fn() }))
+const stubs = vi.hoisted(() => ({ submit: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), token: "fake-token", client: vi.fn(), discount: vi.fn() }))
 
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 vi.mock("next/headers", () => ({
@@ -26,7 +26,7 @@ vi.mock("@/app/discount-code/actions", () => ({ registerAsAgent: stubs.submit })
 vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
 vi.mock("@/components/turnstile-widget", () => ({
   TurnstileWidget: forwardRef(function FakeTurnstile({ action }: { action: string }, ref) {
-    useImperativeHandle(ref, () => ({ reset: stubs.reset }))
+    useImperativeHandle(ref, () => ({ reset: stubs.reset, reveal: stubs.reveal }))
     return <input type="hidden" name="cf-turnstile-response" value={stubs.token} data-action={action} readOnly />
   }),
 }))
@@ -68,6 +68,7 @@ beforeEach(() => {
   jar.values.clear()
   stubs.submit.mockReset()
   stubs.reset.mockReset()
+  stubs.reveal.mockReset().mockReturnValue(false)
   stubs.token = "fake-token"
   stubs.client.mockReset().mockReturnValue({ secret: "client" })
   stubs.discount.mockReset().mockResolvedValue({ ok: true, data: 10000 })

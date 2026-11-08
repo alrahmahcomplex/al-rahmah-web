@@ -44,6 +44,7 @@ type Copy = {
   // couldn't be read, and then names no figure.
   discountNotes: { approved: (discount: string | null) => string } & Record<"pending" | "switched_off" | "unknown" | "unchecked", string>
   interviewFee: string
+  feeNotPaidHere: string
   feePerChild: (amount: string) => string
   feeTotal: (children: number, amount: string) => string
   problems: Record<FormField | "phone_unreadable" | "year_closed", string>
@@ -105,6 +106,7 @@ export const COPY: Record<Language, Copy> = {
       unchecked: "Hatukuweza kuhakiki code yako kwa sasa. Itahifadhiwa pamoja na maombi yako.",
     },
     interviewFee: "Ada ya usaili",
+    feeNotPaidHere: "Hulipi chochote kwenye fomu hii.",
     feePerChild: (amount) => `${amount} kwa kila mtoto`,
     feeTotal: (children, amount) => (children === 1 ? `Jumla: ${amount}` : `Jumla kwa watoto ${children}: ${amount}`),
     problems: {
@@ -180,6 +182,7 @@ export const COPY: Record<Language, Copy> = {
       unchecked: "We couldn't check your code just now. It will still be saved with your application.",
     },
     interviewFee: "Interview fee",
+    feeNotPaidHere: "You don't pay anything on this form.",
     feePerChild: (amount) => `${amount} per child`,
     feeTotal: (children, amount) => (children === 1 ? `Total: ${amount}` : `Total for ${children} children: ${amount}`),
     problems: {

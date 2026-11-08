@@ -1,4 +1,4 @@
-import { act, render, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import { createRef } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -6,7 +6,13 @@ import type { TurnstileWidgetHandle } from "@/components/turnstile-widget"
 
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
 
-type RenderOptions = Record<string, unknown> & { "expired-callback"?: () => void }
+type RenderOptions = Record<string, unknown> & {
+  callback?: () => void
+  "before-interactive-callback"?: () => void
+  "error-callback"?: (code: string) => boolean
+  "unsupported-callback"?: () => void
+  "expired-callback"?: () => void
+}
 
 function fakeTurnstile() {
   return {
@@ -41,23 +47,149 @@ function lastOptions() {
 }
 
 describe("TurnstileWidget", () => {
-  it("renders a managed, flexible widget for the form's action", async () => {
+  it("renders a managed widget that shows only when Cloudflare needs a click", async () => {
     const TurnstileWidget = await loadWidget()
-    const { container } = render(<TurnstileWidget action="admission" language="en" />)
+    render(<TurnstileWidget action="admission" language="en" />)
 
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
-    expect(turnstile.render.mock.calls[0][0]).toBe(container.firstChild)
     expect(lastOptions()).toMatchObject({
       sitekey: "1x00000000000000000000AA",
       action: "admission",
-      size: "flexible",
       theme: "auto",
+      appearance: "interaction-only",
       language: "en",
     })
     // Managed mode is the widget's own setting in Cloudflare; the page never
-    // asks for execute-on-demand or a hidden widget.
+    // asks for execute-on-demand.
     expect(lastOptions()).not.toHaveProperty("execution")
-    expect(lastOptions()).not.toHaveProperty("appearance")
+  })
+
+  it("uses the compact size where flexible's 300px minimum would overflow", async () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(261)
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="agent-link" language="en" />)
+
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    expect(lastOptions().size).toBe("compact")
+  })
+
+  it("fills a container at least 300px wide", async () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(340)
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="en" />)
+
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    expect(lastOptions().size).toBe("flexible")
+  })
+
+  it("draws the check again at the size that fits when the space crosses 300px", async () => {
+    let resized = () => {}
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resized = callback
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(340)
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+    expect(lastOptions().size).toBe("flexible")
+
+    // A width change that keeps the same size draws nothing new.
+    width.mockReturnValue(320)
+    act(() => resized())
+    expect(turnstile.render).toHaveBeenCalledTimes(1)
+
+    act(() => lastOptions()["before-interactive-callback"]!())
+    width.mockReturnValue(261)
+    act(() => resized())
+    // The widget drawn again starts with no message until Cloudflare asks.
+    expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
+    expect(turnstile.remove).toHaveBeenCalledWith("widget-1")
+    expect(lastOptions().size).toBe("compact")
+    vi.unstubAllGlobals()
+  })
+
+  it("says in words when the check needs a click, and brings it into view on send", async () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    const TurnstileWidget = await loadWidget()
+    const widget = createRef<TurnstileWidgetHandle>()
+    render(<TurnstileWidget ref={widget} action="admission" language="sw" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+
+    // Nothing to show while Cloudflare passes the visitor on its own.
+    expect(widget.current!.reveal()).toBe(false)
+    expect(scroll).not.toHaveBeenCalled()
+
+    act(() => lastOptions()["before-interactive-callback"]!())
+    const message = screen.getByText("Weka alama kwenye ukaguzi wa usalama hapa chini, kisha utume.")
+    expect(message).toHaveAttribute("aria-live", "polite")
+
+    let revealed = false
+    act(() => {
+      revealed = widget.current!.reveal()
+    })
+    expect(revealed).toBe(true)
+    expect(scroll).toHaveBeenCalled()
+    expect(message).toHaveFocus()
+
+    // A token clears the message.
+    act(() => lastOptions().callback!())
+    expect(screen.queryByText("Weka alama kwenye ukaguzi wa usalama hapa chini, kisha utume.")).toBeNull()
+    expect(widget.current!.reveal()).toBe(false)
+  })
+
+  it("reads out a check that fails, and logs Cloudflare's error code", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    const widget = createRef<TurnstileWidgetHandle>()
+    render(<TurnstileWidget ref={widget} action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+
+    let handled = false
+    act(() => {
+      handled = lastOptions()["error-callback"]!("110200")
+    })
+
+    expect(handled).toBe(true)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("110200"))
+    const alert = screen.getByRole("alert")
+    expect(alert).toHaveTextContent("The security check couldn't load. Reload the page and try again.")
+    act(() => {
+      widget.current!.reveal()
+    })
+    expect(alert).toHaveFocus()
+  })
+
+  it("points a browser Turnstile doesn't support to another browser or the office", async () => {
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="sw" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+
+    act(() => lastOptions()["unsupported-callback"]!())
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Jaribu kivinjari kingine, au piga simu ofisini.")
+  })
+
+  it("keeps its spacing after a tick, while Cloudflare's box still shows success", async () => {
+    const TurnstileWidget = await loadWidget()
+    const { container } = render(<TurnstileWidget action="admission" language="en" className="mt-5" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    expect(container.firstChild).not.toHaveClass("mt-5")
+
+    act(() => lastOptions()["before-interactive-callback"]!())
+    expect(container.firstChild).toHaveClass("mt-5")
+
+    act(() => lastOptions().callback!())
+    expect(container.firstChild).toHaveClass("mt-5")
+    expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
   })
 
   it("falls back to the visitor's browser language for Swahili, which Turnstile doesn't offer", async () => {
@@ -131,6 +263,7 @@ describe("TurnstileWidget", () => {
       document.querySelector(`script[src="${SCRIPT_SRC}"]`)!.dispatchEvent(new Event("load"))
     })
     expect(document.querySelectorAll(`script[src="${SCRIPT_SRC}"]`)).toHaveLength(0)
+    expect(screen.getByRole("alert")).toHaveTextContent("Ukaguzi wa usalama haukuweza kufunguka.")
     first.unmount()
 
     render(<TurnstileWidget action="admission" language="sw" />)

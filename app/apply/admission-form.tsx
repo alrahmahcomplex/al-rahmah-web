@@ -435,7 +435,8 @@ export function AdmissionFormSteps({
     // Turnstile fills its token in a moment after the step opens; sending
     // before then would only be refused.
     if (!data.get("cf-turnstile-response")) {
-      setNotice("check-pending")
+      // A check that needs a click says so itself, next to Send.
+      setNotice(turnstile.current?.reveal() ? null : "check-pending")
       return
     }
     data.set(
@@ -768,13 +769,14 @@ export function AdmissionFormSteps({
               <p className="mt-0.5 text-base font-semibold text-orange-950">
                 {copy.feeTotal(children.length, tzs(feePerChild * children.length))}
               </p>
-            </div>
-
-            <div>
-              <TurnstileWidget ref={turnstile} action="admission" language={language} />
+              <p className="mt-1 text-sm text-orange-950">{copy.feeNotPaidHere}</p>
             </div>
           </div>
         )}
+
+        {/* Inside the form, so its token is sent; invisible unless Cloudflare
+            needs a click, and then right above Send. */}
+        {step === 2 && <TurnstileWidget ref={turnstile} action="admission" language={language} className="mt-5" />}
 
         {(noticeText || formLevel) && (
           <p

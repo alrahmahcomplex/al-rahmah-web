@@ -26,7 +26,8 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
     const data = new FormData(event.currentTarget)
     // Turnstile fills its token in a moment after the page opens.
     if (!data.get("cf-turnstile-response")) {
-      setStatus("check-pending")
+      // A check that needs a click says so itself, next to Send.
+      setStatus(turnstile.current?.reveal() ? null : "check-pending")
       return
     }
     setStatus(null)
@@ -56,9 +57,10 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
       <input type="hidden" name="form" value={form} />
       <IconField id={`${form}-email`} name="email" label={copy.email} icon={Mail} type="email" autoComplete="email" required />
 
-      <TurnstileWidget ref={turnstile} action="agent-link" language={language} />
-
       {status && <AccountMessageView language={language} message={copy.messages[status]} />}
+
+      {/* Invisible unless Cloudflare needs a click, and then right above Send. */}
+      <TurnstileWidget ref={turnstile} action="agent-link" language={language} />
 
       <button type="submit" disabled={pending} className={AUTH_SUBMIT}>
         {pending ? copy.sending : copy.send}

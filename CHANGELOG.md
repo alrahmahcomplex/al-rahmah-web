@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 8, 2026 `v0.91.0`
+
+### IMPROVED
+
+- Cloudflare's security check on the Admission form, the Discount code page and the
+  password pages is now hidden. It shows only when Cloudflare needs you to tick it, and
+  then it sits above the send button with a line saying what to do.
+- The Interview fee box on the Admission form now says you don't pay anything on the
+  form.
+
+### FIXED
+
+- On phones, the security check no longer sticks out past the edge of the sign-in and
+  password reset card.
+
 ## November 8, 2026 `v0.90.0`
 
 ### NEW

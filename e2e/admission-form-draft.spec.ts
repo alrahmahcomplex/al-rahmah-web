@@ -149,6 +149,33 @@ test("an empty Continue names every missing field at once and focuses the first"
   await expect(page.getByRole("group", { name: "Mtoto 1" }).getByLabel(t.childName)).toBeFocused()
 })
 
+test("renaming one repeated child keeps the other card's warning until no names repeat (#260)", async ({ page }) => {
+  const who = family()
+  await page.goto("/apply")
+  await fillParent(page, "sw", who)
+  await page.getByRole("button", { name: t.continue }).click()
+  const add = page.getByRole("button", { name: "Ongeza mtoto mwingine" })
+  await add.click()
+  await add.click()
+  const cards = ["Mtoto 1", "Mtoto 2", "Mtoto 3"].map((name) => page.getByRole("group", { name }))
+  for (const card of cards) await fillChild(page, "sw", who, nextYear, card)
+  await page.getByRole("button", { name: t.continue }).click()
+
+  const repeated = "yupo mara mbili kwenye fomu hii"
+  await expect(cards[1].getByText(repeated)).toBeVisible()
+  await expect(cards[2].getByText(repeated)).toBeVisible()
+
+  // The third card still repeats the first.
+  await cards[1].getByLabel(t.childName).fill(`${who.child} Pili`)
+  await expect(cards[1].getByText(repeated)).toHaveCount(0)
+  await expect(cards[2].getByText(repeated)).toBeVisible()
+
+  await cards[2].getByLabel(t.childName).fill(`${who.child} Tatu`)
+  await expect(page.getByText(repeated)).toHaveCount(0)
+  await page.getByRole("button", { name: t.continue }).click()
+  await expect(heading(page, 2)).toBeVisible()
+})
+
 for (const lang of ["sw", "en"] as const) {
   test(`the document language is ${lang} when the page is`, async ({ page, context }) => {
     if (lang === "en") await context.addCookies([{ name: "lang", value: "en", url: `http://localhost:${E2E_PORT}` }])

@@ -11,6 +11,7 @@ import {
   childrenProblems,
   MAX_CHILDREN,
   parentProblems,
+  remainingDuplicates,
   type AdmissionChild,
   type AdmissionParent,
   type FieldProblem,
@@ -352,19 +353,25 @@ export function AdmissionFormSteps({
   }
 
   function updateChild(index: number, change: Partial<Omit<ChildDraft, "card">>) {
-    setChildren((current) => current.map((draft, i) => (i === index ? { ...draft, ...change } : draft)))
+    const next = children.map((draft, i) => (i === index ? { ...draft, ...change } : draft))
+    setChildren(next)
     const fields = new Set<FormField>()
-    // A name change can end a repeat on any card.
-    if ("fullName" in change) fields.add("student_name").add("duplicate_child")
+    if ("fullName" in change) fields.add("student_name")
     if ("className" in change) fields.add("class_name")
     if ("enrollmentYear" in change) fields.add("enrollment_year")
     if ("dayOrBoarding" in change) fields.add("day_or_boarding")
-    clearProblems(
-      (shown) =>
-        shown.server ||
-        shown.field === "children" ||
-        (fields.has(shown.field) && (shown.child === index || shown.field === "duplicate_child")),
-    )
+    const fixed = (shown: Shown) =>
+      shown.server || shown.field === "children" || (fields.has(shown.field) && shown.child === index)
+    if (!("fullName" in change)) return clearProblems(fixed)
+    // A name change can end a repeat on any card. The cards still repeating
+    // an earlier one keep their warning; a new repeat waits for Continue.
+    setProblems((current) => {
+      const kept = current.filter((shown) => !fixed(shown))
+      const showing = new Set(kept.flatMap((shown) => (shown.field === "duplicate_child" ? [shown.child ?? -1] : [])))
+      const still = new Set(remainingDuplicates(next.map(asChild), showing).map((problem) => problem.child))
+      const left = kept.filter((shown) => shown.field !== "duplicate_child" || still.has(shown.child))
+      return left.length === current.length ? current : left
+    })
   }
 
   function addChild() {

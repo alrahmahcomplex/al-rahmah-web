@@ -87,6 +87,15 @@ export function childrenProblems(children: AdmissionChild[], years: readonly num
   return problems
 }
 
+// The repeated-child problems still true after a name edit, kept only on the
+// cards in `shown`: an edit can end a repeat, but a new one waits for
+// Continue.
+export function remainingDuplicates(children: AdmissionChild[], shown: ReadonlySet<number>): FieldProblem[] {
+  return childrenProblems(children, []).filter(
+    (problem) => problem.field === "duplicate_child" && problem.child !== null && shown.has(problem.child),
+  )
+}
+
 export function childrenProblem(children: AdmissionChild[], years: readonly number[]): FieldProblem | null {
   return childrenProblems(children, years)[0] ?? null
 }

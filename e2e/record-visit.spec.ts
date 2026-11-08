@@ -73,6 +73,8 @@ test.describe("recording the visit of an Applied family", () => {
     await expect(detail(page, "Status")).toHaveText("Applied")
     await expect(detail(page, "Visit date")).toHaveText("Not visited yet")
 
+    // Record visit is the step, so it has the step's orange button.
+    await expect(page.getByRole("button", { name: "Record visit" })).toHaveClass(/bg-orange-500/)
     await page.getByRole("button", { name: "Record visit" }).click()
     const form = page.getByRole("form", { name: "Record visit" })
     const visitDate = form.getByLabel("Visit date")
@@ -146,6 +148,36 @@ test.describe("when Record visit is offered", () => {
       await expect(visitDate, deviceDay).toHaveValue(today)
       await expect(visitDate, deviceDay).toHaveAttribute("max", today)
     }
+  })
+
+  test("a follow-up that is due keeps the Next step, and Record visit stays as a secondary button", async ({ page }) => {
+    const lead = await appliedLead()
+    await asSystem((sql) =>
+      sql.query("insert into public.follow_ups (lead_id, due_on) values ($1, $2)", [lead.id, today]),
+    )
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead.id}`)
+
+    const card = page.getByRole("region", { name: "Next step" })
+    await expect(card.getByRole("heading", { name: "Next step: Record today's follow-up" })).toBeVisible()
+    // The step's own action keeps the orange button; Record visit is outlined.
+    await expect(card.getByRole("link", { name: "Record follow-up" })).toHaveClass(/bg-orange-500/)
+    const recordVisit = card.getByRole("button", { name: "Record visit" })
+    await expect(recordVisit).toBeVisible()
+    await expect(recordVisit).not.toHaveClass(/bg-orange-500/)
+
+    await recordVisit.click()
+    const form = page.getByRole("form", { name: "Record visit" })
+    await expect(form.getByLabel("Visit date")).toHaveValue(today)
+    await form.getByRole("button", { name: "Record visit" }).click()
+
+    await expect(page.getByRole("status").filter({ hasText: "Visit recorded" })).toHaveText(
+      "Visit recorded. The lead is now Visited.",
+    )
+    await expect(detail(page, "Status")).toHaveText("Visited")
+    // The follow-up is still the step, and the visit is no longer offered.
+    await expect(card.getByRole("heading", { name: "Next step: Record today's follow-up" })).toBeVisible()
+    await expect(card.getByRole("button", { name: "Record visit" })).toHaveCount(0)
   })
 
   test("the Accountant, who may not record visits, is not offered it", async ({ page }) => {

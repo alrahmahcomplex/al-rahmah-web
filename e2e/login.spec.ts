@@ -129,8 +129,10 @@ test.describe("signing in", () => {
     await expect(page.locator("form").getByRole("alert")).toHaveText(/deactivated/)
   })
 
-  test("sends visitors with no session from staff pages to sign-in", async ({ page }) => {
+  test("sends visitors with no session from staff and Discount code pages to sign-in", async ({ page }) => {
     await page.goto("/staff")
+    await expect(page).toHaveURL(/\/login$/)
+    await page.goto("/discount-code/students")
     await expect(page).toHaveURL(/\/login$/)
   })
 })

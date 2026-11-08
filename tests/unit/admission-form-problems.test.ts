@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { childrenProblem, childrenProblems, parentProblem, parentProblems } from "@/lib/admission-form"
+import { childrenProblem, childrenProblems, parentProblem, parentProblems, remainingDuplicates } from "@/lib/admission-form"
 import type { NewStudent } from "@/lib/services/leads"
 
 const YEARS = [2026, 2027]
@@ -54,5 +54,26 @@ describe("every problem across the child cards", () => {
     expect(childrenProblems([], YEARS)).toEqual([{ field: "children", child: null }])
     expect(childrenProblem([CHILD, EMPTY_CHILD], YEARS)).toEqual({ field: "student_name", child: 1 })
     expect(childrenProblem([CHILD], YEARS)).toBeNull()
+  })
+})
+
+describe("repeated-child warnings after a name edit", () => {
+  const named = (...names: string[]) => names.map((fullName) => ({ ...CHILD, fullName }))
+
+  it("keeps the third card's warning when the second of A, A, A is renamed", () => {
+    expect(remainingDuplicates(named("A", "B", "A"), new Set([1, 2]))).toEqual([{ field: "duplicate_child", child: 2 }])
+  })
+
+  it("keeps the third card's warning when the first is renamed: it still repeats the second", () => {
+    expect(remainingDuplicates(named("B", "A", "A"), new Set([1, 2]))).toEqual([{ field: "duplicate_child", child: 2 }])
+  })
+
+  it("clears every warning once no names repeat", () => {
+    expect(remainingDuplicates(named("A", "B", "C"), new Set([1, 2]))).toEqual([])
+  })
+
+  it("adds no warning to a card that wasn't showing one", () => {
+    expect(remainingDuplicates(named("A", "B", "B"), new Set([1]))).toEqual([])
+    expect(remainingDuplicates(named("A", "A"), new Set())).toEqual([])
   })
 })

@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 8, 2026 `v0.88.2`
+
+### FIXED
+
+- On the Admission form, correcting one child's name when the same child appeared on three
+  cards no longer hides the warning on the card that still repeats. Each card's warning
+  goes once its name no longer repeats an earlier card.
+
 ## November 8, 2026 `v0.88.1`
 
 ### FIXED

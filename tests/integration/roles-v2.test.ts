@@ -474,7 +474,8 @@ describe("an invite never names someone outside the caller's managed set", () =>
         ROLE.accountant,
       ])
 
-      // ...so the Manager's invite finds nobody, then waits on the unique email.
+      // ...so the Manager's invite finds nobody, then waits on the first
+      // transaction's login-email lock, and its insert then hits the unique email.
       await manager.query("set statement_timeout = '15s'")
       await manager.query("begin")
       await manager.query("select set_config('request.jwt.claims', $1, true)", [

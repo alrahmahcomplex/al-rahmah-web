@@ -185,3 +185,56 @@ test("each language option is at least 44px tall on a phone", async ({ page }) =
     }
   }
 })
+
+// #259: sent back to an earlier step, the form goes back to that step's own
+// history entry rather than replacing the later one, so no later step's entry
+// is left behind it.
+test("a phone the server can't read opens the parent step, and the phone's Back from there leaves the form", async ({ page }) => {
+  // The server reads the phone's format; the form only checks one is there.
+  const who = { ...family(), phone: "12" }
+  await page.goto("/")
+  await page.goto("/apply")
+  await fillParent(page, "sw", who)
+  await page.getByRole("button", { name: t.continue }).click()
+  await fillChild(page, "sw", who, nextYear)
+  await page.getByRole("button", { name: t.continue }).click()
+  await expect(heading(page, 2)).toBeVisible()
+  await waitForSecurityCheck(page)
+  await page.getByRole("button", { name: t.send }).click()
+
+  await expect(heading(page, 0)).toBeVisible()
+  await expect(page).toHaveURL("/apply")
+  await expect(page.getByText("Hatukuweza kusoma namba hii ya simu.", { exact: false })).toBeVisible()
+  await expect(page.getByLabel(t.phone, { exact: true })).toBeFocused()
+  await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
+
+  await page.goBack()
+  await expect(page).toHaveURL("/")
+
+  await page.goForward()
+  await expect(heading(page, 0)).toBeVisible()
+  await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
+  await expect(page.getByLabel(t.phone, { exact: true })).toHaveValue("12")
+})
+
+test("Forward to a step the entries no longer allow stays put, and the form's Back then opens the parent step", async ({ page }) => {
+  const who = family()
+  await page.goto("/apply")
+  await fillParent(page, "sw", who)
+  await page.getByRole("button", { name: t.continue }).click()
+  await fillChild(page, "sw", who, nextYear)
+  await page.getByRole("button", { name: t.continue }).click()
+  await expect(heading(page, 2)).toBeVisible()
+
+  await page.goBack()
+  await expect(heading(page, 1)).toBeVisible()
+  await page.getByLabel(t.childName).fill("")
+  await page.goForward()
+  await expect(heading(page, 1)).toBeVisible()
+  await expect(page).toHaveURL("/apply?step=2")
+
+  await page.getByRole("button", { name: t.back }).click()
+  await expect(heading(page, 0)).toBeVisible()
+  await expect(page).toHaveURL("/apply")
+  await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
+})

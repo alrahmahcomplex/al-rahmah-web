@@ -2,15 +2,42 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const stubs = vi.hoisted(() => ({ signIn: vi.fn() }))
+const stubs = vi.hoisted(() => ({ signIn: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), token: "XXXX.DUMMY.TOKEN.XXXX" }))
 
 vi.mock("@/app/login/actions", () => ({ signIn: stubs.signIn }))
+
+// Turnstile's widget, as far as the form sees it: the hidden token field it
+// adds, empty while the check is still running, its reset, and reveal, which
+// says whether the check is showing its own message.
+vi.mock("@/components/turnstile-widget", async () => {
+  const { useImperativeHandle } = await import("react")
+  return {
+    TurnstileWidget: ({ action, ref }: { action: string; ref?: React.Ref<{ reset(): void; reveal(): boolean }> }) => {
+      useImperativeHandle(ref, () => ({ reset: stubs.reset, reveal: stubs.reveal }))
+      return <input type="hidden" name="cf-turnstile-response" data-action={action} value={stubs.token} readOnly />
+    },
+  }
+})
 
 import { LoginForm } from "@/app/login/login-form"
 
 beforeEach(() => {
   stubs.signIn.mockReset().mockResolvedValue({ error: "invalid-credentials" })
+  stubs.reset.mockReset()
+  stubs.reveal.mockReset().mockReturnValue(false)
+  stubs.token = "XXXX.DUMMY.TOKEN.XXXX"
 })
+
+async function submit(email: string, password: string, button: string) {
+  for (const [label, value] of [
+    [/^(Email|Barua pepe)$/, email],
+    [/^(Password|Nenosiri)$/, password],
+  ] as const) {
+    await userEvent.clear(screen.getByLabelText(label))
+    await userEvent.type(screen.getByLabelText(label), value)
+  }
+  await userEvent.click(screen.getByRole("button", { name: button }))
+}
 
 describe("the one sign-in form", () => {
   it.each([
@@ -49,5 +76,59 @@ describe("the one sign-in form", () => {
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("Msimbo: switched_off")
     expect(alert.querySelector("a")).toBeNull()
+  })
+
+  it("carries the sign-in security check inside the form", () => {
+    const { container } = render(<LoginForm language="sw" notice={null} />)
+
+    const token = container.querySelector('form input[name="cf-turnstile-response"]')
+    expect(token).toHaveAttribute("data-action", "sign-in")
+  })
+
+  it("sends nothing while the security check has no token, and says to wait", async () => {
+    stubs.token = ""
+    render(<LoginForm language="sw" notice={null} />)
+
+    await submit("neema@example.test", "a-password", "Ingia")
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Subiri ukaguzi wa usalama ukamilike, kisha uingie.")
+    expect(stubs.signIn).not.toHaveBeenCalled()
+    expect(stubs.reset).not.toHaveBeenCalled()
+  })
+
+  it("lets a check that needs a click speak for itself, and sends nothing", async () => {
+    stubs.token = ""
+    stubs.reveal.mockReturnValue(true)
+    render(<LoginForm language="sw" notice={null} />)
+
+    await submit("neema@example.test", "a-password", "Ingia")
+
+    expect(stubs.reveal).toHaveBeenCalled()
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    expect(stubs.signIn).not.toHaveBeenCalled()
+  })
+
+  it("shows a refused security check as a check message, not a wrong password, and gets a fresh token", async () => {
+    stubs.signIn.mockResolvedValue({ error: "check-failed" })
+    render(<LoginForm language="en" notice={null} />)
+
+    await submit("neema@example.test", "a-password", "Log In")
+
+    const alert = await screen.findByRole("alert")
+    expect(alert).toHaveTextContent("The security check didn't finish. Try again.")
+    expect(alert).toHaveTextContent("Code: captcha_failed")
+    expect(alert).not.toHaveTextContent("Wrong email or password.")
+    expect(stubs.reset).toHaveBeenCalledTimes(1)
+  })
+
+  it("gets a fresh token after every failed answer, even the same one twice", async () => {
+    render(<LoginForm language="en" notice={null} />)
+
+    await submit("someone@example.test", "wrong-password", "Log In")
+    await screen.findByRole("alert")
+    await submit("someone@example.test", "wrong-password", "Log In")
+
+    await vi.waitFor(() => expect(stubs.signIn).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(stubs.reset).toHaveBeenCalledTimes(2))
   })
 })

@@ -2,12 +2,13 @@
 
 import { User } from "lucide-react"
 import Link from "next/link"
-import { useActionState, useState } from "react"
+import { useActionState, useRef, useState } from "react"
 
 import { AUTH_SUBMIT, IconField, PasswordField } from "@/components/auth-fields"
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import type { Language } from "@/lib/language"
 
-import { signIn } from "./actions"
+import { signIn, type SignInState } from "./actions"
 import { LOGIN_COPY, type LoginMessage, type LoginNotice } from "./copy"
 
 export const FORGOT_PASSWORD_PATH = "/login/forgot-password"
@@ -15,9 +16,20 @@ export const FORGOT_PASSWORD_PATH = "/login/forgot-password"
 // The one sign-in form (#264) for staff and Discount code holders. A small
 // grey reset link always sits under the button; after a wrong password a
 // clearer one sits under the warning instead.
+//
+// Supabase checks the Turnstile token on every sign-in (#268). Until the
+// widget has one, the form says so and sends nothing.
 export function LoginForm({ language, notice }: { language: Language; notice: LoginNotice | null }) {
   const copy = LOGIN_COPY[language]
-  const [state, formAction, pending] = useActionState(signIn, null)
+  const turnstile = useRef<TurnstileWidgetHandle>(null)
+  const [state, formAction, pending] = useActionState(async (previous: SignInState, data: FormData): Promise<SignInState> => {
+    // A check that needs a click says so itself, next to Ingia.
+    if (!data.get("cf-turnstile-response")) return turnstile.current?.reveal() ? null : { error: "check-pending" }
+    const answer = await signIn(previous, data)
+    // Supabase may have spent the token, so get a fresh one for the next try.
+    if (answer?.error) turnstile.current?.reset()
+    return answer
+  }, null)
   const [shown, setShown] = useState(false)
   const error = state?.error ?? notice
   const message = error ? copy.messages[error] : null
@@ -39,6 +51,9 @@ export function LoginForm({ language, notice }: { language: Language; notice: Lo
         />
 
         {message && <LoginMessageView language={language} message={message} />}
+
+        {/* Invisible unless Cloudflare needs a click, and then right above Ingia. */}
+        <TurnstileWidget ref={turnstile} action="sign-in" language={language} />
 
         <button disabled={pending} type="submit" className={AUTH_SUBMIT}>
           {pending ? copy.processing : copy.logIn}

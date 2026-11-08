@@ -12,6 +12,7 @@ import {
   inRolledBackTransaction,
   secretClient,
   signedIn,
+  TEST_CAPTCHA_TOKEN,
 } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../support/fixtures"
 
@@ -239,12 +240,14 @@ describe("permissions and roles", () => {
 
 describe("accounts", () => {
   test("public sign-up is refused", async () => {
+    // With a valid CAPTCHA token, so the refusal is sign-ups being off, not the check.
     const { data, error } = await anonClient().auth.signUp({
       email: "stranger@example.test",
       password: "fixture-password",
+      options: { captchaToken: TEST_CAPTCHA_TOKEN },
     })
 
-    expect(error).not.toBeNull()
+    expect(error?.code).toBe("signup_disabled")
     expect(data.user).toBeNull()
   })
 

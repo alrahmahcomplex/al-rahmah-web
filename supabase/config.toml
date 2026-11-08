@@ -233,10 +233,17 @@ token_verifications = 30
 web3 = 30
 
 # Configure one of the supported captcha providers: `hcaptcha`, `turnstile`.
-# [auth.captcha]
-# enabled = true
-# provider = "hcaptcha"
-# secret = ""
+# CAPTCHA protection (#268), as on the hosted project: Supabase wants a
+# Turnstile token on password sign-in, /signup, /recover, /resend, /otp and
+# /magiclink. This is Cloudflare's public always-pass test secret, paired with
+# the test site key in .env.example and playwright.config.ts. The real secret
+# is the production widget's, the same one Vercel holds as TURNSTILE_SECRET_KEY,
+# pasted into the hosted dashboard (docs/agents/hosted-services.md). Never put
+# it here.
+[auth.captcha]
+enabled = true
+provider = "turnstile"
+secret = "1x0000000000000000000000000000000AA"
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.

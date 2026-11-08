@@ -18,10 +18,14 @@ vi.mock("@/utils/supabase/server", () => ({ createClient: async () => ({ session
 
 import { signIn } from "@/app/login/actions"
 
-function posted(email: string, password = "fixture-password") {
+// Cloudflare's dummy Turnstile token, what the always-pass test site key gives.
+const TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
+
+function posted(email: string, password = "fixture-password", token = TOKEN) {
   const data = new FormData()
   data.set("email", email)
   data.set("password", password)
+  if (token) data.set("cf-turnstile-response", token)
   return data
 }
 
@@ -38,7 +42,7 @@ describe("the one sign-in form", () => {
     expect(stubs.limit).toHaveBeenCalledWith(
       expect.objectContaining({ key: "sign-in", subject: "neema@example.test" }),
     )
-    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, "neema@example.test", "fixture-password")
+    expect(stubs.signIn).toHaveBeenCalledWith({ session: "client" }, "neema@example.test", "fixture-password", TOKEN)
     expect(stubs.redirect).toHaveBeenCalledWith("/discount-code/students")
   })
 
@@ -47,6 +51,18 @@ describe("the one sign-in form", () => {
 
     expect(await signIn(null, posted("neema@example.test"))).toEqual({ error: "rate-limited" })
     expect(stubs.signIn).not.toHaveBeenCalled()
+  })
+
+  it("answers check-pending without a Turnstile token, counting nothing and sending nothing", async () => {
+    expect(await signIn(null, posted("neema@example.test", "fixture-password", ""))).toEqual({ error: "check-pending" })
+    expect(stubs.limit).not.toHaveBeenCalled()
+    expect(stubs.signIn).not.toHaveBeenCalled()
+  })
+
+  it("passes on a refused security check, not a wrong password", async () => {
+    stubs.signIn.mockResolvedValue({ ok: false, error: "check-failed" })
+
+    expect(await signIn(null, posted("neema@example.test"))).toEqual({ error: "check-failed" })
   })
 
   it("refuses an empty form without counting it", async () => {

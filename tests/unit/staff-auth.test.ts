@@ -4,6 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { signIn } from "@/lib/services/sign-in"
 import { acceptInvite, getStaffUser, requirePermission } from "@/lib/services/staff-auth"
 
+// Cloudflare's dummy Turnstile token, what the always-pass test site key gives.
+const TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
+
 const MANAGER_ROW = {
   id: "a1a1a1a1-0000-4000-8000-000000000001",
   full_name: "Test Manager",
@@ -111,7 +114,7 @@ describe("reading the staff record when PostgREST's clock lags", () => {
       staffRecords: [ISSUED_AT_FUTURE, { data: MANAGER_ROW, error: null }],
     })
 
-    expect(await withTimersRunning(signIn(client, "manager@example.test", "fixture-password"))).toEqual({
+    expect(await withTimersRunning(signIn(client, "manager@example.test", "fixture-password", TOKEN))).toEqual({
       ok: true,
       data: "staff",
     })
@@ -137,7 +140,7 @@ describe("reading the staff record when PostgREST's clock lags", () => {
     vi.useFakeTimers()
     const { client, signOut, rpc } = signedOut({ staffRecords: [ISSUED_AT_FUTURE, ISSUED_AT_FUTURE] })
 
-    expect(await withTimersRunning(signIn(client, "manager@example.test", "fixture-password"))).toEqual({
+    expect(await withTimersRunning(signIn(client, "manager@example.test", "fixture-password", TOKEN))).toEqual({
       ok: false,
       error: "unavailable",
     })

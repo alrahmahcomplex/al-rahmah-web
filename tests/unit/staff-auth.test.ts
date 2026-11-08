@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
-import { acceptInvite, getStaffUser, requirePermission, signInStaff } from "@/lib/services/staff-auth"
+import { signIn } from "@/lib/services/sign-in"
+import { acceptInvite, getStaffUser, requirePermission } from "@/lib/services/staff-auth"
 
 const MANAGER_ROW = {
   id: "a1a1a1a1-0000-4000-8000-000000000001",
@@ -91,107 +92,6 @@ function signedOut(options: Parameters<typeof fakeSupabase>[0] = {}) {
   return fakeSupabase({ startSignedIn: false, ...options })
 }
 
-describe("signInStaff", () => {
-  it("refuses a wrong password", async () => {
-    const { client } = signedOut({
-      signInError: { message: "Invalid login credentials", code: "invalid_credentials" },
-    })
-
-    expect(await signInStaff(client, "manager@example.test", "wrong")).toEqual({
-      ok: false,
-      error: "invalid-credentials",
-    })
-  })
-
-  it("reports an outage as unavailable rather than blaming the password", async () => {
-    const { client } = signedOut({
-      signInError: { message: "request failed", code: "unexpected_failure" },
-    })
-
-    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
-      ok: false,
-      error: "unavailable",
-    })
-  })
-
-  it("reports a rate limit as its own refusal", async () => {
-    for (const signInError of [
-      { message: "Request rate limit reached", code: "over_request_rate_limit" },
-      { message: "Too many requests", status: 429 },
-    ]) {
-      const { client } = signedOut({ signInError })
-
-      expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
-        ok: false,
-        error: "rate-limited",
-      })
-    }
-  })
-
-  it("reports a banned login as its own refusal", async () => {
-    const { client } = signedOut({ signInError: { message: "User is banned", code: "user_banned" } })
-
-    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({ ok: false, error: "banned" })
-  })
-
-  it("refuses while this browser is signed in as a Discount code holder, before trying the password", async () => {
-    const { client, auth } = fakeSupabase({
-      staffRecord: { data: null, error: null },
-      agentAccount: { data: { state: "active" }, error: null },
-    })
-
-    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
-      ok: false,
-      error: "agent-session",
-    })
-    expect(auth.signInWithPassword).not.toHaveBeenCalled()
-  })
-
-  it("signs in an active staff member with their role and permissions, and keeps the session", async () => {
-    const { client, signOut } = signedOut()
-
-    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
-      ok: true,
-      data: MANAGER,
-    })
-    expect(signOut).not.toHaveBeenCalled()
-  })
-
-  it("refuses an account with no staff record and ends the session", async () => {
-    const { client, signOut } = signedOut({ staffRecord: { data: null, error: null } })
-
-    expect(await signInStaff(client, "someone@example.test", "fixture-password")).toEqual({
-      ok: false,
-      error: "not-staff",
-    })
-    expect(signOut).toHaveBeenCalled()
-  })
-
-  it("refuses a deactivated staff member and ends the session", async () => {
-    const { client, signOut } = signedOut({
-      staffRecord: { data: { ...MANAGER_ROW, active: false, permissions: [] }, error: null },
-    })
-
-    expect(await signInStaff(client, "deactivated@example.test", "fixture-password")).toEqual({
-      ok: false,
-      error: "deactivated",
-    })
-    expect(signOut).toHaveBeenCalled()
-  })
-
-  it("refuses and ends the session when the staff record cannot be read", async () => {
-    const { client, signOut } = signedOut({
-      staffRecord: { data: null, error: { message: "connection refused" } },
-    })
-
-    expect(await signInStaff(client, "manager@example.test", "fixture-password")).toEqual({
-      ok: false,
-      error: "unavailable",
-    })
-    expect(signOut).toHaveBeenCalled()
-  })
-})
-
 // PostgREST can briefly judge a token that was just issued as "issued at
 // future" when its cached clock lags. The staff record read tries once more
 // after a second; any other failure, or a second rejection, is still a no.
@@ -211,9 +111,9 @@ describe("reading the staff record when PostgREST's clock lags", () => {
       staffRecords: [ISSUED_AT_FUTURE, { data: MANAGER_ROW, error: null }],
     })
 
-    expect(await withTimersRunning(signInStaff(client, "manager@example.test", "fixture-password"))).toEqual({
+    expect(await withTimersRunning(signIn(client, "manager@example.test", "fixture-password"))).toEqual({
       ok: true,
-      data: MANAGER,
+      data: "staff",
     })
     expect(rpc).toHaveBeenCalledTimes(2)
     expect(signOut).not.toHaveBeenCalled()
@@ -237,7 +137,7 @@ describe("reading the staff record when PostgREST's clock lags", () => {
     vi.useFakeTimers()
     const { client, signOut, rpc } = signedOut({ staffRecords: [ISSUED_AT_FUTURE, ISSUED_AT_FUTURE] })
 
-    expect(await withTimersRunning(signInStaff(client, "manager@example.test", "fixture-password"))).toEqual({
+    expect(await withTimersRunning(signIn(client, "manager@example.test", "fixture-password"))).toEqual({
       ok: false,
       error: "unavailable",
     })

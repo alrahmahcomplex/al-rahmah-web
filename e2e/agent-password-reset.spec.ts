@@ -102,9 +102,14 @@ async function setPassword(page: Page) {
 test("Umesahau nenosiri? emails a reset link; the reset page sets the new password and signs the agent in", async ({ page }) => {
   const agent = await joinedAgent()
 
-  await page.goto("/discount-code/sign-in")
+  await page.goto("/login")
   await page.getByRole("link", { name: "Umesahau nenosiri?" }).click()
+  await expect(page).toHaveURL(/\/login\/forgot-password$/)
   await expect(page.getByRole("heading", { name: "Umesahau nenosiri?" })).toBeVisible()
+  // The same card as sign-in, without the old security-check line (#264).
+  await expect(page.getByText("AL-RAHMAH COMPLEX", { exact: true })).toBeVisible()
+  await expect(page.getByText(/Ukaguzi mfupi wa usalama/)).toHaveCount(0)
+  await expect(page.getByText("Mfanyakazi? Mwombe anayesimamia akaunti yako akuwekee nenosiri jipya.")).toBeVisible()
   await requestLink(page, agent.address)
 
   const [email] = await waitForEmails(agent.address, 1)
@@ -128,7 +133,9 @@ test("Umesahau nenosiri? emails a reset link; the reset page sets the new passwo
 
 test("an email with no account gets the same reply, and nothing is sent", async ({ page }) => {
   const stranger = `nobody-${randomUUID().slice(0, 8)}@example.test`
+  // The old address still works (#264).
   await page.goto("/discount-code/forgot-password")
+  await expect(page).toHaveURL(/\/login\/forgot-password$/)
   await requestLink(page, stranger)
   // The send happens after the reply; give it time to show up if it did.
   await page.waitForTimeout(2_000)

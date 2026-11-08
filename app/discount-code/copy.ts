@@ -32,7 +32,6 @@ type Copy = {
   signInPrompt: string
   signIn: string
   optional: string
-  securityNote: string
   send: string
   sending: string
   problems: Record<AgentField | "phone_unreadable" | "code_unreadable", string>
@@ -76,7 +75,6 @@ export const COPY: Record<Language, Copy> = {
     signInPrompt: "Umeshaweka nenosiri?",
     signIn: "Ingia",
     optional: "si lazima",
-    securityNote: "Ukaguzi mfupi wa usalama hulinda fomu hii.",
     send: "Pata Code ya Punguzo",
     sending: "Inatuma…",
     problems: {
@@ -137,7 +135,6 @@ export const COPY: Record<Language, Copy> = {
     signInPrompt: "Already set a password?",
     signIn: "Sign in",
     optional: "optional",
-    securityNote: "A quick security check protects this form.",
     send: "Get my Discount code",
     sending: "Sending…",
     problems: {

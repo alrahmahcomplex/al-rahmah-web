@@ -5,6 +5,23 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- Staff and Discount code holders now sign in on the same page, `/login`. It works in
+  Kiswahili and English, with the language switch at the top. After signing in, staff go
+  to the staff side and Discount code holders to their students.
+- "Forgot your password?" sits under the Log In button, and after a wrong password a
+  link to it also appears under the warning. The page that sends a new link has moved to
+  `/login/forgot-password` and opens in the same card. Staff are told to ask whoever
+  manages their account, since staff can't reset their own password yet.
+- Every sign-in box shows its name inside the box, next to its icon.
+- The "A quick security check protects this form." line is gone from under the security
+  check on every form.
+- Old links to `/discount-code/sign-in` and `/discount-code/forgot-password` still work.
+  They open the new pages.
+
 ## November 8, 2026 `v0.88.2`
 
 ### FIXED

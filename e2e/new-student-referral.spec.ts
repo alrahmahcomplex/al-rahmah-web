@@ -4,15 +4,13 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { logIn } from "./log-in"
 
 // A Referral code entered at New Student (#81). Every run invents its own
 // child and phone number; the codes are slice 4's seeded agents.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

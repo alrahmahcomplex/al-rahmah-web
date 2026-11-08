@@ -36,6 +36,8 @@ test("a failed security check is refused, keeps the entries, resets the widget a
   await page.getByRole("button", { name: t.send }).click()
 
   await expect(page.getByText(/Ukaguzi wa usalama haukukamilika/)).toBeVisible()
+  // The Cloudflare box carries no "quick security check" line under it (#264).
+  await expect(page.getByText(/Ukaguzi mfupi wa usalama/)).toHaveCount(0)
   await expect(page.getByLabel(t.name)).toHaveValue(who.name)
   await expect(page.getByLabel(t.phone, { exact: true })).toHaveValue(who.phone)
   await expect(page.getByLabel(t.whatsapp)).toHaveValue("0754 000 111")

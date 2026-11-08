@@ -5,6 +5,7 @@ import { MANAGER } from "../tests/support/fixtures"
 import { PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
 import { FORBIDDEN, fillRegistration, newcomer, WORDS, type Lang } from "./discount-code"
 import { E2E_PORT } from "./server"
+import { logIn } from "./log-in"
 
 // The Discount code page on a phone, against local Supabase with Turnstile's
 // always-pass test keys.
@@ -105,10 +106,7 @@ test("the new agent arrives Pending on the Marketing Agents screen", async ({ pa
   const who = newcomer()
   const code = await register(page, "sw", who)
 
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(MANAGER.email)
-  await page.getByLabel("Password", { exact: true }).fill(MANAGER.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, MANAGER.email, MANAGER.password)
   await expect(page).toHaveURL(/\/staff$/)
 
   await page.goto("/staff/agents")

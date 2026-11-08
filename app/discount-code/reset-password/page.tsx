@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { AuthCard } from "@/components/auth-card"
 import { getLanguage } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
 import { currentSessionKind } from "@/lib/services/auth-session"
@@ -7,7 +8,6 @@ import { createClient } from "@/utils/supabase/server"
 
 import { ACCOUNT_COPY } from "../account-copy"
 import { SignOutNotice } from "../account-message"
-import { AccountShell } from "../account-shell"
 import { LINK_REQUEST_COPY } from "../link-request-copy"
 import { SetPasswordForm } from "../set-password/set-password-form"
 
@@ -33,7 +33,7 @@ export default async function AgentResetPasswordPage({
   const session = usable ? await currentSessionKind(await createClient()) : null
 
   return (
-    <AccountShell language={language}>
+    <AuthCard language={language}>
       {usable && session?.ok && session.data === "staff" ? (
         <SignOutNotice
           language={language}
@@ -48,6 +48,6 @@ export default async function AgentResetPasswordPage({
           officePhone={OFFICE_PHONE}
         />
       )}
-    </AccountShell>
+    </AuthCard>
   )
 }

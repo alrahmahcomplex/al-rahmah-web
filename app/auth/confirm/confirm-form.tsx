@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useActionState, useState } from "react"
 
-import { AGENT_SESSION, OtherSessionNotice } from "@/app/login/login-form"
+import { AGENT_SESSION, OtherSessionNotice } from "@/app/login/other-session-notice"
 import { buttonVariants } from "@/components/ui/button"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import { cn } from "@/lib/utils"

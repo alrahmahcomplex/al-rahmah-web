@@ -772,7 +772,6 @@ export function AdmissionFormSteps({
 
             <div>
               <TurnstileWidget ref={turnstile} action="admission" language={language} />
-              <p className="mt-1 text-center text-xs text-slate-500">{copy.securityNote}</p>
             </div>
           </div>
         )}

@@ -10,6 +10,7 @@ import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl, openLeadTab } from "./lead-page"
+import { logIn } from "./log-in"
 
 // Marking the interview fee Paid or Not Paid on the lead screen's interview
 // panel.
@@ -22,10 +23,7 @@ const PAID = "1ead0000-0000-4000-8000-000000000503"
 const RUKIA = "1ead0000-0000-4000-8000-000000000918"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

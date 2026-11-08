@@ -9,7 +9,7 @@ import type { AcceptAgentInviteError, AgentSignInError, AgentUserError } from "@
 // A refusal a person may need to read out on the phone carries a short
 // reason code.
 
-export type AccountMessage = { text: string; code?: string; signIn?: boolean; forgot?: boolean; staffSignIn?: boolean }
+export type AccountMessage = { text: string; code?: string; signIn?: boolean; forgot?: boolean }
 
 type MessageKey =
   | AgentSignInError
@@ -20,17 +20,12 @@ type MessageKey =
 
 type Copy = {
   title: string
-  signInHeading: string
-  signInIntro: string
   email: string
   password: string
   showPassword: string
   hidePassword: string
-  signIn: string
-  signingIn: string
   forgot: string
   helpLine: string
-  staffLink: string
   setPasswordHeading: string
   setPasswordIntro: string
   newPassword: string
@@ -54,17 +49,12 @@ const EXPIRED_EN = "This link has expired or was already used. Call the office f
 export const ACCOUNT_COPY: Record<Language, Copy> = {
   sw: {
     title: "Code ya Punguzo",
-    signInHeading: "Ingia",
-    signInIntro: "Ingia kwa barua pepe na nenosiri lako uone wanafunzi wanaotumia Code yako ya Punguzo.",
     email: "Barua pepe",
     password: "Nenosiri",
     showPassword: "Onyesha nenosiri",
     hidePassword: "Ficha nenosiri",
-    signIn: "Ingia",
-    signingIn: "Inaingia…",
     forgot: "Umesahau nenosiri?",
     helpLine: "Huenda bado tunathibitisha code yako au barua pepe yako.",
-    staffLink: "Mfanyakazi? Ingia hapa",
     setPasswordHeading: "Weka nenosiri lako",
     setPasswordIntro: "Utalitumia pamoja na barua pepe yako kuingia kwenye kurasa za Code ya Punguzo.",
     newPassword: "Nenosiri jipya",
@@ -80,10 +70,7 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
       "rate-limited": { text: "Majaribio ni mengi mno. Subiri dakika chache, kisha ujaribu tena.", code: "rate_limited" },
       banned: { text: OFF_SW, code: "banned" },
       "staff-session": { text: "Kivinjari hiki kimeingia kama mfanyakazi. Toka kwanza." },
-      "not-agent": {
-        text: "Akaunti hii si ya Code ya Punguzo. Wafanyakazi huingia kwenye ukurasa wa wafanyakazi.",
-        staffSignIn: true,
-      },
+      "not-agent": { text: "Akaunti hii si ya Code ya Punguzo.", signIn: true },
       "switched-off": { text: OFF_SW, code: "switched_off" },
       retired: { text: OFF_SW, code: "retired" },
       "access-off": { text: PAUSED_SW, code: "access_off" },
@@ -101,17 +88,12 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
   },
   en: {
     title: "Discount code",
-    signInHeading: "Sign in",
-    signInIntro: "Sign in with your email and password to see the students using your Discount code.",
     email: "Email",
     password: "Password",
     showPassword: "Show password",
     hidePassword: "Hide password",
-    signIn: "Sign in",
-    signingIn: "Signing in…",
     forgot: "Forgot your password?",
     helpLine: "We may still be checking your code or your email.",
-    staffLink: "Staff? Sign in here",
     setPasswordHeading: "Set your password",
     setPasswordIntro: "You'll use it with your email to sign in to the Discount code pages.",
     newPassword: "New password",
@@ -127,7 +109,7 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
       "rate-limited": { text: "Too many attempts. Wait a few minutes, then try again.", code: "rate_limited" },
       banned: { text: OFF_EN, code: "banned" },
       "staff-session": { text: "This browser is signed in as staff. Sign out first." },
-      "not-agent": { text: "This isn't a Discount code account. Staff sign in on the staff page.", staffSignIn: true },
+      "not-agent": { text: "This isn't a Discount code account.", signIn: true },
       "switched-off": { text: OFF_EN, code: "switched_off" },
       retired: { text: OFF_EN, code: "retired" },
       "access-off": { text: PAUSED_EN, code: "access_off" },
@@ -145,6 +127,3 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
   },
 }
 
-// Errors a sign-in page shows from the address, after a redirect.
-export const SIGN_IN_NOTICES = ["switched-off", "retired", "access-off", "not-agent", "unavailable", "invalid-link"] as const
-export type SignInNotice = (typeof SIGN_IN_NOTICES)[number]

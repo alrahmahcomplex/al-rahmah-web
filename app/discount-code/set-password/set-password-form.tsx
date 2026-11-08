@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { useActionState, useState } from "react"
 
+import { AuthHeading } from "@/components/auth-card"
+import { AUTH_SUBMIT, PasswordField } from "@/components/auth-fields"
 import type { Language } from "@/lib/language"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 
@@ -10,7 +12,6 @@ import { ACCOUNT_COPY } from "../account-copy"
 import { AccountMessageView } from "../account-message"
 import { LINK_REQUEST_COPY } from "../link-request-copy"
 import { ExpiredLink } from "../link-request-form"
-import { PasswordField, SUBMIT } from "../password-field"
 import { setAgentPassword, type SetAgentPasswordState } from "./actions"
 
 type ErrorKey = NonNullable<SetAgentPasswordState>["error"]
@@ -42,15 +43,10 @@ export function SetPasswordForm({
   if (error === "invalid-link") return <ExpiredLink language={language} officePhone={officePhone} />
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2 text-center">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">
-          {linkType === "recovery" ? reset.resetHeading : copy.setPasswordHeading}
-        </h1>
-        {showForm && (
-          <p className="font-exo text-[13px] text-slate-600">{linkType === "recovery" ? reset.resetIntro : copy.setPasswordIntro}</p>
-        )}
-      </div>
+    <div className="flex flex-col">
+      <AuthHeading intro={showForm ? (linkType === "recovery" ? reset.resetIntro : copy.setPasswordIntro) : undefined}>
+        {linkType === "recovery" ? reset.resetHeading : copy.setPasswordHeading}
+      </AuthHeading>
 
       {showForm ? (
         <form action={formAction} className="flex flex-col gap-3">
@@ -60,10 +56,11 @@ export function SetPasswordForm({
             id="password"
             label={copy.newPassword}
             autoComplete="new-password"
+            required
             shown={shown}
             onToggle={() => setShown((value) => !value)}
             toggleLabels={{ show: copy.showPassword, hide: copy.hidePassword }}
-            describedBy="password-rule"
+            aria-describedby="password-rule"
             minLength={MINIMUM_PASSWORD_LENGTH}
           />
           <p id="password-rule" className="-mt-1 pl-4 font-exo text-[12px] text-slate-500">
@@ -73,13 +70,14 @@ export function SetPasswordForm({
             id="confirm"
             label={copy.confirmPassword}
             autoComplete="new-password"
+            required
             shown={shown}
             minLength={MINIMUM_PASSWORD_LENGTH}
           />
 
           {message && <AccountMessageView language={language} message={message} />}
 
-          <button type="submit" disabled={pending} className={SUBMIT}>
+          <button type="submit" disabled={pending} className={AUTH_SUBMIT}>
             {pending ? copy.saving : copy.setPassword}
           </button>
         </form>
@@ -87,7 +85,7 @@ export function SetPasswordForm({
         <div className="flex flex-col items-center gap-4">
           {message && <AccountMessageView language={language} message={message} />}
           {!message?.signIn && (
-            <Link href="/discount-code/sign-in" className="font-exo text-[13px] text-blue-600 underline underline-offset-2">
+            <Link href="/login" className="font-exo text-[13px] text-blue-600 underline underline-offset-2">
               {copy.goToSignIn}
             </Link>
           )}

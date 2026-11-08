@@ -7,6 +7,7 @@ import { firstName } from "@/app/staff/_today/greeting"
 import { inRolledBackTransaction } from "../tests/support/db"
 import { ACCOUNTANT, INVITED, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { openStaffHistoryAsSuperAdmin } from "./super-admin"
+import { logIn } from "./log-in"
 
 // Inviting staff end to end: the Manager invites from Staff and roles, the
 // email lands in local Mailpit, and the invited person sets a password on
@@ -16,10 +17,7 @@ import { openStaffHistoryAsSuperAdmin } from "./super-admin"
 const MAILPIT = "http://127.0.0.1:55424"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

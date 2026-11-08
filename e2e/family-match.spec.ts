@@ -7,6 +7,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { signedIn } from "../tests/support/db"
 import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // The Family step of New Student, as Admissions Staff use it. Each test makes
 // its own Family through the lead module, with a number nobody else holds, so
@@ -15,10 +16,7 @@ import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 const thisYear = Number(tanzaniaToday().slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

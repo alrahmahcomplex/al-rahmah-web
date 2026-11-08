@@ -4,6 +4,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test"
 
 import { createThrowawayStaff, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER, SEEDED_AGENT, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // Agent invites and the Discount code sign-in (#191) end to end: the Manager
 // sends the invite from the Agents screen, the email lands in local Mailpit,
@@ -20,19 +21,12 @@ const notice = (page: Page) => page.getByRole("main").getByRole("alert")
 const STAFF_SESSION = "Kivinjari hiki kimeingia kama mfanyakazi. Toka kwanza."
 
 async function signInStaff(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-async function signInAgent(page: Page, email: string, password: string) {
-  await page.goto("/discount-code/sign-in")
-  await page.getByLabel("Barua pepe").fill(email)
-  await page.getByLabel("Nenosiri", { exact: true }).fill(password)
-  await page.getByRole("button", { name: "Ingia", exact: true }).click()
-}
+// Discount code holders sign in on the same page as staff (#264).
+const signInAgent = logIn
 
 // An Approved agent of the test's own, created by the Manager with an email.
 async function newAgent() {
@@ -137,22 +131,21 @@ test("the Manager sends the invite; the agent sets a password from the email and
   await expect(agentRow(page, agent.fullName)).toContainText("Joined")
 })
 
-test("an agent signs in on the Discount code pages; wrong credentials point to the forgotten password", async ({ page }) => {
+test("an agent signs in on the one sign-in page; wrong credentials point to the forgotten password", async ({ page }) => {
   await signInAgent(page, SEEDED_AGENT.email, "not-the-password")
   await expect(notice(page)).toContainText("Barua pepe au nenosiri si sahihi.")
-  await expect(notice(page).getByRole("link", { name: "Umesahau nenosiri?" })).toBeVisible()
+  await expect(notice(page).getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/login/forgot-password")
 
   await signInAgent(page, SEEDED_AGENT.email, SEEDED_AGENT.password)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
   await expect(page.getByRole("heading", { name: `Wanafunzi wanaotumia Code ya Punguzo ${SEEDED_AGENT.code} (0)` })).toBeVisible()
 })
 
-test("staff and agent sign-in pages link to each other", async ({ page }) => {
-  await page.goto("/login")
-  await page.getByRole("link", { name: "Discount code holders sign in here" }).click()
-  await expect(page).toHaveURL(/\/discount-code\/sign-in$/)
-  await page.getByRole("link", { name: "Mfanyakazi? Ingia hapa" }).click()
+test("the old Discount code sign-in address opens the one sign-in page, which sends nobody elsewhere", async ({ page }) => {
+  await page.goto("/discount-code/sign-in")
   await expect(page).toHaveURL(/\/login$/)
+  await expect(page.getByRole("heading", { name: "Karibu!" })).toBeVisible()
+  await expect(page.getByText(/Discount code holders|Mfanyakazi\? Ingia hapa/)).toHaveCount(0)
 })
 
 test("a browser signed in as staff refuses the agent's link until staff sign out, and the link still works", async ({ page }) => {
@@ -173,24 +166,24 @@ test("a browser signed in as staff refuses the agent's link until staff sign out
   await expect(page).toHaveURL(/\/discount-code\/students$/)
 })
 
-test("a browser signed in as staff refuses agent sign-in, and one signed in as an agent refuses staff sign-in", async ({
+test("a signed-in browser opening sign-in goes to its own side, and an agent never reaches the staff side", async ({
   page,
   browser,
 }) => {
   await signInStaff(page, MANAGER)
-  await page.goto("/discount-code/sign-in")
-  await expect(notice(page)).toHaveText(STAFF_SESSION)
-  await expect(page.getByRole("button", { name: "Toka" })).toBeVisible()
+  await page.goto("/login")
+  await expect(page).toHaveURL(/\/staff$/)
+  // The students page sends staff to sign-in, which sends them home.
+  await page.goto("/discount-code/students")
+  await expect(page).toHaveURL(/\/staff$/)
 
   const agentPage = await newContextPage(browser)
   await signInAgent(agentPage, SEEDED_AGENT.email, SEEDED_AGENT.password)
   await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
   await agentPage.goto("/login")
-  await expect(notice(agentPage)).toHaveText(
-    "This browser is signed in to the Discount code pages. Sign out first, then sign in here.",
-  )
-  await agentPage.getByRole("button", { name: "Sign out" }).click()
-  await expect(agentPage.getByLabel("Email")).toBeVisible()
+  await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
+  await agentPage.goto("/staff")
+  await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
 })
 
 test("a switched-off agent is told to call the office, with the reason code", async ({ page }) => {
@@ -212,5 +205,5 @@ test("a switched-off agent is told to call the office, with the reason code", as
 
   await expect(notice(page)).toContainText("Huwezi kuingia kwa sasa. Piga simu ofisini.")
   await expect(notice(page)).toContainText("Msimbo: switched_off")
-  await expect(page).toHaveURL(/\/discount-code\/sign-in$/)
+  await expect(page).toHaveURL(/\/login$/)
 })

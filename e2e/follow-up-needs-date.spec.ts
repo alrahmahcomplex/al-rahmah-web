@@ -7,6 +7,7 @@ import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 
 import { signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // A reopened lead that needs a follow-up date (#95): the seeded one shows in
 // Overdue as Needs a follow-up date and its lead screen says so, until staff
@@ -43,10 +44,7 @@ test.afterAll(async () => {
 })
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

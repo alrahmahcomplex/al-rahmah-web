@@ -8,16 +8,14 @@ import { toCsv } from "@/lib/import"
 
 import { registerApprovedAgent } from "../tests/support/agents"
 import { MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // Importing agents from a CSV (#190): upload, the check screen, confirm, the
 // result screen and the refused-rows download. Every row is fixture data
 // generated here.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

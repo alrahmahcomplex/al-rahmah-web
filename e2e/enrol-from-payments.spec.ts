@@ -5,6 +5,7 @@ import { formatDate } from "@/lib/school-calendar"
 import { ACCOUNTANT, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
+import { logIn } from "./log-in"
 
 // A lead Enrolled from its payments (#108): the lead screen says what
 // enrolled it and when, and the history says why. Reads the seeded lead only.
@@ -14,10 +15,7 @@ import { leadUrl } from "./lead-page"
 const SEEDED_FULL = "1ead0000-0000-4000-8000-000000000904"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

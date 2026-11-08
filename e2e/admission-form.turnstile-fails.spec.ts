@@ -37,6 +37,8 @@ test("a failed security check is refused, keeps the entries and resets the widge
   await page.getByRole("button", { name: "Tuma maombi" }).click()
 
   await expect(page.getByText(/Ukaguzi wa usalama haukukamilika/)).toBeVisible()
+  // The Cloudflare box carries no "quick security check" line under it (#264).
+  await expect(page.getByText(/Ukaguzi mfupi wa usalama/)).toHaveCount(0)
   await expect(page.getByRole("heading", { level: 1, name: "Hakiki maombi yako" })).toBeVisible()
   await expect(page.getByText(who.parent)).toBeVisible()
   await expect(page.getByText(who.child)).toBeVisible()

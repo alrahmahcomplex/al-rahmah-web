@@ -2,16 +2,14 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { signInAsSuperAdmin } from "./super-admin"
+import { logIn } from "./log-in"
 
 // The Super Admin (#237): signs in, reads the system audit, and administers
 // staff on a Roles tab that never lists their own role. The seeded Manager
 // sees no history page and no trace of the Super Admin.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

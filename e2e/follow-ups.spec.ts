@@ -10,6 +10,7 @@ import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
+import { logIn } from "./log-in"
 
 // The Follow-ups panel on the lead screen: scheduling, changing the date with
 // a reason (#90), recording a contact (#91), and who sees the actions.
@@ -29,10 +30,7 @@ function addDays(date: string, days: number): string {
 }
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

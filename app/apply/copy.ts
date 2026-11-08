@@ -36,7 +36,6 @@ type Copy = {
   sending: string
   reviewParent: string
   reviewChild: string
-  securityNote: string
   // The Discount code field and its notes. Never "agent" or "referral".
   discountCode: string
   discountCodeHint: string
@@ -94,7 +93,6 @@ export const COPY: Record<Language, Copy> = {
     sending: "Inatuma…",
     reviewParent: "Mzazi au mlezi",
     reviewChild: "Mtoto",
-    securityNote: "Ukaguzi mfupi wa usalama hulinda fomu hii.",
     discountCode: "Code ya Punguzo · si lazima",
     discountCodeHint: "Kama kuna mtu aliyekupa code ya punguzo, iandike hapa.",
     discountChecking: "Tunahakiki code…",
@@ -170,7 +168,6 @@ export const COPY: Record<Language, Copy> = {
     sending: "Sending…",
     reviewParent: "Parent or guardian",
     reviewChild: "Child",
-    securityNote: "A quick security check protects this form.",
     discountCode: "Discount code · optional",
     discountCodeHint: "If someone gave you a discount code, enter it here.",
     discountChecking: "Checking the code…",

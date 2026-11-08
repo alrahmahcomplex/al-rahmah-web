@@ -7,15 +7,15 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Only the routes that read a session: staff, and the Discount code account
-  // pages (#191). The proxy needs Supabase, so running it on public pages,
-  // the Discount code sign-up page included, would let a Supabase fault take
-  // them down too.
+  // Only the routes that read a session: staff, the one sign-in page (#264),
+  // and the Discount code account pages (#191). The proxy needs Supabase, so
+  // running it on public pages, the Discount code sign-up page and
+  // /login/forgot-password included, would let a Supabase fault take them
+  // down too.
   matcher: [
     "/staff/:path*",
-    "/login/:path*",
+    "/login",
     "/auth/:path*",
-    "/discount-code/sign-in",
     "/discount-code/set-password",
     "/discount-code/reset-password",
     "/discount-code/students/:path*",

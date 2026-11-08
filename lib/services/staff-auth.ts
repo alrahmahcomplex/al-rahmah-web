@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Permission } from "@/lib/permissions"
 
-import { currentSessionKind, passwordSignIn, signOutSession, spendLinkAndSetPassword, type SignInFailure } from "./auth-session"
+import { currentSessionKind, signOutSession, spendLinkAndSetPassword } from "./auth-session"
 import { readWithClockRetry } from "./clock-retry"
 import type { Result } from "./result"
 
@@ -27,9 +27,6 @@ export function managesStaff(staff: Pick<StaffMember, "superAdmin" | "managedRol
 
 // Why someone with a valid session still may not use the staff side.
 export type StaffAccessError = "not-staff" | "deactivated" | "unavailable"
-// `agent-session`: this browser is signed in to the Discount code pages, so
-// it must sign out first (one account per browser).
-export type StaffSignInError = SignInFailure | "agent-session" | StaffAccessError
 export type StaffUserError = "signed-out" | StaffAccessError
 
 type StaffMemberRow = {
@@ -71,28 +68,6 @@ async function loadStaffMember(supabase: SupabaseClient): Promise<Result<StaffMe
       managedRoleIds: data.managed_role_ids ?? [],
     },
   }
-}
-
-export async function signInStaff(
-  supabase: SupabaseClient,
-  email: string,
-  password: string,
-): Promise<Result<StaffMember, StaffSignInError>> {
-  // Checked first, so an agent's session is never swapped for a staff one
-  // in the same browser without signing out.
-  const session = await currentSessionKind(supabase)
-  if (!session.ok) return { ok: false, error: "unavailable" }
-  if (session.data === "agent") return { ok: false, error: "agent-session" }
-
-  const signedIn = await passwordSignIn(supabase, email, password)
-  if (!signedIn.ok) return signedIn
-
-  // A valid password is not enough: the account must belong to an active
-  // staff member. Anyone else, or anyone we cannot check, loses the session
-  // they were just given.
-  const staff = await loadStaffMember(supabase)
-  if (!staff.ok) await supabase.auth.signOut()
-  return staff
 }
 
 export async function getStaffUser(supabase: SupabaseClient): Promise<Result<StaffMember, StaffUserError>> {

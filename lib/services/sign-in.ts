@@ -23,10 +23,15 @@ export type SignInError =
 
 export const HOME: Record<SignedInAs, string> = { staff: "/staff", agent: "/discount-code/students" }
 
-export async function signIn(supabase: SupabaseClient, email: string, password: string): Promise<Result<SignedInAs, SignInError>> {
+export async function signIn(
+  supabase: SupabaseClient,
+  email: string,
+  password: string,
+  captchaToken: string,
+): Promise<Result<SignedInAs, SignInError>> {
   // signInWithPassword replaces any session this browser already holds, so a
   // second login never sits on top of the first.
-  const signedIn = await passwordSignIn(supabase, email, password)
+  const signedIn = await passwordSignIn(supabase, email, password, captchaToken)
   if (!signedIn.ok) return signedIn
 
   const refused = async (error: SignInError): Promise<Result<SignedInAs, SignInError>> => {

@@ -20,6 +20,12 @@ function required(name: string) {
 
 const options = { auth: { persistSession: false, autoRefreshToken: false } }
 
+// Local Supabase runs CAPTCHA protection with Cloudflare's always-pass test
+// secret (supabase/config.toml, #268), so a publishable-key call to /token
+// (password), /signup, /recover, /otp, /magiclink or /resend needs a token.
+// This is Cloudflare's dummy token, which that secret accepts.
+export const TEST_CAPTCHA_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"
+
 export function anonClient(): SupabaseClient {
   return createClient(required("NEXT_PUBLIC_SUPABASE_URL"), required("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"), options)
 }
@@ -30,7 +36,11 @@ export function secretClient(): SupabaseClient {
 
 export async function signedIn(person: { email: string; password: string }): Promise<SupabaseClient> {
   const client = anonClient()
-  const { error } = await client.auth.signInWithPassword({ email: person.email, password: person.password })
+  const { error } = await client.auth.signInWithPassword({
+    email: person.email,
+    password: person.password,
+    options: { captchaToken: TEST_CAPTCHA_TOKEN },
+  })
   if (error) throw new Error(`Could not sign in ${person.email}: ${error.message}`)
   return client
 }

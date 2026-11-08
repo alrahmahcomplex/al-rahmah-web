@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- The sign-in page now runs a short security check before it lets anyone in. If you press
+  Ingia before the check finishes, the page asks you to wait a moment. If the check fails,
+  it says so and gives you a fresh one; it never says your password is wrong when it isn't.
+
 ## November 8, 2026 `v0.91.0`
 
 ### IMPROVED

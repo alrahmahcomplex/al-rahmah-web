@@ -9,7 +9,9 @@ import type { Result } from "./result"
 // adds its own check on top: staff-auth.ts that the login belongs to an
 // active staff member, agent-auth.ts that it belongs to a switched-on agent.
 
-export type SignInFailure = "invalid-credentials" | "rate-limited" | "banned" | "unavailable"
+// "check-pending": no Turnstile token yet, so nothing went to Supabase.
+// "check-failed": Supabase's CAPTCHA protection refused the token (#268).
+export type SignInFailure = "invalid-credentials" | "rate-limited" | "banned" | "check-pending" | "check-failed" | "unavailable"
 
 // Auth errors that mean "these credentials will not do", as opposed to a
 // service problem. Anything else is reported as an outage, so nobody is told
@@ -18,17 +20,24 @@ const CREDENTIAL_ERROR_CODES = new Set(["invalid_credentials", "email_not_confir
 
 export function classifySignInError(error: { code?: string; status?: number }): SignInFailure {
   if (error.code === "user_banned") return "banned"
+  if (error.code === "captcha_failed") return "check-failed"
   if (error.status === 429 || error.code === "over_request_rate_limit") return "rate-limited"
   if (error.code && CREDENTIAL_ERROR_CODES.has(error.code)) return "invalid-credentials"
   return "unavailable"
 }
 
+// With CAPTCHA protection on (#268), Supabase wants a Turnstile token on every
+// password sign-in. It checks the token itself, so nothing here checks it
+// first: Cloudflare accepts a token only once. Without a token, nothing is
+// sent.
 export async function passwordSignIn(
   supabase: SupabaseClient,
   email: string,
   password: string,
+  captchaToken: string,
 ): Promise<Result<null, SignInFailure>> {
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  if (!captchaToken) return { ok: false, error: "check-pending" }
+  const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } })
   if (!error) return { ok: true, data: null }
   const failure = classifySignInError(error as { code?: string; status?: number })
   if (failure === "unavailable") console.error("Sign-in failed", error)

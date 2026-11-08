@@ -202,11 +202,48 @@ describe("Send reset link", () => {
     expect(await resetEvents(member.id)).toEqual([
       { actor_staff_id: MANAGER.id, new_values: { staff_member_id: member.id, email: member.email }, scope: "staff_admin" },
     ])
+    // Counted for the hourly budget under a marker, never against the
+    // person's own per-email allowance.
     const counted = await inRolledBackTransaction(async (sql) => {
-      const { rows } = await sql.query("select 1 from public.agent_link_requests where email_hash = $1", [hashOf(member.email)])
-      return rows.length
+      const marker = createHash("sha256").update(`manager-reset:${member.id}`).digest("hex")
+      const byMarker = await sql.query("select 1 from public.agent_link_requests where email_hash = $1", [marker])
+      const byEmail = await sql.query("select 1 from public.agent_link_requests where email_hash = $1", [hashOf(member.email)])
+      return [byMarker.rows.length, byEmail.rows.length]
     })
-    expect(counted).toBe(1)
+    expect(counted).toEqual([1, 0])
+  })
+
+  test("a second send within a minute is refused, and nothing more is sent or recorded", async () => {
+    const member = await joinedStaff()
+    const manager = await signedIn(MANAGER)
+    expect((await sendResetLink(manager, sender(), member.id, 1_000_000, RESET_URL)).ok).toBe(true)
+    const send = sender()
+    expect(await sendResetLink(manager, send, member.id, 1_000_000, RESET_URL)).toEqual({
+      ok: false,
+      error: {
+        code: "reset_too_soon",
+        message: `A reset link went to ${member.name} less than a minute ago. Wait a minute before sending another.`,
+      },
+    })
+    expect(send).not.toHaveBeenCalled()
+    expect(await resetEvents(member.id)).toHaveLength(1)
+  })
+
+  test("a budget passed straight to the database is capped at Supabase's hourly email limit (50)", async () => {
+    const member = await joinedStaff()
+    await inRolledBackTransaction(async (sql) => {
+      await lockExclusively(sql, ["public.agent_link_requests"])
+      await sql.query("delete from public.agent_link_requests where requested_at < now() - interval '1 hour'")
+      const { rows } = await sql.query<{ n: number }>("select count(*)::int as n from public.agent_link_requests")
+      await sql.query(
+        "insert into public.agent_link_requests (email_hash) select encode(sha256(convert_to('cap-' || g, 'UTF8')), 'hex') from generate_series(1, $1::int) g",
+        [Math.max(0, 50 - rows[0].n)],
+      )
+      const { rows: manager } = await sql.query<{ user_id: string }>("select user_id from public.staff_members where id = $1", [MANAGER.id])
+      await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: manager[0].user_id, role: "authenticated" })])
+      await sql.query("set local role authenticated")
+      await expect(sql.query("select public.prepare_staff_reset($1, 1000000)", [member.id])).rejects.toThrow("reset_rate_limited")
+    })
   })
 
   test("the Super Admin sends to anyone, outside every Manager's set too", async () => {
@@ -263,8 +300,10 @@ describe("Send reset link", () => {
       error: expect.objectContaining({ code: "reset_rate_limited" }),
     })
 
+    // Someone else: a second send to the same person within a minute is refused first.
+    const other = await joinedStaff()
     const broken = vi.fn<SendInvite>(async () => ({ error: { message: "SMTP down", status: 500, code: "unexpected_failure" } }))
-    expect(await sendResetLink(manager, broken, member.id, 1_000_000, RESET_URL)).toEqual({
+    expect(await sendResetLink(manager, broken, other.id, 1_000_000, RESET_URL)).toEqual({
       ok: false,
       error: { code: "reset_not_sent", message: "The reset email could not be sent." },
     })

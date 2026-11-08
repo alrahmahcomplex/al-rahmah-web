@@ -41,6 +41,7 @@ export type RefusalCode =
   | "invite_not_sent"
   | "reset_deactivated"
   | "reset_not_joined"
+  | "reset_too_soon"
   | "reset_rate_limited"
   | "reset_not_sent"
   | "unavailable"
@@ -88,6 +89,7 @@ const MESSAGES: Record<RefusalCode, (names: RefusalNames) => string> = {
   invite_not_sent: () => "The invite email could not be sent.",
   reset_deactivated: ({ name }) => `${name} is deactivated. Reactivate them before sending a reset link.`,
   reset_not_joined: ({ name }) => `${name} hasn't joined yet. Use Resend invite instead.`,
+  reset_too_soon: ({ name }) => `A reset link went to ${name} less than a minute ago. Wait a minute before sending another.`,
   // The database's hourly budget, or Supabase's own email limit.
   reset_rate_limited: () => "Too many emails have gone out in the last hour. Try sending the reset link later.",
   reset_not_sent: () => "The reset email could not be sent.",
@@ -541,7 +543,7 @@ export function describeAuditRow(row: AuditRow, lookup: HistoryLookup): HistoryE
   } else if (row.action === "insert") summary = isStaff ? `added ${subject} to staff` : isRole ? `created the role ${subject}` : `added a ${row.table_name} row`
   else if (row.action === "update") summary = isRole ? `changed the role ${subject}` : isStaff ? `changed ${subject}` : `changed a ${row.table_name} row`
   else if (row.action === "invite_sent") summary = invitee ? `sent an invite to ${invitee}` : "sent an invite"
-  else if (row.action === "password_reset_sent") summary = invitee ? `sent a password reset link to ${invitee}` : "sent a password reset link"
+  else if (row.action === "password_reset_sent") summary = invitee ? `asked for a password reset link for ${invitee}` : "asked for a password reset link"
   else if (row.action === "hosted_reset") summary = "reset the database before launch"
   else if (row.action === "roles_became_templates") summary = "turned the seeded roles into templates"
   else summary = row.action

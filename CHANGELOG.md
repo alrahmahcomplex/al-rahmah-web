@@ -14,7 +14,7 @@ stay in the `0.x` range.
   password gets a fresh invite there instead. Everyone sees the same reply, whether or
   not an email was sent.
 - Staff and roles has a "Send reset link" button for anyone you manage who has already
-  joined. Each send shows in the history as "sent a password reset link to …".
+  joined. Each send shows in the history as "asked for a password reset link for …".
 
 ### IMPROVED
 

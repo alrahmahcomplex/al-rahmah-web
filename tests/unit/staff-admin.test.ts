@@ -373,7 +373,7 @@ describe("describeAuditRow", () => {
         lookup,
       ),
     ).toMatchObject({
-      summary: "sent a password reset link to Baraka Said",
+      summary: "asked for a password reset link for Baraka Said",
       changes: [{ field: "email", from: null, to: "baraka@example.test" }],
     })
   })

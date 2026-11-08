@@ -178,9 +178,17 @@ grant execute on function public.request_password_link(text, integer, integer) t
 -- - forbidden: outside the caller's Managed set;
 -- - reset_deactivated, reset_not_joined: deactivated, or still Invited
 --   (they keep Resend invite);
+-- - reset_too_soon: a Manager sent this person one less than a minute ago
+--   (Supabase would refuse the email anyway);
 -- - reset_rate_limited: the hourly budget is used up.
 -- The email goes out from the server with the secret key after this
 -- returns. Calling this alone sends nothing.
+--
+-- The budget comes from the server's setting, but a caller could pass any
+-- number, so it is capped at Supabase's own hourly email limit (50). A
+-- Manager's send is counted under a marker for the staff member, not their
+-- email's hash, so it uses the hourly budget but never the person's own
+-- per-email allowance on the public page.
 create function public.prepare_staff_reset(staff_id uuid, hourly_budget integer)
 returns jsonb
 language plpgsql
@@ -189,6 +197,7 @@ set search_path = ''
 as $$
 declare
     target public.staff_members;
+    marker text;
 begin
     perform public.require_staff_administrator();
     if hourly_budget is null or hourly_budget < 0 then
@@ -208,11 +217,17 @@ begin
     end if;
 
     delete from public.agent_link_requests r where r.requested_at < now() - interval '1 hour';
-    if (select count(*) from public.agent_link_requests) >= hourly_budget then
+    marker := encode(sha256(convert_to('manager-reset:' || target.id::text, 'UTF8')), 'hex');
+    if exists (
+        select 1 from public.agent_link_requests r
+        where r.email_hash = marker and r.requested_at > now() - interval '60 seconds'
+    ) then
+        raise exception 'reset_too_soon' using detail = jsonb_build_object('name', target.full_name)::text;
+    end if;
+    if (select count(*) from public.agent_link_requests) >= least(hourly_budget, 50) then
         raise exception 'reset_rate_limited';
     end if;
-    insert into public.agent_link_requests (email_hash)
-    values (encode(sha256(convert_to(target.email, 'UTF8')), 'hex'));
+    insert into public.agent_link_requests (email_hash) values (marker);
 
     perform public.record_action(
         'password_reset_sent', null,

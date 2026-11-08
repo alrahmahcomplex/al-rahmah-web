@@ -96,7 +96,8 @@ export function DiscountCodeForm({
     // Turnstile fills its token in a moment after the page opens; sending
     // before then would only be refused.
     if (!data.get("cf-turnstile-response")) {
-      setNotice("check-pending")
+      // A check that needs a click says so itself, next to Send.
+      setNotice(turnstile.current?.reveal() ? null : "check-pending")
       return
     }
     data.set("full_name", draft.fullName)
@@ -219,10 +220,11 @@ export function DiscountCodeForm({
               />
             </div>
           </div>
-          <div>
-            <TurnstileWidget ref={turnstile} action="agent" language={language} />
-          </div>
         </div>
+
+        {/* Inside the form, so its token is sent; invisible unless Cloudflare
+            needs a click, and then right above Send. */}
+        <TurnstileWidget ref={turnstile} action="agent" language={language} className="mt-5" />
 
         {notice && (
           <div

@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const jar = vi.hoisted(() => ({ values: new Map<string, string>() }))
-const stubs = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), reset: vi.fn(), refresh: vi.fn(), token: "fake-token" }))
+const stubs = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), refresh: vi.fn(), token: "fake-token" }))
 
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 vi.mock("next/headers", () => ({
@@ -24,7 +24,7 @@ vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: stubs.refresh }) }))
 vi.mock("@/components/turnstile-widget", () => ({
   TurnstileWidget: forwardRef(function FakeTurnstile(_: unknown, ref) {
-    useImperativeHandle(ref, () => ({ reset: stubs.reset }))
+    useImperativeHandle(ref, () => ({ reset: stubs.reset, reveal: stubs.reveal }))
     return <input type="hidden" name="cf-turnstile-response" value={stubs.token} readOnly />
   }),
 }))
@@ -43,6 +43,7 @@ beforeEach(() => {
   stubs.submit.mockReset()
   stubs.check.mockReset()
   stubs.reset.mockReset()
+  stubs.reveal.mockReset().mockReturnValue(false)
   stubs.refresh.mockReset()
   stubs.token = "fake-token"
 })
@@ -208,6 +209,27 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Send application" }))
     expect(screen.getByRole("alert")).toHaveTextContent("Wait a moment for the security check to finish")
     expect(stubs.submit).not.toHaveBeenCalled()
+  })
+
+  it("leaves the words to a security check that needs a click", async () => {
+    stubs.token = ""
+    stubs.reveal.mockReturnValue(true)
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user)
+
+    await user.click(screen.getByRole("button", { name: "Send application" }))
+    expect(stubs.reveal).toHaveBeenCalled()
+    expect(screen.queryByText(/Wait a moment for the security check/)).toBeNull()
+    expect(stubs.submit).not.toHaveBeenCalled()
+  })
+
+  it("says on the review step that nothing is paid on the form", async () => {
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="sw" years={years} officePhone="+255 700 000 001" />)
+    await fillParentAndChild(user, "sw")
+
+    expect(screen.getByText("Hulipi chochote kwenye fomu hii.")).toBeInTheDocument()
   })
 
   it("sends the parent back to the phone when the database can't read it", async () => {

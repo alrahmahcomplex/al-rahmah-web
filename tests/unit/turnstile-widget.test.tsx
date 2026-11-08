@@ -1,4 +1,4 @@
-import { act, render, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import { createRef } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -6,7 +6,12 @@ import type { TurnstileWidgetHandle } from "@/components/turnstile-widget"
 
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
 
-type RenderOptions = Record<string, unknown> & { "expired-callback"?: () => void }
+type RenderOptions = Record<string, unknown> & {
+  callback?: () => void
+  "before-interactive-callback"?: () => void
+  "error-callback"?: () => boolean
+  "expired-callback"?: () => void
+}
 
 function fakeTurnstile() {
   return {
@@ -41,23 +46,88 @@ function lastOptions() {
 }
 
 describe("TurnstileWidget", () => {
-  it("renders a managed, flexible widget for the form's action", async () => {
+  it("renders a managed widget that shows only when Cloudflare needs a click", async () => {
     const TurnstileWidget = await loadWidget()
-    const { container } = render(<TurnstileWidget action="admission" language="en" />)
+    render(<TurnstileWidget action="admission" language="en" />)
 
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
-    expect(turnstile.render.mock.calls[0][0]).toBe(container.firstChild)
     expect(lastOptions()).toMatchObject({
       sitekey: "1x00000000000000000000AA",
       action: "admission",
-      size: "flexible",
       theme: "auto",
+      appearance: "interaction-only",
       language: "en",
     })
     // Managed mode is the widget's own setting in Cloudflare; the page never
-    // asks for execute-on-demand or a hidden widget.
+    // asks for execute-on-demand.
     expect(lastOptions()).not.toHaveProperty("execution")
-    expect(lastOptions()).not.toHaveProperty("appearance")
+  })
+
+  it("uses the compact size where flexible's 300px minimum would overflow", async () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(261)
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="agent-link" language="en" />)
+
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    expect(lastOptions().size).toBe("compact")
+  })
+
+  it("fills a container at least 300px wide", async () => {
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(340)
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="en" />)
+
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+    expect(lastOptions().size).toBe("flexible")
+  })
+
+  it("says in words when the check needs a click, and brings it into view on send", async () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    const TurnstileWidget = await loadWidget()
+    const widget = createRef<TurnstileWidgetHandle>()
+    render(<TurnstileWidget ref={widget} action="admission" language="sw" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+
+    // Nothing to show while Cloudflare passes the visitor on its own.
+    expect(widget.current!.reveal()).toBe(false)
+    expect(scroll).not.toHaveBeenCalled()
+
+    act(() => lastOptions()["before-interactive-callback"]!())
+    const message = screen.getByText("Weka alama kwenye ukaguzi wa usalama hapa chini, kisha utume.")
+    expect(message).toHaveAttribute("aria-live", "polite")
+
+    let revealed = false
+    act(() => {
+      revealed = widget.current!.reveal()
+    })
+    expect(revealed).toBe(true)
+    expect(scroll).toHaveBeenCalled()
+    expect(message).toHaveFocus()
+
+    // A token clears the message.
+    act(() => lastOptions().callback!())
+    expect(screen.queryByText("Weka alama kwenye ukaguzi wa usalama hapa chini, kisha utume.")).toBeNull()
+    expect(widget.current!.reveal()).toBe(false)
+  })
+
+  it("reads out a check that fails to load", async () => {
+    const TurnstileWidget = await loadWidget()
+    const widget = createRef<TurnstileWidgetHandle>()
+    render(<TurnstileWidget ref={widget} action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+
+    let handled = false
+    act(() => {
+      handled = lastOptions()["error-callback"]!()
+    })
+
+    expect(handled).toBe(true)
+    expect(screen.getByText("The security check couldn't load. Reload the page and try again.")).toHaveAttribute(
+      "aria-live",
+      "assertive",
+    )
+    expect(widget.current!.reveal()).toBe(true)
   })
 
   it("falls back to the visitor's browser language for Swahili, which Turnstile doesn't offer", async () => {

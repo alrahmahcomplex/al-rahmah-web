@@ -1,12 +1,17 @@
 "use client"
 
-import { useEffect, useImperativeHandle, useRef, type Ref } from "react"
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react"
+
+import type { Language } from "@/lib/language"
+import { cn } from "@/lib/utils"
 
 // Cloudflare Turnstile's check on a public form, rendered explicitly so it can
 // mount on a later step (#9). Inside a <form> it adds the hidden
 // `cf-turnstile-response` field that the Server Action passes to
-// `verifyTurnstile`. Only the public site key is used here; the secret stays
-// in lib/turnstile.ts on the server.
+// `verifyTurnstile`, so keep it inside the form. It stays invisible unless
+// Cloudflare needs the person to click; put it just above the send button so
+// that rare box sits where the person is looking. Only the public site key is
+// used here; the secret stays in lib/turnstile.ts on the server.
 
 // Loaded straight from Cloudflare: proxying or caching it breaks Turnstile
 // when Cloudflare updates it.
@@ -23,9 +28,14 @@ const WIDGET_LANGUAGES = new Set(
 type RenderOptions = {
   sitekey: string
   action: string
-  size: "flexible"
+  size: "flexible" | "compact"
   theme: "auto"
+  appearance: "interaction-only"
   language: string
+  callback: () => void
+  "before-interactive-callback": () => void
+  "error-callback": () => boolean
+  "unsupported-callback": () => void
   "expired-callback": () => void
   "timeout-callback": () => void
 }
@@ -40,6 +50,21 @@ declare global {
   interface Window {
     turnstile?: Turnstile
   }
+}
+
+// Turnstile's flexible size is never narrower than this; below it the
+// compact size (150px wide) fits instead.
+const FLEXIBLE_MIN_WIDTH = 300
+
+const COPY: Record<Language, Record<"needsClick" | "failed", string>> = {
+  sw: {
+    needsClick: "Weka alama kwenye ukaguzi wa usalama hapa chini, kisha utume.",
+    failed: "Ukaguzi wa usalama haukuweza kufunguka. Pakia ukurasa upya kisha ujaribu tena.",
+  },
+  en: {
+    needsClick: "Tick the security check below, then send.",
+    failed: "The security check couldn't load. Reload the page and try again.",
+  },
 }
 
 let loading: Promise<Turnstile> | null = null
@@ -70,26 +95,50 @@ export type TurnstileWidgetHandle = {
   // Gets a fresh token. Call it after any server answer that isn't a
   // confirmation: a token is spent once Cloudflare has checked it.
   reset(): void
+  // Call it when the form is sent without a token. When the check needs the
+  // person (or failed to load), scrolls it into view, moves focus to its
+  // message and returns true, so the form can skip its own "wait" notice.
+  reveal(): boolean
 }
+
+type CheckState = "hidden" | "needsClick" | "failed"
 
 export function TurnstileWidget({
   action,
   language,
+  className,
   ref,
 }: {
   // Per form, and checked on the server: "admission", "agent".
   action: string
-  // The page language, such as "sw" or "en".
-  language: string
+  // The page language.
+  language: Language
+  // Spacing around the check, used only while it shows.
+  className?: string
   ref?: Ref<TurnstileWidgetHandle>
 }) {
+  const wrapper = useRef<HTMLDivElement>(null)
   const container = useRef<HTMLDivElement>(null)
+  const message = useRef<HTMLParagraphElement>(null)
   const widget = useRef<{ turnstile: Turnstile; id: string } | null>(null)
+  const [state, setState] = useState<CheckState>("hidden")
+  const stateRef = useRef<CheckState>("hidden")
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+
+  function show(next: CheckState) {
+    stateRef.current = next
+    setState(next)
+  }
 
   useImperativeHandle(ref, () => ({
     reset() {
       if (widget.current) widget.current.turnstile.reset(widget.current.id)
+    },
+    reveal() {
+      if (stateRef.current === "hidden") return false
+      wrapper.current?.scrollIntoView({ block: "center", behavior: "smooth" })
+      message.current?.focus({ preventScroll: true })
+      return true
     },
   }))
 
@@ -108,15 +157,31 @@ export function TurnstileWidget({
         const id = turnstile.render(container.current, {
           sitekey: siteKey,
           action,
-          size: "flexible",
+          // The sign-in card is narrower than flexible's minimum.
+          size: container.current.clientWidth < FLEXIBLE_MIN_WIDTH ? "compact" : "flexible",
           theme: "auto",
+          // Invisible unless Cloudflare needs the person to click: a
+          // box near the fee read like a payment confirmation.
+          appearance: "interaction-only",
           language: WIDGET_LANGUAGES.has(language) ? language : "auto",
+          callback: () => show("hidden"),
+          "before-interactive-callback": () => show("needsClick"),
+          // Returning true tells Turnstile the error is handled; it still
+          // retries on its own, and a later success clears the message.
+          "error-callback": () => {
+            show("failed")
+            return true
+          },
+          "unsupported-callback": () => show("failed"),
           "expired-callback": reset,
           "timeout-callback": reset,
         })
         if (id) widget.current = { turnstile, id }
       })
-      .catch((error: unknown) => console.error(error))
+      .catch((error: unknown) => {
+        console.error(error)
+        if (!cancelled) show("failed")
+      })
 
     return () => {
       cancelled = true
@@ -127,7 +192,20 @@ export function TurnstileWidget({
     }
   }, [siteKey, action, language])
 
-  // Turnstile's flexible size is the container's full width and 65px tall;
-  // reserving the height stops the page jumping when it appears.
-  return <div ref={container} className="min-h-[65px] w-full" />
+  const text = state === "hidden" ? "" : COPY[language][state]
+
+  // The live region is always there, so a message added later is read out.
+  return (
+    <div ref={wrapper} className={cn("flex w-full flex-col items-center gap-2", state !== "hidden" && className)}>
+      <p
+        ref={message}
+        tabIndex={-1}
+        aria-live={state === "failed" ? "assertive" : "polite"}
+        className={cn("text-center text-sm outline-none", state === "failed" ? "text-red-700" : "text-slate-700", !text && "sr-only")}
+      >
+        {text}
+      </p>
+      <div ref={container} data-turnstile-box className="flex w-full justify-center" />
+    </div>
+  )
 }

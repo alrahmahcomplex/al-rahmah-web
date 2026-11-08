@@ -237,8 +237,9 @@ web3 = 30
 # Turnstile token on password sign-in, /signup, /recover, /resend, /otp and
 # /magiclink. This is Cloudflare's public always-pass test secret, paired with
 # the test site key in .env.example and playwright.config.ts. The real secret
-# lives only in the hosted dashboard (docs/agents/hosted-services.md); never
-# put it here.
+# is the production widget's, the same one Vercel holds as TURNSTILE_SECRET_KEY,
+# pasted into the hosted dashboard (docs/agents/hosted-services.md). Never put
+# it here.
 [auth.captcha]
 enabled = true
 provider = "turnstile"

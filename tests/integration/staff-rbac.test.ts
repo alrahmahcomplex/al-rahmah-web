@@ -247,7 +247,7 @@ describe("accounts", () => {
       options: { captchaToken: TEST_CAPTCHA_TOKEN },
     })
 
-    expect(error).not.toBeNull()
+    expect(error?.code).toBe("signup_disabled")
     expect(data.user).toBeNull()
   })
 

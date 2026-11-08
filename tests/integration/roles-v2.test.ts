@@ -465,6 +465,8 @@ describe("an invite never names someone outside the caller's managed set", () =>
     await manager.connect()
     try {
       // The Accountant's record is written and not yet committed...
+      const firstPid = (await first.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0].pid
+      const managerPid = (await manager.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0].pid
       await first.query("begin")
       await first.query("select public.set_audit_actor('system')")
       await first.query("insert into public.staff_members (full_name, email, role_id) values ('Racing Accountant', $1, $2)", [
@@ -472,7 +474,8 @@ describe("an invite never names someone outside the caller's managed set", () =>
         ROLE.accountant,
       ])
 
-      // ...so the Manager's invite finds nobody, then waits on the unique email.
+      // ...so the Manager's invite finds nobody, then waits on the first
+      // transaction's login-email lock, and its insert then hits the unique email.
       await manager.query("set statement_timeout = '15s'")
       await manager.query("begin")
       await manager.query("select set_config('request.jwt.claims', $1, true)", [
@@ -484,16 +487,15 @@ describe("an invite never names someone outside the caller's managed set", () =>
           () => null,
           (error: { message: string; detail?: string }) => error,
         )
-      // Wait until the invite is blocked on the uncommitted record, so it is
-      // the unique index, not the first lookup, that refuses it.
+      // Wait until the invite is blocked by the first transaction itself, so
+      // it is the unique index, not the first lookup, that refuses it. A lock
+      // wait on anything else does not count.
       await expect
         .poll(async () =>
           inRolledBackTransaction(async (sql) =>
             (
-              await sql.query<{ waiting: boolean }>(
-                "select exists (select 1 from pg_stat_activity where pid <> pg_backend_pid() and query like '%Racing Invitee%' and wait_event_type = 'Lock') as waiting",
-              )
-            ).rows[0].waiting,
+              await sql.query<{ blocked: boolean }>("select $1::int = any (pg_blocking_pids($2::int)) as blocked", [firstPid, managerPid])
+            ).rows[0].blocked,
           ),
         )
         .toBe(true)

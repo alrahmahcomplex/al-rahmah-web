@@ -123,14 +123,23 @@ test.describe("when Record visit is offered", () => {
     await expect(detail(page, "Visit date")).toHaveText(formatDate(dayBefore(today, 2)))
   })
 
-  test("cancelling records nothing", async ({ page }) => {
+  test("cancelling records nothing, and focus goes from the button to the Visit date and back", async ({ page }) => {
     const lead = await appliedLead()
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/leads/${lead.id}`)
 
-    await page.getByRole("button", { name: "Record visit" }).click()
-    await page.getByRole("button", { name: "Cancel" }).click()
-    await expect(page.getByRole("form", { name: "Record visit" })).toHaveCount(0)
+    // Opened from the keyboard, as a keyboard or screen-reader user would.
+    const card = page.getByRole("region", { name: "Next step" })
+    await card.getByRole("button", { name: "Record visit" }).focus()
+    await page.keyboard.press("Enter")
+    const form = page.getByRole("form", { name: "Record visit" })
+    await expect(form.getByLabel("Visit date")).toBeFocused()
+
+    await form.getByRole("button", { name: "Cancel" }).click()
+    await expect(form).toHaveCount(0)
+    const recordVisit = card.getByRole("button", { name: "Record visit" })
+    await expect(recordVisit).toBeFocused()
+    await expect(recordVisit).toHaveClass(/bg-orange-500/)
     await page.reload()
     await expect(detail(page, "Status")).toHaveText("Applied")
   })
@@ -178,6 +187,28 @@ test.describe("when Record visit is offered", () => {
     // The follow-up is still the step, and the visit is no longer offered.
     await expect(card.getByRole("heading", { name: "Next step: Record today's follow-up" })).toBeVisible()
     await expect(card.getByRole("button", { name: "Record visit" })).toHaveCount(0)
+  })
+
+  test("cancelling from the secondary Record visit button hands focus back to it", async ({ page }) => {
+    const lead = await appliedLead()
+    await asSystem((sql) =>
+      sql.query("insert into public.follow_ups (lead_id, due_on) values ($1, $2)", [lead.id, today]),
+    )
+    await signIn(page, ADMISSIONS)
+    await page.goto(`/staff/leads/${lead.id}`)
+
+    const card = page.getByRole("region", { name: "Next step" })
+    const recordVisit = card.getByRole("button", { name: "Record visit" })
+    await expect(recordVisit).not.toHaveClass(/bg-orange-500/)
+    await recordVisit.focus()
+    await page.keyboard.press("Enter")
+    const form = page.getByRole("form", { name: "Record visit" })
+    await expect(form.getByLabel("Visit date")).toBeFocused()
+
+    await form.getByRole("button", { name: "Cancel" }).click()
+    await expect(form).toHaveCount(0)
+    await expect(recordVisit).toBeFocused()
+    await expect(recordVisit).not.toHaveClass(/bg-orange-500/)
   })
 
   test("the Accountant, who may not record visits, is not offered it", async ({ page }) => {

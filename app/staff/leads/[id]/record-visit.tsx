@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -20,12 +20,18 @@ import { Field, Refusal, Saved, useCorrection } from "./lead-editors"
 // orange button. It is "secondary" when the lead is still Applied but the
 // step is something else, such as a follow-up that is due: the visit can
 // still be recorded, from an outline button beside the step's own action.
+//
+// Opening the form moves focus to its Visit date, and Cancel hands focus
+// back to the Record visit button that opened it (#254), so keyboard and
+// screen-reader users keep their place.
 export function RecordVisit({ leadId, offer }: { leadId: string; offer: "step" | "secondary" | null }) {
   // Today in Tanzania while the form is open, else null.
   const [recording, setRecording] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   const [unopened, setUnopened] = useState(false)
   const [opening, startOpening] = useTransition()
+  // Set by Cancel, so the button takes focus again as it comes back.
+  const refocus = useRef(false)
 
   function open() {
     setSaved(null)
@@ -45,6 +51,8 @@ export function RecordVisit({ leadId, offer }: { leadId: string; offer: "step" |
         leadId={leadId}
         today={recording}
         onDone={(message) => {
+          // Only when a button comes back to take it.
+          refocus.current = message === null && offer !== null
           setRecording(null)
           setSaved(message)
         }}
@@ -63,6 +71,12 @@ export function RecordVisit({ leadId, offer }: { leadId: string; offer: "step" |
         className="h-10 px-4"
         onClick={open}
         disabled={opening}
+        ref={(button) => {
+          if (button && refocus.current) {
+            refocus.current = false
+            button.focus()
+          }
+        }}
       >
         {opening ? "Opening…" : "Record visit"}
       </Button>
@@ -85,6 +99,8 @@ function RecordVisitForm({
   onDone: (saved: string | null) => void
 }) {
   const [visitDate, setVisitDate] = useState(today)
+  const visitDateRef = useRef<HTMLInputElement>(null)
+  useEffect(() => visitDateRef.current?.focus(), [])
   const { refusal, pending, save } = useCorrection(() => onDone("Visit recorded. The lead is now Visited."))
 
   return (
@@ -100,6 +116,7 @@ function RecordVisitForm({
       <Field label="Visit date" hint="The day the family came to campus: today or earlier.">
         {({ id, describedBy }) => (
           <Input
+            ref={visitDateRef}
             id={id}
             type="date"
             required

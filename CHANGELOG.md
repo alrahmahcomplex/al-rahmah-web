@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 8, 2026 `v0.87.3`
+
+### FIXED
+
+- Opening Record visit on a lead's Next step card puts the cursor in the Visit date,
+  and Cancel puts it back on the Record visit button, so keyboard and screen-reader
+  users keep their place.
+
 ## November 8, 2026 `v0.87.2`
 
 ### FIXED

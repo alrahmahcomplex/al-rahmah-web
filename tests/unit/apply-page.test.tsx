@@ -37,6 +37,9 @@ const years = admissionYears()
 
 beforeEach(() => {
   jar.values.clear()
+  // Each test opens a fresh tab: no draft, and no step in the URL.
+  window.sessionStorage.clear()
+  window.history.replaceState(null, "", "/apply")
   stubs.submit.mockReset()
   stubs.check.mockReset()
   stubs.reset.mockReset()
@@ -451,6 +454,9 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
       await screen.findByText(language === "en" ? /waiting to be confirmed/ : /inasubiri kuthibitishwa/)
       expect(container.textContent).not.toMatch(/wakala|agent|referral|approv|idhini|Jumamosi|Saturday|kumbukumbu|records/i)
       unmount()
+      // The next language starts in a fresh tab, not this one's draft.
+      window.sessionStorage.clear()
+      window.history.replaceState(null, "", "/apply")
     }
   })
 })

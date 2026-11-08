@@ -47,31 +47,48 @@ export function childNameKey(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLowerCase()
 }
 
-export function parentProblem(parent: AdmissionParent): FieldProblem | null {
-  if (!parent.fullName.trim()) return { field: "contact_name", child: null }
-  if (!(RELATIONSHIPS as readonly string[]).includes(parent.relationship)) return { field: "relationship", child: null }
-  if (parent.relationship === "Other" && !parent.relationshipDescription?.trim()) {
-    return { field: "relationship_description", child: null }
+// Every problem with the parent's details, in the order the fields show, so
+// the page can name them all at once. The server names only the first.
+export function parentProblems(parent: AdmissionParent): FieldProblem[] {
+  const problems: FieldProblem[] = []
+  if (!parent.fullName.trim()) problems.push({ field: "contact_name", child: null })
+  if (!(RELATIONSHIPS as readonly string[]).includes(parent.relationship)) {
+    problems.push({ field: "relationship", child: null })
+  } else if (parent.relationship === "Other" && !parent.relationshipDescription?.trim()) {
+    problems.push({ field: "relationship_description", child: null })
   }
-  if (!parent.phone.trim()) return { field: "phone", child: null }
-  return null
+  if (!parent.phone.trim()) problems.push({ field: "phone", child: null })
+  return problems
+}
+
+export function parentProblem(parent: AdmissionParent): FieldProblem | null {
+  return parentProblems(parent)[0] ?? null
+}
+
+// Every problem across the child cards, card by card and field by field.
+// A child whose name repeats an earlier card's is a problem on the later card.
+export function childrenProblems(children: AdmissionChild[], years: readonly number[]): FieldProblem[] {
+  if (children.length < 1 || children.length > MAX_CHILDREN) return [{ field: "children", child: null }]
+  const problems: FieldProblem[] = []
+  const seen = new Set<string>()
+  for (const [index, child] of children.entries()) {
+    const named = child.fullName.trim() !== ""
+    if (!named) problems.push({ field: "student_name", child: index })
+    if (!(LEAD_CLASSES as readonly string[]).includes(child.className)) problems.push({ field: "class_name", child: index })
+    if (!years.includes(child.enrollmentYear)) problems.push({ field: "enrollment_year", child: index })
+    if (!(DAY_OR_BOARDING as readonly string[]).includes(child.dayOrBoarding)) {
+      problems.push({ field: "day_or_boarding", child: index })
+    }
+    if (!named) continue
+    const key = childNameKey(child.fullName)
+    if (seen.has(key)) problems.push({ field: "duplicate_child", child: index })
+    seen.add(key)
+  }
+  return problems
 }
 
 export function childrenProblem(children: AdmissionChild[], years: readonly number[]): FieldProblem | null {
-  if (children.length < 1 || children.length > MAX_CHILDREN) return { field: "children", child: null }
-  const seen = new Set<string>()
-  for (const [index, child] of children.entries()) {
-    if (!child.fullName.trim()) return { field: "student_name", child: index }
-    if (!(LEAD_CLASSES as readonly string[]).includes(child.className)) return { field: "class_name", child: index }
-    if (!years.includes(child.enrollmentYear)) return { field: "enrollment_year", child: index }
-    if (!(DAY_OR_BOARDING as readonly string[]).includes(child.dayOrBoarding)) {
-      return { field: "day_or_boarding", child: index }
-    }
-    const key = childNameKey(child.fullName)
-    if (seen.has(key)) return { field: "duplicate_child", child: index }
-    seen.add(key)
-  }
-  return null
+  return childrenProblems(children, years)[0] ?? null
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

@@ -8,6 +8,8 @@ import type { DayOrBoarding, Relationship } from "@/lib/services/leads"
 
 type Copy = {
   title: string
+  // The logo's link, named for where it goes.
+  homeLink: string
   stepOf: (step: number) => string
   steps: readonly [string, string, string]
   parentName: string
@@ -65,6 +67,7 @@ type Copy = {
 export const COPY: Record<Language, Copy> = {
   sw: {
     title: "Fomu ya Udahili",
+    homeLink: "Ukurasa wa mwanzo wa Al-Rahmah Complex",
     stepOf: (step) => `Hatua ${step} kati ya 3`,
     steps: ["Mzazi au mlezi", "Watoto", "Hakiki maombi yako"],
     parentName: "Jina kamili la mzazi au mlezi",
@@ -140,6 +143,7 @@ export const COPY: Record<Language, Copy> = {
   },
   en: {
     title: "Admission Form",
+    homeLink: "Al-Rahmah Complex home",
     stepOf: (step) => `Step ${step} of 3`,
     steps: ["Parent or guardian", "Children", "Check your application"],
     parentName: "Parent or guardian's full name",

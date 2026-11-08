@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- On the Admission form, the phone's Back button now returns to the previous step instead
+  of leaving the form, and Forward works too. A reload, or a phone browser that reloads
+  after the parent switches to WhatsApp, keeps everything typed so far. The entries stay
+  only in that browser tab and are cleared once the application is received.
+- Pressing Continue with fields missing now names every one at once, across every child,
+  and puts the parent at the first.
+- With the phone's text set very large, the form's header wraps instead of spilling
+  sideways, and each language button is easier to tap. The "Child 1" labels are darker
+  so they are easier to read, and the page tells phones and screen readers which language
+  it is in.
+
 ## November 8, 2026 `v0.87.4`
 
 ### IMPROVED

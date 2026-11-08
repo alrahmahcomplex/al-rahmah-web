@@ -45,12 +45,17 @@ export default async function ApplyPage({
       className="min-h-dvh bg-gradient-to-br from-blue-50 via-blue-100/50 to-white px-4 py-4 sm:px-8 sm:py-6"
     >
       <div className="mx-auto flex w-full max-w-[480px] flex-col gap-4">
-        <header className="flex items-center gap-3">
-          <Link href="/" className="shrink-0 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40">
-            <Image src="/Al-Rahmah_Official_Logo.svg" alt="Al-Rahmah Logo" width={44} height={44} className="size-11" priority />
-          </Link>
-          <p className="min-w-0 font-exo text-lg font-extrabold italic leading-tight text-blue-600">{COPY[language].title}</p>
-          <LanguageSwitch language={language} className="ml-auto shrink-0" />
+        {/* Wraps when there's no room, as with the phone's text made large:
+            the language switch drops to its own row instead of covering the
+            title. */}
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex min-w-0 grow basis-36 items-center gap-3">
+            <Link href="/" className="shrink-0 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40">
+              <Image src="/Al-Rahmah_Official_Logo.svg" alt={COPY[language].homeLink} width={44} height={44} className="size-11" priority />
+            </Link>
+            <p className="min-w-0 font-exo text-lg font-extrabold italic leading-tight text-blue-600">{COPY[language].title}</p>
+          </div>
+          <LanguageSwitch language={language} className="ml-auto max-w-full" />
         </header>
 
         <AdmissionFormSteps

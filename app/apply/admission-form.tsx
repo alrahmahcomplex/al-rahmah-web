@@ -312,7 +312,7 @@ export function AdmissionFormSteps({
     // The entry the browser is on now, which after the phone's Back during a
     // send is no longer the step the send started from.
     const at = stepFromUrl()
-    const unwinding = history === "replace" && next !== at && unwinds(pushedSteps.current, at, next)
+    const unwinding = history === "replace" && next < at && unwinds(pushedSteps.current, at, next)
     if (unwinding) {
       // The popstate opens the step and shows these problems.
       arriving.current = { step: next, shown, refresh }
@@ -414,7 +414,8 @@ export function AdmissionFormSteps({
   }
 
   function onSend(form: HTMLFormElement) {
-    if (sending) return
+    // Also while going back to an earlier step, until its popstate arrives.
+    if (sending || arriving.current) return
     const parentFound = parentProblems(asParent(parent))
     if (parentFound.length) return go(0, parentFound.map((shown) => ({ ...shown, server: false })))
     const childFound = childrenProblems(children.map(asChild), years)

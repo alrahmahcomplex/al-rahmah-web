@@ -95,9 +95,20 @@ export async function NextStepCard({
       )}
       {staff.permissions.includes("visits.record") && (
         // Mounted for everyone who may record visits, so its confirmation
-        // outlasts the refresh that moves the step on; it offers its button
-        // only while Record visit is the step.
-        <RecordVisit key={lead.id} leadId={lead.id} canRecord={step?.kind === "record-visit"} />
+        // outlasts the refresh that moves the step on. It offers its button
+        // as the step's own action while Record visit is the step, and as a
+        // secondary one on any other open Applied lead (#249).
+        <RecordVisit
+          key={lead.id}
+          leadId={lead.id}
+          offer={
+            step?.kind === "record-visit"
+              ? "step"
+              : lead.status === "Applied" && lead.closure === null
+                ? "secondary"
+                : null
+          }
+        />
       )}
     </section>
   )

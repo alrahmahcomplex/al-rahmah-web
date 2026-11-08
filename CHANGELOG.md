@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 8, 2026 `v0.87.2`
+
+### FIXED
+
+- Staff who record visits can record one on any open Applied lead again. When a
+  follow-up is due, the Next step stays on the follow-up and Record visit sits beside it
+  as a second button.
+
 ## November 8, 2026 `v0.87.1`
 
 ### FIXED

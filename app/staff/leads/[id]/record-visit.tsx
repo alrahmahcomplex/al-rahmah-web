@@ -15,7 +15,12 @@ import { Field, Refusal, Saved, useCorrection } from "./lead-editors"
 // whose clock is wrong, still offers the day the database accepts. Once
 // saved the lead is Visited and the screen refreshes without this offer, so
 // the confirmation stays in its place.
-export function RecordVisit({ leadId, canRecord }: { leadId: string; canRecord: boolean }) {
+//
+// `offer` is "step" when Record visit is the Next step, and gets the step's
+// orange button. It is "secondary" when the lead is still Applied but the
+// step is something else, such as a follow-up that is due: the visit can
+// still be recorded, from an outline button beside the step's own action.
+export function RecordVisit({ leadId, offer }: { leadId: string; offer: "step" | "secondary" | null }) {
   // Today in Tanzania while the form is open, else null.
   const [recording, setRecording] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
@@ -47,11 +52,18 @@ export function RecordVisit({ leadId, canRecord }: { leadId: string; canRecord: 
     )
   }
 
-  if (!canRecord) return saved ? <div className="basis-full"><Saved message={saved} /></div> : null
+  if (offer === null) return saved ? <div className="basis-full"><Saved message={saved} /></div> : null
 
   return (
     <>
-      <Button type="button" variant="orange" size="lg" className="h-10 px-4" onClick={open} disabled={opening}>
+      <Button
+        type="button"
+        variant={offer === "step" ? "orange" : "outline"}
+        size="lg"
+        className="h-10 px-4"
+        onClick={open}
+        disabled={opening}
+      >
         {opening ? "Opening…" : "Record visit"}
       </Button>
       {unopened && (

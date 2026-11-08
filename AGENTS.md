@@ -34,7 +34,7 @@ Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, V
 - Add shadcn components through its CLI into `components/ui/`.
 - `proxy.ts` matches only routes reading the staff session: `/staff`, `/login`, `/auth`. Add a route only if it needs that session, so public pages stay up when Supabase is down or misconfigured.
 - Real family/student data stays out of Git and evidence. Use seeded fixture data and the seeded test account.
-- PR evidence is uploaded through the PR's comment box in the signed-in in-app browser, never pushed to a branch or a gist ([Workflow → Attaching evidence](docs/agents/workflow.md#attaching-evidence-to-a-pr)). If that browser isn't signed in to GitHub or isn't available, ask the human to sign in and wait.
+- PR evidence is uploaded through the PR's comment box in the signed-in in-app browser, never pushed to a branch, a gist or another file host ([Workflow → Attaching evidence](docs/agents/workflow.md#attaching-evidence-to-a-pr)). If that browser isn't signed in to GitHub or isn't available, ask the human to sign in and wait.
 - Worktrees share one local Supabase and limited memory. Before database resets, integration/e2e tests, builds or evidence servers, take the shared lock described in [Parallel work](docs/agents/parallel-work.md). Confirm a reused port serves your process. Stop the database only when no other session uses it.
 - Leave other agents' branches, worktrees and uncommitted changes untouched. Release housekeeping may remove merged work only after its safety checks. Force-push only your own branch with `--force-with-lease`; regenerate conflicting lockfiles with `npm install`. Stop on a conflict you cannot resolve confidently.
 

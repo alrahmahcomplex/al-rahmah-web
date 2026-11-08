@@ -63,12 +63,12 @@ Evidence need not be duplicated across local runs and Preview. Record which envi
 Screenshots, recordings and report files (such as Lighthouse HTML and JSON) go into the PR through GitHub's own uploader, which stores them as `https://github.com/user-attachments/...` links:
 
 1. In the signed-in in-app browser, open the PR and give the files to its comment box's file input (`#fc-new_comment_field`), at most 20 per upload.
-2. Wait until every `Uploading …` placeholder has become a link. Put those links in the PR description, then clear the comment box without posting it.
-3. If uploads start failing, GitHub's upload rate limit (HTTP 429) is the usual cause. Wait for it to reset and carry on.
+2. Wait until every `Uploading …` placeholder has become a link. Put those links in the PR description, then empty the comment box and check that no comment was posted.
+3. If uploads start failing, GitHub's upload rate limit (HTTP 429) is the usual cause. Wait for it to reset and carry on. A file GitHub refuses for its size is trimmed, re-encoded (a video with `ffmpeg`, for example) or split; a file type it refuses is zipped.
 
-This is the only way to attach evidence. Never push it to a branch (no `evidence/*` branches and no screenshots committed to any branch), never use a gist or `IMAGE_ADAPTER=gist`, and never link files as `blob/...?raw=true`. Vercel builds every pushed branch, so each push to an evidence branch also fails a Preview build and emails the owner.
+This is the only way to attach evidence. Never push it to a branch (no `evidence/*` branches and no screenshots committed to any branch), never use a gist or `IMAGE_ADAPTER=gist`, never link files as `blob/...?raw=true`, and never use a third-party file host. `before-and-after` and `evidence-driven-testing` are for capturing only: skip their upload steps (`upload-and-copy.sh` with any adapter, 0x0.st included) and attach their files as above. Vercel builds every pushed branch, so each push to an evidence branch also fails a Preview build and emails the owner.
 
-If the in-app browser is not signed in to GitHub, or no in-app browser is available, ask the human to sign in or open one (`AskUserQuestion` in Claude Code), wait until they say it is done, then upload. Do not switch to another way of hosting the files while you wait.
+If the in-app browser is not signed in to GitHub, or no in-app browser is available, ask the human to sign in or open one (`AskUserQuestion` in Claude Code), wait until they say it is done, then upload. A sub-agent that cannot ask the human reports the missing sign-in to its parent as a blocker. Do not switch to another way of hosting the files while you wait.
 
 ## Review and acceptance
 

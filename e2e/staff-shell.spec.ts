@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // The shell around every staff page (#225): the grouped sidebar and its rail,
 // and the phone's tab bar with its More sheet.
@@ -24,10 +25,7 @@ const MANAGER_ENTRIES = [
 ]
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

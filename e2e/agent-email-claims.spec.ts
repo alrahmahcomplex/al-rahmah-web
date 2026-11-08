@@ -6,6 +6,7 @@ import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
 import { FORBIDDEN, WORDS } from "./discount-code"
+import { logIn } from "./log-in"
 
 // Sign-up with an email and claiming an existing Discount code (#193) end to
 // end: each outcome's message on the Discount code page, and the Manager's
@@ -74,10 +75,7 @@ async function storedEmail(agentId: string) {
 }
 
 async function signInManager(page: Page) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(MANAGER.email)
-  await page.getByLabel("Password", { exact: true }).fill(MANAGER.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, MANAGER.email, MANAGER.password)
   // Signing in waits on local Auth, which runs slowly with the other specs.
   await expect(page).toHaveURL(/\/staff$/, { timeout: 15_000 })
 }
@@ -178,7 +176,7 @@ test.describe("the Discount code page's answers", () => {
     await claim(page, agent, email("seven-typed"))
     await expect(notice(page)).toContainText("Tayari una akaunti. Ingia.")
     await notice(page).getByRole("link", { name: "Ingia" }).click()
-    await expect(page).toHaveURL(/\/discount-code\/sign-in$/)
+    await expect(page).toHaveURL(/\/login$/)
   })
 
   test("an email already in use gets the neutral reply", async ({ page }) => {
@@ -192,7 +190,7 @@ test.describe("the Discount code page's answers", () => {
     await expect(page.getByText("Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Weka alama hapa")).toBeVisible()
     await expect(page.getByText("Umeshaweka nenosiri?")).toBeVisible()
     await page.getByRole("link", { name: "Ingia", exact: true }).click()
-    await expect(page).toHaveURL(/\/discount-code\/sign-in$/)
+    await expect(page).toHaveURL(/\/login$/)
   })
 })
 

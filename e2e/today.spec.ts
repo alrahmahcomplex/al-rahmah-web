@@ -4,6 +4,7 @@ import { firstName } from "@/app/staff/_today/greeting"
 import { formatLongDate, tanzaniaToday } from "@/lib/school-calendar"
 
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // Today, the staff home (#226): the greeting, the two front-desk actions, the
 // work waiting for the signed-in person and the newest registrations. The
@@ -12,10 +13,7 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/sup
 // other tests add to those, so counts are matched loosely.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

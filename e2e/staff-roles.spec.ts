@@ -5,6 +5,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { asSystem, createThrowawayStaff, inRolledBackTransaction } from "../tests/support/db"
 import { ACCOUNTANT, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { openStaffHistoryAsSuperAdmin, signInAsSuperAdmin } from "./super-admin"
+import { logIn } from "./log-in"
 
 // The Staff and roles screen (#241): the Super Admin shapes every role and
 // manages everyone; the seeded Manager manages the Admissions Staff and reads
@@ -12,10 +13,7 @@ import { openStaffHistoryAsSuperAdmin, signInAsSuperAdmin } from "./super-admin"
 // their own, so parallel tests and the seeded fixtures never collide.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

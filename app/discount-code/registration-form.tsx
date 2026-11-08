@@ -221,7 +221,6 @@ export function DiscountCodeForm({
           </div>
           <div>
             <TurnstileWidget ref={turnstile} action="agent" language={language} />
-            <p className="mt-1 text-center text-xs text-slate-500">{copy.securityNote}</p>
           </div>
         </div>
 
@@ -235,7 +234,7 @@ export function DiscountCodeForm({
           >
             <p>{noticeText(copy, notice)}</p>
             {notice === "joined" && (
-              <Link href="/discount-code/sign-in" className="mt-1 inline-block font-semibold underline underline-offset-4">
+              <Link href="/login" className="mt-1 inline-block font-semibold underline underline-offset-4">
                 {copy.signIn}
               </Link>
             )}
@@ -259,7 +258,7 @@ export function DiscountCodeForm({
       <p className="mt-6 text-center text-sm text-slate-600">
         {copy.signInPrompt}{" "}
         <Link
-          href="/discount-code/sign-in"
+          href="/login"
           className="font-semibold text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
         >
           {copy.signIn}

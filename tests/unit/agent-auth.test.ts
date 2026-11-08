@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, it, vi } from "vitest"
 
-import { acceptAgentInvite, getAgentUser, signInAgent } from "@/lib/services/agent-auth"
+import { acceptAgentInvite, getAgentUser } from "@/lib/services/agent-auth"
 
 type Answer = { data: unknown; error: { message: string; code?: string } | null }
 
@@ -64,61 +64,6 @@ function fakeSupabase({
   return { client: client as unknown as SupabaseClient, auth: client.auth, rpc: client.rpc, signOut, calls }
 }
 
-describe("signInAgent", () => {
-  it("signs in a switched-on agent and keeps the session", async () => {
-    const { client, signOut } = fakeSupabase()
-
-    expect(await signInAgent(client, "neema@example.test", "a-password")).toEqual({
-      ok: true,
-      data: { fullName: "Neema Juma", code: "NEEMA-01" },
-    })
-    expect(signOut).not.toHaveBeenCalled()
-  })
-
-  it("refuses while staff are signed in in this browser, before trying the password", async () => {
-    const { client, calls } = fakeSupabase({ startedAs: "staff" })
-
-    expect(await signInAgent(client, "neema@example.test", "a-password")).toEqual({ ok: false, error: "staff-session" })
-    expect(calls).toEqual([])
-  })
-
-  it("points wrong credentials to the forgotten-password link", async () => {
-    const { client } = fakeSupabase({ signInError: { message: "Invalid login credentials", code: "invalid_credentials" } })
-
-    expect(await signInAgent(client, "neema@example.test", "wrong")).toEqual({ ok: false, error: "invalid-credentials" })
-  })
-
-  it("gives a rate limit and a banned login their own refusals", async () => {
-    expect(await signInAgent(fakeSupabase({ signInError: { message: "slow down", status: 429 } }).client, "a@example.test", "p")).toEqual({
-      ok: false,
-      error: "rate-limited",
-    })
-    expect(
-      await signInAgent(fakeSupabase({ signInError: { message: "banned", code: "user_banned" } }).client, "a@example.test", "p"),
-    ).toEqual({ ok: false, error: "banned" })
-  })
-
-  it("ends the session of a switched-off or retired agent, or while agent access is off", async () => {
-    for (const [state, error] of [
-      ["switched_off", "switched-off"],
-      ["retired", "retired"],
-      ["access_off", "access-off"],
-    ] as const) {
-      const { client, signOut } = fakeSupabase({ account: { data: { state, full_name: null, code: null }, error: null } })
-
-      expect(await signInAgent(client, "neema@example.test", "a-password")).toEqual({ ok: false, error })
-      expect(signOut).toHaveBeenCalled()
-    }
-  })
-
-  it("ends the session of a login that is no agent's", async () => {
-    const { client, signOut } = fakeSupabase({ account: { data: null, error: null } })
-
-    expect(await signInAgent(client, "someone@example.test", "a-password")).toEqual({ ok: false, error: "not-agent" })
-    expect(signOut).toHaveBeenCalled()
-  })
-})
-
 describe("acceptAgentInvite", () => {
   it("uses the link, sets the password and lands the agent signed in", async () => {
     const { client, calls, auth } = fakeSupabase()
@@ -179,12 +124,12 @@ describe("a token PostgREST's clock thinks is from the future", () => {
     return pending
   }
 
-  it("signs the agent in once a second read is accepted", async () => {
+  it("reads the agent once a second read is accepted", async () => {
     vi.useFakeTimers()
     try {
-      const { client, signOut } = fakeSupabase({ accountAnswers: [ISSUED_AT_FUTURE] })
+      const { client, signOut } = fakeSupabase({ startedAs: "agent", accountAnswers: [ISSUED_AT_FUTURE] })
 
-      expect(await withTimersRunning(signInAgent(client, "neema@example.test", "a-password"))).toEqual({
+      expect(await withTimersRunning(getAgentUser(client))).toEqual({
         ok: true,
         data: { fullName: "Neema Juma", code: "NEEMA-01" },
       })

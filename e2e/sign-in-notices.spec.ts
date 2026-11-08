@@ -5,16 +5,14 @@ import { firstName } from "@/app/staff/_today/greeting"
 import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
 import { SUPER_ADMIN } from "../tests/support/fixtures"
 import type { FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // The notice a staff member sees on the staff home at sign-in when someone
 // else changed their role or account, and dismissing it. Each test changes a
 // throwaway staff member of its own.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

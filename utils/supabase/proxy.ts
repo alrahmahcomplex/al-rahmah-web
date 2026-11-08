@@ -7,7 +7,7 @@ import { supabaseEnv } from "./env"
 function signInPage(pathname: string): string | null {
   if (pathname === "/staff" || pathname.startsWith("/staff/")) return "/login"
   if (pathname === "/discount-code/students" || pathname.startsWith("/discount-code/students/")) {
-    return "/discount-code/sign-in"
+    return "/login"
   }
   return null
 }

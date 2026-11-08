@@ -269,7 +269,7 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
       "Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Weka alama hapa",
     )
     expect(screen.getByText("Umeshaweka nenosiri?")).toContainElement(screen.getByRole("link", { name: "Ingia" }))
-    expect(screen.getByRole("link", { name: "Ingia" })).toHaveAttribute("href", "/discount-code/sign-in")
+    expect(screen.getByRole("link", { name: "Ingia" })).toHaveAttribute("href", "/login")
   })
 
   it("names a missing email, and a missing code once the box is ticked", async () => {
@@ -341,6 +341,6 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
     await fill(user)
     await user.click(screen.getByRole("button", { name: WORDS.sw.send }))
     const alert = await screen.findByRole("alert")
-    expect(alert.querySelector('a[href="/discount-code/sign-in"]')).toHaveTextContent("Ingia")
+    expect(alert.querySelector('a[href="/login"]')).toHaveTextContent("Ingia")
   })
 })

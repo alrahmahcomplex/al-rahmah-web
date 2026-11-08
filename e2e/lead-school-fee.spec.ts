@@ -11,6 +11,7 @@ import { claimFeeYear, noScheduleYear, type FeeYearClaim } from "../tests/suppor
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
 import { leadUrl, openLeadTab } from "./lead-page"
+import { logIn } from "./log-in"
 
 // The School fee section on the lead screen. A test that needs a schedule
 // claims a year of its own and saves one (tests/support/fee-years.ts), so no
@@ -21,10 +22,7 @@ const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

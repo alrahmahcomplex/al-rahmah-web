@@ -14,6 +14,7 @@ import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixture
 import { claimGroupInvitationYear, currentGroupLink, type GroupInvitationYearClaim } from "../tests/support/group-invitation-years"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
+import { logIn } from "./log-in"
 
 // Sending the admissions WhatsApp group invitation from a lead's screen
 // (#186). Each test moves its leads to an Enrollment year it claims (see
@@ -25,10 +26,7 @@ const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

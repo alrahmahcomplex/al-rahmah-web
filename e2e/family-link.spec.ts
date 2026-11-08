@@ -7,6 +7,7 @@ import { createLead, getLead } from "@/lib/services/leads"
 
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // Settling an unconfirmed Family match on the lead screen, and seeing
 // unconfirmed children in the Family lists.
@@ -25,10 +26,7 @@ const SEEDED = {
 }
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

@@ -10,6 +10,7 @@ import { registerPendingAgent as makePendingAgent } from "../tests/support/agent
 import { secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { logIn } from "./log-in"
 
 // The Referral code panel on the lead screen (#80): Admissions Staff editing
 // and clearing a code, the Manager's approval lowering the fee, and the
@@ -26,10 +27,7 @@ const TATU_UNRECOGNISED = "1ead0000-0000-4000-8000-000000000433"
 const ARCHIVED = "1ead0000-0000-4000-8000-000000000005"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { currentSessionKind, passwordSignIn, spendLinkAndSetPassword, type SignInFailure } from "./auth-session"
+import { currentSessionKind, spendLinkAndSetPassword, type SignInFailure } from "./auth-session"
 import { readWithClockRetry } from "./clock-retry"
 import type { Result } from "./result"
 
@@ -54,24 +54,6 @@ export async function getAgentUser(supabase: SupabaseClient): Promise<Result<Age
   } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: "signed-out" }
   return loadAgentAccount(supabase)
-}
-
-export async function signInAgent(
-  supabase: SupabaseClient,
-  email: string,
-  password: string,
-): Promise<Result<AgentAccount, AgentSignInError>> {
-  const session = await currentSessionKind(supabase)
-  if (!session.ok) return { ok: false, error: "unavailable" }
-  if (session.data === "staff") return { ok: false, error: "staff-session" }
-
-  const signedIn = await passwordSignIn(supabase, email, password)
-  if (!signedIn.ok) return signedIn
-
-  // The password is right, but only a switched-on agent keeps the session.
-  const agent = await loadAgentAccount(supabase)
-  if (!agent.ok) await supabase.auth.signOut()
-  return agent
 }
 
 export type AcceptAgentInviteError =

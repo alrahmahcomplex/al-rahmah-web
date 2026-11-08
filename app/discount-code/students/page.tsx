@@ -35,11 +35,11 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   const supabase = await createClient()
   const agent = await getAgentUser(supabase)
 
-  if (!agent.ok && (agent.error === "signed-out" || agent.error === "not-agent")) redirect("/discount-code/sign-in")
+  if (!agent.ok && (agent.error === "signed-out" || agent.error === "not-agent")) redirect("/login")
   if (!agent.ok) {
     return (
       <AccountShell language={language} wide>
-        <SignOutNotice language={language} message={account.messages[agent.error]} back="/discount-code/sign-in" />
+        <SignOutNotice language={language} message={account.messages[agent.error]} back="/login" />
       </AccountShell>
     )
   }
@@ -49,12 +49,12 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   const shown = shownFrom(params.n)
   const list = await getAgentStudents(supabase, { search, limit: shown, offset: 0 })
 
-  if (!list.ok && list.error === "not-agent") redirect("/discount-code/sign-in")
+  if (!list.ok && list.error === "not-agent") redirect("/login")
   if (!list.ok || list.data.kind !== "active") {
     const message = account.messages[list.ok && list.data.kind !== "active" ? list.data.kind : "unavailable"]
     return (
       <AccountShell language={language} wide>
-        <SignOutNotice language={language} message={message} back="/discount-code/sign-in" />
+        <SignOutNotice language={language} message={message} back="/login" />
       </AccountShell>
     )
   }
@@ -104,7 +104,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
         </p>
 
         <form action={signOutAndReturn} className="self-start">
-          <input type="hidden" name="back" value="/discount-code/sign-in" />
+          <input type="hidden" name="back" value="/login" />
           <button type="submit" className="font-exo text-[13px] text-blue-600 underline underline-offset-2">
             {account.signOut}
           </button>

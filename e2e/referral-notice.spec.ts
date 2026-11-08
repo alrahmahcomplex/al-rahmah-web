@@ -10,6 +10,7 @@ import { createLead } from "../lib/services/leads"
 import { inRolledBackTransaction, secretClient } from "../tests/support/db"
 import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { family, fillChild, fillParent, PHONE_WIDTH, waitForSecurityCheck, type Lang } from "./admission-form"
+import { logIn } from "./log-in"
 
 // The code-holder notice (#182): under the Admission form's Discount code
 // whenever the field has a value, typed or filled in by a Referral link, in
@@ -88,10 +89,7 @@ test.describe("the notice on the Admission form", () => {
 })
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

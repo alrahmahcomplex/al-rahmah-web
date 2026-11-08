@@ -7,6 +7,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { asSystem, secretClient } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // Recording the visit of an Applied family on the lead screen, as the front
 // desk does when they arrive.
@@ -28,10 +29,7 @@ function dayAfter(date: string) {
 }
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

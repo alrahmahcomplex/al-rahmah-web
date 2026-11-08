@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test"
 
 import { SUPER_ADMIN } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // The audit history is the Super Admin's alone (#237). A spec that checks a
 // history after acting as another staff member signs out and back in as the
@@ -8,10 +9,7 @@ import { SUPER_ADMIN } from "../tests/support/fixtures"
 
 export async function signInAsSuperAdmin(page: Page): Promise<void> {
   await page.context().clearCookies()
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(SUPER_ADMIN.email)
-  await page.getByLabel("Password", { exact: true }).fill(SUPER_ADMIN.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, SUPER_ADMIN.email, SUPER_ADMIN.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

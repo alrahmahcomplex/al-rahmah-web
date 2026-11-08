@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { agentWithLogin, studentInterview, studentLead, type StudentsAgent } from "../tests/support/agent-students"
 import { signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // The students using an agent's Discount code (#195) on a phone. Each test
 // makes its own agent and leads, with invented names.
@@ -10,10 +11,7 @@ import { MANAGER } from "../tests/support/fixtures"
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
 
 async function signInAgent(page: Page, agent: StudentsAgent) {
-  await page.goto("/discount-code/sign-in")
-  await page.getByLabel("Barua pepe").fill(agent.email)
-  await page.getByLabel("Nenosiri", { exact: true }).fill(agent.password)
-  await page.getByRole("button", { name: "Ingia", exact: true }).click()
+  await logIn(page, agent.email, agent.password)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
 }
 

@@ -14,18 +14,13 @@ export function AccountMessageView({ language, message }: { language: Language; 
       <p>{message.text}</p>
       {message.code && <p className="text-[12px] text-slate-500">{copy.reasonCode(message.code)}</p>}
       {message.forgot && (
-        <Link href="/discount-code/forgot-password" className="text-blue-600 underline underline-offset-2">
+        <Link href="/login/forgot-password" className="text-blue-600 underline underline-offset-2">
           {copy.forgot}
         </Link>
       )}
       {message.signIn && (
-        <Link href="/discount-code/sign-in" className="text-blue-600 underline underline-offset-2">
-          {copy.goToSignIn}
-        </Link>
-      )}
-      {message.staffSignIn && (
         <Link href="/login" className="text-blue-600 underline underline-offset-2">
-          {copy.staffLink}
+          {copy.goToSignIn}
         </Link>
       )}
     </div>

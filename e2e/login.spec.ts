@@ -2,21 +2,44 @@ import { expect, test } from "@playwright/test"
 
 import { asSystem, createThrowawayStaff } from "../tests/support/db"
 import { ACCOUNTANT, DEACTIVATED, MANAGER } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // Al-Rahmah palette values from app/globals.css.
 const AL_RAHMAH_BLUE = "rgb(9, 0, 187)" // --color-blue-600: #0900bb
 const AL_RAHMAH_ORANGE = "rgb(253, 105, 20)" // --color-orange-500: #fd6914
 
-test.describe("staff sign-in page", () => {
+test.describe("the one sign-in page", () => {
+  test("is Swahili first, with the language switch above the card and no separate Discount code sign-in", async ({ page }) => {
+    await page.goto("/login")
+
+    await expect(page.getByRole("heading", { name: "Karibu!" })).toBeVisible()
+    await expect(page.getByLabel("Barua pepe")).toHaveAttribute("placeholder", "Barua pepe")
+    await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveAttribute("placeholder", "Nenosiri")
+    await expect(page.getByText(/Discount code holders/)).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/login/forgot-password")
+
+    // The switch sits above the card, centred; the logo sits inside the card.
+    const switchBox = (await page.getByRole("group", { name: "Lugha" }).boundingBox())!
+    const logoBox = (await page.getByRole("img", { name: "Al-Rahmah Logo" }).boundingBox())!
+    const viewport = page.viewportSize()!
+    expect(switchBox.y + switchBox.height).toBeLessThan(logoBox.y)
+    expect(Math.abs(switchBox.x + switchBox.width / 2 - viewport.width / 2)).toBeLessThan(2)
+
+    await page.getByRole("button", { name: "English" }).click()
+    await expect(page.getByRole("heading", { name: "Welcome!" })).toBeVisible()
+    await expect(page.getByLabel("Email")).toHaveAttribute("placeholder", "Email")
+  })
+
   test("shows the Al-Rahmah logo and brand colours", async ({ page }) => {
     await page.goto("/login")
+    await page.getByRole("button", { name: "English" }).click()
 
     const logo = page.getByRole("img", { name: "Al-Rahmah Logo" })
     await expect(logo).toBeVisible()
     expect(await logo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
 
-    await expect(page.getByText("AL-RAHMAH COMPLEX")).toBeVisible()
-    const badge = page.getByText("AL-RAHMAH COMPLEX").locator("..")
+    await expect(page.getByText("AL-RAHMAH COMPLEX", { exact: true })).toBeVisible()
+    const badge = page.getByText("AL-RAHMAH COMPLEX", { exact: true }).locator("..")
     await expect(badge).toHaveCSS("background-color", AL_RAHMAH_BLUE)
     await expect(page.getByRole("heading", { name: "Welcome!" })).toHaveCSS("color", AL_RAHMAH_BLUE)
     const logIn = page.getByRole("button", { name: "Log In" })
@@ -27,6 +50,7 @@ test.describe("staff sign-in page", () => {
 
   test("the password toggle shows and hides the password", async ({ page }) => {
     await page.goto("/login")
+    await page.getByRole("button", { name: "English" }).click()
     const password = page.getByLabel("Password", { exact: true })
     await password.fill("fixture-password")
 
@@ -40,10 +64,7 @@ test.describe("staff sign-in page", () => {
 
 test.describe("signing in", () => {
   async function signIn(page: import("@playwright/test").Page, email: string, password: string) {
-    await page.goto("/login")
-    await page.getByLabel("Email").fill(email)
-    await page.getByLabel("Password", { exact: true }).fill(password)
-    await page.getByRole("button", { name: "Log In" }).click()
+    await logIn(page, email, password)
   }
 
   test("tells a deactivated staff member their account is deactivated, even with the right password", async ({
@@ -51,8 +72,8 @@ test.describe("signing in", () => {
   }) => {
     await signIn(page, DEACTIVATED.email, DEACTIVATED.password)
 
-    await expect(page.locator("form").getByRole("alert")).toHaveText(
-      "Your staff account is deactivated. Ask an Admissions Manager to reactivate it.",
+    await expect(page.locator("form").getByRole("alert")).toContainText(
+      "Akaunti yako ya mfanyakazi imezimwa. Mwombe anayesimamia akaunti yako aiwashe tena.",
     )
     await expect(page).toHaveURL(/\/login$/)
 
@@ -64,16 +85,18 @@ test.describe("signing in", () => {
   test("explains an account that is not on the staff list", async ({ page }) => {
     await page.goto("/login?error=not-staff")
 
-    await expect(page.locator("form").getByRole("alert")).toHaveText(
-      "This account is not on the staff list. Ask an Admissions Manager to invite you.",
+    await expect(page.locator("form").getByRole("alert")).toContainText(
+      "Akaunti hii haipo kwenye orodha ya wafanyakazi. Mwombe anayesimamia wafanyakazi akualike.",
     )
   })
 
-  test("refuses a wrong password", async ({ page }) => {
+  test("refuses a wrong password and offers the reset link under the warning", async ({ page }) => {
     await signIn(page, MANAGER.email, "not-the-password")
 
-    await expect(page.locator("form").getByRole("alert")).toHaveText("Wrong email or password.")
-    await expect(page).toHaveURL(/\/login$/)
+    const alert = page.locator("form").getByRole("alert")
+    await expect(alert).toContainText("Barua pepe au nenosiri si sahihi.")
+    await alert.getByRole("link", { name: "Umesahau nenosiri?" }).click()
+    await expect(page).toHaveURL(/\/login\/forgot-password$/)
   })
 
   test("lets staff in, shows their name and role on the staff layout, and signs them out", async ({ page }) => {
@@ -106,8 +129,10 @@ test.describe("signing in", () => {
     await expect(page.locator("form").getByRole("alert")).toHaveText(/deactivated/)
   })
 
-  test("sends visitors with no session from staff pages to sign-in", async ({ page }) => {
+  test("sends visitors with no session from staff and Discount code pages to sign-in", async ({ page }) => {
     await page.goto("/staff")
+    await expect(page).toHaveURL(/\/login$/)
+    await page.goto("/discount-code/students")
     await expect(page).toHaveURL(/\/login$/)
   })
 })

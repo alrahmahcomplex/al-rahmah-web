@@ -17,7 +17,8 @@ type Copy = {
   email: string
   send: string
   sending: string
-  securityNote: string
+  // Staff can't reset their own password yet (#265).
+  staffNote: string
   // The same reply whether or not the email has an account.
   sent: string
   messages: Record<Exclude<LinkRequestStatus, "sent">, { text: string; code?: string }>
@@ -37,7 +38,7 @@ export const LINK_REQUEST_COPY: Record<Language, Copy> = {
     email: "Barua pepe",
     send: "Tuma kiungo kipya",
     sending: "Inatuma…",
-    securityNote: "Ukaguzi mfupi wa usalama unalinda fomu hii.",
+    staffNote: "Mfanyakazi? Mwombe anayesimamia akaunti yako akuwekee nenosiri jipya.",
     sent: "Kama barua pepe hii ina akaunti ya Code ya Punguzo, tumeitumia kiungo. Angalia barua pepe zako, pamoja na spam. Kiungo kinatumika mara moja tu, ndani ya saa 24.",
     messages: {
       "invalid-email": { text: "Andika barua pepe yako, mfano jina@mfano.com." },
@@ -61,7 +62,7 @@ export const LINK_REQUEST_COPY: Record<Language, Copy> = {
     email: "Email",
     send: "Send a new link",
     sending: "Sending…",
-    securityNote: "A quick security check protects this form.",
+    staffNote: "Staff? Ask whoever manages your account to reset your password.",
     sent: "If this email has a Discount code account, we've sent it a link. Check your email, including spam. The link works once, within 24 hours.",
     messages: {
       "invalid-email": { text: "Enter your email, for example name@example.com." },

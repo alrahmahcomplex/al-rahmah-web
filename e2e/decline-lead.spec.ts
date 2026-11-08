@@ -9,6 +9,7 @@ import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { chooseMore, moreActions } from "./lead-page"
+import { logIn } from "./log-in"
 
 // Declining a lead from the lead screen (#97). Each test declines a lead of
 // its own; the seeded ones are only read.
@@ -22,10 +23,7 @@ const DECLINED_FROM_INTERVIEWED = "1ead0000-0000-4000-8000-000000000082"
 const ARCHIVED = "1ead0000-0000-4000-8000-000000000005"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

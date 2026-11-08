@@ -12,6 +12,7 @@ import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { family, fillChild, fillParent, PHONE_WIDTH, type Lang } from "./admission-form"
 import { E2E_PORT } from "./server"
+import { logIn } from "./log-in"
 
 // Switching an agent off and retiring them (#187): the Manager's dialog with
 // the families it changes, the Retired filter, the lead's fee line, and the
@@ -21,10 +22,7 @@ import { E2E_PORT } from "./server"
 const thisYear = Number(tanzaniaToday().slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

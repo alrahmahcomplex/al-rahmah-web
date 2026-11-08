@@ -4,13 +4,13 @@ import { Mail, Phone } from "lucide-react"
 import Link from "next/link"
 import { useRef, useState, useTransition, type FormEvent } from "react"
 
+import { AUTH_SUBMIT, IconField } from "@/components/auth-fields"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import type { Language } from "@/lib/language"
 
 import { AccountMessageView } from "./account-message"
 import { requestPasswordLink } from "./link-request-actions"
 import { LINK_REQUEST_COPY, type LinkRequestStatus } from "./link-request-copy"
-import { INPUT, SUBMIT } from "./password-field"
 
 // Asks for a new password link by email (#194): "Umesahau nenosiri?" and
 // the expired-link panel's "Tuma kiungo kipya". `form` names the firewall key.
@@ -54,24 +54,13 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
       <input type="hidden" name="form" value={form} />
-      <div className="flex flex-col gap-1">
-        <label htmlFor={`${form}-email`} className="pl-4 font-exo text-[13px] font-bold italic text-slate-700">
-          {copy.email}
-        </label>
-        <div className="relative">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
-            <Mail className="h-4 w-4 text-slate-400" strokeWidth={1.5} />
-          </div>
-          <input id={`${form}-email`} name="email" type="email" autoComplete="email" className={INPUT} required />
-        </div>
-      </div>
+      <IconField id={`${form}-email`} name="email" label={copy.email} icon={Mail} type="email" autoComplete="email" required />
 
       <TurnstileWidget ref={turnstile} action="agent-link" language={language} />
-      <p className="-mt-1 text-center font-exo text-[12px] text-slate-500">{copy.securityNote}</p>
 
       {status && <AccountMessageView language={language} message={copy.messages[status]} />}
 
-      <button type="submit" disabled={pending} className={SUBMIT}>
+      <button type="submit" disabled={pending} className={AUTH_SUBMIT}>
         {pending ? copy.sending : copy.send}
       </button>
     </form>
@@ -80,7 +69,7 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
 
 export function SignInLink({ language }: { language: Language }) {
   return (
-    <Link href="/discount-code/sign-in" className="text-center font-exo text-[13px] text-blue-600 underline underline-offset-2">
+    <Link href="/login" className="text-center font-exo text-[13px] text-blue-600 underline underline-offset-2">
       {LINK_REQUEST_COPY[language].goToSignIn}
     </Link>
   )

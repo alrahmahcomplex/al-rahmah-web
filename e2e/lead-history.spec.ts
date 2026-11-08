@@ -8,6 +8,7 @@ import { createLead } from "@/lib/services/leads"
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { logIn } from "./log-in"
 
 // Reading a lead's history on its own screen. Only the Super Admin reads it
 // (#237); everyone else keeps the status and the day it last changed. Each
@@ -18,10 +19,7 @@ const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

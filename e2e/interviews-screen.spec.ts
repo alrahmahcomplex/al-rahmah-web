@@ -10,6 +10,7 @@ import { createLead } from "@/lib/services/leads"
 import { asSystem, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { claimInterviewYear, type InterviewYearClaim } from "../tests/support/interview-years"
+import { logIn } from "./log-in"
 
 // The Interviews screen. Slice 5's seeded registrations hold S/N 1 to 3 for
 // 2027, so they head the 2027 list whatever the other tests register after
@@ -21,10 +22,7 @@ import { claimInterviewYear, type InterviewYearClaim } from "../tests/support/in
 const EMPTY_YEAR = 2001
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

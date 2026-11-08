@@ -6,16 +6,14 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 
 import { unusedAdmissionNumber } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // The front desk, as Admissions Staff use it. Every run invents its own
 // child and phone number, so runs never collide with each other or with the
 // seeded leads (+255 700 000 xxx).
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

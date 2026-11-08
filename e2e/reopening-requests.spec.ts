@@ -10,6 +10,7 @@ import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 import { signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
+import { logIn } from "./log-in"
 
 // Raising and withdrawing a Reopening request (#99). Each test raises on a
 // Declined lead of its own; the seeded Pending request on ADMSN-90080, raised
@@ -21,10 +22,7 @@ const thisYear = Number(today.slice(0, 4))
 const SEEDED_PENDING_LEAD = "1ead0000-0000-4000-8000-000000000080"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

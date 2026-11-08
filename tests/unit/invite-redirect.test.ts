@@ -24,3 +24,23 @@ describe("the site root", () => {
     }
   })
 })
+
+// One sign-in page (#264): old Discount code sign-in links from emails,
+// bookmarks and print land on /login for good.
+describe("the old Discount code sign-in addresses", () => {
+  it.each([
+    ["/discount-code/sign-in", "/login"],
+    ["/discount-code/forgot-password", "/login/forgot-password"],
+  ])("permanently forward %s to %s", async (from, to) => {
+    const response = await open(`https://school.example${from}`)
+
+    expect(response.status).toBe(308)
+    expect(getRedirectUrl(response)).toBe(`https://school.example${to}`)
+  })
+
+  it("keep the pages the email links open where they are", async () => {
+    for (const path of ["/discount-code/set-password?token_hash=a&type=invite", "/discount-code/reset-password?token_hash=a&type=recovery"]) {
+      expect(getRedirectUrl(await open(`https://school.example${path}`))).toBeNull()
+    }
+  })
+})

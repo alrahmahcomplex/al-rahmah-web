@@ -5,6 +5,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { admissionYears } from "../lib/admission-form"
 import { secretClient } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 // Reviewing Re-applications (#77): the queue and its count, opening one, and
 // Mark reviewed. The Admissions Staff test records a re-application of its
@@ -14,10 +15,7 @@ import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixt
 const nextYear = admissionYears()[1]
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

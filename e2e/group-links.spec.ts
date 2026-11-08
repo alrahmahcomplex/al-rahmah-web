@@ -1,12 +1,10 @@
 import { randomUUID } from "node:crypto"
 import { expect, test, type Page } from "@playwright/test"
 import { ADMISSIONS, ACCOUNTANT, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn } from "./log-in"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await page.goto("/login")
-  await page.getByLabel("Email").fill(person.email)
-  await page.getByLabel("Password", { exact: true }).fill(person.password)
-  await page.getByRole("button", { name: "Log In" }).click()
+  await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

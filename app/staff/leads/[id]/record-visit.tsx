@@ -51,7 +51,8 @@ export function RecordVisit({ leadId, offer }: { leadId: string; offer: "step" |
         leadId={leadId}
         today={recording}
         onDone={(message) => {
-          refocus.current = message === null
+          // Only when a button comes back to take it.
+          refocus.current = message === null && offer !== null
           setRecording(null)
           setSaved(message)
         }}

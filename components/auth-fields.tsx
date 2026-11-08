@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 // and it keeps its name after the placeholder disappears.
 
 const INPUT =
-  "h-11 w-full rounded-full border border-blue-600/30 bg-white pl-10 pr-4 text-base text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-600"
+  "h-11 w-full rounded-full border border-blue-600/30 bg-white pl-10 pr-4 text-base text-slate-800 outline-none transition-colors placeholder:text-slate-500 focus:border-blue-600"
 
 export const AUTH_SUBMIT = cn(
   buttonVariants({ variant: "orange" }),

@@ -70,7 +70,7 @@ test.describe("the Referral code panel", () => {
 
     // A code no agent holds can't be saved.
     await input.fill("nope-404")
-    await expect(panel(page).getByText("No Marketing Agent has this code.")).toBeVisible()
+    await expect(panel(page).getByText("No Marketing Agent or Promo code has this code.")).toBeVisible()
     await expect(save).toBeDisabled()
 
     // Matched however it is typed.
@@ -125,7 +125,7 @@ test.describe("the Referral code panel", () => {
     await page.goto(`/staff/agents?q=${encodeURIComponent(agent.code)}`)
     const row = page.getByRole("row", { name: new RegExp(agent.fullName) })
     // The Leads column: one lead carries the code.
-    await expect(row.getByRole("cell").nth(5)).toHaveText("1")
+    await expect(row.getByRole("cell").nth(6)).toHaveText("1")
     await row.getByRole("button", { name: `Approve ${agent.fullName}` }).click()
     await page.getByRole("alertdialog").getByRole("button", { name: `Approve ${agent.code}` }).click()
     await expect(page.getByText(`${agent.fullName} (${agent.code}) is Approved.`)).toBeVisible()
@@ -152,7 +152,7 @@ test.describe("the Referral code panel", () => {
 
     await page.goto(`/staff/leads/${TATU_UNRECOGNISED}`)
     await expect(panel(page)).toContainText("Unrecognised")
-    await expect(panel(page)).toContainText("No Marketing Agent has this code.")
+    await expect(panel(page)).toContainText("No Marketing Agent or Promo code has this code.")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
   })
 

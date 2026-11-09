@@ -146,7 +146,7 @@ describe("TurnstileWidget", () => {
     expect(widget.current!.reveal()).toBe(false)
   })
 
-  it("reads out a check that fails, and logs Cloudflare's error code", async () => {
+  it("reads out a check that fails twice in a row, and logs Cloudflare's error code", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {})
     const TurnstileWidget = await loadWidget()
     const widget = createRef<TurnstileWidgetHandle>()
@@ -155,17 +155,98 @@ describe("TurnstileWidget", () => {
 
     let handled = false
     act(() => {
-      handled = lastOptions()["error-callback"]!("110200")
+      handled = lastOptions()["error-callback"]!("300010")
+    })
+    expect(handled).toBe(true)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("300010"))
+    act(() => {
+      lastOptions()["error-callback"]!("300010")
     })
 
-    expect(handled).toBe(true)
-    expect(error).toHaveBeenCalledWith(expect.stringContaining("110200"))
     const alert = screen.getByRole("alert")
     expect(alert).toHaveTextContent("The security check couldn't load. Reload the page and try again.")
     act(() => {
       widget.current!.reveal()
     })
     expect(alert).toHaveFocus()
+  })
+
+  it("stays quiet after one error while Turnstile retries, and a success starts the count again (#272)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    const widget = createRef<TurnstileWidgetHandle>()
+    render(<TurnstileWidget ref={widget} action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+
+    act(() => {
+      lastOptions()["error-callback"]!("300010")
+    })
+    expect(screen.queryByRole("alert")).toBeNull()
+    // Nothing of its own to show, so the form says to wait.
+    expect(widget.current!.reveal()).toBe(false)
+
+    act(() => lastOptions().callback!())
+    act(() => {
+      lastOptions()["error-callback"]!("300010")
+    })
+    expect(screen.queryByRole("alert")).toBeNull()
+  })
+
+  it("says it couldn't load when Turnstile hasn't recovered from one error in time", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
+
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        lastOptions()["error-callback"]!("110200")
+      })
+      act(() => vi.advanceTimersByTime(14_000))
+      expect(screen.queryByRole("alert")).toBeNull()
+      act(() => vi.advanceTimersByTime(1_000))
+      expect(screen.getByRole("alert")).toHaveTextContent("The security check couldn't load.")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("keeps a token it earned out of sight when the space crosses 300px, and fits the size when a click is needed (#272)", async () => {
+    let resized = () => {}
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resized = callback
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(340)
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+
+    // Passed without a click: the widget is invisible, so its size doesn't
+    // matter and its token stays.
+    act(() => lastOptions().callback!())
+    width.mockReturnValue(261)
+    act(() => resized())
+    await act(async () => {})
+    expect(turnstile.render).toHaveBeenCalledTimes(1)
+    expect(turnstile.remove).not.toHaveBeenCalled()
+
+    // Its token expired and Cloudflare now wants a click: drawn again at the
+    // size that fits before the box shows.
+    act(() => lastOptions()["before-interactive-callback"]!())
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
+    expect(lastOptions().size).toBe("compact")
+    expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
+    act(() => lastOptions()["before-interactive-callback"]!())
+    expect(screen.getByText("Tick the security check below, then send.")).toBeInTheDocument()
+    vi.unstubAllGlobals()
   })
 
   it("points a browser Turnstile doesn't support to another browser or the office", async () => {

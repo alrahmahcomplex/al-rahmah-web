@@ -54,6 +54,54 @@ async function cloudflareAsksForAClick(page: Page) {
   })
 }
 
+// Cloudflare's test site key that always asks for a click. The page's
+// always-pass key is built into it, so this one is swapped in as the widget
+// is drawn.
+const FORCED_INTERACTION_SITE_KEY = "3x00000000000000000000FF"
+
+// Cloudflare's own script, counting each widget drawn in
+// `window.checksDrawn`, and drawing with `sitekey` when given.
+async function watchRealCheck(page: Page, sitekey?: string) {
+  await page.addInitScript((sitekey) => {
+    type Render = (container: HTMLElement, options: Record<string, unknown>) => unknown
+    let real: { render: Render } | undefined
+    Object.assign(window, { checksDrawn: 0 })
+    Object.defineProperty(window, "turnstile", {
+      configurable: true,
+      get: () => real,
+      set(value: { render: Render }) {
+        const render = value.render.bind(value)
+        value.render = (container, options) => {
+          Object.assign(window, { checksDrawn: (window as unknown as { checksDrawn: number }).checksDrawn + 1 })
+          return render(container, sitekey ? { ...options, sitekey } : options)
+        }
+        real = value
+      },
+    })
+  }, sitekey)
+}
+
+const checksDrawn = (page: Page) => page.evaluate(() => (window as unknown as { checksDrawn: number }).checksDrawn)
+
+// A stand-in for Cloudflare's script that fails every try, as on a network
+// that blocks challenges.cloudflare.com part-way.
+async function cloudflareKeepsFailing(page: Page) {
+  await page.addInitScript(() => {
+    type Options = { "error-callback": (code: string) => boolean }
+    Object.assign(window, {
+      turnstile: {
+        render(_container: HTMLElement, options: Options) {
+          setTimeout(() => options["error-callback"]("300010"), 0)
+          setTimeout(() => options["error-callback"]("300010"), 50)
+          return "failing-check"
+        },
+        reset() {},
+        remove() {},
+      },
+    })
+  })
+}
+
 async function noSidewaysScroll(page: Page) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
@@ -184,6 +232,66 @@ for (const { name, size } of VIEWPORTS) {
     })
   })
 }
+
+test.describe("the sign-in card", () => {
+  for (const { name, size } of VIEWPORTS) {
+    test(`on a ${name}, the hidden check leaves no gap above Ingia (#273)`, async ({ page }) => {
+      await page.setViewportSize(size)
+      await page.goto("/login")
+      await waitForSecurityCheck(page)
+      const password = await page.getByLabel("Nenosiri", { exact: true }).boundingBox()
+      const ingia = await page.getByRole("button", { name: "Ingia" }).boundingBox()
+      // The same 12px as between the two boxes.
+      expect(Math.round(ingia!.y - (password!.y + password!.height))).toBe(12)
+    })
+
+    test(`on a ${name}, Ingia before the check is ticked keeps the email and password (#273)`, async ({ page }) => {
+      await page.setViewportSize(size)
+      await watchRealCheck(page, FORCED_INTERACTION_SITE_KEY)
+      await page.goto("/login")
+      await page.getByLabel("Barua pepe").fill("mzazi@example.test")
+      await page.getByLabel("Nenosiri", { exact: true }).fill("a-password")
+      await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible({ timeout: 20_000 })
+      await expectInsideCardAndCentred(page)
+      await noSidewaysScroll(page)
+
+      await page.getByRole("button", { name: "Ingia" }).click()
+      await expect(page.getByText(NEEDS_CLICK.sw)).toBeFocused()
+      await expect(page.getByLabel("Barua pepe")).toHaveValue("mzazi@example.test")
+      await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveValue("a-password")
+      await expect(page.getByText(/Subiri ukaguzi wa usalama/)).toHaveCount(0)
+      await expect(page).toHaveURL(/\/login$/)
+    })
+  }
+
+  test("a check that keeps failing says it couldn't load, and Ingia points to it (#272)", async ({ page }) => {
+    await cloudflareKeepsFailing(page)
+    await page.goto("/login")
+    const alert = page.locator("form").getByRole("alert")
+    await expect(alert).toHaveText("Ukaguzi wa usalama haukuweza kufunguka. Pakia ukurasa upya kisha ujaribu tena.")
+    await page.getByLabel("Barua pepe").fill("mzazi@example.test")
+    await page.getByLabel("Nenosiri", { exact: true }).fill("a-password")
+    await page.getByRole("button", { name: "Ingia" }).click()
+    await expect(alert).toBeFocused()
+    await expect(page.getByLabel("Barua pepe")).toHaveValue("mzazi@example.test")
+  })
+})
+
+test("a check that passed out of sight keeps its token when the window narrows (#272)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await watchRealCheck(page)
+  await reachReviewStep(page, "sw")
+  await waitForSecurityCheck(page)
+  expect(await checksDrawn(page)).toBe(1)
+
+  // A small phone: the card's inside drops under Turnstile's 300px minimum,
+  // but the invisible widget isn't drawn again, so its token stays.
+  await page.setViewportSize({ width: 340, height: 800 })
+  await page.waitForTimeout(1_000)
+  expect(await checksDrawn(page)).toBe(1)
+  await waitForSecurityCheck(page)
+  await noSidewaysScroll(page)
+})
 
 test("a check that needs a click is drawn again to fit when the window narrows", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })

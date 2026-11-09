@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache"
 
-import { findReferralAgent, setLeadReferralCode } from "@/lib/services/referral"
+import { findDiscountCode, setLeadReferralCode } from "@/lib/services/referral"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
 import { referralOutcome, type ReferralLookup, type ReferralOutcome } from "./referral-outcome"
 
 // The Referral code panel's Save and Clear, and the lookup that names the
-// agent as a code is typed. Server Actions take input from anyone who can
+// agent or Promo code as a code is typed. Server Actions take input from anyone who can
 // post to them, so the shape is checked here; the database then checks the
 // permission, the code and whether the lead is open.
 
@@ -30,7 +30,8 @@ export async function saveLeadReferralCode(leadId: string, code: string | null):
   return referralOutcome(result, action)
 }
 
-// The agent a typed code belongs to, for staff who may edit the code.
+// The agent record or Promo code a typed code belongs to, for staff who may
+// edit the code.
 export async function lookUpReferralCode(code: string): Promise<ReferralLookup> {
   if (typeof code !== "string" || code.trim() === "") return { status: "empty" }
   // No code is longer than 20 characters, spaces aside.
@@ -40,7 +41,7 @@ export async function lookUpReferralCode(code: string): Promise<ReferralLookup> 
   const allowed = await requirePermission(supabase, "leads.edit")
   if (!allowed.ok) return { status: "unavailable" }
 
-  const found = await findReferralAgent(supabase, code)
+  const found = await findDiscountCode(supabase, code)
   if (!found.ok) return { status: "unavailable" }
-  return found.data ? { status: "found", agent: found.data } : { status: "none" }
+  return found.data ? { status: "found", code: found.data } : { status: "none" }
 }

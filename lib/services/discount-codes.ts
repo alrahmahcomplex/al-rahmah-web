@@ -192,6 +192,31 @@ export async function getStandardDiscountSummary(supabase: SupabaseClient): Prom
   return { ok: true, data: { amount: amount.data, approvedAgentsOnStandard: agents.count ?? 0 } }
 }
 
+// The most an agent's code takes off now: the standard, or a larger own
+// amount of a current, Approved, switched-on agent. The Promo code sheet
+// compares its amount with this.
+export async function getHighestAgentDiscount(supabase: SupabaseClient): Promise<Result<number, "unavailable">> {
+  const [standard, own] = await Promise.all([
+    getStandardDiscount(supabase),
+    supabase
+      .from("marketing_agents")
+      .select("interview_discount")
+      .is("retired_at", null)
+      .is("switched_off_at", null)
+      .eq("status", "Approved")
+      .not("interview_discount", "is", null)
+      .order("interview_discount", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ interview_discount: number }>(),
+  ])
+  if (!standard.ok) return standard
+  if (own.error) {
+    console.error("Could not read the highest agent discount", own.error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: Math.max(standard.data, own.data?.interview_discount ?? 0) }
+}
+
 // One row of the history of amount and Promo code changes.
 export type DiscountChangeKind = "standard" | "agent" | "promo_amount" | "promo_state" | "promo_created" | "promo_ends"
 

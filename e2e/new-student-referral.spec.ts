@@ -71,7 +71,7 @@ test.describe("a Referral code at New Student", () => {
 
     const code = page.getByLabel("Referral code (optional)")
     await code.fill("nope-404")
-    await expect(page.getByText("No Marketing Agent has this code.")).toBeVisible()
+    await expect(page.getByText("No Marketing Agent or Promo code has this code.")).toBeVisible()
     await expect(code).toHaveAttribute("aria-invalid", "true")
 
     // Review stays on the student step until the code is corrected or cleared.

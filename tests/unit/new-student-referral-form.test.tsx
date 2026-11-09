@@ -20,11 +20,28 @@ vi.mock("@/app/staff/leads/[id]/referral-actions", () => ({
 import { NewStudentForm } from "@/app/staff/check-in/new/new-student-form"
 
 const LEAD = "1ead0000-0000-4000-8000-000000000999"
-const AGENT = { code: "BJN-402", fullName: "Baraka Juma Njoroge", state: "approved" }
+const AGENT = {
+  kind: "agent",
+  code: "BJN-402",
+  holderName: "Baraka Juma Njoroge",
+  state: "approved",
+  amountOff: 10000,
+  agentId: "a9e00000-0000-4000-8000-000000000402",
+  promoCodeId: null,
+}
+const PROMO = {
+  kind: "promo",
+  code: "INSTA26",
+  holderName: "Instagram ad, November 2026",
+  state: "active",
+  amountOff: 25000,
+  agentId: null,
+  promoCodeId: "9a000000-0000-4000-8000-000000000026",
+}
 
 type User = ReturnType<typeof userEvent.setup>
 
-async function toStudentStep(user: User, props: { canEditContact: boolean; canEnterReferralCode: boolean; interviewDiscount: number | null }) {
+async function toStudentStep(user: User, props: { canEditContact: boolean; canEnterReferralCode: boolean }) {
   render(<NewStudentForm today="2026-10-06" years={[2026, 2027]} {...props} />)
   await user.type(screen.getByLabelText("Full name"), "Mwanaidi Said")
   await user.type(screen.getByLabelText("Phone"), "0700 000 999")
@@ -39,8 +56,8 @@ async function fillStudent(user: User) {
   await user.click(screen.getByRole("radio", { name: "Day" }))
 }
 
-async function registerWithCode(user: User, interviewDiscount: number | null = 10000) {
-  await toStudentStep(user, { canEditContact: true, canEnterReferralCode: true, interviewDiscount })
+async function registerWithCode(user: User) {
+  await toStudentStep(user, { canEditContact: true, canEnterReferralCode: true })
   await fillStudent(user)
   await user.type(screen.getByLabelText(/^Referral code/), "bjn-402")
   await screen.findByText(/Baraka Juma Njoroge/)
@@ -49,24 +66,38 @@ async function registerWithCode(user: User, interviewDiscount: number | null = 1
 }
 
 beforeEach(() => {
-  stubs.lookUp.mockReset().mockResolvedValue({ status: "found", agent: AGENT })
+  stubs.lookUp.mockReset().mockResolvedValue({ status: "found", code: AGENT })
   stubs.register.mockReset()
 })
 
 describe("New Student with a Referral code", () => {
-  it("names the agent and the interview fee the family will pay, from the discount it was given", async () => {
+  it("names the agent and the interview fee the family will pay, from the code's own amount", async () => {
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: true, interviewDiscount: 10000 })
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: true })
     await user.type(screen.getByLabelText(/^Referral code/), "bjn-402")
     expect(await screen.findByText("Baraka Juma Njoroge · interview fee becomes TZS 40,000")).toBeInTheDocument()
   })
 
-  it("names only the agent when the discount could not be read", async () => {
+  it("names a Promo code, its fee and that no agent or commission comes with it", async () => {
+    stubs.lookUp.mockResolvedValue({ status: "found", code: PROMO })
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: true, interviewDiscount: null })
-    await user.type(screen.getByLabelText(/^Referral code/), "bjn-402")
-    expect(await screen.findByText("Baraka Juma Njoroge · Approved")).toBeInTheDocument()
-    expect(screen.getByRole("status")).not.toHaveTextContent("TZS")
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: true })
+    await user.type(screen.getByLabelText(/^Referral code/), "insta26")
+    expect(
+      await screen.findByText(
+        "Instagram ad, November 2026 · Promo code · interview fee becomes TZS 25,000. No Marketing Agent. No commission.",
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it("names a paused Promo code without a fee change", async () => {
+    stubs.lookUp.mockResolvedValue({ status: "found", code: { ...PROMO, state: "paused", amountOff: 0 } })
+    const user = userEvent.setup()
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: true })
+    await user.type(screen.getByLabelText(/^Referral code/), "insta26")
+    expect(
+      await screen.findByText("Instagram ad, November 2026 · Promo code, Paused · no discount. No Marketing Agent. No commission."),
+    ).toBeInTheDocument()
   })
 
   it("sends the agent's code with the registration", async () => {
@@ -99,7 +130,7 @@ describe("New Student with a Referral code", () => {
 
   it("has no Referral code field for staff who may not set one", async () => {
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: false, canEnterReferralCode: false, interviewDiscount: 10000 })
+    await toStudentStep(user, { canEditContact: false, canEnterReferralCode: false })
     expect(screen.queryByLabelText(/^Referral code/)).not.toBeInTheDocument()
   })
 })
@@ -107,7 +138,7 @@ describe("New Student with a Referral code", () => {
 describe("the registration screens", () => {
   it("asks one question per screen, keeps the entered steps in the rail, and Change returns to a step", async () => {
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false, interviewDiscount: null })
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false })
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Who is the student?")
     expect(screen.getByRole("heading", { level: 1 })).toHaveFocus()
@@ -126,7 +157,7 @@ describe("the registration screens", () => {
 
   it("will not go to Review until a class, a year and day or boarding are chosen", async () => {
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false, interviewDiscount: null })
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false })
     await user.type(screen.getByLabelText("Student's full name"), "Hamisi Said")
 
     await user.click(screen.getByRole("button", { name: "Continue to review" }))
@@ -154,7 +185,7 @@ describe("the registration screens", () => {
 
   it("keeps the visit date as a line until it is changed", async () => {
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false, interviewDiscount: null })
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false })
 
     expect(screen.queryByLabelText("Visit date")).not.toBeInTheDocument()
     expect(screen.getByText(/^Visit date: today, 6 Oct 2026/)).toBeInTheDocument()
@@ -169,7 +200,7 @@ describe("the registration screens", () => {
     let finish: (outcome: unknown) => void = () => {}
     stubs.register.mockReturnValue(new Promise((resolve) => (finish = resolve)))
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false, interviewDiscount: null })
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false })
     await fillStudent(user)
     await user.click(screen.getByRole("button", { name: "Continue to review" }))
     await user.click(await screen.findByRole("button", { name: "Register student" }))
@@ -185,7 +216,7 @@ describe("the registration screens", () => {
   it("retires the duplicate refusal once the rail's Change leaves Review", async () => {
     stubs.register.mockResolvedValue({ status: "duplicate", admissionNumber: "ADMSN-55555", href: "/staff/leads/x" })
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false, interviewDiscount: null })
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false })
     await fillStudent(user)
     await user.click(screen.getByRole("button", { name: "Continue to review" }))
     await user.click(await screen.findByRole("button", { name: "Register student" }))
@@ -201,7 +232,7 @@ describe("the registration screens", () => {
   it("Register another child keeps the parent and starts the Family check again", async () => {
     stubs.register.mockResolvedValue({ status: "created", leadId: LEAD, admissionNumber: "ADMSN-12345", referralCode: "none" })
     const user = userEvent.setup()
-    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false, interviewDiscount: null })
+    await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false })
     await fillStudent(user)
     await user.click(screen.getByRole("button", { name: "Continue to review" }))
     await user.click(await screen.findByRole("button", { name: "Register student" }))

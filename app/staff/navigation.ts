@@ -12,6 +12,7 @@ import {
   RotateCcwIcon,
   ScrollTextIcon,
   ShieldCheckIcon,
+  TicketPercentIcon,
   UserPlusIcon,
   UsersIcon,
   WalletIcon,
@@ -63,6 +64,7 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
   { href: "/staff/follow-ups", label: "Follow-ups", group: "Admissions", icon: PhoneIcon, permission: "leads.view" },
   { href: "/staff/re-applications", label: "Re-applications", group: "Admissions", icon: RepeatIcon, permission: "leads.view" },
   { href: "/staff/agents", label: "Marketing Agents", group: "Referrals", icon: MegaphoneIcon, permission: "leads.view" },
+  { href: "/staff/promo-codes", label: "Promo codes", group: "Referrals", icon: TicketPercentIcon, permission: "leads.view" },
   { href: "/staff/group-links", label: "WhatsApp groups", group: "Referrals", icon: MessageCircleIcon, permission: "leads.view" },
   {
     href: "/staff/fees",

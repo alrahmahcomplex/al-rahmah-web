@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
 
 import { Field, Saved } from "./lead-editors"
 import { lookUpReferralCode, saveLeadReferralCode } from "./referral-actions"
-import { referralLookupNote, type ReferralLookup, type ReferralOutcome } from "./referral-outcome"
+import { referralLookupNote, usableCode, type ReferralLookup, type ReferralOutcome } from "./referral-outcome"
 
 const LOST_REQUEST: ReferralOutcome = {
   status: "refused",
@@ -31,7 +31,8 @@ const LOST_REQUEST: ReferralOutcome = {
 const LOOKUP_DELAY_MS = 300
 
 // Edit and Clear on the Referral code panel. Edit opens an input that names
-// the agent as the code is typed; Save takes only a code an agent holds.
+// the agent or Promo code as the code is typed; Save takes only a code a
+// current agent or a Promo code holds.
 // Clear asks first, since it can raise the interview fee.
 export function ReferralEditor({
   leadId,
@@ -39,7 +40,7 @@ export function ReferralEditor({
   discountApplied,
 }: {
   leadId: string
-  current: { code: string; agentName: string | null } | null
+  current: { code: string; holderName: string | null } | null
   discountApplied: boolean
 }) {
   const [editing, setEditing] = useState(false)
@@ -112,7 +113,7 @@ export function ReferralEditor({
               <AlertDialogTitle>Clear the referral code?</AlertDialogTitle>
               <AlertDialogDescription>
                 <span className="font-mono font-semibold text-foreground">{current.code}</span>
-                {current.agentName ? ` (${current.agentName})` : ""} will no longer be on this lead
+                {current.holderName ? ` (${current.holderName})` : ""} will no longer be on this lead
                 {discountApplied ? ", and the interview fee loses its discount." : "."} The lead&apos;s history keeps
                 the change.
               </AlertDialogDescription>
@@ -148,7 +149,7 @@ function CodeForm({
 }) {
   const [typed, setTyped] = useState(current ?? "")
   const lookup = useCodeLookup(typed)
-  const found = lookup.status === "found" ? lookup.agent : null
+  const found = usableCode(lookup)
   const unchanged = found !== null && found.code === current
 
   return (
@@ -173,7 +174,7 @@ function CodeForm({
               spellCheck={false}
               maxLength={40}
               aria-describedby={typed.trim() ? `${id}-agent ${id}-reminder` : `${id}-agent`}
-              aria-invalid={lookup.status === "none"}
+              aria-invalid={lookup.status === "none" || (lookup.status === "found" && found === null)}
               className="max-w-48 font-mono uppercase"
             />
             {/* Names the agent as the code is typed. */}
@@ -182,7 +183,7 @@ function CodeForm({
               role="status"
               className={cn(
                 "text-sm",
-                lookup.status === "found" ? "text-slate-900" : lookup.status === "none" ? "text-destructive" : "text-muted-foreground",
+                found ? "text-slate-900" : lookup.status === "none" || lookup.status === "found" ? "text-destructive" : "text-muted-foreground",
               )}
             >
               {unchanged ? `${referralLookupNote(lookup)} (the lead's current code)` : referralLookupNote(lookup)}

@@ -543,7 +543,8 @@ export function AdmissionFormSteps({
       : checking.has(currentCode)
         ? copy.discountChecking
         : answer?.status === "approved"
-          ? copy.discountNotes.approved(answer.discount === null ? null : tzs(answer.discount))
+          ? // The code's own amount: the fee it leaves, taken from the standard fee.
+            copy.discountNotes.approved(tzs(STANDARD_INTERVIEW_FEE - answer.amount))
           : answer
             ? copy.discountNotes[answer.status === "rate-limited" || answer.status === "unavailable" ? "unchecked" : answer.status]
             : null

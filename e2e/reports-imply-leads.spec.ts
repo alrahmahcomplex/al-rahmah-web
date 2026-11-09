@@ -10,7 +10,7 @@ import { signInAsSuperAdmin } from "./super-admin"
 
 const unique = (name: string) => `${name} ${randomUUID().slice(0, 8)}`
 const callout = (page: Page) => page.locator("[data-slot=alert]")
-const LEADS = "View leads and their history"
+const LEADS = "View applicants and their history"
 const REPORTS = "View reports"
 
 test("ticking View reports ticks View leads, and unticking View leads unticks both", async ({ page }) => {

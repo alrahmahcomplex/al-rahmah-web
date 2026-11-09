@@ -139,7 +139,7 @@ describe("set_role_permission", () => {
     if (!history.ok) throw new Error(history.error)
     const name = overview.data.roles.find((role) => role.id === id)!.name
     const change = history.data.find((entry) => entry.summary === `changed the role ${name}`)
-    expect(change?.changes).toEqual([{ field: "permissions", from: "None", to: "View leads and their history, View reports" }])
+    expect(change?.changes).toEqual([{ field: "permissions", from: "None", to: "View applicants and their history, View reports" }])
   })
 })
 

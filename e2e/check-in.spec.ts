@@ -339,8 +339,12 @@ test.describe("who sees what", () => {
 
   test("a lead that does not exist is not found", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    const response = await page.goto(`/staff/applicants/${randomUUID()}`)
-    expect(response?.status()).toBe(404)
+    // The application page streams behind its loading skeleton, so the
+    // status is already sent when the lookup finds nothing. Next marks the
+    // page noindex; what staff see is the staff 404 inside the shell.
+    await page.goto(`/staff/applicants/${randomUUID()}`)
+    await expect(page.getByRole("heading", { name: "This page does not exist", level: 1 })).toBeVisible()
+    await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(1)
   })
 
   test("someone signed out is sent to sign in", async ({ page }) => {

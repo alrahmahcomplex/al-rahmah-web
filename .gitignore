@@ -6,6 +6,8 @@
 *.xlsx
 *.xls
 *.csv
+# Except test fixtures: invented names and placeholders only.
+!e2e/fixtures/*.csv
 
 # Local secrets
 .env*

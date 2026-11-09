@@ -5,6 +5,40 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- Each Marketing Agent can now have their own interview discount, set on the Agents screen.
+  Agents without one get the standard discount, which you can also change there. Before you
+  save, the screen lists the families whose unpaid interview fee will change. Fees already
+  marked Paid never change.
+- Promo codes: discount codes for a campaign or a group of families, with a name, a code and
+  an amount off, and no agent, login or commission. Parents type them in the same Discount
+  code box. You can pause, resume or end a code, and it shows how its amount compares with
+  what agents give.
+- Import applicants from a CSV on the Applicants screen. Every row is checked before anything
+  is saved, and you see which rows will be created, which join a family and which are
+  skipped. Students the workbook lists as Enrolled come in as Enrolled, marked "imported,
+  payments not recorded" until their first real payment.
+- Export applicants to a CSV with the columns you choose, or a ready list: Class list,
+  Follow-up calls or Discount codes. Parent phone numbers need their own permission, and the
+  full export is for the Super Admin only. Every export goes in the audit history.
+- Three new permissions on Staff and roles: "Set discount amounts and Promo codes", "Import
+  applicants from CSV" and "Export applicants". The Admissions Manager template has all three.
+
+### IMPROVED
+
+- Staff screens now say applicant, application and student instead of lead. The Leads screen
+  is now Applicants, at `/staff/applicants`; old links still work.
+- Every staff screen shows its outline straight away while it loads, with the Al-Rahmah globe
+  and book as the loading mark. Empty lists, finished imports and error pages are clearer,
+  and an address that doesn't exist shows an Al-Rahmah page instead of a bare error.
+- Staff pages should load faster: the server now runs in Europe next to the database, and
+  sign-in is checked without an extra round trip on each page.
+- The Super Admin's email is now marketing.alrahmah@gmail.com. The name stays Al-Rahmah
+  Complex.
+
 ## November 9, 2026 `v0.92.1`
 
 ### FIXED

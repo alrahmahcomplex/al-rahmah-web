@@ -197,7 +197,7 @@ describe("describeAuditRow", () => {
       ["role-admissions", "Admissions Staff"],
       ["role-accountant", "Accountant"],
     ]),
-    permissionLabels: new Map([["leads.view", "View leads and their history"]]),
+    permissionLabels: new Map([["leads.view", "View applicants and their history"]]),
   }
 
   function row(overrides: Partial<AuditRow>): AuditRow {
@@ -337,7 +337,7 @@ describe("describeAuditRow", () => {
       ),
     ).toMatchObject({
       summary: "changed the role Accountant",
-      changes: [{ field: "permissions", from: "None", to: "View leads and their history" }],
+      changes: [{ field: "permissions", from: "None", to: "View applicants and their history" }],
     })
     expect(
       describeAuditRow(row({ table_name: null, row_id: null, action: "invite_sent", new_values: { email: "x@example.test" } }), lookup),

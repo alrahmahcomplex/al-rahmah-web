@@ -1,0 +1,8 @@
+Student name,Class,Enrollment year,Day or boarding,Parent/guardian name,Relationship,Parent phone,WhatsApp,Visit date,Discount code,Status
+Amani {tag} Mfano,STD 1,{year},Day,Neema {tag} Mzazi,Mother,{phone1},,05/11/2026,,Visited
+Baraka {tag} Mfano,KG 2,{year},,Neema {tag} Mzazi,Mother,{phone1},,,,
+Chausiku {tag} Mfano,PRE-FORM ONE,{year},Boarding,Juma {tag} Baba,Father,{phone2},,2026-10-01,,Contracted
+Dotto {tag} Mfano,STD 9,{year},Day,Rehema {tag} Mama,Mother,{phone3},,,,Applied
+Eliya {tag} Mfano,STD 2,{year},Day,Saida {tag} Mama,Mother,7.12E+08,,,,Applied
+Faraja {tag} Mfano,STD 4,{year},Day,Zawadi {tag} Mama,Mother,{existingPhone},,,,Visited
+Gift {tag} Mfano,STD 6,{year},Day,Zawadi {tag} Mama,Mother,{existingPhone},,,,Applied

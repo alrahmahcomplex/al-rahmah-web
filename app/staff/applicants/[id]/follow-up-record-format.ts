@@ -56,14 +56,14 @@ const CAUSES: Record<NonNullable<FollowUpRecord["cause"]>, string> = {
 // How a record ended, in words. `nextDueOn` is the date of the follow-up it
 // planned, when there is one.
 export function recordOutcomeText(record: Pick<FollowUpRecord, "kind" | "outcome" | "cause">, nextDueOn: string | null): string {
-  if (record.kind === "closed_with_lead") return record.cause ? `Closed with the lead (${CAUSES[record.cause]})` : "Closed with the lead"
+  if (record.kind === "closed_with_lead") return record.cause ? `Closed with the application (${CAUSES[record.cause]})` : "Closed with the application"
   switch (record.outcome) {
     case "next_date":
       return nextDueOn ? `Next follow-up: ${formatDate(nextDueOn)}` : "Next follow-up planned"
     case "lead_enrolled":
-      return "No next date: the lead is Enrolled"
+      return "No next date: the student is Enrolled"
     case "lead_declined":
-      return "The family will not proceed: lead declined"
+      return "The family will not proceed: application declined"
     default:
       return "Recorded"
   }

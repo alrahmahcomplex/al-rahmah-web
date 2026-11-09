@@ -30,6 +30,6 @@ test("a lead paid in Full shows Enrolled, the payment that enrolled it, and why 
   await expect(fee.getByText(`On ${formatDate("2026-09-26")}`)).toBeVisible()
 
   await openLeadHistoryAsSuperAdmin(page, SEEDED_FULL)
-  await expect(page.getByText("enrolled the lead, because a school-fee payment was recorded")).toBeVisible()
-  await expect(page.getByText("recorded what enrolled the lead")).toBeVisible()
+  await expect(page.getByText("enrolled the applicant, because a school-fee payment was recorded")).toBeVisible()
+  await expect(page.getByText("recorded what enrolled the applicant")).toBeVisible()
 })

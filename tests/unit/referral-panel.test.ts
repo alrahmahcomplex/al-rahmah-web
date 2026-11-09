@@ -162,12 +162,12 @@ describe("the Referral code panel's words", () => {
         expect(outcome.message).not.toContain(error)
       }
     }
-    expect(referralOutcome({ ok: false, error: "no-change" }, "set").message).toBe("The lead already has this referral code.")
+    expect(referralOutcome({ ok: false, error: "no-change" }, "set").message).toBe("The application already has this referral code.")
     expect(referralOutcome({ ok: false, error: "no-change" }, "clear").message).toBe(
-      "This lead has no referral code to clear. Reload the page.",
+      "This application has no referral code to clear. Reload the page.",
     )
     expect(referralOutcome({ ok: false, error: "lead-closed" }, "set").message).toBe(
-      "This lead is closed, so its referral code can't be changed.",
+      "This application is closed, so its referral code can't be changed.",
     )
   })
 

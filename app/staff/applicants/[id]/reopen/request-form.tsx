@@ -14,7 +14,7 @@ import type { RaiseOutcome } from "../reopening-outcome"
 
 const LOST_REQUEST: RaiseOutcome = {
   status: "refused",
-  message: "The request could not be confirmed. Check your connection, then open the lead to see whether it was sent.",
+  message: "The request could not be confirmed. Check your connection, then open the application to see whether it was sent.",
 }
 
 // The Reopening request form: why the family is back, required. A request

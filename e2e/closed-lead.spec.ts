@@ -32,7 +32,7 @@ test.describe("a closed lead", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/applicants/${ARCHIVED}`)
 
-    const banner = page.getByRole("region", { name: "This lead is Archived" })
+    const banner = page.getByRole("region", { name: "This application is Archived" })
     await expect(banner).toContainText("read-only")
     // The banner stands in for the Next step.
     await expect(page.getByRole("region", { name: "Next step" })).toHaveCount(0)
@@ -52,7 +52,7 @@ test.describe("a closed lead", () => {
   test("names a Declined lead's state", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/applicants/${DECLINED}`)
-    await expect(page.getByRole("region", { name: "This lead is Declined" })).toBeVisible()
+    await expect(page.getByRole("region", { name: "This application is Declined" })).toBeVisible()
     await expect(page.getByRole("region", { name: "Next step" })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Edit student" })).toHaveCount(0)
   })
@@ -60,7 +60,7 @@ test.describe("a closed lead", () => {
   test("the Accountant sees the banner without the way to reopening", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
     await page.goto(`/staff/applicants/${ARCHIVED}`)
-    await expect(page.getByRole("region", { name: "This lead is Archived" })).toBeVisible()
+    await expect(page.getByRole("region", { name: "This application is Archived" })).toBeVisible()
     await expect(page.getByRole("link", { name: "Request reopening" })).toHaveCount(0)
   })
 
@@ -68,7 +68,7 @@ test.describe("a closed lead", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/applicants/${OPEN_WITH_CLOSED_SISTER}`)
     await expect(page.getByRole("heading", { name: "Daudi Kibwana" })).toBeVisible()
-    await expect(page.getByRole("region", { name: /^This lead is/ })).toHaveCount(0)
+    await expect(page.getByRole("region", { name: /^This application is/ })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Edit student" })).toBeVisible()
     await expect(page.getByRole("button", { name: "Edit parent or guardian" })).toBeVisible()
   })

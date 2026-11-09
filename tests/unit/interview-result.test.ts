@@ -9,7 +9,7 @@ describe("recordedOutcome", () => {
   it("says whether the result was recorded, corrected, or left as it was", () => {
     expect(recordedOutcome({ firstRecording: true, changed: true })).toEqual({
       status: "saved",
-      message: "Result recorded. The lead is Interviewed.",
+      message: "Result recorded. The applicant is Interviewed.",
     })
     expect(recordedOutcome({ firstRecording: false, changed: true })).toEqual({
       status: "saved",
@@ -107,6 +107,6 @@ describe("an interview result in the lead's history", () => {
       [{ ...base, record: "lead", recordId: "11111111-1111-4111-8111-111111111111", changes: [{ field: "status", from: "Visited", to: "Interviewed" }] }],
       {},
     )
-    expect(described.summary).toBe("moved the lead to Interviewed")
+    expect(described.summary).toBe("moved the applicant to Interviewed")
   })
 })

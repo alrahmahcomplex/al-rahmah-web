@@ -46,7 +46,7 @@ export function RegisterInterview({
         <div className="flex max-w-xl flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
           {retake ? (
             <p className="text-sm text-slate-900">
-              This lead was reopened to retake the interview. Registering the retaken interview gives it the next S/N
+              This application was reopened to retake the interview. Registering the retaken interview gives it the next S/N
               for the enrollment year and its own fee, Not Paid. The earlier interview and its result stay on record.
             </p>
           ) : (

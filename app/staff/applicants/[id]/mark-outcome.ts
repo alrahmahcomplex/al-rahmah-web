@@ -10,15 +10,15 @@ export type MarkOutcome = { status: "marked" } | { status: "refused"; message: s
 export function markOutcome(error: MarkError): MarkOutcome {
   switch (error) {
     case "forbidden":
-      return { status: "refused", message: "Your role can't mark leads Inactive or Archived. Nothing was changed." }
+      return { status: "refused", message: "Your role can't mark applications Inactive or Archived. Nothing was changed." }
     case "invalid":
       return {
         status: "refused",
         message:
-          "Choose a reason from the list, with a note of at most 1,000 characters. If the lead was marked meanwhile, reload the page to see its mark.",
+          "Choose a reason from the list, with a note of at most 1,000 characters. If the application was marked meanwhile, reload the page to see its mark.",
       }
     case "not-found":
-      return { status: "refused", message: "This lead could not be found. Reload the page." }
+      return { status: "refused", message: "This application could not be found. Reload the page." }
     case "unavailable":
       return { status: "refused", message: "The mark could not be saved. Nothing was changed. Try again in a moment." }
   }

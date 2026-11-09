@@ -78,7 +78,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
             <>
               <p className="text-sm text-muted-foreground">
                 {view.data.offer.channel === "whatsapp"
-                  ? "The names on this lead make the message too long for WhatsApp, so it goes by SMS. Check the student's and the parent's names."
+                  ? "The names on this application make the message too long for WhatsApp, so it goes by SMS. Check the student's and the parent's names."
                   : "None of the parent's numbers can take a WhatsApp link, so the result goes by SMS."}{" "}
                 Send SMS records the release, then shows the text and the number to send it to from the office phone.
               </p>

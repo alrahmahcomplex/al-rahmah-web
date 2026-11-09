@@ -240,7 +240,7 @@ test.describe("a family who gives their Admission Number", () => {
     await lookUp(page, await unusedAdmissionNumber())
 
     const notFound = page.locator("[data-slot=alert]")
-    await expect(notFound).toContainText("No lead with this Admission Number")
+    await expect(notFound).toContainText("No applicant with this Admission Number")
     await expect(page).toHaveURL(/\/staff\/check-in$/)
 
     await notFound.getByRole("button", { name: "Try again" }).click()
@@ -292,7 +292,7 @@ test.describe("a family who gives their Admission Number", () => {
 
     const refusal = page.locator("[data-slot=alert]")
     await expect(refusal).toContainText("The lookup could not be completed")
-    await expect(refusal).not.toContainText("No lead")
+    await expect(refusal).not.toContainText("No applicant")
     await expect(field).not.toHaveAttribute("readonly")
     await expect(field).toHaveValue("ADMSN-90002")
 
@@ -310,7 +310,7 @@ test.describe("a family who gives their Admission Number", () => {
 
     await lookUp(page, await unusedAdmissionNumber())
     const notFound = page.locator("[data-slot=alert]")
-    await expect(notFound).toContainText("No lead with this Admission Number")
+    await expect(notFound).toContainText("No applicant with this Admission Number")
     await expect(notFound.getByRole("button", { name: "Try again" })).toBeVisible()
     await expect(notFound.getByRole("link", { name: "New family, never registered" })).toHaveCount(0)
   })

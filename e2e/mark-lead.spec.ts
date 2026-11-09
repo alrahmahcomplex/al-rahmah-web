@@ -61,7 +61,7 @@ test.describe("marking a lead", () => {
     await dialog.getByLabel("Note").fill("Waiting to hear about a job transfer.")
     await dialog.getByRole("button", { name: "Mark inactive" }).click()
 
-    const banner = page.getByRole("region", { name: "This lead is Inactive" })
+    const banner = page.getByRole("region", { name: "This application is Inactive" })
     await expect(banner).toContainText("No longer pursuing admission")
     await expect(banner).toContainText("Waiting to hear about a job transfer.")
     await expect(banner).toContainText(ADMISSIONS.name)
@@ -70,7 +70,7 @@ test.describe("marking a lead", () => {
     expect(await moreActions(page)).toEqual(["Request reopening", "Archive"])
 
     await openLeadHistoryAsSuperAdmin(page)
-    await expect(page.getByText("marked the lead Inactive").first()).toBeVisible()
+    await expect(page.getByText("marked the application Inactive").first()).toBeVisible()
   })
 
   test("the Manager archives a Declined lead, and the banner shows the decline and the mark", async ({ page }) => {
@@ -79,14 +79,14 @@ test.describe("marking a lead", () => {
     await signIn(page, MANAGER)
     await page.goto(`/staff/applicants/${lead.id}`)
 
-    await expect(page.getByRole("region", { name: "This lead is Declined" })).toBeVisible()
+    await expect(page.getByRole("region", { name: "This application is Declined" })).toBeVisible()
     expect(await moreActions(page)).toEqual(expect.arrayContaining(["Mark inactive", "Archive"]))
     await chooseMore(page, "Archive")
     const dialog = page.getByRole("dialog", { name: `Archive ${lead.name}`, exact: true })
     await dialog.getByLabel("Reason").selectOption("Admission cycle ended")
     await dialog.getByRole("button", { name: "Archive" }).click()
 
-    const banner = page.getByRole("region", { name: "This lead is Declined and Archived" })
+    const banner = page.getByRole("region", { name: "This application is Declined and Archived" })
     await expect(banner).toContainText("Enrolled elsewhere")
     await expect(banner).toContainText("Admission cycle ended")
     await expect(banner).toContainText(MANAGER.name)
@@ -105,7 +105,7 @@ test.describe("marking a lead", () => {
 
     await page.reload()
     expect(await moreActions(page)).toContain("Archive")
-    await expect(page.getByRole("region", { name: /^This lead is/ })).toHaveCount(0)
+    await expect(page.getByRole("region", { name: /^This application is/ })).toHaveCount(0)
   })
 
   test("the Accountant gets neither action, and an Archived lead offers none", async ({ page }) => {
@@ -119,7 +119,7 @@ test.describe("marking a lead", () => {
     await signIn(page, ADMISSIONS)
     for (const id of [ARCHIVED, DECLINED_AND_ARCHIVED]) {
       await page.goto(`/staff/applicants/${id}`)
-      await expect(page.getByRole("region", { name: /^This lead is .*Archived$/ })).toBeVisible()
+      await expect(page.getByRole("region", { name: /^This application is .*Archived$/ })).toBeVisible()
       const offered = await moreActions(page)
       expect(offered).not.toContain("Mark inactive")
       expect(offered).not.toContain("Archive")
@@ -129,7 +129,7 @@ test.describe("marking a lead", () => {
   test("the seeded Inactive lead shows its reason, note, who and when, and offers Archive alone", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/applicants/${INACTIVE}`)
-    const banner = page.getByRole("region", { name: "This lead is Inactive" })
+    const banner = page.getByRole("region", { name: "This application is Inactive" })
     await expect(banner).toContainText("No longer pursuing admission")
     await expect(banner).toContainText("waiting to hear about a job transfer")
     await expect(banner).toContainText(ADMISSIONS.name)

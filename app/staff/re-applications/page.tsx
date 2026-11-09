@@ -86,7 +86,7 @@ function Results({ results, search }: { results: ReApplicationList; search: ReAp
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">Admission Number</th>
                 <th scope="col" className="px-3 py-2 font-medium">Student</th>
-                <th scope="col" className="px-3 py-2 font-medium">Lead</th>
+                <th scope="col" className="px-3 py-2 font-medium">Application</th>
                 <th scope="col" className="px-3 py-2 font-medium">Arrived</th>
                 <th scope="col" className="px-3 py-2 font-medium">Differences</th>
                 {reviewed && <th scope="col" className="px-3 py-2 font-medium">Reviewed</th>}

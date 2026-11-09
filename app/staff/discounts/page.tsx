@@ -69,7 +69,7 @@ export default async function DiscountRequestsPage() {
               </p>
               <p className="text-sm break-words whitespace-pre-line text-slate-900">{request.note}</p>
               {!request.leadOpen && (
-                <p className="text-sm text-slate-700">This lead is closed. It can be granted only after it is reopened.</p>
+                <p className="text-sm text-slate-700">This application is closed. It can be granted only after it is reopened.</p>
               )}
               <DecideDiscount
                 leadId={request.leadId}

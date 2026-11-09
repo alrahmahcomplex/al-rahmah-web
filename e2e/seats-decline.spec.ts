@@ -115,9 +115,9 @@ test("the Manager declines a ranked lead from Seats with No seat available", asy
 
   const confirm = page.getByRole("dialog", { name: `Decline ${lead.name}?`, exact: true })
   await expect(confirm).toContainText("No seat available")
-  await confirm.getByRole("button", { name: "Decline lead" }).click()
+  await confirm.getByRole("button", { name: "Decline application" }).click()
 
-  const banner = page.getByRole("region", { name: "This lead is Declined" })
+  const banner = page.getByRole("region", { name: "This application is Declined" })
   await expect(banner).toContainText("No seat available")
   await expect(banner).toContainText(MANAGER.name)
   // The link's reason leaves the address, so a reload after a later

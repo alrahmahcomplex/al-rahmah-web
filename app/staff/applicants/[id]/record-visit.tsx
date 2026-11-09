@@ -101,7 +101,7 @@ function RecordVisitForm({
   const [visitDate, setVisitDate] = useState(today)
   const visitDateRef = useRef<HTMLInputElement>(null)
   useEffect(() => visitDateRef.current?.focus(), [])
-  const { refusal, pending, save } = useCorrection(() => onDone("Visit recorded. The lead is now Visited."))
+  const { refusal, pending, save } = useCorrection(() => onDone("Visit recorded. The applicant is now Visited."))
 
   return (
     <form

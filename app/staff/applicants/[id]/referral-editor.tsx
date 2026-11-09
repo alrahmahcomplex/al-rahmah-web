@@ -113,8 +113,8 @@ export function ReferralEditor({
               <AlertDialogTitle>Clear the referral code?</AlertDialogTitle>
               <AlertDialogDescription>
                 <span className="font-mono font-semibold text-foreground">{current.code}</span>
-                {current.holderName ? ` (${current.holderName})` : ""} will no longer be on this lead
-                {discountApplied ? ", and the interview fee loses its discount." : "."} The lead&apos;s history keeps
+                {current.holderName ? ` (${current.holderName})` : ""} will no longer be on this application
+                {discountApplied ? ", and the interview fee loses its discount." : "."} The application&apos;s history keeps
                 the change.
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -186,7 +186,7 @@ function CodeForm({
                 found ? "text-slate-900" : lookup.status === "none" || lookup.status === "found" ? "text-destructive" : "text-muted-foreground",
               )}
             >
-              {unchanged ? `${referralLookupNote(lookup)} (the lead's current code)` : referralLookupNote(lookup)}
+              {unchanged ? `${referralLookupNote(lookup)} (the application's current code)` : referralLookupNote(lookup)}
             </p>
             {/* A code staff save records that the family was told (#182). */}
             {typed.trim() && (

@@ -64,7 +64,7 @@ describe("a Referral code change in the lead's history", () => {
 
   it("shows the code on a lead's creation, as the Admission form stores it", () => {
     const created = described({ ...update(null, "XYZ-999"), action: "insert" })
-    expect(created.summary).toBe("created the lead")
+    expect(created.summary).toBe("created the application")
     expect(created.changes).toEqual([{ label: "Referral code", from: null, to: "XYZ-999" }])
   })
 

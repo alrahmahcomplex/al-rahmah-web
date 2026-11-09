@@ -105,7 +105,7 @@ export function ArrivalSearch({ canRegister }: { canRegister: boolean }) {
       {outcome && nothing && (
         <Alert variant="destructive" role="alert" className="gap-3 p-3">
           <AlertTitle>
-            {outcome.status === "not-found" ? "No lead with this Admission Number" : `No student matches “${outcome.query}”`}
+            {outcome.status === "not-found" ? "No applicant with this Admission Number" : `No student matches “${outcome.query}”`}
           </AlertTitle>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={tryAgain}>
@@ -185,7 +185,7 @@ function Matches({ query, leads, total }: { query: string; leads: ArrivalMatch[]
         <p className="text-xs text-muted-foreground">
           Showing the first {leads.length} of {total.toLocaleString("en-US")}. Add more of the name, or{" "}
           <Link href={`/staff/applicants?q=${encodeURIComponent(query)}`} className="font-medium text-blue-600 underline underline-offset-4">
-            search on Leads
+            search on Applicants
           </Link>
           .
         </p>

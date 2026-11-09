@@ -62,7 +62,7 @@ describe("a decline in the history", () => {
 
   it("says the lead was declined, with the reason and explanation labelled, and leaves out who and when", () => {
     const [described] = describeLeadHistory([entry], {})
-    expect(described.summary).toBe("declined the lead")
+    expect(described.summary).toBe("declined the application")
     expect(described.changes).toEqual([
       { label: "Status", from: "Visited", to: "Declined" },
       { label: "Declined reason", from: "None", to: "Other" },

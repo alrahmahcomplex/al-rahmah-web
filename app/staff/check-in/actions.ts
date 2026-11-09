@@ -37,7 +37,7 @@ export async function lookUpAdmissionNumber(typed: string): Promise<LookupOutcom
 
   const supabase = await createClient()
   const allowed = await requirePermission(supabase, "leads.view")
-  if (!allowed.ok) return { status: "refused", message: "Your role can't look up leads." }
+  if (!allowed.ok) return { status: "refused", message: "Your role can't look up applicants." }
 
   const result = await findLeadByAdmissionNumber(supabase, typed)
   if (result.ok) return { status: "found", href: `/staff/applicants/${result.data}` }
@@ -61,7 +61,7 @@ export async function findArrival(typed: string): Promise<ArrivalOutcome> {
 
   const supabase = await createClient()
   const allowed = await requirePermission(supabase, "leads.view")
-  if (!allowed.ok) return { status: "refused", message: "Your role can't look up leads." }
+  if (!allowed.ok) return { status: "refused", message: "Your role can't look up applicants." }
 
   const result = await searchLeads(supabase, { query, page: 1 })
   if (!result.ok) return { status: "refused", message: "The search could not be completed. Try again in a moment." }

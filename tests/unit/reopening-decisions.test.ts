@@ -39,19 +39,19 @@ describe("the retake choice", () => {
 describe("what approving does", () => {
   it("says where a Declined lead goes back to, Enrolled as Interviewed", () => {
     expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: "Visited", visitDate: "2026-09-01" })).toBe(
-      "The lead goes back to Visited. Staff can work on it again.",
+      "The application goes back to Visited. Staff can work on it again.",
     )
     expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: "Enrolled", visitDate: "2026-09-01" })).toBe(
-      "The lead comes back as Interviewed, and is Enrolled again at once if its payments still qualify. Staff can work on it again.",
+      "The application comes back as Interviewed, and is Enrolled again at once if its payments still qualify. Staff can work on it again.",
     )
   })
 
   it("names the status the database falls back to when the earlier one wasn't recorded", () => {
     expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: null, visitDate: "2026-09-01" })).toBe(
-      "The lead goes back to Visited. Staff can work on it again.",
+      "The application goes back to Visited. Staff can work on it again.",
     )
     expect(approvalConsequence({ status: "Declined", closure: null, statusBefore: null, visitDate: null })).toBe(
-      "The lead goes back to Applied. Staff can work on it again.",
+      "The application goes back to Applied. Staff can work on it again.",
     )
   })
 
@@ -60,7 +60,7 @@ describe("what approving does", () => {
       "Its Inactive mark is cleared and its status stays. Staff can work on it again.",
     )
     expect(approvalConsequence({ status: "Declined", closure: "Archived", statusBefore: "Applied", visitDate: null })).toBe(
-      "The lead goes back to Applied. Its Archived mark is cleared. Staff can work on it again.",
+      "The application goes back to Applied. Its Archived mark is cleared. Staff can work on it again.",
     )
   })
 })
@@ -98,8 +98,8 @@ describe("the seat warning on approval", () => {
     expect(seats).toEqual({
       kind: "full",
       message:
-        "KG 2 Boarding 2027 is full: 2 seats, 2 taken. Approving gives this lead its seat back with its Seat priority, " +
-        "First instalment, so the class will have more leads than seats. You can still approve.",
+        "KG 2 Boarding 2027 is full: 2 seats, 2 taken. Approving gives this applicant their seat back with its Seat priority, " +
+        "First instalment, so the class will have more applicants than seats. You can still approve.",
       seats: 2,
       ranked: [
         expect.objectContaining({ rank: 1, studentName: "Amani Kiwelu", thisLead: false, pastLastSeat: false }),
@@ -114,8 +114,8 @@ describe("the seat warning on approval", () => {
     expect(seats).toEqual({
       kind: "full",
       message:
-        "KG 2 Boarding 2027 is full: 1 seat, 1 taken. Approving gives this lead its seat back, " +
-        "so the class will have more leads than seats. You can still approve.",
+        "KG 2 Boarding 2027 is full: 1 seat, 1 taken. Approving gives this applicant their seat back, " +
+        "so the class will have more applicants than seats. You can still approve.",
       seats: 1,
       ranked: null,
     })
@@ -195,7 +195,7 @@ describe("a decision in the history", () => {
     expect(approval.changes).toEqual([
       { label: "Request", from: "Pending", to: "Approved" },
       { label: "Enrol without a retaken interview", from: "None", to: "Yes" },
-      { label: "Lead was Declined", from: "None", to: "Yes" },
+      { label: "Application was Declined", from: "None", to: "Yes" },
       { label: "Status restored to", from: "None", to: "Interviewed" },
     ])
   })
@@ -222,13 +222,13 @@ describe("a decision in the history", () => {
 
   it("says the lead was reopened, from Declined, a mark, or both", () => {
     const [both] = describeLeadHistory([leadReopened], {})
-    expect(both.summary).toBe("reopened the lead from Declined and Archived")
+    expect(both.summary).toBe("reopened the application from Declined and Archived")
     expect(both.changes).toContainEqual({ label: "Initially declined", from: "No", to: "Yes" })
 
     const declinedOnly = { ...leadReopened, changes: leadReopened.changes.filter((c) => !c.field.startsWith("closure")) }
-    expect(describeLeadHistory([declinedOnly], {})[0].summary).toBe("reopened the lead from Declined")
+    expect(describeLeadHistory([declinedOnly], {})[0].summary).toBe("reopened the application from Declined")
 
     const markOnly = { ...leadReopened, changes: leadReopened.changes.filter((c) => c.field.startsWith("closure")) }
-    expect(describeLeadHistory([markOnly], {})[0].summary).toBe("reopened the lead from Archived")
+    expect(describeLeadHistory([markOnly], {})[0].summary).toBe("reopened the application from Archived")
   })
 })

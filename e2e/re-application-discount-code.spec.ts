@@ -58,7 +58,7 @@ async function reApplied(code: string) {
   return { id: recorded.data as string, leadId }
 }
 
-const comparison = (page: Page) => page.getByRole("table", { name: "Compared with the lead" })
+const comparison = (page: Page) => page.getByRole("table", { name: "Compared with the application" })
 const codeRow = (page: Page) => comparison(page).getByRole("row", { name: /^Discount code/ })
 
 test.describe("a Discount code on a re-application", () => {
@@ -67,7 +67,7 @@ test.describe("a Discount code on a re-application", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/re-applications/${mine.id}`)
 
-    await expect(page.getByRole("main")).toContainText("1 field differs from the lead.")
+    await expect(page.getByRole("main")).toContainText("1 field differs from the application.")
     await expect(codeRow(page)).toContainText(PENDING_CODE)
     await expect(codeRow(page)).toContainText(APPROVED_CODE)
     await expect(codeRow(page)).toContainText("Differs")

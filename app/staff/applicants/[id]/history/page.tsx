@@ -14,7 +14,7 @@ import { requireStaff } from "../../../session"
 import { describeLeadHistory, type DescribedEntry } from "./describe"
 
 export const metadata: Metadata = {
-  title: "Lead history · Al-Rahmah Complex",
+  title: "Application history · Al-Rahmah Complex",
 }
 
 // The school is in Tanzania, so times read in East Africa Time whatever the
@@ -64,7 +64,7 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
 
       {!lead.ok || !history.ok ? (
         <Alert variant="destructive">
-          <AlertDescription>This lead&apos;s history could not be loaded. Try again in a moment.</AlertDescription>
+          <AlertDescription>This application&apos;s history could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : (
         <>
@@ -81,7 +81,7 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
 
       <div>
         <Link href={`/staff/applicants/${id}`} className={buttonVariants({ variant: "outline" })}>
-          Back to the lead
+          Back to the application
         </Link>
       </div>
     </div>

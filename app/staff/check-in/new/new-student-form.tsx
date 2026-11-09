@@ -851,7 +851,7 @@ function FamilyChildrenStep({
       {contact.children.some((child) => child.unconfirmed) && (
         <p className="text-xs text-muted-foreground">
           An unconfirmed child came through the Admission form with this number. Staff confirm or reject the match on
-          that child&apos;s lead.
+          that child&apos;s application.
         </p>
       )}
       <Footer>
@@ -1165,7 +1165,7 @@ function codeRefusalMessage(lookup: ReferralLookup): string {
     case "checking":
       return "The code is still being checked. Wait a moment, then choose Continue to review again."
     case "unavailable":
-      return "The code could not be checked just now. Try again, or clear the field and add the code on the lead later."
+      return "The code could not be checked just now. Try again, or clear the field and add the code on the application later."
     case "found":
       return "This code belongs to a retired Marketing Agent record. Correct it, or clear the field to register without one."
     default:
@@ -1446,7 +1446,7 @@ function Confirmation({
       {referralCode === "not-saved" && (
         <Alert role="alert" className="border-amber-300 bg-amber-50 text-amber-950">
           <AlertDescription className="flex flex-col items-start gap-2 text-amber-950">
-            <span>The lead was created, but the referral code wasn&apos;t saved.</span>
+            <span>The application was created, but the referral code wasn&apos;t saved.</span>
             <Link href={`/staff/applicants/${leadId}#lead-referral`} className="font-medium underline underline-offset-4">
               Add the referral code
             </Link>

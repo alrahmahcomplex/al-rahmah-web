@@ -115,7 +115,7 @@ export function FamilyPanel({
             pending="Separating…"
             run={() => separateLead(leadId)}
             onDone={done}
-            saved="Separated from the Family. This lead now has a parent or guardian contact of its own."
+            saved="Separated from the Family. This applicant now has a parent or guardian contact of their own."
           />
         </div>
       )}

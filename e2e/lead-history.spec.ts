@@ -54,14 +54,14 @@ test.describe("a lead's history", () => {
 
     const entries = page.getByRole("list", { name: "History" }).locator(":scope > li")
     await expect(entries).toHaveCount(3)
-    await expect(entries.nth(0)).toContainText(`${ADMISSIONS.name} changed the lead`)
+    await expect(entries.nth(0)).toContainText(`${ADMISSIONS.name} changed the application`)
     await expect(entries.nth(0)).toContainText("Class: STD 3 → STD 4")
-    await expect(entries.nth(1)).toContainText(`${ADMISSIONS.name} created the lead`)
+    await expect(entries.nth(1)).toContainText(`${ADMISSIONS.name} created the application`)
     await expect(entries.nth(1)).toContainText(`Student name: ${lead.name}`)
     await expect(entries.nth(1)).toContainText("Parent or guardian: Halima History")
     await expect(entries.nth(2)).toContainText(`${ADMISSIONS.name} added the parent or guardian Halima History`)
 
-    await page.getByRole("link", { name: "Back to the lead" }).click()
+    await page.getByRole("link", { name: "Back to the application" }).click()
     await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
   })
 

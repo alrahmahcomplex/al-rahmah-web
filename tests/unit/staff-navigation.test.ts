@@ -13,7 +13,7 @@ import {
 
 const ENTRIES: StaffNavEntry[] = [
   { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: STAFF_HOME.icon, permission: "academic_years.manage" },
-  { href: "/staff/applicants", label: "Leads", group: "Admissions", icon: STAFF_HOME.icon, permission: "leads.view" },
+  { href: "/staff/applicants", label: "Applicants", group: "Admissions", icon: STAFF_HOME.icon, permission: "leads.view" },
 ]
 
 // The seeded roles' permissions, from the roles migration.
@@ -110,8 +110,8 @@ describe("the staff navigation", () => {
     expect(navFor(["leads.view", "payments.record"])).not.toContain(fees)
   })
 
-  it("shows Leads to anyone who may view leads, and to no one else", () => {
-    const leads = STAFF_NAV.find((entry) => entry.label === "Leads")
+  it("shows Applicants to anyone who may view leads, and to no one else", () => {
+    const leads = STAFF_NAV.find((entry) => entry.label === "Applicants")
     expect(leads).toMatchObject({ href: "/staff/applicants", group: "Admissions", permission: "leads.view" })
     expect(navFor(["leads.view"])).toContain(leads)
     expect(navFor(["payments.view"])).not.toContain(leads)

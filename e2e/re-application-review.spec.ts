@@ -100,7 +100,7 @@ test.describe("Re-applications", () => {
 
     await expect(page.getByRole("heading", { name: "Re-application", exact: true })).toBeVisible()
     await expect(page.getByRole("main")).toContainText(mine.admissionNumber)
-    await expect(page.getByRole("main")).toContainText("1 field differs from the lead.")
+    await expect(page.getByRole("main")).toContainText("1 field differs from the application.")
     await page.getByRole("button", { name: "Mark reviewed" }).click()
 
     await expect(page.getByText(`Reviewed by ${ADMISSIONS.name}`)).toBeVisible()

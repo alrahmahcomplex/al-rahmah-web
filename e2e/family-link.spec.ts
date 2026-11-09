@@ -170,7 +170,7 @@ test.describe("settling a match of the test's own", () => {
     await separate.getByRole("button", { name: "Separate" }).click()
 
     await expect(family.getByRole("status")).toHaveText(
-      "Separated from the Family. This lead now has a parent or guardian contact of its own.",
+      "Separated from the Family. This applicant now has a parent or guardian contact of their own.",
     )
     await expect(family).toContainText("No other children are in this Family.")
     await expect(page.getByText("Returning family", { exact: true })).toHaveCount(0)

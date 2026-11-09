@@ -149,7 +149,7 @@ test("the programme isn't offered on another class, and a tick kept after a clas
   await page.goto(leadUrl(SABRA, "School fee"))
   const programme = page.getByRole("region", { name: "Pre-Form One programme" })
   await expect(programme.getByRole("checkbox", { name: "Pre-Form One programme" })).toBeChecked()
-  await expect(programme).toContainText("Doesn't apply: this lead's class is no longer FORM 1.")
+  await expect(programme).toContainText("Doesn't apply: this applicant's class is no longer FORM 1.")
 
   // The Accountant isn't offered the Pre-Form One fee while it doesn't apply.
   await signIn(page, ACCOUNTANT)

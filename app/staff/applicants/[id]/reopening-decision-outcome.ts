@@ -38,8 +38,8 @@ export function approvalConsequence(lead: {
     const before = lead.statusBefore ?? (lead.visitDate ? "Visited" : "Applied")
     parts.push(
       lead.statusBefore === "Enrolled"
-        ? "The lead comes back as Interviewed, and is Enrolled again at once if its payments still qualify."
-        : `The lead goes back to ${before}.`,
+        ? "The application comes back as Interviewed, and is Enrolled again at once if its payments still qualify."
+        : `The application goes back to ${before}.`,
     )
   }
   if (lead.closure) parts.push(`Its ${lead.closure} mark is cleared${lead.status === "Declined" ? "" : " and its status stays"}.`)
@@ -82,8 +82,8 @@ export function approvalSeats(check: Result<SeatCheck, string>): ApprovalSeats {
   return {
     kind: "full",
     message:
-      `${name} is full: ${seats} ${seats === 1 ? "seat" : "seats"}, ${seatsTaken} taken. Approving gives this lead its seat ` +
-      `back${withPriority} so the class will have more leads than seats. You can still approve.`,
+      `${name} is full: ${seats} ${seats === 1 ? "seat" : "seats"}, ${seatsTaken} taken. Approving gives this applicant their seat ` +
+      `back${withPriority} so the class will have more applicants than seats. You can still approve.`,
     seats,
     ranked:
       ranked === null
@@ -108,7 +108,7 @@ function refusal(error: DecisionError, doing: "approve" | "reject"): string {
       return "Your role can't approve or reject reopening requests. Nothing was changed."
     case "invalid":
       return doing === "approve"
-        ? "Choose whether the lead retakes the interview or enrols without one, then reload the page if this repeats."
+        ? "Choose whether the applicant retakes the interview or enrols without one, then reload the page if this repeats."
         : "Write why the request is rejected, in at most 1,000 characters."
     case "not-pending":
       return "This request is no longer waiting: someone withdrew or decided it. Reload the page."

@@ -51,7 +51,7 @@ export function SeatsByClassPanel({
           <>
             <SeatsTable classes={seats.data.classes} />
             <p className="text-xs text-muted-foreground">
-              A lead takes a seat once it has a Seat priority. Declined leads take none; Inactive and Archived leads keep theirs.
+              An applicant takes a seat once they have a Seat priority. Declined applicants take none; Inactive and Archived applicants keep theirs.
             </p>
             {canOpenSeats && (
               <Link

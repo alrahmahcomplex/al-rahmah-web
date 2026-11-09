@@ -28,7 +28,7 @@ test("the Manager sees the Pending count in the navigation and the seeded reques
   const row = page.getByRole("list", { name: "Pending reopening requests" }).getByRole("listitem", { name: "ADMSN-90080 Asha Kibwana" })
   await expect(row).toContainText("Declined")
   await expect(row).toContainText(new RegExp(`Requested by ${ADMISSIONS.name} on 28 Sept? 2026, 09:15\\.`))
-  await expect(row).toContainText("From the lead screen.")
+  await expect(row).toContainText("From the application page.")
   await expect(row).toContainText("The family has a new phone number and wants Asha to start in January.")
 
   await row.getByRole("link", { name: "ADMSN-90080" }).click()
@@ -38,7 +38,7 @@ test("the Manager sees the Pending count in the navigation and the seeded reques
 
 test("Admissions Staff get no entry, and the page is forbidden to them", async ({ page }) => {
   await signIn(page, ADMISSIONS)
-  await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Leads" })).toBeVisible()
+  await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Applicants" })).toBeVisible()
   await expect(navEntry(page)).toHaveCount(0)
 
   await page.goto("/staff/reopenings")

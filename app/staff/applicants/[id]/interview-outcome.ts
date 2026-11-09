@@ -24,16 +24,16 @@ export function registerOutcome(error: RegisterError): RegisterOutcome {
     case "already_registered":
       return {
         status: "refused",
-        message: "This lead is already registered for interview. Reload the page to see its S/N.",
+        message: "This applicant is already registered for interview. Reload the page to see the S/N.",
       }
     case "lead_closed":
-      return { status: "refused", message: "This lead is closed, so it can't be registered for interview." }
+      return { status: "refused", message: "This application is closed, so the applicant can't be registered for interview." }
     case "lead_enrolled":
-      return { status: "refused", message: "This lead is already Enrolled, so it doesn't need an interview." }
+      return { status: "refused", message: "This student is already Enrolled, so they don't need an interview." }
     case "forbidden":
-      return { status: "refused", message: "Your role can't register leads for interview." }
+      return { status: "refused", message: "Your role can't register applicants for interview." }
     case "not_found":
-      return { status: "refused", message: "This lead could not be found. Reload the page." }
+      return { status: "refused", message: "This application could not be found. Reload the page." }
     case "unavailable":
       return {
         status: "refused",
@@ -51,7 +51,7 @@ export type RecordOutcome =
   | { status: "refused"; field: ResultField | null; message: string }
 
 export function recordedOutcome({ firstRecording, changed }: RecordedResult): RecordOutcome {
-  if (firstRecording) return { status: "saved", message: "Result recorded. The lead is Interviewed." }
+  if (firstRecording) return { status: "saved", message: "Result recorded. The applicant is Interviewed." }
   if (!changed) return { status: "saved", message: "Nothing was changed: the result is as it was." }
   return { status: "saved", message: "Result corrected. The history keeps the earlier values." }
 }
@@ -74,10 +74,10 @@ export function recordOutcome(error: RecordResultError): RecordOutcome {
       return {
         status: "refused",
         field: "interview_date",
-        message: "The interview date can't be before the day the lead was registered for interview.",
+        message: "The interview date can't be before the day the applicant was registered for interview.",
       }
     case "lead_closed":
-      return { status: "refused", field: null, message: "This lead is closed, so its interview result can't be changed." }
+      return { status: "refused", field: null, message: "This application is closed, so its interview result can't be changed." }
     case "forbidden":
       return { status: "refused", field: null, message: "Your role can't record this interview result." }
     case "not_found":
@@ -110,7 +110,7 @@ export function feeOutcome(error: FeeStatusError): FeeOutcome {
     case "no_change":
       return { status: "refused", message: "The fee already has that status. Reload the page to see it." }
     case "lead_closed":
-      return { status: "refused", message: "This lead is closed, so its interview fee can't be changed." }
+      return { status: "refused", message: "This application is closed, so its interview fee can't be changed." }
     case "forbidden":
       return { status: "refused", message: "Your role can't mark the interview fee." }
     case "not_found":

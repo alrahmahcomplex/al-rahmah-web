@@ -259,7 +259,7 @@ function ChangeDateForm({
     >
       <DialogHeader>
         <DialogTitle>Change date</DialogTitle>
-        <DialogDescription>The earlier date and your reason stay in the lead&apos;s history.</DialogDescription>
+        <DialogDescription>The earlier date and your reason stay in the application&apos;s history.</DialogDescription>
       </DialogHeader>
       <Refused refusal={refusal} />
       <Field label="New date" hint={DATE_HINT}>
@@ -315,7 +315,7 @@ function ChangeDateForm({
 const SELECT_CLASS =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
 
-const DECLINE_OUTCOME = "The family will not proceed: decline the lead"
+const DECLINE_OUTCOME = "The family will not proceed: decline the application"
 
 // Record follow-up: what happened on a call, message or visit, then the next
 // follow-up date, or, for staff who may decline leads, a Declined reason when
@@ -537,7 +537,7 @@ function RecordForm({
             label={enrolled ? "Next follow-up date (optional)" : "Next follow-up date"}
             hint={
               enrolled
-                ? "The lead is Enrolled, so a next date is optional. Any day after today, up to one year ahead."
+                ? "The student is Enrolled, so a next date is optional. Any day after today, up to one year ahead."
                 : "Any day after today, up to one year ahead."
             }
           >

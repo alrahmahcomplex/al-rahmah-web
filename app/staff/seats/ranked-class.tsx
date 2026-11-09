@@ -18,9 +18,9 @@ export function RankedClass({ entry, canDecline }: { entry: ClassSeats; canDecli
   return (
     <section aria-label={`${name} ranking`} className="flex flex-col gap-2 rounded-xl p-4 ring-1 ring-foreground/10">
       <h3 className="staff-section-heading">
-        {name}: {entry.taken} leads for {seats} {seats === 1 ? "seat" : "seats"}
+        {name}: {entry.taken} applicants for {seats} {seats === 1 ? "seat" : "seats"}
       </h3>
-      <ol aria-label={`${name} leads ranked`} className="flex flex-col divide-y text-sm">
+      <ol aria-label={`${name} applicants ranked`} className="flex flex-col divide-y text-sm">
         {(entry.ranked ?? []).map((holder) => (
           <li key={holder.leadId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
             <span className="w-6 shrink-0 tabular-nums text-muted-foreground">{holder.rank}.</span>

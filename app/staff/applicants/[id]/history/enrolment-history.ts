@@ -39,11 +39,11 @@ const CAUSES: Readonly<Record<string, string>> = {
   payment_adjustment: "a payment was adjusted",
   discount: "a discount was granted",
   fee_schedule: "the Fee schedule changed",
-  lead_details: "the lead's class, enrollment year or Day or boarding changed",
-  family: "the lead's Family changed",
+  lead_details: "the applicant's class, enrollment year or Day or boarding changed",
+  family: "the applicant's Family changed",
   academic_year_start: "the Academic-year start was reached",
-  reopening: "the lead was reopened",
-  sibling: "the lead's Sibling discount changed",
+  reopening: "the application was reopened",
+  sibling: "the applicant's Sibling discount changed",
   prior_sibling: "Has a sibling already at Al-Rahmah was ticked or cleared",
 }
 
@@ -99,8 +99,8 @@ export function enrolmentSummary(entry: LeadHistoryEntry, status: LeadHistoryCha
   if (!status) return null
   const because = causeText(causeBefore(causes, entry.id))
   const suffix = because ? `, because ${because}` : ""
-  if (status.to === "Enrolled") return `enrolled the lead${suffix}`
-  if (status.from === "Enrolled" && status.to !== "Declined") return `took the lead out of Enrolled${suffix}`
+  if (status.to === "Enrolled") return `enrolled the applicant${suffix}`
+  if (status.from === "Enrolled" && status.to !== "Declined") return `took the applicant out of Enrolled${suffix}`
   return null
 }
 
@@ -109,11 +109,11 @@ export function enrolmentProfileSummary(entry: LeadHistoryEntry): string {
   // A new profile lists every column, so an empty trigger is no enrolment.
   const tick = priorSiblingSummary(entry) ?? preFormOneSummary(entry)
   if (tick && !trigger?.to && !trigger?.from) return tick
-  if (entry.action === "insert") return trigger?.to ? "recorded what enrolled the lead" : "recorded the lead's fee details"
+  if (entry.action === "insert") return trigger?.to ? "recorded what enrolled the applicant" : "recorded the applicant's fee details"
   if (entry.action !== "update") return entry.action
-  if (trigger?.to === null) return "cleared what enrolled the lead"
-  if (trigger?.from === null) return "recorded what enrolled the lead"
-  return "updated what enrolled the lead"
+  if (trigger?.to === null) return "cleared what enrolled the applicant"
+  if (trigger?.from === null) return "recorded what enrolled the applicant"
+  return "updated what enrolled the applicant"
 }
 
 // Staff ticking or clearing the Pre-Form One programme; null when the entry

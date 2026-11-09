@@ -278,7 +278,7 @@ function PaymentForm({
       </Field>
       {waived ? (
         <p className="text-sm text-muted-foreground">
-          Fee waived has no amount. The Qualified orphan discount covers the whole School fee, and recording it makes the lead Full.
+          Fee waived has no amount. The Qualified orphan discount covers the whole School fee, and recording it makes the applicant Full.
         </p>
       ) : (
         <Field label="Amount (TZS)" hint="Whole shillings, above zero.">

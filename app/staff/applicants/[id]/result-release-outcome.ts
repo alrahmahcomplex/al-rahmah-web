@@ -12,7 +12,7 @@ export function blockedText(blocked: ReleaseBlocker, amountOwed: number | null):
     case "no_interview":
       return "There is no interview yet, so there is no result to send."
     case "lead_closed":
-      return "This lead is closed, so its result can't be sent."
+      return "This application is closed, so its result can't be sent."
     case "no_result":
       return "No result is recorded yet, so there is nothing to send."
     case "not_paid":
@@ -90,11 +90,11 @@ export function releaseRefusal(error: ReleaseError): ReleaseRefusal {
     case "not-found":
       return { status: "refused", message: "This interview could not be found. Reload the page." }
     case "lead_closed":
-      return { status: "refused", message: "This lead is closed, so its result can't be sent. Nothing was sent." }
+      return { status: "refused", message: "This application is closed, so its result can't be sent. Nothing was sent." }
     case "not_current":
       return {
         status: "refused",
-        message: "This is no longer the lead's current interview, so nothing was sent. Reload the page to see the current result.",
+        message: "This is no longer the applicant's current interview, so nothing was sent. Reload the page to see the current result.",
       }
     case "no_result":
       return { status: "refused", message: "This interview has no result to send, so nothing was sent. Reload the page." }
@@ -111,7 +111,7 @@ export function releaseRefusal(error: ReleaseError): ReleaseRefusal {
     case "too_long":
       return {
         status: "refused",
-        message: "The names on this lead make the message too long for WhatsApp, so nothing was sent. Check the names.",
+        message: "The names on this application make the message too long for WhatsApp, so nothing was sent. Check the names.",
       }
     case "sent_meanwhile":
       return {

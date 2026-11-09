@@ -19,7 +19,7 @@ export function leadUrl(leadId: string, tab: LeadTabName = "Overview"): string {
 
 // Switches the open lead page to a tab, as staff do.
 export async function openLeadTab(page: Page, tab: LeadTabName): Promise<void> {
-  const link = page.getByRole("navigation", { name: "Lead sections" }).getByRole("link", { name: tab, exact: true })
+  const link = page.getByRole("navigation", { name: "Application sections" }).getByRole("link", { name: tab, exact: true })
   await link.click()
   await expect(link).toHaveAttribute("aria-current", "page")
 }

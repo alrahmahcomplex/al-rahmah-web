@@ -83,7 +83,7 @@ describe("what the screens say", () => {
   it("explains each Fee waived refusal", () => {
     expect(paymentRefusal("not_waivable", "checked")).toMatchObject({ field: "type", message: expect.stringContaining("Qualified orphan") })
     expect(paymentRefusal("amount_not_allowed", "checked")).toMatchObject({ field: "amount" })
-    expect(paymentRefusal("already_waived", "recorded")).toMatchObject({ message: "This lead's fee is already waived." })
+    expect(paymentRefusal("already_waived", "recorded")).toMatchObject({ message: "This applicant's fee is already waived." })
   })
 })
 

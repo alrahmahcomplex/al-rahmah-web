@@ -84,7 +84,7 @@ test.describe("recording the visit of an Applied family", () => {
     await form.getByRole("button", { name: "Record visit" }).click()
 
     await expect(page.getByRole("status").filter({ hasText: "Visit recorded" })).toHaveText(
-      "Visit recorded. The lead is now Visited.",
+      "Visit recorded. The applicant is now Visited.",
     )
     await expect(detail(page, "Status")).toHaveText("Visited")
     await expect(detail(page, "Visit date")).toHaveText(formatDate(dayBefore(today)))
@@ -114,7 +114,7 @@ test.describe("when Record visit is offered", () => {
     await form.getByRole("button", { name: "Record visit" }).click()
 
     await expect(form.getByRole("alert")).toHaveText(
-      "This lead is no longer Applied, so its visit is already recorded. Reload the page to see it.",
+      "This applicant is no longer Applied, so their visit is already recorded. Reload the page to see it.",
     )
     await page.reload()
     await expect(detail(page, "Status")).toHaveText("Visited")
@@ -179,7 +179,7 @@ test.describe("when Record visit is offered", () => {
     await form.getByRole("button", { name: "Record visit" }).click()
 
     await expect(page.getByRole("status").filter({ hasText: "Visit recorded" })).toHaveText(
-      "Visit recorded. The lead is now Visited.",
+      "Visit recorded. The applicant is now Visited.",
     )
     await expect(detail(page, "Status")).toHaveText("Visited")
     // The follow-up is still the step, and the visit is no longer offered.

@@ -30,8 +30,8 @@ export function overfillWarning({ wouldOverfill, seats, seatsTaken }: PaymentPre
   if (!wouldOverfill || seats === null) return null
   const set = `${seats} ${seats === 1 ? "seat" : "seats"}`
   return (
-    `This lead's class is full: ${set}, ${seatsTaken} taken. This payment gives the lead a Seat priority, so the ` +
-    "class will have more leads than seats. You can still record it; tell the Admissions Manager."
+    `This applicant's class is full: ${set}, ${seatsTaken} taken. This payment gives the applicant a Seat priority, so the ` +
+    "class will have more applicants than seats. You can still record it; tell the Admissions Manager."
   )
 }
 
@@ -43,20 +43,20 @@ export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded
       return {
         status: "refused",
         field: null,
-        message: "This lead is closed, so it can't take payments. A Reopening request must be approved first.",
+        message: "This application is closed, so it can't take payments. A Reopening request must be approved first.",
       }
     case "not_passed":
       return {
         status: "refused",
         field: null,
         message:
-          "Payments can be recorded only once the lead's current interview result is Passed, or a reopening approved it to enrol without a retaken interview.",
+          "Payments can be recorded only once the applicant's current interview result is Passed, or a reopening approved it to enrol without a retaken interview.",
       }
     case "no_schedule":
       return {
         status: "refused",
         field: null,
-        message: "This lead's enrollment year has no Fee schedule yet, so no payment can be recorded against it.",
+        message: "This applicant's enrollment year has no Fee schedule yet, so no payment can be recorded against it.",
       }
     case "invalid_type":
       return { status: "refused", field: "type", message: "Choose the payment type." }
@@ -64,17 +64,17 @@ export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded
       return {
         status: "refused",
         field: "type",
-        message: "Fee waived can be recorded only while the lead has a granted Qualified orphan discount.",
+        message: "Fee waived can be recorded only while the applicant has a granted Qualified orphan discount.",
       }
     case "amount_not_allowed":
       return { status: "refused", field: "amount", message: "Fee waived has no amount. Leave the amount empty." }
     case "already_waived":
-      return { status: "refused", field: "type", message: "This lead's fee is already waived." }
+      return { status: "refused", field: "type", message: "This applicant's fee is already waived." }
     case "not_pre_form_one":
       return {
         status: "refused",
         field: "type",
-        message: "A Pre-Form One fee can be recorded only while the Pre-Form One programme is ticked on a FORM 1 lead.",
+        message: "A Pre-Form One fee can be recorded only while the Pre-Form One programme is ticked on a FORM 1 applicant.",
       }
     case "amount_not_positive":
       return { status: "refused", field: "amount", message: "Enter an amount above zero." }
@@ -89,7 +89,7 @@ export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded
     case "forbidden":
       return { status: "refused", field: null, message: "Your role can't record school-fee payments." }
     case "not_found":
-      return { status: "refused", field: null, message: "This lead could not be found. Reload the page." }
+      return { status: "refused", field: null, message: "This application could not be found. Reload the page." }
     case "unavailable":
       return {
         status: "refused",

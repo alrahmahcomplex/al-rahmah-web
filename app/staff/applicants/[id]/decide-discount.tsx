@@ -95,7 +95,7 @@ function GrantDiscount({ leadId, requestId, studentName, admissionNumber, discou
             <DialogHeader>
               <DialogTitle>Grant {studentName} the discount?</DialogTitle>
               <DialogDescription>
-                {admissionNumber}. {discount}. The School fee goes down at once, and the lead becomes Enrolled if its payments now
+                {admissionNumber}. {discount}. The School fee goes down at once, and the applicant becomes Enrolled if their payments now
                 reach the line. A granted discount can&apos;t be taken back here.
               </DialogDescription>
             </DialogHeader>
@@ -157,7 +157,7 @@ function RefuseDiscount({ leadId, requestId, studentName, admissionNumber, disco
             <DialogHeader>
               <DialogTitle>Refuse {studentName} the discount?</DialogTitle>
               <DialogDescription>
-                {admissionNumber}. {discount}. The School fee stays as it is. The person who asked reads your reason on the lead.
+                {admissionNumber}. {discount}. The School fee stays as it is. The person who asked reads your reason on the application.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-1.5">

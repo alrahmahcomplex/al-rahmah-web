@@ -10,7 +10,7 @@ const MANAGER_ENTRIES = [
   "Today",
   "Check-in",
   "Register a student",
-  "Leads",
+  "Applicants",
   "Interviews",
   "Follow-ups",
   "Re-applications",
@@ -78,11 +78,11 @@ test.describe("on a desktop", () => {
     await page.getByRole("button", { name: "Collapse sidebar" }).click()
     await expect(aside).toHaveCSS("width", "72px")
     // The labels fold away, but every link keeps its name, and a tooltip shows it.
-    await expect(entry(page, "Leads")).toBeVisible()
-    await entry(page, "Leads").hover()
-    await expect(page.locator("[data-slot=tooltip-content]")).toHaveText("Leads")
+    await expect(entry(page, "Applicants")).toBeVisible()
+    await entry(page, "Applicants").hover()
+    await expect(page.locator("[data-slot=tooltip-content]")).toHaveText("Applicants")
 
-    await entry(page, "Leads").click()
+    await entry(page, "Applicants").click()
     await expect(page).toHaveURL(/\/staff\/applicants$/)
     await expect(aside).toHaveCSS("width", "72px")
 
@@ -104,7 +104,7 @@ test.describe("on a phone", () => {
 
     await expect(sidebar(page)).toBeHidden()
     const tabs = staffNav(page)
-    await expect(tabs.getByRole("link")).toHaveText(["Today", "Check-in", "Leads"])
+    await expect(tabs.getByRole("link")).toHaveText(["Today", "Check-in", "Applicants"])
     await expect(tabs.getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page")
     expect(await scrollsSideways(page)).toBe(false)
 
@@ -112,10 +112,10 @@ test.describe("on a phone", () => {
     const sheet = page.getByRole("dialog", { name: "More" })
     await expect(sheet).toContainText(`${MANAGER.name} · ${MANAGER.roleName}`)
     const more = sheet.getByRole("navigation", { name: "More" })
-    for (const label of MANAGER_ENTRIES.filter((label) => !["Today", "Check-in", "Leads"].includes(label))) {
+    for (const label of MANAGER_ENTRIES.filter((label) => !["Today", "Check-in", "Applicants"].includes(label))) {
       await expect(more.getByRole("link", { name: new RegExp(`^${label}`) })).toBeVisible()
     }
-    await expect(more.getByRole("link", { name: /^(Today|Check-in|Leads)$/ })).toHaveCount(0)
+    await expect(more.getByRole("link", { name: /^(Today|Check-in|Applicants)$/ })).toHaveCount(0)
     await expect(sheet.getByRole("button", { name: "Sign out" })).toBeVisible()
 
     await more.getByRole("link", { name: "Interviews" }).click()

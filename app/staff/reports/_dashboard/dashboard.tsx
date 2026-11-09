@@ -12,8 +12,8 @@ type SearchParams = { [key: string]: string | string[] | undefined }
 // The single-number panels, in the order they appear. Each has its own key in
 // the page address. Later dashboard tickets add a line here.
 export const METRIC_TILES: { metric: DashboardMetric; key: string; title: string; counts: string }[] = [
-  { metric: "visited_leads", key: "visited", title: "Visited leads", counts: "Counted by Visit date" },
-  { metric: "interviewed_leads", key: "interviewed", title: "Interviewed leads", counts: "Children, counted by interview date" },
+  { metric: "visited_leads", key: "visited", title: "Visited applicants", counts: "Counted by Visit date" },
+  { metric: "interviewed_leads", key: "interviewed", title: "Interviewed applicants", counts: "Children, counted by interview date" },
   { metric: "passed_interviews", key: "passed", title: "Passed interviews", counts: "Counted by interview date" },
   { metric: "failed_interviews", key: "failed", title: "Failed interviews", counts: "Counted by interview date" },
   { metric: "enrolled_students", key: "enrolled", title: "Enrolled students", counts: "Counted by the date Enrolled was triggered" },
@@ -80,7 +80,7 @@ export async function Dashboard({
         {/* On wide screens the table stands in the right-hand column, beside the tiles. */}
         <DashboardPanel
           panelKey={CLASSES_KEY}
-          title="Leads by enrollment class"
+          title="Applicants by enrollment class"
           filters={classFilters}
           enrollmentYears={enrollmentYears}
           searchParams={query}

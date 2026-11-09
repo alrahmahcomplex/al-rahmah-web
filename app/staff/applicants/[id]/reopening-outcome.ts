@@ -7,7 +7,7 @@ import type { RaiseError, ReopeningSource, ReopeningState, WithdrawError } from 
 
 // Where a request was raised, in words.
 export const SOURCE_LABELS: Readonly<Record<ReopeningSource, string>> = {
-  lead: "Lead screen",
+  lead: "Application page",
   duplicate_match: "Duplicate match at the front desk",
   re_application: "Re-application",
 }
@@ -52,11 +52,11 @@ export function raiseOutcome(error: RaiseError): RaiseOutcome {
     case "invalid":
       return { status: "refused", message: "Write why the family is back, in at most 1,000 characters." }
     case "lead-open":
-      return { status: "refused", message: "This lead is open, so there is nothing to reopen. Reload the page." }
+      return { status: "refused", message: "This application is open, so there is nothing to reopen. Reload the page." }
     case "already-pending":
       return { status: "refused", message: `${alreadyRequested(error.requestedBy, error.requestedAt)} Nothing new was sent.` }
     case "not-found":
-      return { status: "refused", message: "This lead could not be found. Reload the page." }
+      return { status: "refused", message: "This application could not be found. Reload the page." }
     case "unavailable":
       return { status: "refused", message: "The request could not be sent. Try again in a moment." }
   }

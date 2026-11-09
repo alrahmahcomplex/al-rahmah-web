@@ -57,7 +57,7 @@ describe("a re-application in the lead's history", () => {
       { label: "Relationship", from: null, to: "Mother" },
       { label: "Phone", from: null, to: "+255700000301" },
       { label: "WhatsApp", from: null, to: "+255700000311" },
-      { label: "Differs from the lead", from: null, to: "Class, WhatsApp" },
+      { label: "Differs from the application", from: null, to: "Class, WhatsApp" },
     ])
   })
 
@@ -66,7 +66,7 @@ describe("a re-application in the lead's history", () => {
       [entry({ record: "re_applications", recordId: RE_APPLICATION, action: "insert", changes: [change("differing_fields", null, [])] })],
       {},
     )
-    expect(described.changes).toEqual([{ label: "Differs from the lead", from: null, to: "Nothing" }])
+    expect(described.changes).toEqual([{ label: "Differs from the application", from: null, to: "Nothing" }])
   })
 
   it("labels the Discount code the family sent, and lists it among what differs", () => {
@@ -83,7 +83,7 @@ describe("a re-application in the lead's history", () => {
     )
     expect(described.changes).toEqual([
       { label: "Discount code", from: null, to: "BJN-402" },
-      { label: "Differs from the lead", from: null, to: "Discount code" },
+      { label: "Differs from the application", from: null, to: "Discount code" },
     ])
   })
 
@@ -110,7 +110,7 @@ describe("a re-application in the lead's history", () => {
 
   it("reads the lead's new re-applied cause as a Returning family flag", () => {
     const [described] = describeLeadHistory([entry({ changes: [change("returning_family_reapplied", false, true)] })], {})
-    expect(described.summary).toBe("flagged the lead Returning family: re-applied")
+    expect(described.summary).toBe("flagged the application Returning family: re-applied")
     expect(described.changes).toEqual([{ label: "Returning family: re-applied", from: "No", to: "Yes" }])
   })
 })

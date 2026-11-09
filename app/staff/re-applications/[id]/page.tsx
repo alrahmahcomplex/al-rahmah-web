@@ -69,7 +69,7 @@ export default async function ReApplicationPage({ params }: { params: Promise<{ 
         </div>
         <p className="text-sm text-muted-foreground">
           Arrived <time dateTime={entry.receivedAt}>{when(entry.receivedAt)}</time> from the Admission form.{" "}
-          {differingText(entry.differingFields.length)} from the lead.
+          {differingText(entry.differingFields.length)} from the application.
         </p>
       </div>
 
@@ -97,12 +97,12 @@ export default async function ReApplicationPage({ params }: { params: Promise<{ 
 // A Declined, Inactive or Archived lead is read-only, so nothing the family
 // sent can be applied until a Manager approves reopening it.
 function ClosedLead({ entry, staff }: { entry: ReApplication; staff: StaffMember }) {
-  const title = `This lead is ${closedState(entry)}`
+  const title = `This application is ${closedState(entry)}`
   return (
     <section aria-label={title} className="flex max-w-xl flex-col gap-3 rounded-lg border bg-card p-4 text-sm">
       <h2 className="staff-section-heading">{title}</h2>
       <p className="text-muted-foreground">
-        A closed lead is read-only, so what the family sent can&apos;t be applied. To work on it again, it has to be
+        A closed application is read-only, so what the family sent can&apos;t be applied. To work on it again, it has to be
         reopened, and a Manager approves that.
       </p>
       {canRaiseReopening(staff.permissions) && (
@@ -137,7 +137,7 @@ async function Comparison({ entry, staff }: { entry: ReApplication; staff: Staff
   if (!lead.ok) {
     body = (
       <Alert variant="destructive" className="max-w-xl">
-        <AlertDescription>The lead could not be loaded to compare. Try again in a moment.</AlertDescription>
+        <AlertDescription>The application could not be loaded to compare. Try again in a moment.</AlertDescription>
       </Alert>
     )
   } else {
@@ -160,7 +160,7 @@ async function Comparison({ entry, staff }: { entry: ReApplication; staff: Staff
   return (
     <section aria-labelledby="re-application-compare" className="flex flex-col gap-2">
       <h2 id="re-application-compare" className="staff-section-heading">
-        Compared with the lead
+        Compared with the application
       </h2>
       {body}
     </section>
@@ -202,11 +202,11 @@ function ComparisonTable({
         </p>
       )}
       <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
-        <table aria-label="Compared with the lead" className="w-full min-w-[40rem] text-left text-sm">
+        <table aria-label="Compared with the application" className="w-full min-w-[40rem] text-left text-sm">
           <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
             <tr>
               <th scope="col" className="px-3 py-2 font-medium">Field</th>
-              <th scope="col" className="px-3 py-2 font-medium">On the lead</th>
+              <th scope="col" className="px-3 py-2 font-medium">On the application</th>
               <th scope="col" className="px-3 py-2 font-medium">Sent by the family</th>
               {canApply && (
                 <th scope="col" className="px-3 py-2 font-medium">

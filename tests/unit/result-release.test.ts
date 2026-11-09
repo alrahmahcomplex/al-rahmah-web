@@ -108,7 +108,7 @@ describe("the Result release section's words", () => {
     )
     expect(blockedText("no_interview", null)).toBe("There is no interview yet, so there is no result to send.")
     expect(blockedText("no_result", null)).toBe("No result is recorded yet, so there is nothing to send.")
-    expect(blockedText("lead_closed", null)).toBe("This lead is closed, so its result can't be sent.")
+    expect(blockedText("lead_closed", null)).toBe("This application is closed, so its result can't be sent.")
   })
 
   it("gives the last release by channel, Tanzanian date and name", () => {

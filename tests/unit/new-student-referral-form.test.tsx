@@ -121,7 +121,7 @@ describe("New Student with a Referral code", () => {
     await registerWithCode(userEvent.setup())
 
     expect(await screen.findByLabelText("Admission Number")).toHaveTextContent("ADMSN-12345")
-    expect(screen.getByRole("alert")).toHaveTextContent("The lead was created, but the referral code wasn't saved.")
+    expect(screen.getByRole("alert")).toHaveTextContent("The application was created, but the referral code wasn't saved.")
     expect(screen.getByRole("link", { name: "Add the referral code" })).toHaveAttribute(
       "href",
       `/staff/applicants/${LEAD}#lead-referral`,

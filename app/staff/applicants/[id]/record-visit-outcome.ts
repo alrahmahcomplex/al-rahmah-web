@@ -11,10 +11,10 @@ export function recordVisitOutcome(error: RecordVisitError): CorrectionOutcome {
       return {
         status: "refused",
         field: null,
-        message: "This lead is no longer Applied, so its visit is already recorded. Reload the page to see it.",
+        message: "This applicant is no longer Applied, so their visit is already recorded. Reload the page to see it.",
       }
     case "closed":
-      return { status: "refused", field: null, message: "This lead is closed, so its visit can't be recorded." }
+      return { status: "refused", field: null, message: "This application is closed, so the visit can't be recorded." }
     default:
       return correctionOutcome(error)
   }

@@ -8,7 +8,7 @@ const TABS = ["w-16", "w-16", "w-20", "w-20", "w-16"]
 // be), the next step, the section tabs and two panels.
 export default function Loading() {
   return (
-    <PageSkeleton label="the lead" className="gap-5">
+    <PageSkeleton label="the application" className="gap-5">
       <HeadingSkeleton width="w-56" subline avatar actions={2} />
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border border-l-4 border-l-slate-200 px-4 py-3.5">
         <div className="flex min-w-0 flex-1 basis-72 flex-col gap-2">

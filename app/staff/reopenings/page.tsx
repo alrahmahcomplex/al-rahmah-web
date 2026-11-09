@@ -33,7 +33,7 @@ export default async function ReopeningRequestsPage() {
       <div className="flex flex-col gap-1">
         <h1 className="staff-heading">Reopening requests</h1>
         <p className="text-sm text-muted-foreground">
-          Closed leads waiting for a decision, oldest first. Open a lead to approve or reject its request.
+          Closed applications waiting for a decision, oldest first. Open an application to approve or reject its request.
         </p>
       </div>
 

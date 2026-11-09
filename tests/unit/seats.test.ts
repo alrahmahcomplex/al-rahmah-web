@@ -21,8 +21,8 @@ const PREVIEW = {
 describe("overfillWarning", () => {
   it("says the class is full, how full, and that the payment can still be recorded", () => {
     expect(overfillWarning(PREVIEW)).toBe(
-      "This lead's class is full: 2 seats, 2 taken. This payment gives the lead a Seat priority, so the class will " +
-        "have more leads than seats. You can still record it; tell the Admissions Manager.",
+      "This applicant's class is full: 2 seats, 2 taken. This payment gives the applicant a Seat priority, so the class will " +
+        "have more applicants than seats. You can still record it; tell the Admissions Manager.",
     )
     expect(overfillWarning({ ...PREVIEW, seats: 1, seatsTaken: 3 })).toContain("1 seat, 3 taken")
   })

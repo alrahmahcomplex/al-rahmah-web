@@ -8,7 +8,7 @@ import { RequestReopeningLink } from "./reopening-section"
 // nothing here can be changed, and the way to reopening for staff who may
 // raise a reopening request.
 export function ClosedLeadBanner({ lead, canRequestReopening }: { lead: Lead; canRequestReopening: boolean }) {
-  const title = `This lead is ${closedState(lead)}`
+  const title = `This application is ${closedState(lead)}`
 
   return (
     <section
@@ -18,7 +18,7 @@ export function ClosedLeadBanner({ lead, canRequestReopening }: { lead: Lead; ca
       <h2 className="font-semibold text-slate-900">{title}</h2>
       <ClosedLeadDetails leadId={lead.id} />
       <p className="text-muted-foreground">
-        A closed lead is read-only. To work on it again, it has to be reopened, and a Manager approves that.
+        A closed application is read-only. To work on it again, it has to be reopened, and a Manager approves that.
       </p>
       {canRequestReopening && <RequestReopeningLink leadId={lead.id} />}
     </section>

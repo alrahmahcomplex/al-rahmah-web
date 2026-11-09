@@ -113,7 +113,7 @@ test("a payment into a full class is recorded through the warning, and Seats ran
 
   const review = page.getByRole("region", { name: "Review payment" })
   const warning = review.getByRole("alert", { name: "Class full" })
-  await expect(warning).toContainText(`This lead's class is full: ${taken} ${taken === 1 ? "seat" : "seats"}, ${taken} taken.`)
+  await expect(warning).toContainText(`This applicant's class is full: ${taken} ${taken === 1 ? "seat" : "seats"}, ${taken} taken.`)
   await expect(warning).toContainText("You can still record it; tell the Admissions Manager.")
 
   await review.getByRole("button", { name: "Confirm payment" }).click()
@@ -129,7 +129,7 @@ test("a payment into a full class is recorded through the warning, and Seats ran
   await expect(page.getByRole("heading", { name: `Seats ${year}` })).toBeVisible()
 
   const ranking = page.getByRole("region", { name: "KG 2 Boarding ranking" })
-  await expect(ranking.getByRole("heading")).toHaveText(`KG 2 Boarding: ${taken + 1} leads for ${taken} ${taken === 1 ? "seat" : "seats"}`)
+  await expect(ranking.getByRole("heading")).toHaveText(`KG 2 Boarding: ${taken + 1} applicants for ${taken} ${taken === 1 ? "seat" : "seats"}`)
   const names = await ranking.getByRole("listitem").getByRole("link").allTextContents()
   expect(names.indexOf(holder.name)).toBeGreaterThanOrEqual(0)
   expect(names.indexOf(lead.name)).toBeGreaterThan(names.indexOf(holder.name))

@@ -48,16 +48,16 @@ export function requestOutcome(error: RequestDiscountError): DiscountOutcome {
         message: error.field === "kind" ? "Choose the discount." : "Write a note for the Manager, in at most 1,000 characters.",
       }
     case "lead-closed":
-      return { status: "refused", message: "This lead is closed, so it can't take a discount request. Reload the page." }
+      return { status: "refused", message: "This application is closed, so it can't take a discount request. Reload the page." }
     case "already-pending": {
       const who = error.requestedBy ? ` by ${error.requestedBy}` : ""
       const when = error.requestedAt ? ` on ${dayOf(error.requestedAt)}` : ""
       return { status: "refused", message: `A discount was already requested${who}${when}. Nothing new was sent.` }
     }
     case "already-granted":
-      return { status: "refused", message: "This lead already has that discount. Nothing new was sent." }
+      return { status: "refused", message: "This applicant already has that discount. Nothing new was sent." }
     case "not-found":
-      return { status: "refused", message: "This lead could not be found. Reload the page." }
+      return { status: "refused", message: "This application could not be found. Reload the page." }
     case "unavailable":
       return { status: "refused", message: "The request could not be sent. Nothing was saved. Try again in a moment." }
   }
@@ -72,7 +72,7 @@ export function decideOutcome(error: DecideDiscountError, doing: "grant" | "refu
     case "lead-closed":
       return {
         status: "refused",
-        message: "This lead is closed, so the discount can't be granted until it is reopened. You can still refuse the request.",
+        message: "This application is closed, so the discount can't be granted until it is reopened. You can still refuse the request.",
       }
     case "not-pending":
       return { status: "refused", message: "This request is no longer waiting: someone already decided it. Reload the page." }

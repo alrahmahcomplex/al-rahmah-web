@@ -18,9 +18,9 @@ export function priorSiblingOutcome(error: SetPriorSiblingError): PriorSiblingOu
     case "invalid-class":
       return { status: "refused", field: "class", message: "Choose the sibling's class." }
     case "lead-closed":
-      return { status: "refused", field: null, message: "This lead is closed, so the sibling tick can't change. Reload the page." }
+      return { status: "refused", field: null, message: "This application is closed, so the sibling tick can't change. Reload the page." }
     case "not-found":
-      return { status: "refused", field: null, message: "This lead could not be found. Reload the page." }
+      return { status: "refused", field: null, message: "This application could not be found. Reload the page." }
     case "unavailable":
       return { status: "refused", field: null, message: "The sibling tick could not be saved. Nothing was changed. Try again in a moment." }
   }

@@ -190,8 +190,8 @@ describe("the database's verdicts", () => {
   it("classes each row and explains what staff need to know", () => {
     expect(classified.map((row) => [row.class, row.reason, row.notes])).toEqual([
       ["create", null, ["No visit date in the file. The import date is used."]],
-      ["create", null, ["Same parent as row 2", "Code not recognised. It stays on the lead and gives no discount."]],
-      ["joins-family", null, ["Phone matches Juma Mfano's family. Staff confirm the match on the lead."]],
+      ["create", null, ["Same parent as row 2", "Code not recognised. It stays on the application and gives no discount."]],
+      ["joins-family", null, ["Phone matches Juma Mfano's family. Staff confirm the match on the application."]],
       ["present", "Already on file as ADMSN-90001", []],
       ["refused", "Unknown class", []],
     ])

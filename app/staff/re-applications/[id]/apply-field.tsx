@@ -41,7 +41,7 @@ export function ApplyField({
       } catch {
         answer = LOST_REQUEST
       }
-      if (answer.status === "saved") toast.success(`${label} applied to the lead.`)
+      if (answer.status === "saved") toast.success(`${label} applied to the application.`)
       else setOutcome(answer)
     })
   }

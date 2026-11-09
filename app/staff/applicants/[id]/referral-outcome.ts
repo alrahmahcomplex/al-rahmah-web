@@ -78,8 +78,8 @@ export type ReferralAction = "set" | "clear"
 
 const REFUSED: Record<Exclude<SetReferralCodeError, "no-change"> | "signed-out", string> = {
   forbidden: "Your role can't change the referral code.",
-  "not-found": "This lead could not be found. Reload the page.",
-  "lead-closed": "This lead is closed, so its referral code can't be changed.",
+  "not-found": "This application could not be found. Reload the page.",
+  "lead-closed": "This application is closed, so its referral code can't be changed.",
   "unknown-code": "No Marketing Agent or Promo code has this code. Check it and try again.",
   "retired-code": "This code belongs to a retired Marketing Agent record, so it can't be used. Check it and try again.",
   unavailable: "The referral code could not be saved. Nothing was changed. Try again in a moment.",
@@ -98,7 +98,7 @@ export function referralOutcome(
   if (result.error === "no-change") {
     return {
       status: "refused",
-      message: action === "set" ? "The lead already has this referral code." : "This lead has no referral code to clear. Reload the page.",
+      message: action === "set" ? "The application already has this referral code." : "This application has no referral code to clear. Reload the page.",
     }
   }
   return { status: "refused", message: REFUSED[result.error] }

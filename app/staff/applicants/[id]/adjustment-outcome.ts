@@ -45,7 +45,7 @@ export function adjustmentRefusal(error: AdjustmentError): AdjustmentRefusal {
       return {
         status: "refused",
         field: "reason",
-        message: "This lead already has a Fee waived payment that counts, so this one can't be restored.",
+        message: "This application already has a Fee waived payment that counts, so this one can't be restored.",
       }
     case "type_pre_form_one":
       return {

@@ -10,7 +10,7 @@ export type DeclineOutcome = { status: "declined" } | { status: "refused"; messa
 export function declineOutcome(error: DeclineError): DeclineOutcome {
   switch (error) {
     case "forbidden":
-      return { status: "refused", message: "Your role can't decline this lead with that reason. Nothing was changed." }
+      return { status: "refused", message: "Your role can't decline this application with that reason. Nothing was changed." }
     case "invalid":
       return {
         status: "refused",
@@ -19,10 +19,10 @@ export function declineOutcome(error: DeclineError): DeclineOutcome {
     case "lead-closed":
       return {
         status: "refused",
-        message: "This lead is already closed, so it can't be declined. Reload the page to see why.",
+        message: "This application is already closed, so it can't be declined. Reload the page to see why.",
       }
     case "not-found":
-      return { status: "refused", message: "This lead could not be found. Reload the page." }
+      return { status: "refused", message: "This application could not be found. Reload the page." }
     case "unavailable":
       return { status: "refused", message: "The decline could not be saved. Nothing was changed. Try again in a moment." }
   }

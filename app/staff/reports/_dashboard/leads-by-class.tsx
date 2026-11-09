@@ -10,7 +10,7 @@ export function LeadsByClassTable({ counts }: { counts: LeadsByClass }) {
         <TableHeader>
           <TableRow>
             <TableHead>Class</TableHead>
-            <TableHead className="text-right">Leads</TableHead>
+            <TableHead className="text-right">Applicants</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -35,7 +35,7 @@ export function LeadsByClassTable({ counts }: { counts: LeadsByClass }) {
           </TableRow>
         </TableFooter>
       </Table>
-      <p className="text-xs text-muted-foreground">Counted by the date the lead was created</p>
+      <p className="text-xs text-muted-foreground">Counted by the date the application was created</p>
     </div>
   )
 }

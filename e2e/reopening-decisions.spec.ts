@@ -60,16 +60,16 @@ test("a Manager approves from the lead, choosing to enrol without a retaken inte
   await pending(page).getByRole("button", { name: "Approve" }).click()
 
   const dialog = page.getByRole("dialog", { name: `Approve reopening ${lead.child}?` })
-  await expect(dialog).toContainText("The lead goes back to Interviewed.")
+  await expect(dialog).toContainText("The application goes back to Interviewed.")
   await dialog.getByRole("button", { name: "Approve and reopen" }).click()
-  await expect(dialog.getByRole("alert")).toHaveText("Choose whether the lead retakes the interview.")
+  await expect(dialog.getByRole("alert")).toHaveText("Choose whether the applicant retakes the interview.")
 
   await dialog.getByLabel("Enrol without a retaken interview").check()
   await dialog.getByRole("button", { name: "Approve and reopen" }).click()
   await expect(dialog).toHaveCount(0)
 
   // Open again: no banner, the Interviewed status, the tag and the note.
-  await expect(page.getByRole("region", { name: /^This lead is/ })).toHaveCount(0)
+  await expect(page.getByRole("region", { name: /^This application is/ })).toHaveCount(0)
   await expect(page.getByText("Initially declined", { exact: true })).toBeVisible()
   const note = page.getByRole("region", { name: "Reopened after decline" })
   await expect(note).toContainText(`Approved by ${MANAGER.name} on`)
@@ -85,7 +85,7 @@ test("a Manager approves from the lead, choosing to enrol without a retaken inte
   await expect(row.getByText("Initially declined", { exact: true })).toBeVisible()
 
   await openLeadHistoryAsSuperAdmin(page, lead.id)
-  await expect(page.getByText("reopened the lead from Declined").first()).toBeVisible()
+  await expect(page.getByText("reopened the application from Declined").first()).toBeVisible()
   await expect(page.getByText("approved the reopening request").first()).toBeVisible()
 })
 
@@ -108,7 +108,7 @@ test("a Manager rejects with a reason, and the requester reads it on the lead", 
     await signIn(requester, ADMISSIONS)
     await requester.goto(`/staff/applicants/${lead.id}`)
     // Still closed, with the outcome under the requests.
-    await expect(requester.getByRole("region", { name: "This lead is Declined" })).toBeVisible()
+    await expect(requester.getByRole("region", { name: "This application is Declined" })).toBeVisible()
     await expect(panel(requester)).toContainText(`Rejected by ${MANAGER.name}`)
     await expect(panel(requester)).toContainText("Reason for rejecting: The sponsor letter is missing. Bring it to the office first.")
     // No decision buttons for staff who may not approve.

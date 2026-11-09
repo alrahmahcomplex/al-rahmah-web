@@ -31,6 +31,6 @@ export function withInterviewSerial(
   const interview = serials.get(entry.recordId)
   if (!interview) return described
   const summary =
-    entry.action === "insert" && interview.retake ? "registered the lead for a retaken interview" : described.summary
+    entry.action === "insert" && interview.retake ? "registered the applicant for a retaken interview" : described.summary
   return { ...described, summary: `${summary} (S/N ${String(interview.serialNumber)})` }
 }

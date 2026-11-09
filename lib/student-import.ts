@@ -255,10 +255,10 @@ export const STUDENT_REASONS = {
 } as const
 
 export const STUDENT_NOTES = {
-  unknownCode: "Code not recognised. It stays on the lead and gives no discount.",
+  unknownCode: "Code not recognised. It stays on the application and gives no discount.",
   importDate: "No visit date in the file. The import date is used.",
   sameFamily: (row: number) => `Same parent as row ${row}`,
-  joinsFamily: (name: string) => `Phone matches ${name}'s family. Staff confirm the match on the lead.`,
+  joinsFamily: (name: string) => `Phone matches ${name}'s family. Staff confirm the match on the application.`,
 } as const
 
 export function screenStudentRows(

@@ -15,7 +15,7 @@ export function LatestRegistrations({ leads }: { leads: Result<LatestLead[], "un
           Latest registrations
         </h2>
         <Link href="/staff/applicants" className="text-xs font-medium text-blue-600 underline-offset-4 hover:underline">
-          All leads
+          All applicants
         </Link>
       </div>
       {!leads.ok ? (

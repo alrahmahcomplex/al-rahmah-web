@@ -46,7 +46,7 @@ describe("a Pre-Form One fee payment", () => {
     expect(PAYMENT_TYPE_NAMES.pre_form_one_fee).toBe("Pre-Form One fee")
     expect(paymentRefusal("not_pre_form_one", "checked")).toMatchObject({
       field: "type",
-      message: expect.stringContaining("Pre-Form One programme is ticked on a FORM 1 lead"),
+      message: expect.stringContaining("Pre-Form One programme is ticked on a FORM 1 applicant"),
     })
     expect(recordedPaymentOutcome({ paymentId: PAYMENT, totalPaid: 300_000, priority: "Deposit" }, "pre_form_one_fee")).toEqual({
       status: "recorded",

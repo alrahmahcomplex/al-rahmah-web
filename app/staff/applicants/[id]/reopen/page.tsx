@@ -39,7 +39,7 @@ export default async function ReopenLeadPage({
   if (!lead.ok) {
     return (
       <Alert variant="destructive">
-        <AlertDescription>This lead could not be loaded. Try again in a moment.</AlertDescription>
+        <AlertDescription>This application could not be loaded. Try again in a moment.</AlertDescription>
       </Alert>
     )
   }
@@ -49,7 +49,7 @@ export default async function ReopenLeadPage({
       {source === "duplicate_match" && isClosed(lead.data) && (
         <Alert>
           <AlertDescription>
-            This student is already on file, so no new record was made. To bring the family back, ask for this lead
+            This student is already on file, so no new record was made. To bring the family back, ask for this application
             to be reopened.
           </AlertDescription>
         </Alert>
@@ -57,7 +57,7 @@ export default async function ReopenLeadPage({
       <LeadSummary lead={lead.data} nextStep={<ReopenStep lead={lead.data} staff={staff} source={source} />} />
       <div className="flex flex-wrap gap-2">
         <Link href={`/staff/applicants/${lead.data.id}`} className={buttonVariants({ variant: "outline" })}>
-          {source === "lead" ? "Back to the lead" : "Open the lead"}
+          {source === "lead" ? "Back to the application" : "Open the application"}
         </Link>
         {source !== "lead" && (
           <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>
@@ -71,7 +71,7 @@ export default async function ReopenLeadPage({
 
 async function ReopenStep({ lead, staff, source }: { lead: Lead; staff: StaffMember; source: ReopeningSource }) {
   if (!isClosed(lead)) {
-    return <Note>This lead is open, so there is nothing to reopen.</Note>
+    return <Note>This application is open, so there is nothing to reopen.</Note>
   }
   if (!canRaiseReopening(staff.permissions)) {
     return <Note>Your role can&apos;t request reopening. You can read the record below.</Note>
@@ -81,7 +81,7 @@ async function ReopenStep({ lead, staff, source }: { lead: Lead; staff: StaffMem
   if (!reopenings.ok) {
     return (
       <Alert variant="destructive" className="max-w-xl">
-        <AlertDescription>The lead&apos;s reopening requests could not be loaded. Try again in a moment.</AlertDescription>
+        <AlertDescription>The application&apos;s reopening requests could not be loaded. Try again in a moment.</AlertDescription>
       </Alert>
     )
   }
@@ -103,7 +103,7 @@ async function ReopenStep({ lead, staff, source }: { lead: Lead; staff: StaffMem
           Request reopening
         </h2>
         <p className="max-w-xl text-sm text-muted-foreground">
-          A Manager approves reopening. Until then the lead stays read-only.
+          A Manager approves reopening. Until then the application stays read-only.
         </p>
       </div>
       <RequestReopeningForm leadId={lead.id} source={source} />

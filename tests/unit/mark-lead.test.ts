@@ -78,15 +78,15 @@ describe("a mark in the history", () => {
 
   it("says which mark was set, with the reason and note labelled, and leaves out who and when", () => {
     const [inactive] = describeLeadHistory([entry({ from: null, to: "Inactive" })], {})
-    expect(inactive.summary).toBe("marked the lead Inactive")
+    expect(inactive.summary).toBe("marked the application Inactive")
     expect(inactive.changes).toEqual([
       { label: "Closure", from: "None", to: "Inactive" },
       { label: "Closure reason", from: "None", to: "Duplicate record" },
       { label: "Closure note", from: "None", to: "Entered twice." },
     ])
-    expect(describeLeadHistory([entry({ from: null, to: "Archived" })], {})[0].summary).toBe("archived the lead")
+    expect(describeLeadHistory([entry({ from: null, to: "Archived" })], {})[0].summary).toBe("archived the application")
     expect(describeLeadHistory([entry({ from: "Inactive", to: "Archived" })], {})[0].summary).toBe(
-      "moved the lead from Inactive to Archived",
+      "moved the application from Inactive to Archived",
     )
   })
 })

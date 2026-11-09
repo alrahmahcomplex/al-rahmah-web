@@ -31,7 +31,7 @@ const LOST_REQUEST: DeclineOutcome = {
 }
 
 // What happens next, shown before the decline is sent.
-export const DECLINE_CONSEQUENCE = "This lead becomes read-only. Bringing it back needs a Manager's approval."
+export const DECLINE_CONSEQUENCE = "This application becomes read-only. Bringing it back needs a Manager's approval."
 
 type DeclineLeadProps = {
   lead: { id: string; studentName: string; admissionNumber: string; status: LeadStatus }
@@ -178,7 +178,7 @@ export function DeclineLead({ lead, reasons, open, onOpenChange: setOpen }: Decl
               <DialogDescription>{DECLINE_CONSEQUENCE}</DialogDescription>
             </DialogHeader>
             <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">Lead</dt>
+              <dt className="text-muted-foreground">Applicant</dt>
               <dd className="text-slate-900">
                 {lead.studentName}, <span className="font-mono whitespace-nowrap">{lead.admissionNumber}</span>
               </dd>
@@ -203,7 +203,7 @@ export function DeclineLead({ lead, reasons, open, onOpenChange: setOpen }: Decl
                 Back
               </Button>
               <Button type="button" variant="destructive" onClick={decline} disabled={pending}>
-                {pending ? "Declining…" : "Decline lead"}
+                {pending ? "Declining…" : "Decline application"}
               </Button>
             </DialogFooter>
           </div>

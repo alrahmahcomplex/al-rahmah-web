@@ -23,7 +23,7 @@ import { nobodyHasAsked } from "./reopening-section"
 import { LEAD_TABS, leadTab, leadTabHref } from "./tabs"
 
 export const metadata: Metadata = {
-  title: "Lead · Al-Rahmah Complex",
+  title: "Application · Al-Rahmah Complex",
 }
 
 export default async function LeadPage({
@@ -48,7 +48,7 @@ export default async function LeadPage({
   if (!lead.ok) {
     return (
       <Alert variant="destructive">
-        <AlertDescription>This lead could not be loaded. Try again in a moment.</AlertDescription>
+        <AlertDescription>This application could not be loaded. Try again in a moment.</AlertDescription>
       </Alert>
     )
   }
@@ -87,7 +87,7 @@ export default async function LeadPage({
         <ClosedLeadBanner lead={lead.data} canRequestReopening={canRequestReopening} />
       )}
 
-      <nav aria-label="Lead sections" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <nav aria-label="Application sections" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <ul className="flex min-w-max gap-1 border-b">
           {LEAD_TABS.map(({ key, label }) => (
             <li key={key}>

@@ -12,6 +12,6 @@ export function markTitle(mark: MarkMove, studentName: string): string {
 
 // What happens next, shown in the dialog before the mark is sent.
 export function markConsequence(mark: MarkMove, status: LeadStatus): string {
-  const after = mark === "inactive" ? "It can still be archived later." : "An Archived lead is never moved back to Inactive."
-  return `The lead keeps its status, ${status}, and becomes read-only. ${after} Bringing it back needs a Manager's approval.`
+  const after = mark === "inactive" ? "It can still be archived later." : "An Archived application is never moved back to Inactive."
+  return `The application keeps its status, ${status}, and becomes read-only. ${after} Bringing it back needs a Manager's approval.`
 }

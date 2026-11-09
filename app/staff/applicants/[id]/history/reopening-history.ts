@@ -15,7 +15,7 @@ const LABELS: Readonly<Record<string, string>> = {
   state: "Request",
   rejection_reason: "Reason for rejecting",
   enrol_without_retake: "Enrol without a retaken interview",
-  lead_was_declined: "Lead was Declined",
+  lead_was_declined: "Application was Declined",
   restored_status: "Status restored to",
 }
 
@@ -62,8 +62,8 @@ export function reopenedLeadSummary(changed: ReadonlyMap<string, LeadHistoryChan
   const fromDeclined = status?.from === "Declined" && status.to !== "Declined"
   const closure = changed.get("closure")
   const mark = closure && closure.from !== null && closure.to === null ? String(closure.from) : null
-  if (fromDeclined && mark) return `reopened the lead from Declined and ${mark}`
-  if (fromDeclined) return "reopened the lead from Declined"
-  if (mark) return `reopened the lead from ${mark}`
+  if (fromDeclined && mark) return `reopened the application from Declined and ${mark}`
+  if (fromDeclined) return "reopened the application from Declined"
+  if (mark) return `reopened the application from ${mark}`
   return null
 }

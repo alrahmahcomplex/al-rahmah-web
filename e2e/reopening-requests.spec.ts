@@ -46,7 +46,7 @@ async function declinedLead() {
   return { id: created.data.leadId, ...family }
 }
 
-const banner = (page: Page) => page.getByRole("region", { name: "This lead is Declined" })
+const banner = (page: Page) => page.getByRole("region", { name: "This application is Declined" })
 const panel = (page: Page) => page.getByRole("region", { name: "Reopening requests" })
 
 test.describe("raising a reopening request", () => {
@@ -70,7 +70,7 @@ test.describe("raising a reopening request", () => {
     await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
     const pending = panel(page).getByRole("group", { name: "Pending reopening request" })
     await expect(pending).toContainText("Requested by you")
-    await expect(pending).toContainText("From the lead screen.")
+    await expect(pending).toContainText("From the application page.")
     await expect(pending).toContainText("The family moved back to Dar and wants a place in January.")
     await expect(pending.getByRole("button", { name: "Withdraw" })).toBeVisible()
     // Asked once is enough: the banner stops offering it.

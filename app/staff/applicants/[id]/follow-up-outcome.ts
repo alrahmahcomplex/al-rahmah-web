@@ -26,7 +26,7 @@ export function recordedOutcome(nextDueOn: string | null): FollowUpOutcome {
 // After a contact that declined the lead. The refreshed page shows the
 // closed-lead banner with the decline.
 export function declinedOutcome(): FollowUpOutcome {
-  return { status: "saved", message: "Follow-up recorded. The lead is declined." }
+  return { status: "saved", message: "Follow-up recorded. The application is declined." }
 }
 
 const INVALID: Record<FollowUpField, string> = {
@@ -65,20 +65,20 @@ export function followUpOutcome(
         conflict: true,
         message:
           action === "schedule"
-            ? "This lead already has a follow-up scheduled. Reload the page to see it."
+            ? "This application already has a follow-up scheduled. Reload the page to see it."
             : action === "record" || action === "decline"
               ? "Someone else has already recorded or changed this follow-up. Nothing was saved. Reload the page to see it."
               : "This follow-up has already been changed or completed. Reload the page to see the current one.",
       }
     case "read-only":
-      return { status: "refused", field: null, message: "This lead is closed, so its follow-ups can't be changed." }
+      return { status: "refused", field: null, message: "This application is closed, so its follow-ups can't be changed." }
     case "forbidden":
       return {
         status: "refused",
         field: null,
         message:
           action === "decline"
-            ? "Your role can't decline this lead with that reason. Nothing was saved."
+            ? "Your role can't decline this application with that reason. Nothing was saved."
             : action === "record"
               ? "Your role can't record follow-ups."
               : "Your role can't schedule or change follow-ups.",
@@ -87,7 +87,7 @@ export function followUpOutcome(
       return {
         status: "refused",
         field: null,
-        message: action === "change" ? "This follow-up could not be found. Reload the page." : "This lead could not be found. Reload the page.",
+        message: action === "change" ? "This follow-up could not be found. Reload the page." : "This application could not be found. Reload the page.",
       }
     case "unavailable":
       return { status: "refused", field: null, message: "The follow-up could not be saved. Nothing was changed. Try again in a moment." }

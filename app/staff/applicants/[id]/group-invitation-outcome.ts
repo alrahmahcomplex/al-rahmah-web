@@ -29,9 +29,9 @@ export function invitationRefusal(error: SendInvitationError, method: "link" | "
     case "forbidden":
       return { status: "refused", message: "Your role can't send the group invitation." }
     case "not-found":
-      return { status: "refused", message: "This lead could not be found. Reload the page." }
+      return { status: "refused", message: "This application could not be found. Reload the page." }
     case "lead_closed":
-      return { status: "refused", message: `This lead is closed, so nothing was recorded.${copied}` }
+      return { status: "refused", message: `This application is closed, so nothing was recorded.${copied}` }
     case "not_visited":
       return {
         status: "refused",
@@ -45,7 +45,7 @@ export function invitationRefusal(error: SendInvitationError, method: "link" | "
     case "stale_link":
       return {
         status: "refused",
-        message: `The group link or the lead's Enrollment year has changed, so nothing was recorded.${copied} Reload the page to see the current invitation.`,
+        message: `The group link or the applicant's Enrollment year has changed, so nothing was recorded.${copied} Reload the page to see the current invitation.`,
       }
     case "no_whatsapp_number":
       return {

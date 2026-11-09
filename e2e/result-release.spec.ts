@@ -249,7 +249,7 @@ test.describe("releasing a result by SMS", () => {
 
     await signIn(page, ADMISSIONS)
     await page.goto(leadUrl(lead.id, "Interview"))
-    await expect(release(page)).toContainText("The names on this lead make the message too long for WhatsApp, so it goes by SMS.")
+    await expect(release(page)).toContainText("The names on this application make the message too long for WhatsApp, so it goes by SMS.")
     await expect(release(page).getByRole("button", { name: "Send through WhatsApp" })).toHaveCount(0)
     await expect(release(page).getByRole("group", { name: "Message preview" })).toHaveCount(0)
     // The note shows before the send; the text and the number do not.

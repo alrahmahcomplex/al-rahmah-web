@@ -9,7 +9,7 @@ import { DeclineFacts } from "./decline-details"
 export async function ClosedLeadDetails({ leadId }: { leadId: string }) {
   const closure = await getLeadClosure(await createClient(), leadId)
   if (!closure.ok) {
-    return <p className="text-muted-foreground">Why this lead is closed could not be loaded. Reload the page to try again.</p>
+    return <p className="text-muted-foreground">Why this application is closed could not be loaded. Reload the page to try again.</p>
   }
 
   const { decline, closure: mark } = closure.data

@@ -41,12 +41,12 @@ export function correctionOutcome(error: CorrectionError): CorrectionOutcome {
     case "forbidden":
       return { status: "refused", field: null, message: "Your role can't make this change." }
     case "not-found":
-      return { status: "refused", field: null, message: "This lead could not be found. Reload the page." }
+      return { status: "refused", field: null, message: "This application could not be found. Reload the page." }
     case "closed":
       return {
         status: "refused",
         field: null,
-        message: "This lead has been closed, so it can't be changed. Reload the page.",
+        message: "This application has been closed, so it can't be changed. Reload the page.",
       }
     case "children-changed":
       return {
@@ -62,7 +62,7 @@ export function correctionOutcome(error: CorrectionError): CorrectionOutcome {
         message: "Save the new phone number before this WhatsApp number.",
       }
     case "not-visited":
-      return { status: "refused", field: null, message: "This lead has no visit yet, so there is no Visit date to correct." }
+      return { status: "refused", field: null, message: "This applicant has no visit yet, so there is no Visit date to correct." }
     case "unavailable":
       return { status: "refused", field: null, message: "The change could not be saved. Nothing was changed. Try again in a moment." }
   }

@@ -123,7 +123,7 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
                 aria-describedby={missing ? errorId : undefined}
               >
                 <legend id={legendId} className="mb-1 text-sm font-medium text-slate-900">
-                  The lead was declined after its interview. How does it go on?
+                  The application was declined after its interview. How does it go on?
                 </legend>
                 {(["retake", "enrol"] as const).map((value) => (
                   <Label key={value} className="flex items-center gap-2 font-normal">
@@ -145,7 +145,7 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
             )}
             {missing && (
               <p id={errorId} role="alert" className="text-sm text-destructive">
-                Choose whether the lead retakes the interview.
+                Choose whether the applicant retakes the interview.
               </p>
             )}
             {refusal && (
@@ -180,7 +180,7 @@ function SeatWarning({ seats }: { seats: ApprovalSeats }) {
       <AlertDescription className="grid gap-2 text-amber-950">
         <p>{seats.message}</p>
         {seats.ranked && (
-          <ol aria-label="Leads ranked for the seats" className="flex max-h-56 flex-col divide-y divide-amber-200 overflow-y-auto">
+          <ol aria-label="Applicants ranked for the seats" className="flex max-h-56 flex-col divide-y divide-amber-200 overflow-y-auto">
             {seats.ranked.map((holder) => (
               <li
                 key={holder.leadId}
@@ -191,7 +191,7 @@ function SeatWarning({ seats }: { seats: ApprovalSeats }) {
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span>
                     {holder.studentName}
-                    {holder.thisLead && " (this lead)"}
+                    {holder.thisLead && " (this applicant)"}
                   </span>
                   <span className="text-xs font-normal">{holder.admissionNumber}</span>
                 </span>
@@ -246,7 +246,7 @@ function RejectReopening({ leadId, requestId, studentName, admissionNumber }: De
             <DialogHeader>
               <DialogTitle>Reject reopening {studentName}?</DialogTitle>
               <DialogDescription>
-                {admissionNumber}. The lead stays closed. The person who asked reads your reason on the lead.
+                {admissionNumber}. The application stays closed. The person who asked reads your reason on the application.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-1.5">

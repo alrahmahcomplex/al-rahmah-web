@@ -105,7 +105,7 @@ const LABELS: Record<string, string> = {
   paid_on: "Payment date",
   // Its re-applications, which also use the lead's and contact's labels.
   discount_code: "Discount code",
-  differing_fields: "Differs from the lead",
+  differing_fields: "Differs from the application",
   // A Marketing Agent. Agent rows carry no lead id, so they show in no lead's
   // history; these label them wherever the history is read.
   code: "Referral code",
@@ -118,7 +118,7 @@ const LABELS: Record<string, string> = {
   contacted_at: "Contacted at",
   comment: "Comment",
   outcome: "Outcome",
-  cause: "Closed with the lead",
+  cause: "Closed with the application",
   // A lead the student import created.
   ...IMPORT_LABELS,
 }
@@ -157,8 +157,8 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
 
 const OUTCOMES: Record<string, string> = {
   next_date: "Next follow-up planned",
-  lead_enrolled: "No next date: the lead is Enrolled",
-  lead_declined: "The family will not proceed: lead declined",
+  lead_enrolled: "No next date: the student is Enrolled",
+  lead_declined: "The family will not proceed: application declined",
 }
 
 // Why a follow-up closed with its lead, as the Follow-ups panel says it.
@@ -278,11 +278,11 @@ function summarize(
 
   if (entry.record === "lead") {
     if (insert) {
-      if (changed.get("returning_family_joined")?.to !== true) return "created the lead"
+      if (changed.get("returning_family_joined")?.to !== true) return "created the application"
       // The Admission form joins a Family only unconfirmed: the child's
       // contact carries a match that staff have yet to confirm.
       const unconfirmed = matchBefore(timeline, changed.get("guardian_contact_id")?.to, entry.id) !== null
-      return unconfirmed ? "created the lead, matched to a known Family but not yet confirmed" : "created the lead and joined a Family"
+      return unconfirmed ? "created the application, matched to a known Family but not yet confirmed" : "created the application and joined a Family"
     }
     if (entry.action !== "update") return entry.action
 
@@ -291,7 +291,7 @@ function summarize(
     if (reopened) return reopened
     if (status?.from === "Applied" && status.to === "Visited") return "recorded a visit"
     // The first interview result moves the lead on.
-    if (status?.from === "Visited" && status.to === "Interviewed") return "moved the lead to Interviewed"
+    if (status?.from === "Visited" && status.to === "Interviewed") return "moved the applicant to Interviewed"
     const enrolment = enrolmentSummary(entry, status, causes)
     if (enrolment) return enrolment
     // Confirming moves the lead onto the contact its own contact was matched
@@ -299,21 +299,21 @@ function summarize(
     // Rejecting clears the Family cause and keeps the contact.
     const contact = changed.get("guardian_contact_id")
     if (contact) {
-      return everMatchedTo(timeline, contact.from).includes(contact.to) ? "confirmed the Family match" : "separated the lead from its Family"
+      return everMatchedTo(timeline, contact.from).includes(contact.to) ? "confirmed the Family match" : "separated the applicant from their Family"
     }
     if (changed.get("returning_family_joined")?.to === false) return "rejected the Family match"
-    if (changed.get("status")?.to === "Declined") return "declined the lead"
+    if (changed.get("status")?.to === "Declined") return "declined the application"
     const closure = changed.get("closure")
-    if (closure?.to === "Inactive") return "marked the lead Inactive"
-    if (closure?.to === "Archived") return closure.from === "Inactive" ? "moved the lead from Inactive to Archived" : "archived the lead"
-    if (changed.get("returning_family_reapplied")?.to === true) return "flagged the lead Returning family: re-applied"
+    if (closure?.to === "Inactive") return "marked the application Inactive"
+    if (closure?.to === "Archived") return closure.from === "Inactive" ? "moved the application from Inactive to Archived" : "archived the application"
+    if (changed.get("returning_family_reapplied")?.to === true) return "flagged the application Returning family: re-applied"
     // The notice version changes with the code, and says nothing on its own.
     const referral = changed.get("referral_code")
     if (referral && changed.size === (changed.has("referral_notice_version") ? 2 : 1)) {
       if (referral.to === null) return "cleared the Referral code"
       return referral.from === null ? "added a Referral code" : "changed the Referral code"
     }
-    return "changed the lead"
+    return "changed the application"
   }
 
   if (entry.record === "contact") {
@@ -328,7 +328,7 @@ function summarize(
   }
 
   if (entry.record === "interviews") {
-    if (insert) return "registered the lead for interview"
+    if (insert) return "registered the applicant for interview"
     if (entry.action !== "update") return entry.action
     // The date, result and score are set together, so the first recording
     // sets the result where there was none, and a correction changes any of
@@ -364,7 +364,7 @@ function summarize(
   if (entry.record === "re_applications" && changed.get("reviewed_at")?.to) return "marked the re-application reviewed"
   if (entry.record === "follow_up_records") {
     if (!insert) return entry.action
-    if (changed.get("kind")?.to === "closed_with_lead") return "closed the follow-up with the lead"
+    if (changed.get("kind")?.to === "closed_with_lead") return "closed the follow-up with the application"
     return changed.get("follow_up_id")?.to ? "recorded a follow-up" : "recorded an unplanned contact"
   }
 

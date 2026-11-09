@@ -422,7 +422,7 @@ function Results({
                 <th scope="col" className="px-3 py-2 font-medium">Interview discount</th>
                 <th scope="col" className="px-3 py-2 font-medium">Registered</th>
                 <th scope="col" className="px-3 py-2 font-medium">Approved</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Leads</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Applicants</th>
                 {canApprove && (
                   <th scope="col" className="px-3 py-2 font-medium">
                     <span className="sr-only">Actions</span>

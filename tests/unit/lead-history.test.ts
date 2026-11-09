@@ -90,7 +90,7 @@ describe("describeLeadHistory", () => {
       id: 1,
       at: "2026-09-30T07:15:00Z",
       actor: "Test Admissions",
-      summary: "created the lead",
+      summary: "created the application",
       changes: [
         { label: "Admission Number", from: null, to: "ADMSN-40719" },
         { label: "Student name", from: null, to: "Baraka Juma" },
@@ -112,7 +112,7 @@ describe("describeLeadHistory", () => {
       ],
       names,
     )
-    expect(described.summary).toBe("created the lead and joined a Family")
+    expect(described.summary).toBe("created the application and joined a Family")
     expect(described.changes).toContainEqual({ label: "Returning family: joined a Family", from: null, to: "Yes" })
   })
 
@@ -125,7 +125,7 @@ describe("describeLeadHistory", () => {
       ],
       names,
     )
-    expect(described.summary).toBe("created the lead, matched to a known Family but not yet confirmed")
+    expect(described.summary).toBe("created the application, matched to a known Family but not yet confirmed")
   })
 
   it("says a later child joined when the contact's match was confirmed before it was created", () => {
@@ -137,7 +137,7 @@ describe("describeLeadHistory", () => {
       ],
       names,
     )
-    expect(described.summary).toBe("created the lead and joined a Family")
+    expect(described.summary).toBe("created the application and joined a Family")
   })
 
   it("names a recorded visit", () => {
@@ -182,7 +182,7 @@ describe("describeLeadHistory", () => {
       entry({ changes: [change("guardian_contact_id", CONTACT, OTHER_CONTACT), change("returning_family_joined", true, false)] }),
       names,
     )
-    expect(described.summary).toBe("separated the lead from its Family")
+    expect(described.summary).toBe("separated the applicant from their Family")
   })
 
   it("names a separation of a lead that never joined: moved onto a copy, not onto a matched contact", () => {
@@ -194,12 +194,12 @@ describe("describeLeadHistory", () => {
       ],
       names,
     )
-    expect(moved.summary).toBe("separated the lead from its Family")
+    expect(moved.summary).toBe("separated the applicant from their Family")
   })
 
   it("names any other change to the lead as a change", () => {
     const described = describeLeadHistoryEntry(entry({ changes: [change("class_name", "STD 2", "STD 3")] }), names)
-    expect(described.summary).toBe("changed the lead")
+    expect(described.summary).toBe("changed the application")
     expect(described.changes).toEqual([{ label: "Class", from: "STD 2", to: "STD 3" }])
   })
 
@@ -264,7 +264,7 @@ describe("describeLeadHistory", () => {
       entry({ changes: [change("agent_note", "AGT-01", "AGT-02"), change("marks", null, { maths: 80 })] }),
       names,
     )
-    expect(described.summary).toBe("changed the lead")
+    expect(described.summary).toBe("changed the application")
     expect(described.changes).toEqual([
       { label: "agent_note", from: "AGT-01", to: "AGT-02" },
       { label: "marks", from: "None", to: '{"maths":80}' },

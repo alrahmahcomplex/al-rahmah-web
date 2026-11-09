@@ -61,7 +61,7 @@ export function WithdrawReopening({ leadId, requestId }: { leadId: string; reque
           <AlertDialogHeader>
             <AlertDialogTitle>Withdraw your reopening request?</AlertDialogTitle>
             <AlertDialogDescription>
-              The Manager won&apos;t see it any more, and the lead stays closed. You can send a new request later.
+              The Manager won&apos;t see it any more, and the application stays closed. You can send a new request later.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

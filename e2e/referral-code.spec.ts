@@ -87,7 +87,7 @@ test.describe("the Referral code panel", () => {
 
     // Changed to a Pending agent's code: the fee goes back up.
     await panel(page).getByRole("button", { name: "Edit" }).click()
-    await expect(panel(page).getByText("(the lead's current code)")).toBeVisible()
+    await expect(panel(page).getByText("(the application's current code)")).toBeVisible()
     await panel(page).getByLabel("Referral code").fill("znm-401")
     await expect(panel(page).getByText(/Zawadi Neema Mwakasege · Pending/)).toBeVisible()
     await panel(page).getByRole("button", { name: "Save" }).click()

@@ -109,7 +109,7 @@ test("recording a contact from a queue row moves the row to Upcoming", async ({ 
   await page.goto("/staff/follow-ups")
 
   await overdueList(page).getByRole("link", { name: lead.studentName }).click()
-  await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}\\?tab=follow-ups#lead-follow-ups$`))
+  await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}\\?tab=follow-ups#lead-follow-ups$`))
 
   const panel = page.getByRole("region", { name: "Follow-ups" })
   await panel.getByRole("button", { name: "Record follow-up" }).click()
@@ -126,6 +126,8 @@ test("recording a contact from a queue row moves the row to Upcoming", async ({ 
   // Upcoming may run to several pages; the row is on one of them.
   for (let upcoming = 1; ; upcoming++) {
     await page.goto(`/staff/follow-ups?upcoming=${upcoming}`)
+    // Wait for the page itself, not its loading skeleton, before counting.
+    await expect(laterList(page)).toBeVisible()
     const row = laterList(page).getByRole("listitem").filter({ hasText: lead.studentName })
     if ((await row.count()) > 0) {
       await expect(row).toContainText(formatDate(addDays(today, 2)))

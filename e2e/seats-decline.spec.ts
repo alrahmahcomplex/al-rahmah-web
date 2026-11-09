@@ -108,21 +108,21 @@ test("the Manager declines a ranked lead from Seats with No seat available", asy
   await link.click()
 
   // The lead screen opens Decline with No seat available chosen.
-  await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}\\?decline=No\\+seat\\+available$`))
+  await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}\\?decline=No\\+seat\\+available$`))
   const dialog = page.getByRole("dialog", { name: `Decline ${lead.name}`, exact: true })
   await expect(dialog.getByLabel("Reason")).toHaveValue("No seat available")
   await dialog.getByRole("button", { name: "Continue" }).click()
 
   const confirm = page.getByRole("dialog", { name: `Decline ${lead.name}?`, exact: true })
   await expect(confirm).toContainText("No seat available")
-  await confirm.getByRole("button", { name: "Decline lead" }).click()
+  await confirm.getByRole("button", { name: "Decline application" }).click()
 
-  const banner = page.getByRole("region", { name: "This lead is Declined" })
+  const banner = page.getByRole("region", { name: "This application is Declined" })
   await expect(banner).toContainText("No seat available")
   await expect(banner).toContainText(MANAGER.name)
   // The link's reason leaves the address, so a reload after a later
   // reopening doesn't open Decline again.
-  await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
+  await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
 
   // The seat is released: the class holds one lead fewer, and the lead is
   // ranked no more.
@@ -140,7 +140,7 @@ test("a decline link opens nothing for staff who can't use its reason", async ({
 
   // Admissions Staff may decline, but not with No seat available.
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${lead.id}?decline=No+seat+available`)
+  await page.goto(`/staff/applicants/${lead.id}?decline=No+seat+available`)
   await expect(page.getByRole("heading", { name: lead.name })).toBeVisible()
   await expect(page.getByRole("dialog")).toHaveCount(0)
   expect(await moreActions(page)).toContain("Decline")

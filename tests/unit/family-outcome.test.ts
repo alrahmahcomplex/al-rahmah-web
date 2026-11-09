@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { familyOutcome } from "@/app/staff/leads/[id]/family-outcome"
+import { familyOutcome } from "@/app/staff/applicants/[id]/family-outcome"
 
 describe("familyOutcome", () => {
   it("says a match someone else already settled needs a reload", () => {
@@ -25,7 +25,7 @@ describe("familyOutcome", () => {
         kind: "duplicate",
         lead: { id: "lead-1", admissionNumber: "ADMSN-12345", status: "Visited", closure: null },
       }),
-    ).toEqual({ status: "duplicate", admissionNumber: "ADMSN-12345", href: "/staff/leads/lead-1" })
+    ).toEqual({ status: "duplicate", admissionNumber: "ADMSN-12345", href: "/staff/applicants/lead-1" })
   })
 
   it("explains every other refusal without naming a field", () => {

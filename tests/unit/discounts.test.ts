@@ -6,10 +6,10 @@ import {
   decideOutcome,
   discountLabel,
   requestOutcome,
-} from "@/app/staff/leads/[id]/discount-outcome"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { paymentRefusal } from "@/app/staff/leads/[id]/payment-outcome"
-import { dayOf } from "@/app/staff/leads/[id]/reopening-outcome"
+} from "@/app/staff/applicants/[id]/discount-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { paymentRefusal } from "@/app/staff/applicants/[id]/payment-outcome"
+import { dayOf } from "@/app/staff/applicants/[id]/reopening-outcome"
 import { navFor } from "@/app/staff/navigation"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { isDiscountKind, type DecideDiscountError, type RequestDiscountError } from "@/lib/services/discounts"
@@ -83,7 +83,7 @@ describe("what the screens say", () => {
   it("explains each Fee waived refusal", () => {
     expect(paymentRefusal("not_waivable", "checked")).toMatchObject({ field: "type", message: expect.stringContaining("Qualified orphan") })
     expect(paymentRefusal("amount_not_allowed", "checked")).toMatchObject({ field: "amount" })
-    expect(paymentRefusal("already_waived", "recorded")).toMatchObject({ message: "This lead's fee is already waived." })
+    expect(paymentRefusal("already_waived", "recorded")).toMatchObject({ message: "This applicant's fee is already waived." })
   })
 })
 

@@ -25,7 +25,7 @@ export default async function CheckInPage() {
       </div>
       <ArrivalSearch canRegister={canRegister} />
       {!canRegister && (
-        <p className="text-sm text-muted-foreground">Your role can read leads but not register new students.</p>
+        <p className="text-sm text-muted-foreground">Your role can read applications but not register new students.</p>
       )}
     </div>
   )

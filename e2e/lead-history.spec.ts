@@ -40,7 +40,7 @@ test.describe("a lead's history", () => {
   test("shows an edit first, with who made it and the old and new value", async ({ page }) => {
     const lead = await walkInLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await page.getByRole("button", { name: "Edit student" }).click()
     const form = page.getByRole("form", { name: "Edit student" })
@@ -49,31 +49,31 @@ test.describe("a lead's history", () => {
     await expect(page.getByRole("region", { name: "Student" }).getByRole("status")).toHaveText("Student details saved.")
 
     await openLeadHistoryAsSuperAdmin(page)
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}/history$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}/history$`))
     await expect(page.getByText(`${lead.name} · ${lead.admissionNumber}`)).toBeVisible()
 
     const entries = page.getByRole("list", { name: "History" }).locator(":scope > li")
     await expect(entries).toHaveCount(3)
-    await expect(entries.nth(0)).toContainText(`${ADMISSIONS.name} changed the lead`)
+    await expect(entries.nth(0)).toContainText(`${ADMISSIONS.name} changed the application`)
     await expect(entries.nth(0)).toContainText("Class: STD 3 → STD 4")
-    await expect(entries.nth(1)).toContainText(`${ADMISSIONS.name} created the lead`)
+    await expect(entries.nth(1)).toContainText(`${ADMISSIONS.name} created the application`)
     await expect(entries.nth(1)).toContainText(`Student name: ${lead.name}`)
     await expect(entries.nth(1)).toContainText("Parent or guardian: Halima History")
     await expect(entries.nth(2)).toContainText(`${ADMISSIONS.name} added the parent or guardian Halima History`)
 
-    await page.getByRole("link", { name: "Back to the lead" }).click()
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
+    await page.getByRole("link", { name: "Back to the application" }).click()
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
   })
 
   for (const person of [MANAGER, ACCOUNTANT]) {
     test(`${person.roleName} sees the status and its date, no History link, and a forbidden History page`, async ({ page }) => {
       const lead = await walkInLead()
       await signIn(page, person)
-      await page.goto(`/staff/leads/${lead.id}`)
+      await page.goto(`/staff/applicants/${lead.id}`)
       await expect(page.getByText(/^since \d{1,2} \w{3} \d{4}$/)).toBeVisible()
       await expect(page.getByRole("link", { name: "History" })).toHaveCount(0)
 
-      await page.goto(`/staff/leads/${lead.id}/history`)
+      await page.goto(`/staff/applicants/${lead.id}/history`)
       await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
       await expect(page.getByRole("list", { name: "History" })).toHaveCount(0)
     })

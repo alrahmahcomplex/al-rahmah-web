@@ -28,7 +28,7 @@ const WIDGET_LANGUAGES = new Set(
 type RenderOptions = {
   sitekey: string
   action: string
-  size: "flexible" | "compact"
+  size: Size
   theme: "auto"
   appearance: "interaction-only"
   language: string
@@ -55,6 +55,14 @@ declare global {
 // Turnstile's flexible size is never narrower than this; below it the
 // compact size (150px wide) fits instead.
 const FLEXIBLE_MIN_WIDTH = 300
+
+// A single error is often a network blip that Turnstile's own retry clears
+// (it waits 8 seconds by default), so "couldn't load" shows only after a
+// second error in a row, or when no retry has worked this long after the
+// first. Some errors, such as a wrong site key, are never retried.
+const RETRY_GRACE_MS = 15_000
+
+type Size = "flexible" | "compact"
 
 type CheckState = "hidden" | "needsClick" | "failed" | "unsupported"
 
@@ -129,16 +137,25 @@ export function TurnstileWidget({
   // Once Cloudflare has shown the box, its spacing stays until the widget is
   // drawn again: the box stays on screen after a tick, showing success.
   const [shown, setShown] = useState(false)
-  // Measured before the widget is drawn, and again when the space crosses
-  // 300px (a phone turning, a window narrowing): the widget is then drawn
-  // again at the size that fits.
-  const [size, setSize] = useState<"flexible" | "compact" | null>(null)
+  const shownRef = useRef(false)
+  // The size the widget is drawn at. Measured before it is first drawn, and
+  // again when the space crosses 300px (a phone turning, a window
+  // narrowing). A box on screen is then drawn again at the size that fits,
+  // so it never sticks out of the card; that drops a token it held, and
+  // Turnstile checks again by itself. An invisible widget keeps its size and
+  // its token, since only a box on screen can stick out; if Cloudflare later
+  // needs a click, it is drawn again at the size that fits first.
+  const [size, setSize] = useState<Size | null>(null)
+  const fits = useRef<Size | null>(null)
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
   function show(next: CheckState) {
     stateRef.current = next
     setState(next)
-    if (next !== "hidden") setShown(true)
+    if (next !== "hidden") {
+      shownRef.current = true
+      setShown(true)
+    }
   }
 
   useImperativeHandle(ref, () => ({
@@ -157,7 +174,11 @@ export function TurnstileWidget({
   useEffect(() => {
     const box = container.current
     if (!box) return
-    const measure = () => setSize(box.clientWidth < FLEXIBLE_MIN_WIDTH ? "compact" : "flexible")
+    const measure = () => {
+      const next = box.clientWidth < FLEXIBLE_MIN_WIDTH ? "compact" : "flexible"
+      fits.current = next
+      setSize((current) => (current === null || shownRef.current ? next : current))
+    }
     measure()
     if (typeof ResizeObserver === "undefined") return
     const observer = new ResizeObserver(measure)
@@ -172,6 +193,12 @@ export function TurnstileWidget({
       return
     }
     let cancelled = false
+    let errors = 0
+    let grace: ReturnType<typeof setTimeout> | undefined
+    const recovered = () => {
+      errors = 0
+      clearTimeout(grace)
+    }
     loadTurnstile()
       .then((turnstile) => {
         if (cancelled || !container.current) return
@@ -188,14 +215,25 @@ export function TurnstileWidget({
           // box near the fee read like a payment confirmation.
           appearance: "interaction-only",
           language: WIDGET_LANGUAGES.has(language) ? language : "auto",
-          callback: () => show("hidden"),
-          "before-interactive-callback": () => show("needsClick"),
+          callback: () => {
+            recovered()
+            show("hidden")
+          },
+          "before-interactive-callback": () => {
+            recovered()
+            // Drawn while invisible at a size that no longer fits.
+            if (fits.current && fits.current !== size) return setSize(fits.current)
+            show("needsClick")
+          },
           // Returning true tells Turnstile the error is handled, which also
           // stops it logging the code, so log it here. Turnstile still
           // retries on its own, and a later success clears the message.
           "error-callback": (code: string) => {
             console.error(`Turnstile error ${code}`)
-            show("failed")
+            errors += 1
+            clearTimeout(grace)
+            if (errors > 1) show("failed")
+            else grace = setTimeout(() => show("failed"), RETRY_GRACE_MS)
             return true
           },
           "unsupported-callback": () => show("unsupported"),
@@ -211,12 +249,14 @@ export function TurnstileWidget({
 
     return () => {
       cancelled = true
+      clearTimeout(grace)
       if (widget.current) {
         widget.current.turnstile.remove(widget.current.id)
         widget.current = null
       }
       // A widget drawn again starts with no message and no spacing.
       show("hidden")
+      shownRef.current = false
       setShown(false)
     }
   }, [siteKey, action, language, size])

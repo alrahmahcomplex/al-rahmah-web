@@ -155,7 +155,7 @@ export function queueRows(input: QueueInput): QueueRow[] {
       href: "/staff/reopenings",
       count: reopenings.count,
       title: `${plural(reopenings.count, "Reopening request", "Reopening requests")} pending`,
-      detail: "Closed leads that staff want back in work",
+      detail: "Closed applications that staff want back in work",
       summary: `${plural(reopenings.count, "reopening request", "reopening requests")}`,
     })
   }

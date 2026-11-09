@@ -133,7 +133,7 @@ test.describe("recording a school-fee payment", () => {
     await expect(payments.first()).toContainText(`Recorded by ${ACCOUNTANT.name}`)
 
     // The lead list shows the badge on the lead's row.
-    await page.goto(`/staff/leads?q=${lead.admissionNumber}`)
+    await page.goto(`/staff/applicants?q=${lead.admissionNumber}`)
     const row = page.getByRole("table", { name: "Applicants" }).locator("tbody tr")
     await expect(row).toHaveCount(1)
     await expect(row.locator("td").last()).toHaveText("First instalment")
@@ -155,7 +155,7 @@ test.describe("recording a school-fee payment", () => {
     await form.getByLabel("Amount (TZS)").fill("2000000")
     await form.getByRole("button", { name: "Review payment" }).click()
     await expect(form.getByRole("alert")).toHaveText(
-      "Payments can be recorded only once the lead's current interview result is Passed, or a reopening approved it to enrol without a retaken interview.",
+      "Payments can be recorded only once the applicant's current interview result is Passed, or a reopening approved it to enrol without a retaken interview.",
     )
     await expect(page.getByRole("region", { name: "Review payment" })).toHaveCount(0)
     await expect(section.getByText("No payments recorded yet.")).toBeVisible()

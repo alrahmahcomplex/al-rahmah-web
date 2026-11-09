@@ -96,6 +96,43 @@ describe("the one sign-in form", () => {
     expect(stubs.reset).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ["the check is still running", false],
+    ["the check needs a click", true],
+  ])("keeps the email and password when Ingia is pressed while %s (#273)", async (_case, revealed) => {
+    stubs.token = ""
+    stubs.reveal.mockReturnValue(revealed)
+    render(<LoginForm language="sw" notice={null} />)
+
+    await submit("neema@example.test", "a-password", "Ingia")
+
+    await vi.waitFor(() => expect(stubs.reveal).toHaveBeenCalled())
+    expect(screen.getByLabelText("Barua pepe")).toHaveValue("neema@example.test")
+    expect(screen.getByLabelText("Nenosiri")).toHaveValue("a-password")
+  })
+
+  it("after a wrong password, keeps the email, clears the password and puts the cursor there", async () => {
+    render(<LoginForm language="en" notice={null} />)
+
+    await submit("someone@example.test", "wrong-password", "Log In")
+
+    await screen.findByRole("alert")
+    expect(screen.getByLabelText("Email")).toHaveValue("someone@example.test")
+    expect(screen.getByLabelText("Password")).toHaveValue("")
+    expect(screen.getByLabelText("Password")).toHaveFocus()
+  })
+
+  it("keeps both after an answer that isn't the person's mistake", async () => {
+    stubs.signIn.mockResolvedValue({ error: "check-failed" })
+    render(<LoginForm language="en" notice={null} />)
+
+    await submit("someone@example.test", "a-password", "Log In")
+
+    await screen.findByRole("alert")
+    expect(screen.getByLabelText("Email")).toHaveValue("someone@example.test")
+    expect(screen.getByLabelText("Password")).toHaveValue("a-password")
+  })
+
   it("lets a check that needs a click speak for itself, and sends nothing", async () => {
     stubs.token = ""
     stubs.reveal.mockReturnValue(true)

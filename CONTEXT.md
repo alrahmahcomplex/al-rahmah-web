@@ -8,6 +8,9 @@ This context covers the work of capturing and progressing families who are consi
 A student record created in one of two ways: a parent or guardian submits the **Admission form**, and the lead begins as **Applied**; or a family with no submitted form completes a qualifying campus visit, and the lead begins as **Visited**. It may proceed to an admission interview, enrolment, or decline. The parent or guardian is a contact person or custodian associated with the lead, not the lead themselves.
 _Avoid_: Parent, guardian, prospect, enquiry, applicant
 
+**Words on screen**:
+Staff and families never read "lead". On screen the person is an **applicant** ("12 applicants", the Applicants list at `/staff/applicants`), the record and its page are an **application** ("Open the application", "Application history"), and an **Enrolled** applicant is a **student**. Status names stay as they are. Code, routes in code, tables, columns, permission names and this glossary keep "lead"; the _Avoid_ line above is about them, not about screen text.
+
 **Admission form**:
 The public form, reached from the school landing page or from a **Referral link**, through which a parent or guardian applies for a student. Anyone may submit it without a referral. A successful submission creates an **Applied** admissions lead and shows the parent or guardian the lead's **Admission Number**.
 

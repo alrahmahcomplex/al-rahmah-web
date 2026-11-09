@@ -12,7 +12,7 @@ vi.mock("@/app/staff/check-in/actions", () => ({
   registerWalkIn: (...args: unknown[]) => stubs.register(...args),
   updateSharedContact: vi.fn(),
 }))
-vi.mock("@/app/staff/leads/[id]/referral-actions", () => ({
+vi.mock("@/app/staff/applicants/[id]/referral-actions", () => ({
   lookUpReferralCode: (...args: unknown[]) => stubs.lookUp(...args),
   saveLeadReferralCode: vi.fn(),
 }))
@@ -112,7 +112,7 @@ describe("New Student with a Referral code", () => {
       }),
     )
     expect(await screen.findByLabelText("Admission Number")).toHaveTextContent("ADMSN-12345")
-    expect(screen.getByRole("link", { name: "Open Hamisi Said" })).toHaveAttribute("href", `/staff/leads/${LEAD}`)
+    expect(screen.getByRole("link", { name: "Open Hamisi Said" })).toHaveAttribute("href", `/staff/applicants/${LEAD}`)
     expect(screen.queryByText(/referral code wasn't saved/)).not.toBeInTheDocument()
   })
 
@@ -121,10 +121,10 @@ describe("New Student with a Referral code", () => {
     await registerWithCode(userEvent.setup())
 
     expect(await screen.findByLabelText("Admission Number")).toHaveTextContent("ADMSN-12345")
-    expect(screen.getByRole("alert")).toHaveTextContent("The lead was created, but the referral code wasn't saved.")
+    expect(screen.getByRole("alert")).toHaveTextContent("The application was created, but the referral code wasn't saved.")
     expect(screen.getByRole("link", { name: "Add the referral code" })).toHaveAttribute(
       "href",
-      `/staff/leads/${LEAD}#lead-referral`,
+      `/staff/applicants/${LEAD}#lead-referral`,
     )
   })
 
@@ -214,7 +214,7 @@ describe("the registration screens", () => {
   })
 
   it("retires the duplicate refusal once the rail's Change leaves Review", async () => {
-    stubs.register.mockResolvedValue({ status: "duplicate", admissionNumber: "ADMSN-55555", href: "/staff/leads/x" })
+    stubs.register.mockResolvedValue({ status: "duplicate", admissionNumber: "ADMSN-55555", href: "/staff/applicants/x" })
     const user = userEvent.setup()
     await toStudentStep(user, { canEditContact: true, canEnterReferralCode: false })
     await fillStudent(user)

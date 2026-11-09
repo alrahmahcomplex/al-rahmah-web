@@ -8,8 +8,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { listPendingReopeningRequests } from "@/lib/services/lead-closure"
 import { createClient } from "@/utils/supabase/server"
 
-import { canDecideReopening } from "../leads/[id]/reopening-decision-outcome"
-import { SOURCE_LABELS } from "../leads/[id]/reopening-outcome"
+import { canDecideReopening } from "../applicants/[id]/reopening-decision-outcome"
+import { SOURCE_LABELS } from "../applicants/[id]/reopening-outcome"
 import { when } from "../re-applications/format"
 import { LeadBadges } from "../re-applications/lead-badges"
 import { requireStaff } from "../session"
@@ -33,7 +33,7 @@ export default async function ReopeningRequestsPage() {
       <div className="flex flex-col gap-1">
         <h1 className="staff-heading">Reopening requests</h1>
         <p className="text-sm text-muted-foreground">
-          Closed leads waiting for a decision, oldest first. Open a lead to approve or reject its request.
+          Closed applications waiting for a decision, oldest first. Open an application to approve or reject its request.
         </p>
       </div>
 
@@ -53,7 +53,7 @@ export default async function ReopeningRequestsPage() {
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <Link
-                  href={`/staff/leads/${request.leadId}`}
+                  href={`/staff/applicants/${request.leadId}`}
                   className="font-mono text-sm font-medium text-blue-600 underline-offset-4 hover:underline"
                 >
                   {request.admissionNumber}

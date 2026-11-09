@@ -19,14 +19,14 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible()
 }
 
-const visitedPanel = (page: Page) => page.getByRole("region", { name: "Visited leads" })
+const visitedPanel = (page: Page) => page.getByRole("region", { name: "Visited applicants" })
 
 async function choose(page: Page, select: string, option: string) {
   await page.getByRole("combobox", { name: select, exact: true }).click()
   await page.getByRole("option", { name: option, exact: true }).click()
 }
 
-test("the Visited leads tile shows all time by default, under the Reports heading", async ({ page }) => {
+test("the Visited applicants tile shows all time by default, under the Reports heading", async ({ page }) => {
   await signIn(page, MANAGER)
 
   const panel = visitedPanel(page)
@@ -44,7 +44,7 @@ test("filters chosen from the filter icon go into the address, survive a reload 
   await signIn(page, MANAGER)
   const panel = visitedPanel(page)
 
-  await panel.getByRole("button", { name: "Filter Visited leads" }).click()
+  await panel.getByRole("button", { name: "Filter Visited applicants" }).click()
   await choose(page, "Enrollment year", "2031")
   await expect(page).toHaveURL(/[?&]visited_year=2031/)
   await expect(panel.getByTestId("visited-period")).toHaveText("All time · Enrollment year 2031")
@@ -92,7 +92,7 @@ test("an unreadable address falls back to All time and All years", async ({ page
 
 test("the interview tiles each keep their own filters in the address", async ({ page }) => {
   await signIn(page, MANAGER)
-  const interviewed = page.getByRole("region", { name: "Interviewed leads" })
+  const interviewed = page.getByRole("region", { name: "Interviewed applicants" })
   const passed = page.getByRole("region", { name: "Passed interviews" })
   const failed = page.getByRole("region", { name: "Failed interviews" })
   for (const [panel, key] of [
@@ -155,9 +155,9 @@ test("the Enrolled students tile keeps its own filters in the address", async ({
   await expect(enrolled.getByTestId("enrolled-count")).toHaveText("1")
 })
 
-const classesPanel = (page: Page) => page.getByRole("region", { name: "Leads by enrollment class" })
+const classesPanel = (page: Page) => page.getByRole("region", { name: "Applicants by enrollment class" })
 
-test("Leads by enrollment class lists every class in school order, zeros included, with the total", async ({ page }) => {
+test("Applicants by enrollment class lists every class in school order, zeros included, with the total", async ({ page }) => {
   await signIn(page, MANAGER)
   await page.goto("/staff/reports?classes_year=2031")
 
@@ -170,14 +170,14 @@ test("Leads by enrollment class lists every class in school order, zeros include
   await expect(panel.getByTestId("classes-total")).toHaveText("27")
 })
 
-test("changing the Leads by enrollment class filters leaves the Visited leads tile alone", async ({ page }) => {
+test("changing the Applicants by enrollment class filters leaves the Visited applicants tile alone", async ({ page }) => {
   await signIn(page, MANAGER)
   await page.goto("/staff/reports?visited=month:2026-09-01&visited_year=2031")
   const visited = visitedPanel(page)
   const classes = classesPanel(page)
   await expect(visited.getByTestId("visited-count")).toHaveText("6")
 
-  await classes.getByRole("button", { name: "Filter Leads by enrollment class" }).click()
+  await classes.getByRole("button", { name: "Filter Applicants by enrollment class" }).click()
   await choose(page, "Enrollment year", "2031")
   await expect(page).toHaveURL(/[?&]classes_year=2031/)
   await choose(page, "Period", "Year")
@@ -340,7 +340,7 @@ test.describe("at phone width", () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(375)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
 
-    await panel.getByRole("button", { name: "Filter Visited leads" }).click()
+    await panel.getByRole("button", { name: "Filter Visited applicants" }).click()
     await choose(page, "Period", "Year")
     await expect(panel.getByTestId("visited-period")).toHaveText(`${tanzaniaToday().slice(0, 4)} · All years`)
     const filter = await page.getByRole("combobox", { name: "Enrollment year" }).boundingBox()
@@ -359,7 +359,7 @@ test.describe("at phone width", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   })
 
-  test("the Leads by enrollment class table fits the screen", async ({ page }) => {
+  test("the Applicants by enrollment class table fits the screen", async ({ page }) => {
     await signIn(page, MANAGER)
     const panel = classesPanel(page)
     await expect(panel.getByTestId("classes-total")).toBeVisible()

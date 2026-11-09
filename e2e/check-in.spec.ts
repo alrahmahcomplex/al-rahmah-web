@@ -68,7 +68,7 @@ test.describe("registering a new family", () => {
 
     const admissionNumber = (await number.textContent()) ?? ""
     await page.getByRole("link", { name: `Open ${family.child}` }).click()
-    await expect(page).toHaveURL(/\/staff\/leads\/[0-9a-f-]{36}$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/[0-9a-f-]{36}$/)
     await expect(page.getByRole("heading", { name: family.child, level: 1 })).toBeVisible()
     await expect(page.getByLabel("Admission Number")).toHaveText(admissionNumber)
     await expect(page.getByText("Visited", { exact: true }).first()).toBeVisible()
@@ -179,7 +179,7 @@ test.describe("a child who is already registered", () => {
     await expect(refusal).toContainText("Already registered")
     await expect(refusal).toContainText(number)
     await refusal.getByRole("link", { name: `Open ${number}` }).click()
-    await expect(page).toHaveURL(/\/staff\/leads\/[0-9a-f-]{36}$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/[0-9a-f-]{36}$/)
     await expect(page.getByLabel("Admission Number")).toHaveText(number)
   })
 
@@ -195,7 +195,7 @@ test.describe("a child who is already registered", () => {
     await expect(refusal).toContainText("ADMSN-90005")
     await refusal.getByRole("link", { name: "Open ADMSN-90005" }).click()
 
-    await expect(page).toHaveURL(/\/staff\/leads\/[0-9a-f-]{36}\/reopen\?source=duplicate_match$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/[0-9a-f-]{36}\/reopen\?source=duplicate_match$/)
     await expect(page.getByText("This student is already on file, so no new record was made.")).toBeVisible()
     await expect(page.getByRole("heading", { name: "Hamisi Fixture", level: 1 })).toBeVisible()
     await expect(page.getByText("Archived", { exact: true }).first()).toBeVisible()
@@ -214,7 +214,7 @@ test.describe("a family who gives their Admission Number", () => {
     await signIn(page, ADMISSIONS)
     for (const typed of ["ADMSN-90002", "  admsn-90002 ", "90002"]) {
       await lookUp(page, typed)
-      await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000002$/)
+      await expect(page).toHaveURL(/\/staff\/applicants\/1ead0000-0000-4000-8000-000000000002$/)
       await expect(page.getByRole("heading", { name: "Baraka Fixture", level: 1 })).toBeVisible()
     }
   })
@@ -223,12 +223,12 @@ test.describe("a family who gives their Admission Number", () => {
     await signIn(page, ADMISSIONS)
 
     await lookUp(page, "ADMSN-90005")
-    await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000005$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/1ead0000-0000-4000-8000-000000000005$/)
     await expect(page.getByRole("heading", { name: "Hamisi Fixture", level: 1 })).toBeVisible()
     await expect(page.getByText("Archived", { exact: true }).first()).toBeVisible()
 
     await lookUp(page, "90006")
-    await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000006$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/1ead0000-0000-4000-8000-000000000006$/)
     await expect(page.getByRole("heading", { name: "Rehema Fixture", level: 1 })).toBeVisible()
     await expect(page.getByText("Declined", { exact: true }).first()).toBeVisible()
   })
@@ -240,7 +240,7 @@ test.describe("a family who gives their Admission Number", () => {
     await lookUp(page, await unusedAdmissionNumber())
 
     const notFound = page.locator("[data-slot=alert]")
-    await expect(notFound).toContainText("No lead with this Admission Number")
+    await expect(notFound).toContainText("No applicant with this Admission Number")
     await expect(page).toHaveURL(/\/staff\/check-in$/)
 
     await notFound.getByRole("button", { name: "Try again" }).click()
@@ -292,7 +292,7 @@ test.describe("a family who gives their Admission Number", () => {
 
     const refusal = page.locator("[data-slot=alert]")
     await expect(refusal).toContainText("The lookup could not be completed")
-    await expect(refusal).not.toContainText("No lead")
+    await expect(refusal).not.toContainText("No applicant")
     await expect(field).not.toHaveAttribute("readonly")
     await expect(field).toHaveValue("ADMSN-90002")
 
@@ -310,7 +310,7 @@ test.describe("a family who gives their Admission Number", () => {
 
     await lookUp(page, await unusedAdmissionNumber())
     const notFound = page.locator("[data-slot=alert]")
-    await expect(notFound).toContainText("No lead with this Admission Number")
+    await expect(notFound).toContainText("No applicant with this Admission Number")
     await expect(notFound.getByRole("button", { name: "Try again" })).toBeVisible()
     await expect(notFound.getByRole("link", { name: "New family, never registered" })).toHaveCount(0)
   })
@@ -330,7 +330,7 @@ test.describe("who sees what", () => {
 
   test("an Accountant can read a lead", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await page.goto("/staff/leads/1ead0000-0000-4000-8000-000000000004")
+    await page.goto("/staff/applicants/1ead0000-0000-4000-8000-000000000004")
     await expect(page.getByRole("heading", { name: "Salma Fixture", level: 1 })).toBeVisible()
     await expect(page.getByText("+255700000104")).toHaveCount(0)
     await expect(page.getByText("+255700000103")).toBeVisible()
@@ -339,7 +339,7 @@ test.describe("who sees what", () => {
 
   test("a lead that does not exist is not found", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    const response = await page.goto(`/staff/leads/${randomUUID()}`)
+    const response = await page.goto(`/staff/applicants/${randomUUID()}`)
     expect(response?.status()).toBe(404)
   })
 
@@ -374,7 +374,7 @@ test.describe("a family who gives the student's name", () => {
     await expect(rows.last()).toContainText("Archived")
 
     await matches.getByRole("link", { name: /Baraka Fixture/ }).click()
-    await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000002$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/1ead0000-0000-4000-8000-000000000002$/)
     await expect(page.getByRole("heading", { name: "Baraka Fixture", level: 1 })).toBeVisible()
   })
 

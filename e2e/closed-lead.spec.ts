@@ -30,9 +30,9 @@ const WORK_ACTIONS = [
 test.describe("a closed lead", () => {
   test("shows the banner, hides the work actions and offers Request reopening", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${ARCHIVED}`)
+    await page.goto(`/staff/applicants/${ARCHIVED}`)
 
-    const banner = page.getByRole("region", { name: "This lead is Archived" })
+    const banner = page.getByRole("region", { name: "This application is Archived" })
     await expect(banner).toContainText("read-only")
     // The banner stands in for the Next step.
     await expect(page.getByRole("region", { name: "Next step" })).toHaveCount(0)
@@ -44,31 +44,31 @@ test.describe("a closed lead", () => {
     expect(await moreActions(page)).toEqual(["Request reopening"])
 
     await banner.getByRole("link", { name: "Request reopening" }).click()
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${ARCHIVED}/reopen\\?source=lead$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${ARCHIVED}/reopen\\?source=lead$`))
     await expect(page.getByRole("heading", { name: "Hamisi Fixture" })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Request reopening" })).toBeVisible()
   })
 
   test("names a Declined lead's state", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${DECLINED}`)
-    await expect(page.getByRole("region", { name: "This lead is Declined" })).toBeVisible()
+    await page.goto(`/staff/applicants/${DECLINED}`)
+    await expect(page.getByRole("region", { name: "This application is Declined" })).toBeVisible()
     await expect(page.getByRole("region", { name: "Next step" })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Edit student" })).toHaveCount(0)
   })
 
   test("the Accountant sees the banner without the way to reopening", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${ARCHIVED}`)
-    await expect(page.getByRole("region", { name: "This lead is Archived" })).toBeVisible()
+    await page.goto(`/staff/applicants/${ARCHIVED}`)
+    await expect(page.getByRole("region", { name: "This application is Archived" })).toBeVisible()
     await expect(page.getByRole("link", { name: "Request reopening" })).toHaveCount(0)
   })
 
   test("an open sister keeps her screen as before, with the shared parent editable", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${OPEN_WITH_CLOSED_SISTER}`)
+    await page.goto(`/staff/applicants/${OPEN_WITH_CLOSED_SISTER}`)
     await expect(page.getByRole("heading", { name: "Daudi Kibwana" })).toBeVisible()
-    await expect(page.getByRole("region", { name: /^This lead is/ })).toHaveCount(0)
+    await expect(page.getByRole("region", { name: /^This application is/ })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Edit student" })).toBeVisible()
     await expect(page.getByRole("button", { name: "Edit parent or guardian" })).toBeVisible()
   })

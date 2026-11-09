@@ -12,7 +12,7 @@ import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getFollowUpQueue, type FollowUpQueueItem, type FollowUpQueuePage, type FollowUpQueueSection } from "@/lib/services/follow-ups"
 import { createClient } from "@/utils/supabase/server"
 
-import { leadTabHref } from "../leads/[id]/tabs"
+import { leadTabHref } from "../applicants/[id]/tabs"
 import { displayPhone } from "../re-applications/format"
 import { requireStaff } from "../session"
 import { lastContactText, rowDue, splitToday } from "./queue-format"

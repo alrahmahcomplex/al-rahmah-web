@@ -1,6 +1,6 @@
 import type { ApplyError } from "@/lib/services/re-application-apply"
 
-import { correctionOutcome, type CorrectionOutcome } from "../../leads/[id]/correction-outcome"
+import { correctionOutcome, type CorrectionOutcome } from "../../applicants/[id]/correction-outcome"
 
 // What Apply is told after it asks: the lead screen's correction outcomes,
 // worded for a re-application where they differ.
@@ -16,7 +16,7 @@ export function applyOutcome(error: ApplyError): CorrectionOutcome {
       return {
         status: "refused",
         field: null,
-        message: "This field matched the lead when the re-application arrived, so there is nothing to apply.",
+        message: "This field matched the application when the re-application arrived, so there is nothing to apply.",
       }
     case "not-found":
       return { status: "refused", field: null, message: "This re-application could not be found. Reload the page." }
@@ -31,13 +31,13 @@ export function applyOutcome(error: ApplyError): CorrectionOutcome {
       return {
         status: "refused",
         field: null,
-        message: "No Marketing Agent has this code, so it can't become the lead's Referral code.",
+        message: "No Marketing Agent has this code, so it can't become the application's Referral code.",
       }
     case "retired-code":
       return {
         status: "refused",
         field: null,
-        message: "This code belongs to a retired Marketing Agent record, so it can't become the lead's Referral code.",
+        message: "This code belongs to a retired Marketing Agent record, so it can't become the application's Referral code.",
       }
     default:
       return correctionOutcome(error)

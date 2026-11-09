@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
       // Every reset lands on one page (#265). Reset links sent before it
       // keep working: the query, token and all, comes along.
       { source: "/discount-code/reset-password", destination: "/login/reset-password", permanent: true },
+      // The staff list of applicants moved from /staff/leads. Bookmarks and
+      // links in old messages keep working, query and all.
+      { source: "/staff/leads", destination: "/staff/applicants", permanent: true },
+      { source: "/staff/leads/:path*", destination: "/staff/applicants/:path*", permanent: true },
       {
         // An invite link lands on the site root when it was sent with no
         // redirect (from the Supabase dashboard, for the first staff member)

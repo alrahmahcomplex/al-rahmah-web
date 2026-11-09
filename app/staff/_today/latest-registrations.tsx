@@ -14,8 +14,8 @@ export function LatestRegistrations({ leads }: { leads: Result<LatestLead[], "un
         <h2 id="latest-heading" className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">
           Latest registrations
         </h2>
-        <Link href="/staff/leads" className="text-xs font-medium text-blue-600 underline-offset-4 hover:underline">
-          All leads
+        <Link href="/staff/applicants" className="text-xs font-medium text-blue-600 underline-offset-4 hover:underline">
+          All applicants
         </Link>
       </div>
       {!leads.ok ? (
@@ -29,7 +29,7 @@ export function LatestRegistrations({ leads }: { leads: Result<LatestLead[], "un
           {leads.data.map((lead) => (
             <li key={lead.id}>
               <Link
-                href={`/staff/leads/${lead.id}`}
+                href={`/staff/applicants/${lead.id}`}
                 className="flex items-center gap-3 px-4 py-3 outline-none hover:bg-slate-50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
               >
                 <span

@@ -43,7 +43,7 @@ describe("the session proxy", () => {
   it("lets a verified session through to a staff page", async () => {
     sdk.getClaims.mockResolvedValue(SIGNED_IN)
 
-    const response = await visit("/staff/leads")
+    const response = await visit("/staff/applicants")
 
     expect(response.headers.get("location")).toBeNull()
   })
@@ -51,7 +51,7 @@ describe("the session proxy", () => {
   it("sends a visitor with no session from a staff page to sign-in", async () => {
     sdk.getClaims.mockResolvedValue({ data: null, error: null })
 
-    const response = await visit("/staff/leads?q=x")
+    const response = await visit("/staff/applicants?q=x")
 
     expect(response.status).toBe(307)
     expect(response.headers.get("location")).toBe("https://school.example/login")

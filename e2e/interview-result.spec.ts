@@ -59,7 +59,7 @@ test.describe("recording an interview result", () => {
     await form.getByLabel("Score (%)").fill("64.5")
     await form.getByRole("button", { name: "Save result" }).click()
 
-    await expect(panel(page).getByRole("status")).toHaveText("Result recorded. The lead is Interviewed.")
+    await expect(panel(page).getByRole("status")).toHaveText("Result recorded. The applicant is Interviewed.")
     await expect(panel(page).getByText("64.5%", { exact: true })).toBeVisible()
     await expect(panel(page).getByText("Complete enrollment", { exact: true })).toBeVisible()
     await expect(page.getByText("Interviewed", { exact: true }).first()).toBeVisible()
@@ -82,7 +82,7 @@ test.describe("recording an interview result", () => {
     await expect(page.getByText("recorded the interview result")).toBeVisible()
     await expect(page.getByText("corrected the interview result")).toBeVisible()
     await expect(page.getByText("recorded a visit")).toBeVisible()
-    await expect(page.getByText("moved the lead to Interviewed")).toBeVisible()
+    await expect(page.getByText("moved the applicant to Interviewed")).toBeVisible()
   })
 
   test("a refusal reads as a plain sentence", async ({ page }) => {
@@ -98,7 +98,7 @@ test.describe("recording an interview result", () => {
     await asSystem((sql) => sql.query("update public.leads set closure = 'Inactive', closure_reason = 'Duplicate record' where id = $1", [lead]))
     await form.getByRole("button", { name: "Save result" }).click()
 
-    await expect(form.getByRole("alert")).toHaveText("This lead is closed, so its interview result can't be changed.")
+    await expect(form.getByRole("alert")).toHaveText("This application is closed, so its interview result can't be changed.")
   })
 })
 

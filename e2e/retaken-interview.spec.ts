@@ -91,14 +91,14 @@ test("Admissions Staff register and record a retaken interview, and the earlier 
   await form.getByLabel("Passed").check()
   await form.getByLabel("Score (%)").fill("71.5")
   await form.getByRole("button", { name: "Save result" }).click()
-  await expect(current(page).getByRole("status")).toHaveText("Result recorded. The lead is Interviewed.")
+  await expect(current(page).getByRole("status")).toHaveText("Result recorded. The applicant is Interviewed.")
   await expect(current(page).getByText("71.5%", { exact: true })).toBeVisible()
   await expect(current(page).getByText("Complete enrollment", { exact: true })).toBeVisible()
   await expect(earlier).toContainText("39%")
 
   // The history names both interviews.
   await openLeadHistoryAsSuperAdmin(page, lead.id)
-  await expect(page.getByText(`registered the lead for a retaken interview (S/N ${serial})`)).toBeVisible()
+  await expect(page.getByText(`registered the applicant for a retaken interview (S/N ${serial})`)).toBeVisible()
   await expect(page.getByText(`recorded the interview result (S/N ${serial})`)).toBeVisible()
   await expect(page.getByText(`recorded the interview result (S/N ${lead.firstSerial})`)).toBeVisible()
 })
@@ -107,7 +107,7 @@ test("the seeded leads: Register retaken interview for the Retake one only, and 
   await signIn(page, ADMISSIONS)
   await page.goto(leadUrl(SEEDED_RETAKE, "Interview"))
   await expect(panel(page).getByRole("button", { name: "Register retaken interview" })).toBeVisible()
-  await expect(panel(page)).toContainText("This lead was reopened to retake the interview.")
+  await expect(panel(page)).toContainText("This application was reopened to retake the interview.")
   const nextStep = page.getByRole("region", { name: "Next step" })
   // A reopened lead's follow-up date comes first; the retake registration
   // follows it (tests/unit/lead-next-step.test.ts).

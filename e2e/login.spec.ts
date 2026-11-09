@@ -90,11 +90,15 @@ test.describe("signing in", () => {
     )
   })
 
-  test("refuses a wrong password and offers the reset link under the warning", async ({ page }) => {
+  test("refuses a wrong password, keeps the email, and offers the reset link under the warning", async ({ page }) => {
     await signIn(page, MANAGER.email, "not-the-password")
 
     const alert = page.locator("form").getByRole("alert")
     await expect(alert).toContainText("Barua pepe au nenosiri si sahihi.")
+    // The email stays; the wrong password is cleared, ready to type again (#273).
+    await expect(page.getByLabel("Barua pepe")).toHaveValue(MANAGER.email)
+    await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveValue("")
+    await expect(page.getByLabel("Nenosiri", { exact: true })).toBeFocused()
     await alert.getByRole("link", { name: "Umesahau nenosiri?" }).click()
     await expect(page).toHaveURL(/\/login\/forgot-password$/)
   })

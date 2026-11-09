@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import {
   alreadyRequested,
   canRaiseReopening,
   raiseOutcome,
   reopeningSourceOf,
   withdrawOutcome,
-} from "@/app/staff/leads/[id]/reopening-outcome"
+} from "@/app/staff/applicants/[id]/reopening-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { isReopeningSource, type RaiseError, type WithdrawError } from "@/lib/services/reopening-requests"
 

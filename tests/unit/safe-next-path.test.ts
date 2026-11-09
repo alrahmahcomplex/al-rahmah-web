@@ -5,7 +5,7 @@ import { safeNextPath } from "@/lib/safe-next-path"
 describe("safeNextPath", () => {
   it.each([
     ["/staff", "/staff"],
-    ["/staff/leads?tab=overdue", "/staff/leads?tab=overdue"],
+    ["/staff/applicants?tab=overdue", "/staff/applicants?tab=overdue"],
   ])("keeps the same-site path %s", (next, expected) => {
     expect(safeNextPath(next)).toBe(expected)
   })

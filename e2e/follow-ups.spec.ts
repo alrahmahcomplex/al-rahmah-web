@@ -176,7 +176,7 @@ test.describe("the Follow-ups panel", () => {
     const contacts = panel(page).getByRole("list", { name: "Contacts" })
     await expect(contacts).toContainText(`Phone call by ${MANAGER.name}`)
     await expect(contacts).toContainText("Unplanned")
-    await expect(contacts).toContainText("No next date: the lead is Enrolled")
+    await expect(contacts).toContainText("No next date: the student is Enrolled")
   })
 
   test("a follow-up planned by someone else while the form was open is refused, with a reload", async ({ page }) => {
@@ -206,14 +206,14 @@ test.describe("the Follow-ups panel", () => {
     await expect(contacts).toContainText("Entered")
   })
 
-  test("a closed lead's follow-up shows as Closed with the lead, with no actions", async ({ page }) => {
+  test("a closed lead's follow-up shows as Closed with the application, with no actions", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await page.goto(leadUrl(ARCHIVED, "Follow-ups"))
     await expect(panel(page)).toContainText("No follow-up scheduled.")
     const contacts = panel(page).getByRole("list", { name: "Contacts" })
     // Planned 20 days before the seed ran.
     await expect(contacts).toContainText(/Planned for \d{1,2} \w+ \d{4}/)
-    await expect(contacts).toContainText("Closed with the lead (Archived)")
+    await expect(contacts).toContainText("Closed with the application (Archived)")
     await expect(panel(page)).not.toContainText(/Overdue|Due/)
     await expect(panel(page).getByRole("button")).toHaveCount(0)
   })
@@ -230,12 +230,12 @@ test.describe("the Follow-ups panel", () => {
     await page.goto(leadUrl(lead, "Follow-ups"))
     const contacts = panel(page).getByRole("list", { name: "Contacts" })
     await expect(contacts).toContainText(`Planned for ${formatDate(addDays(today, 3))}`)
-    await expect(contacts).toContainText("Closed with the lead (Declined)")
+    await expect(contacts).toContainText("Closed with the application (Declined)")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
 
     await openLeadHistoryAsSuperAdmin(page, lead)
     const history = page.getByRole("list", { name: "History" })
-    await expect(history.getByText("closed the follow-up with the lead")).toBeVisible()
-    await expect(history).toContainText("Closed with the lead: Declined")
+    await expect(history.getByText("closed the follow-up with the application")).toBeVisible()
+    await expect(history).toContainText("Closed with the application: Declined")
   })
 })

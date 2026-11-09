@@ -155,7 +155,7 @@ describe("Request reopening from a re-application", () => {
   it("links to the lead's reopen page with only the lead id and the re-application id", () => {
     const href = reopeningHref("1ead0000-0000-4000-8000-000000000005", "a0a0a0a0-0000-4000-8000-000000000001")
     expect(href).toBe(
-      "/staff/leads/1ead0000-0000-4000-8000-000000000005/reopen?source=re_application&re_application=a0a0a0a0-0000-4000-8000-000000000001",
+      "/staff/applicants/1ead0000-0000-4000-8000-000000000005/reopen?source=re_application&re_application=a0a0a0a0-0000-4000-8000-000000000001",
     )
     const url = new URL(href, "http://localhost")
     expect([...url.searchParams.keys()]).toEqual(["source", "re_application"])

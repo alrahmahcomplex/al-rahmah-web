@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
 // The lead history's words for a Referral code change (#80).
@@ -64,7 +64,7 @@ describe("a Referral code change in the lead's history", () => {
 
   it("shows the code on a lead's creation, as the Admission form stores it", () => {
     const created = described({ ...update(null, "XYZ-999"), action: "insert" })
-    expect(created.summary).toBe("created the lead")
+    expect(created.summary).toBe("created the application")
     expect(created.changes).toEqual([{ label: "Referral code", from: null, to: "XYZ-999" }])
   })
 

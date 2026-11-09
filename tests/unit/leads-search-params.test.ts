@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { leadsHref, parseLeadSearch } from "@/app/staff/leads/search-params"
+import { leadsHref, parseLeadSearch } from "@/app/staff/applicants/search-params"
 
 describe("parseLeadSearch", () => {
   it("reads the search box, the filters and the page from the URL", () => {
@@ -34,19 +34,19 @@ describe("parseLeadSearch", () => {
 })
 
 describe("leadsHref", () => {
-  it("leaves out defaults, so the everyday list is a plain /staff/leads", () => {
-    expect(leadsHref({ closure: "open", page: 1 })).toBe("/staff/leads")
+  it("leaves out defaults, so the everyday list is a plain /staff/applicants", () => {
+    expect(leadsHref({ closure: "open", page: 1 })).toBe("/staff/applicants")
   })
 
   it("keeps the filters when paging", () => {
     expect(leadsHref({ status: "Visited", closure: "Inactive", page: 1 }, { page: 2 })).toBe(
-      "/staff/leads?status=Visited&closure=Inactive&page=2",
+      "/staff/applicants?status=Visited&closure=Inactive&page=2",
     )
   })
 
   it("keeps the search term when paging, encoded", () => {
     expect(leadsHref({ query: "Amina & Juma", closure: "open", page: 2 }, { page: 3 })).toBe(
-      "/staff/leads?q=Amina+%26+Juma&page=3",
+      "/staff/applicants?q=Amina+%26+Juma&page=3",
     )
   })
 })
@@ -55,7 +55,7 @@ describe("the earlier group link filter", () => {
   it("reads an Enrollment year and keeps it in the URL", () => {
     expect(parseLeadSearch({ earlier_link: "2027" }).earlierLinkYear).toBe(2027)
     expect(leadsHref({ closure: "open", earlierLinkYear: 2027, page: 1 }, { page: 2 })).toBe(
-      "/staff/leads?earlier_link=2027&page=2",
+      "/staff/applicants?earlier_link=2027&page=2",
     )
   })
 
@@ -71,8 +71,8 @@ describe("the import filter", () => {
 
   it("reads one import's id and keeps it in the URL", () => {
     expect(parseLeadSearch({ import: batch.toUpperCase() }).importBatchId).toBe(batch)
-    expect(leadsHref({ closure: "open", importBatchId: batch, page: 1 })).toBe(`/staff/leads?import=${batch}`)
-    expect(leadsHref({ closure: "open", importBatchId: batch, page: 1 }, { importBatchId: undefined })).toBe("/staff/leads")
+    expect(leadsHref({ closure: "open", importBatchId: batch, page: 1 })).toBe(`/staff/applicants?import=${batch}`)
+    expect(leadsHref({ closure: "open", importBatchId: batch, page: 1 }, { importBatchId: undefined })).toBe("/staff/applicants")
   })
 
   it("ignores anything that isn't an id", () => {

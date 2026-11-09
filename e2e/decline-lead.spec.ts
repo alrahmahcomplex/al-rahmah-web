@@ -45,7 +45,7 @@ test.describe("declining a lead", () => {
   test("Admissions Staff decline with Other, explained, after confirming, and the banner tells the story", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await chooseMore(page, "Decline")
     const dialog = page.getByRole("dialog", { name: `Decline ${lead.name}`, exact: true })
@@ -57,13 +57,13 @@ test.describe("declining a lead", () => {
     await dialog.getByRole("button", { name: "Continue" }).click()
 
     const confirm = page.getByRole("dialog", { name: `Decline ${lead.name}?`, exact: true })
-    await expect(confirm).toContainText("This lead becomes read-only. Bringing it back needs a Manager's approval.")
+    await expect(confirm).toContainText("This application becomes read-only. Bringing it back needs a Manager's approval.")
     await expect(confirm).toContainText(lead.admissionNumber)
     await expect(confirm).toContainText("Other")
     await expect(confirm).toContainText("The family is moving to Arusha.")
-    await confirm.getByRole("button", { name: "Decline lead" }).click()
+    await confirm.getByRole("button", { name: "Decline application" }).click()
 
-    const banner = page.getByRole("region", { name: "This lead is Declined" })
+    const banner = page.getByRole("region", { name: "This application is Declined" })
     await expect(banner).toContainText("Other")
     await expect(banner).toContainText("The family is moving to Arusha.")
     await expect(banner).toContainText(ADMISSIONS.name)
@@ -72,13 +72,13 @@ test.describe("declining a lead", () => {
     await expect(page.getByRole("button", { name: "Edit student" })).toHaveCount(0)
 
     await openLeadHistoryAsSuperAdmin(page)
-    await expect(page.getByText("declined the lead").first()).toBeVisible()
+    await expect(page.getByText("declined the application").first()).toBeVisible()
   })
 
   test("Back keeps the choice, and Cancel leaves the lead as it was", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await chooseMore(page, "Decline")
     const dialog = page.getByRole("dialog", { name: `Decline ${lead.name}`, exact: true })
@@ -90,13 +90,13 @@ test.describe("declining a lead", () => {
 
     await page.reload()
     expect(await moreActions(page)).toContain("Decline")
-    await expect(page.getByRole("region", { name: /^This lead is/ })).toHaveCount(0)
+    await expect(page.getByRole("region", { name: /^This application is/ })).toHaveCount(0)
   })
 
   test("No seat available is offered to the Manager only", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
     await chooseMore(page, "Decline")
     const options = page.getByRole("dialog").getByLabel("Reason").locator("option")
     await expect(options).toContainText(["Fees or cost", "Other"])
@@ -104,7 +104,7 @@ test.describe("declining a lead", () => {
 
     await page.context().clearCookies()
     await signIn(page, MANAGER)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
     await chooseMore(page, "Decline")
     await expect(page.getByRole("dialog").getByLabel("Reason").locator("option", { hasText: "No seat available" })).toHaveCount(1)
   })
@@ -112,21 +112,21 @@ test.describe("declining a lead", () => {
   test("the Accountant gets no Decline, and a closed lead offers none", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
     await expect(page.getByRole("heading", { name: lead.name })).toBeVisible()
     expect(await moreActions(page)).not.toContain("Decline")
 
     await page.context().clearCookies()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${ARCHIVED}`)
-    await expect(page.getByRole("region", { name: "This lead is Archived" })).toBeVisible()
+    await page.goto(`/staff/applicants/${ARCHIVED}`)
+    await expect(page.getByRole("region", { name: "This application is Archived" })).toBeVisible()
     expect(await moreActions(page)).not.toContain("Decline")
   })
 
   test("a lead declined after its interview shows its reason, explanation, who and when", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${DECLINED_FROM_INTERVIEWED}`)
-    const banner = page.getByRole("region", { name: "This lead is Declined" })
+    await page.goto(`/staff/applicants/${DECLINED_FROM_INTERVIEWED}`)
+    const banner = page.getByRole("region", { name: "This application is Declined" })
     await expect(banner).toContainText("Did not pass interview")
     await expect(banner).toContainText("Scored below the pass mark")
     await expect(banner).toContainText(ADMISSIONS.name)

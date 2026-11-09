@@ -61,7 +61,7 @@ test.describe("registering a lead for interview", () => {
     await page.reload()
     await expect(panel(page).getByLabel("Interview S/N")).toHaveText(serial)
     await openLeadHistoryAsSuperAdmin(page, lead.id)
-    await expect(page.getByText("registered the lead for interview")).toBeVisible()
+    await expect(page.getByText("registered the applicant for interview")).toBeVisible()
   })
 
   test("a registration someone else made first is refused in a plain sentence", async ({ page }) => {
@@ -84,7 +84,7 @@ test.describe("registering a lead for interview", () => {
     await panel(page).getByRole("button", { name: "Register for interview" }).click()
 
     await expect(panel(page).getByRole("alert")).toHaveText(
-      "This lead is already registered for interview. Reload the page to see its S/N.",
+      "This applicant is already registered for interview. Reload the page to see the S/N.",
     )
   })
 })

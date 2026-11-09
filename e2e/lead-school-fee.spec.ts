@@ -126,7 +126,7 @@ test.describe("a lead's School fee", () => {
     const viewer = await createThrowawayStaff(["leads.view"])
 
     await signIn(page, viewer)
-    await page.goto(`/staff/leads/${id}`)
+    await page.goto(`/staff/applicants/${id}`)
     await expect(page.getByRole("region", { name: "Student" })).toBeVisible()
     // Neither the Overview's summary nor the School fee tab's panel.
     await expect(page.getByRole("region", { name: "School fee" })).toHaveCount(0)

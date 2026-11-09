@@ -1,14 +1,17 @@
 import { CLOSURE_FILTERS, LAST_PAGE, LEAD_STATUSES, type ClosureFilter, type LeadSearch, type LeadStatus } from "@/lib/services/leads"
 
 // The Leads screen keeps its search in the URL (q, status, closure,
-// earlier_link, page), so
-// a search can be bookmarked, shared and paged with the back button working.
+// earlier_link, import, page), so a search can be bookmarked, shared and
+// paged with the back button working. `import` is one student import's id,
+// from the import's "Show them in the list".
 
 type SearchParams = { [key: string]: string | string[] | undefined }
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function oneOf<T extends string>(allowed: readonly T[], value: string | undefined): T | undefined {
   return (allowed as readonly string[]).includes(value ?? "") ? (value as T) : undefined
@@ -20,23 +23,26 @@ export function parseLeadSearch(params: SearchParams): LeadSearch & { closure: C
   const query = first(params.q)?.trim() || undefined
   const page = Number(first(params.page))
   const earlierLink = first(params.earlier_link)
+  const importBatch = first(params.import)?.trim()
   return {
     query,
     status: oneOf<LeadStatus>(LEAD_STATUSES, first(params.status)),
     closure: oneOf<ClosureFilter>(CLOSURE_FILTERS, first(params.closure)) ?? "open",
     earlierLinkYear: earlierLink && /^2\d{3}$/.test(earlierLink) ? Number(earlierLink) : undefined,
+    importBatchId: importBatch && UUID.test(importBatch) ? importBatch.toLowerCase() : undefined,
     page: Number.isInteger(page) && page > 0 && page <= LAST_PAGE ? page : 1,
   }
 }
 
 // The URL of a search, with some of it changed. Defaults are left out.
 export function leadsHref(search: LeadSearch, changes: Partial<LeadSearch> = {}) {
-  const { query, status, closure, earlierLinkYear, page } = { ...search, ...changes }
+  const { query, status, closure, earlierLinkYear, importBatchId, page } = { ...search, ...changes }
   const params = new URLSearchParams()
   if (query) params.set("q", query)
   if (status) params.set("status", status)
   if (closure && closure !== "open") params.set("closure", closure)
   if (earlierLinkYear !== undefined) params.set("earlier_link", String(earlierLinkYear))
+  if (importBatchId) params.set("import", importBatchId)
   if (page > 1) params.set("page", String(page))
   const encoded = params.toString()
   return encoded ? `/staff/leads?${encoded}` : "/staff/leads"

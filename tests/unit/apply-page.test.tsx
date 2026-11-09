@@ -543,11 +543,13 @@ describe("the Discount code on the review step", { timeout: 20_000 }, () => {
     expect(screen.getByText("Total: TZS 40,000")).toBeInTheDocument()
   })
 
-  it("confirms an Approved code without a figure when the discount couldn't be read", async () => {
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: null })
-    await reviewStep({ discountCode: "BJN-402", rememberDiscountCode: "BJN-402" })
-    expect(await screen.findByText("A discount on the interview fee for each child.")).toBeInTheDocument()
-    expect(screen.getByText("TZS 40,000 per child")).toBeInTheDocument()
+  it("states the code's own amount from its estimate, not the standard discount", async () => {
+    // A Promo code or an agent with an own amount: TZS 25,000 off, whatever
+    // the standard discount is, and whether or not it could be read.
+    stubs.check.mockResolvedValue({ status: "approved", amount: 25000, discount: 10000 })
+    await reviewStep({ discountCode: "INSTA26", rememberDiscountCode: "INSTA26" })
+    expect(await screen.findByText("TZS 25,000 off the interview fee for each child.")).toBeInTheDocument()
+    expect(screen.getByText("TZS 25,000 per child")).toBeInTheDocument()
   })
 
   it("leaves the remembered code alone on a visit without a link", async () => {

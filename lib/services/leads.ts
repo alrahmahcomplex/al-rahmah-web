@@ -306,6 +306,8 @@ export type LeadSearch = {
   // Only leads whose latest group invitation for this Enrollment year carried
   // a link the year no longer has (#186).
   earlierLinkYear?: number
+  // Only the leads one student import created ("Show them in the list").
+  importBatchId?: string
   // From 1.
   page: number
 }
@@ -321,6 +323,8 @@ export type LeadListItem = {
   closure: LeadClosure | null
   returningFamily: boolean
   initiallyDeclined: boolean
+  // Created by a student import.
+  imported: boolean
   createdAt: string
 }
 
@@ -346,11 +350,12 @@ type LeadListRow = {
   returning_family_joined: boolean
   returning_family_reapplied: boolean
   initially_declined: boolean
+  import_batch_id: string | null
   created_at: string
 }
 
 const LEAD_LIST_COLUMNS =
-  "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, initially_declined, created_at"
+  "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, initially_declined, import_batch_id, created_at"
 
 // A page number past any real list. Larger ones would overflow the offset.
 export const LAST_PAGE = 10_000
@@ -403,6 +408,7 @@ export async function searchLeads(
     if (closure === "open") list = list.is("closure", null)
     else if (closure !== "all") list = list.eq("closure", closure)
     if (search.status) list = list.eq("status", search.status)
+    if (search.importBatchId) list = list.eq("import_batch_id", search.importBatchId)
     return list.order("created_at", { ascending: false }).order("id", { ascending: false })
   }
 
@@ -441,9 +447,33 @@ export async function searchLeads(
         closure: row.closure,
         returningFamily: row.returning_family_joined || row.returning_family_reapplied,
         initiallyDeclined: row.initially_declined,
+        imported: row.import_batch_id !== null,
         createdAt: row.created_at,
       })),
     },
+  }
+}
+
+// How many leads the export's "Which applicants" choices would take: every
+// lead, closed ones included, and each Enrollment year's. Row-level security
+// counts nothing for anyone without leads.view.
+export async function countLeadsByYear(
+  supabase: SupabaseClient,
+  years: readonly number[],
+): Promise<Result<{ all: number; byYear: Record<number, number> }, "unavailable">> {
+  const count = (year?: number) => {
+    const query = supabase.from("leads").select("id", { count: "exact", head: true })
+    return year === undefined ? query : query.eq("enrollment_year", year)
+  }
+  const [all, ...perYear] = await Promise.all([count(), ...years.map((year) => count(year))])
+  const failed = [all, ...perYear].find((answer) => answer.error)
+  if (failed) {
+    console.error("Could not count leads", failed.error)
+    return { ok: false, error: "unavailable" }
+  }
+  return {
+    ok: true,
+    data: { all: all.count ?? 0, byYear: Object.fromEntries(years.map((year, i) => [year, perYear[i].count ?? 0])) },
   }
 }
 

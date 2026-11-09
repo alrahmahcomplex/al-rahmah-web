@@ -70,12 +70,15 @@ export async function confirmAgentImportRows(input: AgentImportConfirmation): Pr
   const client = await approverClient()
   if (!client.ok) return { status: "refused", message: importErrorMessage({ kind: client.error }) }
   const result = await confirmAgentImport(client.supabase, confirmation)
+  // An import adds Approved agents and fills in missing emails, so no count in
+  // the navigation moves (nav-counts.ts). Only the agents list and this page
+  // change.
   if (!result.ok) {
-    if (result.error.kind === "uncertain") revalidatePath("/staff", "layout")
+    if (result.error.kind === "uncertain") revalidatePath("/staff/agents", "layout")
     return { status: "refused", message: importErrorMessage(result.error) }
   }
   if (result.data.kind === "changed") return { status: "changed", changed: result.data.changed }
-  revalidatePath("/staff", "layout")
+  revalidatePath("/staff/agents", "layout")
   const { batchId, created, emailsAdded, skipped } = result.data
   return { status: "imported", batchId, created, emailsAdded, skipped }
 }

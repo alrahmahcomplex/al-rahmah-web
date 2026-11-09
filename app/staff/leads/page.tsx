@@ -1,30 +1,43 @@
+import { SearchXIcon, UsersIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { EmptyState } from "@/components/staff/empty-state"
 import { StatusChip } from "@/components/status-chip"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
+import { enrollmentYears } from "@/lib/school-calendar"
 import { listGroupLinks } from "@/lib/services/group-links"
 import { searchLeads, type LeadSearchResults } from "@/lib/services/leads"
 import { listSeatPriorities, type LeadSeatPriority } from "@/lib/services/school-fee-payments"
+import { getStudentImport } from "@/lib/services/student-import"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
+import { exportOptions } from "./export/options"
+import { ExportSheet } from "./export-sheet"
+import { ImportSheet } from "./import-sheet"
 import { LeadSearchBar } from "./lead-search-bar"
 import { leadsHref, parseLeadSearch } from "./search-params"
 import { SeatPriorityBadge } from "./seat-priority-badge"
 
 export const metadata: Metadata = {
-  title: "Leads · Al-Rahmah Complex",
+  title: "Applicants · Al-Rahmah Complex",
 }
 
 const EMPTY: Record<LeadSearchResults["mode"], string> = {
-  number: "No lead with this Admission Number.",
-  name: "No lead matches this name.",
-  list: "No leads to show with these filters.",
+  number: "No applicant with this Admission Number.",
+  name: "No applicant matches this name.",
+  list: "No applicants to show with these filters.",
 }
+
+const WHEN = new Intl.DateTimeFormat("en-GB", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Africa/Dar_es_Salaam",
+})
 
 export default async function LeadsPage({
   searchParams,
@@ -36,7 +49,11 @@ export default async function LeadsPage({
 
   const search = parseLeadSearch(await searchParams)
   const supabase = await createClient()
-  const [results, groupLinks] = await Promise.all([searchLeads(supabase, search), listGroupLinks(supabase)])
+  const [results, groupLinks, batch] = await Promise.all([
+    searchLeads(supabase, search),
+    listGroupLinks(supabase),
+    search.importBatchId ? getStudentImport(supabase, search.importBatchId) : null,
+  ])
   // Only the earlier-link filter's choices: without them it offers just Any.
   const groupYears = groupLinks.ok ? groupLinks.data.map((link) => link.year) : []
   // Seat priorities need payments.view. They only decorate the rows, so if
@@ -46,15 +63,47 @@ export default async function LeadsPage({
       ? await listSeatPriorities(supabase, results.data.leads.map((lead) => lead.id))
       : null
 
+  const listSearch = { query: search.query, status: search.status, closure: search.closure, earlierLinkYear: search.earlierLinkYear, importBatchId: search.importBatchId }
+
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="staff-heading">Leads</h1>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="staff-heading">Applicants</h1>
+        <div className="flex flex-wrap gap-2">
+          {staff.permissions.includes("leads.import") && <ImportSheet staffName={staff.name} />}
+          <ExportSheet
+            options={exportOptions(staff)}
+            search={listSearch}
+            shownCount={results.ok ? results.data.total : null}
+            years={enrollmentYears()}
+          />
+        </div>
+      </div>
       {/* Keyed on the URL, so the box shows the search the page is showing. */}
       <LeadSearchBar key={leadsHref(search)} search={search} groupYears={groupYears} />
 
+      {search.importBatchId && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
+          <p className="min-w-0 wrap-anywhere">
+            {batch?.ok && batch.data ? (
+              <>
+                Applicants created by the import of <span className="font-medium">{batch.data.fileName}</span> on{" "}
+                <time dateTime={batch.data.importedAt}>{WHEN.format(new Date(batch.data.importedAt))}</time>
+                {batch.data.importedBy ? ` by ${batch.data.importedBy}` : ""}
+              </>
+            ) : (
+              "Applicants created by an import that can't be found"
+            )}
+          </p>
+          <Link href={leadsHref(search, { importBatchId: undefined, page: 1 })} className="font-medium text-slate-900 underline underline-offset-4">
+            Show every applicant
+          </Link>
+        </div>
+      )}
+
       {!results.ok ? (
         <Alert variant="destructive">
-          <AlertDescription>Leads could not be loaded. Try again in a moment.</AlertDescription>
+          <AlertDescription>Applicants could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : (
         <>
@@ -83,17 +132,21 @@ function Results({
 }) {
   const { leads, total, page, pageCount, mode } = results
   const summary =
-    mode === "list" ? `${total} ${total === 1 ? "lead" : "leads"}` : `${total} ${total === 1 ? "match" : "matches"}`
+    mode === "list" ? `${total} ${total === 1 ? "applicant" : "applicants"}` : `${total} ${total === 1 ? "match" : "matches"}`
 
   return (
     <section aria-label="Results" className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground" aria-live="polite">
-        {total === 0 ? EMPTY[mode] : summary}
-      </p>
+      {total === 0 ? (
+        <EmptyState role="status" icon={mode === "list" ? UsersIcon : SearchXIcon} title={EMPTY[mode]} />
+      ) : (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {summary}
+        </p>
+      )}
 
       {leads.length > 0 && (
         <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
-          <table aria-label="Leads" className="w-full min-w-[44rem] text-left text-sm">
+          <table aria-label="Applicants" className="w-full min-w-[44rem] text-left text-sm">
             <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">Admission Number</th>
@@ -126,6 +179,7 @@ function Results({
                       {lead.closure && <StatusChip status={lead.closure} />}
                       {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
                       {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
+                      {lead.imported && <Badge variant="outline">Imported</Badge>}
                     </div>
                   </td>
                   {priorities && (

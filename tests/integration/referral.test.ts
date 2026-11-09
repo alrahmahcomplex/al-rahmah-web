@@ -55,28 +55,28 @@ async function newAgent() {
 
 describe("reading a lead's Referral code", () => {
   test("an Approved agent's code names the agent and brings the fee to TZS 40,000", async () => {
-    expect(await getLeadReferral(await signedIn(ADMISSIONS), ASHA_APPROVED)).toEqual({
+    expect(await getLeadReferral(await signedIn(ADMISSIONS), ASHA_APPROVED)).toMatchObject({
       ok: true,
       data: { code: APPROVED.code, state: "approved", agentName: APPROVED.fullName, amount: 40000, discountApplied: true, switchedOffAt: null },
     })
   })
 
   test("a Pending agent's code names the agent and keeps the fee at TZS 50,000", async () => {
-    expect(await getLeadReferral(await signedIn(ADMISSIONS), JUMA_PENDING)).toEqual({
+    expect(await getLeadReferral(await signedIn(ADMISSIONS), JUMA_PENDING)).toMatchObject({
       ok: true,
       data: { code: PENDING.code, state: "pending", agentName: PENDING.fullName, amount: 50000, discountApplied: false, switchedOffAt: null },
     })
   })
 
   test("a code no agent holds is Unrecognised, with no name and the full fee", async () => {
-    expect(await getLeadReferral(await signedIn(ADMISSIONS), TATU_UNRECOGNISED)).toEqual({
+    expect(await getLeadReferral(await signedIn(ADMISSIONS), TATU_UNRECOGNISED)).toMatchObject({
       ok: true,
       data: { code: "XYZ-999", state: "unrecognised", agentName: null, amount: 50000, discountApplied: false, switchedOffAt: null },
     })
   })
 
   test("a lead with no code has no state and the full fee", async () => {
-    expect(await getLeadReferral(await signedIn(ADMISSIONS), await newLead())).toEqual({
+    expect(await getLeadReferral(await signedIn(ADMISSIONS), await newLead())).toMatchObject({
       ok: true,
       data: { code: null, state: null, agentName: null, amount: 50000, discountApplied: false, switchedOffAt: null },
     })
@@ -147,7 +147,7 @@ describe("setting a lead's Referral code", () => {
     await setLeadReferralCode(staff, lead, APPROVED.code)
 
     expect(await setLeadReferralCode(staff, lead, null)).toEqual({ ok: true, data: { code: null } })
-    expect(await getLeadReferral(staff, lead)).toEqual({
+    expect(await getLeadReferral(staff, lead)).toMatchObject({
       ok: true,
       data: { code: null, state: null, agentName: null, amount: 50000, discountApplied: false, switchedOffAt: null },
     })

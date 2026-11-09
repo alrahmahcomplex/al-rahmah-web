@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button"
 import { getLeadHistory } from "@/lib/services/audit"
 import { getLeadFollowUps } from "@/lib/services/follow-ups"
 import { getLead } from "@/lib/services/leads"
+import { getLeadImportMark } from "@/lib/services/student-import"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../../session"
@@ -33,7 +34,15 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
 
   const { id } = await params
   const supabase = await createClient()
-  const [lead, history, followUps] = await Promise.all([getLead(supabase, id), getLeadHistory(supabase, id), getLeadFollowUps(supabase, id)])
+  const [lead, history, followUps, importMark] = await Promise.all([
+    getLead(supabase, id),
+    getLeadHistory(supabase, id),
+    getLeadFollowUps(supabase, id),
+    getLeadImportMark(supabase, id),
+  ])
+  // The file an imported lead came from; without it the line still says the
+  // import created the lead.
+  const importFile = importMark.ok ? (importMark.data.batch?.fileName ?? null) : null
   if (!lead.ok && lead.error === "not-found") notFound()
   // Who made each recorded contact, by name alongside the contacts' names.
   const contactedBy = Object.fromEntries(
@@ -66,7 +75,7 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
               </AlertDescription>
             </Alert>
           )}
-          <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames })} />
+          <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }, importFile)} />
         </>
       )}
 
@@ -92,6 +101,7 @@ function Entries({ entries }: { entries: DescribedEntry[] }) {
               {WHEN.format(new Date(entry.at))}
             </time>
           </p>
+          {entry.note && <p className="text-xs text-slate-700">{entry.note}</p>}
           {entry.changes.length > 0 && (
             <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
               {entry.changes.map((change) => (

@@ -134,7 +134,7 @@ test.describe("recording a school-fee payment", () => {
 
     // The lead list shows the badge on the lead's row.
     await page.goto(`/staff/leads?q=${lead.admissionNumber}`)
-    const row = page.getByRole("table", { name: "Leads" }).locator("tbody tr")
+    const row = page.getByRole("table", { name: "Applicants" }).locator("tbody tr")
     await expect(row).toHaveCount(1)
     await expect(row.locator("td").last()).toHaveText("First instalment")
 

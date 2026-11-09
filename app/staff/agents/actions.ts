@@ -113,8 +113,8 @@ export async function changeMarketingAgentStatus(
   }
 
   const result = await changeAgentStatus(supabase, agentId, action, reason)
-  // The list, the Pending count and every lead's fee may change. A lost
-  // answer may hide a saved change.
+  // The list, the Pending count (retiring a Pending agent) and every lead's
+  // fee may change. A lost answer may hide a saved change.
   if (result.ok || result.error === "no-change" || result.error === "retired" || result.error === "uncertain") {
     revalidatePath("/staff", "layout")
   }
@@ -162,12 +162,15 @@ export async function createMarketingAgent(input: AgentDraftInput): Promise<Crea
   const client = await approverClient()
   if (!client.ok) return { status: "refused", ...createRefusal({ kind: client.error }) }
   const result = await createAgent(client.supabase, draftOf(input))
+  // Only the agents list changes. A created agent is Approved at once, so no
+  // count in the navigation moves (nav-counts.ts): the Pending count drops
+  // only on approve, retire or Recreate, which refresh the whole staff side.
   if (!result.ok) {
-    if (result.error.kind === "uncertain") revalidatePath("/staff", "layout")
+    if (result.error.kind === "uncertain") revalidatePath("/staff/agents")
     return { status: "refused", ...createRefusal(result.error) }
   }
   if (result.data.kind !== "created") return { status: "conflict", conflict: result.data }
-  revalidatePath("/staff", "layout")
+  revalidatePath("/staff/agents")
   return { status: "created", message: createdMessage(result.data.agent) }
 }
 
@@ -194,6 +197,7 @@ export async function recreateMarketingAgent(agentId: string, input: AgentDraftI
   if (!client.ok) return { status: "refused", ...recreateRefusal({ kind: client.error }) }
   const { fullName, phone, whatsapp, email } = draftOf(input)
   const result = await recreateAgent(client.supabase, agentId, { fullName, phone, whatsapp, email }, reason)
+  // Recreating a Pending agent retires it, so the Pending count can drop.
   if (!result.ok) {
     if (result.error.kind === "uncertain") revalidatePath("/staff", "layout")
     return { status: "refused", ...recreateRefusal(result.error) }

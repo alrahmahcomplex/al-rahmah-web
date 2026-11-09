@@ -1013,6 +1013,112 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { schedule_year: "2027" },
     agent: { refused: "forbidden" },
   },
+  // Discount amounts and Promo codes (owner decisions of 2026-11-09). The
+  // standard amount is the figure every public page states, so an agent
+  // reading it learns nothing private; agent_discount_amount only reads the
+  // row it is given and the standard.
+  "public.standard_interview_discount()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [10000] },
+  },
+  "public.agent_discount_amount(agent marketing_agents)": {
+    roles: ["authenticated"],
+    args: {
+      agent: "(select a from public.marketing_agents a where a.id = 'a4a4a4a4-0000-4000-8000-000000000002')",
+    },
+    agent: { returns: [10000] },
+  },
+  "public.lead_interview_discount(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.find_discount_code(typed_code text)": {
+    roles: ["authenticated"],
+    args: { typed_code: "'BJN-402'" },
+    agent: { returns: [] },
+  },
+  "public.standard_discount_fee_impact(amount integer)": {
+    roles: ["authenticated"],
+    args: { amount: "12000" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_standard_interview_discount(amount integer, reason text)": {
+    roles: ["authenticated"],
+    args: { amount: "12000", reason: "'A sample reason'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.agent_discount_fee_impact(agent_id uuid, amount integer)": {
+    roles: ["authenticated"],
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'", amount: "12000" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_agent_interview_discount(agent_id uuid, amount integer, reason text)": {
+    roles: ["authenticated"],
+    args: { agent_id: "'a4a4a4a4-0000-4000-8000-000000000002'", amount: "12000", reason: "'A sample reason'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.create_promo_code(name text, code text, amount integer, ends_on date, note text)": {
+    roles: ["authenticated"],
+    args: { name: "'Sample promo'", code: "'SAMPLE01'", amount: "5000", ends_on: "null", note: "null" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.update_promo_code(id uuid, name text, amount integer, ends_on date, note text, reason text)": {
+    roles: ["authenticated"],
+    setup: "insert into public.promo_codes (id, code, name, amount) values ('9c000000-0000-4000-8000-000000000001', 'SAMPLE01', 'Sample promo', 5000)",
+    args: {
+      id: "'9c000000-0000-4000-8000-000000000001'",
+      name: "'Sample promo renamed'",
+      amount: "5000",
+      ends_on: "null",
+      note: "null",
+      reason: "null",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.set_promo_code_state(id uuid, state text, reason text)": {
+    roles: ["authenticated"],
+    setup: "insert into public.promo_codes (id, code, name, amount) values ('9c000000-0000-4000-8000-000000000001', 'SAMPLE01', 'Sample promo', 5000)",
+    args: { id: "'9c000000-0000-4000-8000-000000000001'", state: "'paused'", reason: "'A sample reason'" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.promo_code_fee_impact(id uuid, amount integer, state text)": {
+    roles: ["authenticated"],
+    setup: "insert into public.promo_codes (id, code, name, amount) values ('9c000000-0000-4000-8000-000000000001', 'SAMPLE01', 'Sample promo', 5000)",
+    args: { id: "'9c000000-0000-4000-8000-000000000001'", amount: "6000", state: "null" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.list_promo_codes()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  // The student import and export (owner decisions of 2026-11-09).
+  "public.check_student_import(rows jsonb)": {
+    roles: ["authenticated"],
+    args: { rows: "'[]'::jsonb" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.confirm_student_import(file_name text, row_count integer, rows jsonb)": {
+    roles: ["authenticated"],
+    args: {
+      file_name: "'students.csv'",
+      row_count: "1",
+      rows: `jsonb_build_array(jsonb_build_object(
+        'sheet_row', 2, 'student_name', 'Sample Student Person', 'class_name', 'STD 1', 'pre_form_one', false,
+        'enrollment_year', extract(year from public.tanzania_today())::integer + 1, 'day_or_boarding', 'Day',
+        'guardian_name', 'Sample Parent Person', 'relationship', 'Mother', 'relationship_description', null,
+        'phone', '+255811111189', 'whatsapp', null, 'visit_date', null, 'referral_code', null, 'status', 'Applied',
+        'expected', jsonb_build_object('verdict', 'create', 'family_row', null, 'family', null, 'unknown_code', false)))`,
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.export_leads(filters jsonb, columns text[])": {
+    roles: ["authenticated"],
+    args: { filters: "'{}'::jsonb", columns: "array['admission_number']" },
+    agent: { refused: "not_permitted" },
+  },
 }
 
 export const RELATIONS: Record<string, RelationEntry> = {
@@ -1125,6 +1231,19 @@ export const RELATIONS: Record<string, RelationEntry> = {
     anon: ["select", "references", "trigger", "maintain"],
   },
   "public.whatsapp_group_links": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
+  "public.discount_amount_changes": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
+  "public.export_log": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
+  "public.interview_discount_setting": { authenticated: [], anon: [] },
+  "public.promo_codes": {
     authenticated: ["select", "references", "trigger", "maintain"],
     anon: ["select", "references", "trigger", "maintain"],
   },
@@ -1292,6 +1411,30 @@ export const POLICIES: Record<string, PolicyEntry> = {
     check: null,
   },
   "public.whatsapp_group_links: Staff who view leads read group links": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.discount_amount_changes: Staff who may view leads read discount amount changes": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.export_log: The Super Admin reads exports": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('audit.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.import_batches: Staff who may view leads read student imports": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "((kind = 'students'::text) AND ( SELECT has_permission('leads.view'::text) AS has_permission))",
+    check: null,
+  },
+  "public.promo_codes: Staff who may view leads read Promo codes": {
     command: "SELECT",
     roles: ["authenticated"],
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",

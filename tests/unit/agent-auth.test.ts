@@ -18,6 +18,9 @@ function fakeSupabase({
   // Successive answers before `account` / the staff check's usual answer.
   accountAnswers = [] as Answer[],
   staffAnswers = [] as Answer[],
+  // What getClaims answers while a session is held; `claimsThrow` makes it throw.
+  claims = { data: { claims: { sub: "user" } }, error: null } as { data: unknown; error: unknown },
+  claimsThrow = null as Error | null,
 } = {}) {
   let session: "staff" | "agent" | null = startedAs
   const calls: string[] = []
@@ -30,6 +33,10 @@ function fakeSupabase({
       getUser: vi.fn(async () =>
         session ? { data: { user: { id: "user" } }, error: null } : { data: { user: null }, error: { message: "Auth session missing!", status: 400 } },
       ),
+      getClaims: vi.fn(async () => {
+        if (claimsThrow) throw claimsThrow
+        return session ? claims : { data: null, error: null }
+      }),
       signInWithPassword: vi.fn(async () => {
         calls.push("signInWithPassword")
         if (!signInError) session = "agent"
@@ -110,8 +117,34 @@ describe("getAgentUser", () => {
     expect(await getAgentUser(client)).toEqual({ ok: false, error: "switched-off" })
   })
 
-  it("is signed out with no session", async () => {
-    expect(await getAgentUser(fakeSupabase().client)).toEqual({ ok: false, error: "signed-out" })
+  it("is signed out with no session, and reads no account", async () => {
+    const { client, rpc } = fakeSupabase()
+
+    expect(await getAgentUser(client)).toEqual({ ok: false, error: "signed-out" })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it("is signed out when the session token fails its check, and reads no account", async () => {
+    for (const claims of [
+      { data: null, error: { name: "AuthInvalidJwtError", message: "Invalid JWT signature", status: 400 } },
+      { data: null, error: { name: "AuthRetryableFetchError", message: "fetch failed", status: 0 } },
+      { data: { claims: { sub: "" } }, error: null },
+      { data: { claims: {} }, error: null },
+    ]) {
+      const { client, rpc } = fakeSupabase({ startedAs: "agent", claims })
+
+      expect(await getAgentUser(client)).toEqual({ ok: false, error: "signed-out" })
+      expect(rpc).not.toHaveBeenCalled()
+    }
+  })
+
+  it("is signed out when checking the token throws", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {})
+    const { client, rpc } = fakeSupabase({ startedAs: "agent", claimsThrow: new TypeError("crypto failed") })
+
+    expect(await getAgentUser(client)).toEqual({ ok: false, error: "signed-out" })
+    expect(rpc).not.toHaveBeenCalled()
+    quiet.mockRestore()
   })
 })
 

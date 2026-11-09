@@ -155,6 +155,21 @@ describe("the Discount code page", { timeout: 20_000 }, () => {
     expect(stubs.submit).not.toHaveBeenCalled()
   })
 
+  it("lets a check that needs a click speak for itself, keeping the entries and sending nothing", async () => {
+    stubs.token = ""
+    stubs.reveal.mockReturnValue(true)
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await fill(user)
+    await user.click(screen.getByRole("button", { name: WORDS.sw.send }))
+
+    expect(stubs.reveal).toHaveBeenCalled()
+    expect(screen.queryByText(/Subiri ukaguzi wa usalama/)).toBeNull()
+    expect(screen.queryByRole("alert")).toBeNull()
+    expect(screen.getByLabelText(WORDS.sw.name)).toHaveValue("Rehema Juma")
+    expect(stubs.submit).not.toHaveBeenCalled()
+  })
+
   it("sends the entries and the token, then shows the code, the link, Copy, WhatsApp and the office phone", async () => {
     stubs.submit.mockResolvedValue(REGISTERED)
     const user = userEvent.setup()

@@ -5,6 +5,19 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 9, 2026 `v0.92.1`
+
+### FIXED
+
+- On the sign-in page, pressing Ingia before the security check is ready no longer
+  empties the email and password. After a wrong password the email stays, and only the
+  password box is cleared for you to type it again.
+- The sign-in page no longer leaves an empty gap above Ingia where the hidden security
+  check sits.
+- A short network hiccup no longer flashes "The security check couldn't load". That
+  message now shows only when the check fails twice in a row, or hasn't recovered after
+  15 seconds.
+
 ## November 8, 2026 `v0.92.0`
 
 ### IMPROVED

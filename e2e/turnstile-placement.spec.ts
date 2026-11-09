@@ -60,24 +60,29 @@ async function cloudflareAsksForAClick(page: Page) {
 const FORCED_INTERACTION_SITE_KEY = "3x00000000000000000000FF"
 
 // Cloudflare's own script, counting each widget drawn in
-// `window.checksDrawn`, and drawing with `sitekey` when given.
+// `window.checksDrawn`, and drawing with `sitekey` when given. Turnstile
+// refuses to start if `window.turnstile` already exists, so `render` is
+// wrapped once the script has run: a capturing listener on the document
+// hears the script's load before the widget's own listener does.
 async function watchRealCheck(page: Page, sitekey?: string) {
   await page.addInitScript((sitekey) => {
     type Render = (container: HTMLElement, options: Record<string, unknown>) => unknown
-    let real: { render: Render } | undefined
-    Object.assign(window, { checksDrawn: 0 })
-    Object.defineProperty(window, "turnstile", {
-      configurable: true,
-      get: () => real,
-      set(value: { render: Render }) {
-        const render = value.render.bind(value)
-        value.render = (container, options) => {
-          Object.assign(window, { checksDrawn: (window as unknown as { checksDrawn: number }).checksDrawn + 1 })
+    const counted = window as unknown as { checksDrawn: number; turnstile?: { render: Render } }
+    counted.checksDrawn = 0
+    document.addEventListener(
+      "load",
+      (event) => {
+        const turnstile = counted.turnstile
+        if (!(event.target instanceof HTMLScriptElement) || !turnstile || (turnstile.render as { wrapped?: true }).wrapped) return
+        const render = turnstile.render.bind(turnstile)
+        const wrapped: Render = (container, options) => {
+          counted.checksDrawn += 1
           return render(container, sitekey ? { ...options, sitekey } : options)
         }
-        real = value
+        turnstile.render = Object.assign(wrapped, { wrapped: true as const })
       },
-    })
+      true,
+    )
   }, sitekey)
 }
 

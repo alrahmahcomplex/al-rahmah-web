@@ -37,6 +37,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
   delete (window as { turnstile?: unknown }).turnstile
   document.querySelectorAll("script").forEach((script) => script.remove())
@@ -113,7 +114,6 @@ describe("TurnstileWidget", () => {
     await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
     expect(turnstile.remove).toHaveBeenCalledWith("widget-1")
     expect(lastOptions().size).toBe("compact")
-    vi.unstubAllGlobals()
   })
 
   it("says in words when the check needs a click, and brings it into view on send", async () => {
@@ -178,18 +178,29 @@ describe("TurnstileWidget", () => {
     render(<TurnstileWidget ref={widget} action="admission" language="en" />)
     await waitFor(() => expect(turnstile.render).toHaveBeenCalled())
 
-    act(() => {
-      lastOptions()["error-callback"]!("300010")
-    })
-    expect(screen.queryByRole("alert")).toBeNull()
-    // Nothing of its own to show, so the form says to wait.
-    expect(widget.current!.reveal()).toBe(false)
+    vi.useFakeTimers()
+    try {
+      act(() => {
+        lastOptions()["error-callback"]!("300010")
+      })
+      expect(screen.queryByRole("alert")).toBeNull()
+      // Nothing of its own to show, so the form says to wait.
+      expect(widget.current!.reveal()).toBe(false)
 
-    act(() => lastOptions().callback!())
-    act(() => {
-      lastOptions()["error-callback"]!("300010")
-    })
-    expect(screen.queryByRole("alert")).toBeNull()
+      // The retry works: the first error's wait is dropped, so its time
+      // running out shows nothing.
+      act(() => lastOptions().callback!())
+      act(() => vi.advanceTimersByTime(15_000))
+      expect(screen.queryByRole("alert")).toBeNull()
+
+      // A later error is a first error again.
+      act(() => {
+        lastOptions()["error-callback"]!("300010")
+      })
+      expect(screen.queryByRole("alert")).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("says it couldn't load when Turnstile hasn't recovered from one error in time", async () => {
@@ -246,7 +257,6 @@ describe("TurnstileWidget", () => {
     expect(screen.queryByText("Tick the security check below, then send.")).toBeNull()
     act(() => lastOptions()["before-interactive-callback"]!())
     expect(screen.getByText("Tick the security check below, then send.")).toBeInTheDocument()
-    vi.unstubAllGlobals()
   })
 
   it("points a browser Turnstile doesn't support to another browser or the office", async () => {

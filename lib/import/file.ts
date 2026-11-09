@@ -7,8 +7,9 @@ import { parseCsv, unescapeCell } from "./csv"
 export const IMPORT_LIMITS = { maxBytes: 256 * 1024, maxRows: 1000 } as const
 
 // One column the import reads. The header is what the template writes;
-// aliases are other headers taken for the same column.
-export type ImportColumn<K extends string> = { key: K; header: string; aliases?: readonly string[] }
+// aliases are other headers taken for the same column. An optional column
+// may be left out of the file, and then reads as empty on every row.
+export type ImportColumn<K extends string> = { key: K; header: string; aliases?: readonly string[]; optional?: boolean }
 
 // A data row: its row number in the sheet (the header is row 1) and its
 // cells by column, exactly as the file holds them.
@@ -52,8 +53,8 @@ export function readImportFile<K extends string>(
   for (const column of columns) {
     const names = [column.header, ...(column.aliases ?? [])].map(headerKey)
     const position = headers.findIndex((h) => names.includes(h))
-    if (position === -1) missing.push(column.header)
-    else positions.set(column.key, position)
+    if (position !== -1) positions.set(column.key, position)
+    else if (!column.optional) missing.push(column.header)
   }
   if (missing.length > 0) return { ok: false, error: { kind: "missing-columns", columns: missing } }
 
@@ -61,7 +62,10 @@ export function readImportFile<K extends string>(
   body.forEach((record, index) => {
     if (record.every((cell) => cell.trim() === "")) return
     const cells = {} as Record<K, string>
-    for (const column of columns) cells[column.key] = unescapeCell(record[positions.get(column.key)!] ?? "")
+    for (const column of columns) {
+      const position = positions.get(column.key)
+      cells[column.key] = position === undefined ? "" : unescapeCell(record[position] ?? "")
+    }
     rows.push({ sheetRow: index + 2, cells })
   })
   if (rows.length === 0) return { ok: false, error: { kind: "empty" } }

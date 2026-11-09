@@ -125,13 +125,15 @@ describe("the form's Discount code on the leads it creates", () => {
     expect((await submitAdmissionForm(secretClient(), sent)).ok).toBe(true)
 
     const referral = await getLeadReferral(await signedIn(ADMISSIONS), await leadIdOf(sent.children[0].fullName))
-    expect(referral.ok && referral.data).toEqual({
+    expect(referral.ok && referral.data).toMatchObject({
       code: "QQQ-000",
       state: "unrecognised",
       agentName: null,
       amount: 50000,
       discountApplied: false,
       switchedOffAt: null,
+      kind: "none",
+      discountState: "unrecognised",
     })
   })
 

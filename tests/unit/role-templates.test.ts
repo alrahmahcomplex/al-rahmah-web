@@ -29,7 +29,12 @@ describe("the role templates", () => {
   })
 
   it("hold leads.view wherever they hold reports.view, and every other permission a held one needs (#244)", () => {
-    expect(PERMISSION_NEEDS).toEqual({ "reports.view": "leads.view" })
+    expect(PERMISSION_NEEDS).toEqual({
+      "reports.view": "leads.view",
+      "discount_codes.manage": "leads.view",
+      "leads.import": "leads.create",
+      "leads.export": "leads.view",
+    })
     for (const template of ROLE_TEMPLATES) {
       for (const [dependent, needed] of Object.entries(PERMISSION_NEEDS) as [Permission, Permission][]) {
         if (template.permissions.includes(dependent)) expect(template.permissions, template.name).toContain(needed)
@@ -96,6 +101,26 @@ describe("impliedChanges (#244)", () => {
   it("unticking View leads also unticks View reports, when the role holds it", () => {
     expect(impliedChanges(["leads.view", "reports.view"], "leads.view", false)).toEqual(["reports.view"])
     expect(impliedChanges(["leads.view"], "leads.view", false)).toEqual([])
+  })
+
+  it("keeps the discount, import and export permissions with what each needs", () => {
+    expect(impliedChanges([], "discount_codes.manage", true)).toEqual(["leads.view"])
+    expect(impliedChanges([], "leads.export", true)).toEqual(["leads.view"])
+    expect(impliedChanges(["leads.view"], "leads.import", true)).toEqual(["leads.create"])
+    expect(impliedChanges(["leads.create"], "leads.import", true)).toEqual([])
+    expect(impliedChanges(["leads.view", "leads.export", "discount_codes.manage", "reports.view"], "leads.view", false)).toEqual([
+      "reports.view",
+      "discount_codes.manage",
+      "leads.export",
+    ])
+    expect(impliedChanges(["leads.create", "leads.import"], "leads.create", false)).toEqual(["leads.import"])
+  })
+
+  it("gives the Admissions Manager the discount, import and export permissions, and no other template", () => {
+    for (const template of ROLE_TEMPLATES) {
+      const held = (["discount_codes.manage", "leads.import", "leads.export"] as const).filter((p) => template.permissions.includes(p))
+      expect(held, template.name).toEqual(template.name === "Admissions Manager" ? ["discount_codes.manage", "leads.import", "leads.export"] : [])
+    }
   })
 
   it("leaves every other change alone", () => {

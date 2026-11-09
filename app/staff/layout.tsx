@@ -1,5 +1,6 @@
 import { cookies } from "next/headers"
 
+import { MotionProvider } from "@/components/motion-provider"
 import { managesStaff } from "@/lib/services/staff-auth"
 
 import { StaffShell, type ShellItem } from "./_shell/staff-shell"
@@ -31,7 +32,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       initialCollapsed={cookieStore.get(SIDEBAR_RAIL_COOKIE)?.value === "1"}
       person={{ name: staff.name, roleName: staff.roleName }}
     >
-      {children}
+      <MotionProvider>{children}</MotionProvider>
     </StaffShell>
   )
 }

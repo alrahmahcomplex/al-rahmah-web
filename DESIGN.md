@@ -344,3 +344,31 @@ The staff shell (`app/staff/_shell/`) holds the navigation; the Quiet Staff Rule
 - **Don't** set typed input text below 16px.
 - **Don't** lift more than one surface per screen, and don't use grey drop shadows on public surfaces; lift is tinted.
 - **Don't** add colours outside the palette. The lead lifecycle colours are the status chips above; don't style a status ad hoc with a badge variant.
+
+## States
+
+How a staff screen looks while it loads, when it has nothing, after a save and when it fails. The rule under all of them: the screen answers a click within one frame, and nothing moves unless the movement says something.
+
+### Loading
+- **Skeleton first.** Every staff route has a `loading.tsx` that draws the page's own outline in still slate blocks: its heading, toolbar, table or cards, at the real sizes. When the data lands, the page fills the shape it already had. The blocks come from `components/staff/page-skeleton.tsx` (`PageSkeleton`, `HeadingSkeleton`, `ToolbarSkeleton`, `TableSkeleton`, `CardSkeleton`, `ListSkeleton`, `Bone`). A new route gets its own `loading.tsx` built from them.
+- **The loader.** `LogoLoader` (`components/brand/logo-loader.tsx`) is the globe-and-book emblem from the logo, lettering left out. It sits where the page heading starts (on a lead, where the initials go). It waits 300 ms before it shows, so a fast page never flashes it; then the book's pages open from the spine once and the globe lights pair by pair from the spine to its top corners, on a 1.4 s loop. It is the only loading motion in the staff portal. Skeleton blocks do not pulse or shimmer, and there are no spinners.
+- **Screen readers** hear "Loading leads…" from `PageSkeleton`'s status region; the emblem itself is hidden from them.
+- **Pending actions.** A clicked button changes its label in the same frame ("Saving…", "Checking…") and is disabled until the action answers, through `useTransition` or `useActionState`. `PendingButton` (`components/staff/pending-button.tsx`) does this. A button never turns into a spinner.
+
+### Empty
+`EmptyState` (`components/staff/empty-state.tsx`) stands where the table would be, in the same 1px outline: one lucide icon in a soft indigo disc (the page's own navigation icon, or `SearchXIcon` for a search with no match), a 15px semibold line saying why it is empty, an optional muted line, and at most one action, usually the way back to the full list. The words stay plain and specific: "No follow-ups are overdue.", not "Nothing here yet!".
+
+### Success
+After a save inside a sheet or dialog, and at the import's Done step, `SuccessMark` (`components/staff/success-mark.tsx`) shows a check that draws itself once (420 ms) in a soft green disc, a title saying what happened with the counts, and one line saying what comes next. It is a status region, so screen readers hear it. A save that closes its sheet uses a toast instead.
+
+### Error
+- A failed read inside a page is an inline destructive `Alert` in plain words that say what to do: "Leads could not be loaded. Try again in a moment."
+- A staff page that fails to render shows `app/staff/error.tsx` inside the shell: "This page could not be shown", Try again, Back to the staff area, and "Reference: …" (the error digest, which matches the server log). The error's own message is never shown.
+- A missing record or page inside the staff area shows `app/staff/not-found.tsx`, built like the forbidden page. Anywhere else, `app/not-found.tsx` and `app/error.tsx` keep the landing page's look and say it in Swahili and English at once, with one orange way home.
+
+### Motion
+- **Reduced motion is respected everywhere.** Each CSS module has a `prefers-reduced-motion: reduce` block: the loader stands still and only its opacity pulses softly, the success check is drawn already, and sheets appear without sliding.
+- **The `motion` library** (pinned at 14.6.0) loads only through `MotionProvider` (`components/motion-provider.tsx`) in the staff layout: `LazyMotion` with the small `domAnimation` set in strict mode, so components use `m.*`, and `MotionConfig reducedMotion="user"`. It is for two things: steps changing inside a sheet (`AnimatePresence`) and list rows being added or removed. 150 to 250 ms, exponential ease-out. No page-load choreography, parallax or 3D.
+
+### Sheets
+Anything a list row edits opens in `SheetForm` (`components/staff/sheet-form.tsx`), never a stacked dialog: from the right, 460px wide (720px for wide sheets such as Import), and from the bottom on a phone. The header holds the title, a meta line (chips, counts or steps) and Close; the body scrolls; the footer stays in view with Cancel and the one primary action.

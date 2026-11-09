@@ -1,7 +1,9 @@
+import { RotateCcwIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { listPendingReopeningRequests } from "@/lib/services/lead-closure"
 import { createClient } from "@/utils/supabase/server"
@@ -40,7 +42,7 @@ export default async function ReopeningRequestsPage() {
           <AlertDescription>Reopening requests could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : requests.data.length === 0 ? (
-        <p className="text-sm text-slate-700">No reopening requests are waiting.</p>
+        <EmptyState icon={RotateCcwIcon} title="No reopening requests are waiting." className="max-w-3xl" />
       ) : (
         <ol aria-label="Pending reopening requests" className="flex max-w-3xl flex-col gap-3">
           {requests.data.map((request) => (

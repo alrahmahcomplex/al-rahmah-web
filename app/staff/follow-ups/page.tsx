@@ -1,7 +1,9 @@
+import { PhoneIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { StatusChip } from "@/components/status-chip"
 import { Badge } from "@/components/ui/badge"
@@ -47,9 +49,10 @@ export default async function FollowUpsPage({
       <Section section="overdue" title="Overdue" result={overdue} search={search}>
         {(page) =>
           page.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {page.total === 0 ? "No follow-ups are overdue." : "This page is past the end of the list."}
-            </p>
+            <EmptyState
+              icon={PhoneIcon}
+              title={page.total === 0 ? "No follow-ups are overdue." : "This page is past the end of the list."}
+            />
           ) : (
             <Rows items={page.items} today={today} label="Overdue follow-ups" />
           )
@@ -60,9 +63,10 @@ export default async function FollowUpsPage({
         {(page) => {
           if (page.items.length === 0) {
             return (
-              <p className="text-sm text-muted-foreground">
-                {page.total === 0 ? "No follow-ups are coming up." : "This page is past the end of the list."}
-              </p>
+              <EmptyState
+                icon={PhoneIcon}
+                title={page.total === 0 ? "No follow-ups are coming up." : "This page is past the end of the list."}
+              />
             )
           }
           const { today: dueToday, later } = splitToday(page.items, today)

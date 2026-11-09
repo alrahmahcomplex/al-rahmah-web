@@ -642,6 +642,37 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     await waitForQuestion(lang === "en" ? "Have a discount code?" : "Una code ya punguzo?")
   }
 
+  it("moves on from the Discount code question when the check stalls", async () => {
+    stubs.check.mockReturnValue(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user)
+    await user.type(open().getByLabelText(/Discount code/), "BJN-402")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+
+    await waitFor(() => expect(open().getByRole("heading", { name: "Interview fee" })).toBeInTheDocument(), { timeout: 9000 })
+  })
+
+  it("checks a restored code when the fee question opens after a reload", async () => {
+    window.sessionStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 2,
+        parent: { fullName: "Asha Mfano", relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
+        children: [{ fullName: "Zawadi Mfano", className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
+        discountCode: "BJN-402",
+        linkCode: "",
+        done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code"],
+      }),
+    )
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    render(form("en"))
+
+    await waitFor(() => expect(open().getByRole("heading", { name: "Interview fee" })).toBeInTheDocument())
+    await waitFor(() => expect(stubs.check).toHaveBeenCalledWith("BJN-402"))
+    expect(await open().findAllByText("TZS 40,000")).not.toHaveLength(0)
+  })
+
   it("promises no discount when an earlier send is what went through", async () => {
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
     stubs.submit.mockResolvedValue({ status: "already-sent", children: [{ fullName: "Zawadi Mfano", admissionNumber: "26-0042" }], complete: true })

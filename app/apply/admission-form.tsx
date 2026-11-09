@@ -59,6 +59,9 @@ type FormState = { parent: ParentDraft; children: ChildDraft[]; discountCode: st
 type Sheet = { kind: "class"; card: number } | { kind: "offer" } | null
 type Outcome = { fullName: string; admissionNumber: string }
 
+// How long Continue on the Discount code question waits for the code check.
+const CODE_WAIT_MS = 6000
+
 // Marks a history entry this form pushed.
 const PUSHED = "admissionFormQ"
 
@@ -274,9 +277,11 @@ export function AdmissionFormSteps({
   }, [restored, confirmed, form, rememberDiscountCode])
 
   // A code already in the field (from a link, or kept from before) is
-  // checked as the Discount code question opens.
+  // checked as the Discount code question opens, and as the fee or send
+  // question opens after a reload, so a restored code shows its fee.
   useEffect(() => {
-    if (restored && form.open === "code" && form.discountCode.trim()) void checkCode(form.discountCode, true)
+    const atOrAfterCode = form.open === "code" || form.open === "fee" || form.open === "send"
+    if (restored && atOrAfterCode && form.discountCode.trim()) void checkCode(form.discountCode, true)
     // Only when the question opens; edits are checked on blur.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restored, form.open])
@@ -482,7 +487,12 @@ export function AdmissionFormSteps({
     }
     const code = key === "code" ? normalizeDiscountCode(f.discountCode) : null
     if (code) {
-      const result = await checkCode(f.discountCode)
+      // Waits at most CODE_WAIT_MS: a stalled check never holds the parent
+      // here, and the code is still saved unchecked with the application.
+      const result = await Promise.race([
+        checkCode(f.discountCode),
+        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), CODE_WAIT_MS)),
+      ])
       if (formRef.current.open !== key) return
       // Stop once on a code nobody has, so the parent reads the note.
       if (result?.status === "unknown" && stoppedFor.current !== code) {

@@ -239,7 +239,9 @@ for (const { name, size } of VIEWPORTS) {
         await expect(page.getByText(NEEDS_CLICK[lang])).toBeVisible()
         await expectInsideCardAndCentred(page)
         await noSidewaysScroll(page)
-        // Below the send question's title and above Send.
+        // Below the send question's title and above Send, measured once the
+        // question has finished unfolding.
+        await expect(openQuestion(page)).toHaveClass(/gf-settled/)
         const title = await openQuestion(page).getByRole("heading", { name: APPLY[lang].review }).boundingBox()
         const check = await page.locator("[data-fake-check]").boundingBox()
         const send = await page.getByRole("button", { name: APPLY[lang].send }).boundingBox()

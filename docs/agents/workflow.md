@@ -4,31 +4,31 @@ Use the risk tier in [AGENTS.md](../../AGENTS.md) throughout the task. Planning,
 
 ## Planning and building
 
-For editorial work, the requested edit is the plan. For routine work, record a few observable acceptance criteria in the task or PR. Reuse established design decisions. A UI or UX change first goes through [UI and UX changes](#ui-and-ux-changes). Neither requires a brief, ticket breakdown or a planning approval gate.
+For editorial work, the requested edit is the plan. For routine work, record a few observable acceptance criteria in the task or PR. Reuse established design decisions. Neither requires a brief, ticket breakdown or a planning approval gate. The exception is a UI or UX change, which first goes through [UI and UX changes](#ui-and-ux-changes).
 
 For sensitive work, identify the invariants, failure cases and recovery approach in the task or PR before editing. Agent-policy changes require examples showing how the rule applies to ordinary and sensitive tasks. Ask about unresolved authority or product decisions; proceed when the human has already settled them.
 
 For architectural work, follow the design sequence below. An epic may use `wayfinder` to split work into independently verifiable tasks. Child tickets inherit approved decisions; they do not repeat the architecture review unless their scope changes those decisions.
 
-1. **Align:** use `grill-with-docs`, adding `prototype` for unsettled UI. Record the problem, scope, constraints, alternatives and decisions in `align_brief.md`. The human confirms the brief and readiness for review.
+1. **Align:** use `grill-with-docs`, adding a [UI and UX prototype](#ui-and-ux-changes) for unsettled UI. Record the problem, scope, constraints, alternatives and decisions in `align_brief.md`. The human confirms the brief and readiness for review.
 2. **Goldfish review:** read `egm-brainstorm` and its harness integration guide. Follow only Goldfish Review & Synthesis, with `Mode: BRAINSTORM` and the alignment brief as the hypothesis. Run six independent lenses: necessity/complexity, cost/quotas, usability, migration/compatibility, observability and maintenance. Each starts fresh with the brief and selected references. The main agent retains discussion context and resolves findings with the human. `grill-with-docs` owns further questions; skip EGM's questioning and handoff stages. Record resolutions and accepted risks in the alignment brief and regenerated `concepts_brief.md`. Rerun review when clarification changes the hypothesis. All lenses must report, and the human approves the revised concepts brief before planning.
 3. **Plan:** Claude Code uses `to-spec` then `to-tickets` on the approved concepts brief, marking actionable tickets `ready-for-agent`.
 
 Keep EGM files under `.artifacts/egm/<feature>/`. Pass that path as `EGM artifact directory`.
 
+Use `diagnosing-bugs` when diagnosing a defect and `tdd` for meaningful behavior regressions or new logic. Use `implement` when following an implementation ticket. These skills follow the selected tier. A reversible copy edit does not need a test that repeats its text. New logic needs tests that would fail for a plausible wrong implementation.
+
 ## UI and UX changes
 
 A UI or UX change gets a prototype, and nothing else, until the owner explicitly approves building it. The owner set this rule; it holds over the autonomy and auto-merge rules and over any skill that would build the UI directly.
 
-1. **Prototype:** make an interactive HTML prototype the owner can click through, covering every screen and state the change touches, with fixture data only. Claude Code publishes it with the Artifact tool. Codex has no Artifact tool: it writes one self-contained HTML file to the OS temp folder, outside the repo and off every branch, and gives the owner its absolute path.
-2. **Stop:** give the owner the link or path and wait. Write no app code, make no commits and open no PR for the change. A sub-agent returns the link to its parent, which passes it on.
+1. **Prototype:** make an interactive HTML prototype the owner can click through, covering every screen and state the change touches, with fixture data only. Claude Code publishes it with the Artifact tool. Codex has no Artifact tool: it writes one self-contained HTML file to the OS temp folder, outside the repo and off every branch, and gives the owner its absolute path. Neither uses the `prototype` skill's UI branch, which builds an app route on a branch.
+2. **Stop:** give the owner the link or path and wait. Write no app code, make no commits and open no PR for the change. A sub-agent returns the link to its parent, which passes it on. A parent passes approval down by quoting the owner's words; without that quote, a sub-agent stops here.
 3. **Build on approval:** build only after the owner explicitly approves building, such as "build it" or "build concept C". Silence, praise for one part, a ticket marked `ready-for-agent`, and the general autonomy and auto-merge rules are not approval. A requested change means a new prototype version, then wait again. Build only what the approved prototype shows; a new UI decision it did not show goes back to step 1, even inside an approved ticket.
 
 This covers anything a person sees or uses: layout, styling, flows, forms, messages and copy. Copy changes are covered even when the owner supplied the exact words. It does not cover backend-only work or bug fixes with no visible change.
 
-One exception: a live bug that blocks parents may be fixed before any prototype when the fix only puts the screen back to the look and behaviour the owner already approved. Ship it through the normal workflow, then tell the owner what changed. If the fix needs anything new on screen, prototype it first.
-
-Use `diagnosing-bugs` when diagnosing a defect and `tdd` for meaningful behavior regressions or new logic. Use `implement` when following an implementation ticket. These skills follow the selected tier. A reversible copy edit does not need a test that repeats its text. New logic needs tests that would fail for a plausible wrong implementation.
+One exception: a live bug that blocks parents may be fixed before any prototype when the fix only puts the screen back to the look and behaviour it had before the bug. Ship it through the normal workflow, then tell the owner what changed. If the fix needs anything new on screen, prototype it first.
 
 ## Checks
 
@@ -110,7 +110,7 @@ Use these cases when changing this workflow; they are checks of the rules, not r
 | Change which actions an agent can authorize | Sensitive; policy scenarios and independent review; no runtime tests for Markdown alone; no app version |
 | Change one button's spacing | Prototype first and stop. After the owner says to build it: Routine; relevant static checks, hands-on visual inspection and one review; full CI; app release |
 | Replace a label with words the owner supplied | Prototype first and stop, even for copy only |
-| Restore a broken Submit button that blocks parents to its approved look | Fix through the normal workflow without a prototype, then tell the owner |
+| Restore a broken Submit button that blocks parents to how it was before the bug | Fix through the normal workflow without a prototype, then tell the owner |
 | Build an approved concept that needs a screen the prototype did not show | Build the approved parts; prototype the new screen and stop |
 | Speed up a query behind an unchanged screen | Not a UI change; no prototype |
 | Fix a one-line RLS predicate | Sensitive; migration, allow/deny tests and focused review; full CI; app release |

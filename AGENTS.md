@@ -48,7 +48,7 @@ Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, V
 - **Business behavior or terminology:** relevant sections of [CONTEXT.md](CONTEXT.md), relevant [ADRs](docs/adr/), and [domain guidance](docs/agents/domain.md).
 - **Tickets or triage:** [Issue tracker](docs/agents/issue-tracker.md) and [triage labels](docs/agents/triage-labels.md).
 
-Keep only permanent project material on `main`. Research and `prototype` skill findings stay on their own throwaway branches; handoffs use the skill's OS-temp location. EGM briefs and reports go under `.artifacts/egm/<feature>/`; pass that path as `EGM artifact directory` to EGM. Apply `unslop` to human-facing text you write or change.
+Keep only permanent project material on `main`. Research findings and `prototype` logic demos stay on their own throwaway branches; UI prototypes follow [Workflow → UI and UX changes](docs/agents/workflow.md#ui-and-ux-changes) and are never committed; handoffs use the skill's OS-temp location. EGM briefs and reports go under `.artifacts/egm/<feature>/`; pass that path as `EGM artifact directory` to EGM. Apply `unslop` to human-facing text you write or change.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

@@ -40,8 +40,8 @@ type Copy = {
   discountCode: string
   discountCodeHint: string
   discountChecking: string
-  // `approved` takes the discount as written ("TZS 10,000"), or null when it
-  // couldn't be read, and then names no figure.
+  // `approved` takes the code's own discount as written ("TZS 10,000"): the
+  // standard fee less the estimate's fee per child. Null names no figure.
   discountNotes: { approved: (discount: string | null) => string } & Record<"pending" | "switched_off" | "unknown" | "unchecked", string>
   interviewFee: string
   feeNotPaidHere: string

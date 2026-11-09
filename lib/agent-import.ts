@@ -40,7 +40,8 @@ export type ImportAgentRef = { id: string; fullName: string; code: string; phone
 export type AgentVerdict =
   | { verdict: "create" }
   | { verdict: "present" | "email_to_add" | "email_differs" | "mobile_differs" | "code_exists" | "mobile_taken"; agent: ImportAgentRef }
-  | { verdict: "retired_code" | "email_taken" }
+  // promo_code: a Promo code holds the code, and codes are one namespace.
+  | { verdict: "retired_code" | "email_taken" | "promo_code" }
 
 export type ScreenedAgentRow = {
   sheetRow: number
@@ -120,6 +121,7 @@ export const AGENT_REASONS = {
   duplicateEmail: "Duplicate email in file",
   codeExists: (name: string) => `Code exists as ${name}`,
   retiredCode: "Code belongs to a retired record (use Recreate)",
+  promoCode: "Code is a Promo code",
   mobileTaken: (name: string, code: string) => `Mobile already belongs to ${name}, ${code}`,
   emailTaken: "Email already in use",
   emailDiffers: "Email differs (not changed)",
@@ -189,6 +191,8 @@ export function classOfVerdict(verdict: AgentVerdict): { class: AgentImportClass
       return { class: "refused", reason: AGENT_REASONS.mobileTaken(verdict.agent.fullName, verdict.agent.code), agent: verdict.agent }
     case "retired_code":
       return { class: "refused", reason: AGENT_REASONS.retiredCode, agent: null }
+    case "promo_code":
+      return { class: "refused", reason: AGENT_REASONS.promoCode, agent: null }
     case "email_taken":
       return { class: "refused", reason: AGENT_REASONS.emailTaken, agent: null }
   }

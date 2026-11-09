@@ -39,6 +39,12 @@ export type MarketingAgent = {
   retiredAt: string | null
   // The latest switch-off, switch-on, retirement or recreation, or null.
   statusChange: AgentStatusNote | null
+  // The agent's own interview discount in whole TZS, or null when they take
+  // the standard one.
+  interviewDiscount: number | null
+  // What the agent's code takes off the interview fee while it gives a
+  // discount: the own amount, else the standard.
+  discountAmount: number
 }
 
 export type AgentStatusKind = "switched_off" | "switched_on" | "retired" | "recreated"
@@ -88,6 +94,8 @@ type AgentRow = {
   lead_count: number
   switched_off_at: string | null
   retired_at: string | null
+  interview_discount: number | null
+  agent_discount_amount: number
 }
 
 type StatusNoteRow = {
@@ -99,9 +107,11 @@ type StatusNoteRow = {
   replaced_by_code: string | null
 }
 
-// lead_count is a computed column: the database counts each code's leads in
-// the list query itself.
-const AGENT_COLUMNS = "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count, switched_off_at, retired_at"
+// lead_count and agent_discount_amount are computed columns: the database
+// counts each code's leads and reads each agent's amount in the list query
+// itself.
+const AGENT_COLUMNS =
+  "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count, switched_off_at, retired_at, interview_discount, agent_discount_amount"
 
 // The search box's patterns, matched against the agent's search text: the
 // name in lowercase, the code, and both numbers as digits only. A query that
@@ -227,6 +237,8 @@ export async function listAgents(
         switchedOffAt: row.switched_off_at,
         retiredAt: row.retired_at,
         statusChange: notes.get(row.id) ?? null,
+        interviewDiscount: row.interview_discount,
+        discountAmount: row.agent_discount_amount,
       })),
     },
   }
@@ -492,6 +504,9 @@ function draftArgs(draft: Omit<AgentDraft, "code">) {
 function createRefusal(error: DbError, email: unknown): CreateAgentError | null {
   // 42501: the function isn't granted to the caller at all, as for someone signed out.
   if (error.message === "not_permitted" || error.code === "42501") return { kind: "forbidden" }
+  // A Promo code holds the code: there is no agent to name, so the Manager
+  // hears the code is not available.
+  if (error.message === "code_taken") return { kind: "invalid", field: "code" }
   if (error.message === "email_taken") return emailTakenFrom(error.details, text(email))
   const field = draftField(error)
   if (field && field !== "reason") return { kind: "invalid", field }

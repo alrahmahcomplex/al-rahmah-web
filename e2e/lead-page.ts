@@ -35,6 +35,8 @@ export async function chooseMore(page: Page, action: MoreAction): Promise<void> 
 // The actions the More menu offers on the open lead page, none when there is
 // no More.
 export async function moreActions(page: Page): Promise<string[]> {
+  // Wait for the page itself, not its loading skeleton, before counting.
+  await expect(page.getByRole("navigation", { name: "Application sections" })).toBeVisible()
   const more = page.getByRole("button", { name: "More actions", exact: true })
   if ((await more.count()) === 0) return []
   await more.click()

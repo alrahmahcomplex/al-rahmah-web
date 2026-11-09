@@ -136,6 +136,17 @@ test.describe("the Applicants screen", () => {
     await expect(page.getByLabel("Closure")).toHaveValue("Inactive")
   })
 
+  test("old /staff/leads addresses go to the same place under /staff/applicants", async ({ page, request }) => {
+    const moved = await request.get("/staff/leads/1ead0000-0000-4000-8000-000000000005?tab=interview", { maxRedirects: 0 })
+    expect(moved.status()).toBe(308)
+    expect(moved.headers().location).toBe("/staff/applicants/1ead0000-0000-4000-8000-000000000005?tab=interview")
+
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/leads?closure=Inactive")
+    await expect(page).toHaveURL(/\/staff\/applicants\?closure=Inactive$/)
+    await expect(page.getByLabel("Closure")).toHaveValue("Inactive")
+  })
+
   test("someone signed out is sent to sign in", async ({ page }) => {
     await page.goto("/staff/applicants?q=Fixture")
     await expect(page).toHaveURL(/\/login/)

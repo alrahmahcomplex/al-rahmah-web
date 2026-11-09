@@ -47,7 +47,8 @@ export function LoginForm({ language, notice }: { language: Language; notice: Lo
     const answer = await signIn(previous, data)
     // Supabase may have spent the token, so get a fresh one for the next try.
     if (answer?.error) turnstile.current?.reset()
-    if (answer?.error === "invalid-credentials" && password.current) {
+    // Only the password that was refused is cleared, not one typed since.
+    if (answer?.error === "invalid-credentials" && password.current && password.current.value === data.get("password")) {
       password.current.value = ""
       password.current.focus()
     }

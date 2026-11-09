@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -153,6 +153,21 @@ describe("the one sign-in form", () => {
     await vi.waitFor(() => expect(stubs.signIn).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(screen.getByLabelText("Password")).toHaveValue(""))
     expect(screen.getByLabelText("Password")).toHaveFocus()
+  })
+
+  it("keeps a new password typed while a wrong one was being checked", async () => {
+    let answer: (value: { error: "invalid-credentials" }) => void = () => {}
+    stubs.signIn.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    render(<LoginForm language="en" notice={null} />)
+
+    await submit("someone@example.test", "wrong-password", "Log In")
+    await vi.waitFor(() => expect(stubs.signIn).toHaveBeenCalledTimes(1))
+    await userEvent.clear(screen.getByLabelText("Password"))
+    await userEvent.type(screen.getByLabelText("Password"), "the-right-one")
+    await act(async () => answer({ error: "invalid-credentials" }))
+
+    await screen.findByRole("alert")
+    expect(screen.getByLabelText("Password")).toHaveValue("the-right-one")
   })
 
   it("keeps both after an answer that isn't the person's mistake", async () => {

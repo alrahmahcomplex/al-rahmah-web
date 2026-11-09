@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { formatDate } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
+import type { LeadImportMark } from "@/lib/services/student-import"
 
 import { initials } from "../../_today/greeting"
 
@@ -16,6 +17,7 @@ export function LeadHeader({
   lead,
   statusSince,
   canViewHistory,
+  importMark,
   more,
 }: {
   lead: Lead
@@ -24,6 +26,9 @@ export function LeadHeader({
   statusSince?: string
   // The full history is the Super Admin's alone (#237).
   canViewHistory: boolean
+  // Whether the student import created the lead, and whether its Enrolled is
+  // still the import's, with no payment recorded. Left out when unread.
+  importMark?: LeadImportMark
   more: ReactNode
 }) {
   return (
@@ -43,6 +48,12 @@ export function LeadHeader({
             {lead.closure && <StatusChip status={lead.closure} />}
             {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
             {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
+            {importMark?.batch &&
+              (importMark.enrolledByImport ? (
+                <Badge variant="outline">Enrolled · imported, payments not recorded</Badge>
+              ) : (
+                <Badge variant="outline">Imported</Badge>
+              ))}
           </div>
           <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
             <span className="font-mono font-semibold text-slate-900" aria-label="Admission Number">

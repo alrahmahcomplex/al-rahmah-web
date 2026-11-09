@@ -54,7 +54,7 @@ const pending = (page: Page) => panel(page).getByRole("group", { name: "Pending 
 test("a Manager approves from the lead, choosing to enrol without a retaken interview", async ({ page }) => {
   const lead = await requestedLead({ interviewed: true })
   await signIn(page, MANAGER)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(`/staff/applicants/${lead.id}`)
 
   await expect(pending(page)).toContainText("Requested by Test Admissions")
   await pending(page).getByRole("button", { name: "Approve" }).click()
@@ -79,7 +79,7 @@ test("a Manager approves from the lead, choosing to enrol without a retaken inte
   await expect(panel(page)).toContainText("Reopened from Declined as Interviewed. Enrol without a retaken interview.")
 
   // The lead list shows the tag beside the status.
-  await page.goto(`/staff/leads?q=${encodeURIComponent(lead.child)}`)
+  await page.goto(`/staff/applicants?q=${encodeURIComponent(lead.child)}`)
   const row = page.getByRole("row", { name: new RegExp(lead.child) })
   await expect(row.getByText("Interviewed", { exact: true })).toBeVisible()
   await expect(row.getByText("Initially declined", { exact: true })).toBeVisible()
@@ -92,7 +92,7 @@ test("a Manager approves from the lead, choosing to enrol without a retaken inte
 test("a Manager rejects with a reason, and the requester reads it on the lead", async ({ page, browser }) => {
   const lead = await requestedLead({ interviewed: false })
   await signIn(page, MANAGER)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(`/staff/applicants/${lead.id}`)
 
   await pending(page).getByRole("button", { name: "Reject" }).click()
   const dialog = page.getByRole("dialog", { name: `Reject reopening ${lead.child}?` })
@@ -106,7 +106,7 @@ test("a Manager rejects with a reason, and the requester reads it on the lead", 
   const requester = await browser.newPage()
   try {
     await signIn(requester, ADMISSIONS)
-    await requester.goto(`/staff/leads/${lead.id}`)
+    await requester.goto(`/staff/applicants/${lead.id}`)
     // Still closed, with the outcome under the requests.
     await expect(requester.getByRole("region", { name: "This lead is Declined" })).toBeVisible()
     await expect(panel(requester)).toContainText(`Rejected by ${MANAGER.name}`)

@@ -3,12 +3,12 @@ import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const actions = vi.hoisted(() => ({ whatsapp: vi.fn(), sms: vi.fn() }))
-vi.mock("@/app/staff/leads/[id]/result-release-actions", () => ({
+vi.mock("@/app/staff/applicants/[id]/result-release-actions", () => ({
   sendResultByWhatsApp: actions.whatsapp,
   sendResultBySms: actions.sms,
 }))
 
-import { SendResult } from "@/app/staff/leads/[id]/result-release-send"
+import { SendResult } from "@/app/staff/applicants/[id]/result-release-send"
 
 // The Result release section's send buttons, with the server actions stubbed.
 

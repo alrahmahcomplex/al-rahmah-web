@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import {
   approvalConsequence,
   approvalSeats,
@@ -8,7 +8,7 @@ import {
   canDecideReopening,
   rejectOutcome,
   retakeChoiceText,
-} from "@/app/staff/leads/[id]/reopening-decision-outcome"
+} from "@/app/staff/applicants/[id]/reopening-decision-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { needsRetakeChoice, type DecisionError } from "@/lib/services/reopening-requests"
 import type { SeatCheck } from "@/lib/services/seats"

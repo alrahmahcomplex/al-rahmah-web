@@ -83,7 +83,7 @@ test.describe("on a desktop", () => {
     await expect(page.locator("[data-slot=tooltip-content]")).toHaveText("Leads")
 
     await entry(page, "Leads").click()
-    await expect(page).toHaveURL(/\/staff\/leads$/)
+    await expect(page).toHaveURL(/\/staff\/applicants$/)
     await expect(aside).toHaveCSS("width", "72px")
 
     await page.reload()

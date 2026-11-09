@@ -8,10 +8,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { listPendingDiscountRequests } from "@/lib/services/discounts"
 import { createClient } from "@/utils/supabase/server"
 
-import { DecideDiscount } from "../leads/[id]/decide-discount"
-import { canDecideDiscount, discountLabel } from "../leads/[id]/discount-outcome"
-import { dayOf } from "../leads/[id]/reopening-outcome"
-import { leadTabHref } from "../leads/[id]/tabs"
+import { DecideDiscount } from "../applicants/[id]/decide-discount"
+import { canDecideDiscount, discountLabel } from "../applicants/[id]/discount-outcome"
+import { dayOf } from "../applicants/[id]/reopening-outcome"
+import { leadTabHref } from "../applicants/[id]/tabs"
 import { requireStaff } from "../session"
 
 export const metadata: Metadata = {

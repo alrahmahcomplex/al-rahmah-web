@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { overfillWarning } from "@/app/staff/leads/[id]/payment-outcome"
+import { overfillWarning } from "@/app/staff/applicants/[id]/payment-outcome"
 import { navFor, STAFF_NAV } from "@/app/staff/navigation"
 import { defaultSeatsYear, seatsLine, takenLine } from "@/app/staff/seats/format"
 import type { ClassSeats } from "@/lib/services/seats"

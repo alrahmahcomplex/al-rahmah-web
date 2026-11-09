@@ -61,10 +61,10 @@ test.describe("on a desktop", () => {
     const rows = latest(page).getByRole("listitem")
     await expect(rows).toHaveCount(5)
     for (let i = 0; i < 5; i++) {
-      await expect(rows.nth(i).getByRole("link")).toHaveAttribute("href", /^\/staff\/leads\/[0-9a-f-]{36}$/)
+      await expect(rows.nth(i).getByRole("link")).toHaveAttribute("href", /^\/staff\/applicants\/[0-9a-f-]{36}$/)
       await expect(rows.nth(i)).toContainText(/ADMSN-\d{5}/)
     }
-    await expect(latest(page).getByRole("link", { name: "All leads" })).toHaveAttribute("href", "/staff/leads")
+    await expect(latest(page).getByRole("link", { name: "All leads" })).toHaveAttribute("href", "/staff/applicants")
 
     // A queue row opens the screen the work is done on.
     await overdue.click()

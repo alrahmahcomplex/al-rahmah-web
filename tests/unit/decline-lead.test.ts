@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { declineOutcome } from "@/app/staff/leads/[id]/decline-outcome"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { declineOutcome } from "@/app/staff/applicants/[id]/decline-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { DECLINED_REASONS, declinedReasonsFor, isDeclinedReason, type DeclineError } from "@/lib/services/lead-closure"
 import { PERMISSIONS } from "@/lib/permissions"

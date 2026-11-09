@@ -7,16 +7,16 @@ import {
   followUpOutcome,
   recordedOutcome,
   scheduledOutcome,
-} from "@/app/staff/leads/[id]/follow-up-outcome"
+} from "@/app/staff/applicants/[id]/follow-up-outcome"
 import {
   enteredLate,
   formatContactTime,
   fromTanzaniaLocal,
   recordOutcomeText,
   tanzaniaNowLocal,
-} from "@/app/staff/leads/[id]/follow-up-record-format"
+} from "@/app/staff/applicants/[id]/follow-up-record-format"
 import type { FollowUpWriteError } from "@/lib/services/follow-ups"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
 describe("the Follow-ups panel's sentences", () => {

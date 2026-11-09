@@ -114,7 +114,7 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   // The request links to the lead's Discounts tab.
   await expect(row.getByRole("link", { name: lead.admissionNumber })).toHaveAttribute(
     "href",
-    `/staff/leads/${lead.id}?tab=discounts#lead-discounts`,
+    `/staff/applicants/${lead.id}?tab=discounts#lead-discounts`,
   )
   await row.getByRole("button", { name: "Grant" }).click()
   const grant = page.getByRole("dialog")

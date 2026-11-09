@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { registeredOutcome, registerOutcome } from "@/app/staff/leads/[id]/interview-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { registeredOutcome, registerOutcome } from "@/app/staff/applicants/[id]/interview-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { nextActionOf, type RegisterError } from "@/lib/services/interviews"
 

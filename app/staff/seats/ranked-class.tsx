@@ -4,8 +4,8 @@ import { formatDate } from "@/lib/school-calendar"
 import { SEAT_RELEASE_REASON } from "@/lib/services/lead-closure"
 import type { ClassSeats } from "@/lib/services/seats"
 
-import { declineHref } from "../leads/decline-link"
-import { SeatPriorityBadge } from "../leads/seat-priority-badge"
+import { declineHref } from "../applicants/decline-link"
+import { SeatPriorityBadge } from "../applicants/seat-priority-badge"
 
 // One over-full class's leads, ranked: Full, then First instalment, then
 // Deposit; then the date each reached its priority, oldest first; then
@@ -25,7 +25,7 @@ export function RankedClass({ entry, canDecline }: { entry: ClassSeats; canDecli
           <li key={holder.leadId} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
             <span className="w-6 shrink-0 tabular-nums text-muted-foreground">{holder.rank}.</span>
             <span className="flex min-w-0 flex-1 flex-col">
-              <Link href={`/staff/leads/${holder.leadId}`} className="font-medium text-slate-900 underline-offset-4 hover:underline">
+              <Link href={`/staff/applicants/${holder.leadId}`} className="font-medium text-slate-900 underline-offset-4 hover:underline">
                 {holder.studentName}
               </Link>
               <span className="text-xs text-muted-foreground">

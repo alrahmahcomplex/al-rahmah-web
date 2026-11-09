@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { adjustedPaymentOutcome, adjustmentRefusal } from "@/app/staff/leads/[id]/adjustment-outcome"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { adjustedPaymentOutcome, adjustmentRefusal } from "@/app/staff/applicants/[id]/adjustment-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import { formatDate } from "@/lib/school-calendar"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { isAdjustmentReason, type AdjustmentError } from "@/lib/services/payment-adjustments"

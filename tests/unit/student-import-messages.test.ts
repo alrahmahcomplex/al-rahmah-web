@@ -12,9 +12,9 @@ import {
   skippedRowsLabel,
   summaryChips,
   toCreate,
-} from "@/app/staff/leads/import-messages"
-import { importNote } from "@/app/staff/leads/[id]/history/import-history"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+} from "@/app/staff/applicants/import-messages"
+import { importNote } from "@/app/staff/applicants/[id]/history/import-history"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import type { StudentImportSummary } from "@/lib/student-import"
 

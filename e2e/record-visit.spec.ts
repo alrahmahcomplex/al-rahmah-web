@@ -66,7 +66,7 @@ test.describe("recording the visit of an Applied family", () => {
     await page.getByLabel("Admission Number").fill(SEEDED_APPLIED.number)
     await page.getByRole("button", { name: "Find" }).click()
 
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${SEEDED_APPLIED.id}$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${SEEDED_APPLIED.id}$`))
     await expect(page.getByRole("heading", { name: SEEDED_APPLIED.name, level: 1 })).toBeVisible()
     await expect(detail(page, "Status")).toHaveText("Applied")
     await expect(detail(page, "Visit date")).toHaveText("Not visited yet")
@@ -103,7 +103,7 @@ test.describe("when Record visit is offered", () => {
   test("a visit someone else recorded first is refused, and the lead is left as they recorded it", async ({ page }) => {
     const lead = await appliedLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await page.getByRole("button", { name: "Record visit" }).click()
     // Another member of staff records it while this form is open.
@@ -124,7 +124,7 @@ test.describe("when Record visit is offered", () => {
   test("cancelling records nothing, and focus goes from the button to the Visit date and back", async ({ page }) => {
     const lead = await appliedLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     // Opened from the keyboard, as a keyboard or screen-reader user would.
     const card = page.getByRole("region", { name: "Next step" })
@@ -148,7 +148,7 @@ test.describe("when Record visit is offered", () => {
     // A device whose clock runs a day behind, then a day ahead.
     for (const deviceDay of [dayBefore(today), dayAfter(today)]) {
       await page.clock.setFixedTime(new Date(`${deviceDay}T09:00:00Z`))
-      await page.goto(`/staff/leads/${lead.id}`)
+      await page.goto(`/staff/applicants/${lead.id}`)
 
       await page.getByRole("button", { name: "Record visit" }).click()
       const visitDate = page.getByRole("form", { name: "Record visit" }).getByLabel("Visit date")
@@ -163,7 +163,7 @@ test.describe("when Record visit is offered", () => {
       sql.query("insert into public.follow_ups (lead_id, due_on) values ($1, $2)", [lead.id, today]),
     )
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     const card = page.getByRole("region", { name: "Next step" })
     await expect(card.getByRole("heading", { name: "Next step: Record today's follow-up" })).toBeVisible()
@@ -193,7 +193,7 @@ test.describe("when Record visit is offered", () => {
       sql.query("insert into public.follow_ups (lead_id, due_on) values ($1, $2)", [lead.id, today]),
     )
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     const card = page.getByRole("region", { name: "Next step" })
     const recordVisit = card.getByRole("button", { name: "Record visit" })
@@ -212,7 +212,7 @@ test.describe("when Record visit is offered", () => {
   test("the Accountant, who may not record visits, is not offered it", async ({ page }) => {
     const lead = await appliedLead()
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await expect(page.getByRole("heading", { name: lead.name, level: 1 })).toBeVisible()
     await expect(page.getByRole("button", { name: "Record visit" })).toHaveCount(0)
@@ -222,7 +222,7 @@ test.describe("when Record visit is offered", () => {
     await signIn(page, ADMISSIONS)
     // The seeded Visited, Archived and Declined leads.
     for (const id of ["000000000002", "000000000005", "000000000006"]) {
-      await page.goto(`/staff/leads/1ead0000-0000-4000-8000-${id}`)
+      await page.goto(`/staff/applicants/1ead0000-0000-4000-8000-${id}`)
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
       await expect(page.getByRole("button", { name: "Record visit" })).toHaveCount(0)
     }

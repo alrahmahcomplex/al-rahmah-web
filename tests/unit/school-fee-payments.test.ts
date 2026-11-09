@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { paymentRefusal, recordedPaymentOutcome } from "@/app/staff/leads/[id]/payment-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { paymentRefusal, recordedPaymentOutcome } from "@/app/staff/applicants/[id]/payment-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { isPaymentType, type PaymentError } from "@/lib/services/school-fee-payments"
 

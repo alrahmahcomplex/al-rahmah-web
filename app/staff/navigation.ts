@@ -59,7 +59,7 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
     permission: "leads.create",
     alsoNeeds: "visits.record",
   },
-  { href: "/staff/leads", label: "Leads", group: "Admissions", icon: UsersIcon, permission: "leads.view" },
+  { href: "/staff/applicants", label: "Leads", group: "Admissions", icon: UsersIcon, permission: "leads.view" },
   { href: "/staff/interviews", label: "Interviews", group: "Admissions", icon: ClipboardCheckIcon, permission: "leads.view" },
   { href: "/staff/follow-ups", label: "Follow-ups", group: "Admissions", icon: PhoneIcon, permission: "leads.view" },
   { href: "/staff/re-applications", label: "Re-applications", group: "Admissions", icon: RepeatIcon, permission: "leads.view" },
@@ -112,7 +112,7 @@ export function groupNav<T extends { group: StaffNavGroup }>(entries: readonly T
 
 // The entry the page at `pathname` belongs to: the longest href that is the
 // path or a parent of it, so /staff/check-in/new is Register a student rather
-// than Check-in, and /staff/leads/<id> is Leads. The home is a parent of every
+// than Check-in, and /staff/applicants/<id> is Leads. The home is a parent of every
 // staff page, so it counts only for itself.
 export function currentNavHref(pathname: string, hrefs: readonly string[]): string | undefined {
   let current: string | undefined

@@ -15,7 +15,7 @@ import type { ShellItem, ShellPerson } from "./items"
 
 // The tabs along the bottom of a phone, in this order, each only when the
 // staff member may see it. Everything else is behind More.
-const TABS = ["/staff", "/staff/check-in", "/staff/leads"]
+const TABS = ["/staff", "/staff/check-in", "/staff/applicants"]
 
 // A phone's navigation: the tab bar, and the sheet More opens with the rest of
 // the entries and Sign out.

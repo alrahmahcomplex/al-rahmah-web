@@ -32,7 +32,7 @@ test("the Manager sees the Pending count in the navigation and the seeded reques
   await expect(row).toContainText("The family has a new phone number and wants Asha to start in January.")
 
   await row.getByRole("link", { name: "ADMSN-90080" }).click()
-  await expect(page).toHaveURL(new RegExp(`/staff/leads/${SEEDED_PENDING_LEAD}$`))
+  await expect(page).toHaveURL(new RegExp(`/staff/applicants/${SEEDED_PENDING_LEAD}$`))
   await expect(page.getByRole("heading", { name: "Asha Kibwana", level: 1 })).toBeVisible()
 })
 

@@ -6,10 +6,10 @@ import {
   decideOutcome,
   discountLabel,
   requestOutcome,
-} from "@/app/staff/leads/[id]/discount-outcome"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { paymentRefusal } from "@/app/staff/leads/[id]/payment-outcome"
-import { dayOf } from "@/app/staff/leads/[id]/reopening-outcome"
+} from "@/app/staff/applicants/[id]/discount-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { paymentRefusal } from "@/app/staff/applicants/[id]/payment-outcome"
+import { dayOf } from "@/app/staff/applicants/[id]/reopening-outcome"
 import { navFor } from "@/app/staff/navigation"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { isDiscountKind, type DecideDiscountError, type RequestDiscountError } from "@/lib/services/discounts"

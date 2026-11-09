@@ -97,7 +97,7 @@ test("approving a reopening into a full class shows the seat warning and ranking
   )
 
   await signIn(page, MANAGER)
-  await page.goto(`/staff/leads/${lead.id}`)
+  await page.goto(`/staff/applicants/${lead.id}`)
   const panel = page.getByRole("region", { name: "Reopening requests" })
   await panel.getByRole("group", { name: "Pending reopening request" }).getByRole("button", { name: "Approve" }).click()
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import {
   blockedText,
   changedSinceSentText,
@@ -9,7 +9,7 @@ import {
   repeatSendText,
   smsNote,
   spacedPhone,
-} from "@/app/staff/leads/[id]/result-release-outcome"
+} from "@/app/staff/applicants/[id]/result-release-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import type { ReleaseError } from "@/lib/services/result-release"
 

@@ -58,7 +58,7 @@ test.describe("the Referral code panel", () => {
   test("Admissions Staff add a code, see the agent named as they type, change it, then clear it", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(`/staff/applicants/${lead}`)
 
     await expect(panel(page)).toContainText("No referral code.")
     await expect(fee(page)).toHaveText("TZS 50,000")
@@ -118,7 +118,7 @@ test.describe("the Referral code panel", () => {
     if (!set.ok) throw new Error(`could not set the code: ${set.error}`)
 
     await signIn(page, MANAGER)
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(`/staff/applicants/${lead}`)
     await expect(panel(page)).toContainText("Pending")
     await expect(fee(page)).toHaveText("TZS 50,000")
 
@@ -130,7 +130,7 @@ test.describe("the Referral code panel", () => {
     await page.getByRole("alertdialog").getByRole("button", { name: `Approve ${agent.code}` }).click()
     await expect(page.getByText(`${agent.fullName} (${agent.code}) is Approved.`)).toBeVisible()
 
-    await page.goto(`/staff/leads/${lead}`)
+    await page.goto(`/staff/applicants/${lead}`)
     await expect(panel(page)).toContainText("Approved")
     await expect(fee(page)).toHaveText("TZS 40,000")
     await expect(panel(page)).toContainText("includes TZS 10,000 discount")
@@ -139,18 +139,18 @@ test.describe("the Referral code panel", () => {
   test("the Accountant reads each state with no Edit or Clear", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
 
-    await page.goto(`/staff/leads/${ASHA_APPROVED}`)
+    await page.goto(`/staff/applicants/${ASHA_APPROVED}`)
     await expect(panel(page).getByLabel("Code", { exact: true })).toHaveText("BJN-402")
     await expect(panel(page)).toContainText("Approved")
     await expect(fee(page)).toHaveText("TZS 40,000")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
 
-    await page.goto(`/staff/leads/${JUMA_PENDING}`)
+    await page.goto(`/staff/applicants/${JUMA_PENDING}`)
     await expect(panel(page)).toContainText("Marketing Agent: Zawadi Neema Mwakasege")
     await expect(fee(page)).toHaveText("TZS 50,000")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
 
-    await page.goto(`/staff/leads/${TATU_UNRECOGNISED}`)
+    await page.goto(`/staff/applicants/${TATU_UNRECOGNISED}`)
     await expect(panel(page)).toContainText("Unrecognised")
     await expect(panel(page)).toContainText("No Marketing Agent or Promo code has this code.")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
@@ -158,7 +158,7 @@ test.describe("the Referral code panel", () => {
 
   test("a closed lead shows its panel read-only, even to Admissions Staff", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${ARCHIVED}`)
+    await page.goto(`/staff/applicants/${ARCHIVED}`)
     await expect(panel(page)).toContainText("No referral code.")
     await expect(fee(page)).toHaveText("TZS 50,000")
     await expect(panel(page).getByRole("button")).toHaveCount(0)

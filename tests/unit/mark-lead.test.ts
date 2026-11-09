@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { markOutcome } from "@/app/staff/leads/[id]/mark-outcome"
-import { markConsequence, markTitle } from "@/app/staff/leads/[id]/mark-text"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { markOutcome } from "@/app/staff/applicants/[id]/mark-outcome"
+import { markConsequence, markTitle } from "@/app/staff/applicants/[id]/mark-text"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { CLOSURE_REASONS, isClosureReason, isMarkMove, marksAllowed, type MarkError } from "@/lib/services/lead-closure"
 

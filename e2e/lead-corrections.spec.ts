@@ -58,7 +58,7 @@ test.describe("correcting a lead", () => {
   test("Admissions Staff correct the class, and the lead screen shows it", async ({ page }) => {
     const [lead] = await family()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await page.getByRole("button", { name: "Edit student" }).click()
     const form = page.getByRole("form", { name: "Edit student" })
@@ -79,7 +79,7 @@ test.describe("correcting a lead", () => {
     const [first, second, third] = await family(3)
     const digits = nineDigits()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${first.id}`)
+    await page.goto(`/staff/applicants/${first.id}`)
 
     await page.getByRole("button", { name: "Edit parent or guardian" }).click()
     const form = page.getByRole("form", { name: "Edit parent or guardian" })
@@ -96,7 +96,7 @@ test.describe("correcting a lead", () => {
     await expect(detail(page, "Parent or guardian", "Phone")).toHaveText(`+255${digits}`)
 
     for (const sibling of [second, third]) {
-      await page.goto(`/staff/leads/${sibling.id}`)
+      await page.goto(`/staff/applicants/${sibling.id}`)
       await expect(detail(page, "Parent or guardian", "Phone")).toHaveText(`+255${digits}`)
     }
   })
@@ -109,7 +109,7 @@ test.describe("correcting a lead", () => {
     if (!existingLead.ok) throw new Error("setup failed")
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${other.id}`)
+    await page.goto(`/staff/applicants/${other.id}`)
     await page.getByRole("button", { name: "Edit student" }).click()
     await page.getByLabel("Student's full name").fill(existing.name)
     await page.getByRole("button", { name: "Save" }).click()
@@ -122,7 +122,7 @@ test.describe("correcting a lead", () => {
     const refusal = page.getByRole("form", { name: "Edit parent or guardian" }).getByRole("alert")
     await expect(refusal).toContainText("would make the student a duplicate of")
     await refusal.getByRole("link", { name: existing.admissionNumber }).click()
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${existing.id}$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${existing.id}$`))
   })
 
   test("the Visit date can be moved earlier, never later than today", async ({ page }) => {
@@ -132,7 +132,7 @@ test.describe("correcting a lead", () => {
     const earlierDate = earlier.toISOString().slice(0, 10)
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
     await page.getByRole("button", { name: "Correct Visit date" }).click()
     const input = page.getByLabel("Visit date", { exact: true })
     await expect(input).toHaveAttribute("max", today)
@@ -145,7 +145,7 @@ test.describe("correcting a lead", () => {
   test("an Accountant sees the lead with no edit actions", async ({ page }) => {
     const [lead] = await family()
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await expect(page.getByRole("heading", { name: lead.name, level: 1 })).toBeVisible()
     for (const name of ["Edit student", "Correct Visit date", "Edit parent or guardian"]) {
@@ -156,7 +156,7 @@ test.describe("correcting a lead", () => {
   test("closed leads offer no corrections", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     // The seeded Archived lead, Hamisi Fixture.
-    await page.goto("/staff/leads/1ead0000-0000-4000-8000-000000000005")
+    await page.goto("/staff/applicants/1ead0000-0000-4000-8000-000000000005")
     await expect(page.getByRole("heading", { name: "Hamisi Fixture", level: 1 })).toBeVisible()
     for (const name of ["Edit student", "Correct Visit date", "Edit parent or guardian"]) {
       await expect(page.getByRole("button", { name })).toHaveCount(0)

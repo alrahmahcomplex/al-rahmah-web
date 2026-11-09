@@ -97,7 +97,7 @@ test.describe("comparing a re-application with its lead", () => {
 
     // The lead holds what the family sent, and its history shows the staff
     // member's edits.
-    await page.goto(`/staff/leads/${mine.leadId}`)
+    await page.goto(`/staff/applicants/${mine.leadId}`)
     await expect(page.getByRole("region", { name: "Student" })).toContainText("STD 4")
     await openLeadHistoryAsSuperAdmin(page)
     const entries = page.getByRole("list", { name: "History" }).locator(":scope > li")
@@ -149,10 +149,10 @@ test.describe("comparing a re-application with its lead", () => {
     const link = page.getByRole("link", { name: "Request reopening" })
     await expect(link).toHaveAttribute(
       "href",
-      `/staff/leads/${ARCHIVED}/reopen?source=re_application&re_application=${reApplicationId}`,
+      `/staff/applicants/${ARCHIVED}/reopen?source=re_application&re_application=${reApplicationId}`,
     )
     await link.click()
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${ARCHIVED}/reopen\\?source=re_application&re_application=${reApplicationId}$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${ARCHIVED}/reopen\\?source=re_application&re_application=${reApplicationId}$`))
     await expect(page.getByRole("main")).toContainText("ADMSN-90005")
   })
 })

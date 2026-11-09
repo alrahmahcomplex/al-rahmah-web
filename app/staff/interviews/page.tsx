@@ -22,8 +22,8 @@ import { interviewRows } from "./rows"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
-import { closedState } from "../leads/[id]/closed-state"
-import { leadTabHref } from "../leads/[id]/tabs"
+import { closedState } from "../applicants/[id]/closed-state"
+import { leadTabHref } from "../applicants/[id]/tabs"
 import { requireStaff } from "../session"
 import { defaultInterviewYear, interviewsHref, parseInterviewSearch } from "./search-params"
 

@@ -162,7 +162,7 @@ function Entries({ entries }: { entries: AuditEntry[] }) {
             <span>{entry.table ? `${entry.action} on ${entry.table}` : entry.action}</span>
             <Badge variant="outline">{AREA_LABELS[entry.area] ?? entry.area}</Badge>
             {entry.leadId && entry.admissionNumber && (
-              <Link href={`/staff/leads/${entry.leadId}/history`} className="font-mono text-xs underline underline-offset-4">
+              <Link href={`/staff/applicants/${entry.leadId}/history`} className="font-mono text-xs underline underline-offset-4">
                 {entry.admissionNumber}
               </Link>
             )}

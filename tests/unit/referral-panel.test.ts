@@ -9,7 +9,7 @@ import {
   referralLookupNote,
   referralOutcome,
   usableCode,
-} from "@/app/staff/leads/[id]/referral-outcome"
+} from "@/app/staff/applicants/[id]/referral-outcome"
 import type { FoundDiscountCode } from "@/lib/services/referral"
 
 function agentCode(over: Partial<FoundDiscountCode>): FoundDiscountCode {

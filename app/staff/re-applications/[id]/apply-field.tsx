@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import type { ReApplicationField } from "@/lib/services/re-applications"
 
-import type { CorrectionOutcome } from "../../leads/[id]/correction-outcome"
+import type { CorrectionOutcome } from "../../applicants/[id]/correction-outcome"
 import { applyAction } from "./apply-actions"
 
 const LOST_REQUEST: CorrectionOutcome = {

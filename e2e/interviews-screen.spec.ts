@@ -103,7 +103,7 @@ test.describe("the Interviews screen", () => {
     await expect(page).toHaveURL(/\/staff\/interviews\?year=2027$/)
     await list(page).getByRole("link", { name: "Amani Interview" }).click()
     // The lead opens on its Interview tab.
-    await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000501\?tab=interview#lead-interview$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/1ead0000-0000-4000-8000-000000000501\?tab=interview#lead-interview$/)
     await expect(page.getByRole("region", { name: "Interview", exact: true })).toBeVisible()
   })
 

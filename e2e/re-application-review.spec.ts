@@ -92,7 +92,7 @@ test.describe("Re-applications", () => {
     await expect(page.getByRole("button", { name: "Mark reviewed" })).toBeVisible()
 
     // Its own re-application, from its lead's screen.
-    await page.goto(`/staff/leads/${mine.leadId}`)
+    await page.goto(`/staff/applicants/${mine.leadId}`)
     const section = page.getByRole("region", { name: "Re-applications" })
     await expect(section).toContainText("1 field differs")
     await expect(section).toContainText("Not reviewed")
@@ -122,7 +122,7 @@ test.describe("Re-applications", () => {
     await expect(page.getByRole("link", { name: "Show unreviewed" })).toBeVisible()
 
     // The lead screen keeps it, reviewed.
-    await page.goto(`/staff/leads/${mine.leadId}`)
+    await page.goto(`/staff/applicants/${mine.leadId}`)
     await expect(page.getByRole("region", { name: "Re-applications" })).toContainText(`Reviewed by ${ADMISSIONS.name}`)
   })
 

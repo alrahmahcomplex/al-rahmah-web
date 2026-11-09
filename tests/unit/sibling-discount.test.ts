@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { priorSiblingOutcome } from "@/app/staff/leads/[id]/prior-sibling-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { priorSiblingOutcome } from "@/app/staff/applicants/[id]/prior-sibling-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { FEE_DISCOUNT_NAMES } from "@/lib/services/discounts"
 import type { SetPriorSiblingError } from "@/lib/services/sibling-discount"

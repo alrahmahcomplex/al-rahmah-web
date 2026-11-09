@@ -7,7 +7,7 @@ import type { ReApplicationField } from "@/lib/services/re-applications"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
-import type { CorrectionOutcome } from "../../leads/[id]/correction-outcome"
+import type { CorrectionOutcome } from "../../applicants/[id]/correction-outcome"
 import { FIELD_LABELS } from "../format"
 import { applyOutcome } from "./apply-outcome"
 

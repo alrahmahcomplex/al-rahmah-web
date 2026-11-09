@@ -18,7 +18,7 @@ async function signIn(page: Page, person: FixtureStaff | typeof SUPER_ADMIN) {
 }
 
 async function openExport(page: Page) {
-  await page.goto("/staff/leads")
+  await page.goto("/staff/applicants")
   await page.getByRole("button", { name: "Export" }).click()
   const sheet = page.getByRole("dialog", { name: "Export applicants" })
   await expect(sheet.getByLabel("Which applicants")).toBeVisible()
@@ -61,7 +61,7 @@ test("Admissions Staff export the applicant columns only", async ({ page }) => {
 
   // The route refuses what the sheet does not offer.
   for (const query of ["preset=calls&scope=all", "preset=custom&scope=all&col=adm&col=phone", "preset=full&scope=all"]) {
-    const refused = await page.request.get(`/staff/leads/export?${query}`)
+    const refused = await page.request.get(`/staff/applicants/export?${query}`)
     expect(refused.status()).toBe(403)
     expect(refused.headers()["content-disposition"]).toBeUndefined()
   }
@@ -94,7 +94,7 @@ test("the Manager, with leads.export, exports parent contacts but not Full data"
   expect(answer.headers()["cache-control"]).toBe("no-store")
   expect(headerRow(await answer.text())).toBe("Admission Number,Student name,Class,Status,Status since,Parent name,Parent phone,WhatsApp")
 
-  const full = await page.request.get("/staff/leads/export?preset=full&scope=all")
+  const full = await page.request.get("/staff/applicants/export?preset=full&scope=all")
   expect(full.status()).toBe(403)
 })
 

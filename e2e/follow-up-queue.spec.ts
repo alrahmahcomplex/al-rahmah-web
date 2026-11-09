@@ -109,7 +109,7 @@ test("recording a contact from a queue row moves the row to Upcoming", async ({ 
   await page.goto("/staff/follow-ups")
 
   await overdueList(page).getByRole("link", { name: lead.studentName }).click()
-  await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}\\?tab=follow-ups#lead-follow-ups$`))
+  await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}\\?tab=follow-ups#lead-follow-ups$`))
 
   const panel = page.getByRole("region", { name: "Follow-ups" })
   await panel.getByRole("button", { name: "Record follow-up" }).click()

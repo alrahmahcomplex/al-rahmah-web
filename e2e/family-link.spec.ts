@@ -74,7 +74,7 @@ test.describe("the seeded unconfirmed match", () => {
 
   test("staff confirm it, naming both children it moves, and both join the Family", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${SEEDED.upendo.id}`)
+    await page.goto(`/staff/applicants/${SEEDED.upendo.id}`)
 
     const family = page.getByRole("region", { name: "Family" })
     await expect(family.getByText("Unconfirmed Family match")).toBeVisible()
@@ -100,7 +100,7 @@ test.describe("the seeded unconfirmed match", () => {
     await expect(parent).not.toContainText("Khadija A. Kinship")
 
     // It stays after a reload, and the other child moved too.
-    await page.goto(`/staff/leads/${SEEDED.furaha.id}`)
+    await page.goto(`/staff/applicants/${SEEDED.furaha.id}`)
     await expect(page.getByText("Unconfirmed Family match")).toHaveCount(0)
     await expect(familyRow(page, SEEDED.upendo.name)).not.toContainText("Unconfirmed")
     await expect(page.getByText("Returning family", { exact: true })).toBeVisible()
@@ -111,7 +111,7 @@ test.describe("settling a match of the test's own", () => {
   test("rejecting clears the match and the Returning family badge", async ({ page }) => {
     const match = await unconfirmedMatch()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${match.appliedId}`)
+    await page.goto(`/staff/applicants/${match.appliedId}`)
 
     await expect(page.getByText("Returning family", { exact: true })).toBeVisible()
     const family = page.getByRole("region", { name: "Family" })
@@ -130,7 +130,7 @@ test.describe("settling a match of the test's own", () => {
     const match = await unconfirmedMatch()
     await signIn(page, ADMISSIONS)
 
-    await page.goto(`/staff/leads/${match.knownId}`)
+    await page.goto(`/staff/applicants/${match.knownId}`)
     await expect(familyRow(page, match.applied)).toContainText("Unconfirmed")
     // A match is settled from the child the form sent, not from here.
     await expect(page.getByRole("button", { name: "Confirm match" })).toHaveCount(0)
@@ -161,7 +161,7 @@ test.describe("settling a match of the test's own", () => {
     if (!joined.ok) throw new Error("setup failed")
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${joined.data.leadId}`)
+    await page.goto(`/staff/applicants/${joined.data.leadId}`)
     await expect(page.getByText("Returning family", { exact: true })).toBeVisible()
     const family = page.getByRole("region", { name: "Family" })
     await family.getByRole("button", { name: "Separate from this Family" }).click()
@@ -180,7 +180,7 @@ test.describe("settling a match of the test's own", () => {
   test("the Accountant sees the Family and the match, with nothing to settle", async ({ page }) => {
     const match = await unconfirmedMatch()
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${match.appliedId}`)
+    await page.goto(`/staff/applicants/${match.appliedId}`)
 
     const family = page.getByRole("region", { name: "Family" })
     await expect(family.getByText("Unconfirmed Family match")).toBeVisible()

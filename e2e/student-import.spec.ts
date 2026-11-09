@@ -56,7 +56,7 @@ async function fixtureFile() {
 test("the Manager imports applicants, reviews every row, creates them and finds them in the list", async ({ page }) => {
   const file = await fixtureFile()
   await signIn(page, MANAGER)
-  await page.goto("/staff/leads")
+  await page.goto("/staff/applicants")
   await expect(page.getByRole("heading", { name: "Applicants", level: 1 })).toBeVisible()
 
   await page.getByRole("button", { name: "Import" }).click()
@@ -108,7 +108,7 @@ test("the Manager imports applicants, reviews every row, creates them and finds 
   await expect(sheet.getByText("Test Manager")).toBeVisible()
 
   await sheet.getByRole("button", { name: "Show them in the list" }).click()
-  await expect(page).toHaveURL(/\/staff\/leads\?import=[0-9a-f-]{36}$/)
+  await expect(page).toHaveURL(/\/staff\/applicants\?import=[0-9a-f-]{36}$/)
   await expect(page.getByText(`Applicants created by the import of ${file.name}`)).toBeVisible()
   const listed = page.getByRole("table", { name: "Applicants" }).locator("tbody tr")
   await expect(listed).toHaveCount(4)
@@ -128,7 +128,7 @@ test("the Manager imports applicants, reviews every row, creates them and finds 
 
 test("Admissions Staff, without leads.import, see Export but no Import", async ({ page }) => {
   await signIn(page, ADMISSIONS)
-  await page.goto("/staff/leads")
+  await page.goto("/staff/applicants")
   await expect(page.getByRole("heading", { name: "Applicants", level: 1 })).toBeVisible()
   await expect(page.getByRole("button", { name: "Export" })).toBeVisible()
   await expect(page.getByRole("button", { name: "Import" })).toHaveCount(0)

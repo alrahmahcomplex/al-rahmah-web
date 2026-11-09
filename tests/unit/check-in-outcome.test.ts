@@ -26,7 +26,7 @@ describe("refusalOutcome", () => {
     expect(refusalOutcome({ kind: "duplicate", lead })).toEqual({
       status: "duplicate",
       admissionNumber: "ADMSN-12345",
-      href: "/staff/leads/abc",
+      href: "/staff/applicants/abc",
     })
   })
 
@@ -34,10 +34,10 @@ describe("refusalOutcome", () => {
     const archived = { id: "abc", admissionNumber: "ADMSN-12345", status: "Visited", closure: "Archived" } as const
     const declined = { id: "def", admissionNumber: "ADMSN-54321", status: "Declined", closure: null } as const
     expect(refusalOutcome({ kind: "duplicate", lead: archived })).toMatchObject({
-      href: "/staff/leads/abc/reopen?source=duplicate_match",
+      href: "/staff/applicants/abc/reopen?source=duplicate_match",
     })
     expect(refusalOutcome({ kind: "duplicate", lead: declined })).toMatchObject({
-      href: "/staff/leads/def/reopen?source=duplicate_match",
+      href: "/staff/applicants/def/reopen?source=duplicate_match",
     })
   })
 })

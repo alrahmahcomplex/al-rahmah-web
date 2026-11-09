@@ -19,7 +19,7 @@ import { setLeadReferralCode } from "@/lib/services/referral"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
-import { correctionOutcome, type CorrectionOutcome } from "../leads/[id]/correction-outcome"
+import { correctionOutcome, type CorrectionOutcome } from "../applicants/[id]/correction-outcome"
 import {
   familyRefusal,
   refusalOutcome,
@@ -40,7 +40,7 @@ export async function lookUpAdmissionNumber(typed: string): Promise<LookupOutcom
   if (!allowed.ok) return { status: "refused", message: "Your role can't look up leads." }
 
   const result = await findLeadByAdmissionNumber(supabase, typed)
-  if (result.ok) return { status: "found", href: `/staff/leads/${result.data}` }
+  if (result.ok) return { status: "found", href: `/staff/applicants/${result.data}` }
   if (result.error === "not-found") return { status: "not-found" }
   return { status: "refused", message: "The lookup could not be completed. Try again in a moment." }
 }

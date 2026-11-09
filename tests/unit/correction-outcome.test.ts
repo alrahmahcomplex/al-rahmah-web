@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { correctionOutcome } from "@/app/staff/leads/[id]/correction-outcome"
+import { correctionOutcome } from "@/app/staff/applicants/[id]/correction-outcome"
 
 describe("correctionOutcome", () => {
   it("names the refused field with a message staff can act on", () => {
@@ -15,11 +15,11 @@ describe("correctionOutcome", () => {
     expect(correctionOutcome({ kind: "duplicate", lead: open })).toEqual({
       status: "duplicate",
       admissionNumber: "ADMSN-12345",
-      href: "/staff/leads/abc",
+      href: "/staff/applicants/abc",
     })
     const archived = { ...open, closure: "Archived" } as const
     expect(correctionOutcome({ kind: "duplicate", lead: archived })).toMatchObject({
-      href: "/staff/leads/abc/reopen?source=duplicate_match",
+      href: "/staff/applicants/abc/reopen?source=duplicate_match",
     })
   })
 

@@ -77,7 +77,7 @@ test.describe("a Discount code on a re-application", () => {
     await expect(codeRow(page)).toContainText("Matches now")
     await expect(codeRow(page).getByRole("button")).toHaveCount(0)
 
-    await page.goto(`/staff/leads/${mine.leadId}`)
+    await page.goto(`/staff/applicants/${mine.leadId}`)
     const referral = page.getByRole("region", { name: "Referral code" })
     await expect(referral).toContainText(APPROVED_CODE)
     await expect(referral).not.toContainText(PENDING_CODE)

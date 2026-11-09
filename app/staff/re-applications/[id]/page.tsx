@@ -12,8 +12,8 @@ import type { StaffMember } from "@/lib/services/staff-auth"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
-import { closedState } from "../../leads/[id]/closed-state"
-import { canRaiseReopening } from "../../leads/[id]/reopening-outcome"
+import { closedState } from "../../applicants/[id]/closed-state"
+import { canRaiseReopening } from "../../applicants/[id]/reopening-outcome"
 import { requireStaff } from "../../session"
 import { differingText, when } from "../format"
 import { LeadBadges } from "../lead-badges"
@@ -59,7 +59,7 @@ export default async function ReApplicationPage({ params }: { params: Promise<{ 
         <h1 className="staff-heading">Re-application</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Link
-            href={`/staff/leads/${entry.leadId}`}
+            href={`/staff/applicants/${entry.leadId}`}
             className="font-mono text-sm font-medium text-blue-600 underline-offset-4 hover:underline"
           >
             {entry.admissionNumber}

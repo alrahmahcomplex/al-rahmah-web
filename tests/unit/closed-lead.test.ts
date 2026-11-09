@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { closedState } from "@/app/staff/leads/[id]/closed-state"
+import { closedState } from "@/app/staff/applicants/[id]/closed-state"
 
 describe("the closed-lead banner names the lead's state", () => {
   test.each([

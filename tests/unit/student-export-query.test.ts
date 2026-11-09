@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-import { exportOptions } from "@/app/staff/leads/export/options"
-import { EXPORT_REFUSALS, parseExportRequest, refusalOf, tooManyMessage } from "@/app/staff/leads/export/parse"
-import { exportHref, exportParams, type ExportRequest } from "@/app/staff/leads/export-query"
+import { exportOptions } from "@/app/staff/applicants/export/options"
+import { EXPORT_REFUSALS, parseExportRequest, refusalOf, tooManyMessage } from "@/app/staff/applicants/export/parse"
+import { exportHref, exportParams, type ExportRequest } from "@/app/staff/applicants/export-query"
 import { EXPORT_COLUMNS, EXPORT_PRESETS } from "@/lib/services/student-export"
 
 // The export sheet's GET form and the route that reads it: what the sheet
@@ -26,7 +26,7 @@ describe("the export query", () => {
     const href = exportHref(
       request({ search: { query: undefined, status: "Visited", closure: "all", earlierLinkYear: 2027, importBatchId: BATCH } }),
     )
-    expect(href).toBe(`/staff/leads/export?preset=class&scope=shown&status=Visited&closure=all&earlier_link=2027&import=${BATCH}`)
+    expect(href).toBe(`/staff/applicants/export?preset=class&scope=shown&status=Visited&closure=all&earlier_link=2027&import=${BATCH}`)
   })
 
   it("leaves the list's search out for a year or every applicant", () => {

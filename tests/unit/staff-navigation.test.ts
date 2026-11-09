@@ -13,7 +13,7 @@ import {
 
 const ENTRIES: StaffNavEntry[] = [
   { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: STAFF_HOME.icon, permission: "academic_years.manage" },
-  { href: "/staff/leads", label: "Leads", group: "Admissions", icon: STAFF_HOME.icon, permission: "leads.view" },
+  { href: "/staff/applicants", label: "Leads", group: "Admissions", icon: STAFF_HOME.icon, permission: "leads.view" },
 ]
 
 // The seeded roles' permissions, from the roles migration.
@@ -112,7 +112,7 @@ describe("the staff navigation", () => {
 
   it("shows Leads to anyone who may view leads, and to no one else", () => {
     const leads = STAFF_NAV.find((entry) => entry.label === "Leads")
-    expect(leads).toMatchObject({ href: "/staff/leads", group: "Admissions", permission: "leads.view" })
+    expect(leads).toMatchObject({ href: "/staff/applicants", group: "Admissions", permission: "leads.view" })
     expect(navFor(["leads.view"])).toContain(leads)
     expect(navFor(["payments.view"])).not.toContain(leads)
   })
@@ -183,18 +183,18 @@ describe("groupNav", () => {
 })
 
 describe("currentNavHref", () => {
-  const hrefs = ["/staff", "/staff/check-in", "/staff/check-in/new", "/staff/leads"]
+  const hrefs = ["/staff", "/staff/check-in", "/staff/check-in/new", "/staff/applicants"]
 
   it("picks the entry whose href is the page or its nearest parent", () => {
     expect(currentNavHref("/staff/check-in", hrefs)).toBe("/staff/check-in")
     expect(currentNavHref("/staff/check-in/new", hrefs)).toBe("/staff/check-in/new")
-    expect(currentNavHref("/staff/leads/1ead0000-0000-4000-8000-000000000001", hrefs)).toBe("/staff/leads")
-    expect(currentNavHref("/staff/leads/x/history", hrefs)).toBe("/staff/leads")
+    expect(currentNavHref("/staff/applicants/1ead0000-0000-4000-8000-000000000001", hrefs)).toBe("/staff/applicants")
+    expect(currentNavHref("/staff/applicants/x/history", hrefs)).toBe("/staff/applicants")
   })
 
   it("does not take a prefix for a parent", () => {
     expect(currentNavHref("/staff/check-inn", hrefs)).toBeUndefined()
-    expect(currentNavHref("/staff/leadsx", hrefs)).toBeUndefined()
+    expect(currentNavHref("/staff/applicantsx", hrefs)).toBeUndefined()
   })
 
   it("marks the home only on the home itself", () => {

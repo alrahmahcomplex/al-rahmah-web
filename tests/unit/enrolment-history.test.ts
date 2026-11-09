@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { enrolledBy } from "@/app/staff/leads/[id]/enrolment-text"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { enrolledBy } from "@/app/staff/applicants/[id]/enrolment-text"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import { formatDate } from "@/lib/school-calendar"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 

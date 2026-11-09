@@ -29,8 +29,8 @@ import type { FoundDiscountCode } from "@/lib/services/referral"
 import { cn } from "@/lib/utils"
 
 import { HeaderActions } from "../../_shell/header-actions"
-import type { CorrectionOutcome } from "../../leads/[id]/correction-outcome"
-import { useCodeLookup } from "../../leads/[id]/referral-editor"
+import type { CorrectionOutcome } from "../../applicants/[id]/correction-outcome"
+import { useCodeLookup } from "../../applicants/[id]/referral-editor"
 import {
   formatTzs,
   givesDiscount,
@@ -38,7 +38,7 @@ import {
   referralLookupNote,
   usableCode,
   type ReferralLookup,
-} from "../../leads/[id]/referral-outcome"
+} from "../../applicants/[id]/referral-outcome"
 import { findFamily, registerWalkIn, updateSharedContact } from "../actions"
 import { childHref, compareContact, relationshipLabel } from "../family"
 import type { ReferralCodeResult, RegisterOutcome } from "../outcome"
@@ -1447,14 +1447,14 @@ function Confirmation({
         <Alert role="alert" className="border-amber-300 bg-amber-50 text-amber-950">
           <AlertDescription className="flex flex-col items-start gap-2 text-amber-950">
             <span>The lead was created, but the referral code wasn&apos;t saved.</span>
-            <Link href={`/staff/leads/${leadId}#lead-referral`} className="font-medium underline underline-offset-4">
+            <Link href={`/staff/applicants/${leadId}#lead-referral`} className="font-medium underline underline-offset-4">
               Add the referral code
             </Link>
           </AlertDescription>
         </Alert>
       )}
       <div className="flex flex-wrap gap-3">
-        <Link href={`/staff/leads/${leadId}`} className={cn(buttonVariants({ variant: "orange" }), PRIMARY)}>
+        <Link href={`/staff/applicants/${leadId}`} className={cn(buttonVariants({ variant: "orange" }), PRIMARY)}>
           Open {studentName}
         </Link>
         <Button type="button" variant="outline" className={PRIMARY} onClick={onAnother}>

@@ -14,7 +14,7 @@ const TAB_PARAMS: Record<LeadTabName, string> = {
 
 // The lead page's address on a tab.
 export function leadUrl(leadId: string, tab: LeadTabName = "Overview"): string {
-  return `/staff/leads/${leadId}${TAB_PARAMS[tab]}`
+  return `/staff/applicants/${leadId}${TAB_PARAMS[tab]}`
 }
 
 // Switches the open lead page to a tab, as staff do.

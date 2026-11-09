@@ -1,6 +1,6 @@
 import type { ApplyError } from "@/lib/services/re-application-apply"
 
-import { correctionOutcome, type CorrectionOutcome } from "../../leads/[id]/correction-outcome"
+import { correctionOutcome, type CorrectionOutcome } from "../../applicants/[id]/correction-outcome"
 
 // What Apply is told after it asks: the lead screen's correction outcomes,
 // worded for a re-application where they differ.

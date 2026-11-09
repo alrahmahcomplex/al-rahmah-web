@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { recordVisitOutcome } from "@/app/staff/leads/[id]/record-visit-outcome"
+import { recordVisitOutcome } from "@/app/staff/applicants/[id]/record-visit-outcome"
 
 describe("recordVisitOutcome", () => {
   it("points a future date at the Visit date field", () => {

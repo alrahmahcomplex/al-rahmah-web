@@ -48,7 +48,7 @@ test.describe("marking a lead", () => {
   test("Admissions Staff mark an open lead inactive, and then only Archive is left", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     expect(await moreActions(page)).toEqual(["Mark inactive", "Archive", "Decline"])
     await chooseMore(page, "Mark inactive")
@@ -77,7 +77,7 @@ test.describe("marking a lead", () => {
     const lead = await newLead()
     await declineLead(await signedIn(ADMISSIONS), lead.id, { reason: "Enrolled elsewhere" })
     await signIn(page, MANAGER)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await expect(page.getByRole("region", { name: "This lead is Declined" })).toBeVisible()
     expect(await moreActions(page)).toEqual(expect.arrayContaining(["Mark inactive", "Archive"]))
@@ -96,7 +96,7 @@ test.describe("marking a lead", () => {
   test("Cancel leaves the lead as it was", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
 
     await chooseMore(page, "Archive")
     const dialog = page.getByRole("dialog", { name: `Archive ${lead.name}`, exact: true })
@@ -111,14 +111,14 @@ test.describe("marking a lead", () => {
   test("the Accountant gets neither action, and an Archived lead offers none", async ({ page }) => {
     const lead = await newLead()
     await signIn(page, ACCOUNTANT)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
     await expect(page.getByRole("heading", { name: lead.name })).toBeVisible()
     expect(await moreActions(page)).toEqual([])
 
     await page.context().clearCookies()
     await signIn(page, ADMISSIONS)
     for (const id of [ARCHIVED, DECLINED_AND_ARCHIVED]) {
-      await page.goto(`/staff/leads/${id}`)
+      await page.goto(`/staff/applicants/${id}`)
       await expect(page.getByRole("region", { name: /^This lead is .*Archived$/ })).toBeVisible()
       const offered = await moreActions(page)
       expect(offered).not.toContain("Mark inactive")
@@ -128,7 +128,7 @@ test.describe("marking a lead", () => {
 
   test("the seeded Inactive lead shows its reason, note, who and when, and offers Archive alone", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${INACTIVE}`)
+    await page.goto(`/staff/applicants/${INACTIVE}`)
     const banner = page.getByRole("region", { name: "This lead is Inactive" })
     await expect(banner).toContainText("No longer pursuing admission")
     await expect(banner).toContainText("waiting to hear about a job transfer")

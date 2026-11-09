@@ -16,10 +16,10 @@ export async function signInAsSuperAdmin(page: Page): Promise<void> {
 // A lead's History page, as the Super Admin. Without `leadId`, the lead whose
 // screen the page is on.
 export async function openLeadHistoryAsSuperAdmin(page: Page, leadId?: string): Promise<void> {
-  const id = leadId ?? /^\/staff\/leads\/([^/]+)/.exec(new URL(page.url()).pathname)?.[1]
+  const id = leadId ?? /^\/staff\/applicants\/([^/]+)/.exec(new URL(page.url()).pathname)?.[1]
   if (!id) throw new Error(`not on a lead screen: ${page.url()}`)
   await signInAsSuperAdmin(page)
-  await page.goto(`/staff/leads/${id}/history`)
+  await page.goto(`/staff/applicants/${id}/history`)
 }
 
 // The Staff and roles history, as the Super Admin.

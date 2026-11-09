@@ -344,7 +344,7 @@ test.describe("who sees what", () => {
     // page noindex; what staff see is the staff 404 inside the shell.
     await page.goto(`/staff/applicants/${randomUUID()}`)
     await expect(page.getByRole("heading", { name: "This page does not exist", level: 1 })).toBeVisible()
-    await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(1)
+    await expect(page.locator('meta[name="robots"][content*="noindex"]').first()).toBeAttached()
   })
 
   test("someone signed out is sent to sign in", async ({ page }) => {

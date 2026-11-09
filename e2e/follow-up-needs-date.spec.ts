@@ -56,6 +56,8 @@ const banner = (page: Page) => page.getByRole("note").filter({ hasText: "Reopene
 async function openOverdueWithReopened(page: Page) {
   for (let overdue = 1; ; overdue++) {
     await page.goto(`/staff/follow-ups?overdue=${overdue}`)
+    // Wait for the page itself, not its loading skeleton, before counting.
+    await expect(page.getByRole("heading", { name: "Follow-ups", level: 1 })).toBeVisible()
     if ((await reopenedRow(page).count()) > 0) return
     const next = page.getByRole("navigation", { name: "Overdue pages" }).getByRole("link", { name: "Next" })
     if ((await next.count()) === 0) throw new Error(`${REOPENED.name} is not in Overdue`)

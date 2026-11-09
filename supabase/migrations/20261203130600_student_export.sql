@@ -86,8 +86,7 @@ revoke insert, update, delete, truncate on public.export_log from anon, authenti
 
 -- ---------------------------------------------------------------------------
 -- export_column_tier: each export column's tier, or null for a name that is
--- not one. Granted to signed-in staff, so the app's column list can be
--- checked against it.
+-- not one. lib/services/student-export.ts lists the same tiers. Internal.
 -- ---------------------------------------------------------------------------
 
 create function public.export_column_tier(column_name text)
@@ -110,8 +109,7 @@ as $$
     end;
 $$;
 
-revoke execute on function public.export_column_tier(text) from public, anon;
-grant execute on function public.export_column_tier(text) to authenticated, service_role;
+revoke execute on function public.export_column_tier(text) from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- export_leads.

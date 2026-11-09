@@ -109,7 +109,7 @@ create policy "Staff who may view leads read Promo codes"
 revoke insert, update, delete, truncate on public.promo_codes from anon, authenticated, service_role;
 
 -- What a Promo code's state means today: Active past its last day reads as
--- Expired. A computed column, so the Promo codes screen selects it.
+-- Expired. Internal: list_promo_codes and code_discount read it as owner.
 create function public.effective_state(promo public.promo_codes)
 returns text
 language sql
@@ -122,8 +122,7 @@ as $$
     end;
 $$;
 
-revoke execute on function public.effective_state(public.promo_codes) from public, anon;
-grant execute on function public.effective_state(public.promo_codes) to authenticated, service_role;
+revoke execute on function public.effective_state(public.promo_codes) from public, anon, authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- One code namespace. Both triggers take the same advisory lock on the code

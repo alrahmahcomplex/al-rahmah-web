@@ -19,28 +19,42 @@ export const FORGOT_PASSWORD_PATH = "/login/forgot-password"
 // clearer one sits under the warning instead.
 //
 // Supabase checks the Turnstile token on every sign-in (#268). Until the
-// widget has one, the form says so and sends nothing. The email and password
-// are held here, not left to the browser, so React's reset after each press
-// of Ingia doesn't clear them (#273). After a wrong password only the
-// password is cleared, and the cursor goes there to type it again.
+// widget has one, the form says so and sends nothing. React resets a form
+// after each press of Ingia; the form cancels that reset, so the email and
+// password stay (#273). After a wrong password only the password is cleared,
+// and the cursor goes there to type it again.
+//
+// The password box is left to the browser, never held in React state: React
+// copies a held value into the box's `value` attribute, where injected CSS
+// or a browser extension could read it (#278).
 export function LoginForm({ language, notice }: { language: Language; notice: LoginNotice | null }) {
   const copy = LOGIN_COPY[language]
   const turnstile = useRef<TurnstileWidgetHandle>(null)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const form = useRef<HTMLFormElement>(null)
+  const password = useRef<HTMLInputElement>(null)
+  // React calls form.reset() after each action. A native listener cancels
+  // it; React's own onReset prop doesn't run there in every React build.
+  useEffect(() => {
+    const node = form.current
+    if (!node) return
+    const keep = (event: Event) => event.preventDefault()
+    node.addEventListener("reset", keep)
+    return () => node.removeEventListener("reset", keep)
+  }, [])
   const [state, formAction, pending] = useActionState(async (previous: SignInState, data: FormData): Promise<SignInState> => {
     // A check that needs a click says so itself, next to Ingia.
     if (!data.get("cf-turnstile-response")) return turnstile.current?.reveal() ? null : { error: "check-pending" }
     const answer = await signIn(previous, data)
     // Supabase may have spent the token, so get a fresh one for the next try.
     if (answer?.error) turnstile.current?.reset()
-    if (answer?.error === "invalid-credentials") setPassword("")
+    // Only the password that was refused is cleared, not one typed since.
+    if (answer?.error === "invalid-credentials" && password.current && password.current.value === data.get("password")) {
+      password.current.value = ""
+      password.current.focus()
+    }
     return answer
   }, null)
   const [shown, setShown] = useState(false)
-  useEffect(() => {
-    if (state?.error === "invalid-credentials") document.getElementById("password")?.focus()
-  }, [state])
   const error = state?.error ?? notice
   const message = error ? copy.messages[error] : null
 
@@ -48,7 +62,7 @@ export function LoginForm({ language, notice }: { language: Language; notice: Lo
     <>
       <h1 className="mb-5 text-center font-exo text-2xl font-extrabold italic text-blue-600">{copy.welcome}</h1>
 
-      <form action={formAction} className="flex w-full flex-col">
+      <form ref={form} action={formAction} className="flex w-full flex-col">
         <div className="flex flex-col gap-3">
           <IconField
             id="email"
@@ -57,16 +71,13 @@ export function LoginForm({ language, notice }: { language: Language; notice: Lo
             type="email"
             autoComplete="email"
             required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
           />
           <PasswordField
             id="password"
             label={copy.password}
             autoComplete="current-password"
             required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            ref={password}
             shown={shown}
             onToggle={() => setShown((value) => !value)}
             toggleLabels={{ show: copy.showPassword, hide: copy.hidePassword }}

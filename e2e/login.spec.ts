@@ -59,6 +59,10 @@ test.describe("the one sign-in page", () => {
     await expect(password).toHaveAttribute("type", "text")
     await page.getByRole("button", { name: "Hide password" }).click()
     await expect(password).toHaveAttribute("type", "password")
+    // The typed password is never copied into the HTML, where injected CSS
+    // could read it with an attribute selector (#278).
+    await expect(password).toHaveValue("fixture-password")
+    expect((await password.getAttribute("value")) ?? "").toBe("")
   })
 })
 

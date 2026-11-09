@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { currentSessionKind, spendLinkAndSetPassword, type SignInFailure } from "./auth-session"
+import { currentSessionKind, hasVerifiedSession, spendLinkAndSetPassword, type SignInFailure } from "./auth-session"
 import { readWithClockRetry } from "./clock-retry"
 import type { Result } from "./result"
 
@@ -49,10 +49,7 @@ async function loadAgentAccount(supabase: SupabaseClient): Promise<Result<AgentA
 }
 
 export async function getAgentUser(supabase: SupabaseClient): Promise<Result<AgentAccount, AgentUserError>> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: "signed-out" }
+  if (!(await hasVerifiedSession(supabase))) return { ok: false, error: "signed-out" }
   return loadAgentAccount(supabase)
 }
 

@@ -18,7 +18,7 @@ const CLOSURE_LABELS: Record<ClosureFilter, string> = {
   open: "Without a closure mark",
   Inactive: "Inactive",
   Archived: "Archived",
-  all: "All leads",
+  all: "All applicants",
 }
 
 // The search box and, for the list, its filters. Everything lives in the URL,
@@ -28,11 +28,20 @@ const CLOSURE_LABELS: Record<ClosureFilter, string> = {
 // the "invitation sent with an earlier link" filter.
 export function LeadSearchBar({ search, groupYears }: { search: LeadSearch; groupYears: number[] }) {
   const router = useRouter()
+  // The box follows the URL only when the URL's search changes: Search, Clear
+  // search, back and forward. A filter's page arriving leaves it alone, so
+  // text typed while that page loads is kept.
   const [typed, setTyped] = useState(search.query ?? "")
+  const [shownQuery, setShownQuery] = useState(search.query)
+  if (search.query !== shownQuery) {
+    setShownQuery(search.query)
+    setTyped(search.query ?? "")
+  }
 
   // The filters as the selects show them, not as `search` has them: a change
   // made before the last one's page arrives would otherwise undo it. While a
-  // search is shown the selects are hidden, and `search` has them.
+  // search is shown the selects are hidden, and `search` has them. The selects
+  // are keyed on the URL, so they show the filters the page is showing.
   const statusRef = useRef<HTMLSelectElement>(null)
   const closureRef = useRef<HTMLSelectElement>(null)
   const earlierLinkRef = useRef<HTMLSelectElement>(null)
@@ -66,7 +75,7 @@ export function LeadSearchBar({ search, groupYears }: { search: LeadSearch; grou
   return (
     <div className="flex flex-col gap-4">
       <form onSubmit={submit} role="search" className="flex max-w-xl flex-col gap-1.5">
-        <Label htmlFor="lead-search">Search leads</Label>
+        <Label htmlFor="lead-search">Search applicants</Label>
         <div className="flex gap-2">
           <Input
             id="lead-search"
@@ -92,7 +101,7 @@ export function LeadSearchBar({ search, groupYears }: { search: LeadSearch; grou
           </Link>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-4">
+        <div key={leadsHref(search)} className="flex flex-wrap gap-4">
           <div className="flex w-56 flex-col gap-1.5">
             <Label htmlFor="lead-status">Status</Label>
             <select

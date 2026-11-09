@@ -13,7 +13,7 @@ async function signIn(page: Page, person: FixtureStaff) {
 }
 
 async function searchFor(page: Page, typed: string) {
-  await page.getByLabel("Search leads").fill(typed)
+  await page.getByLabel("Search applicants").fill(typed)
   await page.getByRole("button", { name: "Search" }).click()
 }
 
@@ -22,12 +22,12 @@ function resultRows(page: Page) {
   return page.getByRole("table", { name: "Applicants" }).locator("tbody tr")
 }
 
-test.describe("the Leads screen", () => {
+test.describe("the Applicants screen", () => {
   test("opens from the staff navigation, for Admissions Staff and Accountants alike", async ({ page }) => {
     for (const person of [ADMISSIONS, ACCOUNTANT]) {
       await page.context().clearCookies()
       await signIn(page, person)
-      await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Leads" }).click()
+      await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Applicants" }).click()
       await expect(page).toHaveURL(/\/staff\/applicants$/)
       await expect(page.getByRole("heading", { name: "Applicants", level: 1 })).toBeVisible()
     }
@@ -80,7 +80,7 @@ test.describe("the Leads screen", () => {
     // Clearing the search returns to the everyday list.
     await page.getByRole("link", { name: "Clear search" }).click()
     await expect(page).toHaveURL(/\/staff\/applicants$/)
-    await expect(page.getByLabel("Search leads")).toHaveValue("")
+    await expect(page.getByLabel("Search applicants")).toHaveValue("")
   })
 
   test("the list leaves out closed leads until a filter asks for them", async ({ page }) => {
@@ -123,6 +123,16 @@ test.describe("the Leads screen", () => {
 
     await page.getByRole("link", { name: "Clear search" }).click()
     await expect(page).toHaveURL(/\/staff\/applicants\?closure=Inactive$/)
+    await expect(page.getByLabel("Closure")).toHaveValue("Inactive")
+    await expect(page.getByLabel("Search applicants")).toHaveValue("")
+
+    // Back and forward bring the box to the search each page shows.
+    await page.goBack()
+    await expect(page).toHaveURL(/q=Fixture/)
+    await expect(page.getByLabel("Search applicants")).toHaveValue("Fixture")
+    await page.goForward()
+    await expect(page).toHaveURL(/\/staff\/applicants\?closure=Inactive$/)
+    await expect(page.getByLabel("Search applicants")).toHaveValue("")
     await expect(page.getByLabel("Closure")).toHaveValue("Inactive")
   })
 

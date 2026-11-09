@@ -79,8 +79,7 @@ export default async function LeadsPage({
           />
         </div>
       </div>
-      {/* Keyed on the URL, so the box shows the search the page is showing. */}
-      <LeadSearchBar key={leadsHref(search)} search={search} groupYears={groupYears} />
+      <LeadSearchBar search={search} groupYears={groupYears} />
 
       {search.importBatchId && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-slate-50 px-3 py-2 text-sm">

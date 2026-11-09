@@ -290,7 +290,7 @@ describe("TurnstileWidget", () => {
     expect(lastOptions().size).toBe("compact")
   })
 
-  it("keeps a compact check compact when Cloudflare needs a click in space that has grown past 300px (#278)", async () => {
+  it("keeps a compact check compact in space that has grown past 300px, before and after a click is needed (#278)", async () => {
     let resized = () => {}
     vi.stubGlobal(
       "ResizeObserver",
@@ -317,6 +317,14 @@ describe("TurnstileWidget", () => {
     await act(async () => {})
     expect(turnstile.render).toHaveBeenCalledTimes(1)
     expect(screen.getByText("Tick the security check below, then send.")).toBeInTheDocument()
+
+    // Nor once the box shows: a box growing into view, or a wider window,
+    // doesn't take away the challenge the person is about to click.
+    width.mockReturnValue(360)
+    act(() => resized())
+    await act(async () => {})
+    expect(turnstile.render).toHaveBeenCalledTimes(1)
+    expect(turnstile.remove).not.toHaveBeenCalled()
   })
 
   it("points a browser Turnstile doesn't support to another browser or the office", async () => {

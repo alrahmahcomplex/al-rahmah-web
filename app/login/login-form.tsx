@@ -32,8 +32,8 @@ export function LoginForm({ language, notice }: { language: Language; notice: Lo
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const form = useRef<HTMLFormElement>(null)
   const password = useRef<HTMLInputElement>(null)
-  // React calls form.reset() while it commits, when its own event props
-  // don't run, so the reset is cancelled by a listener on the form itself.
+  // React calls form.reset() after each action. A native listener cancels
+  // it; React's own onReset prop doesn't run there in every React build.
   useEffect(() => {
     const node = form.current
     if (!node) return

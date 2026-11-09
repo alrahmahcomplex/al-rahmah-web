@@ -1,8 +1,10 @@
+import { MailCheckIcon, MegaphoneIcon, SearchXIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Form from "next/form"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -291,11 +293,13 @@ export default async function MarketingAgentsPage({
           </Alert>
         ) : (
           <section aria-label="Results" className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground" aria-live="polite">
-              {queue.data.length === 0
-                ? "No email claims are waiting."
-                : `${queue.data.length} ${queue.data.length === 1 ? "agent" : "agents"} awaiting email confirmation, oldest first`}
-            </p>
+            {queue.data.length === 0 ? (
+              <EmptyState role="status" icon={MailCheckIcon} title="No email claims are waiting." />
+            ) : (
+              <p className="text-sm text-muted-foreground" aria-live="polite">
+                {`${queue.data.length} ${queue.data.length === 1 ? "agent" : "agents"} awaiting email confirmation, oldest first`}
+              </p>
+            )}
             {queue.data.length > 0 && <ClaimQueue entries={queue.data} canApprove={canApprove} />}
           </section>
         )
@@ -371,9 +375,13 @@ function Results({
 
   return (
     <section aria-label="Results" className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground" aria-live="polite">
-        {total === 0 ? empty : `${total} ${total === 1 ? "agent" : "agents"}`}
-      </p>
+      {total === 0 ? (
+        <EmptyState role="status" icon={search.query ? SearchXIcon : MegaphoneIcon} title={empty} />
+      ) : (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {`${total} ${total === 1 ? "agent" : "agents"}`}
+        </p>
+      )}
 
       {agents.length > 0 && (
         <div className="relative overflow-x-auto rounded-lg ring-1 ring-foreground/10">

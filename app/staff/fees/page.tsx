@@ -1,7 +1,9 @@
+import { WalletIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden, redirect } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,7 +57,7 @@ export default async function FeeSchedulesPage({ searchParams }: { searchParams:
           <AlertDescription>The fee schedules could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : schedules.data.length === 0 ? (
-        <p className="text-sm text-slate-700">No fee schedule has been set up yet.</p>
+        <EmptyState icon={WalletIcon} title="No fee schedule has been set up yet." />
       ) : (
         <ul aria-label="Enrollment years" className="flex flex-col divide-y rounded-xl ring-1 ring-foreground/10">
           {schedules.data.map((schedule) => (

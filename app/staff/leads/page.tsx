@@ -1,8 +1,10 @@
+import { SearchXIcon, UsersIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { EmptyState } from "@/components/staff/empty-state"
 import { StatusChip } from "@/components/status-chip"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -87,9 +89,13 @@ function Results({
 
   return (
     <section aria-label="Results" className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground" aria-live="polite">
-        {total === 0 ? EMPTY[mode] : summary}
-      </p>
+      {total === 0 ? (
+        <EmptyState role="status" icon={mode === "list" ? UsersIcon : SearchXIcon} title={EMPTY[mode]} />
+      ) : (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {summary}
+        </p>
+      )}
 
       {leads.length > 0 && (
         <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">

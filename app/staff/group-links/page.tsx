@@ -1,6 +1,8 @@
+import { MessageCircleIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
+import { EmptyState } from "@/components/staff/empty-state"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,7 +43,7 @@ export default async function GroupLinksPage({ searchParams }: { searchParams: P
           <p className="break-all text-sm">{saved.url}</p>
           <p className="text-sm text-muted-foreground">Set by {saved.setByName} on <time dateTime={saved.setAt}>{new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Dar_es_Salaam", dateStyle: "medium", timeStyle: "short" }).format(new Date(saved.setAt))}</time> (Tanzania)</p>
           <a href={saved.url} target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">Open to test</a>
-        </div> : <p className="text-sm text-muted-foreground">No group link saved for {year} yet.</p>}
+        </div> : <EmptyState icon={MessageCircleIcon} title={`No group link saved for ${year} yet.`} className="max-w-xl" />}
         {families && (families.ok ? <div className="flex max-w-xl flex-col gap-2">
           <p className="text-sm">{familiesInvitedText(families.data)}</p>
           {warning && <p role="alert" className="text-sm font-medium text-amber-700">{warning}</p>}

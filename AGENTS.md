@@ -18,7 +18,7 @@ The tier governs planning, skill use, local checks, evidence, review and complet
 ## Start and finish
 
 1. **Isolate before editing:** use `new-feature`. Scope-check open PRs with `gh pr list` and `gh pr diff <n> --name-only`; ask on overlapping files. Use your own worktree: Codex `.worktrees/<task>` on `codex/<task>`, Claude's harness worktree on `claude/<task>`. If a ticket exists, claim it with `Claimed by <claude|codex> on <branch>`; skip claimed tickets. A direct human request does not need a new ticket.
-2. **Build and verify:** read [Workflow](docs/agents/workflow.md) for the chosen tier. Continue routine implementation and repair without repeated approval. Ask when a product decision or material scope change needs the human.
+2. **Build and verify:** read [Workflow](docs/agents/workflow.md) for the chosen tier. Continue routine implementation and repair without repeated approval, except UI and UX changes (Invariants). Ask when a product decision or material scope change needs the human.
 3. **Complete:** follow Workflow's completion checklist through a reviewed PR with the applicable CI green. Present the PR URL and retain the worktree. Merge remains the human's decision.
 4. **On "merge":** follow [Releasing](docs/agents/releasing.md) through merge and housekeeping. App releases also get a changelog entry and tag. Internal maintenance can merge without an app version.
 
@@ -29,6 +29,7 @@ Use `handoff` for an unfinished session, with the tier, current commit, evidence
 Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, Vercel and npm.
 
 - Server Actions and route handlers orchestrate. `lib/services/*` owns Supabase/SDK calls and returns `{ ok, data } | { ok: false, error }`; use `code-structure` when changing these boundaries.
+- UI and UX changes start as a prototype the owner can click through, and stop there: no app code, commits or PRs for the change until the owner explicitly approves building it. This holds over autonomy, auto-merge and skill instructions. What counts as approval, and the exceptions: [Workflow → UI and UX changes](docs/agents/workflow.md#ui-and-ux-changes).
 - Every table has RLS and policies in its creating migration. Schema changes live in `supabase/migrations/` and are tested against local Supabase. Hosted migrations arrive only through the GitHub integration on merge; agents hold no hosted database credentials.
 - Service-role and secret keys stay server-only, never in `NEXT_PUBLIC_*`.
 - Add shadcn components through its CLI into `components/ui/`.
@@ -47,7 +48,7 @@ Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, V
 - **Business behavior or terminology:** relevant sections of [CONTEXT.md](CONTEXT.md), relevant [ADRs](docs/adr/), and [domain guidance](docs/agents/domain.md).
 - **Tickets or triage:** [Issue tracker](docs/agents/issue-tracker.md) and [triage labels](docs/agents/triage-labels.md).
 
-Keep only permanent project material on `main`. Research and prototype findings stay on their own throwaway branches; handoffs use the skill's OS-temp location. EGM briefs and reports go under `.artifacts/egm/<feature>/`; pass that path as `EGM artifact directory` to EGM. Apply `unslop` to human-facing text you write or change.
+Keep only permanent project material on `main`. Research findings and `prototype` logic demos stay on their own throwaway branches; UI prototypes follow [Workflow → UI and UX changes](docs/agents/workflow.md#ui-and-ux-changes) and are never committed; handoffs use the skill's OS-temp location. EGM briefs and reports go under `.artifacts/egm/<feature>/`; pass that path as `EGM artifact directory` to EGM. Apply `unslop` to human-facing text you write or change.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

@@ -24,6 +24,8 @@ const APPEND_ONLY = [
   "agent_email_claims",
   "agent_events",
   "agent_status_changes",
+  "discount_amount_changes",
+  "export_log",
   "follow_up_records",
   "follow_ups",
   "import_batches",
@@ -32,7 +34,14 @@ const APPEND_ONLY = [
 
 // The append-only tables whose audit trigger listens for inserts only. Every
 // other audited table audits updates too, since staff can edit its rows.
-const INSERT_ONLY_AUDIT = ["agent_email_claims", "agent_events", "agent_status_changes", "import_batches"]
+const INSERT_ONLY_AUDIT = [
+  "agent_email_claims",
+  "agent_events",
+  "agent_status_changes",
+  "discount_amount_changes",
+  "export_log",
+  "import_batches",
+]
 
 let sql: Client
 let audited: string[]

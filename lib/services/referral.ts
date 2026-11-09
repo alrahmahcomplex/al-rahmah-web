@@ -128,7 +128,8 @@ export async function getLeadReferral(
   const failed = discount.error ?? fee.error
   if (failed) {
     // A malformed id is no lead at all; so is one the caller may not see.
-    if (["not_found", "not_permitted", "forbidden"].includes(failed.message) || failed.code === "22P02") {
+    // 42501: the function isn't granted to the caller at all, as for someone signed out.
+    if (["not_found", "not_permitted", "forbidden"].includes(failed.message) || ["22P02", "42501"].includes(failed.code)) {
       return { ok: false, error: "not-found" }
     }
     console.error("Could not read a lead's Referral code", failed)

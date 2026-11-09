@@ -78,7 +78,7 @@ const TEMPLATE_COLUMNS: [string, string][] = [
   ["Day or boarding", "New. Day when empty"],
   ["Parent name, relationship, phone", "PARENT/GUARDIAN CONTACTS, RELATIONSHIP"],
   ["Visit date", "DATE"],
-  ["Discount code", "CODE. The agent is found from it"],
+  ["Discount code", "CODE. The Marketing Agent or Promo code is found from it"],
   ["Status", "CUSTOMER JOURNEY"],
 ]
 
@@ -393,8 +393,8 @@ function Review({
           ))}
         </div>
         <p className="text-sm text-muted-foreground">
-          Only &ldquo;to create&rdquo; and &ldquo;joins a family&rdquo; rows are saved. The rest are skipped and written to a file you can fix and
-          upload again.
+          Only &ldquo;to create&rdquo; and &ldquo;joins a family&rdquo; rows are saved. Rows already present are skipped, since they are
+          on file. Flagged and refused rows are skipped and written to a file you can fix and upload again.
         </p>
       </div>
 

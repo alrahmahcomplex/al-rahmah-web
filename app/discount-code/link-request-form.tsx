@@ -7,6 +7,7 @@ import { useRef, useState, useTransition, type FormEvent } from "react"
 import { AUTH_SUBMIT, IconField } from "@/components/auth-fields"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import type { Language } from "@/lib/language"
+import { cn } from "@/lib/utils"
 
 import { AccountMessageView } from "./account-message"
 import { requestPasswordLink } from "./link-request-actions"
@@ -53,16 +54,20 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3" noValidate>
+    <form onSubmit={onSubmit} className="flex flex-col" noValidate>
       <input type="hidden" name="form" value={form} />
-      <IconField id={`${form}-email`} name="email" label={copy.email} icon={Mail} type="email" autoComplete="email" required />
+      <div className="flex flex-col gap-3">
+        <IconField id={`${form}-email`} name="email" label={copy.email} icon={Mail} type="email" autoComplete="email" required />
 
-      {status && <AccountMessageView language={language} message={copy.messages[status]} />}
+        {status && <AccountMessageView language={language} message={copy.messages[status]} />}
+      </div>
 
-      {/* Invisible unless Cloudflare needs a click, and then right above Send. */}
-      <TurnstileWidget ref={turnstile} action="agent-link" language={language} />
+      {/* Invisible unless Cloudflare needs a click, and then right above Send.
+          Its spacing applies only while it shows, so the hidden check leaves
+          no gap (#276). */}
+      <TurnstileWidget ref={turnstile} action="agent-link" language={language} className="mt-3" />
 
-      <button type="submit" disabled={pending} className={AUTH_SUBMIT}>
+      <button type="submit" disabled={pending} className={cn(AUTH_SUBMIT, "mt-3")}>
         {pending ? copy.sending : copy.send}
       </button>
     </form>

@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- On the sign-in page, the password you type is no longer copied into the page's code,
+  where a browser extension could read it. The boxes behave as before: they keep what
+  you typed until a wrong password clears the password box.
+- The security check's box no longer sticks out of a narrow card when it shows an error,
+  and no longer keeps redrawing itself when the window is about 300px wide.
+
 ## November 9, 2026 `v0.92.2`
 
 ### FIXED

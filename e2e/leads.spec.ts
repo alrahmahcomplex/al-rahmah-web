@@ -19,7 +19,7 @@ async function searchFor(page: Page, typed: string) {
 
 // The rows of the results table, without its header.
 function resultRows(page: Page) {
-  return page.getByRole("table", { name: "Leads" }).locator("tbody tr")
+  return page.getByRole("table", { name: "Applicants" }).locator("tbody tr")
 }
 
 test.describe("the Leads screen", () => {
@@ -29,7 +29,7 @@ test.describe("the Leads screen", () => {
       await signIn(page, person)
       await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Leads" }).click()
       await expect(page).toHaveURL(/\/staff\/leads$/)
-      await expect(page.getByRole("heading", { name: "Leads", level: 1 })).toBeVisible()
+      await expect(page.getByRole("heading", { name: "Applicants", level: 1 })).toBeVisible()
     }
   })
 
@@ -75,7 +75,7 @@ test.describe("the Leads screen", () => {
     // A name that matches nothing says so.
     await searchFor(page, "Nobody Fixture Here")
     await expect(resultRows(page)).toHaveCount(0)
-    await expect(page.getByText("No lead matches this name.")).toBeVisible()
+    await expect(page.getByText("No applicant matches this name.")).toBeVisible()
 
     // Clearing the search returns to the everyday list.
     await page.getByRole("link", { name: "Clear search" }).click()

@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- al-rahmah-template: recovery v4 (2026-11-08, #265). Paste into hosted Supabase: Authentication > Email Templates > Reset password. -->
+<!-- al-rahmah-template: recovery v5 (2026-11-09, #277). Paste into hosted Supabase: Authentication > Email Templates > Reset password. -->
 {{/* Every reset, staff's and agents', links to the shared reset page (/login/reset-password) with the token; the page spends it only when the new password is saved. kind: agent picks the wording only. */}}
 {{ $agent := eq (printf "%v" .Data.kind) "agent" }}
 {{ $link := printf "%s?token_hash=%s&type=recovery" .RedirectTo .TokenHash }}

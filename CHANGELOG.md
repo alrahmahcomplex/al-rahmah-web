@@ -5,6 +5,33 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The Admission form asks one question at a time. Each answer folds into a line with a
+  "Badilisha …" link, and a progress bar at the top shows the three parts: Wanafunzi,
+  Msimamizi and Usaili. A second student gets its own "Mwanafunzi wa pili" run through
+  the first part. The Discount code step shows the full interview fee beside what a
+  confirmed code saves, and a finished application celebrates with confetti.
+- On a first visit the form offers Kiswahili or English in a card that grows out of the
+  menu button, remembers the choice, and shows where to change it later.
+- Every public form page has the same top bar: the Al-Rahmah logo (opens
+  alrahmahcomplex.or.tz), the AL-RAHMAH SCHOOLS or AL-RAHMAH COMPLEX badge, and a menu
+  holding the language switch and "Futa fomu yote".
+- The site can be saved to a phone's home screen as an app, with the full Al-Rahmah logo
+  as its icon, and the browser tab shows the logo.
+- A confirmed Discount code brings a "limited time" note with an ⓘ sheet, and the
+  confirmation page says how many applications the school has received this year, read
+  live from the database once there are at least 100.
+
+### IMPROVED
+
+- The Discount code sign-up page uses the same one-question-at-a-time form, and the
+  Discount code holder pages share the new top bar.
+- The action orange across the app is now `#ee7300`, including the invite and
+  password-reset emails.
+
 ## November 9, 2026 `v0.92.3`
 
 ### FIXED

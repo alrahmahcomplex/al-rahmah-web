@@ -1,9 +1,27 @@
 "use client"
 
-import { Check, Copy, Phone } from "lucide-react"
+import { Check, ChevronDown, Copy, MessageCircle, Phone, Plus } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition, type KeyboardEvent, type ReactNode } from "react"
 
+import { BrandTopBar } from "@/components/brand"
+import {
+  ChangeLink,
+  ChoiceTiles,
+  Confetti,
+  ContinuePill,
+  FieldError,
+  FieldInput,
+  GuidedNote,
+  GuidedStack,
+  GuidedStep,
+  Hint,
+  NoticeBox,
+  ProgressBar,
+  QuestionTitle,
+  revealStep,
+  SummaryRow,
+} from "@/components/guided-form"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import { buttonVariants } from "@/components/ui/button"
 import { agentRegistrationProblem, type AgentDraft, type AgentField } from "@/lib/agent-registration"
@@ -11,15 +29,17 @@ import { discountCodeShareLink } from "@/lib/discount-code-share"
 import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
 
+import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
 import { COPY } from "./copy"
 import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
 
-// The Discount code page's form and its confirmation. The entries live in this
-// component's state, so switching language (which re-renders the page around
-// it) or a refused send never loses one. The "Already have a Discount code?"
-// box claims an existing code (#193); the code field is there either way,
-// and the box makes it required.
+// The Discount code page's form and its confirmation, in concept C: one
+// question at a time, answered ones folding into a line with a two-word
+// "Badilisha …" link. The entries live in this component's state, so the
+// menu's language switch (which re-renders the page around it) or a refused
+// send never loses one. "Tayari una code?" claims an existing code (#193):
+// Ndiyo makes the code required, Hapana leaves it optional.
 
 const EMPTY: AgentDraft = { fullName: "", phone: "", whatsapp: "", email: "", hasCode: false, code: "" }
 
@@ -29,8 +49,15 @@ type Done = Extract<DiscountCodeState, { status: "registered" | "claimed" }>
 // database couldn't read, which reads differently from an empty one.
 type Shown = { field: AgentField; server: boolean }
 type Notice = "check-pending" | DiscountCodeMessage | null
+type Step = "name" | "phone" | "email" | "code" | "send"
+type CodeAnswer = "yes" | "no" | null
 
-// Answers that aren't a problem with the form: shown calmly, in blue.
+const ORDER: Step[] = ["name", "phone", "email", "code", "send"]
+// The step each field is asked on. The draft is checked in this same order
+// (lib/agent-registration.ts), so the first problem names the earliest step.
+const FIELD_STEP: Record<AgentField, Step> = { full_name: "name", phone: "phone", whatsapp: "phone", email: "email", code: "code" }
+
+// Answers that aren't a problem with the form: shown calmly.
 const CALM = new Set<Notice>(["claim-waiting", "invited", "joined"])
 
 function noticeText(copy: Copy, notice: Exclude<Notice, null>): string {
@@ -54,28 +81,42 @@ export function DiscountCodeForm({
   language,
   officePhone,
   discount = null,
+  showLanguagePrompt = false,
 }: {
   language: Language
   officePhone: string
   discount?: number | null
+  showLanguagePrompt?: boolean
 }) {
   const copy = COPY[language]
   const [draft, setDraft] = useState<AgentDraft>(EMPTY)
+  const [whatsappOn, setWhatsappOn] = useState(false)
+  const [codeAnswer, setCodeAnswer] = useState<CodeAnswer>(null)
+  const [open, setOpen] = useState<Step>("name")
+  const [answered, setAnswered] = useState<ReadonlySet<Step>>(new Set())
+  const [instant, setInstant] = useState(false)
   const [problem, setProblem] = useState<Shown | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [done, setDone] = useState<Done | null>(null)
   const [sending, startSending] = useTransition()
+  // Counts restarts, so an answer to a send from before "Futa fomu yote" is ignored.
+  const round = useRef(0)
   const turnstile = useRef<TurnstileWidgetHandle>(null)
+  const form = useRef<HTMLFormElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
 
-  // After a send, put the reader at the field to fix, or at the confirmation.
+  // What gets checked and sent: WhatsApp only while its field is shown.
+  const entries: AgentDraft = { ...draft, whatsapp: whatsappOn ? draft.whatsapp : "", hasCode: codeAnswer === "yes" }
+
+  // After a problem or a send, put the reader at the field to fix, or at the
+  // confirmation. Runs after the step's own focus, so it wins.
   useEffect(() => {
     if (!moved.current) return
     moved.current = false
     const target = problem ? document.querySelector<HTMLElement>(`[data-field="${problem.field}"]`) : heading.current
-    target?.focus()
-  }, [problem, done])
+    target?.focus({ preventScroll: problem !== null })
+  }, [problem, done, open])
 
   function update(change: Partial<AgentDraft>) {
     setDraft((current) => ({ ...current, ...change }))
@@ -84,30 +125,76 @@ export function DiscountCodeForm({
 
   function show(shown: Shown) {
     moved.current = true
+    if (shown.field === "whatsapp") setWhatsappOn(true)
     setProblem(shown)
+    setOpen(FIELD_STEP[shown.field])
   }
 
-  function onSend(form: HTMLFormElement) {
-    if (sending) return
-    const found = agentRegistrationProblem(draft)
+  // The problem on this step or an earlier one, or null.
+  function problemUpTo(step: Step): AgentField | null {
+    const found = agentRegistrationProblem(entries)
+    if (!found) return null
+    return ORDER.indexOf(FIELD_STEP[found]) <= ORDER.indexOf(step) ? found : null
+  }
+
+  function next(step: Step) {
+    const found = problemUpTo(step)
+    if (found) return show({ field: found, server: false })
+    const now = new Set(answered).add(step)
+    setAnswered(now)
+    setProblem(null)
+    setOpen(ORDER.find((k) => !now.has(k)) ?? "send")
+  }
+
+  function openStep(step: Step) {
+    if (step === open) return
+    // Leaving an answered step half-fixed would fold a wrong answer away.
+    if (open !== "send" && answered.has(open)) {
+      const found = problemUpTo(open)
+      if (found) return show({ field: found, server: false })
+    }
+    setProblem(null)
+    setOpen(step)
+  }
+
+  function startOver() {
+    // A send still in flight belongs to the form being cleared; its answer is ignored.
+    round.current += 1
+    setDraft(EMPTY)
+    setWhatsappOn(false)
+    setCodeAnswer(null)
+    setAnswered(new Set())
+    setOpen("name")
+    setProblem(null)
+    setNotice(null)
+    setDone(null)
+    // A full restart skips the fold animations, for that one render.
+    setInstant(true)
+    window.setTimeout(() => setInstant(false), 0)
+  }
+
+  function onSend() {
+    if (sending || !form.current) return
+    const found = agentRegistrationProblem(entries)
     if (found) return show({ field: found, server: false })
 
-    const data = new FormData(form)
-    // Turnstile fills its token in a moment after the page opens; sending
+    const data = new FormData(form.current)
+    // Turnstile fills its token in a moment after the step opens; sending
     // before then would only be refused.
     if (!data.get("cf-turnstile-response")) {
       // A check that needs a click says so itself, next to Send.
       setNotice(turnstile.current?.reveal() ? null : "check-pending")
       return
     }
-    data.set("full_name", draft.fullName)
-    data.set("phone", draft.phone)
-    data.set("whatsapp", draft.whatsapp)
-    data.set("email", draft.email)
-    data.set("has_code", draft.hasCode ? "yes" : "no")
-    data.set("code", draft.code)
+    data.set("full_name", entries.fullName)
+    data.set("phone", entries.phone)
+    data.set("whatsapp", entries.whatsapp)
+    data.set("email", entries.email)
+    data.set("has_code", entries.hasCode ? "yes" : "no")
+    data.set("code", entries.code)
     setNotice(null)
     setProblem(null)
+    const sentIn = round.current
     startSending(async () => {
       let result: DiscountCodeState
       try {
@@ -115,6 +202,7 @@ export function DiscountCodeForm({
       } catch {
         result = { status: "unavailable" }
       }
+      if (round.current !== sentIn) return
       if (result.status === "registered" || result.status === "claimed") {
         moved.current = true
         setDone(result)
@@ -127,204 +215,358 @@ export function DiscountCodeForm({
     })
   }
 
+  const topBar = (
+    <BrandTopBar variant="complex" language={language} showLanguagePrompt={showLanguagePrompt} onClearForm={startOver} />
+  )
+
   if (done) {
-    return <Confirmation copy={copy} done={done} officePhone={officePhone} headingRef={heading} />
+    return (
+      <>
+        {topBar}
+        <Confirmation copy={copy} done={done} officePhone={officePhone} headingRef={heading} />
+      </>
+    )
   }
 
   const message = (field: AgentField) => {
-    if (problem?.field !== field) return null
+    if (problem?.field !== field) return undefined
     if (problem.server && field === "phone") return copy.problems.phone_unreadable
     if (problem.server && field === "code") return copy.problems.code_unreadable
     return copy.problems[field]
   }
 
+  // Enter moves on, as the pill does.
+  const onEnter = (step: Step) => (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    next(step)
+  }
+
+  const focusFirstField = (li: HTMLLIElement) => {
+    // A step folding out as it leaves remounts and can report itself opened.
+    if (!li.classList.contains("gf-open")) return
+    const target = li.querySelector<HTMLElement>(".gf-fold input:not([type=hidden])") ?? li.querySelector<HTMLElement>(".gf-fold h2")
+    target?.focus({ preventScroll: true })
+    revealStep(li)
+  }
+
+  const visible = (step: Step) => answered.has(step) || open === step
+  const stateOf = (step: Step) => (open === step ? "open" : "folded")
+  const change = (step: Step, label: string) => <ChangeLink onClick={() => openStep(step)}>{label}</ChangeLink>
+  const describedBy = (...ids: (string | false)[]) => ids.filter(Boolean).join(" ") || undefined
+
+  // Wewe: name (1), then phone and WhatsApp together (2 and 3). Code: email, then the code.
+  const youDone = (answered.has("name") ? 1 : 0) + (answered.has("phone") ? 2 : 0)
+  const codeDone = (answered.has("email") ? 1 : 0) + (answered.has("code") ? 1 : 0)
+  const activeGroup = open === "name" || open === "phone" ? 0 : open === "send" ? 2 : 1
+  const position = { name: 1, phone: 2, email: 1, code: 2, send: 0 }[open]
+  const status =
+    open === "send"
+      ? copy.progressDone
+      : activeGroup === 0
+        ? copy.progress(copy.groups.you, position, 3)
+        : copy.progress(copy.groups.code, position, 2)
+  const nothingYet = answered.size === 0 && Object.values(draft).every((v) => v === "" || v === false)
+
   return (
-    <section className="rounded-[40px] bg-white px-5 py-7 shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">
-      <h1 className="font-exo text-[1.75rem] font-extrabold italic leading-tight text-blue-600">{copy.heading}</h1>
-      <p className="mt-3 text-base text-slate-700">{copy.intro(discount === null ? null : `TZS ${discount.toLocaleString("en-US")}`)}</p>
+    <>
+      {topBar}
+      <h1 className="sr-only">{copy.title}</h1>
+      <section className={CARD}>
+        <ProgressBar
+          groups={[
+            { label: copy.groups.you, steps: 3, done: youDone, current: activeGroup === 0 ? position - 1 : undefined },
+            { label: copy.groups.code, steps: 2, done: codeDone, current: activeGroup === 1 ? position - 1 : undefined },
+          ]}
+          activeGroup={activeGroup}
+          canBack={open !== "name"}
+          onBack={() => openStep(ORDER[ORDER.indexOf(open) - 1])}
+          canReset={open === "name" && !nothingYet}
+          onReset={startOver}
+          labels={{ back: copy.back, reset: copy.startOver }}
+          status={status}
+        />
 
-      <form
-        noValidate
-        className="mt-6"
-        onSubmit={(event) => {
-          event.preventDefault()
-          onSend(event.currentTarget)
-        }}
-      >
-        <div className="flex flex-col gap-5">
-          <TextField
-            id="full-name"
-            field="full_name"
-            label={copy.fullName}
-            value={draft.fullName}
-            onChange={(fullName) => update({ fullName })}
-            autoComplete="name"
-            error={message("full_name")}
-          />
-          <TextField
-            id="phone"
-            field="phone"
-            label={copy.phone}
-            hint={copy.phoneHint}
-            value={draft.phone}
-            onChange={(phone) => update({ phone })}
-            type="tel"
-            autoComplete="tel"
-            error={message("phone")}
-          />
-          <TextField
-            id="whatsapp"
-            field="whatsapp"
-            label={`${copy.whatsapp} (${copy.optional})`}
-            hint={copy.whatsappHint}
-            value={draft.whatsapp}
-            onChange={(whatsapp) => update({ whatsapp })}
-            type="tel"
-            error={message("whatsapp")}
-          />
-          <TextField
-            id="email"
-            field="email"
-            label={copy.email}
-            hint={copy.emailHint}
-            value={draft.email}
-            onChange={(email) => update({ email })}
-            type="email"
-            autoComplete="email"
-            error={message("email")}
-          />
-          <div className="rounded-3xl bg-blue-50 px-4 py-4 ring-1 ring-blue-100">
-            <label className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={draft.hasCode}
-                onChange={(event) => update({ hasCode: event.target.checked })}
-                aria-describedby="has-code-hint"
-                className="mt-0.5 size-5 shrink-0 accent-blue-600"
-              />
-              <span className="text-sm font-semibold text-slate-800">{copy.hasCode}</span>
-            </label>
-            <p id="has-code-hint" className="mt-1 pl-8 text-sm text-slate-600">
-              {copy.hasCodeHint}
-            </p>
-            <div className="mt-4">
-              <TextField
-                id="code"
-                field="code"
-                label={draft.hasCode ? copy.code : `${copy.code} (${copy.optional})`}
-                hint={copy.codeHint}
-                value={draft.code}
-                onChange={(code) => update({ code })}
-                autoComplete="off"
-                error={message("code")}
-              />
-            </div>
-          </div>
-        </div>
+        <form
+          ref={form}
+          noValidate
+          className="mt-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (open === "send") onSend()
+            else next(open)
+          }}
+        >
+          <GuidedStack instant={instant}>
+            <GuidedNote key="intro">
+              <NoticeBox tone="info" className="mb-4">
+                {copy.intro(discount === null ? null : `TZS ${discount.toLocaleString("en-US")}`)}
+              </NoticeBox>
+            </GuidedNote>
 
-        {/* Inside the form, so its token is sent; invisible unless Cloudflare
-            needs a click, and then right above Send. */}
-        <TurnstileWidget ref={turnstile} action="agent" language={language} className="mt-5" />
-
-        {notice && (
-          <div
-            role="alert"
-            className={cn(
-              "mt-5 rounded-2xl px-4 py-3 text-sm ring-1",
-              CALM.has(notice) ? "bg-blue-50 text-blue-950 ring-blue-200" : "bg-red-50 text-red-700 ring-red-200",
+            {visible("name") && (
+              <GuidedStep
+                key="name"
+                state={stateOf("name")}
+                onOpened={focusFirstField}
+                summary={answered.has("name") && <SummaryRow label={copy.fullName} value={draft.fullName.trim()} action={change("name", copy.change.name)} />}
+              >
+                <QuestionTitle htmlFor="full-name">{copy.nameQuestion}</QuestionTitle>
+                <div>
+                  <FieldInput
+                    id="full-name"
+                    name="full_name"
+                    data-field="full_name"
+                    value={draft.fullName}
+                    onChange={(event) => update({ fullName: event.target.value })}
+                    onKeyDown={onEnter("name")}
+                    autoComplete="name"
+                    autoCapitalize="words"
+                    enterKeyHint="next"
+                    maxLength={200}
+                    invalid={!!message("full_name")}
+                    aria-describedby={describedBy(!!message("full_name") && "full-name-error")}
+                  />
+                  <FieldError id="full-name-error" message={message("full_name")} />
+                </div>
+                <ContinuePill onClick={() => next("name")}>{copy.next}</ContinuePill>
+              </GuidedStep>
             )}
+
+            {visible("phone") && (
+              <GuidedStep
+                key="phone"
+                state={stateOf("phone")}
+                onOpened={focusFirstField}
+                openOnMount
+                summary={
+                  answered.has("phone") && (
+                    <SummaryRow
+                      label={copy.phone}
+                      value={
+                        <>
+                          {draft.phone.trim()}
+                          {entries.whatsapp.trim() && (
+                            <>
+                              <br />
+                              <span className="text-sm font-normal text-slate-600">WhatsApp {entries.whatsapp.trim()}</span>
+                            </>
+                          )}
+                        </>
+                      }
+                      action={change("phone", copy.change.phone)}
+                    />
+                  )
+                }
+              >
+                <QuestionTitle htmlFor="phone">{copy.phoneQuestion}</QuestionTitle>
+                <div className="flex flex-col gap-2">
+                  <Hint id="phone-hint">{copy.phoneHint}</Hint>
+                  <FieldInput
+                    id="phone"
+                    name="phone"
+                    data-field="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="0712 345 678"
+                    enterKeyHint="next"
+                    icon={<Phone className="size-5" strokeWidth={1.75} aria-hidden />}
+                    value={draft.phone}
+                    onChange={(event) => update({ phone: event.target.value })}
+                    onKeyDown={onEnter("phone")}
+                    maxLength={200}
+                    invalid={!!message("phone")}
+                    aria-describedby={describedBy("phone-hint", !!message("phone") && "phone-error")}
+                  />
+                  <FieldError id="phone-error" message={message("phone")} />
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <ChangeLink aria-expanded={whatsappOn} aria-controls="whatsapp-field" onClick={() => setWhatsappOn((on) => !on)}>
+                    {whatsappOn ? <ChevronDown className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+                    {copy.whatsappDifferent}
+                  </ChangeLink>
+                  {whatsappOn && (
+                    <div id="whatsapp-field" className="flex w-full flex-col gap-1.5">
+                      <label htmlFor="whatsapp" className="text-[15px] font-semibold text-slate-800">
+                        {copy.whatsapp} <span className="font-normal text-slate-500">({copy.optional})</span>
+                      </label>
+                      <FieldInput
+                        id="whatsapp"
+                        name="whatsapp"
+                        data-field="whatsapp"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="off"
+                        placeholder="0712 345 678"
+                        icon={<MessageCircle className="size-5" strokeWidth={1.75} aria-hidden />}
+                        value={draft.whatsapp}
+                        onChange={(event) => update({ whatsapp: event.target.value })}
+                        onKeyDown={onEnter("phone")}
+                        maxLength={200}
+                        invalid={!!message("whatsapp")}
+                        aria-describedby={describedBy(!!message("whatsapp") && "whatsapp-error")}
+                      />
+                      <FieldError id="whatsapp-error" message={message("whatsapp")} />
+                    </div>
+                  )}
+                </div>
+                <ContinuePill onClick={() => next("phone")}>{copy.next}</ContinuePill>
+              </GuidedStep>
+            )}
+
+            {visible("email") && (
+              <GuidedStep
+                key="email"
+                state={stateOf("email")}
+                onOpened={focusFirstField}
+                openOnMount
+                summary={answered.has("email") && <SummaryRow label={copy.email} value={<span className="wrap-anywhere">{draft.email.trim()}</span>} action={change("email", copy.change.email)} />}
+              >
+                <QuestionTitle htmlFor="email">{copy.emailQuestion}</QuestionTitle>
+                <div className="flex flex-col gap-2">
+                  <Hint id="email-hint">{copy.emailHint}</Hint>
+                  <FieldInput
+                    id="email"
+                    name="email"
+                    data-field="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    enterKeyHint="next"
+                    value={draft.email}
+                    onChange={(event) => update({ email: event.target.value })}
+                    onKeyDown={onEnter("email")}
+                    maxLength={254}
+                    invalid={!!message("email")}
+                    aria-describedby={describedBy("email-hint", !!message("email") && "email-error")}
+                  />
+                  <FieldError id="email-error" message={message("email")} />
+                </div>
+                <ContinuePill onClick={() => next("email")}>{copy.next}</ContinuePill>
+              </GuidedStep>
+            )}
+
+            {visible("code") && (
+              <GuidedStep
+                key="code"
+                state={stateOf("code")}
+                onOpened={focusFirstField}
+                openOnMount
+                summary={
+                  answered.has("code") && (
+                    <SummaryRow
+                      label={copy.hasCode}
+                      value={entries.code.trim() ? `${codeAnswer === "yes" ? copy.yes : copy.no} · ${entries.code.trim()}` : copy.no}
+                      action={change("code", copy.change.code)}
+                    />
+                  )
+                }
+              >
+                <ChoiceTiles
+                  name="has_code_answer"
+                  legend={<QuestionTitle>{copy.hasCode}</QuestionTitle>}
+                  layout="two"
+                  options={[
+                    { value: "yes", label: copy.yes },
+                    { value: "no", label: copy.no },
+                  ]}
+                  value={codeAnswer}
+                  onChange={(value) => {
+                    setCodeAnswer(value as CodeAnswer)
+                    setProblem(null)
+                  }}
+                  describedBy="has-code-hint"
+                >
+                  <Hint id="has-code-hint" className="text-center">
+                    {copy.hasCodeHint}
+                  </Hint>
+                </ChoiceTiles>
+                {codeAnswer && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <label htmlFor="code" className="text-[15px] font-semibold text-slate-800">
+                        {copy.code}
+                        {codeAnswer === "no" && <span className="font-normal text-slate-500"> ({copy.optional})</span>}
+                      </label>
+                      <Hint id="code-hint">{copy.codeHint}</Hint>
+                      <FieldInput
+                        id="code"
+                        name="code"
+                        data-field="code"
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        enterKeyHint="next"
+                        value={draft.code}
+                        onChange={(event) => update({ code: event.target.value })}
+                        onKeyDown={onEnter("code")}
+                        maxLength={200}
+                        invalid={!!message("code")}
+                        aria-describedby={describedBy("code-hint", !!message("code") && "code-error")}
+                      />
+                      <FieldError id="code-error" message={message("code")} />
+                    </div>
+                    <ContinuePill onClick={() => next("code")}>{copy.next}</ContinuePill>
+                  </>
+                )}
+              </GuidedStep>
+            )}
+
+            {open === "send" && (
+              <GuidedStep key="send" state="open" onOpened={focusFirstField} openOnMount>
+                <QuestionTitle>{copy.reviewQuestion}</QuestionTitle>
+                <Hint className="-mt-2">{copy.reviewHint}</Hint>
+                {notice && (
+                  <NoticeBox tone={CALM.has(notice) ? "info" : "bad"} role="alert">
+                    {noticeText(copy, notice)}
+                    {notice === "joined" && (
+                      <>
+                        {" "}
+                        <Link href="/login" className="font-semibold underline underline-offset-4">
+                          {copy.signIn}
+                        </Link>
+                      </>
+                    )}
+                  </NoticeBox>
+                )}
+                {/* Inside the form, so its token is sent; invisible unless Cloudflare
+                    needs a click, and then right above Send. */}
+                <TurnstileWidget ref={turnstile} action="agent" language={language} />
+                <ContinuePill type="submit" pending={sending} disabled={sending}>
+                  {sending ? copy.sending : copy.send}
+                </ContinuePill>
+              </GuidedStep>
+            )}
+          </GuidedStack>
+        </form>
+
+        {/* Kept apart from "Tayari una code?": this one is for someone who
+            has already set a password. */}
+        <p className="mt-6 text-center text-sm text-slate-600">
+          {copy.signInPrompt}{" "}
+          <Link
+            href="/login"
+            className="font-semibold text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
           >
-            <p>{noticeText(copy, notice)}</p>
-            {notice === "joined" && (
-              <Link href="/login" className="mt-1 inline-block font-semibold underline underline-offset-4">
-                {copy.signIn}
-              </Link>
-            )}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={sending}
-          className={cn(
-            buttonVariants({ variant: "orange" }),
-            "mt-7 h-12 w-full rounded-full font-exo text-lg italic shadow-md shadow-orange-500/20 transition hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:opacity-70",
-          )}
-        >
-          {sending ? copy.sending : copy.send}
-        </button>
-      </form>
-
-      {/* Kept apart from the box above: this one is for someone who has
-          already set a password. */}
-      <p className="mt-6 text-center text-sm text-slate-600">
-        {copy.signInPrompt}{" "}
-        <Link
-          href="/login"
-          className="font-semibold text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
-        >
-          {copy.signIn}
-        </Link>
-      </p>
-    </section>
+            {copy.signIn}
+          </Link>
+        </p>
+      </section>
+    </>
   )
 }
 
-function TextField({
-  id,
-  field,
-  label,
-  hint,
-  value,
-  onChange,
-  type = "text",
-  autoComplete,
-  error,
-}: {
-  id: string
-  field: AgentField
-  label: string
-  hint?: string
-  value: string
-  onChange: (value: string) => void
-  type?: "text" | "tel" | "email"
-  autoComplete?: string
-  error: string | null
-}) {
-  const described = [hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(" ") || undefined
+const OUTLINED_PILL =
+  "inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-blue-600/45 px-6 font-exo text-lg font-semibold italic text-blue-600 outline-none transition-[background,transform] hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-[0.97]"
+
+function Note({ tone, children }: { tone: "wait" | "info"; children: ReactNode }) {
   return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-semibold text-slate-700">
-        {label}
-      </label>
-      {hint && (
-        <p id={`${id}-hint`} className="mt-0.5 text-sm text-slate-500">
-          {hint}
-        </p>
-      )}
-      <input
-        id={id}
-        name={field}
-        data-field={field}
-        type={type}
-        inputMode={type === "tel" ? "tel" : type === "email" ? "email" : undefined}
-        autoComplete={autoComplete}
-        value={value}
-        maxLength={type === "email" ? 254 : 200}
-        onChange={(event) => onChange(event.target.value)}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={described}
-        className={cn(
-          "mt-1.5 h-12 w-full rounded-full border bg-white px-5 text-base text-slate-800 outline-none transition focus-visible:border-blue-600 focus-visible:ring-3 focus-visible:ring-blue-600/20",
-          error ? "border-red-500" : "border-blue-600/30",
-        )}
-      />
-      {error && (
-        <p id={`${id}-error`} className="mt-1.5 text-sm text-red-600">
-          {error}
-        </p>
-      )}
-    </div>
+    <NoticeBox tone={tone} className="w-full text-[15px]">
+      {children}
+    </NoticeBox>
   )
 }
 
@@ -340,6 +582,7 @@ function Confirmation({
   headingRef: React.RefObject<HTMLHeadingElement | null>
 }) {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
+  const tick = useRef<HTMLDivElement>(null)
   const shareHref = discountCodeShareLink(copy.shareText(done.code, done.link))
 
   async function copyLink() {
@@ -352,67 +595,71 @@ function Confirmation({
   }
 
   return (
-    <section className="rounded-[40px] bg-white px-5 py-8 text-center shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">
-      <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-orange-500 text-white">
-        <Check className="size-8" strokeWidth={3} aria-hidden />
+    <section className={cn(CARD, "flex flex-col items-center gap-4 text-center")}>
+      <Confetti originRef={tick} />
+      <div
+        ref={tick}
+        className="grid size-[84px] place-items-center rounded-full bg-orange-500 text-white shadow-[0_10px_30px_-8px_rgb(238_115_0/0.6)] motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:fade-in motion-safe:duration-500"
+      >
+        <Check className="size-11" strokeWidth={3} aria-hidden />
       </div>
-      <h1 ref={headingRef} tabIndex={-1} className="mt-4 font-exo text-[1.75rem] font-extrabold italic leading-tight text-blue-600 outline-none">
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className="font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic outline-none"
+      >
         {copy.doneTitle}
       </h1>
-      <p className="mt-4 rounded-3xl bg-blue-50 px-4 py-5 font-mono text-[2.5rem] font-bold leading-tight tracking-wide text-blue-600 ring-1 ring-blue-100">
+      <p className="w-full max-w-full rounded-full bg-blue-50 px-4 py-3 font-mono text-[2.5rem] leading-tight font-bold tracking-wide wrap-anywhere text-blue-600 ring-1 ring-blue-600/15 max-[330px]:text-[2rem]">
         {done.code}
       </p>
 
-      <div className="mt-6 text-left">
+      <div className="flex w-full flex-col gap-3 text-left">
         <p className="text-sm font-semibold text-slate-700">{copy.linkLabel}</p>
-        <p className="mt-1.5 break-all rounded-2xl bg-slate-50 px-4 py-3 font-mono text-sm text-slate-800 ring-1 ring-slate-200 select-all">
+        <p className="-mt-1.5 rounded-2xl bg-[#f8f7fd] px-4 py-3 font-mono text-sm break-all text-slate-800 ring-1 ring-blue-600/15 select-all">
           {done.link}
         </p>
-        <div className="mt-3 flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={copyLink}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-blue-600/30 px-6 font-exo text-base font-bold italic text-blue-600 outline-none transition hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+        <button type="button" onClick={copyLink} className={OUTLINED_PILL}>
+          {copied === "yes" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
+          {copied === "yes" ? copy.copied : copy.copy}
+        </button>
+        {shareHref && (
+          <a
+            href={shareHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(buttonVariants({ variant: "orange" }), "min-h-13 rounded-full px-6 font-exo text-lg italic shadow-md shadow-orange-500/20")}
           >
-            {copied === "yes" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
-            {copied === "yes" ? copy.copied : copy.copy}
-          </button>
-          {shareHref && (
-            <a
-              href={shareHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                buttonVariants({ variant: "orange" }),
-                "h-12 rounded-full px-6 font-exo text-lg italic shadow-md shadow-orange-500/20",
-              )}
-            >
-              {copy.share}
-            </a>
-          )}
-        </div>
-        <p aria-live="polite" className={cn("mt-2 text-sm text-red-600", copied !== "failed" && "sr-only")}>
+            <MessageCircle className="size-5" aria-hidden />
+            {copy.share}
+          </a>
+        )}
+        <p aria-live="polite" className={cn("text-sm text-red-600", copied !== "failed" && "sr-only")}>
           {copied === "failed" ? copy.copyFailed : copied === "yes" ? copy.copied : ""}
         </p>
       </div>
 
       {done.status === "registered" ? (
         <>
-          <p className="mt-6 rounded-3xl bg-orange-50 px-4 py-3 text-base text-orange-950">{copy.confirmNote}</p>
-          <p className="mt-3 rounded-3xl bg-blue-50 px-4 py-3 text-base wrap-anywhere text-blue-950">{copy.emailNote(done.email)}</p>
+          <Note tone="wait">{copy.confirmNote}</Note>
+          <Note tone="info">
+            <span className="wrap-anywhere">{copy.emailNote(done.email)}</span>
+          </Note>
         </>
       ) : (
-        <p className="mt-6 rounded-3xl bg-blue-50 px-4 py-3 text-base text-blue-950">{copy.claimNote}</p>
+        <Note tone="info">{copy.claimNote}</Note>
       )}
 
-      <p className="mt-6 text-sm text-slate-600">{copy.call}</p>
-      <a
-        href={`tel:${officePhone.replaceAll(" ", "")}`}
-        className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold italic text-blue-600 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
-      >
-        <Phone className="size-5" strokeWidth={2} aria-hidden />
-        {officePhone}
-      </a>
+      <div className="flex flex-col items-center">
+        <p className="text-sm text-slate-600">{copy.call}</p>
+        <a
+          href={`tel:${officePhone.replaceAll(" ", "")}`}
+          className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold text-blue-600 italic outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+        >
+          <Phone className="size-5" strokeWidth={2} aria-hidden />
+          {officePhone}
+        </a>
+      </div>
     </section>
   )
 }

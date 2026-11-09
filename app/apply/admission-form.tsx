@@ -1,77 +1,66 @@
 "use client"
 
-import { Check, Phone, Plus, X } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { Fragment, useEffect, useRef, useState, useTransition, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 
-import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
-import { buttonVariants } from "@/components/ui/button"
-import {
-  childNameKey,
-  childrenProblems,
-  MAX_CHILDREN,
-  parentProblems,
-  remainingDuplicates,
-  type AdmissionChild,
-  type AdmissionParent,
-  type FieldProblem,
-  type FormField,
-} from "@/lib/admission-form"
+import { BrandTopBar } from "@/components/brand"
+import { buzz, GuidedStack, ProgressBar, prefersReducedMotion, revealStep } from "@/components/guided-form"
+import type { TurnstileWidgetHandle } from "@/components/turnstile-widget"
+import { childNameKey, MAX_CHILDREN, type FieldProblem, type FormField } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
+import { formatCount, shownApplicationCount } from "@/lib/live-apply"
 import { discountCodeCookie, normalizeDiscountCode, STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
-import { FORM_NOTICE, FORM_NOTICE_VERSION } from "@/lib/referral-notice"
-import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS } from "@/lib/services/leads"
-import { cn } from "@/lib/utils"
+import { FORM_NOTICE_VERSION } from "@/lib/referral-notice"
 
 import { checkDiscountCode, submitAdmissionForm } from "./actions"
+import { Confirmation } from "./confirmation"
 import { COPY } from "./copy"
-import { clearDraft, emptyChild, EMPTY_PARENT, readDraft, writeDraft, type ChildDraft, type Draft, type ParentDraft } from "./draft"
+import { clearDraft, emptyChild, EMPTY_PARENT, readDraft, writeDraft, type ChildDraft, type ParentDraft } from "./draft"
+import {
+  asChild,
+  asParent,
+  firstOpenable,
+  furthest,
+  keyToParam,
+  order,
+  paramToKey,
+  parseKey,
+  restoreDone,
+  stepForProblem,
+  stepProblems,
+  STUDENT_KINDS,
+  studentKey,
+  yearOf,
+  type StepKey,
+} from "./flow"
+import { useLiveApply } from "./live"
 import type { AdmissionFormState, DiscountCodeCheck } from "./outcome"
+import { questionItems, stepId } from "./questions"
+import { ClassSheet, OfferSheet } from "./sheets"
 
-// The Admission form, in three steps: the parent, the children (one card
-// each, up to MAX_CHILDREN), then a review with the security check and Send
-// application. Every entry lives in this component's state, so switching
-// language (which re-renders the page around it) never loses one, and a
-// draft in sessionStorage (./draft.ts) brings them back after a reload.
+// The Admission form, one question at a time (concept C). Answered questions
+// fold into a line with a "Badilisha …" link; Continue on a reopened question
+// folds it again and returns to the first unanswered one. The order lives in
+// ./flow.ts, the drawing in ./questions.tsx.
 //
-// Each step has its own history entry (`?step=2`, `?step=3`, keeping `ref`),
-// so the phone's Back and Forward move between steps instead of leaving the
-// form. A step whose earlier steps aren't complete opens the first one that
-// isn't.
+// Every entry lives in this component's state, so switching language (which
+// re-renders the page around it) never loses one, and a draft in
+// sessionStorage (./draft.ts) brings them back after a reload, with the
+// questions already answered.
 //
-// The review step also holds the optional Discount code, one for every child,
-// and the interview fee. The code is checked when the step opens with one
-// filled in, and again whenever the field loses focus with a different code.
-// Only a confirmed code brings the fee down; any other answer, or none, shows
-// the standard fee. No answer ever stops the form.
+// Each question reached by moving forward gets its own history entry
+// (`?q=class-1`, keeping `ref`), so the phone's Back and Forward move between
+// questions instead of leaving the form. A question whose earlier questions
+// aren't answered opens the first one that isn't.
 
-type Step = 0 | 1 | 2
+type Shown = FieldProblem & { server: boolean }
+type Notice = "check-pending" | "rate-limited" | "check-failed" | "unavailable" | null
+type FormState = { parent: ParentDraft; children: ChildDraft[]; discountCode: string; done: ReadonlySet<StepKey>; open: StepKey }
+type Sheet = { kind: "class"; card: number } | { kind: "offer" } | null
+type Outcome = { fullName: string; admissionNumber: string }
 
-// The step a URL asks for: `?step=2` and `?step=3`, else the first.
-function stepFromUrl(): Step {
-  const step = new URLSearchParams(window.location.search).get("step")
-  return step === "2" ? 1 : step === "3" ? 2 : 0
-}
-
-// The current URL with `step` set for this step, every other parameter kept.
-function stepUrl(step: Step): string {
-  const url = new URL(window.location.href)
-  if (step === 0) url.searchParams.delete("step")
-  else url.searchParams.set("step", String(step + 1))
-  return `${url.pathname}${url.search}${url.hash}`
-}
-
-// Marks a history entry this form pushed when moving forward, so its own
-// Back button can step back through history rather than add to it.
-const PUSHED = "admissionFormStep"
-
-// Whether every step after `to`, up to `from`, has an entry this form pushed,
-// so `history.go(to - from)` lands on `to`'s own entry instead of leaving a
-// later step's entry behind it.
-function unwinds(pushed: ReadonlySet<Step>, from: Step, to: Step): boolean {
-  for (let later = to + 1; later <= from; later++) if (!pushed.has(later as Step)) return false
-  return true
-}
+// Marks a history entry this form pushed.
+const PUSHED = "admissionFormQ"
 
 // A random key per form, kept until a confirmation shows, so sending the same
 // form twice creates nothing new. Falls back to getRandomValues where
@@ -85,64 +74,85 @@ function newSubmissionKey(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-function asParent(draft: ParentDraft): AdmissionParent {
-  return {
-    fullName: draft.fullName,
-    relationship: draft.relationship as AdmissionParent["relationship"],
-    relationshipDescription: draft.relationship === "Other" ? draft.relationshipDescription : undefined,
-    phone: draft.phone,
-    whatsapp: draft.whatsapp || undefined,
+// The current URL naming this question, every other parameter kept. The
+// first question has no `q`. `step` belonged to the earlier three-step form.
+function urlFor(key: StepKey, children: readonly ChildDraft[]): string {
+  const url = new URL(window.location.href)
+  const param = key === order(children)[0] ? null : keyToParam(key, children)
+  if (param) url.searchParams.set("q", param)
+  else url.searchParams.delete("q")
+  url.searchParams.delete("step")
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+// The question the URL names, or the first. An entry naming a student since
+// removed (`board-2` with one student left) opens the same question for the
+// last remaining student, the question before it on the form.
+function urlKey(children: readonly ChildDraft[]): StepKey {
+  const param = new URLSearchParams(window.location.search).get("q")
+  const key = paramToKey(param, children)
+  if (key) return key
+  const removed = param ? /^(name|class|board)-[1-8]$/.exec(param) : null
+  const last = children[children.length - 1]
+  return removed && last ? studentKey(removed[1] as "name" | "class" | "board", last.card) : order(children)[0]
+}
+
+// Where focus goes for a problem.
+function problemSelector({ field, child }: FieldProblem, children: readonly ChildDraft[]): string {
+  const card = child === null ? null : (children[child]?.card ?? null)
+  switch (field) {
+    case "student_name":
+    case "duplicate_child":
+      return `#student-name-${card}`
+    case "class_name":
+      return `#${stepId(studentKey("class", card ?? 0))} .gf-pop`
+    case "enrollment_year":
+      return `input[name="year-${card}"]`
+    case "day_or_boarding":
+      return `input[name="board-${card}"]`
+    case "contact_name":
+      return "#parent-name"
+    case "relationship":
+      return 'input[name="relationship"]'
+    case "relationship_description":
+      return "#relationship-description"
+    case "phone":
+      return "#phone"
+    case "whatsapp":
+      return "#whatsapp"
+    case "discount_code":
+      return "#discount-code"
+    default:
+      return "[data-form-problem]"
   }
 }
 
-function asChild(draft: ChildDraft): AdmissionChild {
-  return {
-    fullName: draft.fullName,
-    className: draft.className as AdmissionChild["className"],
-    enrollmentYear: draft.enrollmentYear ?? 0,
-    dayOrBoarding: draft.dayOrBoarding as AdmissionChild["dayOrBoarding"],
-  }
+function focusIn(root: ParentNode, selector: string): boolean {
+  const target = root.querySelector<HTMLElement>(`${selector}:checked`) ?? root.querySelector<HTMLElement>(selector)
+  target?.focus({ preventScroll: true })
+  return Boolean(target)
 }
 
-// Where focus goes for a problem: a child's field on its own card. The same
-// child twice is fixed in the name.
-function fieldSelector({ field, child }: FieldProblem): string {
-  const target = `[data-field="${field === "duplicate_child" ? "student_name" : field}"]`
-  return child === null ? target : `[data-child="${child}"] ${target}`
-}
-
-const PARENT_FIELDS = new Set<FormField>(["contact_name", "relationship", "relationship_description", "phone", "whatsapp"])
-const CHILD_FIELDS = new Set<FormField>(["student_name", "class_name", "enrollment_year", "day_or_boarding", "duplicate_child"])
-
-// A problem shown under its field. `server` marks one the server found, which
-// for some fields reads differently (a phone it couldn't read, a year that
-// closed since the page loaded).
-type Shown = FieldProblem & { server: boolean }
-
-// The furthest step the entries allow: a step opens only once every step
-// before it is complete.
-function reachable(want: Step, parent: ParentDraft, children: ChildDraft[], years: readonly number[]): Step {
-  if (want === 0 || parentProblems(asParent(parent)).length > 0) return 0
-  if (want === 1 || childrenProblems(children.map(asChild), years).length > 0) return 1
-  return 2
-}
-
-type Notice = "check-pending" | "rate-limited" | "check-failed" | "unavailable" | null
-
-// "TZS 50,000", the way the school writes amounts.
-function tzs(amount: number): string {
-  return `TZS ${amount.toLocaleString("en-US")}`
+const PROBLEM_FIELDS: Record<string, readonly FormField[]> = {
+  fullName: ["student_name", "duplicate_child"],
+  className: ["class_name"],
+  enrollmentYear: ["enrollment_year"],
+  dayOrBoarding: ["day_or_boarding"],
 }
 
 export function AdmissionFormSteps({
   language,
   years,
+  defaultYear,
   officePhone,
   discountCode: startingCode = "",
   rememberDiscountCode = null,
+  showLanguagePrompt = false,
 }: {
   language: Language
   years: [number, number]
+  // The coming intake, which a student's year starts from.
+  defaultYear: number
   officePhone: string
   // Where the Discount code field starts: the Referral link's code, else the
   // one remembered from an earlier link, else empty.
@@ -150,76 +160,107 @@ export function AdmissionFormSteps({
   // The Referral link's code, when the page opened from one: remembered for
   // 30 days from now, replacing any earlier one.
   rememberDiscountCode?: string | null
+  // No language cookie yet: the first-visit language card shows.
+  showLanguagePrompt?: boolean
 }) {
   const copy = COPY[language]
-  const [step, setStep] = useState<Step>(0)
-  const [parent, setParent] = useState<ParentDraft>(EMPTY_PARENT)
+  const live = useLiveApply()
+  const router = useRouter()
+  const [form, setFormState] = useState<FormState>(() => ({
+    parent: EMPTY_PARENT,
+    children: [emptyChild(1)],
+    discountCode: startingCode,
+    done: new Set(),
+    open: studentKey("name", 1),
+  }))
+  // The same state, read by handlers that run after a timeout or an await.
+  const formRef = useRef(form)
+  function setForm(next: FormState) {
+    formRef.current = next
+    setFormState(next)
+  }
   const lastCard = useRef(1)
-  const [children, setChildren] = useState<ChildDraft[]>(() => [emptyChild(1)])
-  // Made per form opened, kept until a confirmation shows.
   const [submissionKey, setSubmissionKey] = useState(newSubmissionKey)
-  // Every problem on the step, in the order the fields show; focus goes to
-  // the first.
   const [problems, setProblems] = useState<Shown[]>([])
+  const problemsRef = useRef(problems)
+  useLayoutEffect(() => {
+    problemsRef.current = problems
+  })
   // Whether the stored draft has been read. Until then nothing is written,
   // so the empty first render never replaces a draft.
   const [restored, setRestored] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
-  const [confirmed, setConfirmed] = useState<Extract<AdmissionFormState, { status: "confirmed" }>["children"] | null>(null)
-  // The confirmation is for an earlier send of this form, before an edit:
-  // all of its children, or only some.
+  const [confirmed, setConfirmed] = useState<{ outcomes: Outcome[]; saved: number } | null>(null)
   const [alreadySent, setAlreadySent] = useState<"all" | "some" | null>(null)
   const [sending, startSending] = useTransition()
-  const router = useRouter()
-  const turnstile = useRef<TurnstileWidgetHandle>(null)
-  const heading = useRef<HTMLHeadingElement>(null)
-  const moved = useRef(false)
-  // The steps this page pushed a history entry for. The entry's own marker
-  // survives a reload, but Next.js rewrites the entry's state when a Server
-  // Action (the language switch) refreshes the page, so both are checked.
-  const pushedSteps = useRef(new Set<Step>())
-  // Sent back to an earlier step's own entry: the problems to show once its
-  // popstate arrives, and whether to refresh the page then (a year closed).
-  const arriving = useRef<{ step: Step; shown: Shown[]; refresh: boolean } | null>(null)
-  // After adding or removing a card: the card to put the reader at, and
-  // whether at its name (a new card) or on the card itself, which reads out
-  // its legend (where a removed card was).
-  const [cardFocus, setCardFocus] = useState<{ index: number; at: "name" | "card" } | null>(null)
-  const [discountCode, setDiscountCode] = useState(startingCode)
-  // The answer for each code checked so far, and the codes being checked now.
+  // Counts restarts, so an answer to a send from before a restart is ignored:
+  // it must not clear the new form's draft or replace it with a confirmation.
+  const round = useRef(0)
   const [answers, setAnswers] = useState<Record<string, DiscountCodeCheck>>({})
+  const answersRef = useRef(answers)
   const [checking, setChecking] = useState<ReadonlySet<string>>(() => new Set())
+  const inflight = useRef(new Map<string, Promise<DiscountCodeCheck>>())
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set())
+  const [yearOpen, setYearOpen] = useState<ReadonlySet<number>>(() => new Set())
+  const [whatsappOn, setWhatsappOn] = useState(false)
+  // After the parent's first tap a new question takes focus as it opens.
+  const [interacted, setInteracted] = useState(false)
+  const [instant, setInstant] = useState(false)
+  const [sheet, setSheet] = useState<Sheet>(null)
+  const [announcement, setAnnouncement] = useState("")
+  const turnstile = useRef<TurnstileWidgetHandle>(null)
+  const doneHeading = useRef<HTMLHeadingElement>(null)
+  const lastPointer = useRef(0)
+  // The code nobody has that Continue has already stopped on once.
+  const stoppedFor = useRef<string | null>(null)
+  // The questions this page has history entries for, in history order, and
+  // the entry the browser is on. A ref, not history.state: Next.js rewrites
+  // the entry's state when a Server Action (the language switch) refreshes
+  // the page.
+  const trail = useRef<StepKey[]>([])
+  const pos = useRef(0)
+  // Sent back to an earlier question's own entry: the problems to show once
+  // its popstate arrives, and whether to refresh the page then.
+  const arriving = useRef<{ key: StepKey; shown: Shown[]; refresh: boolean } | null>(null)
 
   useEffect(() => {
     if (!rememberDiscountCode) return
     document.cookie = discountCodeCookie(rememberDiscountCode, { secure: window.location.protocol === "https:" })
   }, [rememberDiscountCode])
 
-  // Brings back the tab's draft and opens the step the URL asks for, or the
-  // first one the entries don't complete. Runs once, after hydration, since
-  // the server can't see the tab's storage.
+  // Brings back the tab's draft and opens the question the URL names, or the
+  // first one not answered. Runs once, after hydration, since the server
+  // can't see the tab's storage.
   useEffect(() => {
+    const draft = readDraft(years)
     // The draft's code stands unless a different Referral link opened the
     // page: a reload keeps `ref` in the URL, so the same link again is the
     // same form, and the parent's edit to the code stays.
-    const keepsDraftCode = (draft: Draft) => !rememberDiscountCode || draft.linkCode === rememberDiscountCode
-    const draft = readDraft(years)
-    const want = stepFromUrl()
-    const opened = reachable(want, draft?.parent ?? EMPTY_PARENT, draft?.children ?? [emptyChild(1)], years)
-    // After this commit, once Next.js has patched history, so its router
-    // learns the corrected URL too. A null state lets Next.js add its own.
-    if (opened !== want) setTimeout(() => window.history.replaceState(null, "", stepUrl(opened)), 0)
-    /* eslint-disable react-hooks/set-state-in-effect -- reading the tab's storage after hydration */
-    if (draft) {
-      setParent(draft.parent)
-      setChildren(draft.children)
-      lastCard.current = draft.children.length
-      if (keepsDraftCode(draft)) setDiscountCode(draft.discountCode)
+    const keepsCode = draft && (!rememberDiscountCode || draft.linkCode === rememberDiscountCode)
+    const entries = {
+      parent: draft?.parent ?? EMPTY_PARENT,
+      children: draft?.children ?? [emptyChild(1)],
+      discountCode: keepsCode ? draft.discountCode : startingCode,
     }
-    setStep(opened)
+    const done = draft ? restoreDone(draft.done, entries, years) : new Set<StepKey>()
+    const first = firstOpenable(entries, done, years)
+    const want = paramToKey(new URLSearchParams(window.location.search).get("q"), entries.children)
+    const keys = order(entries.children)
+    const open = want && keys.indexOf(want) <= keys.indexOf(first) ? want : first
+    if (draft) lastCard.current = draft.children.length
+    trail.current = [open]
+    pos.current = 0
+    const url = urlFor(open, entries.children)
+    // After this commit, once Next.js has patched history, so its router
+    // learns the corrected URL too.
+    if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      setTimeout(() => window.history.replaceState(null, "", url), 0)
+    }
+    /* eslint-disable react-hooks/set-state-in-effect -- reading the tab's storage after hydration */
+    setForm({ ...entries, done, open })
+    setWhatsappOn(entries.parent.whatsapp !== "")
     setRestored(true)
     /* eslint-enable react-hooks/set-state-in-effect */
-    if (opened === 2) void checkCode(draft && keepsDraftCode(draft) ? draft.discountCode : startingCode)
     // Once, on mount: later changes are the form's own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -227,231 +268,400 @@ export function AdmissionFormSteps({
   // Keeps the draft in step with the entries, until a confirmation shows.
   useEffect(() => {
     if (!restored || confirmed) return
-    writeDraft({ parent, children, discountCode, linkCode: rememberDiscountCode ?? "" })
-  }, [restored, confirmed, parent, children, discountCode, rememberDiscountCode])
+    const { parent, children, discountCode, done } = form
+    const named = [...done].map((key) => keyToParam(key, children)).filter((param): param is string => param !== null)
+    writeDraft({ parent, children, discountCode, linkCode: rememberDiscountCode ?? "", done: named })
+  }, [restored, confirmed, form, rememberDiscountCode])
 
-  // The phone's Back and Forward: open the step the entry names, as far as
-  // the entries allow. A confirmation stays put.
+  // A code already in the field (from a link, or kept from before) is
+  // checked as the Discount code question opens.
+  useEffect(() => {
+    if (restored && form.open === "code" && form.discountCode.trim()) void checkCode(form.discountCode, true)
+    // Only when the question opens; edits are checked on blur.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restored, form.open])
+
+  useEffect(() => {
+    if (!instant) return
+    const frame = requestAnimationFrame(() => setInstant(false))
+    return () => cancelAnimationFrame(frame)
+  }, [instant])
+
+  useEffect(() => {
+    if (!confirmed) return
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? "auto" : "smooth" })
+    doneHeading.current?.focus({ preventScroll: true })
+  }, [confirmed])
+
+  // The phone's Back and Forward: open the question the entry names, as far
+  // as the answers allow. A confirmation stays put.
   useEffect(() => {
     function onPopState() {
       if (confirmed) return
-      const want = stepFromUrl()
-      const opened = reachable(want, parent, children, years)
-      // A step the entries don't allow yet goes back to the allowed step's
-      // own entry when this form pushed the ones in between, so the form's
-      // Back from there still steps back through history. Otherwise the
-      // entry is replaced, and is no longer one this form pushed.
-      const unwinding = opened !== want && unwinds(pushedSteps.current, want, opened)
-      const arrival = arriving.current
-      if (!unwinding) arriving.current = null
-      if (unwinding) window.history.go(opened - want)
-      else if (opened !== want) {
-        pushedSteps.current.delete(opened)
-        window.history.replaceState(null, "", stepUrl(opened))
+      const f = formRef.current
+      const want = urlKey(f.children)
+      const keys = order(f.children)
+      const first = firstOpenable(f, f.done, years)
+      const target = keys.includes(want) && keys.indexOf(want) <= keys.indexOf(first) ? want : first
+      const at = trail.current.indexOf(want)
+      if (at >= 0) pos.current = at
+      else {
+        trail.current = [want]
+        pos.current = 0
       }
+      const arrival = arriving.current
+      if (target !== want) {
+        // Back to the allowed question's own entry when this page has one
+        // before this, so the form's Back from there still steps through
+        // history. Otherwise this entry becomes that question.
+        const earlier = trail.current.indexOf(target)
+        if (earlier >= 0 && earlier < pos.current) {
+          window.history.go(earlier - pos.current)
+          return
+        }
+        trail.current[pos.current] = target
+        window.history.replaceState(null, "", urlFor(target, f.children))
+      }
+      arriving.current = null
       setNotice(null)
-      moved.current = true
-      setProblems(arrival?.step === opened ? arrival.shown : [])
-      setStep(opened)
+      setInteracted(true)
+      const shown = arrival?.key === target ? arrival.shown : []
+      setProblems(shown)
+      reveal(shown)
+      if (target !== f.open) setForm({ ...f, open: target })
+      else if (shown[0]) focusSoon(problemSelector(shown[0], f.children))
       // After Next.js has handled this popstate too, so the refresh doesn't
       // race its restore of the entry.
-      if (arrival?.refresh && !unwinding) setTimeout(() => router.refresh(), 0)
+      if (arrival?.refresh) setTimeout(() => router.refresh(), 0)
     }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
-  }, [confirmed, parent, children, years, router])
+  }, [confirmed, years, router])
 
-  // After a step change, put the reader at the new step's heading, or at the
-  // first field to fix.
-  useEffect(() => {
-    if (!moved.current) return
-    moved.current = false
-    const target = problems[0] ? document.querySelector<HTMLElement>(fieldSelector(problems[0])) : heading.current
-    target?.focus()
-  }, [step, problems, confirmed])
+  function announce(text: string) {
+    setAnnouncement("")
+    window.setTimeout(() => setAnnouncement(text), 40)
+  }
 
-  useEffect(() => {
-    if (!cardFocus) return
-    const card = `[data-child="${cardFocus.index}"]`
-    document.querySelector<HTMLElement>(cardFocus.at === "name" ? `${card} [data-field="student_name"]` : card)?.focus()
-  }, [cardFocus])
+  function focusSoon(selector: string) {
+    window.setTimeout(() => focusIn(document, selector), 30)
+  }
 
-  // Asks what the code in the field means, unless it already has an answer
-  // or is being asked about. A check that couldn't run is asked again on the
-  // next blur. A value that isn't a code is named under the field instead.
-  async function checkCode(value: string) {
-    if (!value.trim()) return
+  // Shows the fields a problem names: the year tiles, the WhatsApp field.
+  function reveal(shown: readonly FieldProblem[]) {
+    const f = formRef.current
+    for (const problem of shown) {
+      const card = problem.child === null ? null : f.children[problem.child]?.card
+      if (problem.field === "enrollment_year" && card) setYearOpen((open) => new Set(open).add(card))
+      if (problem.field === "whatsapp") setWhatsappOn(true)
+    }
+  }
+
+  // Opens a question. `push` gives it a new history entry (moving forward);
+  // `replace` swaps the current entry for it.
+  function show(next: FormState, how: "push" | "replace") {
+    setForm(next)
+    const url = urlFor(next.open, next.children)
+    if (how === "push") {
+      trail.current = [...trail.current.slice(0, pos.current + 1), next.open]
+      pos.current = trail.current.length - 1
+      window.history.pushState({ [PUSHED]: true }, "", url)
+    } else {
+      trail.current[pos.current] = next.open
+      window.history.replaceState(null, "", url)
+    }
+  }
+
+  // Sends the parent back to fix a question: to its own history entry when
+  // this page has one earlier, so no later question's entry is left behind
+  // it; else by swapping the current entry.
+  function goTo(key: StepKey, shown: Shown[], refresh = false) {
+    const earlier = trail.current.indexOf(key)
+    if (earlier >= 0 && earlier < pos.current) {
+      arriving.current = { key, shown, refresh }
+      window.history.go(earlier - pos.current)
+      return
+    }
+    setProblems(shown)
+    reveal(shown)
+    const f = formRef.current
+    if (f.open === key && shown[0]) focusSoon(problemSelector(shown[0], f.children))
+    show({ ...f, open: key }, "replace")
+    if (refresh) router.refresh()
+  }
+
+  function showProblems(found: FieldProblem[]) {
+    const shown = found.map((problem) => ({ ...problem, server: false }))
+    setProblems(shown)
+    reveal(shown)
+    buzz()
+    if (shown[0]) focusSoon(problemSelector(shown[0], formRef.current.children))
+  }
+
+  // Clears the problems a change fixes, and any the server named.
+  function clearProblems(fixed: (shown: Shown) => boolean) {
+    setProblems((current) => (current.some((shown) => fixed(shown) || shown.server) ? current.filter((shown) => !fixed(shown) && !shown.server) : current))
+  }
+
+  // After a question opens: focus its problem, else its text field, else its
+  // title; then bring it into view and read the question out.
+  function onOpened(li: HTMLLIElement) {
+    const f = formRef.current
+    const first = problemsRef.current[0]
+    const focused = first ? focusIn(li, problemSelector(first, f.children)) : false
+    if (!focused) {
+      const field = li.querySelector<HTMLInputElement>('.gf-fold input:not([type="radio"]):not(#discount-code)')
+      const title = li.querySelector<HTMLElement>(".gf-fold h2")
+      ;(field ?? title)?.focus({ preventScroll: true })
+    }
+    const title = li.querySelector<HTMLElement>(".gf-fold h2")
+    if (title?.textContent) announce(title.textContent.trim())
+    revealStep(li)
+  }
+
+  // Asks what a code means, unless it already has an answer or is being
+  // asked about. A check that couldn't run is asked again next time. A value
+  // that isn't a code is named under the field instead, without moving focus.
+  async function checkCode(value: string, quiet = false): Promise<DiscountCodeCheck | null> {
+    if (!value.trim()) return null
     const code = normalizeDiscountCode(value)
     if (!code) {
-      setProblems([{ field: "discount_code", child: null, server: false }])
-      return
+      if (!quiet) setProblems([{ field: "discount_code", child: null, server: false }])
+      return null
     }
-    if ((answers[code] && "amount" in answers[code]) || checking.has(code)) return
-    setChecking((current) => new Set(current).add(code))
-    let result: DiscountCodeCheck
-    try {
-      result = await checkDiscountCode(code)
-    } catch {
-      result = { status: "unavailable" }
-    }
-    // Kept by code, so an answer that arrives after the parent typed on
-    // still answers for that code if they go back to it.
-    setAnswers((current) => ({ ...current, [code]: result }))
-    setChecking((current) => {
-      const next = new Set(current)
-      next.delete(code)
-      return next
-    })
+    const known = answersRef.current[code]
+    if (known && "amount" in known) return known
+    const running = inflight.current.get(code)
+    if (running) return running
+    const ask = (async () => {
+      setChecking((current) => new Set(current).add(code))
+      let result: DiscountCodeCheck
+      try {
+        result = await checkDiscountCode(code)
+      } catch {
+        result = { status: "unavailable" }
+      }
+      // Kept by code, so an answer that arrives after the parent typed on
+      // still answers for that code if they go back to it.
+      answersRef.current = { ...answersRef.current, [code]: result }
+      setAnswers(answersRef.current)
+      setChecking((current) => {
+        const next = new Set(current)
+        next.delete(code)
+        return next
+      })
+      inflight.current.delete(code)
+      return result
+    })()
+    inflight.current.set(code, ask)
+    return ask
   }
 
-  // Opens a step. `push` gives it a new history entry (moving forward),
-  // `replace` sends the parent back to fix something: to that step's own
-  // entry when this form pushed the ones after it, so the phone's Back from
-  // there leaves the form, else by swapping the current entry. `refresh`
-  // re-renders the page once the step is open.
-  function go(next: Step, shown: Shown[] = [], history: "push" | "replace" = "replace", refresh = false) {
-    // The entry the browser is on now, which after the phone's Back during a
-    // send is no longer the step the send started from.
-    const at = stepFromUrl()
-    const unwinding = history === "replace" && next < at && unwinds(pushedSteps.current, at, next)
-    if (unwinding) {
-      // The popstate opens the step and shows these problems.
-      arriving.current = { step: next, shown, refresh }
-      window.history.go(next - at)
+  // Continue: fold the question and open the first one not answered.
+  async function commit(key: StepKey) {
+    const f = formRef.current
+    if (f.open !== key) return
+    setInteracted(true)
+    setNotice(null)
+    const { kind, card } = parseKey(key)
+    const index = f.children.findIndex((child) => child.card === card)
+    let children = f.children
+    // A student's Day or Boarding starts as the student before's; a class
+    // folds with the year it shows.
+    if (kind === "board" && index > 0 && !children[index].dayOrBoarding) {
+      children = children.map((child, i) => (i === index ? { ...child, dayOrBoarding: children[index - 1].dayOrBoarding } : child))
+    }
+    if (kind === "class" && children[index].enrollmentYear === null) {
+      children = children.map((child, i) => (i === index ? { ...child, enrollmentYear: yearOf(children, index, defaultYear) } : child))
+    }
+    const found = stepProblems(key, { ...f, children }, years)
+    if (found.length) {
+      if (children !== f.children) setForm({ ...f, children })
+      showProblems(found)
       return
     }
-    moved.current = true
-    setProblems(shown)
-    setStep(next)
-    if (refresh) router.refresh()
-    if (history === "push") {
-      pushedSteps.current.add(next)
-      window.history.pushState({ [PUSHED]: true }, "", stepUrl(next))
-    } else if (next !== at) {
-      // Problems on the step already open leave its history entry alone, so
-      // the form's Back still steps back through history.
-      pushedSteps.current.delete(next)
-      window.history.replaceState(null, "", stepUrl(next))
+    const code = key === "code" ? normalizeDiscountCode(f.discountCode) : null
+    if (code) {
+      const result = await checkCode(f.discountCode)
+      if (formRef.current.open !== key) return
+      // Stop once on a code nobody has, so the parent reads the note.
+      if (result?.status === "unknown" && stoppedFor.current !== code) {
+        stoppedFor.current = code
+        buzz()
+        focusSoon("#discount-code")
+        return
+      }
     }
+    const latest = formRef.current
+    const done = new Set(latest.done).add(key)
+    const nextChildren = children === f.children ? latest.children : children
+    setProblems([])
+    setExpanded(new Set())
+    show({ ...latest, children: nextChildren, done, open: furthest(nextChildren, done) }, latest.done.has(key) ? "replace" : "push")
   }
 
-  // Clears the problems a change fixes, keeping the rest on show.
-  function clearProblems(fixed: (shown: Shown) => boolean) {
-    setProblems((current) => (current.some(fixed) ? current.filter((shown) => !fixed(shown)) : current))
+  // A "Badilisha …" link: reopen an answered question, unless the open one
+  // was answered before and now has a problem.
+  function change(key: StepKey) {
+    const f = formRef.current
+    if (f.open !== key && f.done.has(f.open)) {
+      const found = stepProblems(f.open, f, years)
+      if (found.length) return showProblems(found)
+    }
+    setInteracted(true)
+    setProblems([])
+    setNotice(null)
+    show({ ...f, open: key }, "replace")
+  }
+
+  // The form's Back: the question before, back through history when this
+  // page moved forward from it, so the phone's Forward still works.
+  function goBack() {
+    const f = formRef.current
+    const keys = order(f.children)
+    const at = keys.indexOf(f.open)
+    if (at <= 0) return
+    const target = keys[at - 1]
+    setInteracted(true)
+    setNotice(null)
+    setProblems([])
+    // This page pushed the entry: by moving forward here, or before a reload
+    // (the entry's own marker survives one).
+    const state: unknown = window.history.state
+    const marked = Boolean(state && typeof state === "object" && (state as Record<string, unknown>)[PUSHED])
+    const pushedHere = pos.current > 0 && trail.current[pos.current - 1] === target && trail.current[pos.current] === f.open
+    if (pushedHere || (marked && pos.current === 0 && trail.current[0] === f.open)) {
+      window.history.back()
+      return
+    }
+    show({ ...f, open: target }, "replace")
+  }
+
+  function updateChild(card: number, change: Partial<Omit<ChildDraft, "card">>, commitAfter = false) {
+    const f = formRef.current
+    const index = f.children.findIndex((child) => child.card === card)
+    if (index < 0) return
+    const children = f.children.map((child, i) => (i === index ? { ...child, ...change } : child))
+    setForm({ ...f, children })
+    const fields = new Set(Object.keys(change).flatMap((name) => PROBLEM_FIELDS[name] ?? []))
+    clearProblems((shown) => shown.field === "children" || (fields.has(shown.field) && shown.child === index))
+    if ("enrollmentYear" in change) setYearOpen((open) => new Set([...open].filter((c) => c !== card)))
+    // A class tile answers at once.
+    if (commitAfter && "className" in change) window.setTimeout(() => void commit(studentKey("class", card)), prefersReducedMotion() ? 0 : 200)
+  }
+
+  // A tap on Day or Boarding, or on a relationship other than Other, answers
+  // the question, as a tap on the one already picked does. Only a tap: the
+  // arrow keys also move between radios.
+  function tapChoice(key: StepKey, event: React.MouseEvent) {
+    const target = event.target as HTMLElement
+    if (!(target instanceof HTMLInputElement) || target.type !== "radio") return
+    if (performance.now() - lastPointer.current > 900) return
+    if (key === "rel" && target.value === "Other") return
+    window.setTimeout(() => void commit(key), prefersReducedMotion() ? 0 : 200)
   }
 
   function updateParent(change: Partial<ParentDraft>) {
-    setParent((current) => ({ ...current, ...change }))
+    const f = formRef.current
+    setForm({ ...f, parent: { ...f.parent, ...change } })
     const fields = new Set<FormField>()
     if ("fullName" in change) fields.add("contact_name")
     if ("relationship" in change) fields.add("relationship").add("relationship_description")
     if ("relationshipDescription" in change) fields.add("relationship_description")
     if ("phone" in change) fields.add("phone")
     if ("whatsapp" in change) fields.add("whatsapp")
-    // A problem the server named goes with any edit, as before.
-    clearProblems((shown) => fields.has(shown.field) || shown.server)
+    clearProblems((shown) => fields.has(shown.field))
   }
 
-  function updateChild(index: number, change: Partial<Omit<ChildDraft, "card">>) {
-    const next = children.map((draft, i) => (i === index ? { ...draft, ...change } : draft))
-    setChildren(next)
-    const fields = new Set<FormField>()
-    if ("fullName" in change) fields.add("student_name")
-    if ("className" in change) fields.add("class_name")
-    if ("enrollmentYear" in change) fields.add("enrollment_year")
-    if ("dayOrBoarding" in change) fields.add("day_or_boarding")
-    const fixed = (shown: Shown) =>
-      shown.server || shown.field === "children" || (fields.has(shown.field) && shown.child === index)
-    if (!("fullName" in change)) return clearProblems(fixed)
-    // A name change can end a repeat on any card. The cards still repeating
-    // an earlier one keep their warning; a new repeat waits for Continue.
-    setProblems((current) => {
-      const kept = current.filter((shown) => !fixed(shown))
-      const showing = new Set(kept.flatMap((shown) => (shown.field === "duplicate_child" ? [shown.child ?? -1] : [])))
-      const still = new Set(remainingDuplicates(next.map(asChild), showing).map((problem) => problem.child))
-      const left = kept.filter((shown) => shown.field !== "duplicate_child" || still.has(shown.child))
-      return left.length === current.length ? current : left
-    })
-  }
-
-  function addChild() {
-    if (children.length >= MAX_CHILDREN) return
+  function addStudent() {
+    const f = formRef.current
+    if (f.children.length >= MAX_CHILDREN) return
     lastCard.current += 1
-    const card = lastCard.current
-    setChildren((current) => [...current, emptyChild(card)])
-    clearProblems((shown) => shown.field === "children")
-    setCardFocus({ index: children.length, at: "name" })
-  }
-
-  function removeChild(index: number) {
-    if (children.length <= 1) return
-    setChildren((current) => current.filter((_, i) => i !== index))
-    // The cards after it move up, so their problems no longer point at them.
+    const children = [...f.children, emptyChild(lastCard.current)]
+    const done = new Set(f.done)
+    done.delete("more")
+    setInteracted(true)
     setProblems([])
-    setCardFocus({ index: Math.min(index, children.length - 2), at: "card" })
+    setExpanded(new Set())
+    show({ ...f, children, done, open: furthest(children, done) }, "push")
   }
 
-  function onContinue() {
+  function removeStudent(card: number) {
+    const f = formRef.current
+    if (f.children.length <= 1) return
+    const children = f.children.filter((child) => child.card !== card)
+    const done = new Set([...f.done].filter((key) => parseKey(key).card !== card))
+    const keys = order(children)
+    const open = !keys.includes(f.open) || f.open === "send" ? furthest(children, done) : f.open
+    setProblems([])
+    show({ ...f, children, done, open }, "replace")
+    // The student's line folds away; put the reader back on the open question.
+    window.setTimeout(() => {
+      const li = document.getElementById(stepId(open))
+      if (li) onOpened(li as HTMLLIElement)
+    }, 340)
+  }
+
+  // Start over, "Fill in another form" and "Clear the whole form": an empty
+  // form with the page's own code, and no draft.
+  function restart(message: string | null) {
+    round.current += 1
+    clearDraft()
+    lastCard.current += 1
+    const children = [emptyChild(lastCard.current)]
+    const open = studentKey("name", lastCard.current)
+    setForm({ parent: EMPTY_PARENT, children, discountCode: startingCode, done: new Set(), open })
+    setSubmissionKey(newSubmissionKey())
+    setConfirmed(null)
+    setAlreadySent(null)
     setNotice(null)
-    if (step === 0) {
-      const found = parentProblems(asParent(parent))
-      if (found.length) return go(0, found.map((shown) => ({ ...shown, server: false })))
-      return go(1, [], "push")
-    }
-    const found = childrenProblems(children.map(asChild), years)
-    if (found.length) return go(1, found.map((shown) => ({ ...shown, server: false })))
-    go(2, [], "push")
-    // A code filled in from a Referral link, or kept from before, is checked
-    // as the review step opens; the field's blur checks any edit.
-    void checkCode(discountCode)
+    setProblems([])
+    setExpanded(new Set())
+    setYearOpen(new Set())
+    setWhatsappOn(false)
+    setSheet(null)
+    setInstant(true)
+    trail.current = [open]
+    pos.current = 0
+    window.history.replaceState(null, "", urlFor(open, children))
+    window.scrollTo({ top: 0 })
+    if (message) announce(message)
+    focusSoon(`#student-name-${lastCard.current}`)
   }
 
-  // The form's own Back: back through history when this step was reached by
-  // moving forward, so the phone's Forward still works; otherwise (a reload,
-  // or a step opened from a link) it replaces the entry.
-  function onBack() {
-    setNotice(null)
-    const state: unknown = window.history.state
-    const marked = Boolean(state && typeof state === "object" && (state as Record<string, unknown>)[PUSHED])
-    if (marked || pushedSteps.current.has(step)) {
-      window.history.back()
-      return
-    }
-    go((step - 1) as Step)
-  }
-
-  function onSend(form: HTMLFormElement) {
-    // Also while going back to an earlier step, until its popstate arrives.
+  function onSend(formElement: HTMLFormElement) {
+    // Also while going back to an earlier question, until its popstate arrives.
     if (sending || arriving.current) return
-    const parentFound = parentProblems(asParent(parent))
-    if (parentFound.length) return go(0, parentFound.map((shown) => ({ ...shown, server: false })))
-    const childFound = childrenProblems(children.map(asChild), years)
-    if (childFound.length) return go(1, childFound.map((shown) => ({ ...shown, server: false })))
-    if (discountCode.trim() && !normalizeDiscountCode(discountCode)) {
-      return go(2, [{ field: "discount_code", child: null, server: false }])
+    const f = formRef.current
+    for (const key of order(f.children)) {
+      if (key === "send") break
+      const found = stepProblems(key, f, years)
+      if (found.length) return goTo(key, found.map((problem) => ({ ...problem, server: false })))
     }
-
-    const data = new FormData(form)
-    // Turnstile fills its token in a moment after the step opens; sending
-    // before then would only be refused.
+    const data = new FormData(formElement)
+    // Turnstile fills its token in a moment after the question opens;
+    // sending before then would only be refused.
     if (!data.get("cf-turnstile-response")) {
       // A check that needs a click says so itself, next to Send.
       setNotice(turnstile.current?.reveal() ? null : "check-pending")
       return
     }
+    const code = f.discountCode.trim()
     data.set(
       "form",
       JSON.stringify({
         submissionKey,
-        parent: asParent(parent),
-        children: children.map(asChild),
-        discountCode: discountCode.trim() || undefined,
+        parent: asParent(f.parent),
+        children: f.children.map(asChild),
+        discountCode: code || undefined,
         // The field has a value, so the code-holder notice is showing.
-        noticeVersion: discountCode.trim() ? FORM_NOTICE_VERSION : undefined,
+        noticeVersion: code ? FORM_NOTICE_VERSION : undefined,
       }),
     )
     setNotice(null)
     setProblems([])
+    const saved = discountEach * f.children.length
+    const sentIn = round.current
     startSending(async () => {
       let result: AdmissionFormState
       try {
@@ -459,625 +669,227 @@ export function AdmissionFormSteps({
       } catch {
         result = { status: "unavailable" }
       }
+      if (round.current !== sentIn) return
       if (result.status === "confirmed" || result.status === "already-sent") {
         // The draft goes as soon as the confirmation shows, and the URL
-        // drops its step, so a reload opens an empty form.
+        // drops its question, so a reload opens an empty form.
         clearDraft()
-        window.history.replaceState(null, "", stepUrl(0))
-        // The entries after this one belong to the form just sent.
-        pushedSteps.current.clear()
-        moved.current = true
-        setConfirmed(result.children)
+        const url = new URL(window.location.href)
+        url.searchParams.delete("q")
+        window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
+        trail.current = []
+        pos.current = 0
+        // An earlier send went through without this send's edits, so its code
+        // (and any saving) is unknown here: promise no discount.
+        setConfirmed({ outcomes: result.children, saved: result.status === "confirmed" ? saved : 0 })
         setAlreadySent(result.status === "already-sent" ? (result.complete ? "all" : "some") : null)
+        announce(copy.doneTitle)
         return
       }
       // The token is spent once checked, so get a fresh one for the next try.
       turnstile.current?.reset()
       if (result.status === "invalid") {
         if (result.field === "submission_key") setSubmissionKey(newSubmissionKey())
-        // The year turned since the page loaded: render the new year chips.
+        // The year turned since the page loaded: render the new year tiles.
         // The entries are client state, so a refresh keeps them.
         const refresh = result.field === "enrollment_year"
         const shown: Shown = { field: result.field, child: result.child, server: true }
-        if (PARENT_FIELDS.has(result.field)) return go(0, [shown], "replace", refresh)
-        if (CHILD_FIELDS.has(result.field)) return go(1, [shown], "replace", refresh)
+        const key = stepForProblem(shown, formRef.current.children)
+        if (key) return goTo(key, [shown], refresh)
         if (refresh) router.refresh()
-        moved.current = true
         setProblems([shown])
+        focusSoon("[data-form-problem]")
         return
       }
       setNotice(result.status === "idle" ? "unavailable" : result.status)
     })
   }
 
-  function startAgain() {
-    clearDraft()
-    setParent(EMPTY_PARENT)
-    lastCard.current += 1
-    setChildren([emptyChild(lastCard.current)])
-    setSubmissionKey(newSubmissionKey())
-    // The remembered code still counts for another form, as the page would
-    // start it.
-    setDiscountCode(startingCode)
-    setConfirmed(null)
-    setAlreadySent(null)
-    setNotice(null)
-    go(0)
-  }
-
-  if (confirmed) {
-    return (
-      <Confirmation
-        copy={copy}
-        outcomes={confirmed}
-        alreadySent={alreadySent}
-        officePhone={officePhone}
-        headingRef={heading}
-        onAgain={startAgain}
-      />
-    )
-  }
+  const { parent, children, discountCode, done, open } = form
+  const currentCode = normalizeDiscountCode(discountCode)
+  const answer = currentCode ? (answers[currentCode] ?? null) : null
+  const feeEach = answer && "amount" in answer ? answer.amount : STANDARD_INTERVIEW_FEE
+  const discountEach = Math.max(0, STANDARD_INTERVIEW_FEE - feeEach)
+  const applications = shownApplicationCount(live.applications)
 
   const message = (field: FormField, childIndex: number | null = null) => {
-    const problem = problems.find(
-      (shown) => shown.field === field && (childIndex === null || shown.child === null || shown.child === childIndex),
-    )
+    const problem = problems.find((shown) => shown.field === field && (childIndex === null || shown.child === null || shown.child === childIndex))
     if (!problem) return null
     if (problem.server && field === "phone") return copy.problems.phone_unreadable
     if (problem.server && field === "enrollment_year") return copy.problems.year_closed
     if (field === "duplicate_child" && problem.child !== null && children[problem.child]) {
-      return copy.duplicateChild(duplicateName(children, problem.child))
+      const key = childNameKey(children[problem.child].fullName)
+      const firstOne = children.slice(0, problem.child).find((child) => childNameKey(child.fullName) === key) ?? children[problem.child]
+      return copy.duplicateChild(firstOne.fullName.trim().replace(/\s+/g, " "))
     }
     return copy.problems[field]
   }
-  const formProblem = problems.find(
-    (shown) => !PARENT_FIELDS.has(shown.field) && !CHILD_FIELDS.has(shown.field) && shown.field !== "discount_code",
-  )
-  const formLevel = formProblem ? copy.problems[formProblem.field] : null
-  // The answer for the code in the field now, if it has one.
-  const currentCode = normalizeDiscountCode(discountCode)
-  const answer = currentCode ? (answers[currentCode] ?? null) : null
-  const discountNote =
-    !currentCode || problems.some((shown) => shown.field === "discount_code")
-      ? null
-      : checking.has(currentCode)
-        ? copy.discountChecking
-        : answer?.status === "approved"
-          ? copy.discountNotes.approved(answer.discount === null ? null : tzs(answer.discount))
-          : answer
-            ? copy.discountNotes[answer.status === "rate-limited" || answer.status === "unavailable" ? "unchecked" : answer.status]
-            : null
-  const feePerChild = answer && "amount" in answer ? answer.amount : STANDARD_INTERVIEW_FEE
-
+  const unplaced = problems.find((shown) => stepForProblem(shown, children) === null)
   const noticeText = notice
-    ? {
-        "check-pending": copy.checkPending,
-        "rate-limited": copy.rateLimited,
-        "check-failed": copy.checkFailed,
-        unavailable: copy.unavailable,
-      }[notice]
+    ? { "check-pending": copy.checkPending, "rate-limited": copy.rateLimited, "check-failed": copy.checkFailed, unavailable: copy.unavailable }[notice]
     : null
 
+  // The progress bar follows the student whose question is open, else the last.
+  const focusCard = parseKey(open).card ?? children[children.length - 1].card
+  const focusIndex = Math.max(0, children.findIndex((child) => child.card === focusCard))
+  const groupKeys: StepKey[][] = [STUDENT_KINDS.map((kind) => studentKey(kind, children[focusIndex].card)), ["pname", "rel", "phone"], ["code", "fee"]]
+  const labels = [children.length === 1 ? copy.oneStudent : copy.sections[0], copy.sections[1], copy.sections[2]]
+  const groups = groupKeys.map((keys, i) => ({
+    label: labels[i],
+    steps: keys.length,
+    done: keys.filter((key) => done.has(key)).length,
+    current: keys.includes(open) && !done.has(open) ? keys.indexOf(open) : -1,
+  }))
+  const activeGroup = open === "send" ? 3 : open === "more" ? 0 : groupKeys.findIndex((keys) => keys.includes(open))
+  const who = children.length > 1 ? copy.who(focusIndex + 1) : undefined
+  const at = order(children).indexOf(open)
+  const status =
+    open === "send"
+      ? copy.progressDone
+      : open === "more"
+        ? copy.anotherQ
+        : copy.progress(labels[activeGroup], groupKeys[activeGroup].indexOf(open) + 1, groupKeys[activeGroup].length, activeGroup === 0 ? (who ?? null) : null)
+
+  const classCard = sheet?.kind === "class" ? children.find((child) => child.card === sheet.card) : undefined
+
   return (
-    <section className="rounded-[40px] bg-white px-5 py-7 shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">
-      <div className="flex gap-1.5" aria-hidden>
-        {copy.steps.map((title, index) => (
-          <div key={title} className={cn("h-1.5 flex-1 rounded-full", index <= step ? "bg-orange-500" : "bg-blue-100")} />
-        ))}
-      </div>
-      <p className="mt-3 text-sm text-slate-600">{copy.stepOf(step + 1)}</p>
-      <h1
-        ref={heading}
-        tabIndex={-1}
-        className="mt-1 font-exo text-3xl font-extrabold italic leading-tight text-balance text-blue-600 outline-none"
-      >
-        {copy.steps[step]}
-      </h1>
-
-      <form
-        noValidate
-        className="mt-6"
-        onSubmit={(event) => {
-          event.preventDefault()
-          if (step < 2) onContinue()
-          else onSend(event.currentTarget)
-        }}
-      >
-        {step === 0 && (
-          <div className="flex flex-col gap-5">
-            <TextField
-              id="parent-name"
-              field="contact_name"
-              label={copy.parentName}
-              value={parent.fullName}
-              onChange={(fullName) => updateParent({ fullName })}
-              autoComplete="name"
-              error={message("contact_name")}
+    <>
+      <BrandTopBar variant="schools" language={language} showLanguagePrompt={showLanguagePrompt} onClearForm={() => restart(copy.cleared)} />
+      <h1 className="sr-only">{copy.title}</h1>
+      <section className="rounded-[32px] bg-white px-5 py-6 shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[40px] sm:px-7 sm:py-8 max-[330px]:rounded-[26px] max-[330px]:px-3">
+        {confirmed ? (
+          <Confirmation
+            copy={copy}
+            outcomes={confirmed.outcomes}
+            alreadySent={alreadySent}
+            officePhone={officePhone}
+            headingRef={doneHeading}
+            savedTotal={confirmed.saved}
+            applications={applications}
+            onAgain={() => restart(null)}
+          />
+        ) : (
+          <>
+            <ProgressBar
+              groups={groups}
+              activeGroup={activeGroup}
+              whoLabel={who}
+              canBack={at > 0}
+              onBack={goBack}
+              canReset={at <= 0 && done.size === 0}
+              onReset={() => restart(copy.resetDone)}
+              labels={{ back: copy.back, reset: copy.reset }}
+              status={status}
             />
-            <ChipField
-              field="relationship"
-              label={copy.relationship}
-              options={RELATIONSHIPS.map((value) => ({ value, label: copy.relationships[value] }))}
-              value={parent.relationship}
-              onPick={(relationship) => updateParent({ relationship })}
-              error={message("relationship")}
-            />
-            {parent.relationship === "Other" && (
-              <TextField
-                id="relationship-description"
-                field="relationship_description"
-                label={copy.relationshipDescription}
-                value={parent.relationshipDescription}
-                onChange={(relationshipDescription) => updateParent({ relationshipDescription })}
-                error={message("relationship_description")}
-              />
-            )}
-            <TextField
-              id="phone"
-              field="phone"
-              label={copy.phone}
-              hint={copy.phoneHint}
-              value={parent.phone}
-              onChange={(phone) => updateParent({ phone })}
-              type="tel"
-              autoComplete="tel"
-              error={message("phone")}
-            />
-            <TextField
-              id="whatsapp"
-              field="whatsapp"
-              label={`${copy.whatsapp} (${copy.optional})`}
-              hint={copy.whatsappHint}
-              value={parent.whatsapp}
-              onChange={(whatsapp) => updateParent({ whatsapp })}
-              type="tel"
-              error={message("whatsapp")}
-            />
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="flex flex-col gap-4">
-            {children.map((draft, index) => (
-              <fieldset
-                key={draft.card}
-                data-child={index}
-                tabIndex={-1}
-                className="flex min-w-0 flex-col gap-5 rounded-3xl p-4 outline-none ring-1 ring-blue-600/15"
-              >
-                <legend className="sr-only">
-                  {copy.child} {index + 1}
-                </legend>
-                <div className="flex items-center justify-between gap-3">
-                  <p aria-hidden className="font-exo text-base font-bold italic text-orange-700">
-                    {copy.child} {index + 1}
-                  </p>
-                  {children.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeChild(index)}
-                      className="-my-1 -mr-2 inline-flex min-h-11 items-center gap-1 rounded-full px-3 text-sm text-blue-800 outline-none transition hover:bg-red-50 hover:text-red-700 focus-visible:ring-3 focus-visible:ring-blue-600/40"
-                    >
-                      <X className="size-4" aria-hidden />
-                      {copy.removeChild(index + 1)}
-                    </button>
-                  )}
-                </div>
-                <TextField
-                  id={`child-name-${draft.card}`}
-                  field="student_name"
-                  label={copy.childName}
-                  value={draft.fullName}
-                  onChange={(fullName) => updateChild(index, { fullName })}
-                  // The child's name, never the parent's own from the phone.
-                  autoComplete="off"
-                  error={message("student_name", index) ?? message("duplicate_child", index)}
-                />
-                <ChipField
-                  id={`class-${draft.card}`}
-                  field="class_name"
-                  label={copy.className}
-                  options={LEAD_CLASSES.map((value) => ({ value, label: value }))}
-                  value={draft.className}
-                  onPick={(className) => updateChild(index, { className })}
-                  error={message("class_name", index)}
-                />
-                <ChipField
-                  id={`year-${draft.card}`}
-                  field="enrollment_year"
-                  label={copy.enrollmentYear}
-                  options={years.map((year) => ({ value: String(year), label: String(year) }))}
-                  value={draft.enrollmentYear === null ? "" : String(draft.enrollmentYear)}
-                  onPick={(year) => updateChild(index, { enrollmentYear: Number(year) })}
-                  error={message("enrollment_year", index)}
-                />
-                <ChipField
-                  id={`boarding-${draft.card}`}
-                  field="day_or_boarding"
-                  label={copy.dayOrBoarding}
-                  options={DAY_OR_BOARDING.map((value) => ({ value, label: copy.dayOrBoardingOptions[value] }))}
-                  value={draft.dayOrBoarding}
-                  onPick={(dayOrBoarding) => updateChild(index, { dayOrBoarding })}
-                  error={message("day_or_boarding", index)}
-                />
-              </fieldset>
-            ))}
-            {children.length < MAX_CHILDREN ? (
-              <button
-                type="button"
-                onClick={addChild}
-                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-3xl border-2 border-dashed border-blue-600/30 px-4 font-exo text-base font-bold italic text-blue-600 outline-none transition hover:border-blue-600/60 hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
-              >
-                <Plus className="size-5" aria-hidden />
-                {copy.addChild}
-              </button>
-            ) : (
-              <p className="text-center text-sm text-slate-600">{copy.maxChildren(MAX_CHILDREN)}</p>
-            )}
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="flex flex-col gap-4">
-            <dl className="rounded-3xl bg-blue-50 p-4 ring-1 ring-blue-100">
-              <dt className="text-sm font-semibold text-blue-800">{copy.reviewParent}</dt>
-              <dd className="mt-1 text-base text-blue-900">
-                <span className="font-semibold">{parent.fullName.trim()}</span>
-                {" · "}
-                {parent.relationship === "Other"
-                  ? parent.relationshipDescription.trim()
-                  : copy.relationships[parent.relationship as keyof typeof copy.relationships]}
-              </dd>
-              <dd className="text-base text-blue-900">{parent.phone.trim()}</dd>
-              {parent.whatsapp.trim() && (
-                <dd className="text-base text-blue-900">
-                  {copy.whatsapp}: {parent.whatsapp.trim()}
-                </dd>
-              )}
-              {children.map((draft, index) => (
-                <Fragment key={draft.card}>
-                  <dt className="mt-4 text-sm font-semibold text-blue-800">
-                    {copy.reviewChild} {index + 1}
-                  </dt>
-                  <dd className="mt-1 text-base font-semibold text-blue-900">{draft.fullName.trim()}</dd>
-                  <dd className="text-base text-blue-900">
-                    {draft.className} · {draft.enrollmentYear} ·{" "}
-                    {copy.dayOrBoardingOptions[draft.dayOrBoarding as keyof typeof copy.dayOrBoardingOptions]}
-                  </dd>
-                </Fragment>
-              ))}
-            </dl>
-
-            <DiscountCodeField
-              label={copy.discountCode}
-              hint={copy.discountCodeHint}
-              value={discountCode}
-              onChange={(value) => {
-                setDiscountCode(value)
-                clearProblems((shown) => shown.field === "discount_code" || shown.server)
+            <form
+              noValidate
+              onPointerDown={() => {
+                lastPointer.current = performance.now()
               }}
-              onBlur={() => void checkCode(discountCode)}
-              note={discountNote}
-              holderNotice={discountCode.trim() ? FORM_NOTICE[language] : null}
-              confirmed={answer?.status === "approved"}
-              error={message("discount_code")}
-            />
-
-            <div className="rounded-3xl bg-orange-50 p-4 ring-1 ring-orange-100">
-              <p className="text-sm font-semibold text-orange-950">{copy.interviewFee}</p>
-              <p className="mt-1 text-base text-orange-950">{copy.feePerChild(tzs(feePerChild))}</p>
-              <p className="mt-0.5 text-base font-semibold text-orange-950">
-                {copy.feeTotal(children.length, tzs(feePerChild * children.length))}
-              </p>
-              <p className="mt-1 text-sm text-orange-950">{copy.feeNotPaidHere}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Inside the form, so its token is sent; invisible unless Cloudflare
-            needs a click, and then right above Send. */}
-        {step === 2 && <TurnstileWidget ref={turnstile} action="admission" language={language} className="mt-5" />}
-
-        {(noticeText || formLevel) && (
-          <p
-            role="alert"
-            tabIndex={-1}
-            data-field={formProblem?.field}
-            className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700 outline-none ring-1 ring-red-200"
-          >
-            {noticeText ?? formLevel}
-          </p>
-        )}
-
-        <div className="mt-7 flex gap-3">
-          {step > 0 && (
-            <button
-              type="button"
-              onClick={onBack}
-              disabled={sending}
-              className="h-12 rounded-full border border-blue-600/30 px-6 font-exo text-base font-bold italic text-blue-600 outline-none transition hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40 disabled:opacity-70"
+              onKeyDown={(event) => {
+                const target = event.target as HTMLElement
+                if (event.key !== "Enter" || !(target instanceof HTMLInputElement) || target.type === "radio") return
+                event.preventDefault()
+                void commit(formRef.current.open)
+              }}
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (formRef.current.open === "send") onSend(event.currentTarget)
+                else void commit(formRef.current.open)
+              }}
             >
-              {copy.back}
-            </button>
-          )}
-          <button
-            type="submit"
-            disabled={sending}
-            className={cn(
-              buttonVariants({ variant: "orange" }),
-              "h-12 flex-1 rounded-full font-exo text-lg italic shadow-md shadow-orange-500/20 transition hover:-translate-y-0.5 active:scale-95 disabled:translate-y-0 disabled:opacity-70",
-            )}
-          >
-            {step < 2 ? copy.continue : sending ? copy.sending : copy.send}
-          </button>
-        </div>
-      </form>
-    </section>
-  )
-}
-
-function FieldError({ id, children }: { id: string; children: ReactNode }) {
-  return (
-    <p id={id} className="mt-1.5 text-sm text-red-600">
-      {children}
-    </p>
-  )
-}
-
-function TextField({
-  id,
-  field,
-  label,
-  hint,
-  value,
-  onChange,
-  type = "text",
-  autoComplete,
-  error,
-}: {
-  id: string
-  field: FormField
-  label: string
-  hint?: string
-  value: string
-  onChange: (value: string) => void
-  type?: "text" | "tel"
-  autoComplete?: string
-  error: string | null
-}) {
-  const described = [hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(" ") || undefined
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-semibold text-slate-700">
-        {label}
-      </label>
-      {hint && (
-        <p id={`${id}-hint`} className="mt-0.5 text-sm text-slate-500">
-          {hint}
-        </p>
-      )}
-      <input
-        id={id}
-        data-field={field}
-        type={type}
-        inputMode={type === "tel" ? "tel" : undefined}
-        autoComplete={autoComplete}
-        value={value}
-        maxLength={200}
-        onChange={(event) => onChange(event.target.value)}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={described}
-        className={cn(
-          "mt-1.5 h-12 w-full rounded-full border bg-white px-5 text-base text-slate-800 outline-none transition focus-visible:border-blue-600 focus-visible:ring-3 focus-visible:ring-blue-600/20",
-          error ? "border-red-500" : "border-blue-600/30",
+              <GuidedStack instant={instant}>
+                {questionItems({
+                  copy,
+                  language,
+                  years,
+                  defaultYear,
+                  parent,
+                  children,
+                  discountCode,
+                  done,
+                  open,
+                  focusOnMount: interacted,
+                  expanded,
+                  yearOpen,
+                  whatsappOn,
+                  message,
+                  codeAnswer: answer,
+                  codeChecking: currentCode !== null && checking.has(currentCode),
+                  feeEach,
+                  discountEach,
+                  liveDiscount: live.discount,
+                  notice: noticeText,
+                  formProblem: unplaced ? { field: unplaced.field, text: copy.problems[unplaced.field] } : null,
+                  sending,
+                  turnstileRef: turnstile,
+                  onOpened,
+                  on: {
+                    commit: (key) => void commit(key),
+                    change,
+                    child: updateChild,
+                    parent: updateParent,
+                    tapChoice,
+                    code: (value) => {
+                      setForm({ ...formRef.current, discountCode: value })
+                      clearProblems((shown) => shown.field === "discount_code")
+                    },
+                    codeBlur: () => void checkCode(formRef.current.discountCode),
+                    codeCheck: () => {
+                      const value = formRef.current.discountCode
+                      if (!value.trim()) return focusSoon("#discount-code")
+                      if (!normalizeDiscountCode(value)) return showProblems([{ field: "discount_code", child: null }])
+                      void checkCode(value)
+                    },
+                    classSheet: (card) => setSheet({ kind: "class", card }),
+                    toggleYear: (card) =>
+                      setYearOpen((current) => {
+                        const next = new Set(current)
+                        if (next.has(card)) next.delete(card)
+                        else next.add(card)
+                        return next
+                      }),
+                    addStudent,
+                    removeStudent,
+                    expand: (card) => {
+                      setExpanded((current) => new Set(current).add(card))
+                      focusSoon(`#kh-${card}`)
+                    },
+                    toggleWhatsapp: () => {
+                      if (whatsappOn) updateParent({ whatsapp: "" })
+                      setWhatsappOn(!whatsappOn)
+                      if (!whatsappOn) focusSoon("#whatsapp")
+                    },
+                    offer: () => setSheet({ kind: "offer" }),
+                  },
+                })}
+              </GuidedStack>
+            </form>
+          </>
         )}
+      </section>
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
+      <ClassSheet
+        copy={copy}
+        open={sheet?.kind === "class"}
+        picked={classCard?.className ?? ""}
+        onClose={() => setSheet(null)}
+        onPick={(className) => {
+          if (!classCard) return
+          setSheet(null)
+          updateChild(classCard.card, { className }, true)
+        }}
       />
-      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
-    </div>
-  )
-}
-
-function ChipField({
-  id,
-  field,
-  label,
-  options,
-  value,
-  onPick,
-  error,
-}: {
-  // Unique on the page; the field's name when the field shows once.
-  id?: string
-  field: FormField
-  label: string
-  options: { value: string; label: string }[]
-  value: string
-  onPick: (value: string) => void
-  error: string | null
-}) {
-  const base = id ?? field
-  const labelId = `${base}-label`
-  return (
-    <div>
-      <p id={labelId} className="text-sm font-semibold text-slate-700">
-        {label}
-      </p>
-      <div
-        role="group"
-        aria-labelledby={labelId}
-        aria-describedby={error ? `${base}-error` : undefined}
-        data-field={field}
-        tabIndex={-1}
-        className="mt-2 flex flex-wrap gap-2 outline-none"
-      >
-        {options.map((option) => {
-          const picked = option.value === value
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={picked}
-              onClick={() => onPick(option.value)}
-              className={cn(
-                "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-base outline-none transition focus-visible:ring-3 focus-visible:ring-blue-600/40",
-                picked
-                  ? "border-blue-600 bg-blue-600 font-semibold text-white"
-                  : error
-                    ? "border-red-400 bg-white text-slate-800 hover:bg-blue-50"
-                    : "border-blue-600/30 bg-white text-slate-800 hover:bg-blue-50",
-              )}
-            >
-              {picked && <Check className="size-4" aria-hidden />}
-              {option.label}
-            </button>
-          )
-        })}
-      </div>
-      {error && <FieldError id={`${base}-error`}>{error}</FieldError>}
-    </div>
-  )
-}
-
-// The optional Discount code, with the note that says what the code means.
-// The note is a live region, so a screen reader hears the answer arrive.
-// Whenever the field has a value, the code-holder notice (#182) shows under
-// it: information only, fixed wording, versioned in lib/referral-notice.ts.
-function DiscountCodeField({
-  label,
-  hint,
-  value,
-  onChange,
-  onBlur,
-  note,
-  holderNotice,
-  confirmed,
-  error,
-}: {
-  label: string
-  hint: string
-  value: string
-  onChange: (value: string) => void
-  onBlur: () => void
-  note: string | null
-  holderNotice: string | null
-  confirmed: boolean
-  error: string | null
-}) {
-  const id = "discount-code"
-  const described = [`${id}-hint`, `${id}-note`, holderNotice ? `${id}-holder-notice` : null, error ? `${id}-error` : null]
-    .filter(Boolean)
-    .join(" ")
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-semibold text-slate-700">
-        {label}
-      </label>
-      <p id={`${id}-hint`} className="mt-0.5 text-sm text-slate-500">
-        {hint}
-      </p>
-      <input
-        id={id}
-        data-field="discount_code"
-        type="text"
-        autoCapitalize="characters"
-        autoComplete="off"
-        spellCheck={false}
-        value={value}
-        maxLength={40}
-        onChange={(event) => onChange(event.target.value)}
-        onBlur={onBlur}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={described}
-        className={cn(
-          "mt-1.5 h-12 w-full rounded-full border bg-white px-5 font-mono text-base uppercase tracking-wide text-slate-800 outline-none transition focus-visible:border-blue-600 focus-visible:ring-3 focus-visible:ring-blue-600/20",
-          error ? "border-red-500" : "border-blue-600/30",
-        )}
+      <OfferSheet
+        copy={copy}
+        open={sheet?.kind === "offer"}
+        onClose={() => setSheet(null)}
+        discountEach={discountEach}
+        students={children.length}
+        applications={applications === null ? null : formatCount(applications)}
       />
-      <p
-        id={`${id}-note`}
-        aria-live="polite"
-        className={cn("mt-1.5 text-sm empty:hidden", confirmed ? "font-semibold text-green-700" : "text-slate-600")}
-      >
-        {note}
-      </p>
-      {holderNotice && (
-        <p id={`${id}-holder-notice`} data-notice-version={FORM_NOTICE_VERSION} className="mt-1.5 text-sm text-slate-600">
-          {holderNotice}
-        </p>
-      )}
-      {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
-    </div>
-  )
-}
-
-// The name to give for the child on card `index`, which repeats an earlier
-// card: as the parent wrote it there, else as on this card.
-function duplicateName(children: ChildDraft[], index: number): string {
-  const key = childNameKey(children[index].fullName)
-  const first = children.slice(0, index).find((draft) => childNameKey(draft.fullName) === key)
-  return (first ?? children[index]).fullName.trim().replace(/\s+/g, " ")
-}
-
-function Confirmation({
-  copy,
-  outcomes,
-  alreadySent,
-  officePhone,
-  headingRef,
-  onAgain,
-}: {
-  copy: (typeof COPY)[Language]
-  outcomes: { fullName: string; admissionNumber: string }[]
-  alreadySent: "all" | "some" | null
-  officePhone: string
-  headingRef: React.RefObject<HTMLHeadingElement | null>
-  onAgain: () => void
-}) {
-  return (
-    <section className="rounded-[40px] bg-white px-5 py-8 text-center shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">
-      <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-orange-500 text-white">
-        <Check className="size-8" strokeWidth={3} aria-hidden />
-      </div>
-      <h1 ref={headingRef} tabIndex={-1} className="mt-4 font-exo text-3xl font-extrabold italic leading-tight text-balance text-blue-600 outline-none">
-        {copy.doneTitle}
-      </h1>
-
-      <ul className="mt-6 flex flex-col gap-3">
-        {outcomes.map((child) => (
-          <li key={child.admissionNumber} className="rounded-3xl bg-blue-50 px-4 py-5 ring-1 ring-blue-100">
-            <p className="text-base text-blue-900">{child.fullName}</p>
-            <p className="mt-2 text-sm font-semibold uppercase tracking-wider text-blue-800">{copy.admissionNumber}</p>
-            <p className="mt-1 font-mono text-3xl font-bold leading-tight tracking-wide break-all text-blue-600">
-              {child.admissionNumber}
-            </p>
-          </li>
-        ))}
-      </ul>
-
-      {alreadySent && (
-        <p className="mt-5 rounded-3xl bg-orange-50 px-4 py-3 text-base text-orange-950">
-          {alreadySent === "all" ? copy.alreadySent : copy.alreadySentInPart}
-        </p>
-      )}
-
-      <p className="mt-5 text-base text-slate-800">{outcomes.length > 1 ? copy.keepNumbers : copy.keepNumber}</p>
-
-      <p className="mt-6 text-sm text-slate-600">{copy.call}</p>
-      <a
-        href={`tel:${officePhone.replaceAll(" ", "")}`}
-        className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold italic text-blue-600 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
-      >
-        <Phone className="size-5" strokeWidth={2} aria-hidden />
-        {officePhone}
-      </a>
-
-      <button
-        type="button"
-        onClick={onAgain}
-        className="mt-6 flex min-h-11 w-full items-center justify-center rounded-full px-4 text-base text-blue-600 underline underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
-      >
-        {copy.again}
-      </button>
-    </section>
+    </>
   )
 }

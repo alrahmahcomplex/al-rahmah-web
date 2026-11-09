@@ -4,6 +4,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test"
 
 import { createThrowawayStaff, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER, SEEDED_AGENT, type FixtureStaff } from "../tests/support/fixtures"
+import { chooseLanguage } from "./discount-code"
 import { logIn } from "./log-in"
 
 // Agent invites and the Discount code sign-in (#191) end to end: the Manager
@@ -19,6 +20,12 @@ const PASSWORD = "agent-e2e-password"
 const notice = (page: Page) => page.getByRole("main").getByRole("alert")
 
 const STAFF_SESSION = "Kivinjari hiki kimeingia kama mfanyakazi. Toka kwanza."
+
+// The Discount code pages ask a first-time visitor for a language; these
+// specs start with it set.
+test.beforeEach(async ({ context }) => {
+  await chooseLanguage(context, "sw")
+})
 
 async function signInStaff(page: Page, person: FixtureStaff) {
   await logIn(page, person.email, person.password)
@@ -93,6 +100,7 @@ async function setPassword(page: Page) {
 
 async function newContextPage(browser: Browser) {
   const context = await browser.newContext()
+  await chooseLanguage(context, "sw")
   return context.newPage()
 }
 

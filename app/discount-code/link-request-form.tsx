@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRef, useState, useTransition, type FormEvent } from "react"
 
 import { AUTH_SUBMIT, IconField } from "@/components/auth-fields"
+import { ContinuePill, FieldInput } from "@/components/guided-form"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
@@ -15,7 +16,17 @@ import { LINK_REQUEST_COPY, type LinkRequestStatus } from "./link-request-copy"
 
 // Asks for a new password link by email (#194): "Umesahau nenosiri?" and
 // the expired-link panel's "Tuma kiungo kipya". `form` names the firewall key.
-export function LinkRequestForm({ language, form }: { language: Language; form: "agent-reset" | "agent-new-link" }) {
+// `guided` draws it in the Discount code pages' look (concept C); the /login
+// pages keep the sign-in card's.
+export function LinkRequestForm({
+  language,
+  form,
+  guided = false,
+}: {
+  language: Language
+  form: "agent-reset" | "agent-new-link"
+  guided?: boolean
+}) {
   const copy = LINK_REQUEST_COPY[language]
   const [status, setStatus] = useState<LinkRequestStatus | null>(null)
   const [pending, startSending] = useTransition()
@@ -57,7 +68,26 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
     <form onSubmit={onSubmit} className="flex flex-col" noValidate>
       <input type="hidden" name="form" value={form} />
       <div className="flex flex-col gap-3">
-        <IconField id={`${form}-email`} name="email" label={copy.email} icon={Mail} type="email" autoComplete="email" required />
+        {guided ? (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={`${form}-email`} className="text-[15px] font-semibold text-slate-800">
+              {copy.email}
+            </label>
+            <FieldInput
+              id={`${form}-email`}
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+              icon={<Mail className="size-5" strokeWidth={1.75} aria-hidden />}
+            />
+          </div>
+        ) : (
+          <IconField id={`${form}-email`} name="email" label={copy.email} icon={Mail} type="email" autoComplete="email" required />
+        )}
 
         {status && <AccountMessageView language={language} message={copy.messages[status]} />}
       </div>
@@ -67,9 +97,15 @@ export function LinkRequestForm({ language, form }: { language: Language; form: 
           no gap (#276). */}
       <TurnstileWidget ref={turnstile} action="agent-link" language={language} className="mt-3" />
 
-      <button type="submit" disabled={pending} className={cn(AUTH_SUBMIT, "mt-3")}>
-        {pending ? copy.sending : copy.send}
-      </button>
+      {guided ? (
+        <ContinuePill type="submit" pending={pending} disabled={pending} className="mt-3">
+          {pending ? copy.sending : copy.send}
+        </ContinuePill>
+      ) : (
+        <button type="submit" disabled={pending} className={cn(AUTH_SUBMIT, "mt-3")}>
+          {pending ? copy.sending : copy.send}
+        </button>
+      )}
     </form>
   )
 }
@@ -101,16 +137,26 @@ export function CallOffice({ language, officePhone }: { language: Language; offi
 
 // What an expired or used invite or reset link shows: "Tuma kiungo kipya"
 // first, which also works for someone invited who hasn't joined, then the
-// office.
-export function ExpiredLink({ language, officePhone }: { language: Language; officePhone: string }) {
+// office. `guided`: inside the Discount code frame, whose sr-only h1 is the
+// page title, so the heading is an h2.
+export function ExpiredLink({ language, officePhone, guided = false }: { language: Language; officePhone: string; guided?: boolean }) {
   const copy = LINK_REQUEST_COPY[language]
+  const Heading = guided ? "h2" : "h1"
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2 text-center">
-        <h1 className="font-exo text-2xl font-extrabold italic text-blue-600">{copy.expiredHeading}</h1>
-        <p className="font-exo text-[13px] text-slate-600">{copy.expiredIntro}</p>
+        <Heading
+          className={
+            guided
+              ? "font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic"
+              : "font-exo text-2xl font-extrabold italic text-blue-600"
+          }
+        >
+          {copy.expiredHeading}
+        </Heading>
+        <p className={guided ? "text-[15px] text-slate-600" : "font-exo text-[13px] text-slate-600"}>{copy.expiredIntro}</p>
       </div>
-      <LinkRequestForm language={language} form="agent-new-link" />
+      <LinkRequestForm language={language} form="agent-new-link" guided={guided} />
       <CallOffice language={language} officePhone={officePhone} />
       <SignInLink language={language} />
     </div>

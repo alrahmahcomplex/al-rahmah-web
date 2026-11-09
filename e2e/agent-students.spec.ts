@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { agentWithLogin, studentInterview, studentLead, type StudentsAgent } from "../tests/support/agent-students"
 import { signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
+import { chooseLanguage } from "./discount-code"
 import { logIn } from "./log-in"
 
 // The students using an agent's Discount code (#195) on a phone. Each test
@@ -11,6 +12,7 @@ import { logIn } from "./log-in"
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true })
 
 async function signInAgent(page: Page, agent: StudentsAgent) {
+  await chooseLanguage(page.context(), "sw")
   await logIn(page, agent.email, agent.password)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
 }
@@ -46,6 +48,9 @@ test("the agent sees a card per student, with the result only once it is out", a
   await expect(page.getByRole("search")).toHaveCount(0)
   await expect(page.getByRole("link", { name: "Onyesha zaidi" })).toHaveCount(0)
 
+  // The language lives in the top bar's menu, under the COMPLEX badge.
+  await expect(page.getByText("AL-RAHMAH COMPLEX")).toBeVisible()
+  await page.getByRole("button", { name: "Menyu" }).click()
   await page.getByRole("button", { name: "English" }).click()
   await expect(page.getByRole("heading", { name: `Students using Discount code ${agent.code} (4)` })).toBeVisible()
   await expect(card(page, "Juma Kadi")).toContainText("Results aren't out yet")

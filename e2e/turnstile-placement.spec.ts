@@ -190,6 +190,26 @@ for (const { name, size } of VIEWPORTS) {
       await noSidewaysScroll(page)
     })
 
+    test("the hidden check leaves no gap above Tuma kiungo kipya (#276)", async ({ page }) => {
+      await page.goto("/login/forgot-password")
+      await waitForSecurityCheck(page)
+      const email = await page.getByRole("textbox").boundingBox()
+      const send = await page.getByRole("button", { name: "Tuma kiungo kipya" }).boundingBox()
+      // The same 12px as /login has above Ingia.
+      expect(Math.round(send!.y - (email!.y + email!.height))).toBe(12)
+    })
+
+    test("a check that needs a click on the forgot-password card has 12px on each side (#276)", async ({ page }) => {
+      await cloudflareAsksForAClick(page)
+      await page.goto("/login/forgot-password")
+      await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible()
+      const email = await page.getByRole("textbox").boundingBox()
+      const check = await page.locator("[data-turnstile-box]").locator("..").boundingBox()
+      const send = await page.getByRole("button", { name: "Tuma kiungo kipya" }).boundingBox()
+      expect(Math.round(check!.y - (email!.y + email!.height))).toBe(12)
+      expect(Math.round(send!.y - (check!.y + check!.height))).toBe(12)
+    })
+
     for (const lang of ["sw", "en"] as const) {
       test(`a check that needs a click sits inside the forgot-password card, in ${lang}`, async ({ page, baseURL }) => {
         if (lang === "en") await page.context().addCookies([{ name: "lang", value: "en", url: baseURL! }])

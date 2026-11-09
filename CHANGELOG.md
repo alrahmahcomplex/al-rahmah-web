@@ -39,6 +39,13 @@ stay in the `0.x` range.
 - The Super Admin's email is now marketing.alrahmah@gmail.com. The name stays Al-Rahmah
   Complex.
 
+## November 9, 2026 `v0.92.2`
+
+### FIXED
+
+- The page for a new password link, and the panel shown for an expired link, no longer
+  leave an empty gap above "Tuma kiungo kipya" where the hidden security check sits.
+
 ## November 9, 2026 `v0.92.1`
 
 ### FIXED

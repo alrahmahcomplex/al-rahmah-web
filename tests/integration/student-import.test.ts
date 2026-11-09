@@ -322,6 +322,33 @@ describe("an import's Enrolled", () => {
     expect(await state()).toEqual({ status: "Interviewed", enrolled_by_import: false })
   })
 
+  test("the workbook pass on payments ends once the imported interview has a result", async () => {
+    const claim = await claimFeeYear()
+    onTestFinished(claim.release)
+    const saved = await saveFeeAmounts(await signedIn(ACCOUNTANT), claim.year, AMOUNTS)
+    if (!saved.ok) throw new Error(JSON.stringify(saved.error))
+
+    const s = randomUUID().slice(0, 6)
+    const file = `${HEADER}\r\nFailed Kid ${s},STD 2,${nextYear},Day,Mama Fail ${s},Mother,${importPhone().typed},,2026-09-01,,Contracted\r\n`
+    const manager = await signedIn(MANAGER)
+    const checked = await checkStudentImportFile(manager, "failed.csv", bytes(file))
+    if (!checked.ok) throw new Error(JSON.stringify(checked.error))
+    const confirmed = await confirmStudentImport(manager, confirmationOf(checked.data))
+    if (!confirmed.ok || confirmed.data.kind !== "imported") throw new Error(JSON.stringify(confirmed))
+    const [lead] = [...(await leadsOfBatch(confirmed.data.batchId)).values()]
+    await asSystem(async (sql) => {
+      await sql.query("update public.leads set enrollment_year = $2 where id = $1", [lead.id, claim.year])
+      // Staff record a Failed result on the imported interview.
+      await sql.query(
+        "update public.interviews set result = 'Failed', score = 31, interview_date = $2 where lead = $1",
+        [lead.id, today],
+      )
+    })
+
+    const paid = await recordPayment(await signedIn(ACCOUNTANT), lead.id, { type: "initial_deposit", amount: 300_000, paidOn: today }, randomUUID())
+    expect(paid).toEqual({ ok: false, error: "not_passed" })
+  })
+
   test("only the import sets the mark, and a lead's batch never changes", async () => {
     const lead = await existingLead(`Marked Kid ${randomUUID().slice(0, 6)}`, importPhone().stored)
     const outcome = await inRolledBackTransaction(async (sql) => {

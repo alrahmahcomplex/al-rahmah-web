@@ -414,6 +414,7 @@ set search_path = ''
 as $$
 declare
     current_result public.interview_result;
+    current_from_import boolean;
     lead_year integer;
     from_workbook boolean;
 begin
@@ -428,14 +429,18 @@ begin
     end if;
     perform public.assert_lead_open(check_school_fee_payment.lead_id);
 
-    select i.result into current_result
+    select i.result, i.import_batch_id is not null into current_result, current_from_import
     from public.interviews i
     where i.lead = check_school_fee_payment.lead_id
     order by i.registered_at desc, i.serial_number desc
     limit 1;
+    -- The workbook pass holds only while the current interview is still the
+    -- one the import registered, with no result. A retake after a reopening,
+    -- or a result recorded on the imported interview, puts the lead back
+    -- under the usual rule.
     if current_result is distinct from 'Passed'
        and not public.reopened_to_enrol(check_school_fee_payment.lead_id)
-       and not from_workbook then
+       and not (from_workbook and coalesce(current_from_import, false) and current_result is null) then
         raise exception 'not_passed';
     end if;
 

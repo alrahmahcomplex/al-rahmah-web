@@ -824,8 +824,13 @@ begin
         perform 1 from public.marketing_agents a where a.id = holder for share;
         held := holder;
     end loop;
-    -- A Promo code's row, then the standard amount: their writers hold them
-    -- for update while they count.
+    -- A Promo code being created with this code has no row to hold yet, so
+    -- wait on the code's lock, which its insert trigger holds exclusively
+    -- until it commits. Then the code's row, then the standard amount: their
+    -- writers hold them for update while they count.
+    if lead_code is not null then
+        perform pg_advisory_xact_lock_shared(hashtextextended('discount-code:' || lead_code, 0));
+    end if;
     perform 1 from public.promo_codes p where p.code = lead_code for share;
     perform 1 from public.interview_discount_setting s where s.singleton for share;
 

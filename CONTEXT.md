@@ -9,7 +9,7 @@ A student record created in one of two ways: a parent or guardian submits the **
 _Avoid_: Parent, guardian, prospect, enquiry, applicant
 
 **Admission form**:
-The public form, reached from the school landing page or from a **Referral link**, through which a parent or guardian applies for a student. Anyone may submit it without a referral. A successful submission creates an **Applied** admissions lead and shows the parent or guardian the lead's **Admission Number**.
+The public form, reached from the school landing page or from a **Referral link**, through which a parent or guardian applies for a student. Anyone may submit it without a referral. A successful submission creates an **Applied** admissions lead and shows the parent or guardian the lead's **Admission Number**. The form also states how many students families have applied for through it since 1 January, Tanzania time, as a plain total, and only once that total reaches 100.
 
 **Enquiry**:
 An initial expression of interest or request for information about admission that has not become an admissions lead, because no **Admission form** was submitted and no qualifying campus visit has happened.

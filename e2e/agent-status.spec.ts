@@ -10,8 +10,7 @@ import { setLeadReferralCode } from "@/lib/services/referral"
 import { registerApprovedAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { family, fillChild, fillParent, PHONE_WIDTH, type Lang } from "./admission-form"
-import { E2E_PORT } from "./server"
+import { family, openQuestion, PHONE_WIDTH, toCode, toSend, setLanguageCookie, WORDS, type Lang } from "./admission-form"
 import { logIn } from "./log-in"
 
 // Switching an agent off and retiring them (#187): the Manager's dialog with
@@ -161,35 +160,34 @@ test.describe("the Admission form", () => {
   test.use({ viewport: PHONE_WIDTH })
 
   const nextYear = String(admissionYears()[1])
-  const FIELD = { sw: "Code ya Punguzo · si lazima", en: "Discount code · optional" } as const
 
   async function toReview(page: Page, lang: Lang) {
-    const who = family()
-    await fillParent(page, lang, who)
-    await page.getByRole("button", { name: lang === "sw" ? "Endelea" : "Continue" }).click()
-    const card = page.getByRole("group", { name: `${lang === "sw" ? "Mtoto" : "Child"} 1` })
-    await fillChild(page, lang, { child: `${who.child} 1` }, nextYear, card)
-    await page.getByRole("button", { name: lang === "sw" ? "Endelea" : "Continue" }).click()
+    await toCode(page, lang, family(), nextYear)
   }
 
   test("a switched-off code says it gives no discount for now, in Swahili and English, at the full fee", async ({ page }) => {
     const agent = await approvedAgent()
     await changeStatus(agent.id, "switched_off")
 
+    await setLanguageCookie(page.context(), "sw")
     await page.goto("/apply")
     await toReview(page, "sw")
-    const field = page.getByLabel(FIELD.sw)
+    const field = openQuestion(page).getByLabel(WORDS.sw.codeLabel)
     await field.fill(agent.code.toLowerCase())
     await field.blur()
     await expect(page.getByText("Code hii haitoi punguzo kwa sasa. Unaweza kutuma fomu.")).toBeVisible()
-    await expect(page.getByText("TZS 50,000 kwa kila mtoto")).toBeVisible()
+    await toSend(page, "sw")
+    await expect(page.getByText(/^TZS 50,000 · Mwanafunzi 1$/)).toBeVisible()
 
-    await page.context().addCookies([{ name: "lang", value: "en", url: `http://localhost:${E2E_PORT}` }])
+    await setLanguageCookie(page.context(), "en")
+    // A fresh form, not the tab's draft of the one above.
+    await page.evaluate(() => window.sessionStorage.clear())
     await page.goto("/apply")
     await toReview(page, "en")
-    await page.getByLabel(FIELD.en).fill(agent.code)
-    await page.getByLabel(FIELD.en).blur()
+    await openQuestion(page).getByLabel(WORDS.en.codeLabel).fill(agent.code)
+    await openQuestion(page).getByLabel(WORDS.en.codeLabel).blur()
     await expect(page.getByText("This code gives no discount at the moment. You can still send the form.")).toBeVisible()
-    await expect(page.getByText("TZS 50,000 per child")).toBeVisible()
+    await toSend(page, "en")
+    await expect(page.getByText(/^TZS 50,000 · 1 student$/)).toBeVisible()
   })
 })

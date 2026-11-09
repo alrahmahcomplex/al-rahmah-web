@@ -1,102 +1,97 @@
-import { expect, test, type Page } from "@playwright/test"
+import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { family, fillChild, fillParent, PHONE_WIDTH, waitForSecurityCheck, WORDS } from "./admission-form"
-import { E2E_PORT } from "./server"
+import { expectQuestion, family, fillForm, fillParent, fillStudent, openQuestion, PHONE_WIDTH, send, toCode, toSend, setLanguageCookie, WORDS } from "./admission-form"
 
 // The Admission form's history entries and its sessionStorage draft (#255):
-// the phone's Back and Forward move between steps, a reload keeps the
-// entries, and a confirmed send leaves nothing behind. Also every problem on
-// a step at once, and the header with the phone's text made large.
+// the phone's Back and Forward move between questions, a reload keeps the
+// entries and reopens the question the parent was on, and a confirmed send
+// leaves nothing behind. Also the top bar with the phone's text made large.
 
 test.use({ viewport: PHONE_WIDTH })
 
 const t = WORDS.sw
 const nextYear = String(admissionYears()[1])
 
-const heading = (page: Page, step: 0 | 1 | 2) => page.getByRole("heading", { level: 1, name: t.steps[step] })
+test.beforeEach(async ({ context }) => {
+  await setLanguageCookie(context, "sw")
+})
 
 test("Back, Forward and reload keep every entry, and a confirmed send clears them", async ({ page }) => {
   const who = family()
   const ref = `MJ-${who.phone.slice(-6)}`
   await page.goto(`/apply?ref=${ref}`)
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(heading(page, 1)).toBeVisible()
-  await expect(page).toHaveURL(`/apply?ref=${ref}&step=2`)
-  await page.getByLabel(t.childName).fill(who.child)
-  await page.getByRole("button", { name: "STD 3", exact: true }).click()
+  await openQuestion(page).getByRole("textbox").fill(who.child)
+  await openQuestion(page).getByRole("button", { name: t.continue }).click()
+  await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
+  await expect(page).toHaveURL(`/apply?ref=${ref}&q=class-1`)
 
   await page.goBack()
-  await expect(heading(page, 0)).toBeVisible()
+  await expectQuestion(page, t.studentName)
   await expect(page).toHaveURL(`/apply?ref=${ref}`)
-  await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
-  await expect(page.getByLabel(t.phone, { exact: true })).toHaveValue(who.phone)
+  await expect(openQuestion(page).getByRole("textbox")).toHaveValue(who.child)
 
   await page.goForward()
-  await expect(heading(page, 1)).toBeVisible()
-  await expect(page.getByLabel(t.childName)).toHaveValue(who.child)
-  await expect(page.getByRole("button", { name: "STD 3", exact: true })).toHaveAttribute("aria-pressed", "true")
+  await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
 
   await page.reload()
-  await expect(heading(page, 1)).toBeVisible()
-  await expect(page.getByLabel(t.childName)).toHaveValue(who.child)
-  await expect(page.getByRole("button", { name: "STD 3", exact: true })).toHaveAttribute("aria-pressed", "true")
+  await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
+  await expect(page.getByText(who.child, { exact: true })).toBeVisible()
 
-  // Problems on the step leave its history entry alone, and the form's own
-  // Back steps back through history, so Forward still works.
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(page.getByText("Chagua mwaka wa kujiunga.")).toBeVisible()
+  // The form's own Back steps back through history, so Forward still works.
   await page.getByRole("button", { name: t.back }).click()
-  await expect(heading(page, 0)).toBeVisible()
-  await expect(page.getByRole("button", { name: t.mother, exact: true })).toHaveAttribute("aria-pressed", "true")
+  await expectQuestion(page, t.studentName)
+  await expect(openQuestion(page).getByRole("textbox")).toHaveValue(who.child)
   await page.goForward()
-  await expect(heading(page, 1)).toBeVisible()
-  await expect(page.getByLabel(t.childName)).toHaveValue(who.child)
+  await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
 
-  await page.getByRole("button", { name: nextYear, exact: true }).click()
-  await page.getByRole("button", { name: t.boarding, exact: true }).click()
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(heading(page, 2)).toBeVisible()
+  await page.getByRole("button", { name: t.back }).click()
+  await openQuestion(page).getByRole("button", { name: t.continue }).click()
+  await openQuestion(page).getByRole("button", { name: t.chooseOther }).click()
+  await page.getByRole("dialog", { name: t.sheetTitle }).getByRole("button", { name: "STD 3", exact: true }).click()
+  await openQuestion(page).getByText(t.boarding, { exact: true }).click()
+  await openQuestion(page).getByRole("button", { name: t.noMore }).click()
+  await fillParent(page, "sw", who)
 
   // The parent clears the link's code; a reload of the same link keeps that.
-  const code = page.getByLabel("Code ya Punguzo · si lazima")
+  const code = openQuestion(page).getByLabel(t.codeLabel)
   await expect(code).toHaveValue(ref)
   await code.fill("")
   await page.reload()
-  await expect(heading(page, 2)).toBeVisible()
-  await expect(code).toHaveValue("")
+  await expectQuestion(page, t.haveCode)
+  await expect(openQuestion(page).getByLabel(t.codeLabel)).toHaveValue("")
 
-  await waitForSecurityCheck(page)
-  await page.getByRole("button", { name: t.send }).click()
-  await expect(page.getByRole("heading", { name: "Maombi yamepokelewa!" })).toBeVisible()
+  await toSend(page, "sw")
+  await send(page, "sw")
+  await expect(page.getByRole("heading", { name: t.done })).toBeVisible()
   expect(await page.evaluate(() => window.sessionStorage.length)).toBe(0)
 
   await page.reload()
-  await expect(heading(page, 0)).toBeVisible()
-  await expect(page.getByLabel(t.parentName)).toHaveValue("")
-  await expect(page.getByRole("button", { name: t.mother, exact: true })).toHaveAttribute("aria-pressed", "false")
+  await expectQuestion(page, t.studentName)
+  await expect(openQuestion(page).getByRole("textbox")).toHaveValue("")
 })
 
-test("switching language on a later step keeps the form's Back in history", async ({ page }) => {
+test("switching language on a later question keeps the form's Back in history", async ({ page }) => {
   const who = family()
   await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(heading(page, 1)).toBeVisible()
+  await fillStudent(page, "sw", who.child, nextYear)
+  await page.getByRole("button", { name: "Menyu" }).click()
   await page.getByRole("button", { name: "English" }).click()
-  await expect(page.getByRole("heading", { level: 1, name: WORDS.en.steps[1] })).toBeVisible()
+  await expectQuestion(page, WORDS.en.another)
+  await page.keyboard.press("Escape")
   await page.getByRole("button", { name: WORDS.en.back }).click()
-  await expect(page.getByRole("heading", { level: 1, name: WORDS.en.steps[0] })).toBeVisible()
+  await expect(openQuestion(page).getByRole("radio", { name: /Boarding/ })).toBeChecked()
   await page.goForward()
-  await expect(page.getByRole("heading", { level: 1, name: WORDS.en.steps[1] })).toBeVisible()
+  await expectQuestion(page, WORDS.en.another)
 })
 
-test("a later step opened directly, with no draft, opens the first step instead", async ({ page }) => {
-  await page.goto("/apply?step=3")
-  await expect(heading(page, 0)).toBeVisible()
-  await expect(page).toHaveURL(/\/apply$/)
-})
+for (const url of ["/apply?q=send", "/apply?step=3"]) {
+  test(`a later question opened directly with no draft (${url}) opens the first question instead`, async ({ page }) => {
+    await page.goto(url)
+    await expectQuestion(page, t.studentName)
+    await expect(page).toHaveURL(/\/apply$/)
+  })
+}
 
 test("with storage blocked, the form still sends", async ({ page }) => {
   await page.addInitScript(() => {
@@ -108,166 +103,92 @@ test("with storage blocked, the form still sends", async ({ page }) => {
   })
   const who = family()
   await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: t.continue }).click()
-  await fillChild(page, "sw", who, nextYear)
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(heading(page, 2)).toBeVisible()
-  await waitForSecurityCheck(page)
-  await page.getByRole("button", { name: t.send }).click()
-  await expect(page.getByRole("heading", { name: "Maombi yamepokelewa!" })).toBeVisible()
+  await fillForm(page, "sw", who, nextYear)
+  await send(page, "sw")
+  await expect(page.getByRole("heading", { name: t.done })).toBeVisible()
   await expect(page.getByText(/^ADMSN-\d{5}$/)).toBeVisible()
-})
-
-test("an empty Continue names every missing field at once and focuses the first", async ({ page }) => {
-  const who = family()
-  await page.goto("/apply")
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(page.getByText("Andika jina kamili la mzazi au mlezi.")).toBeVisible()
-  await expect(page.getByText("Chagua uhusiano wako na mtoto.")).toBeVisible()
-  await expect(page.getByText("Andika namba yako ya simu.")).toBeVisible()
-  await expect(page.getByLabel(t.parentName)).toBeFocused()
-
-  // Fixing one field leaves the others named.
-  await page.getByLabel(t.parentName).fill(who.parent)
-  await expect(page.getByText("Andika jina kamili la mzazi au mlezi.")).toHaveCount(0)
-  await expect(page.getByText("Andika namba yako ya simu.")).toBeVisible()
-
-  await page.getByRole("button", { name: t.mother, exact: true }).click()
-  await page.getByLabel(t.phone, { exact: true }).fill(who.phone)
-  await page.getByRole("button", { name: t.continue }).click()
-  await page.getByRole("button", { name: "Ongeza mtoto mwingine" }).click()
-  await page.getByRole("button", { name: t.continue }).click()
-
-  for (const card of ["Mtoto 1", "Mtoto 2"]) {
-    const group = page.getByRole("group", { name: card })
-    await expect(group.getByText("Andika jina kamili la mtoto.")).toBeVisible()
-    await expect(group.getByText("Chagua darasa analoomba.")).toBeVisible()
-    await expect(group.getByText("Chagua mwaka wa kujiunga.")).toBeVisible()
-    await expect(group.getByText("Chagua kutwa au bweni.")).toBeVisible()
-  }
-  await expect(page.getByRole("group", { name: "Mtoto 1" }).getByLabel(t.childName)).toBeFocused()
-})
-
-test("renaming one repeated child keeps the other card's warning until no names repeat (#260)", async ({ page }) => {
-  const who = family()
-  await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: t.continue }).click()
-  const add = page.getByRole("button", { name: "Ongeza mtoto mwingine" })
-  await add.click()
-  await add.click()
-  const cards = ["Mtoto 1", "Mtoto 2", "Mtoto 3"].map((name) => page.getByRole("group", { name }))
-  for (const card of cards) await fillChild(page, "sw", who, nextYear, card)
-  await page.getByRole("button", { name: t.continue }).click()
-
-  const repeated = "yupo mara mbili kwenye fomu hii"
-  await expect(cards[1].getByText(repeated)).toBeVisible()
-  await expect(cards[2].getByText(repeated)).toBeVisible()
-
-  // The third card still repeats the first.
-  await cards[1].getByLabel(t.childName).fill(`${who.child} Pili`)
-  await expect(cards[1].getByText(repeated)).toHaveCount(0)
-  await expect(cards[2].getByText(repeated)).toBeVisible()
-
-  await cards[2].getByLabel(t.childName).fill(`${who.child} Tatu`)
-  await expect(page.getByText(repeated)).toHaveCount(0)
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(heading(page, 2)).toBeVisible()
 })
 
 for (const lang of ["sw", "en"] as const) {
   test(`the document language is ${lang} when the page is`, async ({ page, context }) => {
-    if (lang === "en") await context.addCookies([{ name: "lang", value: "en", url: `http://localhost:${E2E_PORT}` }])
+    await setLanguageCookie(context, lang)
     await page.goto("/apply")
     await expect(page.locator("html")).toHaveAttribute("lang", lang)
   })
 }
 
-test("with the phone's text doubled, the header wraps and nothing scrolls sideways", async ({ page }) => {
+test("with the phone's text doubled, the top bar keeps its places and nothing scrolls sideways", async ({ page }) => {
   await page.goto("/apply")
   await page.addStyleTag({ content: "html { font-size: 200% !important; }" })
-  await expect(heading(page, 0)).toBeVisible()
+  await expectQuestion(page, t.studentName)
 
   const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }))
   expect(widths.scroll).toBeLessThanOrEqual(widths.client)
 
-  const title = await page.getByText("Fomu ya Udahili", { exact: true }).boundingBox()
-  const languages = await page.getByRole("group", { name: "Lugha" }).boundingBox()
-  expect(title && languages).toBeTruthy()
-  const overlaps =
-    title!.x < languages!.x + languages!.width &&
-    languages!.x < title!.x + title!.width &&
-    title!.y < languages!.y + languages!.height &&
-    languages!.y < title!.y + title!.height
-  expect(overlaps).toBe(false)
+  const badge = await page.getByText("AL-RAHMAH SCHOOLS", { exact: true }).boundingBox()
+  const menu = await page.getByRole("button", { name: "Menyu" }).boundingBox()
+  expect(badge && menu).toBeTruthy()
+  expect(badge!.x + badge!.width).toBeLessThanOrEqual(menu!.x)
 })
 
-test("each language option is at least 44px tall on a phone", async ({ page }) => {
-  for (const path of ["/apply", "/"]) {
-    await page.goto(path)
-    for (const name of ["Kiswahili", "English"]) {
-      const box = await page.getByRole("button", { name, exact: true }).boundingBox()
-      expect(box?.height, `${name} on ${path}`).toBeGreaterThanOrEqual(44)
-    }
+test("the menu button and each language option are at least 44px tall on a phone", async ({ page }) => {
+  await page.goto("/apply")
+  const menu = page.getByRole("button", { name: "Menyu" })
+  expect((await menu.boundingBox())?.height).toBeGreaterThanOrEqual(44)
+  await menu.click()
+  for (const name of ["Kiswahili", "English"]) {
+    // The panel grows in; measure once it has settled.
+    await expect.poll(async () => (await page.getByRole("button", { name, exact: true }).boundingBox())?.height, { message: name }).toBeGreaterThanOrEqual(44)
+  }
+  await page.goto("/")
+  for (const name of ["Kiswahili", "English"]) {
+    const box = await page.getByRole("button", { name, exact: true }).boundingBox()
+    expect(box?.height, `${name} on /`).toBeGreaterThanOrEqual(44)
   }
 })
 
-// #259: sent back to an earlier step, the form goes back to that step's own
-// history entry rather than replacing the later one, so no later step's entry
-// is left behind it.
-test("a phone the server can't read opens the parent step, and the phone's Back from there leaves the form", async ({ page }) => {
+// #259: sent back to an earlier question, the form goes back to that
+// question's own history entry rather than replacing the later one, so no
+// later question's entry is left behind it.
+test("a phone the server can't read opens the phone question on its own history entry", async ({ page }) => {
   // The server reads the phone's format; the form only checks one is there.
   const who = { ...family(), phone: "12" }
   await page.goto("/")
   await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: t.continue }).click()
-  await fillChild(page, "sw", who, nextYear)
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(heading(page, 2)).toBeVisible()
-  await waitForSecurityCheck(page)
-  await page.getByRole("button", { name: t.send }).click()
+  await fillForm(page, "sw", who, nextYear)
+  await send(page, "sw")
 
-  await expect(heading(page, 0)).toBeVisible()
-  await expect(page).toHaveURL("/apply")
-  await expect(page.getByText("Hatukuweza kusoma namba hii ya simu.", { exact: false })).toBeVisible()
-  const phone = page.getByLabel(t.phone, { exact: true })
+  await expectQuestion(page, t.phone)
+  await expect(page).toHaveURL("/apply?q=phone")
+  await expect(openQuestion(page).getByText("Hatukuweza kusoma namba hii ya simu.", { exact: false })).toBeVisible()
+  const phone = openQuestion(page).getByLabel(t.phone)
   await expect(phone).toBeFocused()
-  await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
   // Typing clears the server's problem and leaves the parent in the field.
   await phone.press("End")
   await phone.pressSequentially("34")
   await expect(phone).toBeFocused()
   await expect(phone).toHaveValue("1234")
+  await expect(openQuestion(page).getByText("Hatukuweza kusoma namba hii ya simu.", { exact: false })).toHaveCount(0)
 
   await page.goBack()
-  await expect(page).toHaveURL("/")
-
+  await expect(page).toHaveURL("/apply?q=rel")
   await page.goForward()
-  await expect(heading(page, 0)).toBeVisible()
-  await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
-  await expect(page.getByLabel(t.phone, { exact: true })).toHaveValue("1234")
+  await expectQuestion(page, t.phone)
+  await expect(openQuestion(page).getByLabel(t.phone)).toHaveValue("1234")
 })
 
-test("Forward to a step the entries no longer allow stays put, and the form's Back then opens the parent step", async ({ page }) => {
+test("Forward to a question the answers no longer allow stays put, and the form's Back then opens the one before", async ({ page }) => {
   const who = family()
   await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: t.continue }).click()
-  await fillChild(page, "sw", who, nextYear)
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(heading(page, 2)).toBeVisible()
+  await toCode(page, "sw", who, nextYear)
 
   await page.goBack()
-  await expect(heading(page, 1)).toBeVisible()
-  await page.getByLabel(t.childName).fill("")
+  await expectQuestion(page, t.phone)
+  await openQuestion(page).getByLabel(t.phone).fill("")
   await page.goForward()
-  await expect(heading(page, 1)).toBeVisible()
-  await expect(page).toHaveURL("/apply?step=2")
+  await expectQuestion(page, t.phone)
+  await expect(page).toHaveURL("/apply?q=phone")
 
   await page.getByRole("button", { name: t.back }).click()
-  await expect(heading(page, 0)).toBeVisible()
-  await expect(page).toHaveURL("/apply")
-  await expect(page.getByLabel(t.parentName)).toHaveValue(who.parent)
+  await expect(openQuestion(page).getByRole("radio", { name: t.mother })).toBeChecked()
 })

@@ -4,12 +4,15 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 
 import { signOutAndReturn } from "@/app/actions/session"
+import { FieldInput } from "@/components/guided-form"
+import { buttonVariants } from "@/components/ui/button"
 import { referralLink, requestOrigin } from "@/lib/agent-registration"
 import { discountCodeShareLink } from "@/lib/discount-code-share"
 import { getLanguage, type Language } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
 import { getAgentUser } from "@/lib/services/agent-auth"
 import { getAgentStudents, type AgentStudent } from "@/lib/services/agent-students"
+import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { ACCOUNT_COPY } from "../account-copy"
@@ -65,7 +68,9 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   return (
     <AccountShell language={language} wide>
       <div className="flex flex-col gap-5">
-        <h1 className="font-exo text-2xl font-extrabold italic leading-tight text-blue-600">{copy.heading(code, total)}</h1>
+        <h2 className="font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic [overflow-wrap:anywhere]">
+          {copy.heading(code, total)}
+        </h2>
 
         {total === 0 ? (
           <EmptyList language={language} code={code} />
@@ -73,7 +78,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
           <>
             {(total > PAGE_SIZE || search) && <SearchForm language={language} search={search} />}
             {matched === 0 ? (
-              <p className="font-exo text-[14px] text-slate-600">{copy.noMatch}</p>
+              <p className="text-[15px] text-slate-600">{copy.noMatch}</p>
             ) : (
               <ul className="flex flex-col gap-3">
                 {students.map((student, index) => (
@@ -85,27 +90,33 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
               <Link
                 href={`?${new URLSearchParams({ ...(search ? { q: search } : {}), n: String(shown + PAGE_SIZE) })}`}
                 scroll={false}
-                className="inline-flex h-11 items-center justify-center self-center rounded-full border border-blue-600/30 px-6 font-exo text-base font-bold italic text-blue-600 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+                className="inline-flex min-h-12 items-center justify-center self-center rounded-full border-[1.5px] border-blue-600/45 px-6 font-exo text-base font-semibold italic text-blue-600 outline-none transition-[background,transform] hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-[0.97]"
               >
                 {copy.more}
               </Link>
             )}
             {matched > students.length && shown >= MAX_SHOWN && (
-              <p className="font-exo text-[13px] text-slate-600">{copy.searchForMore}</p>
+              <p className="text-sm text-slate-600">{copy.searchForMore}</p>
             )}
           </>
         )}
 
-        <p className="font-exo text-[13px] text-slate-600">
+        <p className="text-sm text-slate-600">
           {copy.helpLine}{" "}
-          <a href={`tel:${OFFICE_PHONE.replaceAll(" ", "")}`} className="whitespace-nowrap text-blue-600 underline underline-offset-2">
+          <a
+            href={`tel:${OFFICE_PHONE.replaceAll(" ", "")}`}
+            className="whitespace-nowrap font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4"
+          >
             {OFFICE_PHONE}
           </a>
         </p>
 
-        <form action={signOutAndReturn} className="self-start">
+        <form action={signOutAndReturn} className="-ml-2.5 self-start">
           <input type="hidden" name="back" value="/login" />
-          <button type="submit" className="font-exo text-[13px] text-blue-600 underline underline-offset-2">
+          <button
+            type="submit"
+            className="inline-flex min-h-11 items-center rounded-full px-2.5 font-exo text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+          >
             {account.signOut}
           </button>
         </form>
@@ -117,13 +128,13 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
 function StudentCard({ student, language }: { student: AgentStudent; language: Language }) {
   const [status, ...rest] = cardLines(student, language)
   return (
-    <li className="rounded-3xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
-      <p className="font-exo text-base font-bold text-slate-900">
+    <li className="rounded-[20px] bg-[#f2f0fc] px-[18px] py-3.5">
+      <p className="text-base leading-[1.35] font-semibold [overflow-wrap:anywhere] text-slate-800">
         {student.name} <span className="font-normal text-slate-600">· {student.className}</span>
       </p>
-      <p className="mt-1 font-exo text-[14px] font-semibold text-blue-700">{status}</p>
+      <p className="mt-1 font-exo text-[15px] font-bold text-blue-600 italic">{status}</p>
       {rest.map((line) => (
-        <p key={line} className="font-exo text-[13px] text-slate-600">
+        <p key={line} className="text-sm text-slate-600">
           {line}
         </p>
       ))}
@@ -135,27 +146,25 @@ function SearchForm({ language, search }: { language: Language; search: string }
   const copy = STUDENTS_COPY[language]
   return (
     <form method="get" role="search" className="flex flex-col gap-2">
-      <label htmlFor="student-search" className="font-exo text-[13px] font-semibold text-slate-700">
+      <label htmlFor="student-search" className="text-[15px] font-semibold text-slate-800">
         {copy.searchLabel}
       </label>
-      <div className="flex gap-2">
-        <input
-          id="student-search"
-          name="q"
-          type="search"
-          defaultValue={search}
-          maxLength={100}
-          className="h-11 min-w-0 flex-1 rounded-full border border-slate-300 px-4 font-exo text-base outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
-        />
+      <div className="flex gap-2 max-[330px]:flex-col">
+        <div className="min-w-0 flex-1">
+          <FieldInput id="student-search" name="q" type="search" defaultValue={search} maxLength={100} alignStart />
+        </div>
         <button
           type="submit"
-          className="h-11 shrink-0 rounded-full bg-blue-600 px-5 font-exo text-base font-bold italic text-white hover:bg-blue-700"
+          className={cn(buttonVariants({ variant: "orange" }), "min-h-13 shrink-0 rounded-full px-6 font-exo text-lg italic shadow-md shadow-orange-500/20")}
         >
           {copy.search}
         </button>
       </div>
       {search && (
-        <Link href="?" className="self-start font-exo text-[13px] text-blue-600 underline underline-offset-2">
+        <Link
+          href="?"
+          className="inline-flex min-h-11 items-center self-start rounded-full px-2.5 -ml-2.5 text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4"
+        >
           {copy.showAll}
         </Link>
       )}
@@ -171,7 +180,7 @@ async function EmptyList({ language, code }: { language: Language; code: string 
   const link = referralLink(origin, code)
   return (
     <div className="flex flex-col gap-4">
-      <p className="font-exo text-[14px] text-slate-700">{copy.emptyText}</p>
+      <p className="text-[15px] text-slate-700">{copy.emptyText}</p>
       <ShareCode
         code={code}
         link={link}

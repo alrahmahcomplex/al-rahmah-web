@@ -55,7 +55,7 @@ Al-Rahmah Complex (Al-Rahmah Schools) offers Islamic values alongside academic r
 
 - Name: **Al-Rahmah Complex**; the schools are **Al-Rahmah Schools**.
 - Official logo: `public/Al-Rahmah_Official_Logo.svg`. Official palette SVG, kept as the print reference: `public/Al-Rahmah Color Palette (Digital & Web).svg`.
-- Screen palette: Al-Rahmah Indigo `#0900bb` with ShuleFasta's orange `#fd6914`. The owner tried ShuleFasta's deep blue in v0.81.0 and returned to Al-Rahmah Indigo the same day (2026-11-06), keeping ShuleFasta's orange for every action button. Every orange button is white text on orange ([DESIGN.md](DESIGN.md), The ShuleFasta Button Rule).
+- Screen palette: Al-Rahmah Indigo `#0900bb` with the action orange `#ee7300`. The owner tried ShuleFasta's deep blue in v0.81.0 and returned to Al-Rahmah Indigo the same day (2026-11-06), kept ShuleFasta's orange `#fd6914` for every action button, and replaced it with `#ee7300` as the global default on 2026-11-09. Every orange button is white text on orange ([DESIGN.md](DESIGN.md), The ShuleFasta Button Rule).
 - Brand source material, read-only: workspace `branding-elements/` (admission and Pre-Form One flyers, business card, palette). The archived repo `alrahmahcomplex/Al-Rahmah_Complex` is a reference for branded styling and sign-in.
 - Parent-facing Swahili messages are warm and expressive: congratulatory on a pass, empathetic on a fail.
 

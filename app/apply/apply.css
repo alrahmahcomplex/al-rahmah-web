@@ -1,0 +1,30 @@
+/* The Admission form's success screen: the tick draws itself and each
+   Admission Number rises in (prototype core.css, .done-mark and .number).
+   Reduced motion shows both at rest. */
+.apply-done-mark circle {
+  fill: #eefbf3;
+  stroke: #0f7a3d;
+  stroke-width: 3;
+  stroke-dasharray: 252;
+  stroke-dashoffset: 252;
+  animation: apply-draw 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.apply-done-mark path {
+  fill: none;
+  stroke: #0f7a3d;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: apply-draw 420ms 380ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.apply-number { animation: apply-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes apply-draw { to { stroke-dashoffset: 0; } }
+@keyframes apply-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .apply-done-mark circle, .apply-done-mark path { animation: none; stroke-dashoffset: 0; }
+  .apply-number { animation: none; }
+}
+html.rm .apply-done-mark circle, html.rm .apply-done-mark path { animation: none; stroke-dashoffset: 0; }
+html.rm .apply-number { animation: none; }

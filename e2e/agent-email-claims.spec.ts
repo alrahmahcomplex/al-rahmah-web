@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
-import { FORBIDDEN, WORDS } from "./discount-code"
+import { chooseLanguage, FORBIDDEN, fillRegistration, WORDS } from "./discount-code"
 import { logIn } from "./log-in"
 
 // Sign-up with an email and claiming an existing Discount code (#193) end to
@@ -48,12 +48,11 @@ async function existingAgent(address = "") {
 type Entry = { name: string; phone: string; email: string; code?: string; hasCode?: boolean }
 
 async function send(page: Page, entry: Entry) {
+  await chooseLanguage(page.context(), "sw")
   await page.goto("/discount-code")
-  await page.getByLabel(t.name).fill(entry.name)
-  await page.getByLabel(t.phone, { exact: true }).fill(entry.phone)
-  await page.getByLabel(t.email, { exact: true }).fill(entry.email)
-  if (entry.hasCode) await page.getByRole("checkbox", { name: t.hasCode }).check()
-  if (entry.code) await page.getByLabel(t.code).fill(entry.code)
+  // hasCode answers "Tayari una code?" with Ndiyo; without it, Hapana.
+  if (entry.hasCode) await fillRegistration(page, "sw", entry, { code: entry.code ?? "" })
+  else await fillRegistration(page, "sw", entry)
   await waitForSecurityCheck(page)
   await page.getByRole("button", { name: t.send }).click()
 }
@@ -106,7 +105,7 @@ test.describe("the Discount code page's answers", () => {
     await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
   })
 
-  test("2. a phone that has a code, box unticked: tick the box", async ({ page }) => {
+  test("2. a phone that has a code, answered Hapana: say it has a code", async ({ page }) => {
     const agent = await existingAgent()
     await send(page, { name: agent.fullName, phone: agent.phone, email: email("two") })
     await expect(notice(page)).toHaveText(
@@ -185,9 +184,12 @@ test.describe("the Discount code page's answers", () => {
   })
 
   test("the sign-up prompt and the sign-in prompt stay apart", async ({ page }) => {
+    await chooseLanguage(page.context(), "sw")
     await page.goto("/discount-code")
-    await expect(page.getByRole("checkbox", { name: t.hasCode })).toBeVisible()
-    await expect(page.getByText("Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Weka alama hapa")).toBeVisible()
+    await fillRegistration(page, "sw", { name: "Zawadi Barua", phone: phone(), email: email("apart") })
+    await page.getByRole("button", { name: "Badilisha Code" }).click()
+    await expect(page.getByRole("group", { name: t.hasCode })).toBeVisible()
+    await expect(page.getByText("Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Chagua Ndiyo.")).toBeVisible()
     await expect(page.getByText("Umeshaweka nenosiri?")).toBeVisible()
     await page.getByRole("link", { name: "Ingia", exact: true }).click()
     await expect(page).toHaveURL(/\/login$/)

@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto"
 import { expect, test, type Page } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { family, fillChild, fillParent, WORDS as APPLY, waitForSecurityCheck } from "./admission-form"
-import { fillRegistration, newcomer, WORDS as DISCOUNT } from "./discount-code"
+import { expectQuestion, family, fillForm, openQuestion, toCode, setLanguageCookie, WORDS as APPLY, waitForSecurityCheck } from "./admission-form"
+import { chooseLanguage, fillRegistration, newcomer, WORDS as DISCOUNT } from "./discount-code"
 
 // Where Cloudflare's security check sits on the public forms. It stays
 // invisible while Cloudflare passes the visitor on its own (the always-pass
@@ -164,26 +164,31 @@ async function expectSendBringsCheckIntoView(page: Page, lang: "sw" | "en", send
   await expect(page.getByText(/Wait a moment for the security check|Subiri ukaguzi wa usalama/)).toHaveCount(0)
 }
 
+// The Admission form's last question, "Hakiki kisha utume", with the page
+// language set so the first-visit language card stays away.
 async function reachReviewStep(page: Page, lang: "sw" | "en") {
-  const t = APPLY[lang]
+  await setLanguageCookie(page.context(), lang)
   await page.goto("/apply")
-  await fillParent(page, lang, family())
-  await page.getByRole("button", { name: t.continue }).click()
-  await fillChild(page, lang, family(), String(admissionYears()[1]))
-  await page.getByRole("button", { name: t.continue }).click()
-  await expect(page.getByRole("heading", { level: 1, name: t.steps[2] })).toBeVisible()
+  await fillForm(page, lang, family(), String(admissionYears()[1]))
 }
 
 for (const { name, size } of VIEWPORTS) {
   test.describe(`on a ${name} (${size.width}px)`, () => {
     test.use({ viewport: size })
 
-    test("the Admission review step shows no check while Cloudflare passes, and says nothing is paid", async ({ page }) => {
-      await reachReviewStep(page, "sw")
+    test("the Admission send step shows no check while Cloudflare passes, and the fee says nothing is paid", async ({ page }) => {
+      const t = APPLY.sw
+      await setLanguageCookie(page.context(), "sw")
+      await page.goto("/apply")
+      await toCode(page, "sw", family(), String(admissionYears()[1]))
+      await openQuestion(page).getByRole("button", { name: new RegExp(`^(${t.continue}|${t.skipCode})$`) }).click()
+      await expectQuestion(page, t.fee)
+      await expect(openQuestion(page).getByText(/Hulipi chochote kwenye fomu hii\./)).toBeVisible()
+      await openQuestion(page).getByRole("button", { name: t.continue }).click()
+      await expectQuestion(page, t.review)
       await waitForSecurityCheck(page)
       const { container } = await boxAndCard(page)
       expect(container.height).toBeLessThanOrEqual(1)
-      await expect(page.getByText("Hulipi chochote kwenye fomu hii.")).toBeVisible()
       await noSidewaysScroll(page)
     })
 
@@ -234,11 +239,13 @@ for (const { name, size } of VIEWPORTS) {
         await expect(page.getByText(NEEDS_CLICK[lang])).toBeVisible()
         await expectInsideCardAndCentred(page)
         await noSidewaysScroll(page)
-        // Below the fee box and above Send.
-        const fee = await page.getByText(lang === "sw" ? "Ada ya usaili" : "Interview fee").boundingBox()
+        // Below the send question's title and above Send, measured once the
+        // question has finished unfolding.
+        await expect(openQuestion(page)).toHaveClass(/gf-settled/)
+        const title = await openQuestion(page).getByRole("heading", { name: APPLY[lang].review }).boundingBox()
         const check = await page.locator("[data-fake-check]").boundingBox()
         const send = await page.getByRole("button", { name: APPLY[lang].send }).boundingBox()
-        expect(check!.y).toBeGreaterThan(fee!.y)
+        expect(check!.y).toBeGreaterThan(title!.y)
         expect(check!.y + check!.height).toBeLessThan(send!.y)
         await expectSendBringsCheckIntoView(page, lang, APPLY[lang].send)
       })
@@ -246,6 +253,7 @@ for (const { name, size } of VIEWPORTS) {
 
     test("a check that needs a click sits inside the Discount code card", async ({ page }) => {
       await cloudflareAsksForAClick(page)
+      await chooseLanguage(page.context(), "sw")
       await page.goto("/discount-code")
       await fillRegistration(page, "sw", newcomer())
       await expectInsideCardAndCentred(page)

@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { secretClient, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
+import { chooseLanguage } from "./discount-code"
 import { logIn } from "./log-in"
 
 // Agents reset their own password (#194) end to end, against local Supabase
@@ -19,6 +20,12 @@ const SENT =
   "Kama barua pepe hii ina akaunti, tumeitumia kiungo. Angalia barua pepe zako, pamoja na spam. Kiungo kinatumika mara moja tu, ndani ya saa 24."
 
 type Email = { subject: string; html: string; link: string }
+
+// The Discount code pages ask a first-time visitor for a language; these
+// specs start with it set.
+test.beforeEach(async ({ context }) => {
+  await chooseLanguage(context, "sw")
+})
 
 async function emailsTo(address: string): Promise<Email[]> {
   const search = await fetch(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${address}"`)}`)

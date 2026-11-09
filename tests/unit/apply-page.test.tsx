@@ -1,15 +1,17 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { forwardRef, useImperativeHandle } from "react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { forwardRef, useImperativeHandle, type ImgHTMLAttributes } from "react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const jar = vi.hoisted(() => ({ values: new Map<string, string>() }))
 const stubs = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), refresh: vi.fn(), token: "fake-token" }))
 
+vi.mock("server-only", () => ({}))
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => (jar.values.has(name) ? { name, value: jar.values.get(name) } : undefined),
+    has: (name: string) => jar.values.has(name),
   }),
 }))
 // The form page must render with Supabase down: any use of a Supabase client
@@ -20,8 +22,15 @@ vi.mock("@/utils/supabase/server", () => ({
   },
 }))
 vi.mock("@/app/apply/actions", () => ({ submitAdmissionForm: stubs.submit, checkDiscountCode: stubs.check }))
-vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
+vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn().mockResolvedValue(undefined) }))
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: stubs.refresh }) }))
+vi.mock("next/image", () => ({
+  default: ({ priority, ...props }: ImgHTMLAttributes<HTMLImageElement> & { priority?: boolean }) => {
+    void priority
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img {...props} alt={props.alt ?? ""} />
+  },
+}))
 vi.mock("@/components/turnstile-widget", () => ({
   TurnstileWidget: forwardRef(function FakeTurnstile(_: unknown, ref) {
     useImperativeHandle(ref, () => ({ reset: stubs.reset, reveal: stubs.reveal }))
@@ -30,16 +39,31 @@ vi.mock("@/components/turnstile-widget", () => ({
 }))
 
 import { AdmissionFormSteps } from "@/app/apply/admission-form"
+import { DRAFT_KEY } from "@/app/apply/draft"
 import ApplyPage from "@/app/apply/page"
 import { admissionYears } from "@/lib/admission-form"
 
 const years = admissionYears()
+const DEFAULT_YEAR = years[1]
+type User = ReturnType<typeof userEvent.setup>
+
+// The live figures the form reads from /api/apply/live.
+let live: { applications: number | null; discount: number | null } = { applications: null, discount: null }
 
 beforeEach(() => {
   jar.values.clear()
-  // Each test opens a fresh tab: no draft, and no step in the URL.
+  jar.values.set("lang", "sw")
+  // Each test opens a fresh tab: no draft, and no question in the URL.
   window.sessionStorage.clear()
   window.history.replaceState(null, "", "/apply")
+  // Folds and taps answer at once, with no animation to wait for.
+  document.documentElement.classList.add("rm")
+  window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
+  live = { applications: null, discount: null }
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify(live), { headers: { "content-type": "application/json" } })),
+  )
   stubs.submit.mockReset()
   stubs.check.mockReset()
   stubs.reset.mockReset()
@@ -48,136 +72,373 @@ beforeEach(() => {
   stubs.token = "fake-token"
 })
 
-async function fillParentAndChild(user: ReturnType<typeof userEvent.setup>, lang: "sw" | "en" = "en") {
-  const t =
-    lang === "en"
-      ? { name: "Parent or guardian's full name", mother: "Mother", phone: "Phone number", next: "Continue", child: "Child's full name", day: "Day" }
-      : { name: "Jina kamili la mzazi au mlezi", mother: "Mama", phone: "Namba ya simu", next: "Endelea", child: "Jina kamili la mtoto", day: "Kutwa" }
-  await user.type(screen.getByLabelText(t.name), "Amina Fixture")
-  await user.click(screen.getByRole("button", { name: t.mother }))
-  await user.type(screen.getByLabelText(t.phone, { exact: false }), "0700 000 900")
-  await user.click(screen.getByRole("button", { name: t.next }))
-  await user.type(screen.getByLabelText(t.child), "Zawadi Fixture")
-  await user.click(screen.getByRole("button", { name: "STD 2" }))
-  await user.click(screen.getByRole("button", { name: String(years[1]) }))
-  await user.click(screen.getByRole("button", { name: t.day }))
-  await user.click(screen.getByRole("button", { name: t.next }))
+afterEach(() => {
+  vi.unstubAllGlobals()
+  document.documentElement.classList.remove("rm")
+})
+
+const W = {
+  sw: {
+    name: "Mwanafunzi anaitwa nani?",
+    other: "Chagua darasa lingine",
+    day: "Kutwa",
+    no: "Hapana, endelea",
+    yes: "Ndiyo, ongeza mwanafunzi",
+    pname: "Jina lako kamili ni nani?",
+    mother: "Mama",
+    phone: "Namba yako ya simu ni ipi?",
+    next: "Endelea",
+    skip: "Ruka, sina code",
+    send: "Tuma maombi",
+  },
+  en: {
+    name: "What is the student's name?",
+    other: "Choose another class",
+    day: "Day",
+    no: "No, continue",
+    yes: "Yes, add a student",
+    pname: "What is your full name?",
+    mother: "Mother",
+    phone: "What is your phone number?",
+    next: "Continue",
+    skip: "Skip, no code",
+    send: "Send application",
+  },
+} as const
+
+/** The question open now. */
+function open() {
+  const li = document.querySelector<HTMLElement>('li[data-state="open"]')
+  if (!li) throw new Error("no question is open")
+  return within(li)
 }
 
-// Each test types a whole form, which takes seconds on a loaded machine.
-describe("the Admission form page", { timeout: 20_000 }, () => {
-  it("renders in Swahili by default, reading no Supabase", async () => {
+async function waitForQuestion(name: string | RegExp) {
+  await waitFor(() => expect(open().getByRole("heading", { name })).toBeInTheDocument())
+}
+
+async function pickClass(user: User, className: string, lang: "sw" | "en") {
+  await user.click(open().getByRole("button", { name: W[lang].other }))
+  const sheet = await screen.findByRole("dialog")
+  await user.click(within(sheet).getByRole("button", { name: className }))
+}
+
+async function answerStudent(user: User, name: string, lang: "sw" | "en", { className = "STD 2", day = true } = {}) {
+  await user.type(open().getByRole("textbox"), name)
+  await user.click(open().getByRole("button", { name: W[lang].next }))
+  await pickClass(user, className, lang)
+  await waitFor(() => expect(open().getByRole("radio", { name: new RegExp(W[lang].day) })).toBeInTheDocument())
+  if (day) await user.click(open().getByRole("radio", { name: new RegExp(W[lang].day) }))
+  else await user.click(open().getByRole("button", { name: W[lang].next }))
+}
+
+async function answerCustodian(user: User, lang: "sw" | "en") {
+  await waitForQuestion(W[lang].pname)
+  await user.type(open().getByRole("textbox"), "Amina Mfano")
+  await user.click(open().getByRole("button", { name: W[lang].next }))
+  await user.click(open().getByRole("radio", { name: W[lang].mother }))
+  await waitForQuestion(W[lang].phone)
+  await user.type(open().getByRole("textbox"), "0700 000 900")
+  await user.click(open().getByRole("button", { name: W[lang].next }))
+}
+
+/** One student, no code, through to the send question. */
+async function fillToSend(user: User, lang: "sw" | "en" = "en") {
+  await answerStudent(user, "Zawadi Mfano", lang)
+  await waitFor(() => expect(open().getByRole("button", { name: W[lang].no })).toBeInTheDocument())
+  await user.click(open().getByRole("button", { name: W[lang].no }))
+  await answerCustodian(user, lang)
+  await user.click(open().getByRole("button", { name: W[lang].skip }))
+  await user.click(open().getByRole("button", { name: W[lang].next }))
+  await waitFor(() => expect(open().getByRole("button", { name: W[lang].send })).toBeInTheDocument())
+}
+
+/** Sends, once the send button is back from any earlier send. */
+async function send(user: User, label: string) {
+  const button = await waitFor(() => open().getByRole("button", { name: label }))
+  await user.click(button)
+}
+
+function form(language: "sw" | "en" = "en", extra: Partial<Parameters<typeof AdmissionFormSteps>[0]> = {}) {
+  return <AdmissionFormSteps language={language} years={years} defaultYear={DEFAULT_YEAR} officePhone="+255 700 000 001" {...extra} />
+}
+
+function sentBody(call = 0) {
+  const [, data] = stubs.submit.mock.calls[call] as [unknown, FormData]
+  return JSON.parse(String(data.get("form")))
+}
+
+// Each test walks a whole form, which takes seconds on a loaded machine.
+describe("the Admission form page", { timeout: 30_000 }, () => {
+  it("renders in Swahili by default under the brand top bar, reading no Supabase", async () => {
+    jar.values.clear()
     render(await ApplyPage({ searchParams: Promise.resolve({}) }))
 
     expect(screen.getByRole("main")).toHaveAttribute("lang", "sw")
-    expect(screen.getByRole("heading", { level: 1, name: "Mzazi au mlezi" })).toBeInTheDocument()
-    expect(screen.getByText("Hatua 1 kati ya 3")).toBeInTheDocument()
-    for (const word of ["Mama", "Baba", "Mlezi", "Mwingine"]) {
-      expect(screen.getByRole("button", { name: word })).toBeInTheDocument()
-    }
+    expect(screen.getByText("AL-RAHMAH SCHOOLS")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { level: 1, name: "Fomu ya Udahili" })).toHaveClass("sr-only")
+    expect(screen.getByRole("button", { name: "Menyu" })).toBeInTheDocument()
+    expect(open().getByRole("heading", { name: "Mwanafunzi anaitwa nani?" })).toBeInTheDocument()
+    expect(screen.getByText("Kama lilivyo kwenye cheti cha kuzaliwa.")).toBeInTheDocument()
+    // No language cookie yet: the first-visit card asks.
+    expect(screen.getByText("Karibu!")).toBeInTheDocument()
+    // One question only, and no step counter or language switch on the page.
+    expect(document.querySelectorAll("li.gf-step")).toHaveLength(1)
+    expect(screen.queryByText(/Hatua \d kati ya/)).not.toBeInTheDocument()
+    expect(screen.queryByRole("group", { name: "Lugha" })).not.toBeInTheDocument()
   })
 
-  it("renders in English when the language cookie says so", async () => {
+  it("renders in English when the language cookie says so, without the language card", async () => {
     jar.values.set("lang", "en")
     render(await ApplyPage({ searchParams: Promise.resolve({}) }))
 
     expect(screen.getByRole("main")).toHaveAttribute("lang", "en")
-    expect(screen.getByRole("heading", { level: 1, name: "Parent or guardian" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { level: 1, name: "Admission Form" })).toBeInTheDocument()
+    expect(open().getByRole("heading", { name: "What is the student's name?" })).toBeInTheDocument()
+    expect(screen.queryByText("Karibu!")).not.toBeInTheDocument()
   })
 
-  it("offers the 14 classes with no Pre-Form One, this year and next, and Kutwa or Bweni", async () => {
+  it("asks one question at a time in the prototype's order, folding each answer with a two-word Change link", async () => {
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="sw" years={years} officePhone="+255 700 000 001" />)
-    await user.type(screen.getByLabelText("Jina kamili la mzazi au mlezi"), "Amina Fixture")
-    await user.click(screen.getByRole("button", { name: "Mama" }))
-    await user.type(screen.getByLabelText("Namba ya simu", { exact: false }), "0700000900")
-    await user.click(screen.getByRole("button", { name: "Endelea" }))
+    render(form("sw"))
 
-    const classes = within(screen.getByRole("group", { name: "Darasa analoomba" })).getAllByRole("button")
-    expect(classes.map((c) => c.textContent)).toEqual([
-      "DAY CARE", "KG 1", "KG 2", "STD 1", "STD 2", "STD 3", "STD 4", "STD 5", "STD 6", "STD 7",
-      "FORM 1", "FORM 2", "FORM 3", "FORM 4",
-    ])
-    const yearChips = within(screen.getByRole("group", { name: "Mwaka wa kujiunga" })).getAllByRole("button")
-    expect(yearChips.map((c) => c.textContent)).toEqual(years.map(String))
-    expect(screen.getByRole("button", { name: "Kutwa" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Bweni" })).toBeInTheDocument()
+    await user.type(open().getByRole("textbox"), "Neema Mfano")
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    await waitForQuestion("Neema anaomba darasa gani?")
+    expect(screen.getByRole("heading", { level: 3, name: "Mwanafunzi" })).toBeInTheDocument()
+    expect(screen.getByText("Jina kamili la mwanafunzi")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Badilisha Jina" })).toBeInTheDocument()
+    expect(open().getByText("Wazazi wengi huchagua")).toBeInTheDocument()
+    expect(open().getByText(String(DEFAULT_YEAR))).toBeInTheDocument()
+
+    await user.click(open().getByRole("button", { name: /FORM 1/ }))
+    await waitForQuestion("Neema atakuwa wa kutwa au bweni?")
+    expect(screen.getByText(`FORM 1 · ${DEFAULT_YEAR}`)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Badilisha Darasa" })).toBeInTheDocument()
+
+    await user.click(open().getByRole("radio", { name: /Bweni/ }))
+    await waitForQuestion("Unaomba kwa mwanafunzi mwingine pia?")
+    // The student folds into one line once their three answers are in.
+    const buttons = open().getAllByRole("button").map((b) => b.textContent)
+    expect(buttons).toEqual(["Ndiyo, ongeza mwanafunzi", "Hapana, endelea"])
+
+    await user.click(open().getByRole("button", { name: "Hapana, endelea" }))
+    await waitForQuestion("Jina lako kamili ni nani?")
+    expect(screen.getByRole("heading", { level: 3, name: "Msimamizi" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Badilisha Taarifa, Neema Mfano" })).toBeInTheDocument()
+    await user.type(open().getByRole("textbox"), "Asha Mfano")
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    await waitForQuestion("Wewe ni nani kwa Neema?")
+    expect(open().getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["Mama", "Baba", "Mlezi", "Mwingine"])
+    await user.click(open().getByRole("radio", { name: "Mama" }))
+    await waitForQuestion("Namba yako ya simu ni ipi?")
+    await user.type(open().getByRole("textbox"), "0712 345 678")
+    await user.click(open().getByRole("button", { name: "Namba yangu ya WhatsApp ni tofauti" }))
+    await user.type(screen.getByLabelText(/Namba ya WhatsApp/), "0754 000 111")
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+
+    await waitForQuestion("Una code ya punguzo?")
+    expect(screen.getByRole("heading", { level: 3, name: "Usaili" })).toBeInTheDocument()
+    expect(screen.getByText("WhatsApp 0754 000 111")).toBeInTheDocument()
+    for (const link of ["Badilisha Uhusiano", "Badilisha Namba"]) expect(screen.getByRole("button", { name: link })).toBeInTheDocument()
+    expect(open().getByText("TZS 50,000")).toBeInTheDocument()
+    expect(open().getByRole("button", { name: "Hakiki Punguzo" })).toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: "Ruka, sina code" }))
+
+    await waitForQuestion("Ada ya usaili")
+    expect(screen.getByText("Hakuna code")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Badilisha Code" })).toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    await waitForQuestion("Hakiki kisha utume")
+    expect(open().getByRole("button", { name: "Tuma maombi" })).toHaveAttribute("type", "submit")
   })
 
-  it("Continue names the missing field, and Other asks for a description", async () => {
+  it("reopens a folded answer, folds it again on Continue and returns to the first unanswered question", async () => {
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
+    render(form("en"))
+    await answerStudent(user, "Zawadi Mfano", "en")
+    await user.click(open().getByRole("button", { name: "No, continue" }))
+    await waitForQuestion("What is your full name?")
 
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-    expect(screen.getByText("Enter the parent or guardian's full name.")).toBeInTheDocument()
-    expect(screen.getByRole("heading", { level: 1, name: "Parent or guardian" })).toBeInTheDocument()
-
-    await user.type(screen.getByLabelText("Parent or guardian's full name"), "Amina Fixture")
-    await user.click(screen.getByRole("button", { name: "Other" }))
-    await user.type(screen.getByLabelText("Phone number", { exact: false }), "0700000900")
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-    expect(screen.getByText("Describe your relationship to the child.", { selector: "p" })).toBeInTheDocument()
-
-    await user.type(screen.getByLabelText("Describe your relationship to the child"), "Aunt")
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-    expect(screen.getByRole("heading", { level: 1, name: "Children" })).toBeInTheDocument()
-
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-    expect(screen.getByText("Enter the child's full name.")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Change Details, Zawadi Mfano" }))
+    await user.click(screen.getByRole("button", { name: "Change Name" }))
+    await waitForQuestion("What is the student's name?")
+    const field = open().getByRole("textbox")
+    expect(field).toHaveFocus()
+    await user.clear(field)
+    await user.type(field, "Zawadi Juma")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("What is your full name?")
+    expect(screen.getByText(/Zawadi Juma/)).toBeInTheDocument()
   })
 
-  it("keeps every entry when the language switches mid-form, and Back keeps them too", async () => {
+  it("Back opens the question before, and Start over shows only on the first, empty question", async () => {
     const user = userEvent.setup()
-    const { rerender } = render(<AdmissionFormSteps language="sw" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user, "sw")
-    expect(screen.getByRole("heading", { level: 1, name: "Hakiki maombi yako" })).toBeInTheDocument()
+    render(form("en"))
+    expect(screen.getByRole("button", { name: "Start over" })).toBeInTheDocument()
+    expect(document.querySelector('button[aria-label="Back"]')).toHaveAttribute("aria-hidden", "true")
 
-    rerender(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    expect(screen.getByRole("heading", { level: 1, name: "Check your application" })).toBeInTheDocument()
-    expect(screen.getByText("Amina Fixture")).toBeInTheDocument()
-    expect(screen.getByText(`STD 2 · ${years[1]} · Day`)).toBeInTheDocument()
-
+    await user.type(open().getByRole("textbox"), "Zawadi Mfano")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Which class is Zawadi applying for?")
     await user.click(screen.getByRole("button", { name: "Back" }))
-    expect(screen.getByLabelText("Child's full name")).toHaveValue("Zawadi Fixture")
-    expect(screen.getByRole("button", { name: "STD 2" })).toHaveAttribute("aria-pressed", "true")
-    await user.click(screen.getByRole("button", { name: "Back" }))
-    expect(screen.getByLabelText("Parent or guardian's full name")).toHaveValue("Amina Fixture")
-    expect(screen.getByRole("button", { name: "Mother" })).toHaveAttribute("aria-pressed", "true")
+    await waitForQuestion("What is the student's name?")
+    expect(open().getByRole("textbox")).toHaveValue("Zawadi Mfano")
+    expect(document.querySelector('button[aria-label="Start over"]')).toHaveAttribute("aria-hidden", "true")
   })
 
-  it("sends once, shows the Admission Number, the office phone, and Fill in another form starts empty", async () => {
+  it("Start over and the menu's Clear the whole form empty the form and its draft", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await user.type(open().getByRole("textbox"), "Zawadi Mfano")
+    await waitFor(() => expect(window.sessionStorage.length).toBe(1))
+
+    await user.click(screen.getByRole("button", { name: "Menu" }))
+    await user.click(screen.getByRole("button", { name: "Clear the whole form" }))
+    await user.click(screen.getByRole("button", { name: "Yes, clear" }))
+    await waitFor(() => expect(open().getByRole("textbox")).toHaveValue(""))
+    expect(window.sessionStorage.length).toBe(0)
+    await waitFor(() => expect(screen.getByText("The form is cleared. Start again.")).toBeInTheDocument())
+  })
+
+  it("names the missing name under the field, and Other asks for a description", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    expect(open().getByText("Enter the student's full name.")).toBeInTheDocument()
+    await waitFor(() => expect(open().getByRole("textbox")).toHaveFocus())
+    await user.type(open().getByRole("textbox"), "Zawadi Mfano")
+    expect(screen.queryByText("Enter the student's full name.")).not.toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await pickClass(user, "STD 2", "en")
+    await waitForQuestion(/day scholar/)
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    // Nothing picked and no student before to copy: the choice is asked for.
+    expect(open().getByText("Choose day or boarding.")).toBeInTheDocument()
+    await user.click(open().getByRole("radio", { name: /Day/ }))
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await waitForQuestion("What is your full name?")
+    await user.type(open().getByRole("textbox"), "Amina Mfano")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await user.click(open().getByRole("radio", { name: "Other" }))
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    expect(open().getByText("Describe your relationship to the student.")).toBeInTheDocument()
+    await user.type(open().getByLabelText("Describe your relationship to the student"), "Aunt")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("What is your phone number?")
+    expect(screen.getByText("Other: Aunt")).toBeInTheDocument()
+  })
+
+  it("offers every class by level, and this year and next", async () => {
+    const user = userEvent.setup()
+    render(form("sw"))
+    await user.type(open().getByRole("textbox"), "Neema Mfano")
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    await user.click(open().getByRole("button", { name: "Chagua darasa lingine" }))
+    const sheet = await screen.findByRole("dialog", { name: "Chagua darasa" })
+    const classes: string[] = []
+    for (const level of ["Awali", "Msingi", "Sekondari"]) {
+      await user.click(within(sheet).getByRole("tab", { name: level }))
+      classes.push(...within(within(sheet).getByRole("tabpanel")).getAllByRole("button").map((b) => b.textContent ?? ""))
+    }
+    expect(classes).toEqual(["DAY CARE", "KG 1", "KG 2", "STD 1", "STD 2", "STD 3", "STD 4", "STD 5", "STD 6", "STD 7", "FORM 1", "FORM 2", "FORM 3", "FORM 4"])
+    await user.click(within(sheet).getByRole("button", { name: "Funga" }))
+
+    await user.click(open().getByRole("button", { name: "Badilisha Mwaka" }))
+    expect(open().getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual([`${years[0]} · Mwaka huu`, `${years[1]} · Mwaka ujao`])
+    await user.click(open().getByRole("radio", { name: new RegExp(String(years[0])) }))
+    expect(open().getByText(String(years[0]))).toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: /FORM 1/ }))
+    await waitFor(() => expect(screen.getByText(`FORM 1 · ${years[0]}`)).toBeInTheDocument())
+  })
+
+  it("adds a second student with its label, copies Day or Boarding, asks about the students, and removes one", async () => {
+    const user = userEvent.setup()
+    render(form("sw"))
+    await answerStudent(user, "Neema Mfano", "sw")
+    await user.click(await screen.findByRole("button", { name: "Ndiyo, ongeza mwanafunzi" }))
+
+    await waitForQuestion("Mwanafunzi wa pili anaitwa nani?")
+    expect(screen.getByText("Mwanafunzi wa pili")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { level: 3, name: "Wanafunzi" })).toBeInTheDocument()
+    await answerStudent(user, "Juma Mfano", "sw", { day: false })
+    // Juma's Day or Boarding started as Neema's.
+    await waitFor(() => expect(open().getByRole("heading", { name: "Unaomba kwa mwanafunzi mwingine pia?" })).toBeInTheDocument())
+    await user.click(open().getByRole("button", { name: "Hapana, endelea" }))
+    await waitForQuestion("Jina lako kamili ni nani?")
+    await user.type(open().getByRole("textbox"), "Asha Mfano")
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    await waitForQuestion("Wewe ni nani kwa wanafunzi hawa?")
+
+    await user.click(screen.getByRole("button", { name: "Badilisha Taarifa, Juma Mfano" }))
+    expect(screen.getByText("Kutwa", { selector: ".gf-sum-w span" })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Ondoa Juma Mfano" }))
+    await waitFor(() => expect(screen.queryByText(/Juma Mfano/)).not.toBeInTheDocument())
+    expect(screen.getByRole("heading", { level: 3, name: "Mwanafunzi" })).toBeInTheDocument()
+    expect(open().getByRole("heading", { name: "Wewe ni nani kwa Neema?" })).toBeInTheDocument()
+  })
+
+  it("refuses the same student twice, naming them", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi Mfano", "en")
+    await user.click(await screen.findByRole("button", { name: "Yes, add a student" }))
+    await user.type(open().getByRole("textbox"), "  zawadi MFANO ")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    expect(open().getByText("Zawadi Mfano is on this form twice. Remove one, or correct the name.")).toBeInTheDocument()
+  })
+
+  it("stops adding students at eight", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    for (let n = 1; n <= 8; n++) {
+      await answerStudent(user, `Mwanafunzi ${n} Mfano`, "en")
+      if (n < 8) await user.click(await screen.findByRole("button", { name: "Yes, add a student" }))
+    }
+    await waitForQuestion("What is your full name?")
+    expect(screen.getByText("You can apply for up to 8 students on one form.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Yes, add a student" })).not.toBeInTheDocument()
+  })
+
+  it("sends once, shows each Admission Number with a copy button, and Fill in another form starts empty", async () => {
     let finish: (value: unknown) => void = () => {}
     stubs.submit.mockImplementation(() => new Promise((resolve) => (finish = resolve)))
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="sw" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user, "sw")
+    render(form("sw"))
+    await fillToSend(user, "sw")
 
-    await user.click(screen.getByRole("button", { name: "Tuma maombi" }))
-    expect(screen.getByRole("button", { name: "Inatuma…" })).toBeDisabled()
+    await send(user, "Tuma maombi")
+    expect(open().getByRole("button", { name: "Inatuma…" })).toHaveAttribute("aria-busy", "true")
     const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
     expect(sent.get("cf-turnstile-response")).toBe("fake-token")
-    const body = JSON.parse(String(sent.get("form")))
+    const body = sentBody()
     expect(body.submissionKey).toMatch(/^[0-9a-f-]{36}$/)
-    expect(body.children).toEqual([{ fullName: "Zawadi Fixture", className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }])
+    expect(body.parent).toEqual({ fullName: "Amina Mfano", relationship: "Mother", phone: "0700 000 900" })
+    expect(body.children).toEqual([{ fullName: "Zawadi Mfano", className: "STD 2", enrollmentYear: DEFAULT_YEAR, dayOrBoarding: "Day" }])
+    expect(body.discountCode).toBeUndefined()
 
-    finish({ status: "confirmed", children: [{ fullName: "Zawadi Fixture", admissionNumber: "ADMSN-40719" }] })
+    finish({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
     expect(await screen.findByRole("heading", { name: "Maombi yamepokelewa!" })).toBeInTheDocument()
     expect(screen.getByText("Namba ya Udahili")).toBeInTheDocument()
     expect(screen.getByText("ADMSN-40719")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Nakili ADMSN-40719" })).toBeInTheDocument()
     expect(screen.getByText(/Hifadhi namba hii/)).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /\+255 700 000 001/ })).toHaveAttribute("href", "tel:+255700000001")
-    expect(stubs.submit).toHaveBeenCalledTimes(1)
+    // The progress bar goes, and no offer shows without a discount.
+    expect(document.querySelector('button[aria-label="Rudi"]')).toBeNull()
+    expect(screen.queryByText(/Ofa hii ni ya muda maalumu/)).not.toBeInTheDocument()
+    expect(window.sessionStorage.length).toBe(0)
 
     await user.click(screen.getByRole("button", { name: "Jaza fomu nyingine" }))
-    expect(screen.getByLabelText("Jina kamili la mzazi au mlezi")).toHaveValue("")
-    expect(screen.getByRole("button", { name: "Mama" })).toHaveAttribute("aria-pressed", "false")
+    expect(open().getByRole("textbox")).toHaveValue("")
 
     // A new form gets a new key.
     stubs.submit.mockResolvedValue({ status: "unavailable" })
-    await fillParentAndChild(user, "sw")
-    await user.click(screen.getByRole("button", { name: "Tuma maombi" }))
-    const [, again] = stubs.submit.mock.calls[1] as [unknown, FormData]
-    expect(JSON.parse(String(again.get("form"))).submissionKey).not.toBe(body.submissionKey)
+    await fillToSend(user, "sw")
+    await send(user, "Tuma maombi")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalledTimes(2))
+    expect(sentBody(1).submissionKey).not.toBe(body.submissionKey)
   })
 
   it.each([
@@ -187,481 +448,382 @@ describe("the Admission form page", { timeout: 20_000 }, () => {
   ])("on %s, says so, keeps the entries, resets the widget and keeps the key", async (status, text) => {
     stubs.submit.mockResolvedValue({ status })
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="sw" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user, "sw")
+    render(form("sw"))
+    await fillToSend(user, "sw")
 
-    await user.click(screen.getByRole("button", { name: "Tuma maombi" }))
+    await send(user, "Tuma maombi")
     expect(await screen.findByRole("alert")).toHaveTextContent(text)
     expect(stubs.reset).toHaveBeenCalledTimes(1)
-    expect(screen.getByText("Amina Fixture")).toBeInTheDocument()
+    expect(screen.getByText("Amina Mfano")).toBeInTheDocument()
 
-    await user.click(screen.getByRole("button", { name: "Tuma maombi" }))
-    const [first, second] = stubs.submit.mock.calls.map(([, data]) => JSON.parse(String((data as FormData).get("form"))))
-    expect(second.submissionKey).toBe(first.submissionKey)
+    await send(user, "Tuma maombi")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalledTimes(2))
+    expect(sentBody(1).submissionKey).toBe(sentBody(0).submissionKey)
   })
 
   it("waits for the security check before sending", async () => {
     stubs.token = ""
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
+    render(form("en"))
+    await fillToSend(user)
 
-    await user.click(screen.getByRole("button", { name: "Send application" }))
+    await send(user, "Send application")
     expect(screen.getByRole("alert")).toHaveTextContent("Wait a moment for the security check to finish")
     expect(stubs.submit).not.toHaveBeenCalled()
+  })
+
+  it("shows the code-holder notice at sending when a restored draft carries a code past an unopened code question", async () => {
+    window.sessionStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 2,
+        parent: { fullName: "Asha Mfano", relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
+        children: [{ fullName: "Zawadi Mfano", className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
+        discountCode: "BJN-402",
+        linkCode: "",
+        done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code", "fee"],
+      }),
+    )
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
+    const user = userEvent.setup()
+    render(form("en"))
+
+    await waitFor(() => expect(open().getByRole("button", { name: "Send application" })).toBeInTheDocument())
+    expect(open().getByText("The person who gave you this code will see your child's admission progress.")).toBeInTheDocument()
+    await send(user, "Send application")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalled())
+    expect(sentBody()).toMatchObject({ discountCode: "BJN-402", noticeVersion: "form_v1" })
   })
 
   it("leaves the words to a security check that needs a click", async () => {
     stubs.token = ""
     stubs.reveal.mockReturnValue(true)
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
+    render(form("en"))
+    await fillToSend(user)
 
-    await user.click(screen.getByRole("button", { name: "Send application" }))
+    await send(user, "Send application")
     expect(stubs.reveal).toHaveBeenCalled()
     expect(screen.queryByText(/Wait a moment for the security check/)).toBeNull()
     expect(stubs.submit).not.toHaveBeenCalled()
   })
 
-  it("says on the review step that nothing is paid on the form", async () => {
+  it("says on the fee question that nothing is paid on the form", async () => {
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="sw" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user, "sw")
+    render(form("sw"))
+    await answerStudent(user, "Zawadi Mfano", "sw")
+    await waitFor(() => expect(open().getByRole("button", { name: W.sw.no })).toBeInTheDocument())
+    await user.click(open().getByRole("button", { name: W.sw.no }))
+    await answerCustodian(user, "sw")
+    await user.click(open().getByRole("button", { name: W.sw.skip }))
 
-    expect(screen.getByText("Hulipi chochote kwenye fomu hii.")).toBeInTheDocument()
+    expect(await screen.findByText(/^Hulipi chochote kwenye fomu hii\./)).toBeInTheDocument()
   })
 
   it("sends the parent back to the phone when the database can't read it", async () => {
     stubs.submit.mockResolvedValue({ status: "invalid", field: "phone", child: null })
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
+    render(form("en"))
+    await fillToSend(user)
 
-    await user.click(screen.getByRole("button", { name: "Send application" }))
-    expect(await screen.findByRole("heading", { level: 1, name: "Parent or guardian" })).toBeInTheDocument()
-    expect(screen.getByText(/We couldn't read that phone number/)).toBeInTheDocument()
-    expect(screen.getByLabelText("Phone number", { exact: false })).toHaveValue("0700 000 900")
+    await send(user, "Send application")
+    await waitForQuestion("What is your phone number?")
+    expect(open().getByText(/We couldn't read that phone number/)).toBeInTheDocument()
+    expect(open().getByRole("textbox")).toHaveValue("0700 000 900")
     expect(stubs.reset).toHaveBeenCalled()
   })
 
-  it("sends the parent back to the child card when the year has closed", async () => {
+  it("sends the parent back to the student's class when the year has closed", async () => {
     stubs.submit.mockResolvedValue({ status: "invalid", field: "enrollment_year", child: 0 })
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
+    render(form("en"))
+    await fillToSend(user)
 
-    await user.click(screen.getByRole("button", { name: "Send application" }))
-    expect(await screen.findByRole("heading", { level: 1, name: "Children" })).toBeInTheDocument()
-    expect(screen.getByText("That year no longer takes applications. Choose another year.")).toBeInTheDocument()
-    // The page renders again, with the new year chips.
+    await send(user, "Send application")
+    await waitForQuestion("Which class is Zawadi applying for?")
+    expect(open().getByText("That year no longer takes applications. Choose another year.")).toBeInTheDocument()
+    expect(open().getAllByRole("radio")).toHaveLength(2)
+    // The page renders again, with the new years.
     expect(stubs.refresh).toHaveBeenCalledTimes(1)
   })
 
   it("makes a new key when the server says the key was used for a different form", async () => {
     stubs.submit.mockResolvedValue({ status: "invalid", field: "submission_key", child: null })
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
+    render(form("en"))
+    await fillToSend(user)
 
-    await user.click(screen.getByRole("button", { name: "Send application" }))
+    await send(user, "Send application")
     expect(await screen.findByRole("alert")).toHaveTextContent("Tap Send application again")
-    await user.click(screen.getByRole("button", { name: "Send application" }))
-    const [first, second] = stubs.submit.mock.calls.map(([, data]) => JSON.parse(String((data as FormData).get("form"))))
-    expect(second.submissionKey).not.toBe(first.submissionKey)
+    await send(user, "Send application")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalledTimes(2))
+    expect(sentBody(1).submissionKey).not.toBe(sentBody(0).submissionKey)
   })
 
   it("keeps the same key when the parent edits after a send with no answer", async () => {
     stubs.submit.mockRejectedValueOnce(new Error("network dropped")).mockResolvedValue({ status: "unavailable" })
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
+    render(form("en"))
+    await fillToSend(user)
 
-    await user.click(screen.getByRole("button", { name: "Send application" }))
+    await send(user, "Send application")
     expect(await screen.findByRole("alert")).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Back" }))
-    await user.type(screen.getByLabelText("Child's full name"), " Edited")
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-    await user.click(screen.getByRole("button", { name: "Send application" }))
+    await user.click(screen.getByRole("button", { name: "Change Details, Zawadi Mfano" }))
+    await user.click(screen.getAllByRole("button", { name: "Change Name" })[0])
+    await user.type(open().getByRole("textbox"), " Edited")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitFor(() => expect(open().getByRole("button", { name: "Send application" })).toBeInTheDocument())
+    await send(user, "Send application")
 
-    const [first, second] = stubs.submit.mock.calls.map(([, data]) => JSON.parse(String((data as FormData).get("form"))))
-    expect(second.children[0].fullName).toBe("Zawadi Fixture Edited")
-    expect(second.submissionKey).toBe(first.submissionKey)
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalledTimes(2))
+    expect(sentBody(1).children[0].fullName).toBe("Zawadi Mfano Edited")
+    expect(sentBody(1).submissionKey).toBe(sentBody(0).submissionKey)
   })
 
   it("shows the earlier send's Admission Number, and says the edits weren't saved", async () => {
-    stubs.submit.mockResolvedValue({
-      status: "already-sent",
-      children: [{ fullName: "Zawadi Fixture", admissionNumber: "26-0042" }],
-      complete: true,
-    })
+    stubs.submit.mockResolvedValue({ status: "already-sent", children: [{ fullName: "Zawadi Mfano", admissionNumber: "26-0042" }], complete: true })
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
+    render(form("en"))
+    await fillToSend(user)
 
-    await user.click(screen.getByRole("button", { name: "Send application" }))
-    expect(await screen.findByRole("heading", { level: 1, name: "Application received!" })).toBeInTheDocument()
+    await send(user, "Send application")
+    expect(await screen.findByRole("heading", { name: "Application received!" })).toBeInTheDocument()
     expect(screen.getByText("26-0042")).toBeInTheDocument()
     expect(screen.getByText(/^This form had already been sent, so the changes/)).toBeInTheDocument()
   })
 
-  it("says plainly when the earlier send reached only some children", async () => {
-    stubs.submit.mockResolvedValue({
-      status: "already-sent",
-      children: [{ fullName: "Zawadi Fixture", admissionNumber: "26-0042" }],
-      complete: false,
-    })
+  it("ignores the answer to a send made before the form was cleared", async () => {
+    let answer: (value: unknown) => void = () => {}
+    stubs.submit.mockReturnValue(new Promise((resolve) => (answer = resolve)))
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
+    render(form("en"))
+    await fillToSend(user)
+    await send(user, "Send application")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalled())
 
-    await user.click(screen.getByRole("button", { name: "Send application" }))
+    await user.click(screen.getByRole("button", { name: "Menu" }))
+    await user.click(screen.getByRole("button", { name: "Clear the whole form" }))
+    await user.click(screen.getByRole("button", { name: "Yes, clear" }))
+    answer({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
+
+    await waitFor(() => expect(open().getByRole("textbox")).toBeInTheDocument())
+    expect(screen.queryByRole("heading", { name: "Application received!" })).toBeNull()
+  })
+
+  it("says plainly when the earlier send reached only some students", async () => {
+    stubs.submit.mockResolvedValue({ status: "already-sent", children: [{ fullName: "Zawadi Mfano", admissionNumber: "26-0042" }], complete: false })
+    const user = userEvent.setup()
+    render(form("en"))
+    await fillToSend(user)
+
+    await send(user, "Send application")
     expect(await screen.findByText("26-0042")).toBeInTheDocument()
-    expect(screen.getByText(/not every child on it was received/)).toBeInTheDocument()
+    expect(screen.getByText(/not every student on it was received/)).toBeInTheDocument()
   })
 
-  it("adds child cards up to eight, and removes any card while more than one remains", async () => {
+  it.each(["sw", "en"] as const)("never says agent, referral, wakala, idhini or mtoto in %s", async (language) => {
     const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
-    await user.click(screen.getByRole("button", { name: "Back" }))
-
-    // One card: nothing to remove.
-    expect(screen.queryByRole("button", { name: /^Remove child/ })).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole("button", { name: "Add another child" }))
-    const second = screen.getByRole("group", { name: "Child 2" })
-    expect(within(second).getByLabelText("Child's full name")).toHaveFocus()
-    expect(within(second).getByLabelText("Child's full name")).toHaveValue("")
-    expect(screen.getByRole("button", { name: "Remove child 1" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Remove child 2" })).toBeInTheDocument()
-
-    // Removing the first card keeps the second one's entries, now as Child 1.
-    await user.type(within(second).getByLabelText("Child's full name"), "Baraka Fixture")
-    await user.click(screen.getByRole("button", { name: "Remove child 1" }))
-    expect(screen.queryByRole("group", { name: "Child 2" })).not.toBeInTheDocument()
-    expect(screen.getByRole("group", { name: "Child 1" })).toHaveFocus()
-    expect(within(screen.getByRole("group", { name: "Child 1" })).getByLabelText("Child's full name")).toHaveValue("Baraka Fixture")
-    expect(screen.queryByRole("button", { name: /^Remove child/ })).not.toBeInTheDocument()
-
-    for (let count = 2; count <= 8; count++) {
-      await user.click(screen.getByRole("button", { name: "Add another child" }))
-      expect(screen.getByRole("group", { name: `Child ${count}` })).toBeInTheDocument()
-    }
-    expect(screen.queryByRole("button", { name: "Add another child" })).not.toBeInTheDocument()
-    expect(screen.getByText("You can apply for up to 8 children on one form.")).toBeInTheDocument()
-  })
-
-  it("checks every child card before Continue, on the card that needs it", async () => {
-    const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
-    await user.click(screen.getByRole("button", { name: "Back" }))
-    await user.click(screen.getByRole("button", { name: "Add another child" }))
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-
-    const second = screen.getByRole("group", { name: "Child 2" })
-    expect(within(second).getByText("Enter the child's full name.")).toBeInTheDocument()
-    expect(within(second).getByLabelText("Child's full name")).toHaveFocus()
-    expect(within(screen.getByRole("group", { name: "Child 1" })).queryByText("Enter the child's full name.")).toBeNull()
-  })
-
-  it("refuses the same child twice before Continue, naming the child", async () => {
-    const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
-    await user.click(screen.getByRole("button", { name: "Back" }))
-    await user.click(screen.getByRole("button", { name: "Add another child" }))
-    const second = screen.getByRole("group", { name: "Child 2" })
-    await user.type(within(second).getByLabelText("Child's full name"), "  zawadi   FIXTURE ")
-    await user.click(within(second).getByRole("button", { name: "STD 2" }))
-    await user.click(within(second).getByRole("button", { name: String(years[1]) }))
-    await user.click(within(second).getByRole("button", { name: "Boarding" }))
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-
-    expect(screen.getByRole("heading", { level: 1, name: "Children" })).toBeInTheDocument()
-    expect(within(second).getByText("Zawadi Fixture is on this form twice. Remove one of the two cards, or correct the name.")).toBeInTheDocument()
-    expect(within(second).getByLabelText("Child's full name")).toHaveFocus()
-
-    // The same name typed exactly alike is caught too.
-    await user.clear(within(second).getByLabelText("Child's full name"))
-    await user.type(within(second).getByLabelText("Child's full name"), "Zawadi Fixture")
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-    expect(within(second).getByText(/^Zawadi Fixture is on this form twice/)).toBeInTheDocument()
-  })
-
-  it("sends every child in form order, lists them all on review and confirmation", async () => {
-    stubs.submit.mockResolvedValue({
-      status: "confirmed",
-      children: [
-        { fullName: "Zawadi Fixture", admissionNumber: "ADMSN-40719" },
-        { fullName: "Baraka Fixture", admissionNumber: "ADMSN-40720" },
-      ],
-    })
-    const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user)
-    await user.click(screen.getByRole("button", { name: "Back" }))
-    await user.click(screen.getByRole("button", { name: "Add another child" }))
-    const second = screen.getByRole("group", { name: "Child 2" })
-    await user.type(within(second).getByLabelText("Child's full name"), "Baraka Fixture")
-    await user.click(within(second).getByRole("button", { name: "FORM 1" }))
-    await user.click(within(second).getByRole("button", { name: String(years[0]) }))
-    await user.click(within(second).getByRole("button", { name: "Boarding" }))
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-
-    expect(screen.getByRole("heading", { level: 1, name: "Check your application" })).toBeInTheDocument()
-    expect(screen.getByText("Child 1")).toBeInTheDocument()
-    expect(screen.getByText(`STD 2 · ${years[1]} · Day`)).toBeInTheDocument()
-    expect(screen.getByText("Child 2")).toBeInTheDocument()
-    expect(screen.getByText("Baraka Fixture")).toBeInTheDocument()
-    expect(screen.getByText(`FORM 1 · ${years[0]} · Boarding`)).toBeInTheDocument()
-
-    await user.click(screen.getByRole("button", { name: "Send application" }))
-    const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
-    expect(JSON.parse(String(sent.get("form"))).children).toEqual([
-      { fullName: "Zawadi Fixture", className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" },
-      { fullName: "Baraka Fixture", className: "FORM 1", enrollmentYear: years[0], dayOrBoarding: "Boarding" },
-    ])
-
-    expect(await screen.findByRole("heading", { name: "Application received!" })).toBeInTheDocument()
-    const listed = within(screen.getByRole("list")).getAllByRole("listitem")
-    expect(listed.map((item) => item.textContent)).toEqual([
-      "Zawadi FixtureAdmission NumberADMSN-40719",
-      "Baraka FixtureAdmission NumberADMSN-40720",
-    ])
-    expect(screen.getByText(/^Keep these numbers and bring them/)).toBeInTheDocument()
-
-    // Fill in another form starts with one empty card.
-    await user.click(screen.getByRole("button", { name: "Fill in another form" }))
-    await user.type(screen.getByLabelText("Parent or guardian's full name"), "Amina Fixture")
-    await user.click(screen.getByRole("button", { name: "Mother" }))
-    await user.type(screen.getByLabelText("Phone number", { exact: false }), "0700 000 900")
-    await user.click(screen.getByRole("button", { name: "Continue" }))
-    expect(screen.getAllByRole("group", { name: /^Child \d$/ })).toHaveLength(1)
-    expect(screen.getByLabelText("Child's full name")).toHaveValue("")
-  })
-
-  it("sends the parent back to the card the server refused as the same child twice", async () => {
-    stubs.submit.mockResolvedValue({ status: "invalid", field: "duplicate_child", child: 1 })
-    const user = userEvent.setup()
-    render(<AdmissionFormSteps language="sw" years={years} officePhone="+255 700 000 001" />)
-    await fillParentAndChild(user, "sw")
-    await user.click(screen.getByRole("button", { name: "Rudi" }))
-    await user.click(screen.getByRole("button", { name: "Ongeza mtoto mwingine" }))
-    const second = screen.getByRole("group", { name: "Mtoto 2" })
-    await user.type(within(second).getByLabelText("Jina kamili la mtoto"), "Zawadi Fixtures")
-    await user.click(within(second).getByRole("button", { name: "STD 2" }))
-    await user.click(within(second).getByRole("button", { name: String(years[1]) }))
-    await user.click(within(second).getByRole("button", { name: "Kutwa" }))
-    await user.click(screen.getByRole("button", { name: "Endelea" }))
-    await user.click(screen.getByRole("button", { name: "Tuma maombi" }))
-
-    expect(await screen.findByRole("heading", { level: 1, name: "Watoto" })).toBeInTheDocument()
-    expect(
-      within(screen.getByRole("group", { name: "Mtoto 2" })).getByText(
-        "Zawadi Fixtures yupo mara mbili kwenye fomu hii. Ondoa mojawapo ya kadi hizo mbili, au sahihisha jina.",
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it("never mentions agents, referrals or approval, an 'already in our records' note or Saturday interviews", async () => {
-    stubs.check.mockResolvedValue({ status: "pending", amount: 50000 })
-    for (const language of ["sw", "en"] as const) {
-      const user = userEvent.setup()
-      const { container, unmount } = render(
-        <AdmissionFormSteps language={language} years={years} officePhone="+255 700 000 001" discountCode="ZNM-401" />,
-      )
-      await fillParentAndChild(user, language)
-      await screen.findByText(language === "en" ? /waiting to be confirmed/ : /inasubiri kuthibitishwa/)
-      expect(container.textContent).not.toMatch(/wakala|agent|referral|approv|idhini|Jumamosi|Saturday|kumbukumbu|records/i)
-      unmount()
-      // The next language starts in a fresh tab, not this one's draft.
-      window.sessionStorage.clear()
-      window.history.replaceState(null, "", "/apply")
-    }
+    render(form(language, { discountCode: "BJN-402" }))
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    await fillToSend(user, language).catch(() => undefined)
+    // The code holder's notice is versioned wording from lib/referral-notice.ts.
+    document.querySelectorAll("[data-notice-version]").forEach((notice) => notice.remove())
+    const text = document.body.textContent ?? ""
+    expect(text).not.toMatch(/agent|referral|wakala|idhini|approval|\bmtoto\b|\bwatoto\b/i)
   })
 })
 
-describe("the Discount code on the review step", { timeout: 20_000 }, () => {
-  beforeEach(() => {
-    for (const cookie of document.cookie.split("; ")) {
-      const name = cookie.split("=")[0]
-      if (name) document.cookie = `${name}=; Max-Age=0; Path=/`
-    }
-  })
-
-  it.each([
-    ["the link's code over the remembered one", { ref: "bjn-402" }, "ZNM-401", "BJN-402"],
-    ["the remembered code on a visit without a link", {}, "ZNM-401", "ZNM-401"],
-    ["nothing with neither", {}, undefined, ""],
-  ])("the page starts the field from %s, reading no Supabase", async (_, params, remembered, expected) => {
-    jar.values.set("lang", "en")
-    if (remembered) jar.values.set("discount_code", remembered)
-    stubs.check.mockResolvedValue({ status: "unavailable" })
-    const user = userEvent.setup()
-    render(await ApplyPage({ searchParams: Promise.resolve(params) }))
-    await fillParentAndChild(user)
-    expect(screen.getByLabelText("Discount code · optional")).toHaveValue(expected)
-  })
-
-  async function reviewStep(props: { discountCode?: string; rememberDiscountCode?: string | null } = {}, children = 1) {
-    const user = userEvent.setup()
-    render(<AdmissionFormSteps language="en" years={years} officePhone="+255 700 000 001" {...props} />)
-    await fillParentAndChild(user)
-    for (let n = 2; n <= children; n++) {
-      await user.click(screen.getByRole("button", { name: "Back" }))
-      await user.click(screen.getByRole("button", { name: "Add another child" }))
-      const card = screen.getByRole("group", { name: `Child ${n}` })
-      await user.type(within(card).getByLabelText("Child's full name"), `Sibling Fixture ${n}`)
-      await user.click(within(card).getByRole("button", { name: "STD 2" }))
-      await user.click(within(card).getByRole("button", { name: String(years[1]) }))
-      await user.click(within(card).getByRole("button", { name: "Day" }))
-      await user.click(screen.getByRole("button", { name: "Continue" }))
-    }
-    return user
+describe("the Discount code question", { timeout: 30_000 }, () => {
+  async function toCode(user: User, lang: "sw" | "en" = "en") {
+    await answerStudent(user, "Zawadi Mfano", lang)
+    await user.click(await screen.findByRole("button", { name: W[lang].no }))
+    await answerCustodian(user, lang)
+    await waitForQuestion(lang === "en" ? "Have a discount code?" : "Una code ya punguzo?")
   }
 
-  it("is optional, empty without a link, and shows the standard fee for one child", async () => {
-    await reviewStep()
-    expect(screen.getByLabelText("Discount code · optional")).toHaveValue("")
-    expect(screen.getByText("If someone gave you a discount code, enter it here.")).toBeInTheDocument()
-    expect(screen.getByText("TZS 50,000 per child")).toBeInTheDocument()
-    expect(screen.getByText("Total: TZS 50,000")).toBeInTheDocument()
+  it("moves on from the Discount code question when the check stalls", async () => {
+    stubs.check.mockReturnValue(new Promise(() => {}))
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user)
+    await user.type(open().getByLabelText(/Discount code/), "BJN-402")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+
+    await waitFor(() => expect(open().getByRole("heading", { name: "Interview fee" })).toBeInTheDocument(), { timeout: 9000 })
+  })
+
+  it("checks a restored code when the fee question opens after a reload", async () => {
+    window.sessionStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        version: 2,
+        parent: { fullName: "Asha Mfano", relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
+        children: [{ fullName: "Zawadi Mfano", className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
+        discountCode: "BJN-402",
+        linkCode: "",
+        done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code"],
+      }),
+    )
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    render(form("en"))
+
+    await waitFor(() => expect(open().getByRole("heading", { name: "Interview fee" })).toBeInTheDocument())
+    await waitFor(() => expect(stubs.check).toHaveBeenCalledWith("BJN-402"))
+    expect(await open().findAllByText("TZS 40,000")).not.toHaveLength(0)
+  })
+
+  it("promises no discount when an earlier send is what went through", async () => {
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.submit.mockResolvedValue({ status: "already-sent", children: [{ fullName: "Zawadi Mfano", admissionNumber: "26-0042" }], complete: true })
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user, "en")
+    await user.type(open().getByLabelText(/Discount code/), "BJN-402")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Interview fee")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+
+    await send(user, "Send application")
+    expect(await screen.findByRole("heading", { name: "Application received!" })).toBeInTheDocument()
+    expect(screen.queryByText(/discount is waiting/i)).toBeNull()
+  })
+
+
+  it("is optional and empty without a link, with the full fee and no saving until the live figure arrives", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user)
+    expect(open().getByLabelText(/Discount code/)).toHaveValue("")
+    expect(open().getByText("TZS 50,000")).toBeInTheDocument()
+    expect(open().queryByText(/^Save TZS/)).not.toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: "Skip, no code" }))
+    await waitForQuestion("Interview fee")
+    expect(open().getAllByText("TZS 50,000")).toHaveLength(2)
+  })
+
+  it("shows the live discount against the full fee", async () => {
+    live = { applications: 1284, discount: 10000 }
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user)
+    expect(open().getByText("Save TZS 10,000")).toBeInTheDocument()
+    expect(open().getByText("50,000", { selector: "s" })).toBeInTheDocument()
+    expect(open().getByText(/→ 40,000/)).toBeInTheDocument()
+  })
+
+  it("starts from the link's code, remembers it for 30 days, and checks it as the question opens", async () => {
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    const user = userEvent.setup()
+    render(form("sw", { discountCode: "BJN-402", rememberDiscountCode: "BJN-402" }))
+    expect(document.cookie).toContain("discount_code=BJN-402")
+    await toCode(user, "sw")
+
+    expect(open().getByLabelText(/Code ya Punguzo/)).toHaveValue("BJN-402")
+    await waitFor(() => expect(stubs.check).toHaveBeenCalledWith("BJN-402"))
+    expect(await screen.findByText("Hongera! Umeokoa TZS 10,000 kwa kila mwanafunzi.")).toBeInTheDocument()
+    expect(open().getByText("Ofa hii ni ya muda mfupi")).toBeInTheDocument()
+    expect(open().getByText(/Mtu aliyekupa code hii/)).toHaveAttribute("data-notice-version", "form_v1")
+  })
+
+  it("checks a typed code with Hakiki Punguzo, and only when it changed", async () => {
+    stubs.check.mockResolvedValue({ status: "pending", amount: 50000 })
+    const user = userEvent.setup()
+    render(form("sw"))
+    await toCode(user, "sw")
+    await user.type(open().getByLabelText(/Code ya Punguzo/), "bjn-402")
+    await user.click(open().getByRole("button", { name: "Hakiki Punguzo" }))
+    expect(await screen.findByText(/inasubiri kuthibitishwa/)).toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: "Hakiki Punguzo" }))
+    expect(stubs.check).toHaveBeenCalledTimes(1)
+  })
+
+  it("stops once on a code nobody has, then lets the parent go on", async () => {
+    stubs.check.mockResolvedValue({ status: "unknown", amount: 50000 })
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user)
+    await user.type(open().getByLabelText(/Discount code/), "NOBODY-1")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    expect(await screen.findByText(/We don't recognise this code/)).toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Interview fee")
+    expect(screen.getByText(/· not recognised/)).toBeInTheDocument()
+  })
+
+  it("names a value that isn't a code under the field, and won't send it", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user)
+    await user.type(open().getByLabelText(/Discount code/), "not a code!")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    expect(open().getByText(/A discount code has only letters, numbers/)).toBeInTheDocument()
     expect(stubs.check).not.toHaveBeenCalled()
   })
 
-  it("starts from the link's code, remembers it for 30 days, and checks it as the step opens", async () => {
+  it("brings the fee down for a confirmed code, opens the offer sheet, and sends the code with the notice version", async () => {
+    live = { applications: 1284, discount: 10000 }
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
-    await reviewStep({ discountCode: "BJN-402", rememberDiscountCode: "BJN-402" })
+    stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
+    const user = userEvent.setup()
+    render(form("sw"))
+    await toCode(user, "sw")
+    await user.type(open().getByLabelText(/Code ya Punguzo/), "BJN-402")
+    await user.click(open().getByRole("button", { name: "Endelea" }))
 
-    expect(document.cookie).toContain("discount_code=BJN-402")
-    expect(screen.getByLabelText("Discount code · optional")).toHaveValue("BJN-402")
-    expect(await screen.findByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
-    expect(stubs.check).toHaveBeenCalledWith("BJN-402")
-    expect(screen.getByText("TZS 40,000 per child")).toBeInTheDocument()
-    expect(screen.getByText("Total: TZS 40,000")).toBeInTheDocument()
+    await waitForQuestion("Ada ya usaili")
+    expect(open().getAllByText("TZS 40,000")).toHaveLength(2)
+    expect(open().getByText("Umeokoa TZS 10,000")).toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: "Kuhusu ofa ya muda maalum" }))
+    const sheet = await screen.findByRole("dialog", { name: "Ofa ya muda maalum" })
+    expect(within(sheet).getByText("Nafasi ni chache: mpaka sasa tuna maombi 1,284.")).toBeInTheDocument()
+    await user.click(within(sheet).getByRole("button", { name: "Sawa, nimeelewa" }))
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    expect(await screen.findByRole("button", { name: "Ofa ya muda maalum" })).toBeInTheDocument()
+
+    await send(user, "Tuma maombi")
+    expect(await screen.findByRole("heading", { name: "Maombi yamepokelewa!" })).toBeInTheDocument()
+    expect(sentBody()).toMatchObject({ discountCode: "BJN-402", noticeVersion: "form_v1" })
+    expect(screen.getByText("Punguzo lako la TZS 10,000 linakusubiri")).toBeInTheDocument()
+    const offer = screen.getByRole("note")
+    expect(offer).toHaveTextContent(
+      "Ofa hii ni ya muda maalumu na inaweza kuondolewa wakati wowote. Pia nafasi ni chache sababu mpaka sasa tuna maombi",
+    )
+    expect(within(offer).getByText("1,284")).toHaveClass("gf-live")
+    expect(offer).toHaveTextContent("Hivyo mlete mwanafunzi kwenye usaili mapema, Ikiwezekana mlete wiki hii ndani ya siku za kazi.")
   })
 
-  it("confirms an Approved code without a figure when the discount couldn't be read", async () => {
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: null })
-    await reviewStep({ discountCode: "BJN-402", rememberDiscountCode: "BJN-402" })
-    expect(await screen.findByText("A discount on the interview fee for each child.")).toBeInTheDocument()
-    expect(screen.getByText("TZS 40,000 per child")).toBeInTheDocument()
-  })
-
-  it("leaves the remembered code alone on a visit without a link", async () => {
-    document.cookie = "discount_code=ZNM-401; Path=/"
-    stubs.check.mockResolvedValue({ status: "pending", amount: 50000 })
-    await reviewStep({ discountCode: "ZNM-401", rememberDiscountCode: null })
-    expect(document.cookie).toContain("discount_code=ZNM-401")
-    expect(screen.getByLabelText("Discount code · optional")).toHaveValue("ZNM-401")
-  })
-
-  it.each([
-    [{ status: "approved", amount: 40000, discount: 10000 }, "TZS 10,000 off the interview fee for each child.", "TZS 40,000"],
-    [{ status: "pending", amount: 50000 }, "This code is waiting to be confirmed. The discount applies if it is confirmed before you pay.", "TZS 50,000"],
-    [{ status: "unknown", amount: 50000 }, "We don't recognise this code. Check it, or send the form without it.", "TZS 50,000"],
-    [{ status: "rate-limited" }, "We couldn't check your code just now. It will still be saved with your application.", "TZS 50,000"],
-    [{ status: "unavailable" }, "We couldn't check your code just now. It will still be saved with your application.", "TZS 50,000"],
-  ])("checks a typed code when the field loses focus: %j", async (answer, note, fee) => {
-    stubs.check.mockResolvedValue(answer)
-    const user = await reviewStep({}, 3)
-    await user.type(screen.getByLabelText("Discount code · optional"), " abc 123 ")
-    await user.tab()
-
-    expect(await screen.findByText(note)).toBeInTheDocument()
-    expect(stubs.check).toHaveBeenCalledWith("ABC123")
-    const perChild = Number(fee.replace(/\D/g, ""))
-    expect(screen.getByText(`${fee} per child`)).toBeInTheDocument()
-    expect(screen.getByText(`Total for 3 children: TZS ${(perChild * 3).toLocaleString("en-US")}`)).toBeInTheDocument()
-  })
-
-  it("checks again only when the code changed", async () => {
-    stubs.check.mockResolvedValue({ status: "unknown", amount: 50000 })
-    const user = await reviewStep()
-    const field = screen.getByLabelText("Discount code · optional")
-    await user.type(field, "QQQ-000")
-    await user.tab()
-    await screen.findByText(/We don't recognise this code/)
-    await user.click(field)
-    await user.tab()
-    expect(stubs.check).toHaveBeenCalledTimes(1)
-
+  it("leaves the count sentence out of the offer when the count is below the minimum", async () => {
+    live = { applications: 40, discount: 10000 }
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
-    await user.clear(field)
-    await user.type(field, "BJN-402")
-    await user.tab()
-    expect(await screen.findByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
-    expect(stubs.check).toHaveBeenCalledTimes(2)
-  })
+    stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
+    const user = userEvent.setup()
+    render(form("sw", { discountCode: "BJN-402" }))
+    await toCode(user, "sw")
+    await screen.findByText(/Hongera!/)
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    await waitForQuestion("Ada ya usaili")
+    await user.click(open().getByRole("button", { name: "Kuhusu ofa ya muda maalum" }))
+    const sheet = await screen.findByRole("dialog")
+    expect(within(sheet).queryByText(/mpaka sasa tuna maombi/)).not.toBeInTheDocument()
+    await user.click(within(sheet).getByRole("button", { name: "Sawa, nimeelewa" }))
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    await user.click(await screen.findByRole("button", { name: "Tuma maombi" }))
 
-  it("asks again on the next blur when a check couldn't run", async () => {
-    stubs.check.mockResolvedValueOnce({ status: "unavailable" }).mockResolvedValueOnce({ status: "approved", amount: 40000, discount: 10000 })
-    const user = await reviewStep()
-    const field = screen.getByLabelText("Discount code · optional")
-    await user.type(field, "BJN-402")
-    await user.tab()
-    await screen.findByText(/We couldn't check your code just now/)
-    await user.click(field)
-    await user.tab()
-    expect(await screen.findByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
-    expect(stubs.check).toHaveBeenCalledTimes(2)
-  })
-
-  it("keeps each code's answer when a slower check finishes after a newer one", async () => {
-    let finishFirst: (value: unknown) => void = () => {}
-    stubs.check
-      .mockImplementationOnce(() => new Promise((resolve) => (finishFirst = resolve)))
-      .mockResolvedValueOnce({ status: "approved", amount: 40000, discount: 10000 })
-    const user = await reviewStep()
-    const field = screen.getByLabelText("Discount code · optional")
-    await user.type(field, "QQQ-000")
-    await user.tab()
-    await user.clear(field)
-    await user.type(field, "BJN-402")
-    await user.tab()
-    expect(await screen.findByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
-
-    finishFirst({ status: "unknown", amount: 50000 })
-    await screen.findByText("TZS 40,000 per child")
-    expect(screen.getByText("TZS 10,000 off the interview fee for each child.")).toBeInTheDocument()
-  })
-
-  it("sends whatever code is in the field, recognised or not, and the confirmation shows no fee", async () => {
-    stubs.check.mockResolvedValue({ status: "unknown", amount: 50000 })
-    stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Fixture", admissionNumber: "ADMSN-40719" }] })
-    const user = await reviewStep({ discountCode: "BJN-402", rememberDiscountCode: "BJN-402" })
-    const field = screen.getByLabelText("Discount code · optional")
-    await user.clear(field)
-    await user.type(field, "qqq-000")
-    await user.click(screen.getByRole("button", { name: "Send application" }))
-
-    const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
-    expect(JSON.parse(String(sent.get("form"))).discountCode).toBe("qqq-000")
-    expect(await screen.findByRole("heading", { name: "Application received!" })).toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/TZS|fee/i)
-    // Sending leaves the remembered code in place.
-    expect(document.cookie).toContain("discount_code=BJN-402")
+    const offer = await screen.findByRole("note")
+    expect(offer).toHaveTextContent("Ofa hii ni ya muda maalumu na inaweza kuondolewa wakati wowote.")
+    expect(offer).toHaveTextContent("Hivyo mlete mwanafunzi kwenye usaili mapema")
+    expect(offer).not.toHaveTextContent(/nafasi ni chache|40/)
   })
 
   it("sends no code when the field is empty", async () => {
     stubs.submit.mockResolvedValue({ status: "unavailable" })
-    const user = await reviewStep()
-    await user.click(screen.getByRole("button", { name: "Send application" }))
-    const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
-    expect(JSON.parse(String(sent.get("form")))).not.toHaveProperty("discountCode")
-  })
-
-  it("names a value that isn't a code under the field, and won't send it", async () => {
-    const user = await reviewStep()
-    const field = screen.getByLabelText("Discount code · optional")
-    await user.type(field, "ABC_123!")
-    await user.click(screen.getByRole("button", { name: "Send application" }))
-
-    expect(screen.getByText(/A discount code has only letters, numbers/)).toBeInTheDocument()
-    expect(field).toHaveAttribute("aria-invalid", "true")
-    expect(stubs.submit).not.toHaveBeenCalled()
-    expect(stubs.check).not.toHaveBeenCalled()
+    const user = userEvent.setup()
+    render(form("en"))
+    await fillToSend(user)
+    await send(user, "Send application")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalled())
+    expect(sentBody().discountCode).toBeUndefined()
+    expect(sentBody().noticeVersion).toBeUndefined()
   })
 })

@@ -6,7 +6,7 @@ import { logIn } from "./log-in"
 
 // Al-Rahmah palette values from app/globals.css.
 const AL_RAHMAH_BLUE = "rgb(9, 0, 187)" // --color-blue-600: #0900bb
-const AL_RAHMAH_ORANGE = "rgb(253, 105, 20)" // --color-orange-500: #fd6914
+const AL_RAHMAH_ORANGE = "rgb(238, 115, 0)" // --color-orange-500: #ee7300
 
 test.describe("the one sign-in page", () => {
   test("is Swahili first, with the language switch above the card and no separate Discount code sign-in", async ({ page }) => {

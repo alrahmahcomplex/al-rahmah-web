@@ -49,6 +49,7 @@ function fakeSupabase({
           ? { data: { user: { id: "user" } }, error: null }
           : { data: { user: null }, error: { message: "Auth session missing!", status: 400 } },
       ),
+      getClaims: vi.fn(async () => (session ? { data: { claims: { sub: "user" } }, error: null } : { data: null, error: null })),
       signOut,
     },
     rpc: vi.fn((fn: string) => ({

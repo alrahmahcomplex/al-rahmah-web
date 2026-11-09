@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Permission } from "@/lib/permissions"
 
-import { currentSessionKind, signOutSession, spendLinkAndSetPassword } from "./auth-session"
+import { currentSessionKind, hasVerifiedSession, signOutSession, spendLinkAndSetPassword } from "./auth-session"
 import { readWithClockRetry } from "./clock-retry"
 import type { Result } from "./result"
 
@@ -70,12 +70,10 @@ async function loadStaffMember(supabase: SupabaseClient): Promise<Result<StaffMe
   }
 }
 
+// The staff record is read under the token hasVerifiedSession just checked,
+// so it answers for the same person.
 export async function getStaffUser(supabase: SupabaseClient): Promise<Result<StaffMember, StaffUserError>> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: "signed-out" }
-
+  if (!(await hasVerifiedSession(supabase))) return { ok: false, error: "signed-out" }
   return loadStaffMember(supabase)
 }
 

@@ -44,6 +44,24 @@ export async function passwordSignIn(
   return { ok: false, error: failure }
 }
 
+// Whether this request carries a verified session. getClaims checks the access
+// token's signature and expiry: on the spot with the project's published
+// signing keys, or by asking the Auth server while the project still signs
+// with the legacy shared secret. No session, an error or a token without a
+// subject all count as signed out, and so does anything getClaims throws.
+// The readers that call this then read the person's record from the
+// database, under the same token, on every request.
+export async function hasVerifiedSession(supabase: SupabaseClient): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.auth.getClaims()
+    if (error || !data) return false
+    return typeof data.claims.sub === "string" && data.claims.sub !== ""
+  } catch (error) {
+    console.error("Could not check the session token", error)
+    return false
+  }
+}
+
 // Who this browser is signed in as already. One account per browser: staff
 // pages refuse while an agent is signed in, and agent pages while staff are,
 // so a link is never spent on the wrong session. A login that belongs to

@@ -41,6 +41,7 @@ function fakeSupabase({
       getUser: vi.fn(async () =>
         session ? { data: { user: { id: "user-1" } }, error: null } : { data: { user: null }, error: { message: "missing", status: 400 } },
       ),
+      getClaims: vi.fn(async () => (session ? { data: { claims: { sub: "user-1" } }, error: null } : { data: null, error: null })),
       signOut: vi.fn(async () => {
         session = false
         return { error: null }

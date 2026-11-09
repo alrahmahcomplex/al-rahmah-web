@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
 import { declinedReasonsFor, marksAllowed } from "@/lib/services/lead-closure"
 import { getLead, isClosed } from "@/lib/services/leads"
+import { getLeadImportMark } from "@/lib/services/student-import"
 import { getLeadStatusSince } from "@/lib/services/system-audit"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
@@ -38,7 +39,11 @@ export default async function LeadPage({
   const [{ id }, { tab: tabParam }] = await Promise.all([params, searchParams])
   const tab = leadTab(tabParam)
   const supabase = await createClient()
-  const [lead, statusSince] = await Promise.all([getLead(supabase, id), getLeadStatusSince(supabase, id)])
+  const [lead, statusSince, importMark] = await Promise.all([
+    getLead(supabase, id),
+    getLeadStatusSince(supabase, id),
+    getLeadImportMark(supabase, id),
+  ])
   if (!lead.ok && lead.error === "not-found") notFound()
   if (!lead.ok) {
     return (
@@ -60,6 +65,7 @@ export default async function LeadPage({
         lead={lead.data}
         statusSince={statusSince.ok ? statusSince.data : undefined}
         canViewHistory={staff.permissions.includes("audit.view")}
+        importMark={importMark.ok ? importMark.data : undefined}
         more={
           <LeadMoreMenu
             lead={{

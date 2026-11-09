@@ -27,6 +27,7 @@ import {
   groupInvitationSummary,
   groupInvitationValue,
 } from "./group-invitation-history"
+import { IMPORT_HIDDEN, IMPORT_LABELS, importNote } from "./import-history"
 import { interviewSerials, withInterviewSerial } from "./interview-history"
 import { REOPENING_HIDDEN, reopenedLeadSummary, reopeningLabel, reopeningSummary, reopeningValue } from "./reopening-history"
 import {
@@ -51,6 +52,8 @@ export type DescribedEntry = {
   actor: string
   summary: string
   changes: DescribedChange[]
+  // A line under the summary, such as the import a lead came from.
+  note?: string
 }
 
 const LABELS: Record<string, string> = {
@@ -116,14 +119,16 @@ const LABELS: Record<string, string> = {
   comment: "Comment",
   outcome: "Outcome",
   cause: "Closed with the lead",
+  // A lead the student import created.
+  ...IMPORT_LABELS,
 }
 
 // Kept on a row for the database's sake, and already shown by the entry
 // itself: who declined a lead and when; an interview's lead, and who
 // registered it when.
 const HIDDEN: Record<string, ReadonlySet<string>> = {
-  lead: new Set(["declined_at", "declined_by", "closed_at", "closed_by"]),
-  interviews: new Set(["lead", "registered_at", "registered_by"]),
+  lead: new Set(["declined_at", "declined_by", "closed_at", "closed_by", IMPORT_HIDDEN]),
+  interviews: new Set(["lead", "registered_at", "registered_by", IMPORT_HIDDEN]),
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
   reopening_requests: REOPENING_HIDDEN,
@@ -389,17 +394,21 @@ function rank(field: string) {
 // A whole history, in the order it came (newest first). The Family entries
 // are read against the contacts' own entries, so the history is described as
 // a whole.
+// `importFile` names the student import the lead came from, if it did.
 export function describeLeadHistory(
   entries: readonly LeadHistoryEntry[],
   contactNames: Readonly<Record<string, string>>,
+  importFile: string | null = null,
 ): DescribedEntry[] {
   const timeline = matchTimeline(entries)
   const plans = followUpPlans(entries)
   const causes = enrolmentCauses(entries)
   const serials = interviewSerials(entries)
-  return entries.map((entry) =>
-    withInterviewSerial(entry, describeEntry(withEarlierPlan(entry, plans), contactNames, timeline, causes), serials),
-  )
+  return entries.map((entry) => {
+    const described = withInterviewSerial(entry, describeEntry(withEarlierPlan(entry, plans), contactNames, timeline, causes), serials)
+    const note = importNote(entry, importFile)
+    return note ? { ...described, note } : described
+  })
 }
 
 // Each follow-up's date and note as written, by follow-up id.

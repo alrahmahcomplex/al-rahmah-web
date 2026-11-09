@@ -65,3 +65,19 @@ describe("the earlier group link filter", () => {
     }
   })
 })
+
+describe("the import filter", () => {
+  const batch = "b0000000-0000-4000-8000-00000000000a"
+
+  it("reads one import's id and keeps it in the URL", () => {
+    expect(parseLeadSearch({ import: batch.toUpperCase() }).importBatchId).toBe(batch)
+    expect(leadsHref({ closure: "open", importBatchId: batch, page: 1 })).toBe(`/staff/leads?import=${batch}`)
+    expect(leadsHref({ closure: "open", importBatchId: batch, page: 1 }, { importBatchId: undefined })).toBe("/staff/leads")
+  })
+
+  it("ignores anything that isn't an id", () => {
+    for (const value of ["", "batch", "b0000000-0000-4000-8000", `${batch}x`]) {
+      expect(parseLeadSearch({ import: value }).importBatchId).toBeUndefined()
+    }
+  })
+})

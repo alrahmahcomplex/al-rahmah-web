@@ -449,6 +449,8 @@ export type CreatedAgent = { kind: "created"; agent: { id: string; fullName: str
 export type CreateAgentError =
   | { kind: "forbidden" }
   | { kind: "invalid"; field: AgentDraftField }
+  // A Promo code holds the code typed.
+  | { kind: "promo-code-taken" }
   | EmailTaken
   | { kind: "unavailable" }
   | { kind: "uncertain" }
@@ -504,9 +506,8 @@ function draftArgs(draft: Omit<AgentDraft, "code">) {
 function createRefusal(error: DbError, email: unknown): CreateAgentError | null {
   // 42501: the function isn't granted to the caller at all, as for someone signed out.
   if (error.message === "not_permitted" || error.code === "42501") return { kind: "forbidden" }
-  // A Promo code holds the code: there is no agent to name, so the Manager
-  // hears the code is not available.
-  if (error.message === "code_taken") return { kind: "invalid", field: "code" }
+  // A Promo code holds the code: there is no agent to name.
+  if (error.message === "code_taken") return { kind: "promo-code-taken" }
   if (error.message === "email_taken") return emailTakenFrom(error.details, text(email))
   const field = draftField(error)
   if (field && field !== "reason") return { kind: "invalid", field }

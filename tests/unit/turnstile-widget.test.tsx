@@ -259,6 +259,66 @@ describe("TurnstileWidget", () => {
     expect(screen.getByText("Tick the security check below, then send.")).toBeInTheDocument()
   })
 
+  it("draws a box that is too wide again at the size that fits when Cloudflare shows an error in it (#278)", async () => {
+    let resized = () => {}
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resized = callback
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(340)
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+
+    // Drawn flexible while invisible, then the space drops under 300px.
+    width.mockReturnValue(261)
+    act(() => resized())
+    await act(async () => {})
+    expect(turnstile.render).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      lastOptions()["error-callback"]!("300010")
+    })
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(2))
+    expect(lastOptions().size).toBe("compact")
+  })
+
+  it("keeps a compact check compact when Cloudflare needs a click in space that has grown past 300px (#278)", async () => {
+    let resized = () => {}
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resized = callback
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(261)
+    const TurnstileWidget = await loadWidget()
+    render(<TurnstileWidget action="admission" language="en" />)
+    await waitFor(() => expect(turnstile.render).toHaveBeenCalledTimes(1))
+    expect(lastOptions().size).toBe("compact")
+
+    // The space grows past 300px while the check is invisible. The compact
+    // box still fits, so it shows as drawn: redrawing it wider is what let a
+    // scrollbar near 300px redraw it over and over.
+    width.mockReturnValue(340)
+    act(() => resized())
+    act(() => lastOptions()["before-interactive-callback"]!())
+    await act(async () => {})
+    expect(turnstile.render).toHaveBeenCalledTimes(1)
+    expect(screen.getByText("Tick the security check below, then send.")).toBeInTheDocument()
+  })
+
   it("points a browser Turnstile doesn't support to another browser or the office", async () => {
     const TurnstileWidget = await loadWidget()
     render(<TurnstileWidget action="admission" language="sw" />)

@@ -28,9 +28,12 @@ const NEEDS_CLICK = {
 async function cloudflareAsksForAClick(page: Page) {
   await page.addInitScript(() => {
     type Options = { size: "flexible" | "compact"; "before-interactive-callback": () => void }
+    const counted = window as unknown as { checksDrawn: number }
+    counted.checksDrawn = 0
     Object.assign(window, {
       turnstile: {
         render(container: HTMLElement, options: Options) {
+          counted.checksDrawn += 1
           const box = document.createElement("div")
           box.dataset.fakeCheck = options.size
           Object.assign(
@@ -61,25 +64,27 @@ const FORCED_INTERACTION_SITE_KEY = "3x00000000000000000000FF"
 
 // Cloudflare's own script, counting each widget drawn in
 // `window.checksDrawn`, and drawing with `sitekey` when given. Turnstile
-// refuses to start if `window.turnstile` already exists, so `render` is
-// wrapped once the script has run: a capturing listener on the document
-// hears the script's load before the widget's own listener does.
+// refuses to start if `window.turnstile` already exists, so it is wrapped
+// once the script has run: a capturing listener on the document hears the
+// script's load before the widget's own listener does. The wrapper is a new
+// object over Cloudflare's, so it works even if Cloudflare makes `render`
+// read-only (#278).
 async function watchRealCheck(page: Page, sitekey?: string) {
   await page.addInitScript((sitekey) => {
     type Render = (container: HTMLElement, options: Record<string, unknown>) => unknown
-    const counted = window as unknown as { checksDrawn: number; turnstile?: { render: Render } }
+    type Turnstile = { render: Render; wrapped?: true }
+    const counted = window as unknown as { checksDrawn: number; turnstile?: Turnstile }
     counted.checksDrawn = 0
     document.addEventListener(
       "load",
       (event) => {
         const turnstile = counted.turnstile
-        if (!(event.target instanceof HTMLScriptElement) || !turnstile || (turnstile.render as { wrapped?: true }).wrapped) return
-        const render = turnstile.render.bind(turnstile)
-        const wrapped: Render = (container, options) => {
+        if (!(event.target instanceof HTMLScriptElement) || !turnstile || turnstile.wrapped) return
+        const render: Render = (container, options) => {
           counted.checksDrawn += 1
-          return render(container, sitekey ? { ...options, sitekey } : options)
+          return turnstile.render(container, sitekey ? { ...options, sitekey } : options)
         }
-        turnstile.render = Object.assign(wrapped, { wrapped: true as const })
+        counted.turnstile = Object.create(turnstile, { render: { value: render }, wrapped: { value: true } })
       },
       true,
     )
@@ -284,6 +289,7 @@ test.describe("the sign-in card", () => {
       await expect(page.getByText(NEEDS_CLICK.sw)).toBeFocused()
       await expect(page.getByLabel("Barua pepe")).toHaveValue("mzazi@example.test")
       await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveValue("a-password")
+      expect((await page.getByLabel("Nenosiri", { exact: true }).getAttribute("value")) ?? "").toBe("")
       await expect(page.getByText(/Subiri ukaguzi wa usalama/)).toHaveCount(0)
       await expect(page).toHaveURL(/\/login$/)
     })
@@ -316,6 +322,29 @@ test("a check that passed out of sight keeps its token when the window narrows (
   expect(await checksDrawn(page)).toBe(1)
   await waitForSecurityCheck(page)
   await noSidewaysScroll(page)
+})
+
+// Near 300px, a classic scrollbar can come and go with the box: the box
+// makes the page taller, the scrollbar narrows the space under 300px, and the
+// redraw, invisible for a moment, takes the scrollbar away. The stand-in
+// space is 301px wide, and 18px narrower while a flexible box is in it.
+test("a check that needs a click near 300px settles on the compact box instead of redrawing over and over (#278)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await cloudflareAsksForAClick(page)
+  await page.goto("/login/forgot-password")
+  await page.addStyleTag({
+    content: `[data-turnstile-box] { width: 301px !important; flex: none !important; }
+      [data-turnstile-box]:has([data-fake-check="flexible"]) { width: 283px !important; }`,
+  })
+  await page.getByRole("textbox").fill("mzazi@example.test")
+  await page.evaluate(() => window.dispatchEvent(new Event("resize")))
+
+  await expect(page.locator('[data-fake-check="compact"]')).toBeVisible()
+  const settled = await checksDrawn(page)
+  await page.waitForTimeout(2_000)
+  expect(await checksDrawn(page)).toBe(settled)
+  await expect(page.locator('[data-fake-check="compact"]')).toHaveCount(1)
+  await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible()
 })
 
 test("a check that needs a click is drawn again to fit when the window narrows", async ({ page }) => {

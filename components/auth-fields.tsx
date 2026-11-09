@@ -1,7 +1,7 @@
 "use client"
 
 import { Eye, EyeOff, Lock, type LucideIcon } from "lucide-react"
-import type { InputHTMLAttributes } from "react"
+import type { InputHTMLAttributes, Ref } from "react"
 
 import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -18,7 +18,10 @@ export const AUTH_SUBMIT = cn(
   "h-11 w-full rounded-full font-exo text-base italic shadow-md shadow-orange-500/20 transition-transform hover:-translate-y-0.5 active:scale-95 disabled:opacity-70 disabled:hover:translate-y-0",
 )
 
-type FieldProps = { id: string; label: string } & Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "placeholder" | "className">
+type FieldProps = { id: string; label: string; ref?: Ref<HTMLInputElement> } & Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "id" | "placeholder" | "className"
+>
 
 export function IconField({ id, label, icon: Icon, name, ...input }: FieldProps & { icon: LucideIcon }) {
   return (

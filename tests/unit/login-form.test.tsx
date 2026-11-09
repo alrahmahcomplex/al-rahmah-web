@@ -122,6 +122,39 @@ describe("the one sign-in form", () => {
     expect(screen.getByLabelText("Password")).toHaveFocus()
   })
 
+  // A value attribute can be read by injected CSS (attribute selectors) or a
+  // browser extension, so the typed password must live only in the box (#278).
+  it("never copies the typed password into the box's value attribute", async () => {
+    stubs.signIn.mockResolvedValue({ error: "check-failed" })
+    render(<LoginForm language="en" notice={null} />)
+    const password = screen.getByLabelText("Password")
+
+    await userEvent.type(password, "secret-password")
+    expect(password.getAttribute("value") ?? "").toBe("")
+    await userEvent.click(screen.getByRole("button", { name: "Show password" }))
+    expect(password.getAttribute("value") ?? "").toBe("")
+
+    await submit("someone@example.test", "secret-password", "Log In")
+    await screen.findByRole("alert")
+    expect(password).toHaveValue("secret-password")
+    expect(password.getAttribute("value") ?? "").toBe("")
+  })
+
+  it("clears the password and puts the cursor there after each wrong password, even the same answer twice", async () => {
+    const wrong = { error: "invalid-credentials" } as const
+    stubs.signIn.mockResolvedValue(wrong)
+    render(<LoginForm language="en" notice={null} />)
+
+    await submit("someone@example.test", "wrong-password", "Log In")
+    await screen.findByRole("alert")
+    await userEvent.click(screen.getByLabelText("Email"))
+    await submit("someone@example.test", "wrong-again", "Log In")
+
+    await vi.waitFor(() => expect(stubs.signIn).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(screen.getByLabelText("Password")).toHaveValue(""))
+    expect(screen.getByLabelText("Password")).toHaveFocus()
+  })
+
   it("keeps both after an answer that isn't the person's mistake", async () => {
     stubs.signIn.mockResolvedValue({ error: "check-failed" })
     render(<LoginForm language="en" notice={null} />)

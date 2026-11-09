@@ -10,7 +10,7 @@ import { logIn } from "./log-in"
 // parent contacts too. Full data is the Super Admin's. The route answers a
 // CSV attachment, never cached, and refuses a tier not held.
 
-const DATED_NAME = (preset: string) => new RegExp(`^attachment; filename="students-${preset}-\d{4}-\d{2}-\d{2}\.csv"$`)
+const DATED_NAME = (preset: string) => new RegExp(`^attachment; filename="students-${preset}-[0-9]{4}-[0-9]{2}-[0-9]{2}[.]csv"$`)
 
 async function signIn(page: Page, person: FixtureStaff | typeof SUPER_ADMIN) {
   await logIn(page, person.email, person.password)

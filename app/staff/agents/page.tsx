@@ -471,7 +471,8 @@ function Results({
                     <InviteState note={invites?.get(agent.id)} />
                   </td>
                   <td className="px-3 py-2">
-                    {standard ? (
+                    {/* A retired record has no actions left, so its amount is text. */}
+                    {standard && !agent.retiredAt ? (
                       <AgentDiscount agent={discountAgent(agent)} standard={standard.amount} canManage={canManageDiscounts} />
                     ) : (
                       <span className="whitespace-nowrap">

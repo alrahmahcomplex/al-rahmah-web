@@ -1,3 +1,4 @@
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import type { Metadata } from "next"
 import localFont from "next/font/local"
 
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="bg-slate-100 text-slate-800 min-h-screen antialiased">
         {children}
         <Toaster />
+        <SpeedInsights />
       </body>
     </html>
   )

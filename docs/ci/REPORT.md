@@ -45,7 +45,9 @@ Where a warm run's 236 goes, at the median:
 The warm runs measured `c2000ee`. The commits after it add two things, and only the second touches the time of a pull request run:
 
 - The review fixes: `package.json` in the cache key, a skipped browser test fails its shard, every push to main runs the full suite.
-- A 400 ms wait at the end of each unit test file (`bb7b1fb`). The unit step took 67 in the cold runs against 64 in the warm ones. It is in the job that takes 111.5, not in the slowest one.
+- A 400 ms wait at the end of a unit test file that rendered the guided form (`bb7b1fb`, narrowed to those files in `b2810f3`). When every file still waited, the unit step took 67 in the cold runs against 64 in the warm ones. It is in the job that takes 111.5, not in the slowest one.
+
+The commits after `7411e32` are not in either measurement. They add the `caches` job to the gate's list and change the two measuring scripts and the unit test setup. None adds a step to a pull request run.
 
 Re-run rate after: not measured. Every run of this branch was re-run on purpose to measure it. The baseline's 7.5% for pull requests and 0% for main are the numbers to compare against after a month of normal use.
 
@@ -252,7 +254,7 @@ None. A pull request runs every test unless it changes only allowlisted Markdown
 | `e2e/admission-form-draft.spec.ts` › Forward to a question the answers no longer allow stays put | 1 | 0 | Not analysed. |
 | `tests/integration/leads-search.test.ts` › pages 50 at a time, and `tests/integration/interview-release-status.test.ts` › a result never sent | 1 attempt, passed on a retry | 2 attempts, before the retry existed | Both create and lock leads. In the same seconds they fill the connection pool, and each gets "unavailable" after about 10 s. Seen only with two integration shards, where Vitest puts both files in one shard. Vitest now retries these load errors, change 13. The contention itself is not fixed. |
 | `tests/integration/leads-search.test.ts` › finds a Declined lead, and a number that matches nothing finds nothing | 0 | 1 attempt of run `42863416438` | It searched for `ADMSN-00000` and expected no lead, but Admission Numbers are random and another test's lead held it. Fixed in `cc6fc9d`: it asks `unusedAdmissionNumber` for a free one. |
-| Unit tests, an error with no failed test | | 3 attempts: `42697498569` on main, and attempts 1 and 10 of `42872902972` | "ReferenceError: window is not defined" at `components/guided-form/stack.tsx:196`. A timer the guided form sets fires after the test's browser environment is gone. Every test passes and Vitest still fails the run. It came from `tests/unit/apply-page.test.tsx` once and `tests/unit/discount-code-page.test.tsx` twice, the second time in attempt 10 of the same run. `revealStep` sets a 340 ms timer that nothing cancels. Since `bb7b1fb` each unit test file waits 400 ms before its environment goes, and the three runs after it passed. The timer itself is application code and is not changed. |
+| Unit tests, an error with no failed test | | 3 attempts: `42697498569` on main, and attempts 1 and 10 of `42872902972` | "ReferenceError: window is not defined" at `components/guided-form/stack.tsx:196`. A timer the guided form sets fires after the test's browser environment is gone. Every test passes and Vitest still fails the run. It came from `tests/unit/apply-page.test.tsx` once and `tests/unit/discount-code-page.test.tsx` twice, the second time in attempt 10 of the same run. `revealStep` sets a 340 ms timer that nothing cancels. Since `bb7b1fb` a unit test file that rendered a guided step waits 400 ms before its environment goes, and the three runs after it passed. The timer itself is application code and is not changed. |
 | Start local Supabase (a step, not a test) | | 4 runs | "failed to bind host port ...: address already in use" on port 55422 or 55424. See below. |
 
 The Vitest failures in the scan were real failures of work in progress, not flaky tests: 37 tests of `tests/unit/apply-page.test.tsx` in one run, and three files in single runs. The one exception is run `42697498569` in the table above.
@@ -275,6 +277,15 @@ A separate agent reviewed commit `c2000ee` against main, read-only, and returned
 | Note: the flaky scan stopped at 100 runs whatever `--limit` said. | `be2da2f`: it reads pages until it has the limit. |
 
 One suggestion was not taken: to compare each shard's tests by name with Playwright's list, not only its files. In one environment the list and the run collect the same tests, and a collected test that did not run has no result, which the check catches. The reviewer agreed for today's suite and added the limit: a test that is defined only under some condition of the environment would escape a comparison by file.
+
+Greptile then reviewed commit `126624b` and scored it 4 of 5 with four findings. All four are fixed:
+
+| Finding | Fix |
+|---|---|
+| `CI complete` did not wait for the `caches` job, so that job could fail on main while the gate passed. | `db90658`: the gate needs it. It must succeed on a push to main and be skipped for every other event. |
+| `ci-measure.mjs --attempts all` lost a run's earlier successful attempts when its newest attempt failed. Every measurement in this report ended on a success, so none was affected. | `40abcc4`: it lists completed runs and keeps each successful attempt. |
+| `ci-flaky.mjs` dropped a job whose log could not be read, failed jobs included, without saying so. | `95347cb`: it names those jobs in its output. |
+| Every unit test file waited 400 ms, also the ones that never render the guided form. | `b2810f3`: only a file that rendered a guided step waits. |
 
 ## Decisions for the owner
 

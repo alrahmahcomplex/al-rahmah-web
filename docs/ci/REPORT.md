@@ -1,20 +1,72 @@
 # CI time report
 
-Work in progress on branch `claude/ci-time`, pull request #285. This file changes after every measured change.
+Branch `claude/ci-time`, pull request #285, measured on 2026-11-10. Commit hashes in this file are of that branch.
 
 All times are seconds unless a unit is given. "Not measured" means no number exists. Nothing here is an estimate.
 
-## Result so far
+## Result
 
-| Event | Runs before | Dates before | Median before | p90 before | Runs after | Median after | p90 after | Ratio |
+| Event | Runs before | Dates before | Median before | p90 before | Runs after | Date after | Median after | p90 after | Ratio, median | Ratio, p90 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `pull_request`, full suite, warm cache | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 10 | 2026-11-10 | 236 | 246 | 5.5 | 6.9 |
+| `pull_request`, full suite, cold cache | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 3 | 2026-11-10 | 297 | 300 | 4.4 | 5.7 |
+| `pull_request`, documents only | 6 | 2026-11-08 to 2026-11-09 | 24.5 | 30 | not measured | | not measured | not measured | not measured | not measured |
+| `push` to main, full suite | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | not measured | | not measured | not measured | not measured | not measured |
+| `merge_group` | 0 | none | not measured | not measured | 0 | | not measured | not measured | not measured | not measured |
+
+- The repository has no merge queue, so GitHub has never sent a `merge_group` event.
+- Pushes to main can only be measured after the merge. "After the merge" below has the commands.
+- No documents-only pull request ran on this branch, so that path has no "after" number. It now runs three jobs where it ran two: the helper tests moved to a job of their own.
+- The baseline's runs restored npm's download cache, apart from the first run after a lockfile change, so the warm row is the like-for-like one.
+
+## Final numbers
+
+Warm cache: 10 successful runs of commit `c2000ee`, run `42872902972`. Cold cache: 3 successful runs of commit `7411e32`, run `42882655848`, where no cache matched the new key and every job installed its dependencies from the registry. Data: `data/final-warm.json` and `data/final-cold.json`.
+
+| | Runs | Median | p90 | Min | Max | Queue median | Queue p90 | Runner median |
 |---|---|---|---|---|---|---|---|---|
-| `pull_request`, full suite | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 5, change 14 | 247 | 295 | 5.3 |
-| `pull_request`, all 30 runs | 30 | 2026-11-08 to 2026-11-10 | 1277 | 1539 | not measured | not measured | not measured | not measured |
-| `push` to main, full suite | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | not measured | not measured | not measured | not measured |
-| `push` to main, all 30 runs | 30 | 2026-11-06 to 2026-11-10 | 1120 | 1535 | not measured | not measured | not measured | not measured |
-| `merge_group` | 0 | none | not measured | not measured | 0 | not measured | not measured | not measured |
+| Baseline, pull request, full suite | 24 | 1305 | 1696 | 1011 | 1759 | 9 | 34 | 1445.5 |
+| Final, warm cache | 10 | 236 | 246 | 227 | 259 | 9 | 11 | 2050.5 |
+| Final, cold cache | 3 | 297 | 300 | 282 | 300 | 11 | 12 | 2653 |
 
-The repository has no merge queue, so GitHub has never sent a `merge_group` event. Pushes to main can only be measured after the merge. The "after" row is the newest measured change and moves as the work goes on.
+The ten warm runs took 227, 235, 235, 236, 236, 236, 239, 239, 246 and 259. The three cold runs took 282, 297 and 300.
+
+Where a warm run's 236 goes, at the median:
+
+| Job | Median | What is in it |
+|---|---|---|
+| Scope | 7 | Every runtime job waits for it. |
+| Browser shard, the slowest of eight | 206 | Setup 92 (Supabase, build and Chromium at once), tests 92.5, `node_modules` 5. |
+| Integration shard, the slower of two | 186 | Supabase 71.5, tests 96.5. |
+| Lint, typecheck and unit tests | 111.5 | Lint 18.5, typecheck 13, unit tests 64. |
+| Repository helpers and documents | 9.5 | Beside the scope job. |
+| CI complete | 7 | After the last test job. |
+
+The warm runs measured `c2000ee`. The commits after it add two things, and only the second touches the time of a pull request run:
+
+- The review fixes: `package.json` in the cache key, a skipped browser test fails its shard, every push to main runs the full suite.
+- A 400 ms wait at the end of each unit test file (`bb7b1fb`). The unit step took 67 in the cold runs against 64 in the warm ones. It is in the job that takes 111.5, not in the slowest one.
+
+Re-run rate after: not measured. Every run of this branch was re-run on purpose to measure it. The baseline's 7.5% for pull requests and 0% for main are the numbers to compare against after a month of normal use.
+
+### After the merge
+
+Main's numbers need the merge. The first push to main is a cold run, and its `caches` job saves `node_modules` for every later run. Then, after 30 pushes or a month:
+
+```bash
+node scripts/ci-measure.mjs fetch --event push --branch main --limit 30 --out docs/ci/data/after-push-main.json
+node scripts/ci-measure.mjs fetch --event pull_request --limit 30 --out docs/ci/data/after-pull_request.json
+node scripts/ci-measure.mjs summary docs/ci/data/after-push-main.json docs/ci/data/after-pull_request.json
+node scripts/ci-flaky.mjs --limit 100 --out docs/ci/data/flaky-after.json
+```
+
+To measure the shards' seconds again, download the reports of a run on main and let the script rewrite `e2e/shards.json`:
+
+```bash
+gh run download <run id of a push to main> -p "e2e-results-*" -D /tmp/e2e-results
+node scripts/e2e-shards.mjs timings /tmp/e2e-results/*/e2e-results.json
+node scripts/e2e-shards.mjs plan
+```
 
 ## Method
 
@@ -26,8 +78,8 @@ The repository has no merge queue, so GitHub has never sent a `merge_group` even
 - **Runner time.** The sum of every job's own duration. Sharding raises it while it lowers run time.
 - **Median.** The middle value, or the mean of the two middle values.
 - **p90.** Nearest rank: the smallest value with at least 90% of the sample at or below it.
-- **Re-run rate.** Of every run that finished as success or failure since the oldest sampled run, the share that needed a second attempt. Cancelled runs are left out. For a commit of this branch the rate means nothing, because I re-ran each run on purpose to get three measurements.
-- **Full suite and documents only.** A run whose changes are all allowlisted Markdown skips the runtime jobs. The tables keep the two kinds apart, because a 25-second documents-only run says nothing about the test suite.
+- **Re-run rate.** Of every run that finished as success or failure since the oldest sampled run, the share that needed a second attempt. Cancelled runs are left out. For a commit of this branch the rate means nothing, because I re-ran each run on purpose to get three or more measurements.
+- **Full suite and documents only.** A pull request whose changes are all allowlisted Markdown skips the runtime jobs. In the baseline a push to main did so too. The tables keep the two kinds apart, because a 25-second documents-only run says nothing about the test suite.
 
 Step and job times have one-second resolution, because that is what the API returns.
 
@@ -47,6 +99,10 @@ node scripts/ci-measure.mjs summary docs/ci/data/baseline-pull_request.json
 
 # Failed and flaky tests of the last 100 finished runs, from the job logs.
 node scripts/ci-flaky.mjs --limit 100 --out docs/ci/data/flaky-baseline.json
+
+# The changed files of the last 60 merged pull requests, for method 10.
+gh pr list --state merged --base main --limit 60 --json number,mergedAt,files \
+  --jq '[.[] | {number, mergedAt, files: [.files[].path]}]' > docs/ci/data/merged-pr-files.json
 ```
 
 `ci-measure.mjs` wraps these `gh` calls:
@@ -118,7 +174,7 @@ Full-suite pull request runs, n = 24. Steps under 3 s at p90 are left out.
 
 ## Changes
 
-Each change is one commit, measured on pull request #285 by three successful runs of that commit. "Before" is the change measured before it, so both numbers come from the same code and the same day.
+Each change is one commit, measured on pull request #285 by three or five successful runs of that commit. "Before" is the change measured before it, so both numbers come from the same code and the same day. Where two changes went up in one push, they touch different jobs or steps, and each is judged on its own.
 
 | # | Method | Commit | Change | Runs | Run median before | Run median after | Decrease | Kept |
 |---|---|---|---|---|---|---|---|---|
@@ -161,13 +217,13 @@ Notes on each change:
 | 1 | Cancel old runs when there is a new commit | DONE | It was in place before this work. Change 1 keeps it for pull requests and stops it for main, where it had cancelled two merges' runs. |
 | 2 | Run independent jobs in parallel | DONE | Changes 2, 7 and 10. Change 11, an early image pull, gave no decrease and is gone. |
 | 3 | Shallow checkout or partial clone | NOT APPLICABLE | Every test job already checks out one commit, in 1 to 2 s. The scope job needs the full history for the merge-base, and its diff looks for renames by reading file contents, which a clone without file contents would fetch one at a time. Its checkout takes 2 s at the median in the baseline. |
-| 4a | Cache for dependencies | DONE | Change 3. Only the `caches` job, on a push to main, saves it. |
+| 4a | Cache for dependencies | DONE | Change 3. Only the `caches` job, on a push to main, saves it. The key holds `package.json`, the lockfile, `.npmrc`, the Node version and the runner. |
 | 4b | Cache for build output | NOT APPLICABLE | Since change 7 the build runs while Supabase starts, and the start is the longer of the two: 77.5 against 26.5 at the median in change 6's runs. A faster build cannot shorten the job. Not measured. |
 | 4c | Cache for Docker layers | NOT APPLICABLE | The repository builds no image. The only Docker work is pulling Supabase's seven published images, which took 24.6 s of a 79 s start in one shard of run `42831286387` (10.4 + 3.3 + 10.9). The rest is the database starting and its migrations. A cache of pulled images was not tried. |
-| 5 | Faster tools with the same build output | NOT APPLICABLE | Change 4, the headless shell alone, gave no decrease and is gone. The other candidates sit in jobs that are not the slowest: lint takes 20, typecheck 15 and the unit tests 74 in a job of 126, against 183 to 237 for the test jobs. Dependencies install in 5 from the cache, and another package manager is a build-system change. |
+| 5 | Faster tools with the same build output | NOT APPLICABLE | Change 4, the headless shell alone, gave no decrease and is gone. The other candidates sit in a job that is not the slowest: lint takes 18.5, typecheck 13 and the unit tests 64 in a job of 111.5, against 186 and 206 for the slowest integration and browser shards. Dependencies install in 5 from the cache, and another package manager is a build-system change. |
 | 6 | Shards of equal measured time | DONE | Changes 5, 8, 13 and 14. `scripts/e2e-shards.mjs` plans the browser shards from measured seconds. Vitest splits the integration files itself. |
 | 7 | Decrease the time of the slowest tests | DONE | Change 12. No single test was slow: the slowest took 34.7 s of 1735. The repeated sign-in was. |
-| 8 | Find flaky tests, retry only the failed tests | DONE | See "Flaky tests". Three tests and the Supabase start are fixed. Playwright already retried a failed test once and still does. Vitest now retries an integration test up to two times for the two load errors only. |
+| 8 | Find flaky tests, retry only the failed tests | DONE | See "Flaky tests". Three tests and the Supabase start are fixed, and the unit tests wait out a stray timer. Playwright already retried a failed test once and still does. Vitest now retries an integration test up to two times for the two load errors only. |
 | 9 | Remote build cache | APPROVAL NECESSARY | It needs a build tool that has one, such as Turborepo or Nx, which changes the build system. The gain would be small here for the reason given in 4b: one package, a 26.5 s build that runs beside a longer step. Not measured. |
 | 10 | On pull requests, test only what depends on the changed files | NOT APPLICABLE | The documents-only path already exists and stays. Beyond it there is one app and one database, and every browser and integration test depends on both. Of the last 60 merged pull requests, 53 changed app or database code, 3 only documents, 3 only tests and 1 only CI tools (`data/merged-pr-files.json`). A path rule for the 3 would not move the median. |
 | 11 | Merge queue | APPROVAL NECESSARY | It is a repository setting. GitHub's announcement of the feature also limits it to repositories owned by an organization, and this one is owned by a personal account. The workflow would need `merge_group` as a trigger, which `scripts/ci-scope.mjs` already treats as a full-suite run. |
@@ -196,7 +252,7 @@ None. A pull request runs every test unless it changes only allowlisted Markdown
 | `e2e/admission-form-draft.spec.ts` › Forward to a question the answers no longer allow stays put | 1 | 0 | Not analysed. |
 | `tests/integration/leads-search.test.ts` › pages 50 at a time, and `tests/integration/interview-release-status.test.ts` › a result never sent | 1 attempt, passed on a retry | 2 attempts, before the retry existed | Both create and lock leads. In the same seconds they fill the connection pool, and each gets "unavailable" after about 10 s. Seen only with two integration shards, where Vitest puts both files in one shard. Vitest now retries these load errors, change 13. The contention itself is not fixed. |
 | `tests/integration/leads-search.test.ts` › finds a Declined lead, and a number that matches nothing finds nothing | 0 | 1 attempt of run `42863416438` | It searched for `ADMSN-00000` and expected no lead, but Admission Numbers are random and another test's lead held it. Fixed in `cc6fc9d`: it asks `unusedAdmissionNumber` for a free one. |
-| Unit tests, an error with no failed test | | 2 runs: `42697498569` on main and attempt 1 of `42872902972` | "ReferenceError: window is not defined" at `components/guided-form/stack.tsx:196`. A timer the guided form sets fires after the test's browser environment is gone. Every test passes and Vitest still fails the run. It came from `tests/unit/apply-page.test.tsx` once and `tests/unit/discount-code-page.test.tsx` once. Not changed: the timer is application code. |
+| Unit tests, an error with no failed test | | 3 attempts: `42697498569` on main, and attempts 1 and 10 of `42872902972` | "ReferenceError: window is not defined" at `components/guided-form/stack.tsx:196`. A timer the guided form sets fires after the test's browser environment is gone. Every test passes and Vitest still fails the run. It came from `tests/unit/apply-page.test.tsx` once and `tests/unit/discount-code-page.test.tsx` twice, the second time in attempt 10 of the same run. `revealStep` sets a 340 ms timer that nothing cancels. Since `bb7b1fb` each unit test file waits 400 ms before its environment goes, and the three runs after it passed. The timer itself is application code and is not changed. |
 | Start local Supabase (a step, not a test) | | 4 runs | "failed to bind host port ...: address already in use" on port 55422 or 55424. See below. |
 
 The Vitest failures in the scan were real failures of work in progress, not flaky tests: 37 tests of `tests/unit/apply-page.test.tsx` in one run, and three files in single runs. The one exception is run `42697498569` in the table above.
@@ -204,3 +260,29 @@ The Vitest failures in the scan were real failures of work in progress, not flak
 ### The Supabase port failure
 
 Supabase binds host ports 55420 to 55429, which lie inside the range Linux gives to outgoing connections (32768 to 60999). Four runs failed there: `42460099117`, `42472165346`, `42791844494` and `42821412717`. The last one failed after the ports were reserved with `ip_local_reserved_ports`, so a connection opened before the reservation still held the port. The reservation now comes first in the job, and `scripts/ci-db-start.sh` starts Supabase again, up to three times, when the log says "address already in use". It prints the socket that holds the port, so the next occurrence names its owner.
+
+It has not happened again on this branch since, so the retry itself has not run yet.
+
+## Review
+
+A separate agent reviewed commit `c2000ee` against main, read-only, and returned NOT READY with three blocking points. All three are fixed, and its re-check of commits `c2000ee..7411e32` returned READY.
+
+| Finding | Fix |
+|---|---|
+| The `node_modules` cache key left out `package.json`. A pull request that changed it and not the lockfile would restore main's `node_modules` and skip the `npm ci` that refuses the mismatch. | `36de9b6`: the key holds `package.json` and `.npmrc` too, and a test checks that every job uses the same key. |
+| The check after a shard took any result as proof that a test ran, and Playwright gives a skipped test a result. | `2cfde5f`: a skipped browser test fails its shard. None is skipped today. |
+| A push to main that changed only allowlisted Markdown ran no runtime test. This is older than the branch. | `246c21e`: every push to main runs the full suite. The documents-only path stays for pull requests. |
+| Note: the flaky scan stopped at 100 runs whatever `--limit` said. | `be2da2f`: it reads pages until it has the limit. |
+
+One suggestion was not taken: to compare each shard's tests by name with Playwright's list, not only its files. In one environment the list and the run collect the same tests, and a collected test that did not run has no result, which the check catches. The reviewer agreed for today's suite and added the limit: a test that is defined only under some condition of the environment would escape a comparison by file.
+
+## Decisions for the owner
+
+- **Sign-in reuse, change 12.** It touches 58 spec files. It is one commit, `862665e`, and can be dropped on its own. It took 41.5 s off each shard's test step when there were six shards.
+- **Eight shards, change 14.** A run starts 12 jobs at once, 13 on main, against GitHub's 20 for this account. Two runs that overlap will queue. Six shards is `shards` in `e2e/shards.json` and the `browser` matrix.
+- **Skipped browser tests fail CI.** This follows the rule that no test is skipped without approval. To allow a skip, change `verifyErrors` in `scripts/e2e-shards.mjs`.
+- **Documents-only merges now run the full suite on main.** That run takes about four minutes where it took 20 s. Nothing waits for it.
+- **`revealStep`'s timer.** Cancelling it on unmount in `components/guided-form/stack.tsx` is the real fix for the unit-test error. The 400 ms wait in `tests/unit/setup.ts` can go after that.
+- **Two integration test files collide.** `leads-search` and `interview-release-status` create and lock leads in the same seconds. The retry gets past it, once on its last try. Shorter or fewer table locks in those tests would remove the cause.
+- **The Pending count test.** `e2e/marketing-agents.spec.ts` passed only on its retry in 16 of 77 runs. Fixing it changes what it asserts.
+- **Approval needed:** a remote build cache, a merge queue, faster runners. The status table has the reason for each.

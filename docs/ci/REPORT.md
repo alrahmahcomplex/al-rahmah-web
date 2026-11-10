@@ -130,6 +130,9 @@ Each change is one commit, measured on pull request #285 by three successful run
 | 6 | 5 | `c2677f6` | Install Chromium without `apt-get`'s font packages | 3 | 568 | 406 | 162 | yes |
 | 7 | 2 | `fb568ec` | Build the app and install Chromium while Supabase starts | 3 | 406 | 387 | 19 | yes |
 | 8 | 6 | `5cf47d2` | Browser tests as six shards | 3 | 387 | 309 | 78 | yes |
+| 9 | 6 | removed | Integration tests as two shards, without a retry | 3 | 309 | 306 | 3, inside the noise | no |
+| 10 | 2 | `32a5184` | The scope job only classifies the change | 3 | 309 | 332, with change 11 | none in run time, 3 in the scope job | yes |
+| 11 | 2 | removed | Pull two Supabase images beside the first ones | 3 | 309 | 332, with change 10 | none | no |
 
 Notes on each change:
 
@@ -141,6 +144,9 @@ Notes on each change:
 6. **Chromium without `apt-get`.** `playwright install --with-deps` ran `apt-get update` and installed nine font packages for Japanese, Thai, Chinese and Cyrillic text. In one shard the mirror served them at 275 kB/s, and the step took 148 s. The step went from a median of 58 (13 to 191) to 8 (7 to 9). Every shared library Chromium needs was already on the runner image, and all 388 tests passed in each of the three runs without the fonts. Data: `change-07-chromium-without-apt.json`, runs 393, 406 and 421.
 7. **Setup at the same time.** Starting Supabase, writing `.env.local`, building and installing Chromium took 77.5 + 2 + 26.5 + 8 = 114 one after the other. As one step it takes 93 (84 to 118). The build needs the `NEXT_PUBLIC_` values before Supabase is up, so `scripts/ci-build-env.mjs` writes local Supabase's fixed address and publishable key first and fails the job if the running stack reports other values. Data: `change-08-parallel-setup.json`, runs 380, 387 and 399.
 8. **Six shards.** The test step went from 236.5 per shard to 151.5 (134 to 171 over 18 shard jobs). Runner time went from 1703 to 1936. The integration job, at 269, is now the slowest job. The same push carried the nightly run, this report, and the shards' seconds measured from the four-shard run's own reports. Data: `change-09-six-shards.json`, runs 299, 309 and 327. Two more attempts failed on the placement test described under "Flaky tests".
+9. **Two integration shards, without a retry.** The integration jobs took 186 and 178 where the single job took 269, but the run did not get shorter, because the browser shards take as long. Two of five attempts failed: `tests/integration/leads-search.test.ts` ("pages 50 at a time") and `tests/integration/interview-release-status.test.ts` both got "unavailable" after about 10 s, in the same seconds, both times. Both create and lock leads, and Vitest's split put them in one shard. The commit is gone from the branch. Data: `change-10-integration-shards.json`, runs 299, 306 and 330.
+10. **Scope job.** The helper tests and the document checks moved to a job of their own, so the job that every runtime job waits for went from a median of 11 to 8. Measured in the same runs as change 11. Data: `change-11-scope-and-early-pull.json`, runs 299, 332 and 345.
+11. **Early image pull.** The Supabase CLI pulls the realtime and storage images only after the database is up (3.3 s and 10.9 s in one shard). Pulling them in the background from the start did not help: Start local Supabase took 80 in the integration job against 71 before, and the browser shards' setup step took up to 147 against 104. The commit is gone from the branch.
 
 ## Status of each method
 

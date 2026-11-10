@@ -80,15 +80,17 @@ jobs:
         id: node
         with:
           node-version: 24
-      # node_modules as `npm ci` left it on main for this lockfile, this Node
-      # version and this runner. Any other lockfile misses and installs.
+      # node_modules as `npm ci` left it on main for this package.json, this
+      # lockfile, this Node version and this runner. A change to any of them
+      # misses and installs, so `npm ci` still refuses a package.json that
+      # the lockfile does not match.
       - name: Restore node_modules
         id: modules
         if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
       - name: Install dependencies
         if: ${{ steps.modules.outputs.cache-hit != 'true' }}
         run: npm ci
@@ -137,7 +139,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
       - name: Install dependencies
         if: ${{ steps.modules.outputs.cache-hit != 'true' }}
         run: npm ci
@@ -186,7 +188,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
       - name: Install dependencies
         if: ${{ steps.modules.outputs.cache-hit != 'true' }}
         run: npm ci
@@ -259,7 +261,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
-          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
           lookup-only: true
       - name: Install dependencies
         if: ${{ steps.modules.outputs.cache-hit != 'true' }}

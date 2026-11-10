@@ -69,6 +69,18 @@ test("the nightly and the manual run restore no cache", () => {
   assert.ok(restores > 0);
 });
 
+test("every job uses one node_modules cache key, made of everything that decides its contents", () => {
+  const keys = lines.filter((line) => /^\s+key: node-modules-/.test(line)).map((line) => line.trim());
+  assert.ok(keys.length >= 4, "the restores and the caches job's lookup");
+  assert.equal(new Set(keys).size, 1, "the jobs use different cache keys");
+  // Without package.json in the key, a pull request that changes it and not
+  // the lockfile would restore the old node_modules and skip the `npm ci`
+  // that refuses the mismatch.
+  for (const part of ["runner.os", "runner.arch", "steps.node.outputs.node-version", "hashFiles('package.json', 'package-lock.json', '.npmrc')"]) {
+    assert.ok(keys[0].includes(part), `the cache key lacks ${part}`);
+  }
+});
+
 test("the integration shards are numbered 1 to n and each runs its share of n", () => {
   const text = uncommented(jobs.get("integration"));
   const shards = text.match(/^ {8}shard: \[([\d, ]+)\]$/m)[1].split(",").map((value) => Number(value.trim()));

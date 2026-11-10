@@ -75,12 +75,18 @@ function main() {
   }
   const runs = listed.slice(0, limit).filter((run) => ["success", "failure"].includes(run.conclusion));
   const records = [];
+  // Jobs whose log could not be read: GitHub deletes old logs, and a request
+  // can fail. They are named in the output, so a gap is never silent.
+  const unreadable = [];
   for (const run of runs) {
     for (let attempt = 1; attempt <= run.run_attempt; attempt += 1) {
       const { jobs } = gh(["api", "-X", "GET", `repos/{owner}/{repo}/actions/runs/${run.id}/attempts/${attempt}/jobs`, "-f", "per_page=100"]);
       for (const job of jobs.filter((entry) => ["success", "failure"].includes(entry.conclusion) && !/^(Scope|CI complete)/.test(entry.name))) {
         let log;
-        try { log = gh(["api", "--allow-escape-sequences", `repos/{owner}/{repo}/actions/jobs/${job.id}/logs`], true); } catch { continue; }
+        try { log = gh(["api", "--allow-escape-sequences", `repos/{owner}/{repo}/actions/jobs/${job.id}/logs`], true); } catch {
+          unreadable.push({ run: run.id, attempt, job: job.name, conclusion: job.conclusion });
+          continue;
+        }
         const playwright = playwrightOutcomes(log);
         const vitest = vitestFailures(log);
         const retried = vitestFlaky(log);
@@ -97,13 +103,18 @@ function main() {
   }
   mkdirSync(dirname(out), { recursive: true });
   const scanned = { runs: runs.length, from: runs.at(-1)?.created_at, to: runs[0]?.created_at };
-  writeFileSync(out, `{\n  "fetched_at": ${JSON.stringify(new Date().toISOString())},\n  "scanned": ${JSON.stringify(scanned)},\n  "records": [\n${records.map((record) => `    ${JSON.stringify(record)}`).join(",\n")}\n  ]\n}\n`);
+  const rows = (list) => list.map((row) => `    ${JSON.stringify(row)}`).join(",\n");
+  writeFileSync(out, `{\n  "fetched_at": ${JSON.stringify(new Date().toISOString())},\n  "scanned": ${JSON.stringify(scanned)},\n  "records": [\n${rows(records)}\n  ],\n  "unreadable": [\n${rows(unreadable)}\n  ]\n}\n`);
   const count = (pick) => {
     const tally = new Map();
     for (const record of records) for (const test of pick(record)) tally.set(test, (tally.get(test) ?? 0) + 1);
     return [...tally].sort((a, b) => b[1] - a[1]);
   };
   console.log(`Scanned ${runs.length} finished runs from ${scanned.from} to ${scanned.to}; ${records.length} jobs had a failure or a flaky test.`);
+  if (unreadable.length) {
+    const failed = unreadable.filter((job) => job.conclusion === "failure").length;
+    console.log(`\nNOT SCANNED: ${unreadable.length} job logs could not be read, ${failed} of them of failed jobs. The lists below leave them out; "unreadable" in ${out} names them.`);
+  }
   console.log("\nPassed on a retry in the same job (flaky):");
   for (const [test, times] of count((record) => record.flaky)) console.log(`  ${times}x ${test}`);
   console.log("\nFailed after every retry (Playwright):");

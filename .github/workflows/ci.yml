@@ -76,6 +76,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Local Supabase binds host ports 55420 to 55429 (supabase/config.toml).
+      # Linux hands out ports from 32768 to 60999 to outgoing connections, so
+      # an image pull could take one first and the start failed with "address
+      # already in use". Reserved ports are never handed out.
+      - name: Reserve the local Supabase ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
       # The Supabase CLI is the repo's own pinned dev dependency, the same
       # version every worktree runs.
       - name: Start local Supabase
@@ -97,6 +103,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Reserve the local Supabase ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
       - name: Start local Supabase
         run: npm run db:start
       - name: Write .env.local from the local stack

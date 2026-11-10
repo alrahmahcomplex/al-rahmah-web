@@ -552,10 +552,16 @@ begin
     if exists (select 1 from jsonb_array_elements(student_import_rows.rows) r group by r ->> 'sheet_row' having count(*) > 1) then
         raise exception 'invalid' using detail = jsonb_build_object('field', 'sheet_row')::text;
     end if;
+    -- The same student twice: the same name key with any parent number in
+    -- common, phone or WhatsApp, as a student on file is matched below. Two
+    -- rows with the numbers swapped are one child, not two.
     if exists (
-        select 1 from jsonb_array_elements(student_import_rows.rows) r
-        group by public.normalize_student_name(coalesce(r ->> 'student_name', '')), r ->> 'phone'
-        having count(*) > 1
+        select 1
+        from jsonb_array_elements(student_import_rows.rows) r
+        cross join lateral unnest(array[r ->> 'phone', r ->> 'whatsapp']) as parent(number)
+        where parent.number is not null
+        group by public.normalize_student_name(coalesce(r ->> 'student_name', '')), parent.number
+        having count(distinct r ->> 'sheet_row') > 1
     ) then
         raise exception 'invalid' using detail = jsonb_build_object('field', 'duplicate_student')::text;
     end if;

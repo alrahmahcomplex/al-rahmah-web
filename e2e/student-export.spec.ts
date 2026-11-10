@@ -29,6 +29,9 @@ function presets(sheet: ReturnType<Page["getByRole"]>) {
   return sheet.getByRole("radio")
 }
 
+// The sheet fetches the file from the route, then hands it to the browser.
+const exportAnswer = (page: Page) => page.waitForResponse((response) => response.url().includes("/staff/applicants/export?"))
+
 // The first line of a CSV, without the byte-order mark.
 function headerRow(text: string) {
   return text.replace(/^﻿/, "").split("\r\n")[0]
@@ -83,16 +86,19 @@ test("the Manager, with leads.export, exports parent contacts but not Full data"
   await expect(sheet.getByText(/^\d[\d,]* rows?, 8 columns$/)).toBeVisible()
 
   const download = page.waitForEvent("download")
+  const answered = exportAnswer(page)
   await sheet.getByRole("button", { name: "Download CSV" }).click()
-  const file = await download
-  expect(new URL(file.url()).search).toBe("?preset=calls&scope=all")
-
-  const answer = await page.request.get(file.url())
+  const answer = await answered
+  expect(new URL(answer.url()).search).toBe("?preset=calls&scope=all")
   expect(answer.status()).toBe(200)
   expect(answer.headers()["content-type"]).toBe("text/csv; charset=utf-8")
   expect(answer.headers()["content-disposition"]).toMatch(DATED_NAME("calls"))
   expect(answer.headers()["cache-control"]).toBe("no-store")
-  expect(headerRow(await answer.text())).toBe("Admission Number,Student name,Class,Status,Status since,Parent name,Parent phone,WhatsApp")
+  const file = await download
+  expect(file.suggestedFilename()).toMatch(/^students-calls-\d{4}-\d{2}-\d{2}\.csv$/)
+  expect(headerRow(await readFile((await file.path())!, "utf8"))).toBe(
+    "Admission Number,Student name,Class,Status,Status since,Parent name,Parent phone,WhatsApp",
+  )
 
   const full = await page.request.get("/staff/applicants/export?preset=full&scope=all")
   expect(full.status()).toBe(403)
@@ -106,12 +112,33 @@ test("the Super Admin exports Full data", async ({ page }) => {
   await sheet.getByLabel("Which applicants").selectOption({ label: `Enrollment year ${new Date().getFullYear() + 1}` })
 
   const download = page.waitForEvent("download")
+  const answered = exportAnswer(page)
   await sheet.getByRole("button", { name: "Download CSV" }).click()
-  const file = await download
-  const answer = await page.request.get(file.url())
+  const answer = await answered
   expect(answer.status()).toBe(200)
   expect(answer.headers()["content-disposition"]).toMatch(DATED_NAME("full"))
-  const header = headerRow(await answer.text()).split(",")
+  const header = headerRow(await readFile((await (await download).path())!, "utf8")).split(",")
   expect(header).toHaveLength(28)
   expect(header).toEqual(expect.arrayContaining(["Parent phone", "Interview fee status", "Follow-up notes", "History entries"]))
+})
+
+test("an export the route refuses says why in the sheet, and never says Exported", async ({ page }) => {
+  await signIn(page, MANAGER)
+  const sheet = await openExport(page)
+  // More applicants than one export holds: the route answers 413 and records nothing.
+  const refusal = "More applicants match (5,001) than one export holds, 5,000. Export one Enrollment year at a time, or filter the list first."
+  await page.route("**/staff/applicants/export?*", (route) =>
+    route.fulfill({ status: 413, contentType: "text/plain; charset=utf-8", body: refusal }),
+  )
+  await sheet.getByRole("button", { name: "Download CSV" }).click()
+  await expect(sheet.getByRole("alert")).toHaveText(refusal)
+  await expect(sheet.getByRole("button", { name: "Download CSV" })).toBeEnabled()
+  await expect(page.getByText(/^Exported /)).toHaveCount(0)
+
+  // A dropped connection is no export either.
+  await page.unroute("**/staff/applicants/export?*")
+  await page.route("**/staff/applicants/export?*", (route) => route.abort())
+  await sheet.getByRole("button", { name: "Download CSV" }).click()
+  await expect(sheet.getByRole("alert")).toHaveText("The export could not be downloaded. Check your connection, reload the page and try again.")
+  await expect(page.getByText(/^Exported /)).toHaveCount(0)
 })

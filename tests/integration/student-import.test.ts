@@ -257,6 +257,22 @@ describe("importing a workbook", () => {
       ],
     })
     expect(twice.error?.message).toBe("invalid")
+
+    // The same child with the parent's phone and WhatsApp swapped is still
+    // one child: neither the check nor the confirm takes both rows.
+    const swapped = [
+      { ...row, student_name: "Sent Twice", class_name: "STD 1", phone: "+255900000002", whatsapp: "+255900000003" },
+      { ...row, sheet_row: 3, student_name: "sent twice", class_name: "STD 1", phone: "+255900000003", whatsapp: "+255900000002" },
+    ]
+    expect((await manager.rpc("check_student_import", { rows: swapped })).error?.message).toBe("invalid")
+    expect((await manager.rpc("confirm_student_import", { file_name: "swapped.csv", row_count: 2, rows: swapped })).error?.message).toBe("invalid")
+    // One number in common is enough.
+    const shared = [swapped[0], { ...swapped[1], phone: "+255900000004" }]
+    expect((await manager.rpc("check_student_import", { rows: shared })).error?.message).toBe("invalid")
+    // Siblings on those numbers are two children.
+    const siblings = await manager.rpc("check_student_import", { rows: [swapped[0], { ...swapped[1], student_name: "Other Child" }] })
+    expect(siblings.error).toBeNull()
+    expect(siblings.data).toHaveLength(2)
   })
 })
 

@@ -4,7 +4,9 @@ import { DownloadIcon, LockIcon } from "lucide-react"
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
 
+import { PendingButton } from "@/components/staff/pending-button"
 import { SheetForm } from "@/components/staff/sheet-form"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import type { LeadSearch } from "@/lib/services/leads"
@@ -23,14 +25,19 @@ const GROUPS: { tier: ExportTier; heading: string; locked: string }[] = [
   { tier: "full", heading: "Full data", locked: "Full data is the Super Admin’s export only: payments, results, notes and history." },
 ]
 
+// When the answer is no file and no refusal the route wrote: the connection
+// dropped, or the sign-in ended and the answer was the sign-in page.
+const EXPORT_LOST = "The export could not be downloaded. Check your connection, reload the page and try again."
+
 const count = (n: number) => n.toLocaleString("en-US")
 const plural = (n: number, word: string) => `${count(n)} ${word}${n === 1 ? "" : "s"}`
 
 // Export on the Applicants list: which applicants, which columns, then a CSV
 // from the export route. Every holder of leads.view may export the
 // applicant columns; parent contacts need leads.export and Full data is the
-// Super Admin's. The download is a plain GET form, so the browser saves the
-// file itself.
+// Super Admin's. The sheet fetches the file and says Exported only once the
+// route has answered with it, since only then is the export recorded; a
+// refusal stays in the sheet with its reason.
 export function ExportSheet({
   options,
   search,
@@ -51,10 +58,14 @@ export function ExportSheet({
   const [ticked, setTicked] = useState<string[]>(options.presets[0].choices)
   const [counts, setCounts] = useState<ExportCounts>(null)
   const [, startCounting] = useTransition()
+  const [refusal, setRefusal] = useState<string | null>(null)
+  const [downloading, startDownload] = useTransition()
 
   function openChange(next: boolean) {
+    if (downloading) return
     setOpen(next)
     if (next) {
+      setRefusal(null)
       startCounting(async () => {
         try {
           setCounts(await exportCounts())
@@ -90,10 +101,34 @@ export function ExportSheet({
   const rows = scope === "shown" ? shownCount : scope === "year" ? (counts?.byYear[year] ?? null) : (counts?.all ?? null)
   const fields = exportParams({ preset: current.key, choices: chosen.map((choice) => choice.key), scope, year, search })
 
-  function submitted() {
-    toast.success(rows === null ? "Exported. Recorded in the audit history." : `Exported ${plural(rows, "applicant")}. Recorded in the audit history.`)
-    // After the browser has taken the form's fields.
-    setTimeout(() => setOpen(false), 0)
+  function download(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (downloading) return
+    setRefusal(null)
+    const address = `${EXPORT_PATH}?${new URLSearchParams(fields)}`
+    startDownload(async () => {
+      let response: Response
+      try {
+        response = await fetch(address, { cache: "no-store" })
+      } catch {
+        setRefusal(EXPORT_LOST)
+        return
+      }
+      const type = response.headers.get("Content-Type") ?? ""
+      if (!response.ok || !type.startsWith("text/csv")) {
+        // The route's refusals are short plain text with their own status.
+        setRefusal(!response.ok && type.startsWith("text/plain") ? await response.text() : EXPORT_LOST)
+        return
+      }
+      const link = document.createElement("a")
+      link.href = URL.createObjectURL(await response.blob())
+      link.download = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "applicants.csv"
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(link.href), 60_000)
+      const exported = Number(response.headers.get("X-Row-Count"))
+      toast.success(`Exported ${plural(exported, "applicant")}. Recorded in the audit history.`)
+      setOpen(false)
+    })
   }
 
   return (
@@ -107,16 +142,16 @@ export function ExportSheet({
         onOpenChange={openChange}
         title="Export applicants"
         meta={<span>A CSV of the columns you choose. Each export is recorded.</span>}
-        form={{ action: EXPORT_PATH, method: "get", onSubmit: submitted }}
+        form={{ action: EXPORT_PATH, method: "get", onSubmit: download }}
         footerStart={
           <span className="text-sm text-muted-foreground" aria-live="polite">
             {rows === null ? plural(columns, "column") : `${plural(rows, "row")}, ${plural(columns, "column")}`}
           </span>
         }
         footer={
-          <Button type="submit" disabled={columns === 0}>
+          <PendingButton type="submit" pending={downloading} pendingLabel="Preparing…" disabled={columns === 0}>
             Download CSV
-          </Button>
+          </PendingButton>
         }
       >
         {fields.map(([name, value], index) => (
@@ -208,6 +243,11 @@ export function ExportSheet({
         </fieldset>
 
         {note && <p className="rounded-xl bg-slate-50 px-3.5 py-3 text-[13px] text-muted-foreground">{note}</p>}
+        {refusal && (
+          <Alert variant="destructive" role="alert">
+            <AlertDescription>{refusal}</AlertDescription>
+          </Alert>
+        )}
       </SheetForm>
     </>
   )

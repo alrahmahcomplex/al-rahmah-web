@@ -45,7 +45,7 @@ export function parseExportRequest(params: URLSearchParams): ParsedExport | null
 // What the browser shows when the route refuses, as plain text. The sheet
 // hides what the person may not have, so these are rare.
 export const EXPORT_REFUSALS = {
-  invalid: "This export can't be read. Close this tab, open Export again and choose the columns.",
+  invalid: "This export can't be read. Open Export again and choose the columns.",
   forbidden: "You can't export these columns. Ask the Super Admin if you need them.",
   unavailable: "The export could not be made. Try again in a moment.",
 } as const

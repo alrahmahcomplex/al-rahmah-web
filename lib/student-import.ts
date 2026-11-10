@@ -296,11 +296,14 @@ export function screenStudentRows(
     return { sheetRow: record.sheetRow, original: { ...cells }, normalized, codeUnreadable: code === undefined }
   })
 
+  // The same student twice: the same name with any parent number in common,
+  // phone or WhatsApp, as the database matches a student already on file.
   const students = findDuplicates(
-    rows.map((row) => ({
-      sheetRow: row.sheetRow,
-      key: row.normalized.studentName && row.normalized.phone ? `${studentNameKey(row.normalized.studentName)}|${row.normalized.phone}` : null,
-    })),
+    rows.flatMap((row) => {
+      const { studentName, phone, whatsapp } = row.normalized
+      if (!studentName) return []
+      return [phone, whatsapp].filter((number) => number !== null).map((number) => ({ sheetRow: row.sheetRow, key: `${studentNameKey(studentName)}|${number}` }))
+    }),
   )
 
   return rows.map(({ codeUnreadable, ...row }) => {

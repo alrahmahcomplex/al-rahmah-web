@@ -169,6 +169,29 @@ describe("the file's own checks", () => {
       null,
     ])
   })
+
+  it("refuses a student named twice when the rows share any parent number, phone or WhatsApp", () => {
+    const rows = read([
+      // The same child with the two numbers swapped.
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,0712000002,,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000002,0712000001,,,",
+      // One row's WhatsApp is the other's phone.
+      "Juma Mfano,STD 2,2027,,Baba,,0712000003,0712000004,,,",
+      "Juma Mfano,STD 2,2027,,Baba,,0712000004,,,,",
+      // A sibling on the same numbers is another child.
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000002,0712000001,,,",
+      // The same name with no number in common is another family's child.
+      "Asha Mfano,STD 1,2027,,Mama Mwingine,,0712000009,,,,",
+    ])
+    expect(rows.map((row) => row.problem?.reason ?? null)).toEqual([
+      "Same student twice in the file (rows 2, 3)",
+      "Same student twice in the file (rows 2, 3)",
+      "Same student twice in the file (rows 4, 5)",
+      "Same student twice in the file (rows 4, 5)",
+      null,
+      null,
+    ])
+  })
 })
 
 describe("the database's verdicts", () => {

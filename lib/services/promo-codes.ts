@@ -206,18 +206,21 @@ export async function setPromoCodeState(
   return { ok: true, data: { feeChangeCount: (data as { fee_change_count: number }).fee_change_count } }
 }
 
-// The families whose unpaid interview fee would move with this amount or
-// state (each left out keeps the code's own).
+// The families whose unpaid interview fee would move with this amount,
+// state or last day (each left out keeps the code's own; a null last day
+// means none).
 export async function getPromoCodeImpact(
   supabase: SupabaseClient,
   id: string,
-  change: { amount?: number; state?: PromoState },
+  change: { amount?: number; state?: PromoState; endsOn?: string | null },
 ): Promise<Result<FeeImpactFamily[], PromoWriteError>> {
   if (change.amount !== undefined && !validAmount(change.amount)) return { ok: false, error: "invalid-amount" }
   const { data, error } = await supabase.rpc("promo_code_fee_impact", {
     id,
     amount: change.amount ?? null,
     state: change.state ?? null,
+    ends_on: change.endsOn ?? null,
+    ends_on_given: change.endsOn !== undefined,
   })
   if (error) {
     const refused = promoRefusal(error)

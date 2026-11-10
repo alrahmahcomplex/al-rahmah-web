@@ -66,15 +66,22 @@ export async function checkPromoCode(typed: string): Promise<CodeCheck> {
 }
 
 // The families whose unpaid interview fee this amount or state would move.
-export async function readPromoImpact(id: string, change: { amount?: number; state?: PromoState }): Promise<ImpactAnswer> {
+export async function readPromoImpact(
+  id: string,
+  change: { amount?: number; state?: PromoState; endsOn?: string | null },
+): Promise<ImpactAnswer> {
   if (typeof id !== "string") return { status: "refused", message: "This Promo code could not be found. Reload the page and try again." }
   const amount = change?.amount
   const state = change?.state
+  const endsOn = change?.endsOn
   if (amount !== undefined && !validAmount(amount)) return { status: "refused", message: impactRefusal("invalid-amount") }
   if (state !== undefined && !STATES.includes(state)) return { status: "refused", message: promoRefusal("invalid-state").message }
   const client = await manager()
   if (!client.ok) return { status: "refused", message: impactRefusal(client.error) }
-  const result = await getPromoCodeImpact(client.supabase, id, { amount, state })
+  if (endsOn !== undefined && endsOn !== null && !DAY.test(endsOn)) {
+    return { status: "refused", message: promoRefusal("invalid-ends-on").message }
+  }
+  const result = await getPromoCodeImpact(client.supabase, id, { amount, state, endsOn })
   return result.ok ? { status: "ready", families: result.data } : { status: "refused", message: promoRefusal(result.error).message }
 }
 

@@ -1083,10 +1083,10 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { id: "'9c000000-0000-4000-8000-000000000001'", state: "'paused'", reason: "'A sample reason'" },
     agent: { refused: "not_permitted" },
   },
-  "public.promo_code_fee_impact(id uuid, amount integer, state text)": {
+  "public.promo_code_fee_impact(id uuid, amount integer, state text, ends_on date, ends_on_given boolean)": {
     roles: ["authenticated"],
     setup: "insert into public.promo_codes (id, code, name, amount) values ('9c000000-0000-4000-8000-000000000001', 'SAMPLE01', 'Sample promo', 5000)",
-    args: { id: "'9c000000-0000-4000-8000-000000000001'", amount: "6000", state: "null" },
+    args: { id: "'9c000000-0000-4000-8000-000000000001'", amount: "6000", state: "null", ends_on: "null", ends_on_given: "false" },
     agent: { refused: "not_permitted" },
   },
   "public.list_promo_codes()": {

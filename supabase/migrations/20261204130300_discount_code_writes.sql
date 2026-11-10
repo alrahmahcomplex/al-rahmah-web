@@ -23,7 +23,7 @@
 --
 --   standard_discount_fee_impact(amount)
 --   agent_discount_fee_impact(agent_id, amount)
---   promo_code_fee_impact(id, amount, state)
+--   promo_code_fee_impact(id, amount, state, ends_on, ends_on_given)
 --
 -- list_promo_codes() is the Promo codes screen's list, for leads.view.
 --
@@ -444,8 +444,10 @@ revoke execute on function public.create_promo_code(text, text, integer, date, t
 grant execute on function public.create_promo_code(text, text, integer, date, text) to authenticated;
 
 -- What a Promo code change would move: the code with the given amount and
--- state (null keeps each as it is) and its last day as it is.
-create function public.promo_code_fee_impact(id uuid, amount integer, state text)
+-- state (null keeps each as it is) and, when ends_on_given, the given last
+-- day, where null means no last day. A new last day moves fees by itself: an
+-- expired code given a later day gives its amount again.
+create function public.promo_code_fee_impact(id uuid, amount integer, state text, ends_on date, ends_on_given boolean)
 returns jsonb
 language plpgsql
 stable
@@ -473,7 +475,7 @@ begin
     off_after := public.promo_amount_off(
         coalesce(promo_code_fee_impact.amount, promo.amount),
         coalesce(promo_code_fee_impact.state, promo.state),
-        promo.ends_on
+        case when promo_code_fee_impact.ends_on_given then promo_code_fee_impact.ends_on else promo.ends_on end
     );
     return public.fee_impact_families(
         public.unpaid_leads_for_codes(array[promo.code]),
@@ -483,8 +485,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.promo_code_fee_impact(uuid, integer, text) from public, anon;
-grant execute on function public.promo_code_fee_impact(uuid, integer, text) to authenticated;
+revoke execute on function public.promo_code_fee_impact(uuid, integer, text, date, boolean) from public, anon;
+grant execute on function public.promo_code_fee_impact(uuid, integer, text, date, boolean) to authenticated;
 
 -- Edits a Promo code's name, amount, last day and note. A reason is needed
 -- only when the amount or the last day changes. An Ended code is refused as

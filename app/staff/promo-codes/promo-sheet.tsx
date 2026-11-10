@@ -148,8 +148,11 @@ function EditablePromo({
   const endsMoved = !isNew && (endsOn || null) !== promo.endsOn
   const changed =
     isNew || amountMoved || endsMoved || name.trim() !== promo.name || (note.trim() || null) !== (promo.note ?? null)
-  const impact = useImpact(!isNew && amountMoved && amount !== null ? `amount:${amount}` : null, () =>
-    readPromoImpact(promo!.id, { amount: amount ?? undefined }),
+  // A new last day moves fees as an amount does: an expired code given a
+  // later day gives its amount again. The preview takes both.
+  const impact = useImpact(
+    !isNew && (amountMoved || endsMoved) && amount !== null ? `amount:${amount}|ends:${endsOn}` : null,
+    () => readPromoImpact(promo!.id, { amount: amount ?? undefined, endsOn: endsOn || null }),
   )
 
   const busy = pending || statePending

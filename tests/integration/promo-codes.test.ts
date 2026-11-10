@@ -9,7 +9,7 @@ import { findDiscountCode, getLeadReferral, setLeadReferralCode } from "@/lib/se
 
 import { agentWithLogin } from "../support/agent-students"
 import { anonClient, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { discountPhone, expectedFee, freshCode, leadWithCode, lockedAmount, payInterview } from "../support/discount-codes"
+import { actAs, discountPhone, expectedFee, freshCode, leadWithCode, lockedAmount, payInterview } from "../support/discount-codes"
 import { ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Promo codes (owner decisions of 2026-11-09): school codes with a name and
@@ -30,7 +30,7 @@ describe("who may manage Promo codes", () => {
       ["create_promo_code", { name: "Nope", code: freshCode("N"), amount: 1000, ends_on: null, note: null }],
       ["update_promo_code", { id: promo.id, name: "Nope", amount: 1000, ends_on: null, note: null, reason: "x" }],
       ["set_promo_code_state", { id: promo.id, state: "paused", reason: "x" }],
-      ["promo_code_fee_impact", { id: promo.id, amount: 1000, state: null }],
+      ["promo_code_fee_impact", { id: promo.id, amount: 1000, state: null, ends_on: null, ends_on_given: false }],
     ] as const
     for (const client of [await signedIn(ADMISSIONS), await signedIn(await createThrowawayStaff(["leads.view"]))]) {
       for (const [fn, args] of calls) {
@@ -262,6 +262,35 @@ describe("a lead carrying a Promo code", () => {
       return { state: state.rows[0].effective, fee: await expectedFee(sql, lead) }
     })
     expect(answer).toEqual({ state: "expired", fee: 50000 })
+  })
+
+  test("a new last day shows the fees it moves before it is saved", async () => {
+    const promo = await newPromo(20000)
+    const lead = await leadWithCode(promo.code)
+    const manager = await signedIn(MANAGER)
+    // A last day still to come, or none, moves nothing.
+    expect(await getPromoCodeImpact(manager, promo.id, { endsOn: "2099-12-31" })).toEqual({ ok: true, data: [] })
+    expect(await getPromoCodeImpact(manager, promo.id, { endsOn: null })).toEqual({ ok: true, data: [] })
+    // A last day already past would take the discount away.
+    expect(await getPromoCodeImpact(manager, promo.id, { endsOn: "2020-01-01" })).toEqual({
+      ok: true,
+      data: [expect.objectContaining({ leadId: lead, feeNow: 30000, feeAfter: 50000 })],
+    })
+    // An expired code given a later day gives its amount again, the new amount if that changes too.
+    const restored = await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("update public.promo_codes set ends_on = current_date - 3 where id = $1", [promo.id])
+      await actAs(sql, MANAGER.id)
+      const impact = (amount: number | null, given: boolean) =>
+        sql
+          .query<{ impact: { lead_id: string; fee_now: number; fee_after: number }[] }>(
+            "select public.promo_code_fee_impact($1, $2, null, current_date + 30, $3) as impact",
+            [promo.id, amount, given],
+          )
+          .then(({ rows }) => rows[0].impact.map((row) => [row.lead_id, row.fee_now, row.fee_after]))
+      return { kept: await impact(null, false), extended: await impact(null, true), both: await impact(35000, true) }
+    })
+    expect(restored).toEqual({ kept: [], extended: [[lead, 50000, 30000]], both: [[lead, 50000, 15000]] })
   })
 
   test("the code never changes, Ended never comes back, and no Promo code is deleted, whoever writes", async () => {

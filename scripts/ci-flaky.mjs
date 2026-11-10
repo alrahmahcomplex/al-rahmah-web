@@ -66,8 +66,14 @@ function main() {
   const limit = Number(option("limit", "100"));
   const out = option("out");
   if (!out) throw new Error("ci-flaky.mjs needs --out <file>");
-  const runs = gh(["api", "-X", "GET", "repos/{owner}/{repo}/actions/workflows/ci.yml/runs", "-f", "status=completed", "-f", `per_page=${Math.min(limit, 100)}`]).workflow_runs
-    .filter((run) => ["success", "failure"].includes(run.conclusion));
+  // The API gives 100 runs a page.
+  const listed = [];
+  for (let page = 1; listed.length < limit; page += 1) {
+    const batch = gh(["api", "-X", "GET", "repos/{owner}/{repo}/actions/workflows/ci.yml/runs", "-f", "status=completed", "-f", "per_page=100", "-f", `page=${page}`]).workflow_runs;
+    listed.push(...batch);
+    if (batch.length < 100) break;
+  }
+  const runs = listed.slice(0, limit).filter((run) => ["success", "failure"].includes(run.conclusion));
   const records = [];
   for (const run of runs) {
     for (let attempt = 1; attempt <= run.run_attempt; attempt += 1) {

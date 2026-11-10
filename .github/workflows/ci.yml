@@ -74,6 +74,13 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
+      # The shards are worked out from the spec files on disk. Playwright's
+      # own list of tests must name the same files, or a test would never run.
+      - name: Check that the browser-test shards hold every test
+        run: |
+          mkdir -p .artifacts
+          npx playwright test --list --reporter=json > .artifacts/e2e-list.json
+          node scripts/e2e-shards.mjs check .artifacts/e2e-list.json
 
   # The integration tests and the browser tests each start their own local
   # Supabase, so neither waits for the other.
@@ -112,12 +119,21 @@ jobs:
         run: npm run env:local
       - run: npm run test:integration
 
+  # The browser tests run as shards of equal measured time, each in its own
+  # job with its own Supabase, build and servers. scripts/e2e-shards.mjs
+  # decides which spec files a shard runs, from the seconds in e2e/shards.json.
   browser:
-    name: Build and browser tests
+    name: Browser tests (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: scope
     if: ${{ needs.scope.outputs.full_suite == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      # Every shard finishes and reports, also when another one fails.
+      fail-fast: false
+      matrix:
+        # One job for each shard of e2e/shards.json. A test keeps them equal.
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -142,16 +158,29 @@ jobs:
       - run: npm run build
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      # Runs the shard's spec files, then fails unless exactly those files ran
+      # and every test in them ran.
+      - name: Run this shard's browser tests
+        run: node scripts/e2e-shards.mjs run ${{ matrix.shard }}
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
+      # The measured seconds of each test, for `e2e-shards.mjs timings`. Kept
+      # from runs on main only, so the measurements come from merged code.
+      # MEASUREMENT ONLY: the head_ref clause, as on the caches job.
+      - name: Upload the measured test times
+        if: ${{ !cancelled() && (github.event_name == 'push' || github.head_ref == 'claude/ci-time') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-results-${{ matrix.shard }}
+          path: test-results/e2e-results.json
+          retention-days: 14
 
   # Saves what later runs restore. It is the only job allowed to write to the
   # Actions cache, and it runs only for a push to main, so a pull request can

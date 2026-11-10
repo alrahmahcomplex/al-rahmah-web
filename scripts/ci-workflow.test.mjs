@@ -71,6 +71,11 @@ test("the documents-only path skips every runtime job, and the gate always runs"
     const text = uncommented(block);
     if (name === "scope") continue;
     if (name === "complete") { assert.match(text, /^ {4}if: \$\{\{ always\(\) \}\}$/m); continue; }
+    if (name === "repository") {
+      // The helper tests and the document checks run for every change.
+      assert.doesNotMatch(text, /^ {4}(if|needs):/m, "repository must run for every change, waiting for nothing");
+      continue;
+    }
     assert.match(text, /^ {4}needs: scope$/m, `${name} must wait for the scope job`);
     assert.match(text, /^ {4}if: \$\{\{ needs\.scope\.outputs\.full_suite == 'true'/m, `${name} must run only for the full suite`);
   }

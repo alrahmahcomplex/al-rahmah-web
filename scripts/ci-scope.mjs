@@ -77,18 +77,24 @@ export function determineScope({ eventName, event, cwd = process.cwd() }) {
   }
 }
 
-// The runtime jobs of .github/workflows/ci.yml. The gate fails when one is
-// missing from its `needs`, so a job added there must be added here too.
+// The jobs of .github/workflows/ci.yml that the gate waits for. It fails when
+// one is missing from its `needs`, so a job added there must be added here.
+// The always jobs run for every change. The runtime jobs run for the full
+// suite and are skipped for a documents-only change.
+export const alwaysJobs = ["repository"];
 export const runtimeJobs = ["static", "integration", "browser"];
 
 export function gateErrors(needs) {
   const errors = [];
-  if (needs.scope?.result !== "success") errors.push("Scope and document checks did not succeed");
+  if (needs.scope?.result !== "success") errors.push("The scope job did not succeed");
   const fullSuite = needs.scope?.outputs?.full_suite;
   if (!["true", "false"].includes(fullSuite)) errors.push("Scope did not produce a valid full_suite output");
   const expected = fullSuite === "false" ? "skipped" : "success";
   for (const job of Object.keys(needs)) {
-    if (job !== "scope" && !runtimeJobs.includes(job)) errors.push(`${job}: the gate does not know this job`);
+    if (job !== "scope" && !alwaysJobs.includes(job) && !runtimeJobs.includes(job)) errors.push(`${job}: the gate does not know this job`);
+  }
+  for (const job of alwaysJobs) {
+    if (needs[job]?.result !== "success") errors.push(`${job}: expected success, received ${needs[job]?.result ?? "missing"}`);
   }
   for (const job of runtimeJobs) {
     if (needs[job]?.result !== expected) errors.push(`${job}: expected ${expected}, received ${needs[job]?.result ?? "missing"}`);

@@ -56,8 +56,10 @@ export function runTimes(run) {
     queueSeconds: idleSeconds(run.run_started_at, finished, jobs),
     // Runner time: the sum of every job's own duration.
     jobSeconds: jobs.reduce((sum, job) => sum + seconds(job.started_at, job.completed_at), 0),
-    // The documents-only path runs two jobs: the scope job and the gate.
-    fullSuite: jobs.length > 2,
+    // The documents-only path runs the scope job, the gate and, since the
+    // helper tests moved out of the scope job, the repository job. The full
+    // suite ran four jobs before this work and runs more now.
+    fullSuite: jobs.length > 3,
   };
 }
 

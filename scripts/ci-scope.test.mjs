@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { classifyChanges, determineScope, gateErrors, parseNameStatus, runtimeJobs } from "./ci-scope.mjs";
+import { alwaysJobs, classifyChanges, determineScope, gateErrors, parseNameStatus, runtimeJobs } from "./ci-scope.mjs";
 
 test("ordinary docs and policy docs use document checks without runtime jobs", () => {
   for (const path of ["README.md", "CHANGELOG.md", "CONTEXT.md", "AGENTS.md", "CLAUDE.md", "docs/agents/workflow.md", "docs/adr/0001.md"]) {
@@ -108,29 +108,42 @@ test("missing, zero, inaccessible and unsupported comparisons fail safe", (t) =>
   assert.equal(determineScope({ cwd: repo.cwd, eventName: "workflow_dispatch", event: {} }).fullSuite, true);
 });
 
+// The always jobs succeed; the runtime jobs get `result`.
 function needs(fullSuite, result) {
-  return { scope: { result: "success", outputs: { full_suite: fullSuite } }, ...Object.fromEntries(runtimeJobs.map((job) => [job, { result }])) };
+  return {
+    scope: { result: "success", outputs: { full_suite: fullSuite } },
+    ...Object.fromEntries(alwaysJobs.map((job) => [job, { result: "success" }])),
+    ...Object.fromEntries(runtimeJobs.map((job) => [job, { result }])),
+  };
 }
 
 test("the gate's job list matches the workflow's gate job", () => {
   const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
   const gate = workflow.slice(workflow.indexOf("\n  complete:"));
   const listed = gate.match(/^    needs: \[([^\]]+)\]$/m)[1].split(",").map((job) => job.trim());
-  assert.deepEqual(listed, ["scope", ...runtimeJobs]);
-  for (const job of runtimeJobs) assert.match(workflow, new RegExp(`^  ${job}:$`, "m"), job);
+  assert.deepEqual(listed, ["scope", ...alwaysJobs, ...runtimeJobs]);
+  for (const job of [...alwaysJobs, ...runtimeJobs]) assert.match(workflow, new RegExp(`^  ${job}:$`, "m"), job);
 });
 
 test("completion gate accepts only the expected successful or skipped jobs", () => {
   assert.deepEqual(gateErrors(needs("true", "success")), []);
   assert.deepEqual(gateErrors(needs("false", "skipped")), []);
-  for (const job of runtimeJobs) {
+  for (const job of [...alwaysJobs, ...runtimeJobs]) {
     const missing = needs("true", "success");
     delete missing[job];
     assert.notEqual(gateErrors(missing).length, 0, `${job} missing`);
   }
   assert.notEqual(gateErrors({ ...needs("true", "success"), extra: { result: "success" } }).length, 0);
+  // A job that runs for every change may never be skipped, even for documents.
+  for (const job of alwaysJobs) {
+    for (const fullSuite of ["true", "false"]) {
+      const state = needs(fullSuite, fullSuite === "true" ? "success" : "skipped");
+      state[job].result = "skipped";
+      assert.notEqual(gateErrors(state).length, 0, `${job} skipped`);
+    }
+  }
   for (const fullSuite of ["true", "false"]) {
-    for (const job of ["scope", ...runtimeJobs]) {
+    for (const job of ["scope", ...alwaysJobs, ...runtimeJobs]) {
       for (const result of ["failure", "cancelled"]) {
         const state = needs(fullSuite, fullSuite === "true" ? "success" : "skipped");
         state[job].result = result;

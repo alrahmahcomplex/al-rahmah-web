@@ -171,7 +171,7 @@ jobs:
       fail-fast: false
       matrix:
         # One job for each shard of e2e/shards.json. A test keeps them equal.
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - name: Reserve the local Supabase ports
         run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429

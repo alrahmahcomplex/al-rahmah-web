@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { playwrightOutcomes, vitestFailures } from "./ci-flaky.mjs";
+import { playwrightOutcomes, vitestFailures, vitestFlaky } from "./ci-flaky.mjs";
 
 const stamp = "2026-11-09T20:45:02.5137239Z ";
 const log = (lines) => lines.map((line) => stamp + line).join("\n");
@@ -44,4 +44,36 @@ test("Vitest failures are listed once each, with or without a project name", () 
     "tests/unit/apply-page.test.tsx > the Admission form page > sends once",
     "tests/unit/seats.test.ts > counts a seat",
   ]);
+});
+
+test("Vitest's summary gives the tests that passed only on a retry, with their file", () => {
+  const flaky = vitestFlaky(log([
+    "## (integration) Vitest Test Report",
+    "",
+    "### Summary",
+    "",
+    "- **Test Files**: ✅ **45 passes** · 45 total",
+    "",
+    "### Flaky Tests",
+    "",
+    "These tests passed only after one or more retries, indicating potential instability.",
+    "",
+    "##### `tests/integration/leads-search.test.ts` (2 flaky tests)",
+    "",
+    "- [`the lead list > pages 50 at a time, keeping the filters`](https://github.com/o/r/blob/abc/tests/integration/leads-search.test.ts#L285) (**passed on retry 2 out of 2**)",
+    "- `the lead list > finds a lead by name` (passed on retry 1 out of 2)",
+    "",
+    "##### `tests/integration/interview-release-status.test.ts` (1 flaky tests)",
+    "",
+    "- [`listReleaseStatus > a result never sent`](https://github.com/o/r/blob/abc/x.ts#L91) (passed on retry 1 out of 2)",
+    "",
+    "Post job cleanup.",
+    "- `not a test` (passed on retry 1 out of 2)",
+  ]));
+  assert.deepEqual(flaky, [
+    "tests/integration/leads-search.test.ts > the lead list > pages 50 at a time, keeping the filters",
+    "tests/integration/leads-search.test.ts > the lead list > finds a lead by name",
+    "tests/integration/interview-release-status.test.ts > listReleaseStatus > a result never sent",
+  ]);
+  assert.deepEqual(vitestFlaky(log(["### Summary", "- **Test Files**: ✅ **45 passes** · 45 total"])), []);
 });

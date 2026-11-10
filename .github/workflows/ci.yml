@@ -142,7 +142,15 @@ jobs:
         run: bash scripts/ci-db-start.sh
       - name: Write .env.local from the local stack
         run: npm run env:local
-      - run: npm run test:integration
+      # Vitest writes a summary to the run's page that names each test that
+      # passed only on a retry. Printing it puts it in the log as well, where
+      # scripts/ci-flaky.mjs reads it.
+      - name: Run the integration tests
+        run: |
+          status=0
+          npm run test:integration || status=$?
+          cat "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          exit "$status"
 
   # The browser tests run as shards of equal measured time, each in its own
   # job with its own Supabase, build and servers. scripts/e2e-shards.mjs

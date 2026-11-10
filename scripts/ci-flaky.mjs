@@ -39,6 +39,22 @@ export function vitestFailures(log) {
   return [...failures];
 }
 
+// In GitHub Actions, Vitest writes a summary that names each test that passed
+// only on a retry, under "##### `<file>` (n flaky tests)". The integration
+// step prints that summary into its log.
+export function vitestFlaky(log) {
+  const flaky = [];
+  let file = null;
+  for (const line of strip(log).split(/\r?\n/).map(body)) {
+    const heading = line.match(/^#{5} `(.+?)` \(\d+ flaky tests?\)\s*$/);
+    if (heading) { file = heading[1]; continue; }
+    const test = file && line.match(/^- \[?`(.+?)`(?:\]\([^)]*\))? \(\*{0,2}passed on retry \d+ out of \d+\*{0,2}\)\s*$/);
+    if (test) flaky.push(`${file} > ${test[1]}`);
+    else if (file && line.trim() !== "") file = null;
+  }
+  return flaky;
+}
+
 function gh(args, raw = false) {
   const out = execFileSync("gh", args, { encoding: "utf8", maxBuffer: 512 * 1024 * 1024 });
   return raw ? out : JSON.parse(out);
@@ -61,11 +77,13 @@ function main() {
         try { log = gh(["api", "--allow-escape-sequences", `repos/{owner}/{repo}/actions/jobs/${job.id}/logs`], true); } catch { continue; }
         const playwright = playwrightOutcomes(log);
         const vitest = vitestFailures(log);
+        const retried = vitestFlaky(log);
         const failedStep = (job.steps ?? []).find((step) => step.conclusion === "failure")?.name ?? null;
-        if (job.conclusion === "failure" || playwright.flaky.length || playwright.failed.length || vitest.length) {
+        if (job.conclusion === "failure" || playwright.flaky.length || playwright.failed.length || vitest.length || retried.length) {
           records.push({
             run: run.id, attempt, attempts: run.run_attempt, event: run.event, branch: run.head_branch, sha: run.head_sha.slice(0, 7),
-            created_at: run.created_at, job: job.name, conclusion: job.conclusion, failedStep, flaky: playwright.flaky, failed: playwright.failed, vitestFailed: vitest,
+            created_at: run.created_at, job: job.name, conclusion: job.conclusion, failedStep, flaky: playwright.flaky, failed: playwright.failed,
+            vitestFlaky: retried, vitestFailed: vitest,
           });
         }
       }
@@ -84,6 +102,8 @@ function main() {
   for (const [test, times] of count((record) => record.flaky)) console.log(`  ${times}x ${test}`);
   console.log("\nFailed after every retry (Playwright):");
   for (const [test, times] of count((record) => record.failed)) console.log(`  ${times}x ${test}`);
+  console.log("\nPassed on a retry (Vitest, flaky):");
+  for (const [test, times] of count((record) => record.vitestFlaky ?? [])) console.log(`  ${times}x ${test}`);
   console.log("\nFailed (Vitest):");
   for (const [test, times] of count((record) => record.vitestFailed)) console.log(`  ${times}x ${test}`);
 }

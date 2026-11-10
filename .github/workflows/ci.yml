@@ -104,13 +104,18 @@ jobs:
           node scripts/e2e-shards.mjs check .artifacts/e2e-list.json
 
   # The integration tests and the browser tests each start their own local
-  # Supabase, so neither waits for the other.
+  # Supabase, so neither waits for the other. Vitest splits the integration
+  # test files between the shards itself: every file lands in one of them.
   integration:
-    name: Integration tests
+    name: Integration tests (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: scope
     if: ${{ needs.scope.outputs.full_suite == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       # Local Supabase binds host ports 55420 to 55429 (supabase/config.toml).
       # Linux hands out ports from 32768 to 60999 to outgoing connections, and
@@ -145,10 +150,10 @@ jobs:
       # Vitest writes a summary to the run's page that names each test that
       # passed only on a retry. Printing it puts it in the log as well, where
       # scripts/ci-flaky.mjs reads it.
-      - name: Run the integration tests
+      - name: Run this shard's integration tests
         run: |
           status=0
-          npm run test:integration || status=$?
+          npm run test:integration -- --shard=${{ matrix.shard }}/${{ strategy.job-total }} || status=$?
           cat "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
           exit "$status"
 

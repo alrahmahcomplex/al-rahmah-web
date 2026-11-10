@@ -76,7 +76,12 @@ test("measured seconds use each test's last attempt and sum both projects", () =
 
 test("the workflow runs one job for each shard of e2e/shards.json", () => {
   const { shards } = readConfig(new URL("e2e/shards.json", root));
-  const matrix = read(".github/workflows/ci.yml").match(/^ {8}shard: \[([\d, ]+)\]$/m);
+  const workflow = read(".github/workflows/ci.yml").replace(/\r\n/g, "\n");
+  const start = workflow.indexOf("\n  browser:\n");
+  assert.notEqual(start, -1, "the browser job was not found");
+  const next = workflow.slice(start + 1).search(/\n {2}[A-Za-z_][\w-]*:\n/);
+  const browser = next === -1 ? workflow.slice(start) : workflow.slice(start, start + 1 + next);
+  const matrix = browser.match(/^ {8}shard: \[([\d, ]+)\]$/m);
   assert.ok(matrix, "the browser job's matrix was not found");
   assert.deepEqual(matrix[1].split(",").map((value) => Number(value.trim())), Array.from({ length: shards }, (_, index) => index + 1));
 });

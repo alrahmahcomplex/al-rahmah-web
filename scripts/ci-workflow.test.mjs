@@ -66,6 +66,15 @@ test("the nightly and the manual run restore no cache", () => {
   assert.ok(restores > 0);
 });
 
+test("the integration shards are numbered 1 to n and each runs its share of n", () => {
+  const text = uncommented(jobs.get("integration"));
+  const shards = text.match(/^ {8}shard: \[([\d, ]+)\]$/m)[1].split(",").map((value) => Number(value.trim()));
+  assert.deepEqual(shards, Array.from({ length: shards.length }, (_, index) => index + 1));
+  // Vitest gives each file to one shard of the total. The total is the
+  // matrix's own size, so no shard can be left without a job.
+  assert.ok(text.includes("npm run test:integration -- --shard=${{ matrix.shard }}/${{ strategy.job-total }} "));
+});
+
 test("the documents-only path skips every runtime job, and the gate always runs", () => {
   for (const [name, block] of jobs) {
     const text = uncommented(block);

@@ -230,9 +230,8 @@ jobs:
           retention-days: 7
       # The measured seconds of each test, for `e2e-shards.mjs timings`. Kept
       # from runs on main only, so the measurements come from merged code.
-      # MEASUREMENT ONLY: the head_ref clause, as on the caches job.
       - name: Upload the measured test times
-        if: ${{ !cancelled() && (github.event_name == 'push' || github.head_ref == 'claude/ci-time') }}
+        if: ${{ !cancelled() && github.event_name == 'push' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: e2e-results-${{ matrix.shard }}
@@ -245,10 +244,7 @@ jobs:
   caches:
     name: Save caches for later runs
     needs: scope
-    # MEASUREMENT ONLY: the head_ref clause lets this pull request save a cache
-    # of its own (GitHub scopes it to the pull request) so warm runs can be
-    # measured before the merge. The last commit of the branch removes it.
-    if: ${{ needs.scope.outputs.full_suite == 'true' && (github.event_name == 'push' || github.head_ref == 'claude/ci-time') }}
+    if: ${{ needs.scope.outputs.full_suite == 'true' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     cache-mode: write

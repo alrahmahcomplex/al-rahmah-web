@@ -42,6 +42,9 @@ test("only the caches job can save to the Actions cache", () => {
     const text = uncommented(block);
     if (name === "caches") {
       assert.match(text, /^ {4}cache-mode: write$/m);
+      // Only a push starts it, and the workflow's one push trigger is main.
+      assert.match(text, /^ {4}if: \$\{\{ needs\.scope\.outputs\.full_suite == 'true' && github\.event_name == 'push' \}\}$/m, "caches must run for pushes only");
+      assert.match(workflow, /^ {2}push:\n {4}branches: \[main\]$/m, "the push trigger must be main alone");
       continue;
     }
     assert.doesNotMatch(text, /cache-mode:/, `${name} must not set its own cache-mode`);

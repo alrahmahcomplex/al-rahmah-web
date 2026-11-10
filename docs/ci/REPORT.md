@@ -178,7 +178,7 @@ Notes on each change:
 
 ## Tests that now run only after the merge
 
-None. Every pull request run and every push to main runs every test.
+None. A pull request runs every test unless it changes only allowlisted Markdown, as before. Every push to main runs every test, since `246c21e` also when the merge changed only documents: before, such a push ran none.
 
 ## Flaky tests
 
@@ -194,9 +194,12 @@ None. Every pull request run and every push to main runs every test.
 | `e2e/staff-roles.spec.ts` › a role is renamed, retired, then reactivated | 0 | 3 of 6 attempts of run `42804913691` | New with change 2. After Save name the closing dialog's title, "Rename <new name>", also matched the heading locator. Fixed in `0ec9b50` by matching the heading exactly. |
 | `e2e/record-visit.spec.ts` › a visit someone else recorded first is refused | 1 | 0 | Not analysed. |
 | `e2e/admission-form-draft.spec.ts` › Forward to a question the answers no longer allow stays put | 1 | 0 | Not analysed. |
+| `tests/integration/leads-search.test.ts` › pages 50 at a time, and `tests/integration/interview-release-status.test.ts` › a result never sent | 1 attempt, passed on a retry | 2 attempts, before the retry existed | Both create and lock leads. In the same seconds they fill the connection pool, and each gets "unavailable" after about 10 s. Seen only with two integration shards, where Vitest puts both files in one shard. Vitest now retries these load errors, change 13. The contention itself is not fixed. |
+| `tests/integration/leads-search.test.ts` › finds a Declined lead, and a number that matches nothing finds nothing | 0 | 1 attempt of run `42863416438` | It searched for `ADMSN-00000` and expected no lead, but Admission Numbers are random and another test's lead held it. Fixed in `cc6fc9d`: it asks `unusedAdmissionNumber` for a free one. |
+| Unit tests, an error with no failed test | | 2 runs: `42697498569` on main and attempt 1 of `42872902972` | "ReferenceError: window is not defined" at `components/guided-form/stack.tsx:196`. A timer the guided form sets fires after the test's browser environment is gone. Every test passes and Vitest still fails the run. It came from `tests/unit/apply-page.test.tsx` once and `tests/unit/discount-code-page.test.tsx` once. Not changed: the timer is application code. |
 | Start local Supabase (a step, not a test) | | 4 runs | "failed to bind host port ...: address already in use" on port 55422 or 55424. See below. |
 
-The Vitest failures in the scan were real failures of work in progress, not flaky tests: 37 tests of `tests/unit/apply-page.test.tsx` in one run, and three files in single runs.
+The Vitest failures in the scan were real failures of work in progress, not flaky tests: 37 tests of `tests/unit/apply-page.test.tsx` in one run, and three files in single runs. The one exception is run `42697498569` in the table above.
 
 ### The Supabase port failure
 

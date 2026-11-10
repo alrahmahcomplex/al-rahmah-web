@@ -79,13 +79,19 @@ export function checkErrors(files, shards, listed) {
 }
 
 // After a shard ran: its report must hold exactly its files, and every test
-// in them must have run.
+// in them must have run. A skipped test did not run: `test.skip` and
+// `test.fixme` pass Playwright, and fail here. Skipping a browser test takes
+// the owner's approval and a change to this check.
 export function verifyErrors(shardFiles, ran) {
   const errors = [];
   const ranFiles = new Set(ran.map((test) => test.file));
   for (const file of shardFiles) if (!ranFiles.has(file)) errors.push(`${file} belongs to this shard, but none of its tests ran`);
   for (const file of ranFiles) if (!shardFiles.includes(file)) errors.push(`${file} ran, but belongs to another shard`);
-  for (const test of ran) if (!test.results.length) errors.push(`${test.file}: "${test.title}" [${test.project}] did not run`);
+  for (const test of ran) {
+    const last = test.results.at(-1);
+    if (!last) errors.push(`${test.file}: "${test.title}" [${test.project}] did not run`);
+    else if (last.status === "skipped") errors.push(`${test.file}: "${test.title}" [${test.project}] was skipped`);
+  }
   return errors;
 }
 

@@ -68,6 +68,15 @@ test("after a run, the shard must have run its own files, all of their tests and
   assert.match(verifyErrors(mine, reportTests(report([["a.spec.ts", "one"], ["b.spec.ts", "two", []]]))).join("\n"), /b\.spec\.ts: "two" \[chromium\] did not run/);
 });
 
+test("a skipped test did not run: test.skip and test.fixme fail the shard", () => {
+  const mine = ["a.spec.ts"];
+  const skipped = reportTests(report([["a.spec.ts", "one"], ["a.spec.ts", "two", [{ status: "skipped", duration: 0 }]]]));
+  assert.deepEqual(verifyErrors(mine, skipped), ['a.spec.ts: "two" [chromium] was skipped']);
+  // A test that failed and then passed on its retry ran.
+  const retried = reportTests(report([["a.spec.ts", "one", [{ status: "failed", duration: 900 }, { status: "passed", duration: 800 }]]]));
+  assert.deepEqual(verifyErrors(mine, retried), []);
+});
+
 test("measured seconds use each test's last attempt and sum both projects", () => {
   const first = report([["a.spec.ts", "one", [{ duration: 30000 }, { duration: 4200 }]], ["a.spec.ts", "two", [{ duration: 1849 }]]]);
   const second = report([["b.spec.ts", "three", [{ duration: 500 }], "turnstile-fails"], ["b.spec.ts", "four", []]]);

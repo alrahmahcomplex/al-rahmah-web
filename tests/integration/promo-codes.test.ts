@@ -271,11 +271,9 @@ describe("a lead carrying a Promo code", () => {
     // A last day still to come, or none, moves nothing.
     expect(await getPromoCodeImpact(manager, promo.id, { endsOn: "2099-12-31" })).toEqual({ ok: true, data: [] })
     expect(await getPromoCodeImpact(manager, promo.id, { endsOn: null })).toEqual({ ok: true, data: [] })
-    // A last day already past would take the discount away.
-    expect(await getPromoCodeImpact(manager, promo.id, { endsOn: "2020-01-01" })).toEqual({
-      ok: true,
-      data: [expect.objectContaining({ leadId: lead, feeNow: 30000, feeAfter: 50000 })],
-    })
+    // A new last day already past is refused, as the save refuses it.
+    expect(await getPromoCodeImpact(manager, promo.id, { endsOn: "2020-01-01" })).toEqual({ ok: false, error: "invalid-ends-on" })
+    expect(await getPromoCodeImpact(manager, promo.id, { amount: 25000, endsOn: "2020-01-01" })).toEqual({ ok: false, error: "invalid-ends-on" })
     // An expired code given a later day gives its amount again, the new amount if that changes too.
     const restored = await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
@@ -288,9 +286,20 @@ describe("a lead carrying a Promo code", () => {
             [promo.id, amount, given],
           )
           .then(({ rows }) => rows[0].impact.map((row) => [row.lead_id, row.fee_now, row.fee_after]))
-      return { kept: await impact(null, false), extended: await impact(null, true), both: await impact(35000, true) }
+      // The expired code's own past day, sent back unchanged with a new
+      // amount, still previews: nothing moves while it stays expired.
+      const unchanged = await sql.query<{ impact: unknown[] }>(
+        "select public.promo_code_fee_impact($1, 25000, null, current_date - 3, true) as impact",
+        [promo.id],
+      )
+      return {
+        kept: await impact(null, false),
+        extended: await impact(null, true),
+        both: await impact(35000, true),
+        unchanged: unchanged.rows[0].impact,
+      }
     })
-    expect(restored).toEqual({ kept: [], extended: [[lead, 50000, 30000]], both: [[lead, 50000, 15000]] })
+    expect(restored).toEqual({ kept: [], extended: [[lead, 50000, 30000]], both: [[lead, 50000, 15000]], unchanged: [] })
   })
 
   test("the code never changes, Ended never comes back, and no Promo code is deleted, whoever writes", async () => {

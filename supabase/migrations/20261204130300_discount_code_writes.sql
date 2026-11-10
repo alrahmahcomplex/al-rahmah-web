@@ -470,6 +470,14 @@ begin
     if not found then
         raise exception 'not_found';
     end if;
+    -- A new last day already past is refused as update_promo_code refuses
+    -- it, so the preview never lists a change the save won't make.
+    if promo_code_fee_impact.ends_on_given
+       and promo_code_fee_impact.ends_on is distinct from promo.ends_on
+       and promo_code_fee_impact.ends_on is not null
+       and promo_code_fee_impact.ends_on < public.tanzania_today() then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'ends_on')::text;
+    end if;
 
     off_now := public.promo_amount_off(promo.amount, promo.state, promo.ends_on);
     off_after := public.promo_amount_off(

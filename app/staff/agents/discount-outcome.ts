@@ -45,7 +45,7 @@ export function impactSummary(count: number): string {
   return `${plural(count, "unpaid interview fee")} will change`
 }
 
-export const NO_IMPACT = "No interview fee changes. Every fee carrying this code is already Paid, or none is registered yet."
+export const NO_IMPACT = "No interview fee changes."
 
 export const PAID_KEEP = "Fees already marked Paid keep their amount."
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { median, percentile, runTimes, summarize, windowRates } from "./ci-measure.mjs";
+import { collect, median, percentile, runTimes, summarize, windowRates } from "./ci-measure.mjs";
 
 const at = (second) => new Date(Date.UTC(2026, 10, 10, 8, 0, second)).toISOString();
 const job = (name, start, end, steps = []) => ({ name, conclusion: "success", created_at: at(start), started_at: at(start), completed_at: at(end), steps });
@@ -60,4 +60,38 @@ test("the re-run rate leaves cancelled runs out", () => {
   ];
   assert.deepEqual(windowRates(window), { completed: 5, cancelled: 1, finished: 4, failed: 2, rerun: 2, rerunRate: 0.5 });
   assert.equal(windowRates([]).rerunRate, null);
+});
+
+// A stand-in for the GitHub API: one run of a commit, re-run twice, whose
+// attempts ended success, success, failure.
+function fakeApi(conclusions) {
+  const latest = conclusions.at(-1);
+  const run = (attempt) => ({
+    id: 7, run_attempt: attempt, event: "pull_request", head_branch: "b", head_sha: "abc", display_title: "t",
+    conclusion: conclusions[attempt - 1], html_url: "u", created_at: at(0), run_started_at: at(attempt), updated_at: at(attempt + 50),
+  });
+  return (path, params = {}) => {
+    if (path.endsWith("/runs")) {
+      const matches = params.status === "completed" || params.status === latest;
+      return { workflow_runs: matches ? [run(conclusions.length)] : [] };
+    }
+    const attempt = Number(path.match(/attempts\/(\d+)/)[1]);
+    if (path.endsWith("/jobs")) return { jobs: [job("scope", attempt + 1, attempt + 9)] };
+    return run(attempt);
+  };
+}
+
+test("measuring a re-run commit keeps its successful attempts when the newest attempt failed", () => {
+  const all = collect({ query: { event: "pull_request", head_sha: "abc" }, limit: 30, attempts: "all" }, fakeApi(["success", "success", "failure"]));
+  assert.deepEqual(all.runs.map((run) => run.attempt), [1, 2]);
+  assert.deepEqual(all.window, [{ id: 7, attempt: 3, conclusion: "failure", created_at: at(0), sha: "abc" }]);
+  // The failed attempts in between are left out too.
+  const mixed = collect({ query: { event: "pull_request" }, limit: 30, attempts: "all" }, fakeApi(["failure", "success", "failure", "success"]));
+  assert.deepEqual(mixed.runs.map((run) => run.attempt), [2, 4]);
+});
+
+test("the last successful runs are the runs whose newest attempt succeeded, one record each", () => {
+  const latest = collect({ query: { event: "push" }, limit: 30, attempts: "latest" }, fakeApi(["failure", "success"]));
+  assert.deepEqual(latest.runs.map((run) => run.attempt), [2]);
+  assert.deepEqual(collect({ query: { event: "push" }, limit: 30, attempts: "latest" }, fakeApi(["success", "failure"])).runs, []);
 });

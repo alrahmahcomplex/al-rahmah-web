@@ -122,19 +122,19 @@ function gh(path, params = {}) {
   return JSON.parse(execFileSync("gh", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 }));
 }
 
-function listRuns(params, limit) {
+function listRuns(params, limit, api) {
   const runs = [];
   for (let page = 1; runs.length < limit; page += 1) {
-    const batch = gh(`repos/{owner}/{repo}/actions/workflows/${WORKFLOW}/runs`, { ...params, per_page: 100, page }).workflow_runs;
+    const batch = api(`repos/{owner}/{repo}/actions/workflows/${WORKFLOW}/runs`, { ...params, per_page: 100, page }).workflow_runs;
     runs.push(...batch);
     if (batch.length < 100) break;
   }
   return runs.slice(0, limit);
 }
 
-function attemptRecord(runId, attempt) {
-  const run = gh(`repos/{owner}/{repo}/actions/runs/${runId}/attempts/${attempt}`);
-  const { jobs } = gh(`repos/{owner}/{repo}/actions/runs/${runId}/attempts/${attempt}/jobs`, { per_page: 100 });
+function attemptRecord(runId, attempt, api) {
+  const run = api(`repos/{owner}/{repo}/actions/runs/${runId}/attempts/${attempt}`);
+  const { jobs } = api(`repos/{owner}/{repo}/actions/runs/${runId}/attempts/${attempt}/jobs`, { per_page: 100 });
   return {
     id: run.id, attempt: run.run_attempt, event: run.event, branch: run.head_branch, sha: run.head_sha,
     title: run.display_title, conclusion: run.conclusion, url: run.html_url,
@@ -158,27 +158,34 @@ function options(argv) {
   return result;
 }
 
+// The runs to measure, and every completed run since the oldest of them.
+// `latest` takes the last runs that ended in success, as `gh run list --status
+// success` lists them. `all` is for a commit measured by re-running its run:
+// it takes the last completed runs and keeps every successful attempt, also
+// of a run whose newest attempt failed.
+export function collect({ query, limit, attempts }, api = gh) {
+  const listed = listRuns({ ...query, status: attempts === "all" ? "completed" : "success" }, limit, api);
+  const runs = [];
+  for (const run of listed) {
+    const wanted = attempts === "all" ? Array.from({ length: run.run_attempt }, (_, index) => index + 1) : [run.run_attempt];
+    for (const attempt of wanted) {
+      const record = attemptRecord(run.id, attempt, api);
+      if (record.conclusion === "success") runs.push(record);
+    }
+  }
+  // The base for the re-run rate.
+  const oldest = listed.map((run) => run.created_at).sort()[0];
+  const window = oldest ? listRuns({ ...query, status: "completed", created: `>=${oldest}` }, 1000, api)
+    .map((run) => ({ id: run.id, attempt: run.run_attempt, conclusion: run.conclusion, created_at: run.created_at, sha: run.head_sha })) : [];
+  return { runs, window };
+}
+
 // --event <name> [--branch <name>] [--sha <sha>] [--limit 30] [--attempts latest|all] --out <file>
-// `latest` keeps the last successful runs, as `gh run list --status success`
-// lists them. `all` keeps every successful attempt of those runs, for a commit
-// measured by re-running its run.
 function fetch(argv) {
   const { event, branch, sha, out, limit = "30", attempts = "latest" } = options(argv);
   if (!event || !out) throw new Error("fetch needs --event and --out");
   const query = { event, ...(branch && { branch }), ...(sha && { head_sha: sha }) };
-  const successful = listRuns({ ...query, status: "success" }, Number(limit));
-  const runs = [];
-  for (const run of successful) {
-    const wanted = attempts === "all" ? Array.from({ length: run.run_attempt }, (_, index) => index + 1) : [run.run_attempt];
-    for (const attempt of wanted) {
-      const record = attemptRecord(run.id, attempt);
-      if (record.conclusion === "success") runs.push(record);
-    }
-  }
-  // Every completed run since the oldest sample: the base for the re-run rate.
-  const oldest = successful.map((run) => run.created_at).sort()[0];
-  const window = oldest ? listRuns({ ...query, status: "completed", created: `>=${oldest}` }, 1000)
-    .map((run) => ({ id: run.id, attempt: run.run_attempt, conclusion: run.conclusion, created_at: run.created_at, sha: run.head_sha })) : [];
+  const { runs, window } = collect({ query, limit: Number(limit), attempts });
   mkdirSync(dirname(out), { recursive: true });
   const lines = (rows) => rows.map((row) => `    ${JSON.stringify(row)}`).join(",\n");
   writeFileSync(out, `{\n  "fetched_at": ${JSON.stringify(new Date().toISOString())},\n  "query": ${JSON.stringify({ ...query, limit: Number(limit), attempts })},\n  "runs": [\n${lines(runs)}\n  ],\n  "window": [\n${lines(window)}\n  ]\n}\n`);

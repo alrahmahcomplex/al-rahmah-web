@@ -276,7 +276,7 @@ jobs:
   complete:
     name: CI complete
     if: ${{ always() }}
-    needs: [scope, repository, static, integration, browser]
+    needs: [scope, repository, static, integration, browser, caches]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

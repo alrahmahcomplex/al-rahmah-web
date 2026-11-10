@@ -19,6 +19,10 @@ concurrency:
 permissions:
   contents: read
 
+# Jobs read the Actions cache and never save to it. The one job that saves is
+# `caches`, which runs only for a push to main.
+cache-mode: read
+
 env:
   NEXT_TELEMETRY_DISABLED: "1"
 
@@ -53,10 +57,20 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+      # node_modules as `npm ci` left it on main for this lockfile, this Node
+      # version and this runner. Any other lockfile misses and installs.
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
@@ -72,10 +86,18 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
       # Local Supabase binds host ports 55420 to 55429 (supabase/config.toml).
       # Linux hands out ports from 32768 to 60999 to outgoing connections, so
       # an image pull could take one first and the start failed with "address
@@ -99,10 +121,18 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
       - name: Reserve the local Supabase ports
         run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
       - name: Start local Supabase
@@ -122,6 +152,42 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # Saves what later runs restore. It is the only job allowed to write to the
+  # Actions cache, and it runs only for a push to main, so a pull request can
+  # never change what another run restores.
+  caches:
+    name: Save caches for later runs
+    needs: scope
+    # MEASUREMENT ONLY: the head_ref clause lets this pull request save a cache
+    # of its own (GitHub scopes it to the pull request) so warm runs can be
+    # measured before the merge. The last commit of the branch removes it.
+    if: ${{ needs.scope.outputs.full_suite == 'true' && (github.event_name == 'push' || github.head_ref == 'claude/ci-time') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
+        with:
+          node-version: 24
+      - name: Look for this lockfile's node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package-lock.json') }}
+          lookup-only: true
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
+      - name: Save node_modules
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.modules.outputs.cache-primary-key }}
 
   complete:
     name: CI complete

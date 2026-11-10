@@ -133,14 +133,21 @@ describe("which students", () => {
         "insert into public.guardian_contacts (full_name, relationship, phone, origin) values ('Mzazi Wengi', 'Mother', '+255899999999', 'front_desk') returning id",
       )
       const code = freshCode("X")
-      await sql.query(
-        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id, import_batch_id, referral_code)
-         select 'ADMSN-' || lpad(n::text, 5, '0'), 'Many ' || n, 'STD 1', 2027, 'Day', 'Applied', $1, $2, $3
-         from generate_series(1, 99999) n
-         where not exists (select 1 from public.leads l where l.admission_number = 'ADMSN-' || lpad(n::text, 5, '0'))
-         limit 5001`,
-        [contact.rows[0].id, batch.rows[0].id, code],
-      )
+      // Tests running alongside register applicants too, and one can take a
+      // free Admission Number before this insert lands. Skip a taken number
+      // and top up until there are exactly 5001.
+      for (let have = 0; have < 5001; ) {
+        const added = await sql.query(
+          `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id, import_batch_id, referral_code)
+           select 'ADMSN-' || lpad(n::text, 5, '0'), 'Many ' || n, 'STD 1', 2027, 'Day', 'Applied', $1, $2, $3
+           from generate_series(1, 99999) n
+           where not exists (select 1 from public.leads l where l.admission_number = 'ADMSN-' || lpad(n::text, 5, '0'))
+           limit $4
+           on conflict (admission_number) do nothing`,
+          [contact.rows[0].id, batch.rows[0].id, code, 5001 - have],
+        )
+        have += added.rowCount ?? 0
+      }
       await actAs(sql, ADMISSIONS.id)
       return sql
         .query("select public.export_leads($1, array['admission_number'])", [{ import_batch_id: batch.rows[0].id }])

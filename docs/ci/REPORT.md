@@ -124,7 +124,7 @@ Each change is one commit, measured on pull request #285 by three successful run
 |---|---|---|---|---|---|---|---|---|
 | 1 | 1 | `d025fc3` | Cancel superseded runs on pull requests only, never on main | 3 | 1305 (baseline) | 1282 | none expected | yes, for safety |
 | 2 | 2 | `9a63aa2` | Integration tests and browser tests in separate jobs | 3 | 1282 | 1052 | 230 | yes |
-| 3 | 4 | `9f6b1cc` | `node_modules` from a cache that only main saves | 3 warm | 1052 | 1082 | none in run time, 47 to 66 per job in the install step | yes |
+| 3 | 4 | `9f6b1cc` | `node_modules` from a cache that only main saves | 3 warm | 1052 | 1082 | none in run time, 47 to 65 per job in the install step | yes |
 | 4 | 5 | removed | Install only Chromium's headless shell | 3 | Install Chromium step 21 | 19 | none | no |
 | 5 | 6 | `65824e6` | Browser tests as four shards of equal measured time | 3 | 1082 | 568 | 514 | yes |
 | 6 | 5 | `c2677f6` | Install Chromium without `apt-get`'s font packages | 3 | 568 | 406 | 162 | yes |
@@ -133,6 +133,7 @@ Each change is one commit, measured on pull request #285 by three successful run
 | 9 | 6 | removed | Integration tests as two shards, without a retry | 3 | 309 | 306 | 3, inside the noise | no |
 | 10 | 2 | `32a5184` | The scope job only classifies the change | 3 | 309 | 332, with change 11 | none in run time, 3 in the scope job | yes |
 | 11 | 2 | removed | Pull two Supabase images beside the first ones | 3 | 309 | 332, with change 10 | none | no |
+| 12 | 7 | `862665e` | Sign in once per worker in browser tests that only need a session | 5 | 309 | 303 | 6 in run time, 41.5 in each shard's test step | yes |
 
 Notes on each change:
 
@@ -147,6 +148,7 @@ Notes on each change:
 9. **Two integration shards, without a retry.** The integration jobs took 186 and 178 where the single job took 269, but the run did not get shorter, because the browser shards take as long. Two of five attempts failed: `tests/integration/leads-search.test.ts` ("pages 50 at a time") and `tests/integration/interview-release-status.test.ts` both got "unavailable" after about 10 s, in the same seconds, both times. Both create and lock leads, and Vitest's split put them in one shard. The commit is gone from the branch. Data: `change-10-integration-shards.json`, runs 299, 306 and 330.
 10. **Scope job.** The helper tests and the document checks moved to a job of their own, so the job that every runtime job waits for went from a median of 11 to 8. Measured in the same runs as change 11. Data: `change-11-scope-and-early-pull.json`, runs 299, 332 and 345.
 11. **Early image pull.** The Supabase CLI pulls the realtime and storage images only after the database is up (3.3 s and 10.9 s in one shard). Pulling them in the background from the start did not help: Start local Supabase took 80 in the integration job against 71 before, and the browser shards' setup step took up to 147 against 104. The commit is gone from the branch.
+12. **Sign in once per worker.** Nearly every browser test began by signing in through the form: the page, Cloudflare's security check and the password check, about 390 times a run. `signInOnce` in `e2e/log-in.ts` signs in on the page the first time a worker needs an account and keeps the session cookies. A later test puts them into its own fresh browser and opens `/login`, which sends a signed-in browser home. Only helpers that sign in as setup and then expect the staff home changed, one line each in 58 files. The specs about signing in itself keep the form: `login`, `auth-captcha`, `sign-in-notices`, `staff-invites`, `staff-shell`, `super-admin` and both password-reset specs. No test is removed and no assertion changed. The test step went from 156.5 per shard to 115 (97 to 150 over 30 shard jobs), the tests' summed time from 1707 to 1391, and runner time from 1936 to 1729. All five attempts passed. The run barely moved, because the integration job, at 278, is now the slowest job. Data: `change-12-sign-in-once.json`, runs 279, 291, 303, 313 and 320.
 
 ## Status of each method
 

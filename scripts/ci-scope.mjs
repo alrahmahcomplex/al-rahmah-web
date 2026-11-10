@@ -70,7 +70,13 @@ export function determineScope({ eventName, event, cwd = process.cwd() }) {
       throw new Error(`Unsupported event: ${eventName}`);
     }
     const changes = parseNameStatus(git(["diff", "--name-status", "-z", "--find-renames", base, head, "--"], cwd));
-    return { ...classifyChanges(changes), base, head, changes };
+    const scope = { ...classifyChanges(changes), base, head, changes };
+    // Every merge to main runs every test. The documents-only path is for
+    // pull requests alone.
+    if (eventName === "push" && !scope.fullSuite) {
+      return { ...scope, fullSuite: true, reason: "A push to main always runs the full suite" };
+    }
+    return scope;
   } catch (error) {
     // A missing comparison never grants the documentation-only shortcut.
     return { fullSuite: true, documents: null, reason: `Full suite required: ${error.message}` };

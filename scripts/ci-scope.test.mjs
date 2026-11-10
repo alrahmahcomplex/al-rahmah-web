@@ -87,6 +87,19 @@ test("pushes inspect every commit between before and after", (t) => {
   assert.equal(determineScope({ cwd: repo.cwd, eventName: "push", event: { before: repo.initial, after: head } }).fullSuite, true);
 });
 
+test("a push runs the full suite even when only documents changed, and a pull request with the same change does not", (t) => {
+  const repo = fixture(t);
+  repo.write("README.md", "Improved\n");
+  repo.write("docs/agents/workflow.md", "A guide\n");
+  const head = repo.commit();
+  const push = determineScope({ cwd: repo.cwd, eventName: "push", event: { before: repo.initial, after: head } });
+  assert.equal(push.fullSuite, true);
+  assert.deepEqual(push.documents.sort(), ["README.md", "docs/agents/workflow.md"]);
+  assert.match(push.reason, /push to main always runs the full suite/);
+  const pullRequest = determineScope({ cwd: repo.cwd, eventName: "pull_request", event: { pull_request: { base: { sha: repo.initial }, head: { sha: head } } } });
+  assert.equal(pullRequest.fullSuite, false);
+});
+
 test("renaming code to Markdown still requires runtime checks", (t) => {
   const repo = fixture(t);
   repo.write("source.ts", "export const value = 1;\n");

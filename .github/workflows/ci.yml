@@ -91,6 +91,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Local Supabase binds host ports 55420 to 55429 (supabase/config.toml).
+      # Linux hands out ports from 32768 to 60999 to outgoing connections, and
+      # a connection that holds one of Supabase's makes the start fail with
+      # "address already in use". Reserved ports are never handed out, so this
+      # comes before the job opens any connection of its own. The runner's
+      # earlier connections can still hold one: scripts/ci-db-start.sh tries
+      # the start again for those.
+      - name: Reserve the local Supabase ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         id: node
@@ -105,16 +114,10 @@ jobs:
       - name: Install dependencies
         if: ${{ steps.modules.outputs.cache-hit != 'true' }}
         run: npm ci
-      # Local Supabase binds host ports 55420 to 55429 (supabase/config.toml).
-      # Linux hands out ports from 32768 to 60999 to outgoing connections, so
-      # an image pull could take one first and the start failed with "address
-      # already in use". Reserved ports are never handed out.
-      - name: Reserve the local Supabase ports
-        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
       # The Supabase CLI is the repo's own pinned dev dependency, the same
       # version every worktree runs.
       - name: Start local Supabase
-        run: npm run db:start
+        run: bash scripts/ci-db-start.sh
       - name: Write .env.local from the local stack
         run: npm run env:local
       - run: npm run test:integration
@@ -135,6 +138,8 @@ jobs:
         # One job for each shard of e2e/shards.json. A test keeps them equal.
         shard: [1, 2, 3, 4]
     steps:
+      - name: Reserve the local Supabase ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         id: node
@@ -149,10 +154,8 @@ jobs:
       - name: Install dependencies
         if: ${{ steps.modules.outputs.cache-hit != 'true' }}
         run: npm ci
-      - name: Reserve the local Supabase ports
-        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
       - name: Start local Supabase
-        run: npm run db:start
+        run: bash scripts/ci-db-start.sh
       - name: Write .env.local from the local stack
         run: npm run env:local
       - run: npm run build

@@ -77,13 +77,20 @@ export function determineScope({ eventName, event, cwd = process.cwd() }) {
   }
 }
 
+// The runtime jobs of .github/workflows/ci.yml. The gate fails when one is
+// missing from its `needs`, so a job added there must be added here too.
+export const runtimeJobs = ["static", "integration", "browser"];
+
 export function gateErrors(needs) {
   const errors = [];
   if (needs.scope?.result !== "success") errors.push("Scope and document checks did not succeed");
   const fullSuite = needs.scope?.outputs?.full_suite;
   if (!["true", "false"].includes(fullSuite)) errors.push("Scope did not produce a valid full_suite output");
   const expected = fullSuite === "false" ? "skipped" : "success";
-  for (const job of ["static", "database-and-browser"]) {
+  for (const job of Object.keys(needs)) {
+    if (job !== "scope" && !runtimeJobs.includes(job)) errors.push(`${job}: the gate does not know this job`);
+  }
+  for (const job of runtimeJobs) {
     if (needs[job]?.result !== expected) errors.push(`${job}: expected ${expected}, received ${needs[job]?.result ?? "missing"}`);
   }
   return errors;

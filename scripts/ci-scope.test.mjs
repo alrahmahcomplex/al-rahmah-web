@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { classifyChanges, determineScope, gateErrors, parseNameStatus } from "./ci-scope.mjs";
+import { classifyChanges, determineScope, gateErrors, parseNameStatus, runtimeJobs } from "./ci-scope.mjs";
 
 test("ordinary docs and policy docs use document checks without runtime jobs", () => {
   for (const path of ["README.md", "CHANGELOG.md", "CONTEXT.md", "AGENTS.md", "CLAUDE.md", "docs/agents/workflow.md", "docs/adr/0001.md"]) {
@@ -109,14 +109,28 @@ test("missing, zero, inaccessible and unsupported comparisons fail safe", (t) =>
 });
 
 function needs(fullSuite, result) {
-  return { scope: { result: "success", outputs: { full_suite: fullSuite } }, static: { result }, "database-and-browser": { result } };
+  return { scope: { result: "success", outputs: { full_suite: fullSuite } }, ...Object.fromEntries(runtimeJobs.map((job) => [job, { result }])) };
 }
+
+test("the gate's job list matches the workflow's gate job", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  const gate = workflow.slice(workflow.indexOf("\n  complete:"));
+  const listed = gate.match(/^    needs: \[([^\]]+)\]$/m)[1].split(",").map((job) => job.trim());
+  assert.deepEqual(listed, ["scope", ...runtimeJobs]);
+  for (const job of runtimeJobs) assert.match(workflow, new RegExp(`^  ${job}:$`, "m"), job);
+});
 
 test("completion gate accepts only the expected successful or skipped jobs", () => {
   assert.deepEqual(gateErrors(needs("true", "success")), []);
   assert.deepEqual(gateErrors(needs("false", "skipped")), []);
+  for (const job of runtimeJobs) {
+    const missing = needs("true", "success");
+    delete missing[job];
+    assert.notEqual(gateErrors(missing).length, 0, `${job} missing`);
+  }
+  assert.notEqual(gateErrors({ ...needs("true", "success"), extra: { result: "success" } }).length, 0);
   for (const fullSuite of ["true", "false"]) {
-    for (const job of ["scope", "static", "database-and-browser"]) {
+    for (const job of ["scope", ...runtimeJobs]) {
       for (const result of ["failure", "cancelled"]) {
         const state = needs(fullSuite, fullSuite === "true" ? "success" : "skipped");
         state[job].result = result;

@@ -61,12 +61,14 @@ jobs:
       - run: npm run typecheck
       - run: npm run test
 
-  database-and-browser:
-    name: Integration, build and browser tests
+  # The integration tests and the browser tests each start their own local
+  # Supabase, so neither waits for the other.
+  integration:
+    name: Integration tests
     needs: scope
     if: ${{ needs.scope.outputs.full_suite == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -81,6 +83,24 @@ jobs:
       - name: Write .env.local from the local stack
         run: npm run env:local
       - run: npm run test:integration
+
+  browser:
+    name: Build and browser tests
+    needs: scope
+    if: ${{ needs.scope.outputs.full_suite == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Start local Supabase
+        run: npm run db:start
+      - name: Write .env.local from the local stack
+        run: npm run env:local
       - run: npm run build
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -98,7 +118,7 @@ jobs:
   complete:
     name: CI complete
     if: ${{ always() }}
-    needs: [scope, static, database-and-browser]
+    needs: [scope, static, integration, browser]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

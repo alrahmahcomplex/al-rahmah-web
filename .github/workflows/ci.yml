@@ -159,8 +159,13 @@ jobs:
       - name: Write .env.local from the local stack
         run: npm run env:local
       - run: npm run build
+      # No --with-deps: the runner image already holds every shared library
+      # Chromium needs. With it, apt-get fetched nine font packages for
+      # scripts the app does not use (Japanese, Thai, Chinese, Cyrillic),
+      # which took up to 191 s on a slow mirror. If the image ever lacks a
+      # library, Playwright refuses to start the browser and names it.
       - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
       # Runs the shard's spec files, then fails unless exactly those files ran
       # and every test in them ran.
       - name: Run this shard's browser tests

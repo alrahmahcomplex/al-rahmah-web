@@ -154,18 +154,31 @@ jobs:
       - name: Install dependencies
         if: ${{ steps.modules.outputs.cache-hit != 'true' }}
         run: npm ci
-      - name: Start local Supabase
-        run: bash scripts/ci-db-start.sh
-      - name: Write .env.local from the local stack
-        run: npm run env:local
-      - run: npm run build
-      # No --with-deps: the runner image already holds every shared library
-      # Chromium needs. With it, apt-get fetched nine font packages for
-      # scripts the app does not use (Japanese, Thai, Chinese, Cyrillic),
-      # which took up to 191 s on a slow mirror. If the image ever lacks a
-      # library, Playwright refuses to start the browser and names it.
-      - name: Install Chromium
-        run: npx playwright install chromium
+      # Three things that do not need each other run at once: Supabase's images
+      # download, Chromium installs and the app builds. The build needs the
+      # NEXT_PUBLIC_ values before Supabase is up, so ci-build-env.mjs writes
+      # local Supabase's fixed ones first, and its check fails the job if the
+      # running stack reports anything else.
+      #
+      # Chromium installs with no --with-deps: the runner image already holds
+      # every shared library it needs. With it, apt-get fetched nine font
+      # packages for scripts the app does not use (Japanese, Thai, Chinese,
+      # Cyrillic), which took up to 191 s on a slow mirror. If the image ever
+      # lacks a library, Playwright refuses to start the browser and names it.
+      - name: Start local Supabase, install Chromium and build the app
+        run: |
+          node scripts/ci-build-env.mjs write
+          npx playwright install chromium > "$RUNNER_TEMP/chromium.log" 2>&1 &
+          chromium=$!
+          npm run build > "$RUNNER_TEMP/build.log" 2>&1 &
+          build=$!
+          bash scripts/ci-db-start.sh
+          npm run env:local
+          node scripts/ci-build-env.mjs check
+          wait "$build" || { cat "$RUNNER_TEMP/build.log"; exit 1; }
+          cat "$RUNNER_TEMP/build.log"
+          wait "$chromium" || { cat "$RUNNER_TEMP/chromium.log"; exit 1; }
+          tail -n 3 "$RUNNER_TEMP/chromium.log"
       # Runs the shard's spec files, then fails unless exactly those files ran
       # and every test in them ran.
       - name: Run this shard's browser tests

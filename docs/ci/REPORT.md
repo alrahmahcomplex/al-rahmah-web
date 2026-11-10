@@ -1,20 +1,20 @@
 # CI time report
 
-Work in progress on branch `claude/ci-time`. This file changes after every measured change.
+Work in progress on branch `claude/ci-time`, pull request #285. This file changes after every measured change.
 
 All times are seconds unless a unit is given. "Not measured" means no number exists. Nothing here is an estimate.
 
 ## Result so far
 
-| Event | Runs before | Dates before | Median before | p90 before | Median after | p90 after | Ratio |
-|---|---|---|---|---|---|---|---|
-| `pull_request`, full suite | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | not measured | not measured | not measured |
-| `pull_request`, all 30 runs | 30 | 2026-11-08 to 2026-11-10 | 1277 | 1539 | not measured | not measured | not measured |
-| `push` to main, full suite | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | not measured | not measured | not measured |
-| `push` to main, all 30 runs | 30 | 2026-11-06 to 2026-11-10 | 1120 | 1535 | not measured | not measured | not measured |
-| `merge_group` | 0 | none | not measured | not measured | not measured | not measured | not measured |
+| Event | Runs before | Dates before | Median before | p90 before | Runs after | Median after | p90 after | Ratio |
+|---|---|---|---|---|---|---|---|---|
+| `pull_request`, full suite | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 3, change 5 | 568 | 591 | 2.3 |
+| `pull_request`, all 30 runs | 30 | 2026-11-08 to 2026-11-10 | 1277 | 1539 | not measured | not measured | not measured | not measured |
+| `push` to main, full suite | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | not measured | not measured | not measured | not measured |
+| `push` to main, all 30 runs | 30 | 2026-11-06 to 2026-11-10 | 1120 | 1535 | not measured | not measured | not measured | not measured |
+| `merge_group` | 0 | none | not measured | not measured | 0 | not measured | not measured | not measured |
 
-The repository has no merge queue, so GitHub has never sent a `merge_group` event.
+The repository has no merge queue, so GitHub has never sent a `merge_group` event. Pushes to main can only be measured after the merge. The "after" row is the newest measured change and moves as the work goes on.
 
 ## Method
 
@@ -26,7 +26,7 @@ The repository has no merge queue, so GitHub has never sent a `merge_group` even
 - **Runner time.** The sum of every job's own duration. Sharding raises it while it lowers run time.
 - **Median.** The middle value, or the mean of the two middle values.
 - **p90.** Nearest rank: the smallest value with at least 90% of the sample at or below it.
-- **Re-run rate.** Of every run that finished as success or failure since the oldest sampled run, the share that needed a second attempt. Cancelled runs are left out.
+- **Re-run rate.** Of every run that finished as success or failure since the oldest sampled run, the share that needed a second attempt. Cancelled runs are left out. For a commit of this branch the rate means nothing, because I re-ran each run on purpose to get three measurements.
 - **Full suite and documents only.** A run whose changes are all allowlisted Markdown skips the runtime jobs. The tables keep the two kinds apart, because a 25-second documents-only run says nothing about the test suite.
 
 Step and job times have one-second resolution, because that is what the API returns.
@@ -44,9 +44,12 @@ node scripts/ci-measure.mjs fetch --event pull_request --sha <commit> --attempts
 
 # Tables from saved data. Add --json for every number.
 node scripts/ci-measure.mjs summary docs/ci/data/baseline-pull_request.json
+
+# Failed and flaky tests of the last 100 finished runs, from the job logs.
+node scripts/ci-flaky.mjs --limit 100 --out docs/ci/data/flaky-baseline.json
 ```
 
-The script wraps these `gh` calls:
+`ci-measure.mjs` wraps these `gh` calls:
 
 ```bash
 gh api -X GET "repos/{owner}/{repo}/actions/workflows/ci.yml/runs" -f event=pull_request -f status=success -f per_page=100
@@ -110,12 +113,28 @@ Full-suite pull request runs, n = 24. Steps under 3 s at p90 are left out.
 
 - The browser tests are 70% of a pull request run, 897.5 of 1280 seconds in the slowest job. Everything in that job runs in one line, one step after the other.
 - The browser tests grow with the product. On main the step took 505 s on 2026-11-06 and 1026 s on 2026-11-10. The run of 2026-11-10 had 388 tests on 2 workers.
-- Two pushes to main lost their run. Runs `42461775959` (commit `5ef6212`) and `42462546390` (commit `bf7195d`) were cancelled on 2026-11-08 when the next merge arrived, because `cancel-in-progress` applies to main as well. The next run tested their code together with its own, but a run that tests one merge alone never finished for either.
-- The runner pool is not uniform. The same `npm ci` takes 34 s on one run and 56 s on the next. Three runs cannot separate a 5% change from this noise, so small changes are judged on step times as well as on run time.
+- Two pushes to main lost their run. Runs `42461775959` (commit `5ef6212`) and `42462546390` (commit `bf7195d`) were cancelled on 2026-11-08 when the next merge arrived, because `cancel-in-progress` applied to main as well. The next run tested their code together with its own, but a run that tests one merge alone never finished for either.
+- The runner pool is not uniform. The same `npm ci` takes 13 s on one run and 56 s on the next, with the same cache hit. Three runs cannot separate a 5% change from this noise, so small changes are judged on step times as well as on run time.
 
 ## Changes
 
-None measured yet.
+Each change is one commit, measured on pull request #285 by three successful runs of that commit. "Before" is the change measured before it, so both numbers come from the same code and the same day.
+
+| # | Method | Commit | Change | Runs | Run median before | Run median after | Decrease | Kept |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 1 | `d025fc3` | Cancel superseded runs on pull requests only, never on main | 3 | 1305 (baseline) | 1282 | none expected | yes, for safety |
+| 2 | 2 | `9a63aa2` | Integration tests and browser tests in separate jobs | 3 | 1282 | 1052 | 230 | yes |
+| 3 | 4 | `9f6b1cc` | `node_modules` from a cache that only main saves | 3 warm | 1052 | 1082 | none in run time, 47 to 66 per job in the install step | yes |
+| 4 | 5 | removed | Install only Chromium's headless shell | 3 | Install Chromium step 21 | 19 | none | no |
+| 5 | 6 | `65824e6` | Browser tests as four shards of equal measured time | 3 | 1082 | 568 | 514 | yes |
+
+Notes on each change:
+
+1. **Cancel on pull requests only.** Method 1 was already in place. This commit only stops main from cancelling its own runs, so it is not a speed change. Its three runs are the control for everything after it: the unchanged pipeline at 388 browser tests. Data: `change-01-cancel-pr-only.json`, runs 1245, 1282 and 1496.
+2. **Separate jobs.** The slowest job went from 1249 to 1024. Runner time went from 1365 to 1574, because Supabase now starts twice. Data: `change-02-split-jobs.json`, runs 1046, 1052 and 1181. The same push carried `09ec42c` (reserve the Supabase ports) and the flaky-test scan, neither of which changes a step that takes a second.
+3. **`node_modules` cache.** The run median did not go down. The browser test step alone took 903 to 979 in these runs against 849 to 933 before, which is runner noise larger than the change. The step the change touches did go down in every job: `setup-node` with its npm cache plus `npm ci` took 53 (browser), 66 (integration) and 71 (static) at the median before, and restoring `node_modules` takes 5 to 6. Against the control runs, where `npm ci` happened to be fast, it is 17 to 6. The cold run, with no cache, installed in 41 s (integration job of attempt 1). That attempt failed at Start local Supabase, so there is no cold run time yet. Data: `change-04-node-modules-cache.json`, runs 1065, 1082 and 1154.
+4. **Headless shell only.** The Install Chromium step took 12, 19 and 29, against a median of 17 in the baseline and 21 in change 2. No decrease, so the commit is gone from the branch. It was measured in the same runs as change 3, on commit `5130785`.
+5. **Four shards.** The browser test step went from 909 in one job to a median of 232.5 per shard, 196 to 257 over 12 shard jobs. Runner time went from 1481 to 2119. The slowest shard job took 540 at the median and the fastest 377: the tests are balanced, but Install Chromium took 13 to 191 across the shards, and the slowest shard sets the run time. Data: `change-06-four-shards.json`, runs 501, 568 and 591. The same push carried `0ec9b50` (the rename test's locator) and `a3c16f1` (try the Supabase start again), which change no step time.
 
 ## Status of each method
 
@@ -127,4 +146,22 @@ None. Every pull request run and every push to main runs every test.
 
 ## Flaky tests
 
-Not analysed yet.
+`scripts/ci-flaky.mjs` scanned the 77 finished runs from 2026-11-07 to 2026-11-10 (`docs/ci/data/flaky-baseline.json`). "Flaky" is Playwright's word for a test that failed and then passed on its retry in the same job.
+
+| Test | Flaky | Failed after the retry | What happens |
+|---|---|---|---|
+| `e2e/marketing-agents.spec.ts` › the Manager confirms a Pending agent's name and code, approves them, and the Pending count drops | 16 | 0 | The test waits for the sidebar's Pending count to equal the database's. Another test that registers an agent in the same seconds makes them differ, and the page does not redraw. Not changed: a fix alters what the test asserts, which is the owner's call. |
+| `e2e/turnstile-placement.spec.ts` › on a phone (390px) › a check that needs a click sits above Send on the Admission review step, in `en` and in `sw` | 3 | 1, on this branch | The check's box is measured a few pixels below Send's top edge (778.97 where under 771.45 is expected). Not changed. |
+| `e2e/turnstile-placement.spec.ts`, four other tests | 0 | 1 each | Three in run `42648081424` on `claude/272-273-turnstile-followups`, the branch that was changing that screen, and one in run `42656397158` on `claude/apply-ux-concepts`. Work in progress or flaky, the logs do not say. |
+| `e2e/agent-students.spec.ts` › the agent sees a card per student | 0 | 1 | Run `42773356261` on `claude/discounts-promo-import-export`. Same doubt. |
+| `e2e/follow-up-needs-date.spec.ts` › the seeded reopened lead shows as Needs a follow-up date | 0 | 1 | Run `42672467539`, second attempt, on the same branch. Same doubt. |
+| `e2e/staff-roles.spec.ts` › a role is renamed, retired, then reactivated | 0 | 3 of 6 attempts of run `42804913691` | New with change 2. After Save name the closing dialog's title, "Rename <new name>", also matched the heading locator. Fixed in `0ec9b50` by matching the heading exactly. |
+| `e2e/record-visit.spec.ts` › a visit someone else recorded first is refused | 1 | 0 | Not analysed. |
+| `e2e/admission-form-draft.spec.ts` › Forward to a question the answers no longer allow stays put | 1 | 0 | Not analysed. |
+| Start local Supabase (a step, not a test) | | 4 runs | "failed to bind host port ...: address already in use" on port 55422 or 55424. See below. |
+
+The Vitest failures in the scan were real failures of work in progress, not flaky tests: 37 tests of `tests/unit/apply-page.test.tsx` in one run, and three files in single runs.
+
+### The Supabase port failure
+
+Supabase binds host ports 55420 to 55429, which lie inside the range Linux gives to outgoing connections (32768 to 60999). Four runs failed there: `42460099117`, `42472165346`, `42791844494` and `42821412717`. The last one failed after the ports were reserved with `ip_local_reserved_ports`, so a connection opened before the reservation still held the port. The reservation now comes first in the job, and `scripts/ci-db-start.sh` starts Supabase again, up to three times, when the log says "address already in use". It prints the socket that holds the port, so the next occurrence names its owner.

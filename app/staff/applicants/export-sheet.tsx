@@ -107,21 +107,27 @@ export function ExportSheet({
     setRefusal(null)
     const address = `${EXPORT_PATH}?${new URLSearchParams(fields)}`
     startDownload(async () => {
+      // The connection can drop before the answer or while its body is read:
+      // either way there is no file, and the sheet says so.
       let response: Response
+      let file: Blob | null = null
+      let refused: string | null = null
       try {
         response = await fetch(address, { cache: "no-store" })
+        const type = response.headers.get("Content-Type") ?? ""
+        if (response.ok && type.startsWith("text/csv")) file = await response.blob()
+        // The route's refusals are short plain text with their own status.
+        else refused = !response.ok && type.startsWith("text/plain") ? await response.text() : EXPORT_LOST
       } catch {
         setRefusal(EXPORT_LOST)
         return
       }
-      const type = response.headers.get("Content-Type") ?? ""
-      if (!response.ok || !type.startsWith("text/csv")) {
-        // The route's refusals are short plain text with their own status.
-        setRefusal(!response.ok && type.startsWith("text/plain") ? await response.text() : EXPORT_LOST)
+      if (!file) {
+        setRefusal(refused ?? EXPORT_LOST)
         return
       }
       const link = document.createElement("a")
-      link.href = URL.createObjectURL(await response.blob())
+      link.href = URL.createObjectURL(file)
       link.download = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ?? "applicants.csv"
       link.click()
       setTimeout(() => URL.revokeObjectURL(link.href), 60_000)

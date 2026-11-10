@@ -8,7 +8,7 @@ All times are seconds unless a unit is given. "Not measured" means no number exi
 
 | Event | Runs before | Dates before | Median before | p90 before | Runs after | Median after | p90 after | Ratio |
 |---|---|---|---|---|---|---|---|---|
-| `pull_request`, full suite | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 3, change 5 | 568 | 591 | 2.3 |
+| `pull_request`, full suite | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 3, change 8 | 309 | 327 | 4.2 |
 | `pull_request`, all 30 runs | 30 | 2026-11-08 to 2026-11-10 | 1277 | 1539 | not measured | not measured | not measured | not measured |
 | `push` to main, full suite | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | not measured | not measured | not measured | not measured |
 | `push` to main, all 30 runs | 30 | 2026-11-06 to 2026-11-10 | 1120 | 1535 | not measured | not measured | not measured | not measured |
@@ -127,6 +127,9 @@ Each change is one commit, measured on pull request #285 by three successful run
 | 3 | 4 | `9f6b1cc` | `node_modules` from a cache that only main saves | 3 warm | 1052 | 1082 | none in run time, 47 to 66 per job in the install step | yes |
 | 4 | 5 | removed | Install only Chromium's headless shell | 3 | Install Chromium step 21 | 19 | none | no |
 | 5 | 6 | `65824e6` | Browser tests as four shards of equal measured time | 3 | 1082 | 568 | 514 | yes |
+| 6 | 5 | `c2677f6` | Install Chromium without `apt-get`'s font packages | 3 | 568 | 406 | 162 | yes |
+| 7 | 2 | `fb568ec` | Build the app and install Chromium while Supabase starts | 3 | 406 | 387 | 19 | yes |
+| 8 | 6 | `5cf47d2` | Browser tests as six shards | 3 | 387 | 309 | 78 | yes |
 
 Notes on each change:
 
@@ -135,6 +138,9 @@ Notes on each change:
 3. **`node_modules` cache.** The run median did not go down. The browser test step alone took 903 to 979 in these runs against 849 to 933 before, which is runner noise larger than the change. The step the change touches did go down in every job: `setup-node` with its npm cache plus `npm ci` took 53 (browser), 66 (integration) and 71 (static) at the median before, and restoring `node_modules` takes 5 to 6. Against the control runs, where `npm ci` happened to be fast, it is 17 to 6. The cold run, with no cache, installed in 41 s (integration job of attempt 1). That attempt failed at Start local Supabase, so there is no cold run time yet. Data: `change-04-node-modules-cache.json`, runs 1065, 1082 and 1154.
 4. **Headless shell only.** The Install Chromium step took 12, 19 and 29, against a median of 17 in the baseline and 21 in change 2. No decrease, so the commit is gone from the branch. It was measured in the same runs as change 3, on commit `5130785`.
 5. **Four shards.** The browser test step went from 909 in one job to a median of 232.5 per shard, 196 to 257 over 12 shard jobs. Runner time went from 1481 to 2119. The slowest shard job took 540 at the median and the fastest 377: the tests are balanced, but Install Chromium took 13 to 191 across the shards, and the slowest shard sets the run time. Data: `change-06-four-shards.json`, runs 501, 568 and 591. The same push carried `0ec9b50` (the rename test's locator) and `a3c16f1` (try the Supabase start again), which change no step time.
+6. **Chromium without `apt-get`.** `playwright install --with-deps` ran `apt-get update` and installed nine font packages for Japanese, Thai, Chinese and Cyrillic text. In one shard the mirror served them at 275 kB/s, and the step took 148 s. The step went from a median of 58 (13 to 191) to 8 (7 to 9). Every shared library Chromium needs was already on the runner image, and all 388 tests passed in each of the three runs without the fonts. Data: `change-07-chromium-without-apt.json`, runs 393, 406 and 421.
+7. **Setup at the same time.** Starting Supabase, writing `.env.local`, building and installing Chromium took 77.5 + 2 + 26.5 + 8 = 114 one after the other. As one step it takes 93 (84 to 118). The build needs the `NEXT_PUBLIC_` values before Supabase is up, so `scripts/ci-build-env.mjs` writes local Supabase's fixed address and publishable key first and fails the job if the running stack reports other values. Data: `change-08-parallel-setup.json`, runs 380, 387 and 399.
+8. **Six shards.** The test step went from 236.5 per shard to 151.5 (134 to 171 over 18 shard jobs). Runner time went from 1703 to 1936. The integration job, at 269, is now the slowest job. The same push carried the nightly run, this report, and the shards' seconds measured from the four-shard run's own reports. Data: `change-09-six-shards.json`, runs 299, 309 and 327. Two more attempts failed on the placement test described under "Flaky tests".
 
 ## Status of each method
 
@@ -151,7 +157,7 @@ None. Every pull request run and every push to main runs every test.
 | Test | Flaky | Failed after the retry | What happens |
 |---|---|---|---|
 | `e2e/marketing-agents.spec.ts` › the Manager confirms a Pending agent's name and code, approves them, and the Pending count drops | 16 | 0 | The test waits for the sidebar's Pending count to equal the database's. Another test that registers an agent in the same seconds makes them differ, and the page does not redraw. Not changed: a fix alters what the test asserts, which is the owner's call. |
-| `e2e/turnstile-placement.spec.ts` › on a phone (390px) › a check that needs a click sits above Send on the Admission review step, in `en` and in `sw` | 3 | 1, on this branch | The check's box is measured a few pixels below Send's top edge (778.97 where under 771.45 is expected). Not changed. |
+| `e2e/turnstile-placement.spec.ts` › on a phone (390px) › a check that needs a click sits above Send on the Admission review step, in `en` and in `sw` | 3 | 3 attempts on this branch | The test read the title's, the check's and Send's positions one after the other while the page was still scrolling the question into place, so Send's reading came a frame later and a few pixels higher (805.64 where under 798.97 was expected, twice). With six shards it failed both tries in 2 of 5 attempts of run `42844460009`. Fixed in `b571cda`: one reading gives all three positions, and the assertions are the same. |
 | `e2e/turnstile-placement.spec.ts`, four other tests | 0 | 1 each | Three in run `42648081424` on `claude/272-273-turnstile-followups`, the branch that was changing that screen, and one in run `42656397158` on `claude/apply-ux-concepts`. Work in progress or flaky, the logs do not say. |
 | `e2e/agent-students.spec.ts` › the agent sees a card per student | 0 | 1 | Run `42773356261` on `claude/discounts-promo-import-export`. Same doubt. |
 | `e2e/follow-up-needs-date.spec.ts` › the seeded reopened lead shows as Needs a follow-up date | 0 | 1 | Run `42672467539`, second attempt, on the same branch. Same doubt. |

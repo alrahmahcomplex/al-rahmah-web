@@ -67,8 +67,8 @@ npm run build
 that server once they've checked it serves this checkout's build. Local checks
 follow the affected behavior under [Workflow](docs/agents/workflow.md). CI runs
 the full suite for application, configuration and executable-tool changes;
-allowlisted Markdown-only changes receive document checks. Every PR receives a
-final `CI complete` result.
+a PR that changes only allowlisted Markdown receives document checks. Every
+push to main runs the full suite. Every PR receives a final `CI complete` result.
 
 ## Staff sign-in
 

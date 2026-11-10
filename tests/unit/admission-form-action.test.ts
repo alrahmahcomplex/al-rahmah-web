@@ -6,7 +6,6 @@ const stubs = vi.hoisted(() => ({
   turnstile: vi.fn(),
   save: vi.fn(),
   estimate: vi.fn(),
-  discount: vi.fn(),
   client: vi.fn(),
 }))
 
@@ -38,10 +37,6 @@ vi.mock("@/lib/services/referral", () => ({
   estimateDiscountCode: (...args: unknown[]) => {
     calls.order.push("estimate")
     return stubs.estimate(...args)
-  },
-  getInterviewDiscount: (...args: unknown[]) => {
-    calls.order.push("discount")
-    return stubs.discount(...args)
   },
 }))
 
@@ -180,13 +175,11 @@ describe("sending the Admission form", () => {
 describe("checking a Discount code", () => {
   beforeEach(() => {
     stubs.estimate.mockReset().mockResolvedValue({ ok: true, data: { state: "approved", amount: 40000 } })
-    stubs.discount.mockReset().mockResolvedValue({ ok: true, data: 10000 })
   })
 
-  it("runs the rate limit with its own key, then the estimate and the discount, with no security check", async () => {
-    expect(await checkDiscountCode(" bjn -402 ")).toEqual({ status: "approved", amount: 40000, discount: 10000 })
-    expect(calls.order).toEqual(["rate-limit", "estimate", "discount"])
-    expect(stubs.discount).toHaveBeenCalledWith({ secret: "client" })
+  it("runs the rate limit with its own key, then the estimate alone, with no security check", async () => {
+    expect(await checkDiscountCode(" bjn -402 ")).toEqual({ status: "approved", amount: 40000 })
+    expect(calls.order).toEqual(["rate-limit", "estimate"])
     // IP only: a code in the key would let one IP try every code.
     expect(stubs.limit).toHaveBeenCalledWith(expect.objectContaining({ key: "code-check" }))
     expect(stubs.limit.mock.calls[0][0]).not.toHaveProperty("subject")
@@ -199,18 +192,11 @@ describe("checking a Discount code", () => {
     [{ state: "unknown", amount: 50000 }, { status: "unknown", amount: 50000 }],
     // A switched-off agent's code gives no discount, with its own note.
     [{ state: "switched_off", amount: 50000 }, { status: "switched_off", amount: 50000 }],
-  ])("passes on the estimate %j, without reading the discount", async (data, answer) => {
+    // A code of its own amount: the fee it leaves is all the form needs.
+    [{ state: "approved", amount: 25000 }, { status: "approved", amount: 25000 }],
+  ])("passes on the estimate %j", async (data, answer) => {
     stubs.estimate.mockResolvedValue({ ok: true, data })
     expect(await checkDiscountCode("ZNM-401")).toEqual(answer)
-    expect(stubs.discount).not.toHaveBeenCalled()
-  })
-
-  it("still confirms an Approved code when the discount can't be read, with no figure", async () => {
-    stubs.discount.mockResolvedValue({ ok: false, error: "unavailable" })
-    expect(await checkDiscountCode("BJN-402")).toEqual({ status: "approved", amount: 40000, discount: null })
-
-    stubs.discount.mockRejectedValue(new Error("connection reset by peer"))
-    expect(await checkDiscountCode("BJN-402")).toEqual({ status: "approved", amount: 40000, discount: null })
   })
 
   it("looks up a value that isn't a code as no code", async () => {

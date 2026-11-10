@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest"
 
 import { insightsUrl } from "@/lib/insights-url"
 
+import nextConfig from "../../next.config"
+
+describe("the referrer every page allows", () => {
+  it("is the site's origin only, so no page's query string reaches the next page or its analytics", async () => {
+    expect(await nextConfig.headers?.()).toEqual([
+      { source: "/:path*", headers: [{ key: "Referrer-Policy", value: "strict-origin" }] },
+    ])
+  })
+})
+
 describe("the address sent to Vercel Web Analytics and Speed Insights", () => {
   it("drops the query string, which holds link tokens, Discount codes and searched names", () => {
     expect(insightsUrl("https://example.test/login/reset-password?token_hash=abc123&type=recovery")).toBe(

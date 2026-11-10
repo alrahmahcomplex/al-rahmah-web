@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
     // permission a page needs.
     authInterrupts: true,
   },
+  async headers() {
+    // A page's address can hold a sign-in link token, a Discount code or a
+    // name staff searched for. The next page, and anything measuring it,
+    // learns only which site the visitor came from, never the full address.
+    return [{ source: "/:path*", headers: [{ key: "Referrer-Policy", value: "strict-origin" }] }];
+  },
   async redirects() {
     return [
       // One sign-in page for everyone (#264). Old emails, bookmarks and

@@ -607,20 +607,23 @@ function codeBody(p: QuestionsProps, next: (label?: string) => ReactElement, tit
         </NoticeBox>,
       )
     } else if (answer) {
-      const status = answer.status === "rate-limited" || answer.status === "unavailable" ? "unchecked" : answer.status
+      // The code's own amount, which a Promo code or an agent may set: the
+      // standard fee less the fee this code leaves. A confirmed code set to
+      // nothing off reads like one that gives no discount for now.
+      const saving = answer.status === "approved" ? STANDARD_INTERVIEW_FEE - answer.amount : 0
+      const status =
+        answer.status === "rate-limited" || answer.status === "unavailable"
+          ? "unchecked"
+          : answer.status === "approved" && saving <= 0
+            ? "switched_off"
+            : answer.status
       const tone = { approved: "good", pending: "wait", switched_off: "info", unknown: "bad", unchecked: "info" } as const
-      const text =
-        answer.status === "approved"
-          ? // The code's own amount, which a Promo code or an agent may set: the
-            // standard fee less the fee this code leaves.
-            copy.discountNotes.approved(tzs(STANDARD_INTERVIEW_FEE - answer.amount))
-          : copy.discountNotes[status as Exclude<typeof status, "approved">]
       notes.push(
         <NoticeBox key="status" tone={tone[status]}>
-          {text}
+          {status === "approved" ? copy.discountNotes.approved(tzs(saving)) : copy.discountNotes[status]}
         </NoticeBox>,
       )
-      if (answer.status === "approved") {
+      if (status === "approved") {
         notes.push(
           <OfferNote key="offer" pulse title={copy.offerTitle}>
             {copy.offerBody(p.children.length)}

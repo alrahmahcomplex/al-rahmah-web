@@ -63,7 +63,7 @@ async function reApplied(withWhatsApp = false) {
   }
 }
 
-const comparison = (page: Page) => page.getByRole("table", { name: "Compared with the lead" })
+const comparison = (page: Page) => page.getByRole("table", { name: "Compared with the application" })
 const row = (page: Page, field: string) => comparison(page).getByRole("row", { name: new RegExp(`^${field}`) })
 
 test.describe("comparing a re-application with its lead", () => {
@@ -73,7 +73,7 @@ test.describe("comparing a re-application with its lead", () => {
     await page.goto(`/staff/re-applications/${mine.id}`)
 
     // Side by side, the differing fields highlighted: as many as the queue counts.
-    await expect(page.getByRole("main")).toContainText("2 fields differ from the lead.")
+    await expect(page.getByRole("main")).toContainText("2 fields differ from the application.")
     await expect(comparison(page).getByText("Differs")).toHaveCount(2)
     await expect(row(page, "Class")).toContainText("STD 3")
     await expect(row(page, "Class")).toContainText("STD 4")
@@ -97,13 +97,13 @@ test.describe("comparing a re-application with its lead", () => {
 
     // The lead holds what the family sent, and its history shows the staff
     // member's edits.
-    await page.goto(`/staff/leads/${mine.leadId}`)
+    await page.goto(`/staff/applicants/${mine.leadId}`)
     await expect(page.getByRole("region", { name: "Student" })).toContainText("STD 4")
     await openLeadHistoryAsSuperAdmin(page)
     const entries = page.getByRole("list", { name: "History" }).locator(":scope > li")
     await expect(entries.nth(0)).toContainText(ADMISSIONS.name)
     await expect(entries.nth(0)).toContainText(mine.newPhone.replaceAll(" ", ""))
-    await expect(entries.nth(1)).toContainText(`${ADMISSIONS.name} changed the lead`)
+    await expect(entries.nth(1)).toContainText(`${ADMISSIONS.name} changed the application`)
     await expect(entries.nth(1)).toContainText("Class: STD 3 → STD 4")
   })
 
@@ -142,17 +142,17 @@ test.describe("comparing a re-application with its lead", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/re-applications/${reApplicationId}`)
 
-    await expect(page.getByRole("region", { name: "This lead is Archived" })).toBeVisible()
+    await expect(page.getByRole("region", { name: "This application is Archived" })).toBeVisible()
     await expect(comparison(page)).toBeVisible()
     await expect(comparison(page).getByRole("button")).toHaveCount(0)
 
     const link = page.getByRole("link", { name: "Request reopening" })
     await expect(link).toHaveAttribute(
       "href",
-      `/staff/leads/${ARCHIVED}/reopen?source=re_application&re_application=${reApplicationId}`,
+      `/staff/applicants/${ARCHIVED}/reopen?source=re_application&re_application=${reApplicationId}`,
     )
     await link.click()
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${ARCHIVED}/reopen\\?source=re_application&re_application=${reApplicationId}$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${ARCHIVED}/reopen\\?source=re_application&re_application=${reApplicationId}$`))
     await expect(page.getByRole("main")).toContainText("ADMSN-90005")
   })
 })

@@ -94,6 +94,8 @@ describe("searching by Admission Number", () => {
           // Re-applied for (supabase/seeds/30_admission_form.sql).
           returningFamily: true,
           initiallyDeclined: false,
+          // Seeded, not brought in by the student import.
+          imported: false,
           createdAt: expect.any(String),
         },
       ])

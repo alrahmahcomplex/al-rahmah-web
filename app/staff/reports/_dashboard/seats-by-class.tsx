@@ -1,5 +1,7 @@
+import { ArmchairIcon } from "lucide-react"
 import Link from "next/link"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { ClassSeatFigures, SeatsByClass } from "@/lib/services/dashboard"
@@ -44,12 +46,12 @@ export function SeatsByClassPanel({
         {!seats.ok ? (
           <p className="text-sm text-muted-foreground">These seats could not be loaded. Try again in a moment.</p>
         ) : year === null ? (
-          <p className="text-sm text-muted-foreground">No fee schedule yet</p>
+          <EmptyState icon={ArmchairIcon} title="No fee schedule yet" className="py-6 ring-0" />
         ) : (
           <>
             <SeatsTable classes={seats.data.classes} />
             <p className="text-xs text-muted-foreground">
-              A lead takes a seat once it has a Seat priority. Declined leads take none; Inactive and Archived leads keep theirs.
+              An applicant takes a seat once they have a Seat priority. Declined applicants take none; Inactive and Archived applicants keep theirs.
             </p>
             {canOpenSeats && (
               <Link

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { priorSiblingOutcome } from "@/app/staff/leads/[id]/prior-sibling-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { priorSiblingOutcome } from "@/app/staff/applicants/[id]/prior-sibling-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { FEE_DISCOUNT_NAMES } from "@/lib/services/discounts"
 import type { SetPriorSiblingError } from "@/lib/services/sibling-discount"
@@ -103,7 +103,7 @@ describe("the prior-sibling tick in the lead history", () => {
     })
   })
 
-  it("says a sibling's enrolment enrolled the lead, which keeps the discount", () => {
+  it("says a sibling's enrolment enrolled the applicant, which keeps the discount", () => {
     const at = "2026-10-10T09:00:00Z"
     const [status, profile] = describeLeadHistory(
       [
@@ -131,9 +131,9 @@ describe("the prior-sibling tick in the lead history", () => {
       ],
       {},
     )
-    expect(status.summary).toBe("enrolled the lead, because the lead's Sibling discount changed")
-    expect(profile.summary).toBe("recorded what enrolled the lead")
+    expect(status.summary).toBe("enrolled the applicant, because the applicant's Sibling discount changed")
+    expect(profile.summary).toBe("recorded what enrolled the applicant")
     expect(profile.changes).toContainEqual({ label: "Keeps the Sibling discount", from: "No", to: "Yes" })
-    expect(profile.changes).toContainEqual({ label: "Because", from: "None", to: "The lead's Sibling discount changed" })
+    expect(profile.changes).toContainEqual({ label: "Because", from: "None", to: "The applicant's Sibling discount changed" })
   })
 })

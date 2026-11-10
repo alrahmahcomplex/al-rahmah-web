@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { invitationRefusal, sentLine } from "@/app/staff/leads/[id]/group-invitation-outcome"
+import { invitationRefusal, sentLine } from "@/app/staff/applicants/[id]/group-invitation-outcome"
 
 const SENT = { year: 2027, sentAt: "2026-11-03T09:30:00Z", sentBy: "Amina Salim" }
 

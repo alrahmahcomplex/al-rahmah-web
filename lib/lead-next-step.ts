@@ -153,7 +153,7 @@ export function nextStepText(step: Exclude<NextStep, { kind: "closed" }>, format
         title: "Set the next follow-up date",
         detail:
           step.reason === "reopened"
-            ? "The lead was reopened and needs a follow-up date."
+            ? "The application was reopened and needs a follow-up date."
             : "The student did not pass and the result has gone to the family. Plan when to talk to them about a retake.",
         action: { label: "Schedule follow-up", tab: "follow-ups", anchor: "lead-follow-ups", permission: "follow_ups.record" },
       }
@@ -167,7 +167,7 @@ export function nextStepText(step: Exclude<NextStep, { kind: "closed" }>, format
       return step.retake
         ? {
             title: "Register the retaken interview",
-            detail: "The lead was reopened for a retaken interview. Registering gives the student a new S/N.",
+            detail: "The application was reopened for a retaken interview. Registering gives the student a new S/N.",
             action: { label: "Register retaken interview", tab: "interview", anchor: "lead-interview", permission: "interviews.record" },
           }
         : {

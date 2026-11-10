@@ -75,7 +75,7 @@ test.describe("a parent whose number is on file", () => {
     }
 
     await row.getByRole("link", { name: `Open ${family.child}` }).click()
-    await expect(page).toHaveURL(/\/staff\/leads\/[0-9a-f-]{36}$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/[0-9a-f-]{36}$/)
     await expect(page.getByRole("heading", { name: family.child, level: 1 })).toBeVisible()
   })
 
@@ -213,7 +213,7 @@ test.describe("a parent whose number is on file", () => {
     await expect(row).toContainText("Archived")
 
     await row.getByRole("link", { name: "Reopening request for Hamisi Fixture" }).click()
-    await expect(page).toHaveURL(/\/staff\/leads\/1ead0000-0000-4000-8000-000000000005\/reopen\?source=duplicate_match$/)
+    await expect(page).toHaveURL(/\/staff\/applicants\/1ead0000-0000-4000-8000-000000000005\/reopen\?source=duplicate_match$/)
     await expect(page.getByRole("heading", { name: "Hamisi Fixture", level: 1 })).toBeVisible()
     await expect(page.getByLabel("Why is the family back?")).toBeVisible()
   })

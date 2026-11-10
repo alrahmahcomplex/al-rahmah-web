@@ -88,8 +88,8 @@ describe("a refused Family lookup", () => {
 
 describe("where a listed child leads", () => {
   it("opens an active child's lead", () => {
-    expect(childHref({ id: "l1", status: "Visited", closure: null })).toBe("/staff/leads/l1")
-    expect(childHref({ id: "l2", status: "Applied", closure: null })).toBe("/staff/leads/l2")
+    expect(childHref({ id: "l1", status: "Visited", closure: null })).toBe("/staff/applicants/l1")
+    expect(childHref({ id: "l2", status: "Applied", closure: null })).toBe("/staff/applicants/l2")
   })
 
   it("sends a Declined, Inactive or Archived child to the Reopening request hand-off", () => {
@@ -98,7 +98,7 @@ describe("where a listed child leads", () => {
       { id: "l4", status: "Visited" as const, closure: "Inactive" as const },
       { id: "l5", status: "Enrolled" as const, closure: "Archived" as const },
     ]) {
-      expect(childHref(child)).toBe(`/staff/leads/${child.id}/reopen?source=duplicate_match`)
+      expect(childHref(child)).toBe(`/staff/applicants/${child.id}/reopen?source=duplicate_match`)
     }
   })
 })

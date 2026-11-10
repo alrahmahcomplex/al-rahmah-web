@@ -93,7 +93,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
                 Seats by class
               </h2>
               <p className="text-sm text-muted-foreground">
-                A lead takes a seat once it has a Seat priority. Declined leads take none; Inactive and Archived leads keep theirs.
+                An applicant takes a seat once they have a Seat priority. Declined applicants take none; Inactive and Archived applicants keep theirs.
               </p>
               <Table aria-label="Seats by class">
                 <TableHeader>

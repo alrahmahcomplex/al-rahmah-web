@@ -52,6 +52,9 @@ function fakeSupabase({
   getUserError = null as { message: string; status?: number } | null,
   verifyError = null as { message: string; code?: string; status?: number } | null,
   updateError = null as { message: string; code?: string; status?: number } | null,
+  // What getClaims answers while a session is held; `claimsThrow` makes it throw.
+  claims = { data: { claims: { sub: "user" } }, error: null } as { data: unknown; error: unknown },
+  claimsThrow = null as Error | null,
 } = {}) {
   const calls: string[] = []
   let signedIn = startSignedIn
@@ -70,6 +73,10 @@ function fakeSupabase({
           ? { data: { user: { id: "user" } }, error: null }
           : { data: { user: null }, error: signedIn ? getUserError : { message: "Auth session missing!", status: 400 } },
       ),
+      getClaims: vi.fn(async () => {
+        if (claimsThrow) throw claimsThrow
+        return signedIn && sessionUser ? claims : { data: null, error: null }
+      }),
       signOut,
       verifyOtp: vi.fn(async () => {
         calls.push("verifyOtp")
@@ -169,10 +176,37 @@ describe("getStaffUser", () => {
     expect(await getStaffUser(client)).toEqual({ ok: true, data: MANAGER })
   })
 
-  it("reports a visitor with no session as signed out", async () => {
-    const { client } = fakeSupabase({ sessionUser: false })
+  it("reports a visitor with no session as signed out, without reading a staff record", async () => {
+    const { client, rpc } = fakeSupabase({ sessionUser: false })
 
     expect(await getStaffUser(client)).toEqual({ ok: false, error: "signed-out" })
+    expect(rpc).not.toHaveBeenCalled()
+  })
+
+  // A forged, expired or unverifiable token, or an outage while checking it,
+  // never reaches the staff record read.
+  it("fails closed as signed out when the session token fails its check", async () => {
+    for (const claims of [
+      { data: null, error: { name: "AuthInvalidJwtError", message: "Invalid JWT signature", status: 400 } },
+      { data: null, error: { name: "AuthSessionMissingError", message: "Auth session missing!", status: 400 } },
+      { data: null, error: { name: "AuthRetryableFetchError", message: "fetch failed", status: 0 } },
+      { data: { claims: { sub: "" } }, error: null },
+      { data: { claims: {} }, error: null },
+    ]) {
+      const { client, rpc } = fakeSupabase({ claims })
+
+      expect(await getStaffUser(client)).toEqual({ ok: false, error: "signed-out" })
+      expect(rpc).not.toHaveBeenCalled()
+    }
+  })
+
+  it("fails closed as signed out when checking the token throws", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {})
+    const { client, rpc } = fakeSupabase({ claimsThrow: new TypeError("crypto failed") })
+
+    expect(await getStaffUser(client)).toEqual({ ok: false, error: "signed-out" })
+    expect(rpc).not.toHaveBeenCalled()
+    quiet.mockRestore()
   })
 
   it("refuses a session whose staff member has since been deactivated", async () => {

@@ -85,9 +85,9 @@ type Copy = {
   anchorWithout: string
   anchorWith: string
   anchorSave: (amount: string) => string
-  // `approved` takes the discount per student as written ("TZS 10,000"), or
-  // null when it couldn't be read, and then names no figure.
-  discountNotes: { approved: (discount: string | null) => string } & Record<"pending" | "switched_off" | "unknown" | "unchecked", string>
+  // `approved` takes the code's own discount per student as written
+  // ("TZS 10,000"): the standard fee less the fee the code leaves.
+  discountNotes: { approved: (discount: string) => string } & Record<"pending" | "switched_off" | "unknown" | "unchecked", string>
   offerTitle: string
   offerBody: (students: number) => string
   feeQ: string
@@ -215,8 +215,7 @@ export const COPY: Record<Language, Copy> = {
     anchorWith: "Ukiwa na code",
     anchorSave: (amount) => `Okoa ${amount}`,
     discountNotes: {
-      approved: (discount) =>
-        discount ? `Hongera! Umeokoa ${discount} kwa kila mwanafunzi.` : "Hongera! Code imethibitishwa: kuna punguzo kwenye ada ya usaili kwa kila mwanafunzi.",
+      approved: (discount) => `Hongera! Umeokoa ${discount} kwa kila mwanafunzi.`,
       pending: "Code hii inasubiri kuthibitishwa. Punguzo litatumika ikithibitishwa kabla hujalipa.",
       switched_off: "Code hii haitoi punguzo kwa sasa. Unaweza kutuma fomu.",
       unknown: "Hatuitambui code hii. Ihakiki, au tuma fomu bila code.",
@@ -368,8 +367,7 @@ export const COPY: Record<Language, Copy> = {
     anchorWith: "With a code",
     anchorSave: (amount) => `Save ${amount}`,
     discountNotes: {
-      approved: (discount) =>
-        discount ? `Well done! You save ${discount} for each student.` : "Well done! The code is confirmed: the interview fee is lower for each student.",
+      approved: (discount) => `Well done! You save ${discount} for each student.`,
       pending: "This code is waiting to be confirmed. The discount applies if it is confirmed before you pay.",
       switched_off: "This code gives no discount at the moment. You can still send the form.",
       unknown: "We don't recognise this code. Check it, or send the form without it.",

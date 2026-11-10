@@ -26,6 +26,13 @@ export const PERMISSIONS = [
   // The Reports page (#241), once shown to holders of the retired
   // staff.administer.
   "reports.view",
+  // The standard interview discount, each agent's own amount and Promo
+  // codes: one permission for all three (owner decision of 2026-11-09).
+  "discount_codes.manage",
+  // The student import and export. The export's contact columns need
+  // leads.export; its full columns only the Super Admin, never a permission.
+  "leads.import",
+  "leads.export",
 ] as const
 
 // Never offered on a role, so the Roles tab leaves it out.
@@ -34,11 +41,16 @@ export const RESERVED_PERMISSIONS: readonly Permission[] = ["audit.view"]
 export type Permission = (typeof PERMISSIONS)[number]
 
 // A permission that is useless without another (#244): every Reports count is
-// answered only under leads.view. The database keeps each pair together
-// (supabase/migrations/20261130990700_reports_imply_leads.sql); the role
-// screen uses this to tick and untick them together and say why.
+// answered only under leads.view, and so is every discount and export
+// screen; the import creates leads. The database keeps each pair together
+// (supabase/migrations/20261204130100_discount_import_export_permissions.sql);
+// the role screen uses this to tick and untick them together and say why.
+// No needed permission needs another, so one step is always enough.
 export const PERMISSION_NEEDS: Readonly<Partial<Record<Permission, Permission>>> = {
   "reports.view": "leads.view",
+  "discount_codes.manage": "leads.view",
+  "leads.import": "leads.create",
+  "leads.export": "leads.view",
 }
 
 // The other permissions that change when `permission` is ticked or unticked

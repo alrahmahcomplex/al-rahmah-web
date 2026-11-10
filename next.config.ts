@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
     // permission a page needs.
     authInterrupts: true,
   },
+  async headers() {
+    // A page's address can hold a sign-in link token, a Discount code or a
+    // name staff searched for. The next page, and anything measuring it,
+    // learns only which site the visitor came from, never the full address.
+    return [{ source: "/:path*", headers: [{ key: "Referrer-Policy", value: "strict-origin" }] }];
+  },
   async redirects() {
     return [
       // One sign-in page for everyone (#264). Old emails, bookmarks and
@@ -15,6 +21,10 @@ const nextConfig: NextConfig = {
       // Every reset lands on one page (#265). Reset links sent before it
       // keep working: the query, token and all, comes along.
       { source: "/discount-code/reset-password", destination: "/login/reset-password", permanent: true },
+      // The staff list of applicants moved from /staff/leads. Bookmarks and
+      // links in old messages keep working, query and all.
+      { source: "/staff/leads", destination: "/staff/applicants", permanent: true },
+      { source: "/staff/leads/:path*", destination: "/staff/applicants/:path*", permanent: true },
       {
         // An invite link lands on the site root when it was sent with no
         // redirect (from the Supabase dashboard, for the first staff member)

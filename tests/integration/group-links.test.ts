@@ -72,9 +72,10 @@ describe("the group-link permission on a fresh database", () => {
 
   test("takes the next position in the permission list", async () => {
     const { data } = await secretClient().from("permissions").select("name, position").order("position")
-    // audit.view (#237) and reports.view (#241) came after it.
+    // audit.view (#237), reports.view (#241) and the discount, import and
+    // export permissions came after it.
     expect(data?.find((p) => p.name === "group_links.manage")).toEqual({ name: "group_links.manage", position: 19 })
-    expect(data?.slice(-2)).toEqual([
+    expect(data?.filter((p) => p.position === 20 || p.position === 21)).toEqual([
       { name: "audit.view", position: 20 },
       { name: "reports.view", position: 21 },
     ])

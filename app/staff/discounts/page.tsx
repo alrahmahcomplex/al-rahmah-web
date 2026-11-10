@@ -1,15 +1,17 @@
+import { BadgePercentIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { listPendingDiscountRequests } from "@/lib/services/discounts"
 import { createClient } from "@/utils/supabase/server"
 
-import { DecideDiscount } from "../leads/[id]/decide-discount"
-import { canDecideDiscount, discountLabel } from "../leads/[id]/discount-outcome"
-import { dayOf } from "../leads/[id]/reopening-outcome"
-import { leadTabHref } from "../leads/[id]/tabs"
+import { DecideDiscount } from "../applicants/[id]/decide-discount"
+import { canDecideDiscount, discountLabel } from "../applicants/[id]/discount-outcome"
+import { dayOf } from "../applicants/[id]/reopening-outcome"
+import { leadTabHref } from "../applicants/[id]/tabs"
 import { requireStaff } from "../session"
 
 export const metadata: Metadata = {
@@ -40,7 +42,7 @@ export default async function DiscountRequestsPage() {
           <AlertDescription>Discount requests could not be loaded. Try again in a moment.</AlertDescription>
         </Alert>
       ) : requests.data.length === 0 ? (
-        <p className="text-sm text-slate-700">No discount requests are waiting.</p>
+        <EmptyState icon={BadgePercentIcon} title="No discount requests are waiting." className="max-w-3xl" />
       ) : (
         <ol aria-label="Pending discount requests" className="flex max-w-3xl flex-col gap-3">
           {requests.data.map((request) => (
@@ -67,7 +69,7 @@ export default async function DiscountRequestsPage() {
               </p>
               <p className="text-sm break-words whitespace-pre-line text-slate-900">{request.note}</p>
               {!request.leadOpen && (
-                <p className="text-sm text-slate-700">This lead is closed. It can be granted only after it is reopened.</p>
+                <p className="text-sm text-slate-700">This application is closed. It can be granted only after it is reopened.</p>
               )}
               <DecideDiscount
                 leadId={request.leadId}

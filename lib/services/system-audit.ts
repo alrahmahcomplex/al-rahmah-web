@@ -11,7 +11,7 @@ import type { Result } from "./result"
 export type AuditArea = "lead" | "payment" | "staff_admin"
 
 export const AUDIT_AREAS: readonly { value: AuditArea; label: string }[] = [
-  { value: "lead", label: "Leads" },
+  { value: "lead", label: "Applicants" },
   { value: "payment", label: "Payments" },
   { value: "staff_admin", label: "Staff administration" },
 ]

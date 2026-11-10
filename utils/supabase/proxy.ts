@@ -35,13 +35,20 @@ export async function refreshSessionAndGuardStaffRoutes(request: NextRequest) {
     },
   })
 
-  // Nothing may run between createServerClient and getUser, or sessions can
-  // drop at random. getUser (not getSession) revalidates the token.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // Nothing may run between createServerClient and getClaims, or sessions can
+  // drop at random. getClaims refreshes an expiring session the same way
+  // getUser did, and (unlike getSession) verifies the token: locally with the
+  // project's signing keys, or through the Auth server for a project still on
+  // the legacy shared secret. No claims, an error or a throw is signed out.
+  let signedIn = false
+  try {
+    const { data, error } = await supabase.auth.getClaims()
+    signedIn = !error && typeof data?.claims.sub === "string" && data.claims.sub !== ""
+  } catch (error) {
+    console.error("Could not check the session token", error)
+  }
 
-  const signInFor = !user ? signInPage(request.nextUrl.pathname) : null
+  const signInFor = !signedIn ? signInPage(request.nextUrl.pathname) : null
   if (signInFor) {
     const redirectTo = request.nextUrl.clone()
     redirectTo.pathname = signInFor

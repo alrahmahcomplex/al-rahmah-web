@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { registeredOutcome, registerOutcome } from "@/app/staff/leads/[id]/interview-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { registeredOutcome, registerOutcome } from "@/app/staff/applicants/[id]/interview-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { nextActionOf, type RegisterError } from "@/lib/services/interviews"
 
@@ -33,8 +33,8 @@ describe("registerOutcome", () => {
   })
 
   it("tells staff why a closed or Enrolled lead can't be registered", () => {
-    expect(registerOutcome("lead_closed").message).toBe("This lead is closed, so it can't be registered for interview.")
-    expect(registerOutcome("lead_enrolled").message).toBe("This lead is already Enrolled, so it doesn't need an interview.")
+    expect(registerOutcome("lead_closed").message).toBe("This application is closed, so the applicant can't be registered for interview.")
+    expect(registerOutcome("lead_enrolled").message).toBe("This student is already Enrolled, so they don't need an interview.")
   })
 })
 
@@ -74,7 +74,7 @@ describe("an interview registration in the lead's history", () => {
         id: 7,
         at: "2026-10-01T07:15:00Z",
         actor: "Test Admissions",
-        summary: "registered the lead for interview",
+        summary: "registered the applicant for interview",
         changes: [
           { label: "S/N", from: null, to: "12" },
           { label: "S/N enrollment year", from: null, to: "2027" },
@@ -128,14 +128,14 @@ describe("a retaken interview in the lead's history", () => {
     const described = describeLeadHistory([retakeResult, retakeRegistration, firstResult, firstRegistration], {})
     expect(described.map((e) => e.summary)).toEqual([
       "recorded the interview result (S/N 31)",
-      "registered the lead for a retaken interview (S/N 31)",
+      "registered the applicant for a retaken interview (S/N 31)",
       "recorded the interview result (S/N 12)",
-      "registered the lead for interview (S/N 12)",
+      "registered the applicant for interview (S/N 12)",
     ])
   })
 
   it("reads as before for a lead with one interview", () => {
     const described = describeLeadHistory([firstResult, firstRegistration], {})
-    expect(described.map((e) => e.summary)).toEqual(["recorded the interview result", "registered the lead for interview"])
+    expect(described.map((e) => e.summary)).toEqual(["recorded the interview result", "registered the applicant for interview"])
   })
 })

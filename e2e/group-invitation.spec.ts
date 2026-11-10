@@ -187,10 +187,10 @@ test.describe("the group invitation on a lead's screen", () => {
       await expect(panel(page)).toContainText("Sent with an earlier link. Send it again to give the family the current one.")
     }
 
-    await page.goto("/staff/leads")
+    await page.goto("/staff/applicants")
     await page.getByLabel("Group invitation").selectOption(String(year))
-    await expect(page).toHaveURL(`/staff/leads?earlier_link=${year}`)
-    const rows = page.getByRole("table", { name: "Leads" }).getByRole("row")
+    await expect(page).toHaveURL(`/staff/applicants?earlier_link=${year}`)
+    const rows = page.getByRole("table", { name: "Applicants" }).getByRole("row")
     await expect(rows).toHaveCount(3)
     await expect(page.getByRole("link", { name: sender.studentName })).toBeVisible()
     await expect(page.getByRole("link", { name: sibling.studentName })).toBeVisible()

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { enrolledBy } from "@/app/staff/leads/[id]/enrolment-text"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { enrolledBy } from "@/app/staff/applicants/[id]/enrolment-text"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import { formatDate } from "@/lib/school-calendar"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
@@ -55,11 +55,11 @@ describe("Enrolled in the lead's history", () => {
     const [status, profile] = describeLeadHistory(enrolledBy_("2026-10-05T07:15:00Z", 10), {})
     expect(status).toMatchObject({
       actor: "Test Accountant",
-      summary: "enrolled the lead, because a school-fee payment was recorded",
+      summary: "enrolled the applicant, because a school-fee payment was recorded",
       changes: [{ label: "Status", from: "Interviewed", to: "Enrolled" }],
     })
     expect(profile).toMatchObject({
-      summary: "recorded what enrolled the lead",
+      summary: "recorded what enrolled the applicant",
       changes: [
         { label: "Enrolled by", from: null, to: "A school-fee payment" },
         { label: "Enrolled on", from: null, to: formatDate("2026-10-04") },
@@ -91,9 +91,9 @@ describe("Enrolled in the lead's history", () => {
       ],
       {},
     )
-    expect(described[0].summary).toBe("took the lead out of Enrolled, because the Fee schedule changed")
+    expect(described[0].summary).toBe("took the applicant out of Enrolled, because the Fee schedule changed")
     expect(described[1]).toMatchObject({
-      summary: "cleared what enrolled the lead",
+      summary: "cleared what enrolled the applicant",
       changes: [
         { label: "Enrolled by", from: "A school-fee payment", to: "None" },
         { label: "Enrolled on", from: formatDate("2026-10-04"), to: "None" },
@@ -120,7 +120,7 @@ describe("Enrolled in the lead's history", () => {
       {},
     )
     expect(described[0]).toMatchObject({
-      summary: "updated what enrolled the lead",
+      summary: "updated what enrolled the applicant",
       changes: [{ label: "Enrolled on", from: formatDate("2026-10-04"), to: formatDate("2026-10-03") }],
     })
   })
@@ -130,7 +130,7 @@ describe("Enrolled in the lead's history", () => {
       [entry({ changes: [change("status", "Enrolled", "Declined"), change("declined_reason", null, "Family changed plans")] })],
       {},
     )
-    expect(described.summary).toBe("declined the lead")
+    expect(described.summary).toBe("declined the application")
   })
 })
 

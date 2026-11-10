@@ -90,7 +90,7 @@ test.describe("switching an agent off and retiring them", () => {
     await expect(row).toContainText(`Switched off by ${MANAGER.name} on`)
     await expect(row.getByRole("button", { name: `Switch on ${agent.fullName}` })).toBeVisible()
 
-    await page.goto(`/staff/leads/${lead.leadId}`)
+    await page.goto(`/staff/applicants/${lead.leadId}`)
     const panel = page.getByRole("region", { name: "Referral code" })
     await expect(panel).toContainText("Switched off")
     await expect(panel.getByLabel("Expected interview fee")).toHaveText("TZS 50,000")

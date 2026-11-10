@@ -1,7 +1,9 @@
+import { ScrollTextIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -119,9 +121,11 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
         </Alert>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
-            {page.data.total === 0 ? "Nothing matches." : `${page.data.total} ${page.data.total === 1 ? "entry" : "entries"}`}
-          </p>
+          {page.data.total === 0 ? (
+            <EmptyState icon={ScrollTextIcon} title="Nothing matches." className="max-w-4xl" />
+          ) : (
+            <p className="text-sm text-muted-foreground">{`${page.data.total} ${page.data.total === 1 ? "entry" : "entries"}`}</p>
+          )}
           <Entries entries={page.data.entries} />
           {page.data.pageCount > 1 && (
             <nav aria-label="Audit pages" className="flex items-center gap-3 text-sm">
@@ -158,7 +162,7 @@ function Entries({ entries }: { entries: AuditEntry[] }) {
             <span>{entry.table ? `${entry.action} on ${entry.table}` : entry.action}</span>
             <Badge variant="outline">{AREA_LABELS[entry.area] ?? entry.area}</Badge>
             {entry.leadId && entry.admissionNumber && (
-              <Link href={`/staff/leads/${entry.leadId}/history`} className="font-mono text-xs underline underline-offset-4">
+              <Link href={`/staff/applicants/${entry.leadId}/history`} className="font-mono text-xs underline underline-offset-4">
                 {entry.admissionNumber}
               </Link>
             )}

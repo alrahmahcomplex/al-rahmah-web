@@ -1,8 +1,10 @@
+import { MailCheckIcon, MegaphoneIcon, SearchXIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Form from "next/form"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -18,6 +20,7 @@ import {
   readInviteBudgetConfig,
   type BatchOutcome,
 } from "@/lib/services/agent-invite-batches"
+import { getStandardDiscountSummary, type StandardDiscountSummary } from "@/lib/services/discount-codes"
 import { getEmailClaimQueue, getSignUpNotes, type SignUpNote } from "@/lib/services/agent-email-claims"
 import { getAgentAccountCounts, getAgentInvites, type AgentInviteNote } from "@/lib/services/agent-invites"
 import { getPendingAgentCount, listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
@@ -31,12 +34,15 @@ import { AgentStatusActions } from "./agent-status-actions"
 import { ApproveAgent } from "./approve-agent"
 import { ClaimQueue } from "./claim-queue"
 import { CreateAgent } from "./create-agent"
+import { AgentDiscount, type DiscountAgent } from "./discount-sheet"
+import { tzs } from "./discount-outcome"
 import { SendInvites } from "./invite-batch"
 import { budgetLine } from "./invite-batch-outcome"
 import { InviteBatchReportPanel } from "./invite-batch-report"
 import { inviteLine, needsAttention } from "./invite-outcome"
 import { RecreateAgent } from "./recreate-agent"
 import { statusChangeLine } from "./outcome"
+import { StandardDiscount } from "./standard-discount-sheet"
 import { accountParam, agentsHref, outcomeParam, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
 
 // Send invites runs as a Server Action of this page, one invite at a time,
@@ -91,6 +97,7 @@ export default async function MarketingAgentsPage({
   const staff = await requireStaff()
   if (!staff.permissions.includes("leads.view")) forbidden()
   const canApprove = staff.permissions.includes("agents.approve")
+  const canManageDiscounts = staff.permissions.includes("discount_codes.manage")
 
   const search = parseAgentSearch(await searchParams, canApprove)
   const supabase = await createClient()
@@ -100,7 +107,7 @@ export default async function MarketingAgentsPage({
   // "Awaiting email confirmation" shows the claim queue in place of the list.
   const showsQueue = search.account === "awaiting_confirmation" && !search.batchOutcome
   const budgetConfig = readInviteBudgetConfig()
-  const [results, batch, access, counts, pendingCount, inviteBatch, budgetUsed, queue] = await Promise.all([
+  const [results, batch, access, counts, pendingCount, inviteBatch, budgetUsed, queue, standard] = await Promise.all([
     search.batchId && search.batchOutcome
       ? listAgentsInBatchOutcome(supabase, search.batchId, search.batchOutcome, { query: search.query, page: search.page })
       : search.account
@@ -119,6 +126,7 @@ export default async function MarketingAgentsPage({
       : null,
     canApprove && search.account === "no_account" && budgetConfig ? getInviteBudgetUsed(supabase) : null,
     showsQueue ? getEmailClaimQueue(supabase) : null,
+    getStandardDiscountSummary(supabase),
   ])
   // The invite badge and line, and any code typed at sign-up, for each agent
   // on this page.
@@ -143,6 +151,18 @@ export default async function MarketingAgentsPage({
       </div>
 
       <AgentAccessBanner access={access} />
+
+      {standard.ok ? (
+        <StandardDiscount
+          amount={standard.data.amount}
+          agentsOnStandard={standard.data.approvedAgentsOnStandard}
+          canManage={canManageDiscounts}
+        />
+      ) : (
+        <Alert variant="destructive">
+          <AlertDescription>The standard discount could not be loaded. Try again in a moment.</AlertDescription>
+        </Alert>
+      )}
 
       <div className="flex flex-col gap-4">
         {/* Keyed on the URL, so the box shows the search the page is showing. */}
@@ -291,11 +311,13 @@ export default async function MarketingAgentsPage({
           </Alert>
         ) : (
           <section aria-label="Results" className="flex flex-col gap-3">
-            <p className="text-sm text-muted-foreground" aria-live="polite">
-              {queue.data.length === 0
-                ? "No email claims are waiting."
-                : `${queue.data.length} ${queue.data.length === 1 ? "agent" : "agents"} awaiting email confirmation, oldest first`}
-            </p>
+            {queue.data.length === 0 ? (
+              <EmptyState role="status" icon={MailCheckIcon} title="No email claims are waiting." />
+            ) : (
+              <p className="text-sm text-muted-foreground" aria-live="polite">
+                {`${queue.data.length} ${queue.data.length === 1 ? "agent" : "agents"} awaiting email confirmation, oldest first`}
+              </p>
+            )}
             {queue.data.length > 0 && <ClaimQueue entries={queue.data} canApprove={canApprove} />}
           </section>
         )
@@ -310,6 +332,8 @@ export default async function MarketingAgentsPage({
           canApprove={canApprove}
           invites={invites?.ok ? invites.data : null}
           signUpNotes={signUpNotes?.ok ? signUpNotes.data : null}
+          standard={standard.ok ? standard.data : null}
+          canManageDiscounts={canManageDiscounts}
         />
       )}
     </div>
@@ -351,6 +375,8 @@ function Results({
   canApprove,
   invites,
   signUpNotes,
+  standard,
+  canManageDiscounts,
 }: {
   results: AgentList
   search: AgentScreenSearch
@@ -359,6 +385,9 @@ function Results({
   invites: Map<string, AgentInviteNote> | null
   // Codes typed at sign-up that weren't adopted; null when unread.
   signUpNotes: Map<string, SignUpNote> | null
+  // Null when it couldn't be read: the amounts show without their sheet.
+  standard: StandardDiscountSummary | null
+  canManageDiscounts: boolean
 }) {
   const { agents, total, page, pageCount } = results
   const empty = search.query
@@ -371,24 +400,29 @@ function Results({
 
   return (
     <section aria-label="Results" className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground" aria-live="polite">
-        {total === 0 ? empty : `${total} ${total === 1 ? "agent" : "agents"}`}
-      </p>
+      {total === 0 ? (
+        <EmptyState role="status" icon={search.query ? SearchXIcon : MegaphoneIcon} title={empty} />
+      ) : (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {`${total} ${total === 1 ? "agent" : "agents"}`}
+        </p>
+      )}
 
       {agents.length > 0 && (
         <div className="relative overflow-x-auto rounded-lg ring-1 ring-foreground/10">
           {/* Relative, so the table's screen-reader-only text scrolls with it
               instead of widening the page on a phone. */}
-          <table aria-label="Marketing Agents" className="w-full min-w-[52rem] text-left text-sm">
+          <table aria-label="Marketing Agents" className="w-full min-w-[60rem] text-left text-sm">
             <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">Name</th>
                 <th scope="col" className="px-3 py-2 font-medium">Phone</th>
                 <th scope="col" className="px-3 py-2 font-medium">Code</th>
                 <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                <th scope="col" className="px-3 py-2 font-medium">Interview discount</th>
                 <th scope="col" className="px-3 py-2 font-medium">Registered</th>
                 <th scope="col" className="px-3 py-2 font-medium">Approved</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Leads</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Applicants</th>
                 {canApprove && (
                   <th scope="col" className="px-3 py-2 font-medium">
                     <span className="sr-only">Actions</span>
@@ -435,6 +469,17 @@ function Results({
                       <p className="mt-1 max-w-64 text-xs text-muted-foreground">{statusChangeLine(agent)}</p>
                     )}
                     <InviteState note={invites?.get(agent.id)} />
+                  </td>
+                  <td className="px-3 py-2">
+                    {/* A retired record has no actions left, so its amount is text. */}
+                    {standard && !agent.retiredAt ? (
+                      <AgentDiscount agent={discountAgent(agent)} standard={standard.amount} canManage={canManageDiscounts} />
+                    ) : (
+                      <span className="whitespace-nowrap">
+                        <span className="font-medium text-slate-900 tabular-nums">{tzs(agent.discountAmount)}</span>{" "}
+                        <span className="text-muted-foreground">{agent.interviewDiscount === null ? "standard" : "own amount"}</span>
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     <time dateTime={agent.registeredAt}>{WHEN.format(new Date(agent.registeredAt))}</time>
@@ -511,6 +556,27 @@ function Results({
       )}
     </section>
   )
+}
+
+// An agent as the discount sheet shows them.
+function discountAgent(agent: AgentList["agents"][number]): DiscountAgent {
+  const status: DiscountAgent["status"] = agent.retiredAt
+    ? { label: "Retired", tone: "bad" }
+    : agent.switchedOffAt
+      ? { label: "Switched off", tone: "bad" }
+      : agent.status === "Approved"
+        ? { label: "Approved", tone: "good" }
+        : { label: "Pending", tone: "warn" }
+  return {
+    id: agent.id,
+    fullName: agent.fullName,
+    code: agent.code,
+    phone: displayPhone(agent.phone),
+    status,
+    studentCount: agent.leadCount,
+    interviewDiscount: agent.interviewDiscount,
+    retired: agent.retiredAt !== null,
+  }
 }
 
 function InviteState({ note }: { note: AgentInviteNote | undefined }) {

@@ -122,7 +122,7 @@ test("the lead's Referral code editor shows the reminder once a code is typed", 
   if (!created.ok) throw new Error(`setup failed: ${JSON.stringify(created.error)}`)
 
   await signIn(page, ADMISSIONS)
-  await page.goto(`/staff/leads/${created.data.leadId}`)
+  await page.goto(`/staff/applicants/${created.data.leadId}`)
   const panel = page.getByRole("region", { name: "Referral code" })
   await panel.getByRole("button", { name: "Add a code" }).click()
   const reminder = panel.getByText(STAFF_REMINDER)

@@ -105,7 +105,7 @@ export function ArrivalSearch({ canRegister }: { canRegister: boolean }) {
       {outcome && nothing && (
         <Alert variant="destructive" role="alert" className="gap-3 p-3">
           <AlertTitle>
-            {outcome.status === "not-found" ? "No lead with this Admission Number" : `No student matches “${outcome.query}”`}
+            {outcome.status === "not-found" ? "No applicant with this Admission Number" : `No student matches “${outcome.query}”`}
           </AlertTitle>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={tryAgain}>
@@ -154,7 +154,7 @@ function Matches({ query, leads, total }: { query: string; leads: ArrivalMatch[]
         {leads.map((lead) => (
           <li key={lead.id}>
             <Link
-              href={`/staff/leads/${lead.id}`}
+              href={`/staff/applicants/${lead.id}`}
               className="flex items-center gap-3 px-4 py-3 outline-none hover:bg-slate-50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
             >
               <span
@@ -184,8 +184,8 @@ function Matches({ query, leads, total }: { query: string; leads: ArrivalMatch[]
       {total > leads.length && (
         <p className="text-xs text-muted-foreground">
           Showing the first {leads.length} of {total.toLocaleString("en-US")}. Add more of the name, or{" "}
-          <Link href={`/staff/leads?q=${encodeURIComponent(query)}`} className="font-medium text-blue-600 underline underline-offset-4">
-            search on Leads
+          <Link href={`/staff/applicants?q=${encodeURIComponent(query)}`} className="font-medium text-blue-600 underline underline-offset-4">
+            search on Applicants
           </Link>
           .
         </p>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { DECLINE_PARAM, declineHref, linkedDeclineReason } from "@/app/staff/leads/decline-link"
+import { DECLINE_PARAM, declineHref, linkedDeclineReason } from "@/app/staff/applicants/decline-link"
 import { DECLINED_REASONS, declinedReasonsFor } from "@/lib/services/lead-closure"
 
 // The link from Seats into a lead's Decline with a reason chosen (#115).
@@ -8,7 +8,7 @@ import { DECLINED_REASONS, declinedReasonsFor } from "@/lib/services/lead-closur
 describe("the decline link", () => {
   it("opens the lead with the reason in the query", () => {
     const href = declineHref("1ead0000-0000-4000-8000-000000000901", "No seat available")
-    expect(href).toBe("/staff/leads/1ead0000-0000-4000-8000-000000000901?decline=No+seat+available")
+    expect(href).toBe("/staff/applicants/1ead0000-0000-4000-8000-000000000901?decline=No+seat+available")
     expect(new URL(href, "http://localhost").searchParams.get(DECLINE_PARAM)).toBe("No seat available")
   })
 

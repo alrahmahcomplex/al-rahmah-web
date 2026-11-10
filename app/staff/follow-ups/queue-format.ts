@@ -1,7 +1,7 @@
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import type { FollowUpQueueItem } from "@/lib/services/follow-ups"
 
-import { dueLabel } from "../leads/[id]/follow-up-outcome"
+import { dueLabel } from "../applicants/[id]/follow-up-outcome"
 
 // The words on a Follow-ups queue row.
 

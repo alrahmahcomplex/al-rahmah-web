@@ -105,5 +105,5 @@ export function compareFields(
 // re-application, never what the family sent.
 export function reopeningHref(leadId: string, reApplicationId: string): string {
   const query = new URLSearchParams({ source: "re_application", re_application: reApplicationId })
-  return `/staff/leads/${encodeURIComponent(leadId)}/reopen?${query}`
+  return `/staff/applicants/${encodeURIComponent(leadId)}/reopen?${query}`
 }

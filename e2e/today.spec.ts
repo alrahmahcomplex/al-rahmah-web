@@ -54,17 +54,17 @@ test.describe("on a desktop", () => {
     await expect(page.getByTestId("today-empty")).toHaveCount(0)
 
     // No statistics: those live on Reports now.
-    await expect(page.getByRole("region", { name: "Visited leads" })).toHaveCount(0)
+    await expect(page.getByRole("region", { name: "Visited applicants" })).toHaveCount(0)
     await expect(page.getByRole("heading", { name: "Dashboard" })).toHaveCount(0)
     await expect(staffNav(page).getByRole("link", { name: "Reports" })).toHaveCount(0)
 
     const rows = latest(page).getByRole("listitem")
     await expect(rows).toHaveCount(5)
     for (let i = 0; i < 5; i++) {
-      await expect(rows.nth(i).getByRole("link")).toHaveAttribute("href", /^\/staff\/leads\/[0-9a-f-]{36}$/)
+      await expect(rows.nth(i).getByRole("link")).toHaveAttribute("href", /^\/staff\/applicants\/[0-9a-f-]{36}$/)
       await expect(rows.nth(i)).toContainText(/ADMSN-\d{5}/)
     }
-    await expect(latest(page).getByRole("link", { name: "All leads" })).toHaveAttribute("href", "/staff/leads")
+    await expect(latest(page).getByRole("link", { name: "All applicants" })).toHaveAttribute("href", "/staff/applicants")
 
     // A queue row opens the screen the work is done on.
     await overdue.click()
@@ -89,8 +89,8 @@ test.describe("on a desktop", () => {
     await reports.click()
     await expect(page).toHaveURL(/\/staff\/reports$/)
     await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible()
-    await expect(page.getByRole("region", { name: "Visited leads" })).toBeVisible()
-    await expect(page.getByRole("region", { name: "Leads by enrollment class" })).toBeVisible()
+    await expect(page.getByRole("region", { name: "Visited applicants" })).toBeVisible()
+    await expect(page.getByRole("region", { name: "Applicants by enrollment class" })).toBeVisible()
     await expect(reports).toHaveAttribute("aria-current", "page")
     await expect(page.getByRole("banner")).toContainText("Reports")
   })
@@ -111,7 +111,7 @@ test.describe("on a desktop", () => {
     await expect(staffNav(page).getByRole("link", { name: "Reports" })).toHaveCount(0)
     await page.goto("/staff/reports")
     await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
-    await expect(page.getByRole("region", { name: "Visited leads" })).toHaveCount(0)
+    await expect(page.getByRole("region", { name: "Visited applicants" })).toHaveCount(0)
   })
 })
 

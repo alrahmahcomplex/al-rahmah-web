@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import localFont from "next/font/local"
 
 import { Toaster } from "@/components/ui/sonner"
+import { VercelInsights } from "@/components/vercel-insights"
 import { cn } from "@/lib/utils"
 
 import "./globals.css"
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="bg-slate-100 text-slate-800 min-h-screen antialiased">
         {children}
         <Toaster />
+        <VercelInsights />
       </body>
     </html>
   )

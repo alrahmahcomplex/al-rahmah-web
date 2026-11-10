@@ -46,18 +46,18 @@ async function declinedLead() {
   return { id: created.data.leadId, ...family }
 }
 
-const banner = (page: Page) => page.getByRole("region", { name: "This lead is Declined" })
+const banner = (page: Page) => page.getByRole("region", { name: "This application is Declined" })
 const panel = (page: Page) => page.getByRole("region", { name: "Reopening requests" })
 
 test.describe("raising a reopening request", () => {
   test("from the lead screen: the reason is required, and the lead then shows the Pending request", async ({ page }) => {
     const lead = await declinedLead()
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
     await expect(panel(page)).toHaveCount(0)
 
     await banner(page).getByRole("link", { name: "Request reopening" }).click()
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}/reopen\\?source=lead$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}/reopen\\?source=lead$`))
     await expect(page.getByRole("heading", { name: lead.child, level: 1 })).toBeVisible()
 
     await page.getByRole("button", { name: "Send request" }).click()
@@ -67,10 +67,10 @@ test.describe("raising a reopening request", () => {
     await page.getByLabel("Why is the family back?").fill("The family moved back to Dar and wants a place in January.")
     await page.getByRole("button", { name: "Send request" }).click()
 
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
     const pending = panel(page).getByRole("group", { name: "Pending reopening request" })
     await expect(pending).toContainText("Requested by you")
-    await expect(pending).toContainText("From the lead screen.")
+    await expect(pending).toContainText("From the application page.")
     await expect(pending).toContainText("The family moved back to Dar and wants a place in January.")
     await expect(pending.getByRole("button", { name: "Withdraw" })).toBeVisible()
     // Asked once is enough: the banner stops offering it.
@@ -92,12 +92,12 @@ test.describe("raising a reopening request", () => {
     await page.getByRole("group", { name: lead.parent }).getByRole("button", { name: "Same person" }).click()
     await page.getByRole("row", { name: new RegExp(lead.child) }).getByRole("link", { name: `Reopening request for ${lead.child}` }).click()
 
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}/reopen\\?source=duplicate_match$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}/reopen\\?source=duplicate_match$`))
     await expect(page.getByText("This student is already on file, so no new record was made.")).toBeVisible()
     await page.getByLabel("Why is the family back?").fill("The mother came to the front desk to re-register her son.")
     await page.getByRole("button", { name: "Send request" }).click()
 
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
     const pending = panel(page).getByRole("group", { name: "Pending reopening request" })
     await expect(pending).toContainText("From the duplicate match at the front desk.")
     await expect(pending).toContainText("The mother came to the front desk to re-register her son.")
@@ -105,7 +105,7 @@ test.describe("raising a reopening request", () => {
 
   test("a second staff member sees who already asked, instead of the form", async ({ page }) => {
     await signIn(page, MANAGER)
-    await page.goto(`/staff/leads/${SEEDED_PENDING_LEAD}/reopen?source=lead`)
+    await page.goto(`/staff/applicants/${SEEDED_PENDING_LEAD}/reopen?source=lead`)
 
     await expect(page.getByRole("status")).toHaveText(
       "Reopening already requested by Test Admissions on 28 Sept 2026. A Manager will approve or reject it.",
@@ -115,7 +115,7 @@ test.describe("raising a reopening request", () => {
 
     // On the lead, the Pending request shows without Withdraw for anyone but
     // its requester.
-    await page.goto(`/staff/leads/${SEEDED_PENDING_LEAD}`)
+    await page.goto(`/staff/applicants/${SEEDED_PENDING_LEAD}`)
     const pending = panel(page).getByRole("group", { name: "Pending reopening request" })
     await expect(pending).toContainText("Requested by Test Admissions on 28 Sept 2026")
     await expect(pending.getByRole("button", { name: "Withdraw" })).toHaveCount(0)
@@ -132,7 +132,7 @@ test.describe("withdrawing a reopening request", () => {
     if (!raised.ok) throw new Error(`setup failed: ${JSON.stringify(raised.error)}`)
 
     await signIn(page, ADMISSIONS)
-    await page.goto(`/staff/leads/${lead.id}`)
+    await page.goto(`/staff/applicants/${lead.id}`)
     await panel(page).getByRole("button", { name: "Withdraw" }).click()
     const confirm = page.getByRole("alertdialog", { name: "Withdraw your reopening request?" })
     await confirm.getByRole("button", { name: "Withdraw request" }).click()
@@ -145,7 +145,7 @@ test.describe("withdrawing a reopening request", () => {
     await page.getByLabel("Why is the family back?").fill("They asked again after the holidays.")
     await page.getByRole("button", { name: "Send request" }).click()
 
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
     await expect(panel(page).getByRole("group", { name: "Pending reopening request" })).toContainText(
       "They asked again after the holidays.",
     )

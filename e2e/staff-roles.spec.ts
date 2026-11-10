@@ -247,17 +247,17 @@ test.describe("shaping roles, the Super Admin's alone", () => {
     await expect(page.getByText("Changes apply to everyone in this role immediately.")).toBeVisible()
     await expect(page.getByRole("checkbox", { checked: true })).toHaveCount(0)
 
-    await page.getByRole("checkbox", { name: "View leads and their history" }).click()
+    await page.getByRole("checkbox", { name: "View applicants and their history" }).click()
 
-    await expect(callout(page)).toHaveText(`${name} can now: View leads and their history.`)
-    await expect(page.getByRole("checkbox", { name: "View leads and their history" })).toBeChecked()
+    await expect(callout(page)).toHaveText(`${name} can now: View applicants and their history.`)
+    await expect(page.getByRole("checkbox", { name: "View applicants and their history" })).toBeChecked()
 
     await openStaffHistoryAsSuperAdmin(page)
     const change = page
       .getByRole("list", { name: "History" })
       .getByRole("listitem")
       .filter({ hasText: `changed the role ${name}` })
-    await expect(change).toContainText("permissions: None → View leads and their history")
+    await expect(change).toContainText("permissions: None → View applicants and their history")
   })
 
   test("a name another role has is refused under the field", async ({ page }) => {

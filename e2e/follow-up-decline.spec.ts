@@ -44,7 +44,7 @@ async function leadWithFollowUp() {
 }
 
 const panel = (page: Page) => page.getByRole("region", { name: "Follow-ups" })
-const DECLINE_OUTCOME = "The family will not proceed: decline the lead"
+const DECLINE_OUTCOME = "The family will not proceed: decline the application"
 
 async function openRecord(page: Page) {
   await panel(page).getByRole("button", { name: "Record follow-up" }).click()
@@ -62,7 +62,7 @@ test.describe("declining the lead from Record follow-up", () => {
     await record.getByLabel(DECLINE_OUTCOME).check()
     // A decline takes a reason instead of a next date.
     await expect(record.getByLabel("Next follow-up date")).toHaveCount(0)
-    await expect(record).toContainText("This lead becomes read-only. Bringing it back needs a Manager's approval.")
+    await expect(record).toContainText("This application becomes read-only. Bringing it back needs a Manager's approval.")
     // Only staff who may set the seats see No seat available.
     const reasons = await record.getByLabel("Declined reason").locator("option").allTextContents()
     expect(reasons).toContain("Enrolled elsewhere")
@@ -75,22 +75,22 @@ test.describe("declining the lead from Record follow-up", () => {
     await record.getByLabel("Explanation").fill("The family is moving abroad.")
     await record.getByRole("button", { name: "Record and decline" }).click()
 
-    const banner = page.getByRole("region", { name: "This lead is Declined" })
+    const banner = page.getByRole("region", { name: "This application is Declined" })
     await expect(banner).toContainText("Other")
     await expect(banner).toContainText("The family is moving abroad.")
     await expect(banner).toContainText(ADMISSIONS.name)
     const contacts = panel(page).getByRole("list", { name: "Contacts" })
     await expect(contacts).toContainText("The father says they have chosen a school nearer home.")
-    await expect(contacts).toContainText("The family will not proceed: lead declined")
+    await expect(contacts).toContainText("The family will not proceed: application declined")
     // The contact closed the follow-up; nothing else closed it with the lead.
-    await expect(contacts).not.toContainText("Closed with the lead")
+    await expect(contacts).not.toContainText("Closed with the application")
     await expect(panel(page).getByRole("button")).toHaveCount(0)
 
     await openLeadHistoryAsSuperAdmin(page, lead)
     const history = page.getByRole("list", { name: "History" })
     await expect(history.getByText("recorded a follow-up")).toBeVisible()
-    await expect(history.getByText("declined the lead")).toBeVisible()
-    await expect(history).not.toContainText("closed the follow-up with the lead")
+    await expect(history.getByText("declined the application")).toBeVisible()
+    await expect(history).not.toContainText("closed the follow-up with the application")
   })
 
   test("the Manager may pick No seat available", async ({ page }) => {
@@ -104,7 +104,7 @@ test.describe("declining the lead from Record follow-up", () => {
     await record.getByLabel("Declined reason").selectOption("No seat available")
     await record.getByRole("button", { name: "Record and decline" }).click()
 
-    await expect(page.getByRole("region", { name: "This lead is Declined" })).toContainText("No seat available")
+    await expect(page.getByRole("region", { name: "This application is Declined" })).toContainText("No seat available")
   })
 
   test("staff who may not decline leads plan the next date with no decline outcome", async ({ page }) => {

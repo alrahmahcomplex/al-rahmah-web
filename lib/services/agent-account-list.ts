@@ -54,6 +54,8 @@ type Row = {
   lead_count: number
   switched_off_at: string | null
   retired_at: string | null
+  interview_discount: number | null
+  agent_discount_amount: number
 }
 
 type StatusNoteRow = {
@@ -66,7 +68,8 @@ type StatusNoteRow = {
 }
 
 // A plain string, so both sources below give the same query type.
-const COLUMNS: string = "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count, switched_off_at, retired_at"
+const COLUMNS: string =
+  "id, full_name, phone, whatsapp, code, status, registered_at, approved_at, lead_count, switched_off_at, retired_at, interview_discount, agent_discount_amount"
 
 type Search = { query?: string; page: number; importBatchId?: string }
 
@@ -160,6 +163,8 @@ async function pageOfAgents(
         switchedOffAt: row.switched_off_at,
         retiredAt: row.retired_at,
         statusChange: notes.get(row.id) ?? null,
+        interviewDiscount: row.interview_discount,
+        discountAmount: row.agent_discount_amount,
       })),
     },
   }

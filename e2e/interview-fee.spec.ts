@@ -52,11 +52,11 @@ test.describe("the interview fee", () => {
     await signIn(page, ACCOUNTANT)
 
     // Slice 2's lead search, as at the counter.
-    await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Leads" }).click()
-    await page.getByLabel("Search leads").fill(lead.admissionNumber)
+    await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Applicants" }).click()
+    await page.getByLabel("Search applicants").fill(lead.admissionNumber)
     await page.getByRole("button", { name: "Search" }).click()
     await page.getByRole("link", { name: lead.name }).click()
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${lead.id}$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
     await openLeadTab(page, "Interview")
 
     // The fee as it comes to now, before any interview has happened.
@@ -95,7 +95,7 @@ test.describe("the interview fee", () => {
       "Next step: Collect the interview fee, TZS 50,000",
     )
     await page.getByRole("link", { name: "Record interview fee" }).click()
-    await expect(page).toHaveURL(new RegExp(`/staff/leads/${RUKIA}\\?tab=interview#lead-interview$`))
+    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${RUKIA}\\?tab=interview#lead-interview$`))
     await expect(panel(page).getByRole("button", { name: "Mark paid" })).toBeVisible()
 
     // Admissions Staff, who can't mark it, are pointed at the tab instead.

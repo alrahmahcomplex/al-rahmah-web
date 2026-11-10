@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { recordVisitOutcome } from "@/app/staff/leads/[id]/record-visit-outcome"
+import { recordVisitOutcome } from "@/app/staff/applicants/[id]/record-visit-outcome"
 
 describe("recordVisitOutcome", () => {
   it("points a future date at the Visit date field", () => {
@@ -15,7 +15,7 @@ describe("recordVisitOutcome", () => {
     expect(recordVisitOutcome({ kind: "not-applied" })).toEqual({
       status: "refused",
       field: null,
-      message: "This lead is no longer Applied, so its visit is already recorded. Reload the page to see it.",
+      message: "This applicant is no longer Applied, so their visit is already recorded. Reload the page to see it.",
     })
   })
 

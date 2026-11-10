@@ -1,7 +1,9 @@
+import { ClipboardCheckIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
@@ -20,8 +22,8 @@ import { interviewRows } from "./rows"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
-import { closedState } from "../leads/[id]/closed-state"
-import { leadTabHref } from "../leads/[id]/tabs"
+import { closedState } from "../applicants/[id]/closed-state"
+import { leadTabHref } from "../applicants/[id]/tabs"
 import { requireStaff } from "../session"
 import { defaultInterviewYear, interviewsHref, parseInterviewSearch } from "./search-params"
 
@@ -178,20 +180,27 @@ function Results({
 
   return (
     <section aria-label="Results" className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground" aria-live="polite">
-        {total === 0 ? empty : `${total} ${total === 1 ? "interview" : "interviews"}`}
-        {total === 0 && filtered && (
-          <>
-            {" "}
-            <Link
-              href={interviewsHref({ enrollmentYear: search.enrollmentYear, page: 1 })}
-              className="font-medium text-slate-900 underline underline-offset-4"
-            >
-              Show every interview for {search.enrollmentYear}
-            </Link>
-          </>
-        )}
-      </p>
+      {total === 0 ? (
+        <EmptyState
+          role="status"
+          icon={ClipboardCheckIcon}
+          title={empty}
+          action={
+            filtered && (
+              <Link
+                href={interviewsHref({ enrollmentYear: search.enrollmentYear, page: 1 })}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Show every interview for {search.enrollmentYear}
+              </Link>
+            )
+          }
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {`${total} ${total === 1 ? "interview" : "interviews"}`}
+        </p>
+      )}
 
       {interviews.length > 0 && (
         <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">

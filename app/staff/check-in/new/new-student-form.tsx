@@ -25,13 +25,20 @@ import {
   type LeadClass,
   type Relationship,
 } from "@/lib/services/leads"
-import type { ReferralAgent } from "@/lib/services/referral"
+import type { FoundDiscountCode } from "@/lib/services/referral"
 import { cn } from "@/lib/utils"
 
 import { HeaderActions } from "../../_shell/header-actions"
-import type { CorrectionOutcome } from "../../leads/[id]/correction-outcome"
-import { useCodeLookup } from "../../leads/[id]/referral-editor"
-import { formatTzs, referralLookupNote, type ReferralLookup } from "../../leads/[id]/referral-outcome"
+import type { CorrectionOutcome } from "../../applicants/[id]/correction-outcome"
+import { useCodeLookup } from "../../applicants/[id]/referral-editor"
+import {
+  formatTzs,
+  givesDiscount,
+  PROMO_NO_AGENT,
+  referralLookupNote,
+  usableCode,
+  type ReferralLookup,
+} from "../../applicants/[id]/referral-outcome"
 import { findFamily, registerWalkIn, updateSharedContact } from "../actions"
 import { childHref, compareContact, relationshipLabel } from "../family"
 import type { ReferralCodeResult, RegisterOutcome } from "../outcome"
@@ -81,16 +88,12 @@ export function NewStudentForm({
   years,
   canEditContact,
   canEnterReferralCode,
-  interviewDiscount,
 }: {
   today: string
   years: number[]
   canEditContact: boolean
   // Staff who may set a lead's Referral code (leads.edit) get the field.
   canEnterReferralCode: boolean
-  // What an Approved agent's code takes off the interview fee, from
-  // interview_discount(), or null when that read failed.
-  interviewDiscount: number | null
 }) {
   const [screen, setScreen] = useState<Screen>("parent")
   const [details, setDetails] = useState<Details>({
@@ -106,8 +109,8 @@ export function NewStudentForm({
     visitDate: today,
     referralCode: "",
   })
-  // The Marketing Agent whose code the student step accepted, if any.
-  const [referralAgent, setReferralAgent] = useState<ReferralAgent | null>(null)
+  // The Marketing Agent's or Promo code's code the student step accepted, if any.
+  const [referralAgent, setReferralAgent] = useState<FoundDiscountCode | null>(null)
   // The contacts that hold the parent's numbers, and the one staff confirmed
   // as the same person, if any.
   const [match, setMatch] = useState<FamilyMatch | null>(null)
@@ -421,7 +424,6 @@ export function NewStudentForm({
               years={years}
               field={field}
               canEnterReferralCode={canEnterReferralCode}
-              interviewDiscount={interviewDiscount}
               onBack={() => goTo(known ? "family" : "parent")}
               onNext={(agent) => {
                 setReferralAgent(agent)
@@ -849,7 +851,7 @@ function FamilyChildrenStep({
       {contact.children.some((child) => child.unconfirmed) && (
         <p className="text-xs text-muted-foreground">
           An unconfirmed child came through the Admission form with this number. Staff confirm or reject the match on
-          that child&apos;s lead.
+          that child&apos;s application.
         </p>
       )}
       <Footer>
@@ -990,16 +992,14 @@ function StudentStep({
   years,
   field,
   canEnterReferralCode,
-  interviewDiscount,
   onBack,
   onNext,
 }: StepProps & {
   today: string
   years: number[]
   canEnterReferralCode: boolean
-  interviewDiscount: number | null
   onBack: () => void
-  onNext: (agent: ReferralAgent | null) => void
+  onNext: (code: FoundDiscountCode | null) => void
 }) {
   const typedCode = canEnterReferralCode ? details.referralCode : ""
   const lookup = useCodeLookup(typedCode)
@@ -1045,8 +1045,10 @@ function StudentStep({
           return
         }
         if (typedCode.trim() === "") return onNext(null)
-        // Only a code a Marketing Agent holds goes on to Review.
-        if (lookup.status === "found") return onNext(lookup.agent)
+        // Only a code a current Marketing Agent or a Promo code holds goes on
+        // to Review.
+        const found = usableCode(lookup)
+        if (found) return onNext(found)
         setCodeRefusal(codeRefusalMessage(lookup))
         codeRef.current?.focus()
       }}
@@ -1106,7 +1108,6 @@ function StudentStep({
           value={details.referralCode}
           lookup={lookup}
           refusal={codeRefusal}
-          interviewDiscount={interviewDiscount}
           onChange={(value) => {
             setCodeRefusal(null)
             set("referralCode", value)
@@ -1164,17 +1165,24 @@ function codeRefusalMessage(lookup: ReferralLookup): string {
     case "checking":
       return "The code is still being checked. Wait a moment, then choose Continue to review again."
     case "unavailable":
-      return "The code could not be checked just now. Try again, or clear the field and add the code on the lead later."
+      return "The code could not be checked just now. Try again, or clear the field and add the code on the application later."
+    case "found":
+      return "This code belongs to a retired Marketing Agent record. Correct it, or clear the field to register without one."
     default:
-      return "No Marketing Agent has this code. Correct it, or clear the field to register without one."
+      return "No Marketing Agent or Promo code has this code. Correct it, or clear the field to register without one."
   }
 }
 
-// What the field says under a code an agent holds: for an Approved agent,
-// the interview fee the family will pay, when the discount could be read.
-function agentNote(lookup: ReferralLookup, interviewDiscount: number | null): string {
-  if (lookup.status === "found" && lookup.agent.state === "approved" && interviewDiscount !== null) {
-    return `${lookup.agent.fullName} · interview fee becomes ${formatTzs(STANDARD_INTERVIEW_FEE - interviewDiscount)}`
+// What the field says under a code an agent or Promo code holds: when it
+// takes something off, the interview fee the family will pay, from the
+// code's own amount.
+function agentNote(lookup: ReferralLookup): string {
+  if (lookup.status === "found" && givesDiscount(lookup)) {
+    const code = lookup.code
+    const fee = `interview fee becomes ${formatTzs(STANDARD_INTERVIEW_FEE - code.amountOff)}`
+    return code.kind === "promo"
+      ? `${code.holderName} · Promo code · ${fee}. ${PROMO_NO_AGENT}`
+      : `${code.holderName} · ${fee}`
   }
   return referralLookupNote(lookup)
 }
@@ -1185,21 +1193,20 @@ function ReferralCodeField({
   value,
   lookup,
   refusal,
-  interviewDiscount,
   onChange,
 }: {
   ref: React.Ref<HTMLInputElement>
   value: string
   lookup: ReferralLookup
   refusal: string | null
-  interviewDiscount: number | null
   onChange: (value: string) => void
 }) {
   const id = useId()
   const note =
-    refusal ?? (lookup.status === "empty" ? "Only if the family has a Marketing Agent's code, such as ABC-123." : agentNote(lookup, interviewDiscount))
-  const invalid = refusal !== null || lookup.status === "none"
-  const confirmed = refusal === null && lookup.status === "found" && lookup.agent.state === "approved"
+    refusal ??
+    (lookup.status === "empty" ? "Only if the family has a Marketing Agent's code, such as ABC-123, or a Promo code." : agentNote(lookup))
+  const invalid = refusal !== null || lookup.status === "none" || (lookup.status === "found" && usableCode(lookup) === null)
+  const confirmed = refusal === null && givesDiscount(lookup)
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>
@@ -1307,7 +1314,7 @@ function ReviewStep({
   details: Details
   // The confirmed contact the student joins, or null for a new one.
   contact: FamilyContact | null
-  referralAgent: ReferralAgent | null
+  referralAgent: FoundDiscountCode | null
   pending: boolean
   duplicate: Extract<RegisterOutcome, { status: "duplicate" }> | null
   onChangeParent: () => void
@@ -1359,7 +1366,9 @@ function ReviewStep({
             ...(referralAgent
               ? ([
                   ["Referral code", referralAgent.code],
-                  ["Marketing Agent", referralAgent.fullName],
+                  referralAgent.kind === "promo"
+                    ? (["Promo code", `${referralAgent.holderName}. ${PROMO_NO_AGENT}`] as const)
+                    : (["Marketing Agent", referralAgent.holderName] as const),
                 ] as [string, string][])
               : []),
           ]}
@@ -1437,15 +1446,15 @@ function Confirmation({
       {referralCode === "not-saved" && (
         <Alert role="alert" className="border-amber-300 bg-amber-50 text-amber-950">
           <AlertDescription className="flex flex-col items-start gap-2 text-amber-950">
-            <span>The lead was created, but the referral code wasn&apos;t saved.</span>
-            <Link href={`/staff/leads/${leadId}#lead-referral`} className="font-medium underline underline-offset-4">
+            <span>The application was created, but the referral code wasn&apos;t saved.</span>
+            <Link href={`/staff/applicants/${leadId}#lead-referral`} className="font-medium underline underline-offset-4">
               Add the referral code
             </Link>
           </AlertDescription>
         </Alert>
       )}
       <div className="flex flex-wrap gap-3">
-        <Link href={`/staff/leads/${leadId}`} className={cn(buttonVariants({ variant: "orange" }), PRIMARY)}>
+        <Link href={`/staff/applicants/${leadId}`} className={cn(buttonVariants({ variant: "orange" }), PRIMARY)}>
           Open {studentName}
         </Link>
         <Button type="button" variant="outline" className={PRIMARY} onClick={onAnother}>

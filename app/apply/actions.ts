@@ -6,7 +6,7 @@ import { admissionContact, admissionYears, parseAdmissionForm } from "@/lib/admi
 import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { normalizeDiscountCode } from "@/lib/referral-link"
 import { submitAdmissionForm as saveAdmissionForm } from "@/lib/services/admission-form"
-import { estimateDiscountCode, getInterviewDiscount } from "@/lib/services/referral"
+import { estimateDiscountCode } from "@/lib/services/referral"
 import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
@@ -94,16 +94,5 @@ export async function checkDiscountCode(code: unknown): Promise<DiscountCodeChec
     return { status: "unavailable" }
   }
   if (!estimate.ok) return { status: "unavailable" }
-  const state = estimate.data.state
-  if (state !== "approved") return { status: state, amount: estimate.data.amount }
-
-  // The note names the discount; the code is confirmed even if this fails.
-  let discount: number | null = null
-  try {
-    const read = await getInterviewDiscount(supabase)
-    if (read.ok) discount = read.data
-  } catch (error) {
-    console.error("Discount code check: could not read the interview discount", error)
-  }
-  return { status: "approved", amount: estimate.data.amount, discount }
+  return { status: estimate.data.state, amount: estimate.data.amount }
 }

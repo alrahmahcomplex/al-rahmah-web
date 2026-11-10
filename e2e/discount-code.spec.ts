@@ -53,7 +53,7 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
 
     await page.goto("/discount-code")
     await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeAttached()
-    await expect(page.getByText("AL-RAHMAH COMPLEX")).toBeVisible()
+    await expect(page.getByText("AL-RAHMAH COMPLEX", { exact: true })).toBeVisible()
     await expect(page.getByRole("heading", { name: t.name })).toBeVisible()
     await expect(page.getByText(/TZS 10,000/)).toBeVisible()
     expect(await page.locator("body").innerText()).not.toMatch(FORBIDDEN)

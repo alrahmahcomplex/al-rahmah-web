@@ -40,7 +40,7 @@ const ACCOUNTANT: readonly Permission[] = [
 export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   {
     name: "Admissions Staff",
-    summary: "Front desk and admissions work on leads, visits, interviews and follow-ups.",
+    summary: "Front desk and admissions work on applicants, visits, interviews and follow-ups.",
     permissions: ADMISSIONS_STAFF,
     manages: [],
   },
@@ -51,7 +51,10 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
       ...ADMISSIONS_STAFF,
       "academic_years.manage",
       "agents.approve",
+      "discount_codes.manage",
       "discounts.approve",
+      "leads.export",
+      "leads.import",
       "lifecycle.intervene",
       "reopenings.approve",
       "reports.view",
@@ -72,7 +75,7 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   },
   {
     name: "Administrator",
-    summary: "Manages Admissions Managers and Head Accountants. Reads leads, payments and Reports; changes neither.",
+    summary: "Manages Admissions Managers and Head Accountants. Reads applications, payments and Reports; changes neither.",
     permissions: ["leads.view", "payments.view", "reports.view"],
     manages: ["Admissions Manager", "Head Accountant"],
   },

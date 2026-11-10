@@ -16,16 +16,54 @@ export type ReferralState = "approved" | "pending" | "switched_off" | "unrecogni
 export type LeadReferral = {
   // The code as stored, such as BJN-402, or null when the lead has none.
   code: string | null
-  // Null when there is no code.
+  // Null when there is no code. A Promo code reads `approved` while it gives
+  // its discount and `switched_off` otherwise; discountState says which.
   state: ReferralState | null
-  // The agent's name, when an agent holds the code.
+  // The agent's name, when a current agent holds the code.
   agentName: string | null
   // When the code's agent was switched off, while they are.
   switchedOffAt: string | null
-  // The expected interview fee in whole TZS, and whether an Approved agent's
-  // discount brought it down.
+  // The expected interview fee in whole TZS, and whether the code's discount
+  // brought it down.
   amount: number
   discountApplied: boolean
+  // What holds the code: an agent record, a Promo code, or nothing.
+  kind: DiscountCodeKind
+  // The agent's or the Promo code's name; a retired agent's too.
+  holderName: string | null
+  // The code's state in full, null when there is no code.
+  discountState: DiscountCodeState | null
+  // Whole TZS the code takes off the interview fee right now.
+  amountOff: number
+  agentId: string | null
+  promoCodeId: string | null
+}
+
+export type DiscountCodeKind = "agent" | "promo" | "none"
+
+// An agent's code: approved, pending, switched_off, or retired (only retired
+// records held it). A Promo code: active, paused, ended, or expired (Active
+// past its last day). unrecognised: nothing holds the code.
+export type DiscountCodeState =
+  | "approved"
+  | "pending"
+  | "switched_off"
+  | "retired"
+  | "active"
+  | "paused"
+  | "ended"
+  | "expired"
+  | "unrecognised"
+
+// The agent or Promo code a typed code belongs to, with what it takes off now.
+export type FoundDiscountCode = {
+  kind: "agent" | "promo"
+  code: string
+  holderName: string
+  state: Exclude<DiscountCodeState, "unrecognised">
+  amountOff: number
+  agentId: string | null
+  promoCodeId: string | null
 }
 
 // The agent a typed code belongs to.
@@ -38,7 +76,7 @@ export type SetReferralCodeError =
   | "not-found"
   // The lead is Declined, Inactive or Archived.
   | "lead-closed"
-  // No Marketing Agent holds the code.
+  // No Marketing Agent or Promo code holds the code.
   | "unknown-code"
   // Only a retired agent record holds the code.
   | "retired-code"
@@ -54,54 +92,78 @@ function stateOf(agent: FoundAgent | null | undefined): ReferralState {
   return agent.status === "Approved" ? "approved" : "pending"
 }
 
-// The lead's Referral code with its agent and the expected interview fee.
-// Needs leads.view: row-level security hides the lead from anyone else, so
-// for them it is not found.
+type DiscountRow = {
+  kind: DiscountCodeKind
+  code: string | null
+  agent_id: string | null
+  promo_code_id: string | null
+  holder_name: string | null
+  state: DiscountCodeState | null
+  amount_off: number
+}
+
+// The legacy state, for screens that know agents only.
+function referralStateOf(row: DiscountRow): ReferralState {
+  if (row.kind === "promo") return row.state === "active" ? "approved" : "switched_off"
+  if (row.kind === "agent" && row.state !== "retired") {
+    if (row.state === "switched_off") return "switched_off"
+    return row.state === "approved" ? "approved" : "pending"
+  }
+  return "unrecognised"
+}
+
+// The lead's Referral code with its holder, agent or Promo code, and the
+// expected interview fee. Needs leads.view: the database refuses anyone
+// else, and for them the lead is not found.
 export async function getLeadReferral(
   supabase: SupabaseClient,
   leadId: string,
 ): Promise<Result<LeadReferral, GetLeadReferralError>> {
-  const lead = await supabase
-    .from("leads")
-    .select("referral_code")
-    .eq("id", leadId)
-    .maybeSingle<{ referral_code: string | null }>()
-  // A malformed id is no lead at all.
-  if (lead.error?.code === "22P02") return { ok: false, error: "not-found" }
-  if (lead.error) {
-    console.error("Could not read a lead's Referral code", lead.error)
-    return { ok: false, error: "unavailable" }
-  }
-  if (!lead.data) return { ok: false, error: "not-found" }
-
-  const code = lead.data.referral_code
-  const [agent, fee] = await Promise.all([
-    // The code's current agent, through the database's one code rule, so a
-    // retired record that once held it is never named.
-    code
-      ? supabase
-          .rpc("find_marketing_agent", { typed_code: code })
-          .maybeSingle<FoundAgent>()
-      : Promise.resolve({ data: null, error: null }),
+  const [discount, fee] = await Promise.all([
+    supabase.rpc("lead_interview_discount", { lead_id: leadId }).single<DiscountRow>(),
     supabase
       .rpc("expected_interview_amount", { lead_id: leadId })
       .single<{ amount: number; discount_applied: boolean }>(),
   ])
-  if (agent.error || fee.error) {
-    if (fee.error?.message === "not_found") return { ok: false, error: "not-found" }
-    console.error("Could not read a lead's Referral code", agent.error ?? fee.error)
+  const failed = discount.error ?? fee.error
+  if (failed) {
+    // A malformed id is no lead at all; so is one the caller may not see.
+    // 42501: the function isn't granted to the caller at all, as for someone signed out.
+    if (["not_found", "not_permitted", "forbidden"].includes(failed.message) || ["22P02", "42501"].includes(failed.code)) {
+      return { ok: false, error: "not-found" }
+    }
+    console.error("Could not read a lead's Referral code", failed)
     return { ok: false, error: "unavailable" }
+  }
+
+  const row = discount.data as DiscountRow
+  const expected = fee.data as { amount: number; discount_applied: boolean }
+  // When a current agent holds the code and is switched off, since when.
+  let switchedOffAt: string | null = null
+  if (row.kind === "agent" && row.state === "switched_off" && row.code) {
+    const agent = await supabase.rpc("find_marketing_agent", { typed_code: row.code }).maybeSingle<FoundAgent>()
+    if (agent.error) {
+      console.error("Could not read a lead's Referral code", agent.error)
+      return { ok: false, error: "unavailable" }
+    }
+    switchedOffAt = agent.data?.switched_off_at ?? null
   }
 
   return {
     ok: true,
     data: {
-      code,
-      state: code ? stateOf(agent.data) : null,
-      agentName: agent.data?.full_name ?? null,
-      switchedOffAt: agent.data?.switched_off_at ?? null,
-      amount: fee.data.amount,
-      discountApplied: fee.data.discount_applied,
+      code: row.code,
+      state: row.code ? referralStateOf(row) : null,
+      agentName: row.kind === "agent" && row.state !== "retired" ? row.holder_name : null,
+      switchedOffAt,
+      amount: expected.amount,
+      discountApplied: expected.discount_applied,
+      kind: row.kind,
+      holderName: row.holder_name,
+      discountState: row.code ? (row.state ?? "unrecognised") : null,
+      amountOff: row.amount_off,
+      agentId: row.agent_id,
+      promoCodeId: row.promo_code_id,
     },
   }
 }
@@ -120,7 +182,8 @@ function setError(error: PostgrestError): SetReferralCodeError {
 }
 
 // Sets the lead's Referral code to a registered Marketing Agent's, Pending or
-// Approved, matched however it is typed; null clears it. A code set this way
+// Approved, or a Promo code's in any state, matched however it is typed; null
+// clears it. A code set this way
 // records the staff reminder as its notice version, and clearing it clears
 // the version. Needs leads.edit, and the lead must be open. Returns the code
 // as stored.
@@ -151,11 +214,50 @@ export async function findReferralAgent(
   return { ok: true, data: { code: data.code, fullName: data.full_name, state: stateOf(data) as ReferralAgent["state"] } }
 }
 
+// The agent record or Promo code a typed code belongs to, matched however it
+// is typed, or null when nothing ever held it. For the referral panel, its
+// editor and the check-in form. Staff without leads.view find nothing.
+export async function findDiscountCode(
+  supabase: SupabaseClient,
+  code: string,
+): Promise<Result<FoundDiscountCode | null, "unavailable">> {
+  const { data, error } = await supabase
+    .rpc("find_discount_code", { typed_code: code })
+    .maybeSingle<{
+      kind: "agent" | "promo"
+      code: string
+      holder_name: string
+      state: FoundDiscountCode["state"]
+      amount_off: number
+      agent_id: string | null
+      promo_code_id: string | null
+    }>()
+  if (error) {
+    console.error("Could not look up a Discount code", error)
+    return { ok: false, error: "unavailable" }
+  }
+  if (!data) return { ok: true, data: null }
+  return {
+    ok: true,
+    data: {
+      kind: data.kind,
+      code: data.code,
+      holderName: data.holder_name,
+      state: data.state,
+      amountOff: data.amount_off,
+      agentId: data.agent_id,
+      promoCodeId: data.promo_code_id,
+    },
+  }
+}
+
 // What a code typed on the Admission form means for the interview fee: an
-// Approved agent's code (`approved`), a Pending agent's (`pending`), a
-// switched-off agent's (`switched_off`, no discount), or no current agent's
-// (`unknown`), with the fee per child in whole TZS. Secret key only: the
-// public form's Server Action calls it after the rate limit.
+// Approved agent's code or an Active Promo code (`approved`), a Pending
+// agent's (`pending`), a switched-off agent's or a paused, ended or expired
+// Promo code (`switched_off`, no discount), or nobody's (`unknown`), with the
+// fee per child in whole TZS after the code's own amount. The form states
+// this amount, not the standard discount. Secret key only: the public form's
+// Server Action calls it after the rate limit.
 export type DiscountCodeEstimate = { state: "approved" | "pending" | "switched_off" | "unknown"; amount: number }
 
 export async function estimateDiscountCode(
@@ -175,9 +277,9 @@ export async function estimateDiscountCode(
 // How long a read of the interview discount waits before giving up.
 const DISCOUNT_WAIT_MS = 2000
 
-// How much an Approved agent's code takes off the interview fee, in whole
-// TZS: the one figure the Admission form, the Discount code page and the
-// Referral code panel state. Signed-in staff and the secret key only. Every
+// The standard interview discount, in whole TZS: what an Approved agent's
+// code takes off unless the agent has an own amount. The Discount code page
+// and the Referral code panel state it. Signed-in staff and the secret key only. Every
 // caller can do without the figure, so the read gives up after 2 seconds
 // (or when the caller's own signal fires) rather than hold up a fee.
 export async function getInterviewDiscount(

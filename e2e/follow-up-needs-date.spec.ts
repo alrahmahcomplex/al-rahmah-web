@@ -56,6 +56,8 @@ const banner = (page: Page) => page.getByRole("note").filter({ hasText: "Reopene
 async function openOverdueWithReopened(page: Page) {
   for (let overdue = 1; ; overdue++) {
     await page.goto(`/staff/follow-ups?overdue=${overdue}`)
+    // Wait for the page itself, not its loading skeleton, before counting.
+    await expect(page.getByRole("heading", { name: "Follow-ups", level: 1 })).toBeVisible()
     if ((await reopenedRow(page).count()) > 0) return
     const next = page.getByRole("navigation", { name: "Overdue pages" }).getByRole("link", { name: "Next" })
     if ((await next.count()) === 0) throw new Error(`${REOPENED.name} is not in Overdue`)
@@ -79,7 +81,7 @@ test("the seeded reopened lead shows as Needs a follow-up date until a follow-up
   await expect(row).toContainText("Zainabu Rejea")
 
   await row.getByRole("link", { name: REOPENED.name }).click()
-  await expect(page).toHaveURL(new RegExp(`/staff/leads/${REOPENED.id}\\?tab=follow-ups#lead-follow-ups$`))
+  await expect(page).toHaveURL(new RegExp(`/staff/applicants/${REOPENED.id}\\?tab=follow-ups#lead-follow-ups$`))
   const panel = page.getByRole("region", { name: "Follow-ups" })
   await expect(banner(page)).toBeVisible()
   await expect(panel).toContainText("No follow-up scheduled.")

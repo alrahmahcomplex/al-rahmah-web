@@ -7,16 +7,16 @@ import {
   followUpOutcome,
   recordedOutcome,
   scheduledOutcome,
-} from "@/app/staff/leads/[id]/follow-up-outcome"
+} from "@/app/staff/applicants/[id]/follow-up-outcome"
 import {
   enteredLate,
   formatContactTime,
   fromTanzaniaLocal,
   recordOutcomeText,
   tanzaniaNowLocal,
-} from "@/app/staff/leads/[id]/follow-up-record-format"
+} from "@/app/staff/applicants/[id]/follow-up-record-format"
 import type { FollowUpWriteError } from "@/lib/services/follow-ups"
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
 describe("the Follow-ups panel's sentences", () => {
@@ -46,7 +46,7 @@ describe("the Follow-ups panel's sentences", () => {
       message: "Give a reason of 3 to 500 characters.",
     })
     expect(followUpOutcome({ kind: "read-only" }, "schedule").message).toBe(
-      "This lead is closed, so its follow-ups can't be changed.",
+      "This application is closed, so its follow-ups can't be changed.",
     )
   })
 
@@ -201,12 +201,12 @@ describe("follow-ups in the lead's history", () => {
       {},
     )
     expect(described[0].summary).toBe("recorded an unplanned contact")
-    expect(described[0].changes).toContainEqual({ label: "Outcome", from: null, to: "No next date: the lead is Enrolled" })
+    expect(described[0].changes).toContainEqual({ label: "Outcome", from: null, to: "No next date: the student is Enrolled" })
     // A name the page could not find still shows the raw value.
     expect(described[0].changes).toContainEqual({ label: "Made the contact", from: null, to: "gone" })
     expect(described[1]).toMatchObject({
-      summary: "closed the follow-up with the lead",
-      changes: [{ label: "Closed with the lead", from: null, to: "Archived" }],
+      summary: "closed the follow-up with the application",
+      changes: [{ label: "Closed with the application", from: null, to: "Archived" }],
     })
   })
 })
@@ -226,7 +226,7 @@ describe("recording a contact", () => {
       message: "Someone else has already recorded or changed this follow-up. Nothing was saved. Reload the page to see it.",
     })
     expect(followUpOutcome({ kind: "forbidden" }, "record").message).toBe("Your role can't record follow-ups.")
-    expect(followUpOutcome({ kind: "not-found" }, "record").message).toBe("This lead could not be found. Reload the page.")
+    expect(followUpOutcome({ kind: "not-found" }, "record").message).toBe("This application could not be found. Reload the page.")
   })
 
   test("a refused decline outcome says nothing was saved, in a plain sentence", () => {
@@ -239,10 +239,10 @@ describe("recording a contact", () => {
       "Write an explanation for Other, of at most 1,000 characters.",
     )
     expect(followUpOutcome({ kind: "forbidden" }, "decline").message).toBe(
-      "Your role can't decline this lead with that reason. Nothing was saved.",
+      "Your role can't decline this application with that reason. Nothing was saved.",
     )
     expect(followUpOutcome({ kind: "conflict" }, "decline")).toMatchObject({ conflict: true })
-    expect(declinedOutcome()).toEqual({ status: "saved", message: "Follow-up recorded. The lead is declined." })
+    expect(declinedOutcome()).toEqual({ status: "saved", message: "Follow-up recorded. The application is declined." })
   })
 
   test("confirms the next date in words, or just the record", () => {
@@ -267,9 +267,9 @@ describe("recording a contact", () => {
 
   test("says how each record ended", () => {
     expect(recordOutcomeText({ kind: "contact", outcome: "next_date", cause: null }, "2026-10-11")).toBe("Next follow-up: 11 Oct 2026")
-    expect(recordOutcomeText({ kind: "contact", outcome: "lead_enrolled", cause: null }, null)).toBe("No next date: the lead is Enrolled")
-    expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "declined" }, null)).toBe("Closed with the lead (Declined)")
-    expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "inactive" }, null)).toBe("Closed with the lead (Inactive)")
-    expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "archived" }, null)).toBe("Closed with the lead (Archived)")
+    expect(recordOutcomeText({ kind: "contact", outcome: "lead_enrolled", cause: null }, null)).toBe("No next date: the student is Enrolled")
+    expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "declined" }, null)).toBe("Closed with the application (Declined)")
+    expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "inactive" }, null)).toBe("Closed with the application (Inactive)")
+    expect(recordOutcomeText({ kind: "closed_with_lead", outcome: null, cause: "archived" }, null)).toBe("Closed with the application (Archived)")
   })
 })

@@ -175,7 +175,7 @@ describe("a code held by a retired record and a new one", () => {
     expect(resolved).toEqual([replacement.id])
 
     // The replacement starts Approved and switched on, so the fee keeps the discount.
-    expect(await fee(lead)).toEqual({
+    expect(await fee(lead)).toMatchObject({
       code: old.code,
       state: "approved",
       agentName: replacement.fullName,
@@ -314,7 +314,17 @@ describe("the discount rule", () => {
     const lead = await newLead(agent.code)
     await asSystem((sql) => changeStatus(sql, agent.id, "retired"))
 
-    expect(await fee(lead)).toEqual({ code: agent.code, state: "unrecognised", agentName: null, amount: 50000, discountApplied: false, switchedOffAt: null })
+    expect(await fee(lead)).toMatchObject({
+      code: agent.code,
+      state: "unrecognised",
+      agentName: null,
+      amount: 50000,
+      discountApplied: false,
+      switchedOffAt: null,
+      kind: "agent",
+      discountState: "retired",
+      amountOff: 0,
+    })
     expect(await estimateDiscountCode(secretClient(), agent.code)).toEqual({ ok: true, data: { state: "unknown", amount: 50000 } })
     expect(await findReferralAgent(await signedIn(ADMISSIONS), agent.code)).toEqual({ ok: true, data: null })
   })

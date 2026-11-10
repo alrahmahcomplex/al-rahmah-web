@@ -30,10 +30,10 @@ insert into public.roles (id, name, permissions) values
         'follow_ups.record', 'group_links.manage', 'interviews.record', 'leads.close', 'leads.create',
         'leads.decline', 'leads.edit', 'leads.view', 'payments.view', 'results.send', 'visits.record']),
     ('7e000000-0000-4000-8000-000000000002', 'Admissions Manager', array[
-        'academic_years.manage', 'agents.approve', 'discounts.approve', 'follow_ups.record',
+        'academic_years.manage', 'agents.approve', 'discount_codes.manage', 'discounts.approve', 'follow_ups.record',
         'group_links.manage', 'interviews.record', 'leads.close', 'leads.create', 'leads.decline',
-        'leads.edit', 'leads.view', 'lifecycle.intervene', 'payments.view', 'reopenings.approve', 'reports.view',
-        'results.send', 'visits.record']),
+        'leads.edit', 'leads.export', 'leads.import', 'leads.view', 'lifecycle.intervene', 'payments.view',
+        'reopenings.approve', 'reports.view', 'results.send', 'visits.record']),
     ('7e000000-0000-4000-8000-000000000003', 'Accountant', array[
         'interview_payments.record', 'leads.view', 'payments.record', 'payments.view']),
     ('7e000000-0000-4000-8000-000000000004', 'Receptionist', array['leads.view', 'leads.create']);
@@ -87,8 +87,9 @@ from auth.users u
 where u.email like '%@example.test';
 
 -- The Super Admin (#237). Migration 20261130990300_super_admin_role.sql
--- creates the staff record with the school's own address, as on hosted;
--- locally it gets a login with the fixture password, so tests can sign in.
+-- creates the staff record and 20261204130900_super_admin_email.sql sets the
+-- school's own address, as on hosted; locally it gets a login with the
+-- fixture password and the record's email, so tests can sign in.
 insert into auth.users (
     instance_id, id, aud, role, email, encrypted_password,
     email_confirmed_at, raw_app_meta_data, raw_user_meta_data,

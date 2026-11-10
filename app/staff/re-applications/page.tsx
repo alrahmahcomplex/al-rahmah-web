@@ -1,7 +1,9 @@
+import { RepeatIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { buttonVariants } from "@/components/ui/button"
 import { listReApplications, type ReApplicationList } from "@/lib/services/re-applications"
@@ -65,9 +67,17 @@ function Results({ results, search }: { results: ReApplicationList; search: ReAp
 
   return (
     <section aria-label="Results" className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground" aria-live="polite">
-        {total === 0 ? (reviewed ? "No re-application has been reviewed yet." : "No re-applications wait for review.") : counted}
-      </p>
+      {total === 0 ? (
+        <EmptyState
+          role="status"
+          icon={RepeatIcon}
+          title={reviewed ? "No re-application has been reviewed yet." : "No re-applications wait for review."}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {counted}
+        </p>
+      )}
 
       {reApplications.length > 0 && (
         <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
@@ -76,7 +86,7 @@ function Results({ results, search }: { results: ReApplicationList; search: ReAp
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">Admission Number</th>
                 <th scope="col" className="px-3 py-2 font-medium">Student</th>
-                <th scope="col" className="px-3 py-2 font-medium">Lead</th>
+                <th scope="col" className="px-3 py-2 font-medium">Application</th>
                 <th scope="col" className="px-3 py-2 font-medium">Arrived</th>
                 <th scope="col" className="px-3 py-2 font-medium">Differences</th>
                 {reviewed && <th scope="col" className="px-3 py-2 font-medium">Reviewed</th>}

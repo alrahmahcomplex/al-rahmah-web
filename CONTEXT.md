@@ -8,6 +8,9 @@ This context covers the work of capturing and progressing families who are consi
 A student record created in one of two ways: a parent or guardian submits the **Admission form**, and the lead begins as **Applied**; or a family with no submitted form completes a qualifying campus visit, and the lead begins as **Visited**. It may proceed to an admission interview, enrolment, or decline. The parent or guardian is a contact person or custodian associated with the lead, not the lead themselves.
 _Avoid_: Parent, guardian, prospect, enquiry, applicant
 
+**Words on screen**:
+Staff and families never read "lead". On screen the person is an **applicant** ("12 applicants", the Applicants list at `/staff/applicants`), the record and its page are an **application** ("Open the application", "Application history"), and an **Enrolled** applicant is a **student**. Status names stay as they are. Code, routes in code, tables, columns, permission names and this glossary keep "lead"; the _Avoid_ line above is about them, not about screen text.
+
 **Admission form**:
 The public form, reached from the school landing page or from a **Referral link**, through which a parent or guardian applies for a student. Anyone may submit it without a referral. A successful submission creates an **Applied** admissions lead and shows the parent or guardian the lead's **Admission Number**. The form also states how many students families have applied for through it since 1 January, Tanzania time, as a plain total, and only once that total reaches 100.
 
@@ -50,7 +53,7 @@ A required choice from a fixed list recorded when a lead is marked **Declined**,
 The initial choices are: **Enrolled elsewhere**, **Family changed plans**, **Fees or cost**, **Fee payment not completed**, **No seat available**, **Did not pass interview**, **Unreachable after follow-up**, **School decision**, and **Other**.
 
 **Interview payment**:
-The payment status for the admission interview, in Tanzanian shillings (TZS). The standard interview amount is **TZS 50,000**. An **Approved** **Referral code** on the lead grants a **TZS 10,000** discount, making the calculated expected amount **TZS 40,000**. A fee already **Paid** keeps the amount locked when it was marked, and a family who pays less than the expected amount stays **Not Paid**. Staff cannot override the calculated fee. The Accountant records only **Paid** or **Not Paid**; payment date, method, and receipt reference are outside the current scope.
+The payment status for the admission interview, in Tanzanian shillings (TZS). The standard interview amount is **TZS 50,000**. A code on the lead takes a whole-shilling amount off it, from 0 to 50,000: an **Approved**, switched-on agent's **Referral code** takes the **Standard discount** (**TZS 10,000** when the system starts, so the expected amount is **TZS 40,000**) unless the agent has an own amount, and an Active **Promo code** takes its own amount. A paused, ended or expired Promo code, and a **Pending** or switched-off agent's code, take nothing off. Changing an amount or a code's state moves every fee not yet **Paid** that carries the code, and needs a reason. A fee already **Paid** keeps the amount locked when it was marked, and a family who pays less than the expected amount stays **Not Paid**. Staff cannot override the calculated fee. The Accountant records only **Paid** or **Not Paid**; payment date, method, and receipt reference are outside the current scope.
 
 The fee belongs to each interview, not to the lead, so a retaken interview after a reopening starts **Not Paid** with its own fee. Marking it **Paid** locks the calculated amount at that moment, and a later change to the **Referral code** or the agent's approval does not change it. Marking it **Not Paid** again, to undo a wrong click, releases the lock; the next **Paid** locks the amount as it is then.
 
@@ -166,9 +169,12 @@ The permissions are:
 | `academic_years.manage` | Setting the **Academic-year start** and the seats in each class, and releasing a seat with **No seat available**. |
 | `group_links.manage` | Saving or replacing the admissions WhatsApp group link for an Enrollment year. |
 | `reports.view` | Opening **Reports**, the lead and seat statistics. Every count is answered under `leads.view`, so `reports.view` implies it: a role given `reports.view` gets `leads.view` with it, and a role that loses `leads.view` loses `reports.view` too. Seats by class still needs `payments.view`. |
+| `discount_codes.manage` | Setting the **Standard discount** and each Marketing Agent's own interview discount, and creating, editing, pausing, resuming and ending **Promo codes**. Needs `leads.view`. |
+| `leads.import` | Importing applicants from a CSV. Needs `leads.create`. |
+| `leads.export` | Exporting applicants with their parents' names and phone numbers. Needs `leads.view`. |
 | `audit.view` | Reading the audit history: every lead's History page, the Staff and roles history and the system-wide **Audit** screen. Held only by the **Super Admin**; no role may be given it. |
 
-No role holds `reports.view` without `leads.view`. The database keeps the pair together on every write and records the implied change in the same audit entry as the role change; it is the only dependency between permissions.
+No role holds `reports.view`, `discount_codes.manage` or `leads.export` without `leads.view`, or `leads.import` without `leads.create`. The database keeps each pair together on every write and records the implied change in the same audit entry as the role change.
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
 
@@ -361,9 +367,16 @@ Switching off, switching on, retiring and Recreate each need `agents.approve` an
 **Referral code**:
 The code that identifies a Marketing Agent, issued when the agent registers. It is the only referral field on a lead: the agent's name is never entered separately and is resolved from the code. A lead gets its code from a **Referral link**, from the parent or guardian typing it into the **Admission form**, or from staff entering it for a walk-in family. However it arrives, an **Approved** code on the lead is what grants the interview discount. A code typed on the form that matches no Marketing Agent is kept on the lead as **Unrecognised** and grants no discount; staff may correct it to a real code, and the correction is audited.
 A code is the initials of the first three words of the agent's name, a hyphen and three digits, such as `AJM-407` (four digits once the three-digit codes for those initials run short). Codes are matched however they are typed: case and spaces never matter.
-Staff can only enter a registered agent's code, **Pending** or **Approved**; a code that matches no Marketing Agent is refused. Only the **Admission form** can leave an **Unrecognised** code on a lead.
+Staff can only enter a registered agent's code, **Pending** or **Approved**, or a **Promo code** in any state; a code that matches neither is refused. Only the **Admission form** can leave an **Unrecognised** code on a lead.
 A code the form sends for a child already on file stays on the **Re-application** and never reaches the lead from the form, so nothing from the public overwrites a checked record. Staff reviewing the re-application see it beside the lead's code, flagged when the two differ, and may apply it to the lead under the same rule as entering a code: only a registered agent's code, and only on an open lead.
 _Avoid_: External referral code, Marketing Agent code. Parents and agents see it as a **Discount code**.
+
+**Standard discount**:
+The amount an **Approved**, switched-on agent's code takes off the interview fee unless the agent has an own amount: whole shillings from 0 to 50,000, **TZS 10,000** when the system starts. A role with `discount_codes.manage` changes it on the Marketing Agents screen with a reason, after seeing the families whose unpaid fee it moves; the agent registration page quotes it. An agent's own amount is set the same way, and putting the agent back on the standard makes them follow it again.
+
+**Promo code**:
+A school code for a campaign or group, such as an Instagram ad or a parents' association, with a name staff see, the code parents type and a whole-shilling amount off the interview fee. It belongs to no Marketing Agent: a lead carrying it has no agent, earns no commission and never shows on an agent's students. The code is 4 to 12 letters and digits with no hyphen, unique across agent codes and Promo codes, and never changes once created. A Promo code is **Active** (gives its amount), **Paused** (gives nothing until resumed), **Ended** (final: it stays in history and on its students, gives nothing and can never be reused), or **Expired** (Active past its optional last day). Creating, editing, pausing, resuming and ending need `discount_codes.manage`; a new amount or last day, and every state change, need a reason. Everyone with `leads.view` sees the list. Parents type it into the same **Discount code** field as an agent's code.
+_Avoid_: Coupon, voucher, school code
 
 **Discount code**:
 The name used for a **Referral code** wherever parents, guardians or Marketing Agents see it: on the **Admission form**, the agent registration page, and every message or page addressed to them. In Swahili it is **Code ya Punguzo**. Parent-facing text never mentions Marketing Agents, referrals or agent approval: a **Pending** code is described as a discount code awaiting confirmation. The agent registration page tells the agent that families who use their discount code get TZS 10,000 off the interview fee.

@@ -73,7 +73,7 @@ export function refusalOutcome(error: CreateLeadError): RegisterOutcome {
       return {
         status: "duplicate",
         admissionNumber,
-        href: closed ? `/staff/leads/${id}/reopen?source=duplicate_match` : `/staff/leads/${id}`,
+        href: closed ? `/staff/applicants/${id}/reopen?source=duplicate_match` : `/staff/applicants/${id}`,
       }
     }
     case "invalid": {

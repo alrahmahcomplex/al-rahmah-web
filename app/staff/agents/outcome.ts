@@ -179,7 +179,10 @@ const FIELD_HINTS: Record<AgentDraftField, string> = {
 
 export const AGENT_LOST = "The agent could not be confirmed as saved. Check your connection, reload the page and search for the agent's phone before trying again."
 
-const CREATE_REFUSED: Record<Exclude<CreateAgentError["kind"], "invalid" | "email-taken"> | "signed-out", string> = {
+// A Promo code holds the code: there is no agent record to name.
+export const PROMO_CODE_TAKEN = "A Promo code already uses this code."
+
+const CREATE_REFUSED: Record<Exclude<CreateAgentError["kind"], "invalid" | "email-taken" | "promo-code-taken"> | "signed-out", string> = {
   forbidden: "You don't have permission to add Marketing Agents.",
   unavailable: "The agent could not be checked just now. Nothing was saved. Try again in a moment.",
   uncertain: AGENT_LOST,
@@ -191,6 +194,7 @@ export type DraftRefusal = { message: string; field?: AgentDraftField }
 export function createRefusal(error: CreateAgentError | { kind: "signed-out" }): DraftRefusal {
   if (error.kind === "invalid") return { message: FIELD_HINTS[error.field], field: error.field }
   if (error.kind === "email-taken") return { message: emailTakenMessage(error), field: "email" }
+  if (error.kind === "promo-code-taken") return { message: PROMO_CODE_TAKEN, field: "code" }
   return { message: CREATE_REFUSED[error.kind] }
 }
 

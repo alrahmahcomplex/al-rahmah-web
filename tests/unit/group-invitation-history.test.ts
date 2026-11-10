@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
 // The lead history's words for a group invitation (#186).

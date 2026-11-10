@@ -39,7 +39,7 @@ Al-Rahmah Complex (Al-Rahmah Schools) offers Islamic values alongside academic r
 - Parents read on phones, often on mobile data, and share via WhatsApp.
 - A parent who submits the Admission form receives an **Admission Number** (the Lead ID) and brings it to campus; staff find the lead by that number or by the student's name.
 - Interview results reach parents only through a staff-triggered **Send through WhatsApp** (or **Send SMS**) action, as a warm Swahili message, and only once the interview fee is **Paid**.
-- Money is in Tanzanian shillings (TZS). The interview fee is TZS 50,000, or TZS 40,000 with an **Approved** Referral code (TZS 10,000 off).
+- Money is in Tanzanian shillings (TZS). The interview fee is TZS 50,000, less the amount the family's code takes off: an **Approved** agent's Referral code takes the Standard discount (TZS 10,000 at launch, so TZS 40,000) or the agent's own amount, and an Active **Promo code** takes its own amount, with no agent and no commission.
 - Domain terms, lifecycle rules and role permissions are defined in [CONTEXT.md](CONTEXT.md); that file is the authority for vocabulary.
 
 ## Capabilities and Constraints

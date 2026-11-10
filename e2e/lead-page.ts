@@ -14,12 +14,12 @@ const TAB_PARAMS: Record<LeadTabName, string> = {
 
 // The lead page's address on a tab.
 export function leadUrl(leadId: string, tab: LeadTabName = "Overview"): string {
-  return `/staff/leads/${leadId}${TAB_PARAMS[tab]}`
+  return `/staff/applicants/${leadId}${TAB_PARAMS[tab]}`
 }
 
 // Switches the open lead page to a tab, as staff do.
 export async function openLeadTab(page: Page, tab: LeadTabName): Promise<void> {
-  const link = page.getByRole("navigation", { name: "Lead sections" }).getByRole("link", { name: tab, exact: true })
+  const link = page.getByRole("navigation", { name: "Application sections" }).getByRole("link", { name: tab, exact: true })
   await link.click()
   await expect(link).toHaveAttribute("aria-current", "page")
 }
@@ -35,6 +35,8 @@ export async function chooseMore(page: Page, action: MoreAction): Promise<void> 
 // The actions the More menu offers on the open lead page, none when there is
 // no More.
 export async function moreActions(page: Page): Promise<string[]> {
+  // Wait for the page itself, not its loading skeleton, before counting.
+  await expect(page.getByRole("navigation", { name: "Application sections" })).toBeVisible()
   const more = page.getByRole("button", { name: "More actions", exact: true })
   if ((await more.count()) === 0) return []
   await more.click()

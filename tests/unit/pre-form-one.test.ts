@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { describeLeadHistory } from "@/app/staff/leads/[id]/history/describe"
-import { paymentRefusal, recordedPaymentOutcome } from "@/app/staff/leads/[id]/payment-outcome"
-import { preFormOneOutcome } from "@/app/staff/leads/[id]/pre-form-one-outcome"
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { paymentRefusal, recordedPaymentOutcome } from "@/app/staff/applicants/[id]/payment-outcome"
+import { preFormOneOutcome } from "@/app/staff/applicants/[id]/pre-form-one-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import type { SetPreFormOneError } from "@/lib/services/pre-form-one"
 import { PAYMENT_TYPE_NAMES } from "@/lib/services/school-fee-payments"
@@ -46,7 +46,7 @@ describe("a Pre-Form One fee payment", () => {
     expect(PAYMENT_TYPE_NAMES.pre_form_one_fee).toBe("Pre-Form One fee")
     expect(paymentRefusal("not_pre_form_one", "checked")).toMatchObject({
       field: "type",
-      message: expect.stringContaining("Pre-Form One programme is ticked on a FORM 1 lead"),
+      message: expect.stringContaining("Pre-Form One programme is ticked on a FORM 1 applicant"),
     })
     expect(recordedPaymentOutcome({ paymentId: PAYMENT, totalPaid: 300_000, priority: "Deposit" }, "pre_form_one_fee")).toEqual({
       status: "recorded",

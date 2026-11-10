@@ -484,7 +484,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
         done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code", "fee"],
       }),
     )
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
     const user = userEvent.setup()
     render(form("en"))
@@ -625,7 +625,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
   it.each(["sw", "en"] as const)("never says agent, referral, wakala, idhini or mtoto in %s", async (language) => {
     const user = userEvent.setup()
     render(form(language, { discountCode: "BJN-402" }))
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     await fillToSend(user, language).catch(() => undefined)
     // The code holder's notice is versioned wording from lib/referral-notice.ts.
     document.querySelectorAll("[data-notice-version]").forEach((notice) => notice.remove())
@@ -665,7 +665,7 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
         done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code"],
       }),
     )
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     render(form("en"))
 
     await waitFor(() => expect(open().getByRole("heading", { name: "Interview fee" })).toBeInTheDocument())
@@ -674,7 +674,7 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
   })
 
   it("promises no discount when an earlier send is what went through", async () => {
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     stubs.submit.mockResolvedValue({ status: "already-sent", children: [{ fullName: "Zawadi Mfano", admissionNumber: "26-0042" }], complete: true })
     const user = userEvent.setup()
     render(form("en"))
@@ -713,7 +713,7 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
   })
 
   it("starts from the link's code, remembers it for 30 days, and checks it as the question opens", async () => {
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     const user = userEvent.setup()
     render(form("sw", { discountCode: "BJN-402", rememberDiscountCode: "BJN-402" }))
     expect(document.cookie).toContain("discount_code=BJN-402")
@@ -763,7 +763,7 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
 
   it("brings the fee down for a confirmed code, opens the offer sheet, and sends the code with the notice version", async () => {
     live = { applications: 1284, discount: 10000 }
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
     const user = userEvent.setup()
     render(form("sw"))
@@ -793,9 +793,33 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     expect(offer).toHaveTextContent("Hivyo mlete mwanafunzi kwenye usaili mapema, Ikiwezekana mlete wiki hii ndani ya siku za kazi.")
   })
 
+  it("states the code's own amount from its estimate, not the standard discount", async () => {
+    // A Promo code or an agent with an own amount: TZS 25,000 off, whatever
+    // the standard discount is.
+    live = { applications: null, discount: 10000 }
+    stubs.check.mockResolvedValue({ status: "approved", amount: 25000 })
+    const user = userEvent.setup()
+    render(form("en", { discountCode: "INSTA26" }))
+    await toCode(user)
+    expect(await screen.findByText("Well done! You save TZS 25,000 for each student.")).toBeInTheDocument()
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Interview fee")
+    expect(open().getByText("You save TZS 25,000")).toBeInTheDocument()
+  })
+
+  it("promises no saving for a confirmed code set to nothing off", async () => {
+    stubs.check.mockResolvedValue({ status: "approved", amount: 50000 })
+    const user = userEvent.setup()
+    render(form("en", { discountCode: "ZERO26" }))
+    await toCode(user)
+    expect(await screen.findByText("This code gives no discount at the moment. You can still send the form.")).toBeInTheDocument()
+    expect(screen.queryByText(/You save/)).not.toBeInTheDocument()
+    expect(screen.queryByText("This offer is for a limited time")).not.toBeInTheDocument()
+  })
+
   it("leaves the count sentence out of the offer when the count is below the minimum", async () => {
     live = { applications: 40, discount: 10000 }
-    stubs.check.mockResolvedValue({ status: "approved", amount: 40000, discount: 10000 })
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
     const user = userEvent.setup()
     render(form("sw", { discountCode: "BJN-402" }))

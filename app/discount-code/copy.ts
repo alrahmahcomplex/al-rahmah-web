@@ -13,22 +13,40 @@ import type { DiscountCodeMessage } from "./outcome"
 type SignUpMessage = Exclude<DiscountCodeMessage, "rate-limited" | "check-failed" | "unavailable">
 
 type Copy = {
+  // The page title: the tab, and the sr-only h1 above the form.
   title: string
-  heading: string
   // Takes the discount as written ("TZS 10,000"), or null when it couldn't be
   // read, and then names no figure.
   intro: (discount: string | null) => string
+  // The progress bar's two groups: you (name, phone, WhatsApp), then the code (email, code).
+  groups: { you: string; code: string }
+  back: string
+  startOver: string
+  // The progress line read to screen readers.
+  progress: (group: string, step: number, of: number) => string
+  progressDone: string
+  next: string
+  // The questions, one at a time; the short labels name the folded answers.
+  nameQuestion: string
   fullName: string
+  phoneQuestion: string
   phone: string
   phoneHint: string
+  whatsappDifferent: string
   whatsapp: string
-  whatsappHint: string
   email: string
+  emailQuestion: string
   emailHint: string
   hasCode: string
   hasCodeHint: string
+  yes: string
+  no: string
   code: string
   codeHint: string
+  reviewQuestion: string
+  reviewHint: string
+  // The two-word links on the folded answers.
+  change: { name: string; phone: string; email: string; code: string }
   signInPrompt: string
   signIn: string
   optional: string
@@ -58,20 +76,33 @@ type Copy = {
 export const COPY: Record<Language, Copy> = {
   sw: {
     title: "Code ya Punguzo",
-    heading: "Pata Code ya Punguzo",
     intro: (discount) =>
       `Shiriki Code yako ya Punguzo na familia unazozifahamu. Familia itakayoitumia itapata punguzo${discount ? ` la ${discount}` : ""} kwenye ada ya usaili, shule itakapothibitisha code yako.`,
+    groups: { you: "Wewe", code: "Code" },
+    back: "Rudi",
+    startOver: "Anza upya",
+    progress: (group, step, of) => `${group}: hatua ${step} kati ya ${of}`,
+    progressDone: "Kila kitu kimejazwa. Hakiki kisha utume.",
+    next: "Endelea",
+    nameQuestion: "Unaitwa nani?",
     fullName: "Jina lako kamili",
+    phoneQuestion: "Namba yako ya simu?",
     phone: "Namba ya simu",
     phoneHint: "Mfano: 0712 345 678",
+    whatsappDifferent: "Namba yangu ya WhatsApp ni tofauti",
     whatsapp: "Namba ya WhatsApp",
-    whatsappHint: "Jaza tu kama ni tofauti na namba ya simu.",
     email: "Barua pepe",
+    emailQuestion: "Barua pepe yako?",
     emailHint: "Utapokea barua pepe ya kuweka nenosiri hapa.",
     hasCode: "Tayari una code?",
-    hasCodeHint: "Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Weka alama hapa",
+    hasCodeHint: "Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Chagua Ndiyo.",
+    yes: "Ndiyo",
+    no: "Hapana",
     code: "Code yako ya Punguzo",
     codeHint: "Iandike kama ulivyopewa, mfano ABC-123.",
+    reviewQuestion: "Hakiki kisha utume",
+    reviewHint: "Gusa Badilisha kurekebisha chochote.",
+    change: { name: "Badilisha Jina", phone: "Badilisha Namba", email: "Badilisha Barua pepe", code: "Badilisha Code" },
     signInPrompt: "Umeshaweka nenosiri?",
     signIn: "Ingia",
     optional: "si lazima",
@@ -118,20 +149,33 @@ export const COPY: Record<Language, Copy> = {
   },
   en: {
     title: "Discount code",
-    heading: "Get a Discount code",
     intro: (discount) =>
       `Share your Discount code with families you know. Families who use it get ${discount ? `${discount} off` : "a discount on"} the interview fee once the school confirms your code.`,
+    groups: { you: "You", code: "Code" },
+    back: "Back",
+    startOver: "Start over",
+    progress: (group, step, of) => `${group}: step ${step} of ${of}`,
+    progressDone: "Everything is filled in. Check, then send.",
+    next: "Continue",
+    nameQuestion: "What's your name?",
     fullName: "Your full name",
+    phoneQuestion: "Your phone number?",
     phone: "Phone number",
     phoneHint: "For example: 0712 345 678",
+    whatsappDifferent: "My WhatsApp number is different",
     whatsapp: "WhatsApp number",
-    whatsappHint: "Only if it is different from your phone number.",
     email: "Email",
+    emailQuestion: "Your email?",
     emailHint: "We send the email to set your password here.",
     hasCode: "Already have a Discount code?",
-    hasCodeHint: "Have a code but no email to set a password yet? Tick here",
+    hasCodeHint: "Have a code but no email to set a password yet? Choose Yes.",
+    yes: "Yes",
+    no: "No",
     code: "Your Discount code",
     codeHint: "Type it as you were given it, for example ABC-123.",
+    reviewQuestion: "Check, then send",
+    reviewHint: "Tap Change to fix anything.",
+    change: { name: "Change Name", phone: "Change Number", email: "Change Email", code: "Change Code" },
     signInPrompt: "Already set a password?",
     signIn: "Sign in",
     optional: "optional",

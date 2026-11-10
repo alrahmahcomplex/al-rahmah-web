@@ -43,7 +43,7 @@ export type Permission = (typeof PERMISSIONS)[number]
 // A permission that is useless without another (#244): every Reports count is
 // answered only under leads.view, and so is every discount and export
 // screen; the import creates leads. The database keeps each pair together
-// (supabase/migrations/20261203130100_discount_import_export_permissions.sql);
+// (supabase/migrations/20261204130100_discount_import_export_permissions.sql);
 // the role screen uses this to tick and untick them together and say why.
 // No needed permission needs another, so one step is always enough.
 export const PERMISSION_NEEDS: Readonly<Partial<Record<Permission, Permission>>> = {

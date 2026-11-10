@@ -6,13 +6,16 @@ import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS } from "@/lib/services/lea
 // WhatsApp never loses what they typed. sessionStorage only: the draft dies
 // with the tab, and nothing reaches a cookie or localStorage.
 //
-// The draft holds the parent, the children and the Discount code, never the
-// Turnstile token or the submission key: a restored form makes a fresh key.
+// The draft holds the custodian, the students, the Discount code and which
+// questions the parent has answered (`done`, named by the student's place on
+// the form, as `name-2`), never the Turnstile token or the submission key: a
+// restored form makes a fresh key.
 // Every read and write is wrapped, so with storage blocked the form works as
 // it would with no draft at all.
 
 export const DRAFT_KEY = "al-rahmah:admission-form-draft"
-const VERSION = 1
+// 2: adds `done`, for the one-question-at-a-time form.
+const VERSION = 2
 const MAX_TEXT = 200
 
 export type ParentDraft = { fullName: string; relationship: string; relationshipDescription: string; phone: string; whatsapp: string }
@@ -22,7 +25,7 @@ export type ChildDraft = { card: number; fullName: string; className: string; en
 // `linkCode` is the Referral link's code the page opened with when the draft
 // was written (empty without one), so a reload of the same link keeps the
 // parent's own edit to the code and a different link replaces it.
-export type Draft = { parent: ParentDraft; children: ChildDraft[]; discountCode: string; linkCode: string }
+export type Draft = { parent: ParentDraft; children: ChildDraft[]; discountCode: string; linkCode: string; done: string[] }
 
 export const EMPTY_PARENT: ParentDraft = { fullName: "", relationship: "", relationshipDescription: "", phone: "", whatsapp: "" }
 
@@ -31,6 +34,10 @@ export const EMPTY_PARENT: ParentDraft = { fullName: "", relationship: "", relat
 export function emptyChild(card: number): ChildDraft {
   return { card, fullName: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
 }
+
+// A question's name in the draft: a student's (`class-3`) or the form's own.
+const DONE_KEY = /^((name|class|board)-[1-8]|more|pname|rel|phone|code|fee)$/
+const MAX_DONE = MAX_CHILDREN * 3 + 6
 
 function storage(): Storage | null {
   try {
@@ -61,7 +68,7 @@ export function parseDraft(raw: string | null, years: readonly number[]): Draft 
     return null
   }
   if (!value || typeof value !== "object") return null
-  const { version, parent, children, discountCode, linkCode } = value as Record<string, unknown>
+  const { version, parent, children, discountCode, linkCode, done } = value as Record<string, unknown>
   if (version !== VERSION) return null
 
   const p = parent && typeof parent === "object" ? (parent as Record<string, unknown>) : {}
@@ -87,7 +94,9 @@ export function parseDraft(raw: string | null, years: readonly number[]): Draft 
   })
   if (cleanChildren.length === 0) cleanChildren.push(emptyChild(1))
 
-  return { parent: cleanParent, children: cleanChildren, discountCode: text(discountCode), linkCode: text(linkCode) }
+  const cleanDone = Array.isArray(done) ? done.filter((key): key is string => typeof key === "string" && DONE_KEY.test(key)).slice(0, MAX_DONE) : []
+
+  return { parent: cleanParent, children: cleanChildren, discountCode: text(discountCode), linkCode: text(linkCode), done: cleanDone }
 }
 
 export function readDraft(years: readonly number[]): Draft | null {
@@ -118,7 +127,7 @@ export function writeDraft(draft: Draft) {
       store.removeItem(DRAFT_KEY)
       return
     }
-    const { parent, children, discountCode, linkCode } = draft
+    const { parent, children, discountCode, linkCode, done } = draft
     store.setItem(
       DRAFT_KEY,
       JSON.stringify({
@@ -132,6 +141,7 @@ export function writeDraft(draft: Draft) {
         })),
         discountCode,
         linkCode,
+        done,
       }),
     )
   } catch {

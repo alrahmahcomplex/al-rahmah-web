@@ -12,6 +12,7 @@ const DRAFT: Draft = {
   ],
   discountCode: "AMINA-1",
   linkCode: "BJN-402",
+  done: ["name-1", "class-1", "board-1", "name-2", "pname"],
 }
 
 afterEach(() => {
@@ -34,7 +35,7 @@ describe("the Admission form's draft", () => {
     expect(window.localStorage.length).toBe(0)
     expect(document.cookie).toBe("")
     const stored = JSON.parse(window.sessionStorage.getItem(DRAFT_KEY)!)
-    expect(Object.keys(stored).sort()).toEqual(["children", "discountCode", "linkCode", "parent", "version"])
+    expect(Object.keys(stored).sort()).toEqual(["children", "discountCode", "done", "linkCode", "parent", "version"])
     expect(JSON.stringify(stored)).not.toMatch(/submission|turnstile|token|card/i)
   })
 
@@ -44,7 +45,7 @@ describe("the Admission form's draft", () => {
     expect(window.sessionStorage.getItem(DRAFT_KEY)).toBeNull()
 
     writeDraft(DRAFT)
-    writeDraft({ parent: EMPTY_PARENT, children: [emptyChild(1)], discountCode: "FROM-LINK", linkCode: "FROM-LINK" })
+    writeDraft({ parent: EMPTY_PARENT, children: [emptyChild(1)], discountCode: "FROM-LINK", linkCode: "FROM-LINK", done: [] })
     expect(window.sessionStorage.getItem(DRAFT_KEY)).toBeNull()
   })
 
@@ -64,10 +65,17 @@ describe("the Admission form's draft", () => {
     expect(parseDraft(null, YEARS)).toBeNull()
     expect(parseDraft("{not json", YEARS)).toBeNull()
     expect(parseDraft(JSON.stringify({ version: 99, parent: DRAFT.parent }), YEARS)).toBeNull()
-    const odd = parseDraft(JSON.stringify({ version: 1, parent: { fullName: 7 }, children: "two", discountCode: ["x"] }), YEARS)
-    expect(odd).toEqual({ parent: EMPTY_PARENT, children: [emptyChild(1)], discountCode: "", linkCode: "" })
-    const many = parseDraft(JSON.stringify({ version: 1, parent: {}, children: Array(12).fill({}) }), YEARS)
+    // The three-step form's drafts (version 1) start the new form afresh.
+    expect(parseDraft(JSON.stringify({ ...DRAFT, version: 1 }), YEARS)).toBeNull()
+    const odd = parseDraft(JSON.stringify({ version: 2, parent: { fullName: 7 }, children: "two", discountCode: ["x"], done: "all" }), YEARS)
+    expect(odd).toEqual({ parent: EMPTY_PARENT, children: [emptyChild(1)], discountCode: "", linkCode: "", done: [] })
+    const many = parseDraft(JSON.stringify({ version: 2, parent: {}, children: Array(12).fill({}) }), YEARS)
     expect(many?.children).toHaveLength(8)
+  })
+
+  it("keeps only the answered questions it knows by name", () => {
+    writeDraft({ ...DRAFT, done: ["name-1", "class-9", "send", "<script>", "code", "fee"] })
+    expect(readDraft(YEARS)?.done).toEqual(["name-1", "code", "fee"])
   })
 
   it("works without a draft when storage is blocked", () => {

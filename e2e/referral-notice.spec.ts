@@ -2,14 +2,12 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { expect, test, type Page } from "@playwright/test"
 
-import { E2E_PORT } from "./server"
-
 import { admissionYears } from "../lib/admission-form"
 import { FORM_NOTICE, FORM_NOTICE_VERSION, STAFF_REMINDER } from "../lib/referral-notice"
 import { createLead } from "../lib/services/leads"
 import { inRolledBackTransaction, secretClient } from "../tests/support/db"
 import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
-import { family, fillChild, fillParent, PHONE_WIDTH, waitForSecurityCheck, type Lang } from "./admission-form"
+import { family, openQuestion, PHONE_WIDTH, send, toCode, toSend, setLanguageCookie, WORDS, type Lang } from "./admission-form"
 import { logIn } from "./log-in"
 
 // The code-holder notice (#182): under the Admission form's Discount code
@@ -18,19 +16,11 @@ import { logIn } from "./log-in"
 // walk-in family. The codes are slice 4's seeded agents.
 
 const nextYear = String(admissionYears()[1])
-const FIELD = { sw: "Code ya Punguzo · si lazima", en: "Discount code · optional" } as const
 
-async function useEnglish(page: Page) {
-  await page.context().addCookies([{ name: "lang", value: "en", url: `http://localhost:${E2E_PORT}` }])
-}
-
-// Fills one parent and child and opens the review step, where the field is.
+// Fills one student and the custodian and opens the Discount code question.
 async function toReview(page: Page, lang: Lang) {
   const who = family()
-  await fillParent(page, lang, who)
-  await page.getByRole("button", { name: lang === "sw" ? "Endelea" : "Continue" }).click()
-  await fillChild(page, lang, { child: who.child }, nextYear, page.getByRole("group", { name: lang === "sw" ? "Mtoto 1" : "Child 1" }))
-  await page.getByRole("button", { name: lang === "sw" ? "Endelea" : "Continue" }).click()
+  await toCode(page, lang, who, nextYear)
   return who
 }
 
@@ -50,10 +40,10 @@ test.describe("the notice on the Admission form", () => {
 
   for (const lang of ["sw", "en"] as const) {
     test(`a typed code shows the notice in ${lang === "sw" ? "Swahili" : "English"}, and clearing it hides it`, async ({ page }) => {
-      if (lang === "en") await useEnglish(page)
+      await setLanguageCookie(page.context(), lang)
       await page.goto("/apply")
       await toReview(page, lang)
-      const field = page.getByLabel(FIELD[lang])
+      const field = openQuestion(page).getByLabel(WORDS[lang].codeLabel)
       const notice = page.getByText(FORM_NOTICE[lang])
 
       // No code, no notice: the field stays optional.
@@ -72,17 +62,17 @@ test.describe("the notice on the Admission form", () => {
     test(`a Referral link's code shows the notice in ${lang === "sw" ? "Swahili" : "English"}, and the lead records its version`, async ({
       page,
     }) => {
-      if (lang === "en") await useEnglish(page)
+      await setLanguageCookie(page.context(), lang)
       await page.goto("/apply?ref=bjn-402")
       const who = await toReview(page, lang)
-      await expect(page.getByLabel(FIELD[lang])).toHaveValue("BJN-402")
+      await expect(openQuestion(page).getByLabel(WORDS[lang].codeLabel)).toHaveValue("BJN-402")
       await expect(page.getByText(FORM_NOTICE[lang])).toBeVisible()
       // Only the notice for the page's language shows.
       await expect(page.getByText(FORM_NOTICE[lang === "sw" ? "en" : "sw"])).toHaveCount(0)
 
-      await waitForSecurityCheck(page)
-      await page.getByRole("button", { name: lang === "sw" ? "Tuma maombi" : "Send application" }).click()
-      await expect(page.getByRole("heading", { name: lang === "sw" ? "Maombi yamepokelewa!" : "Application received!" })).toBeVisible()
+      await toSend(page, lang)
+      await send(page, lang)
+      await expect(page.getByRole("heading", { name: WORDS[lang].done })).toBeVisible()
       expect(await noticeVersionOf(who.child)).toBe(FORM_NOTICE_VERSION)
     })
   }

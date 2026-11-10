@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { secretClient } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
-import { FORBIDDEN, fillRegistration, newcomer, WORDS, type Lang } from "./discount-code"
+import { chooseLanguage, FORBIDDEN, fillRegistration, newcomer, WORDS, type Lang } from "./discount-code"
 import { E2E_PORT } from "./server"
 import { logIn } from "./log-in"
 
@@ -12,6 +12,10 @@ import { logIn } from "./log-in"
 
 test.use({ viewport: PHONE_WIDTH })
 
+test.beforeEach(async ({ context }) => {
+  await chooseLanguage(context, "sw")
+})
+
 const ORIGIN = `http://localhost:${E2E_PORT}`
 const CODE = /^[A-Z]{1,3}-\d{3,4}$/
 
@@ -19,7 +23,7 @@ async function register(page: Page, lang: Lang, who: ReturnType<typeof newcomer>
   const t = WORDS[lang]
   await page.goto("/discount-code")
   await expect(page.getByRole("main")).toHaveAttribute("lang", lang)
-  await fillRegistration(page, lang, who, whatsapp)
+  await fillRegistration(page, lang, who, { whatsapp })
   await waitForSecurityCheck(page)
   await page.getByRole("button", { name: t.send }).click()
   await expect(page.getByRole("heading", { level: 1, name: t.done })).toBeVisible()
@@ -45,10 +49,12 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
     const t = WORDS[lang]
     const who = newcomer()
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: ORIGIN })
-    if (lang === "en") await context.addCookies([{ name: "lang", value: "en", url: ORIGIN }])
+    if (lang === "en") await chooseLanguage(context, "en")
 
     await page.goto("/discount-code")
-    await expect(page.getByRole("heading", { level: 1, name: t.heading })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeAttached()
+    await expect(page.getByText("AL-RAHMAH COMPLEX")).toBeVisible()
+    await expect(page.getByRole("heading", { name: t.name })).toBeVisible()
     await expect(page.getByText(/TZS 10,000/)).toBeVisible()
     expect(await page.locator("body").innerText()).not.toMatch(FORBIDDEN)
 
@@ -83,7 +89,7 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
   })
 }
 
-test("registering again with the same details shows the same code; another name on the phone is told to tick the box", async ({
+test("registering again with the same details shows the same code; another name on the phone is told to say it has a code", async ({
   page,
 }) => {
   const who = newcomer()
@@ -115,6 +121,41 @@ test("the new agent arrives Pending on the Marketing Agents screen", async ({ pa
   const row = page.getByRole("row", { name: new RegExp(who.name) })
   await expect(row).toContainText(code)
   await expect(row).toContainText("Pending")
+})
+
+test("the menu changes the language in place, keeping every answer, and 'Futa fomu yote' asks before clearing", async ({ page }) => {
+  const who = newcomer()
+  await page.goto("/discount-code")
+  await page.getByLabel(WORDS.sw.name).fill(who.name)
+  await page.locator("li.gf-open").getByRole("button", { name: WORDS.sw.next }).click()
+  await page.getByLabel(WORDS.sw.phone).fill(who.phone)
+
+  await page.getByRole("button", { name: "Menyu" }).click()
+  await page.getByRole("button", { name: "English" }).click()
+  await expect(page.getByLabel(WORDS.en.phone)).toHaveValue(who.phone)
+  await expect(page.getByText(who.name)).toBeVisible()
+  await expect(page.getByRole("button", { name: "Change Name" })).toBeVisible()
+
+  // The menu stays open across the switch; its words follow the language.
+  const clear = page.getByRole("button", { name: "Clear the whole form" })
+  await expect(clear).toBeVisible()
+  await clear.click()
+  await expect(page.getByText("Clear every answer?")).toBeVisible()
+  await page.getByRole("button", { name: "Yes, clear" }).click()
+  await expect(page.getByLabel(WORDS.en.name)).toHaveValue("")
+  await expect(page.getByLabel(WORDS.en.phone)).toHaveCount(0)
+})
+
+test("a first visit asks for the language once", async ({ page, context }) => {
+  await context.clearCookies()
+  await page.goto("/discount-code")
+  await expect(page.getByText("Karibu!")).toBeVisible()
+  await page.getByRole("button", { name: "Endelea kwa Kiswahili" }).click()
+  await expect(page.getByText("Karibu!")).toBeHidden({ timeout: 10_000 })
+  expect((await context.cookies()).find((c) => c.name === "lang")?.value).toBe("sw")
+  await page.reload()
+  await expect(page.getByRole("heading", { name: WORDS.sw.name })).toBeVisible()
+  await expect(page.getByText("Karibu!")).toHaveCount(0)
 })
 
 test("the page is noindex and the landing page doesn't link to it", async ({ page }) => {

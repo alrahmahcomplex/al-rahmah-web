@@ -1,84 +1,88 @@
 import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { family, fillChild, fillParent, PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
+import { expectQuestion, family, fillStudent, openQuestion, tile, PHONE_WIDTH, send, toSend, setLanguageCookie, WORDS } from "./admission-form"
 
-// Several children on one Admission form (#75), on a phone, in Swahili,
+// Several students on one Admission form (#75), on a phone, in Swahili,
 // against local Supabase with Turnstile's always-pass test keys.
 
 test.use({ viewport: PHONE_WIDTH })
 
 const nextYear = String(admissionYears()[1])
+const t = WORDS.sw
 
-test("adds and removes child cards, keeping the entries of the cards that stay", async ({ page }) => {
-  const who = family()
-  await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: "Endelea" }).click()
-
-  await expect(page.getByRole("button", { name: /^Ondoa mtoto/ })).toHaveCount(0)
-  await page.getByLabel("Jina kamili la mtoto").fill(`${who.child} A`)
-
-  await page.getByRole("button", { name: "Ongeza mtoto mwingine" }).click()
-  const second = page.getByRole("group", { name: "Mtoto 2" })
-  await expect(second.getByLabel("Jina kamili la mtoto")).toBeFocused()
-  await second.getByLabel("Jina kamili la mtoto").fill(`${who.child} B`)
-  await page.getByRole("button", { name: "Ongeza mtoto mwingine" }).click()
-  await page.getByRole("group", { name: "Mtoto 3" }).getByLabel("Jina kamili la mtoto").fill(`${who.child} C`)
-
-  await page.getByRole("button", { name: "Ondoa mtoto 2" }).click()
-  await expect(page.getByRole("group", { name: "Mtoto 3" })).toHaveCount(0)
-  await expect(page.getByRole("group", { name: "Mtoto 1" }).getByLabel("Jina kamili la mtoto")).toHaveValue(`${who.child} A`)
-  await expect(page.getByRole("group", { name: "Mtoto 2" }).getByLabel("Jina kamili la mtoto")).toHaveValue(`${who.child} C`)
-
-  await page.getByRole("button", { name: "Ondoa mtoto 1" }).click()
-  await expect(page.getByRole("group", { name: /^Mtoto \d$/ })).toHaveCount(1)
-  await expect(page.getByLabel("Jina kamili la mtoto")).toHaveValue(`${who.child} C`)
-  await expect(page.getByRole("button", { name: /^Ondoa mtoto/ })).toHaveCount(0)
-
-  for (let count = 2; count <= 8; count++) await page.getByRole("button", { name: "Ongeza mtoto mwingine" }).click()
-  await expect(page.getByRole("group", { name: /^Mtoto \d$/ })).toHaveCount(8)
-  await expect(page.getByRole("button", { name: "Ongeza mtoto mwingine" })).toHaveCount(0)
-  await expect(page.getByText("Unaweza kuomba kwa watoto hadi 8 kwenye fomu moja.")).toBeVisible()
+test.beforeEach(async ({ context }) => {
+  await setLanguageCookie(context, "sw")
 })
 
-test("the same child twice on one form is refused before Continue, naming the child", async ({ page }) => {
+test("adds students up to eight with their labels, and removes one, keeping the others' entries", async ({ page }) => {
+  // Eight students, three questions each.
+  test.setTimeout(120_000)
   const who = family()
   await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: "Endelea" }).click()
-  await fillChild(page, "sw", who, nextYear, page.getByRole("group", { name: "Mtoto 1" }))
-  await page.getByRole("button", { name: "Ongeza mtoto mwingine" }).click()
-  const second = page.getByRole("group", { name: "Mtoto 2" })
-  await fillChild(page, "sw", { child: `  ${who.child.toUpperCase()} ` }, nextYear, second)
-  await page.getByRole("button", { name: "Endelea" }).click()
+  await fillStudent(page, "sw", `${who.child} A`, nextYear)
+  await expect(page.getByText("Mwanafunzi wa pili")).toHaveCount(0)
 
-  await expect(page.getByRole("heading", { level: 1, name: "Watoto" })).toBeVisible()
-  await expect(second.getByText(`${who.child} yupo mara mbili kwenye fomu hii.`, { exact: false })).toBeVisible()
-  await expect(second.getByLabel("Jina kamili la mtoto")).toBeFocused()
+  await openQuestion(page).getByRole("button", { name: t.addStudent }).click()
+  await expectQuestion(page, t.secondStudentName)
+  await expect(page.getByText("Mwanafunzi wa pili", { exact: true })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 3, name: "Wanafunzi", exact: true })).toBeVisible()
+  await fillStudent(page, "sw", `${who.child} B`, nextYear, { residence: "day" })
+  await openQuestion(page).getByRole("button", { name: t.addStudent }).click()
+  await fillStudent(page, "sw", `${who.child} C`, nextYear)
+
+  await page.getByRole("button", { name: `Badilisha Taarifa, ${who.child} B` }).click()
+  // Let the folded line finish leaving before the next change (GuidedStack
+  // keeps an item that is still folding away when the list changes again).
+  await expect(page.getByRole("button", { name: `Badilisha Taarifa, ${who.child} B` })).toHaveCount(0)
+  await page.getByRole("button", { name: `Ondoa ${who.child} B` }).click()
+  await expect(page.getByText(`${who.child} B`)).toHaveCount(0)
+  await expect(page.getByText(new RegExp(`^${who.child} A`))).toBeVisible()
+  await expect(page.getByText(new RegExp(`^${who.child} C`))).toBeVisible()
+
+  for (let n = 3; n <= 8; n++) {
+    await openQuestion(page).getByRole("button", { name: t.addStudent }).click()
+    // The eighth student has no "another student?" question after it.
+    await fillStudent(page, "sw", `${who.child} ${n}`, nextYear, { last: n === 8 })
+  }
+  await expect(page.getByText("Unaweza kuomba kwa wanafunzi hadi 8 kwenye fomu moja.")).toBeVisible()
+  await expect(page.getByRole("button", { name: t.addStudent })).toHaveCount(0)
 })
 
-test("two children on one form are sent together, and the confirmation lists each with its number", async ({ page }) => {
+test("the same student twice on one form is refused at the name, naming the student", async ({ page }) => {
+  const who = family()
+  await page.goto("/apply")
+  await fillStudent(page, "sw", who.child, nextYear)
+  await openQuestion(page).getByRole("button", { name: t.addStudent }).click()
+  await openQuestion(page).getByRole("textbox").fill(`  ${who.child.toUpperCase()} `)
+  await openQuestion(page).getByRole("button", { name: t.continue }).click()
+
+  await expectQuestion(page, t.secondStudentName)
+  await expect(openQuestion(page).getByText(`${who.child} yupo mara mbili kwenye fomu hii.`, { exact: false })).toBeVisible()
+  await expect(openQuestion(page).getByRole("textbox")).toBeFocused()
+})
+
+test("two students on one form are sent together, and the confirmation lists each with its number", async ({ page }) => {
   const who = family()
   const brother = `${who.child} Kaka`
   await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: "Endelea" }).click()
-  await fillChild(page, "sw", who, nextYear, page.getByRole("group", { name: "Mtoto 1" }))
-  await page.getByRole("button", { name: "Ongeza mtoto mwingine" }).click()
-  await fillChild(page, "sw", { child: brother }, nextYear, page.getByRole("group", { name: "Mtoto 2" }))
-  await page.getByRole("button", { name: "Endelea" }).click()
+  await fillStudent(page, "sw", who.child, nextYear)
+  await openQuestion(page).getByRole("button", { name: t.addStudent }).click()
+  await fillStudent(page, "sw", brother, nextYear)
+  await openQuestion(page).getByRole("button", { name: t.noMore }).click()
+  await expectQuestion(page, "Jina lako kamili ni nani?")
+  await openQuestion(page).getByRole("textbox").fill(who.parent)
+  await openQuestion(page).getByRole("button", { name: t.continue }).click()
+  await expectQuestion(page, "Wewe ni nani kwa wanafunzi hawa?")
+  await tile(openQuestion(page), t.mother).click()
+  await expectQuestion(page, t.phone)
+  await openQuestion(page).getByLabel(t.phone).fill(who.phone)
+  await openQuestion(page).getByRole("button", { name: t.continue }).click()
+  await toSend(page, "sw")
+  await expect(page.getByText("Wanafunzi 2", { exact: false })).toBeVisible()
+  await send(page, "sw")
 
-  await expect(page.getByRole("heading", { level: 1, name: "Hakiki maombi yako" })).toBeVisible()
-  await expect(page.getByText("Mtoto 1", { exact: true })).toBeVisible()
-  await expect(page.getByText(who.child, { exact: true })).toBeVisible()
-  await expect(page.getByText("Mtoto 2", { exact: true })).toBeVisible()
-  await expect(page.getByText(brother, { exact: true })).toBeVisible()
-
-  await waitForSecurityCheck(page)
-  await page.getByRole("button", { name: "Tuma maombi" }).click()
-
-  await expect(page.getByRole("heading", { name: "Maombi yamepokelewa!" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: t.done })).toBeVisible()
   const listed = page.getByRole("listitem")
   await expect(listed).toHaveCount(2)
   await expect(listed.nth(0).getByText(who.child, { exact: true })).toBeVisible()

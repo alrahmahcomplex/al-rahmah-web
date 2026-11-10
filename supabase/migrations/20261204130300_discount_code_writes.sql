@@ -1,6 +1,6 @@
 -- Setting discount amounts and managing Promo codes (owner decisions of
 -- 2026-11-09), on the data and the fee rule in
--- 20261203130200_discount_amounts_and_promo_codes.sql.
+-- 20261204130200_discount_amounts_and_promo_codes.sql.
 --
 -- Every write needs discount_codes.manage and a signed-in staff session. It
 -- locks the row it changes, counts the leads whose interview fee, not yet

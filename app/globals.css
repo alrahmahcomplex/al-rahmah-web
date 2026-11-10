@@ -31,13 +31,16 @@
     --color-blue-800: #050073;
     --color-blue-900: #03004d;
 
-    /* ShuleFasta's orange (#231, 2026-11-06). orange-500 is every primary
-       action, white text on it (DESIGN.md, The ShuleFasta Button Rule). */
+    /* The action orange: the owner's choice on 2026-11-09, replacing
+       ShuleFasta's #fd6914. orange-500 is every primary action, white text on
+       it (DESIGN.md, The ShuleFasta Button Rule); orange-600 is its hover;
+       orange-700 is deep orange text on white or the orange tint. */
     --color-orange-50: #fff4ec;
     --color-orange-100: #ffe1cc;
     --color-orange-400: #ff9a5c;
-    --color-orange-500: #fd6914;
-    --color-orange-600: #e05a0e;
+    --color-orange-500: #ee7300;
+    --color-orange-600: #cc6200;
+    --color-orange-700: #b35500;
 
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);

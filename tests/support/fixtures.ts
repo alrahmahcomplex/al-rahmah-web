@@ -36,7 +36,7 @@ export const INVITED = staff("a1a1a1a1-0000-4000-8000-000000000007", "Invited St
 
 // The Super Admin (#237): the staff record comes from
 // supabase/migrations/20261130990300_super_admin_role.sql, its email from
-// 20261203130900_super_admin_email.sql, the local login from
+// 20261204130900_super_admin_email.sql, the local login from
 // supabase/seeds/00_base.sql. The role is hidden from every reader.
 export const SUPER_ADMIN = {
   ...staff("5a000000-0000-4000-8000-000000000002", "Al-Rahmah Complex", "marketing.alrahmah@gmail.com", "Super Admin"),

@@ -12,7 +12,7 @@ _Avoid_: Parent, guardian, prospect, enquiry, applicant
 Staff and families never read "lead". On screen the person is an **applicant** ("12 applicants", the Applicants list at `/staff/applicants`), the record and its page are an **application** ("Open the application", "Application history"), and an **Enrolled** applicant is a **student**. Status names stay as they are. Code, routes in code, tables, columns, permission names and this glossary keep "lead"; the _Avoid_ line above is about them, not about screen text.
 
 **Admission form**:
-The public form, reached from the school landing page or from a **Referral link**, through which a parent or guardian applies for a student. Anyone may submit it without a referral. A successful submission creates an **Applied** admissions lead and shows the parent or guardian the lead's **Admission Number**.
+The public form, reached from the school landing page or from a **Referral link**, through which a parent or guardian applies for a student. Anyone may submit it without a referral. A successful submission creates an **Applied** admissions lead and shows the parent or guardian the lead's **Admission Number**. The form also states how many students families have applied for through it since 1 January, Tanzania time, as a plain total, and only once that total reaches 100.
 
 **Enquiry**:
 An initial expression of interest or request for information about admission that has not become an admissions lead, because no **Admission form** was submitted and no qualifying campus visit has happened.

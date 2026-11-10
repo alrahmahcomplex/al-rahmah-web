@@ -1,6 +1,6 @@
 -- Discount amounts and Promo codes: the data and the one fee rule (owner
 -- decisions of 2026-11-09). The writers come in
--- 20261203130300_discount_code_writes.sql.
+-- 20261204130300_discount_code_writes.sql.
 --
 -- - The standard interview discount is a setting, TZS 10,000 to start, in
 --   whole TZS off the standard interview fee of TZS 50,000.

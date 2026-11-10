@@ -139,12 +139,16 @@ export function TurnstileWidget({
   const [shown, setShown] = useState(false)
   const shownRef = useRef(false)
   // The size the widget is drawn at. Measured before it is first drawn, and
-  // again when the space crosses 300px (a phone turning, a window
-  // narrowing). A box on screen is then drawn again at the size that fits,
-  // so it never sticks out of the card; that drops a token it held, and
-  // Turnstile checks again by itself. An invisible widget keeps its size and
-  // its token, since only a box on screen can stick out; if Cloudflare later
-  // needs a click, it is drawn again at the size that fits first.
+  // again when the space drops under 300px (a phone turning, a window
+  // narrowing). A flexible box on screen is then drawn again compact, so it
+  // never sticks out of the card; that drops a token it held, and Turnstile
+  // checks again by itself. An invisible widget keeps its size and its
+  // token, since only a box on screen can stick out; if Cloudflare later
+  // needs a click or shows an error in the box, a flexible box that no longer
+  // fits is drawn again compact first. A compact widget is never drawn again
+  // wider: it fits wherever flexible does, and growing it looped near 300px,
+  // where the box's own scrollbar narrowed the space and the redraw,
+  // invisible for a moment, took the scrollbar away (#278).
   const [size, setSize] = useState<Size | null>(null)
   const fits = useRef<Size | null>(null)
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
@@ -177,7 +181,7 @@ export function TurnstileWidget({
     const measure = () => {
       const next = box.clientWidth < FLEXIBLE_MIN_WIDTH ? "compact" : "flexible"
       fits.current = next
-      setSize((current) => (current === null || shownRef.current ? next : current))
+      setSize((current) => (current === null || (shownRef.current && next === "compact") ? next : current))
     }
     measure()
     if (typeof ResizeObserver === "undefined") return
@@ -205,6 +209,9 @@ export function TurnstileWidget({
         const reset = () => {
           if (widget.current) turnstile.reset(widget.current.id)
         }
+        // Drawn flexible while invisible, in space that has since dropped
+        // under 300px.
+        const sticksOut = () => size === "flexible" && fits.current === "compact"
         const id = turnstile.render(container.current, {
           sitekey: siteKey,
           action,
@@ -221,8 +228,7 @@ export function TurnstileWidget({
           },
           "before-interactive-callback": () => {
             recovered()
-            // Drawn while invisible at a size that no longer fits.
-            if (fits.current && fits.current !== size) return setSize(fits.current)
+            if (sticksOut()) return setSize("compact")
             show("needsClick")
           },
           // Returning true tells Turnstile the error is handled, which also
@@ -230,6 +236,12 @@ export function TurnstileWidget({
           // retries on its own, and a later success clears the message.
           "error-callback": (code: string) => {
             console.error(`Turnstile error ${code}`)
+            // The error may show in the box, so draw it to fit first; the
+            // new widget counts its own errors.
+            if (sticksOut()) {
+              setSize("compact")
+              return true
+            }
             errors += 1
             clearTimeout(grace)
             if (errors > 1) show("failed")

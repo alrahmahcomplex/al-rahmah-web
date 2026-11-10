@@ -1,8 +1,8 @@
-import { SpeedInsights } from "@vercel/speed-insights/next"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import localFont from "next/font/local"
 
 import { Toaster } from "@/components/ui/sonner"
+import { VercelInsights } from "@/components/vercel-insights"
 import { cn } from "@/lib/utils"
 
 import "./globals.css"
@@ -28,6 +28,17 @@ const exo = localFont({
 export const metadata: Metadata = {
   title: "Al-Rahmah Complex",
   description: "Al-Rahmah Schools: admissions and staff portal.",
+  manifest: "/manifest.webmanifest",
+  // app/favicon.ico is picked up on its own; these add the PNG tab icon and the iPhone home-screen icon.
+  icons: {
+    icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }],
+    apple: "/apple-touch-icon.png",
+  },
+  appleWebApp: { capable: true, title: "Al-Rahmah", statusBarStyle: "default" },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#0900bb",
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -36,7 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="bg-slate-100 text-slate-800 min-h-screen antialiased">
         {children}
         <Toaster />
-        <SpeedInsights />
+        <VercelInsights />
       </body>
     </html>
   )

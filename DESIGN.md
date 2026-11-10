@@ -7,8 +7,9 @@ colors:
   indigo-night: "#03004d"
   lavender-mist: "#e0dcf9"
   lavender-whisper: "#f2f0fc"
-  sunrise-orange: "#fd6914"
-  sunrise-ember: "#e05a0e"
+  sunrise-orange: "#ee7300"
+  sunrise-ember: "#cc6200"
+  sunrise-deep: "#b35500"
   peach-glow: "#ffe1cc"
   paper: "#ffffff"
   slate-canvas: "#f1f5f9"
@@ -193,7 +194,7 @@ components:
 
 **Creative North Star: "The Open Invitation"**
 
-Al-Rahmah's printed flyers greet parents with a school that is open and waiting for their child. The flyers use stacked indigo pills, bold italic type that leans forward, and one orange call to enrol. The design system carries that feeling onto the screen in Al-Rahmah Indigo with ShuleFasta's warmer orange for every action. Every public surface should read as an invitation: warm, confident and easy to accept from a phone in one hand. The forward slant of Exo italic, the fully rounded pill and the soft indigo glow under a raised card are the three moves that make a screen look like Al-Rahmah.
+Al-Rahmah's printed flyers greet parents with a school that is open and waiting for their child. The flyers use stacked indigo pills, bold italic type that leans forward, and one orange call to enrol. The design system carries that feeling onto the screen in Al-Rahmah Indigo with a warm orange for every action. Every public surface should read as an invitation: warm, confident and easy to accept from a phone in one hand. The forward slant of Exo italic, the fully rounded pill and the soft indigo glow under a raised card are the three moves that make a screen look like Al-Rahmah.
 
 The system has **two volumes**. The public site (landing page, Admission form, Marketing Agent registration) plays at full flyer strength: indigo fields, orange actions, Exo italic display type. The staff portal plays quietly, because staff use it for hours at a desk with a family watching. There, neutral shadcn surfaces and Geist carry the work, and the brand appears only in details: the logo, the page heading, the primary action and the lead status colours. Sign-in is the doorway between the two, so it keeps the public volume.
 
@@ -216,6 +217,7 @@ A two-colour brand (indigo authority, orange warmth) on white and pale lavender,
 ### Secondary
 - **Sunrise Orange**: the invitation. Reserved for the action a parent should take next (Apply, Enrol, Log In) and for small accents that echo the flyer's orange capsules. Text on it is white (The ShuleFasta Button Rule).
 - **Sunrise Ember**: hover and pressed state of Sunrise Orange, and the orange used for text links on white.
+- **Sunrise Deep** (`orange-700`): orange text on white or on the orange tint, such as a finished progress number, the limited-time pill and the application count. It measures 4.7:1 on the orange tint.
 
 ### Tertiary
 - **Lavender Mist** and **Lavender Whisper**: the page atmosphere. The public background is a diagonal wash from Lavender Whisper through half-strength Lavender Mist to white. Lavender Whisper is also the background of the current staff navigation item.
@@ -232,7 +234,7 @@ A two-colour brand (indigo authority, orange warmth) on white and pale lavender,
 ### Named Rules
 **The One Invitation Rule.** Sunrise Orange marks the single next step on a screen. If two things are orange, one of them is wrong.
 
-**The ShuleFasta Button Rule.** Every orange action is `orange-500` (`#fd6914`) with white semibold text, `orange-600` (`#e05a0e`) on hover and a `blue-600` focus ring, in the surface's own pill or 10 to 12px radius, through the `orange` variant of `components/ui/button.tsx`. White on `#fd6914` measures about 2.9:1, under WCAG AA's 4.5:1 for normal text and 3:1 for large text. The owner accepted this on 2026-11-06 to match ShuleFasta; it is a recorded risk, not a defect to fix. Do not add dark text or a darker orange to raise it. Keep labels short, semibold and at least 14px.
+**The ShuleFasta Button Rule.** Every orange action is `orange-500` (`#ee7300`) with white semibold text, `orange-600` (`#cc6200`) on hover and a `blue-600` focus ring, in the surface's own pill or 10 to 12px radius, through the `orange` variant of `components/ui/button.tsx`. White on `#ee7300` measures about 3.0:1, under WCAG AA's 4.5:1 for normal text. The owner accepted white on orange on 2026-11-06 and chose `#ee7300` on 2026-11-09, replacing ShuleFasta's `#fd6914`; it is a recorded risk, not a defect to fix. Do not add dark text or a darker orange to raise it. Keep labels short, semibold and at least 14px.
 
 **The Quiet Staff Rule.** Staff screens stay neutral. Rahmah Indigo may mark the current navigation item and links; Sunrise Orange may mark one primary action and the waiting counts; the status chips carry the lead lifecycle in soft tints. Everything else, page headings included, is Staff Ink on Paper.
 
@@ -274,7 +276,7 @@ Depth is **soft, coloured and rare**. At most one surface per screen is lifted: 
 
 ### Shadow Vocabulary
 - **Indigo lift** (`box-shadow: 0 30px 80px -15px rgb(9 0 187 / 0.25)`): the one hero card on a public screen.
-- **Sun lift** (`box-shadow: 0 4px 6px -1px rgb(253 105 20 / 0.2), 0 2px 4px -2px rgb(253 105 20 / 0.2)`): the primary orange button.
+- **Sun lift** (`box-shadow: 0 4px 6px -1px rgb(238 115 0 / 0.25), 0 2px 4px -2px rgb(238 115 0 / 0.25)`): the primary orange button.
 - **Band rest** (`box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05)`): indigo name bands.
 
 ### Named Rules
@@ -328,6 +330,23 @@ The staff shell (`app/staff/_shell/`) holds the navigation; the Quiet Staff Rule
 - **Bottom tab bar:** on a phone the sidebar gives way to a fixed white tab bar with Today, Check-in and Leads (each only when the person may see it) and More, which opens a sheet with every other entry and Sign out. The current tab is `blue-600`.
 - **Logo:** rendered at its own aspect ratio with both width and height set, 36×28 in the sidebar and 32×24 in the phone top bar.
 
+### Brand top bar
+Public form pages (the Admission form and the Discount code pages) open with one row, `BrandTopBar` in `components/brand/`, in a 44px | 1fr | 44px grid. On the left is the round logo in a 44px circle with a 1.5px indigo outline at 22%; it links to alrahmahcomplex.or.tz in the same tab. In the middle is the badge, the name band shrunk to a pill: 44px, Rahmah Indigo, Exo 800 italic, uppercase, 1px tracking, 15px text. It reads "AL-RAHMAH SCHOOLS" on pages for parents and "AL-RAHMAH COMPLEX" on pages for staff and code holders, and its text steps down at 380, 330 and 300px so it never pushes the row wide. On the right is the menu, a 44px outlined circle with a three-bar icon. Its panel holds the Kiswahili | English control, the only language switch on these pages, and, where the page has a form, a red "Futa fomu yote" item that asks once before it clears. The page title moves into an `sr-only` `<h1>`. `/login` keeps its own card.
+
+On a visitor's first visit (no `lang` cookie) a language card grows out of the menu button over a frosted indigo backdrop. It asks in Swahili, waits 5 seconds unless the visitor is reading or using it, confirms the choice for 3 seconds, then shrinks back into the menu button, which pops with an orange ring.
+
+### Guided form (concept C)
+The Admission form and the Discount code registration ask one question at a time. The pieces live in `components/guided-form/`, with usage in its README.
+- **Progress bar:** a sticky row above the questions. Back sits on the left, and Start over takes its place on the first question; both are 44px outlined circles. Three groups of 6px chips follow, one chip per step, each group led by a small indigo number. When a group finishes, its chips close into one bar, a light runs through it, a green tick lands on its end and the number pops and turns Sunrise Deep. An outlined chip on the right names the section; it hides under 380px.
+- **Folding cards:** the open question is centred, with the title in Exo 800 italic at 26px. Answering folds the card into a one-line summary with a tick dot, the label and value on the left and a two-word "Badilisha …" link on the right. The folded lines become the review, so there is no separate check page. Group titles ("Mwanafunzi", "Msimamizi", "Usaili") sit between the groups.
+- **Choices:** real radios drawn as pills with the tick on the right, a segmented grid for short answers, and one big default tile for the common answer with a small tagline above it.
+- **Continue:** a full-width Sunrise Orange pill in Exo italic that always ends with ›. The outlined pill is for the other way forward, such as adding another student.
+- **Offer and price:** the price box sets the full fee on a faint orange half against the saving on a faint green half. The limited-time note has a clock icon on the orange tint, and an outlined Sunrise Deep pill and ⓘ buttons open a bottom sheet over a frosted indigo backdrop. Every urgency line must be true. No countdowns.
+- **Motion:** folds take 300ms on an exponential ease-out, the sheet slides up in 320ms, and confetti in orange and indigo follows a sent form. Under reduced motion the folds are instant with a 120ms fade, the sheet fades and the confetti, cheers and balloon are skipped.
+
+### App icon
+The site installs as an app from `app/manifest.ts`. Every icon is the full Al-Rahmah logo, never the globe-and-book emblem alone: `public/icons/` holds the any, maskable and monochrome sizes, `public/apple-touch-icon.png` the iPhone icon and `app/favicon.ico` the tab icon. The theme colour is Rahmah Indigo.
+
 ## Do's and Don'ts
 
 ### Do:
@@ -339,7 +358,7 @@ The staff shell (`app/staff/_shell/`) holds the navigation; the Quiet Staff Rule
 
 ### Don't:
 - **Don't** use Sunrise Orange for more than one action on a screen.
-- **Don't** put dark text, or a darker orange, on an orange action to raise its contrast; the 2.9:1 ratio is the owner's accepted choice. Keep the label short, semibold and at least 14px instead.
+- **Don't** put dark text, or a darker orange, on an orange action to raise its contrast; the 3.0:1 ratio is the owner's accepted choice. Keep the label short, semibold and at least 14px instead.
 - **Don't** bring flyer volume into the staff portal: no indigo sidebars, coloured stat tiles or glowing cards there.
 - **Don't** set typed input text below 16px.
 - **Don't** lift more than one surface per screen, and don't use grey drop shadows on public surfaces; lift is tinted.

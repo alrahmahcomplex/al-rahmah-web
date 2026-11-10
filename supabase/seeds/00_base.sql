@@ -87,7 +87,7 @@ from auth.users u
 where u.email like '%@example.test';
 
 -- The Super Admin (#237). Migration 20261130990300_super_admin_role.sql
--- creates the staff record and 20261203130900_super_admin_email.sql sets the
+-- creates the staff record and 20261204130900_super_admin_email.sql sets the
 -- school's own address, as on hosted; locally it gets a login with the
 -- fixture password and the record's email, so tests can sign in.
 insert into auth.users (

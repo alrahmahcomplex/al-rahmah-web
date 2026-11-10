@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { family, fillChild, fillParent, PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
+import { expectQuestion, family, fillForm, openQuestion, PHONE_WIDTH, setLanguageCookie, waitForSecurityCheck, WORDS } from "./admission-form"
 
 // The Admission form's fail-closed path, on the server whose Turnstile secret
 // always fails (playwright.config.ts).
@@ -14,13 +14,11 @@ declare global {
   }
 }
 
-test("a failed security check is refused, keeps the entries and resets the widget", async ({ page }) => {
+test("a failed security check is refused, keeps the entries and resets the widget", async ({ page, context }) => {
   const who = family()
+  await setLanguageCookie(context, "sw")
   await page.goto("/apply")
-  await fillParent(page, "sw", who)
-  await page.getByRole("button", { name: "Endelea" }).click()
-  await fillChild(page, "sw", who, String(admissionYears()[1]))
-  await page.getByRole("button", { name: "Endelea" }).click()
+  await fillForm(page, "sw", who, String(admissionYears()[1]))
   await waitForSecurityCheck(page)
 
   // Count the widget's resets.
@@ -34,18 +32,22 @@ test("a failed security check is refused, keeps the entries and resets the widge
     }
   })
 
-  await page.getByRole("button", { name: "Tuma maombi" }).click()
+  await openQuestion(page).getByRole("button", { name: WORDS.sw.send }).click()
 
   await expect(page.getByText(/Ukaguzi wa usalama haukukamilika/)).toBeVisible()
   // The Cloudflare box carries no "quick security check" line under it (#264).
   await expect(page.getByText(/Ukaguzi mfupi wa usalama/)).toHaveCount(0)
-  await expect(page.getByRole("heading", { level: 1, name: "Hakiki maombi yako" })).toBeVisible()
-  await expect(page.getByText(who.parent)).toBeVisible()
-  await expect(page.getByText(who.child)).toBeVisible()
+  await expectQuestion(page, WORDS.sw.review)
+  await expect(page.getByText(who.parent, { exact: true })).toBeVisible()
+  await expect(page.getByText(`${who.child} · STD 3`)).toBeVisible()
   expect(await page.evaluate(() => window.turnstileResets)).toBe(1)
-  await expect(page.getByRole("button", { name: "Tuma maombi" })).toBeEnabled()
+  await expect(openQuestion(page).getByRole("button", { name: WORDS.sw.send })).toBeEnabled()
 
-  await page.getByRole("button", { name: "Rudi" }).click()
-  await page.getByRole("button", { name: "Rudi" }).click()
-  await expect(page.getByLabel("Jina kamili la mzazi au mlezi")).toHaveValue(who.parent)
+  await page.getByRole("button", { name: WORDS.sw.back }).click()
+  await page.getByRole("button", { name: WORDS.sw.back }).click()
+  await page.getByRole("button", { name: WORDS.sw.back }).click()
+  await page.getByRole("button", { name: WORDS.sw.back }).click()
+  await expectQuestion(page, /Wewe ni nani kwa/)
+  await page.getByRole("button", { name: "Badilisha Jina" }).last().click()
+  await expect(openQuestion(page).getByRole("textbox")).toHaveValue(who.parent)
 })

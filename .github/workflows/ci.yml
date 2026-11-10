@@ -9,9 +9,12 @@ on:
   push:
     branches: [main]
 
+# A new commit on a pull request cancels that pull request's older run. A push
+# to main gets a group of its own, so the next merge never cancels or replaces
+# its run: every merge gets a finished run.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

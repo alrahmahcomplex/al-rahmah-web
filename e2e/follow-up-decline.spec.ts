@@ -10,7 +10,7 @@ import { createThrowawayStaff, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Declining the lead as the outcome of a recorded contact (#94), from the
 // Follow-ups panel. Each test makes a lead of its own.
@@ -24,7 +24,7 @@ function addDays(date: string, days: number): string {
 }
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

@@ -13,7 +13,7 @@ import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl, openLeadTab } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Requesting, granting and refusing a Staff child or Qualified orphan
 // discount, and recording Fee waived (#112). Each test makes its own Passed
@@ -45,7 +45,7 @@ test.afterEach(async () => {
 
 async function signIn(page: Page, person: FixtureStaff) {
   await page.context().clearCookies()
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

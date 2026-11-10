@@ -30,6 +30,13 @@ export default defineConfig({
           setupFiles: ["tests/support/env.ts"],
           testTimeout: 30_000,
           hookTimeout: 30_000,
+          // In CI a test that fails from load is tried again, up to two times,
+          // and only that test: "unavailable" when test files that create and
+          // lock leads in the same seconds fill the connection pool, and the
+          // AuthRetryableFetchError of docs/agents/parallel-work.md. A test
+          // that fails for any other reason fails at once. The log marks each
+          // retried test, and scripts/ci-flaky.mjs lists them.
+          retry: process.env.CI ? { count: 2, delay: 1_000, condition: /unavailable|AuthRetryableFetchError/ } : 0,
         },
       },
     ],

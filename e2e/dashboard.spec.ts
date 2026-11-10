@@ -5,7 +5,7 @@ import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { createThrowawayStaff } from "../tests/support/db"
 import { MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { signInAsSuperAdmin } from "./super-admin"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // The dashboard on the Reports page (/staff/reports since #226). Counts are
 // read for Enrollment year 2031,
@@ -13,7 +13,7 @@ import { logIn } from "./log-in"
 // tests' leads never shift them.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
   await page.goto("/staff/reports")
   await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible()
@@ -204,7 +204,7 @@ test("changing the Applicants by enrollment class filters leaves the Visited app
 
 test("a role that reads leads and payments but lacks reports.view sees no statistics", async ({ page }) => {
   const person = await createThrowawayStaff(["leads.view", "payments.view"])
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 
   await page.goto("/staff/reports")
@@ -285,7 +285,7 @@ test("Seats by class opens on the latest year with a Fee schedule and keeps a ch
 
 test("a role holding reports.view finds Reports in the sidebar and opens it (#241)", async ({ page }) => {
   const person = await createThrowawayStaff(["leads.view", "reports.view"])
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
   await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" }).click()
   await expect(page).toHaveURL(/\/staff\/reports$/)
@@ -303,7 +303,7 @@ test("the Super Admin finds Reports in the sidebar and opens the dashboard (#245
 
 test("a role without reports.view is refused the Reports page, however much else it reads", async ({ page }) => {
   const person = await createThrowawayStaff(["leads.view", "payments.view", "academic_years.manage"])
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 
   await page.goto("/staff/reports")

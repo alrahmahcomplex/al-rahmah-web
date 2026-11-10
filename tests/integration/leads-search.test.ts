@@ -12,7 +12,7 @@ import {
   type LeadStatus,
 } from "@/lib/services/leads"
 
-import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
+import { anonClient, asSystem, inRolledBackTransaction, signedIn, unusedAdmissionNumber } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Lead search and the lead list, through the lead module against local
@@ -106,7 +106,9 @@ describe("searching by Admission Number", () => {
   test("finds a Declined lead, and a number that matches nothing finds nothing", async () => {
     expect(names((await search({ query: "90006", page: 1 })).leads)).toEqual(["Rehema Fixture"])
 
-    const none = await search({ query: "ADMSN-00000", page: 1 })
+    // Numbers are random, so any fixed one is some other test's lead sooner
+    // or later. This one is free at the moment it is read.
+    const none = await search({ query: await unusedAdmissionNumber(), page: 1 })
     expect(none.mode).toBe("number")
     expect(none.leads).toEqual([])
     expect(none.total).toBe(0)

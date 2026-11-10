@@ -10,7 +10,7 @@ import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Recording and correcting an interview result on the lead screen's
 // interview panel.
@@ -22,7 +22,7 @@ const thisYear = Number(today.slice(0, 4))
 const PASSED = "1ead0000-0000-4000-8000-000000000503"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

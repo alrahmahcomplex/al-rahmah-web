@@ -8,20 +8,36 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Every night, main's full suite again with no cache restored: a cache that
+  # has gone stale, or a test that only passes on cached files, shows here.
+  # 01:17 UTC is 04:17 in Tanzania.
+  schedule:
+    - cron: "17 1 * * *"
+  # The same uncached full run, started by hand from the Actions tab.
+  workflow_dispatch:
 
+# A new commit on a pull request cancels that pull request's older run. A push
+# to main gets a group of its own, so the next merge never cancels or replaces
+# its run: every merge gets a finished run.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
+
+# Jobs read the Actions cache and never save to it. The one job that saves is
+# `caches`, which runs only for a push to main.
+cache-mode: read
 
 env:
   NEXT_TELEMETRY_DISABLED: "1"
 
 jobs:
+  # Every runtime job waits for this one, so it does nothing but classify the
+  # change. The full history is there for the merge-base.
   scope:
-    name: Scope and document checks
+    name: Scope
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -36,6 +52,17 @@ jobs:
       - name: Classify the complete Git diff
         id: scope
         run: node scripts/ci-scope.mjs
+
+  # Runs for every change, documents-only ones included, beside the scope job.
+  repository:
+    name: Repository helpers and documents
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
       - name: Test repository helpers
         run: node --test "scripts/*.test.mjs"
       - name: Check tracked documents
@@ -50,52 +77,206 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+      # node_modules as `npm ci` left it on main for this package.json, this
+      # lockfile, this Node version and this runner. A change to any of them
+      # misses and installs, so `npm ci` still refuses a package.json that
+      # the lockfile does not match.
+      - name: Restore node_modules
+        id: modules
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test
+      # The shards are worked out from the spec files on disk. Playwright's
+      # own list of tests must name the same files, or a test would never run.
+      - name: Check that the browser-test shards hold every test
+        run: |
+          mkdir -p .artifacts
+          npx playwright test --list --reporter=json > .artifacts/e2e-list.json
+          node scripts/e2e-shards.mjs check .artifacts/e2e-list.json
 
-  database-and-browser:
-    name: Integration, build and browser tests
+  # The integration tests and the browser tests each start their own local
+  # Supabase, so neither waits for the other. Vitest splits the integration
+  # test files between the shards itself: every file lands in one of them.
+  integration:
+    name: Integration tests (${{ matrix.shard }}/${{ strategy.job-total }})
     needs: scope
     if: ${{ needs.scope.outputs.full_suite == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
+      # Local Supabase binds host ports 55420 to 55429 (supabase/config.toml).
+      # Linux hands out ports from 32768 to 60999 to outgoing connections, and
+      # a connection that holds one of Supabase's makes the start fail with
+      # "address already in use". Reserved ports are never handed out, so this
+      # comes before the job opens any connection of its own. The runner's
+      # earlier connections can still hold one: scripts/ci-db-start.sh tries
+      # the start again for those.
+      - name: Reserve the local Supabase ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
         with:
           node-version: 24
-          cache: npm
-      - run: npm ci
+      - name: Restore node_modules
+        id: modules
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
       # The Supabase CLI is the repo's own pinned dev dependency, the same
       # version every worktree runs.
       - name: Start local Supabase
-        run: npm run db:start
+        run: bash scripts/ci-db-start.sh
       - name: Write .env.local from the local stack
         run: npm run env:local
-      - run: npm run test:integration
-      - run: npm run build
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      # Vitest writes a summary to the run's page that names each test that
+      # passed only on a retry. Printing it puts it in the log as well, where
+      # scripts/ci-flaky.mjs reads it.
+      - name: Run this shard's integration tests
+        run: |
+          status=0
+          npm run test:integration -- --shard=${{ matrix.shard }}/${{ strategy.job-total }} || status=$?
+          cat "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          exit "$status"
+
+  # The browser tests run as shards of equal measured time, each in its own
+  # job with its own Supabase, build and servers. scripts/e2e-shards.mjs
+  # decides which spec files a shard runs, from the seconds in e2e/shards.json.
+  browser:
+    name: Browser tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: scope
+    if: ${{ needs.scope.outputs.full_suite == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # Every shard finishes and reports, also when another one fails.
+      fail-fast: false
+      matrix:
+        # One job for each shard of e2e/shards.json. A test keeps them equal.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - name: Reserve the local Supabase ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
+        with:
+          node-version: 24
+      - name: Restore node_modules
+        id: modules
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
+      # Three things that do not need each other run at once: Supabase's images
+      # download, Chromium installs and the app builds. The build needs the
+      # NEXT_PUBLIC_ values before Supabase is up, so ci-build-env.mjs writes
+      # local Supabase's fixed ones first, and its check fails the job if the
+      # running stack reports anything else.
+      #
+      # Chromium installs with no --with-deps: the runner image already holds
+      # every shared library it needs. With it, apt-get fetched nine font
+      # packages for scripts the app does not use (Japanese, Thai, Chinese,
+      # Cyrillic), which took up to 191 s on a slow mirror. If the image ever
+      # lacks a library, Playwright refuses to start the browser and names it.
+      - name: Start local Supabase, install Chromium and build the app
+        run: |
+          node scripts/ci-build-env.mjs write
+          npx playwright install chromium > "$RUNNER_TEMP/chromium.log" 2>&1 &
+          chromium=$!
+          npm run build > "$RUNNER_TEMP/build.log" 2>&1 &
+          build=$!
+          bash scripts/ci-db-start.sh
+          npm run env:local
+          node scripts/ci-build-env.mjs check
+          wait "$build" || { cat "$RUNNER_TEMP/build.log"; exit 1; }
+          cat "$RUNNER_TEMP/build.log"
+          wait "$chromium" || { cat "$RUNNER_TEMP/chromium.log"; exit 1; }
+          tail -n 3 "$RUNNER_TEMP/chromium.log"
+      # Runs the shard's spec files, then fails unless exactly those files ran
+      # and every test in them ran.
+      - name: Run this shard's browser tests
+        run: node scripts/e2e-shards.mjs run ${{ matrix.shard }}
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
+      # The measured seconds of each test, for `e2e-shards.mjs timings`. Kept
+      # from runs on main only, so the measurements come from merged code.
+      - name: Upload the measured test times
+        if: ${{ !cancelled() && github.event_name == 'push' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-results-${{ matrix.shard }}
+          path: test-results/e2e-results.json
+          retention-days: 14
+
+  # Saves what later runs restore. It is the only job allowed to write to the
+  # Actions cache, and it runs only for a push to main, so a pull request can
+  # never change what another run restores.
+  caches:
+    name: Save caches for later runs
+    needs: scope
+    if: ${{ needs.scope.outputs.full_suite == 'true' && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    cache-mode: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
+        with:
+          node-version: 24
+      - name: Look for this lockfile's node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
+          lookup-only: true
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
+      - name: Save node_modules
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: ${{ steps.modules.outputs.cache-primary-key }}
 
   complete:
     name: CI complete
     if: ${{ always() }}
-    needs: [scope, static, database-and-browser]
+    needs: [scope, repository, static, integration, browser, caches]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

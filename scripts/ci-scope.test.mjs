@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { classifyChanges, determineScope, gateErrors, parseNameStatus } from "./ci-scope.mjs";
+import { alwaysJobs, classifyChanges, determineScope, gateErrors, parseNameStatus, pushJobs, runtimeJobs } from "./ci-scope.mjs";
 
 test("ordinary docs and policy docs use document checks without runtime jobs", () => {
   for (const path of ["README.md", "CHANGELOG.md", "CONTEXT.md", "AGENTS.md", "CLAUDE.md", "docs/agents/workflow.md", "docs/adr/0001.md"]) {
@@ -87,6 +87,19 @@ test("pushes inspect every commit between before and after", (t) => {
   assert.equal(determineScope({ cwd: repo.cwd, eventName: "push", event: { before: repo.initial, after: head } }).fullSuite, true);
 });
 
+test("a push runs the full suite even when only documents changed, and a pull request with the same change does not", (t) => {
+  const repo = fixture(t);
+  repo.write("README.md", "Improved\n");
+  repo.write("docs/agents/workflow.md", "A guide\n");
+  const head = repo.commit();
+  const push = determineScope({ cwd: repo.cwd, eventName: "push", event: { before: repo.initial, after: head } });
+  assert.equal(push.fullSuite, true);
+  assert.deepEqual(push.documents.sort(), ["README.md", "docs/agents/workflow.md"]);
+  assert.match(push.reason, /push to main always runs the full suite/);
+  const pullRequest = determineScope({ cwd: repo.cwd, eventName: "pull_request", event: { pull_request: { base: { sha: repo.initial }, head: { sha: head } } } });
+  assert.equal(pullRequest.fullSuite, false);
+});
+
 test("renaming code to Markdown still requires runtime checks", (t) => {
   const repo = fixture(t);
   repo.write("source.ts", "export const value = 1;\n");
@@ -108,24 +121,66 @@ test("missing, zero, inaccessible and unsupported comparisons fail safe", (t) =>
   assert.equal(determineScope({ cwd: repo.cwd, eventName: "workflow_dispatch", event: {} }).fullSuite, true);
 });
 
-function needs(fullSuite, result) {
-  return { scope: { result: "success", outputs: { full_suite: fullSuite } }, static: { result }, "database-and-browser": { result } };
+// A pull request's outcomes: the always jobs succeed, the runtime jobs get
+// `result`, and the push jobs are skipped unless `pushResult` says otherwise.
+function needs(fullSuite, result, pushResult = "skipped") {
+  return {
+    scope: { result: "success", outputs: { full_suite: fullSuite } },
+    ...Object.fromEntries(alwaysJobs.map((job) => [job, { result: "success" }])),
+    ...Object.fromEntries(runtimeJobs.map((job) => [job, { result }])),
+    ...Object.fromEntries(pushJobs.map((job) => [job, { result: pushResult }])),
+  };
 }
 
+test("the gate's job list matches the workflow's gate job", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+  const gate = workflow.slice(workflow.indexOf("\n  complete:"));
+  const listed = gate.match(/^    needs: \[([^\]]+)\]$/m)[1].split(",").map((job) => job.trim());
+  assert.deepEqual(listed, ["scope", ...alwaysJobs, ...runtimeJobs, ...pushJobs]);
+  for (const job of [...alwaysJobs, ...runtimeJobs, ...pushJobs]) assert.match(workflow, new RegExp(`^  ${job}:$`, "m"), job);
+});
+
 test("completion gate accepts only the expected successful or skipped jobs", () => {
-  assert.deepEqual(gateErrors(needs("true", "success")), []);
-  assert.deepEqual(gateErrors(needs("false", "skipped")), []);
+  const pr = "pull_request";
+  assert.deepEqual(gateErrors(needs("true", "success"), pr), []);
+  assert.deepEqual(gateErrors(needs("false", "skipped"), pr), []);
+  for (const job of [...alwaysJobs, ...runtimeJobs, ...pushJobs]) {
+    const missing = needs("true", "success");
+    delete missing[job];
+    assert.notEqual(gateErrors(missing, pr).length, 0, `${job} missing`);
+  }
+  assert.notEqual(gateErrors({ ...needs("true", "success"), extra: { result: "success" } }, pr).length, 0);
+  // A job that runs for every change may never be skipped, even for documents.
+  for (const job of alwaysJobs) {
+    for (const fullSuite of ["true", "false"]) {
+      const state = needs(fullSuite, fullSuite === "true" ? "success" : "skipped");
+      state[job].result = "skipped";
+      assert.notEqual(gateErrors(state, pr).length, 0, `${job} skipped`);
+    }
+  }
   for (const fullSuite of ["true", "false"]) {
-    for (const job of ["scope", "static", "database-and-browser"]) {
+    for (const job of ["scope", ...alwaysJobs, ...runtimeJobs, ...pushJobs]) {
       for (const result of ["failure", "cancelled"]) {
         const state = needs(fullSuite, fullSuite === "true" ? "success" : "skipped");
         state[job].result = result;
-        assert.notEqual(gateErrors(state).length, 0);
+        assert.notEqual(gateErrors(state, pr).length, 0);
       }
     }
   }
-  assert.notEqual(gateErrors(needs("true", "skipped")).length, 0);
-  assert.notEqual(gateErrors(needs("false", "success")).length, 0);
-  assert.notEqual(gateErrors(needs("", "success")).length, 0);
-  assert.notEqual(gateErrors({}).length, 0);
+  assert.notEqual(gateErrors(needs("true", "skipped"), pr).length, 0);
+  assert.notEqual(gateErrors(needs("false", "success"), pr).length, 0);
+  assert.notEqual(gateErrors(needs("", "success"), pr).length, 0);
+  assert.notEqual(gateErrors({}, pr).length, 0);
+});
+
+test("the caches job must succeed on a push to main and be skipped for every other event", () => {
+  assert.deepEqual(gateErrors(needs("true", "success", "success"), "push"), []);
+  for (const result of ["skipped", "failure", "cancelled"]) {
+    assert.match(gateErrors(needs("true", "success", result), "push").join("\n"), /caches: expected success/, result);
+  }
+  // It saves a cache, so it must not run where a cache may not be saved.
+  for (const eventName of ["pull_request", "schedule", "workflow_dispatch", "merge_group", undefined]) {
+    assert.deepEqual(gateErrors(needs("true", "success"), eventName), [], String(eventName));
+    assert.match(gateErrors(needs("true", "success", "success"), eventName).join("\n"), /caches: expected skipped/, String(eventName));
+  }
 });

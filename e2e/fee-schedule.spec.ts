@@ -6,14 +6,14 @@ import { saveFeeAmounts } from "@/lib/services/fees"
 
 import { inRolledBackTransaction, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // The Fee schedule screen, as the Accountant and the Admissions Manager use
 // it. The Accountant's test creates a year of its own, far from the seeded
 // 2027, so reruns never meet an earlier run's schedule.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

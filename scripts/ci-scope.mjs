@@ -70,28 +70,54 @@ export function determineScope({ eventName, event, cwd = process.cwd() }) {
       throw new Error(`Unsupported event: ${eventName}`);
     }
     const changes = parseNameStatus(git(["diff", "--name-status", "-z", "--find-renames", base, head, "--"], cwd));
-    return { ...classifyChanges(changes), base, head, changes };
+    const scope = { ...classifyChanges(changes), base, head, changes };
+    // Every merge to main runs every test. The documents-only path is for
+    // pull requests alone.
+    if (eventName === "push" && !scope.fullSuite) {
+      return { ...scope, fullSuite: true, reason: "A push to main always runs the full suite" };
+    }
+    return scope;
   } catch (error) {
     // A missing comparison never grants the documentation-only shortcut.
     return { fullSuite: true, documents: null, reason: `Full suite required: ${error.message}` };
   }
 }
 
-export function gateErrors(needs) {
+// The jobs of .github/workflows/ci.yml that the gate waits for. It fails when
+// one is missing from its `needs`, so a job added there must be added here.
+// The always jobs run for every change. The runtime jobs run for the full
+// suite and are skipped for a documents-only change. The push jobs run for
+// the full suite of a push to main and are skipped for every other event.
+export const alwaysJobs = ["repository"];
+export const runtimeJobs = ["static", "integration", "browser"];
+export const pushJobs = ["caches"];
+
+export function gateErrors(needs, eventName) {
   const errors = [];
-  if (needs.scope?.result !== "success") errors.push("Scope and document checks did not succeed");
+  if (needs.scope?.result !== "success") errors.push("The scope job did not succeed");
   const fullSuite = needs.scope?.outputs?.full_suite;
   if (!["true", "false"].includes(fullSuite)) errors.push("Scope did not produce a valid full_suite output");
   const expected = fullSuite === "false" ? "skipped" : "success";
-  for (const job of ["static", "database-and-browser"]) {
+  const known = ["scope", ...alwaysJobs, ...runtimeJobs, ...pushJobs];
+  for (const job of Object.keys(needs)) {
+    if (!known.includes(job)) errors.push(`${job}: the gate does not know this job`);
+  }
+  for (const job of alwaysJobs) {
+    if (needs[job]?.result !== "success") errors.push(`${job}: expected success, received ${needs[job]?.result ?? "missing"}`);
+  }
+  for (const job of runtimeJobs) {
     if (needs[job]?.result !== expected) errors.push(`${job}: expected ${expected}, received ${needs[job]?.result ?? "missing"}`);
+  }
+  const expectedOnPush = eventName === "push" ? expected : "skipped";
+  for (const job of pushJobs) {
+    if (needs[job]?.result !== expectedOnPush) errors.push(`${job}: expected ${expectedOnPush}, received ${needs[job]?.result ?? "missing"}`);
   }
   return errors;
 }
 
 function main() {
   if (process.argv.includes("--gate")) {
-    const errors = gateErrors(JSON.parse(process.env.CI_NEEDS ?? "{}"));
+    const errors = gateErrors(JSON.parse(process.env.CI_NEEDS ?? "{}"), process.env.GITHUB_EVENT_NAME);
     if (errors.length) throw new Error(errors.join("\n"));
     console.log("All checks required for this change passed.");
     return;

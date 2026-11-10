@@ -9,7 +9,7 @@ import { setLeadReferralCode } from "@/lib/services/referral"
 import { registerApprovedAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Adding an agent and Recreate (#189): the check before saving, the
 // duplicate-phone message, and Recreate from a retired code and from a
@@ -18,7 +18,7 @@ import { logIn } from "./log-in"
 const thisYear = Number(tanzaniaToday().slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

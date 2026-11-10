@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto"
 import { expect, test, type Page } from "@playwright/test"
 import { ADMISSIONS, ACCOUNTANT, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

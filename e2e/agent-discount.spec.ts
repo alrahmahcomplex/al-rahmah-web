@@ -11,7 +11,7 @@ import { registerApprovedAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { leadUrl } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // An agent's own interview discount on Marketing Agents: the Manager sets
 // it in the agent's sheet, sees the unpaid fee it moves and gives a reason;
@@ -22,7 +22,7 @@ import { logIn } from "./log-in"
 const thisYear = Number(tanzaniaToday().slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

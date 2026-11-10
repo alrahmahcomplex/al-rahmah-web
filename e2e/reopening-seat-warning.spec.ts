@@ -14,7 +14,7 @@ import { getSeats } from "@/lib/services/seats"
 import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // The seat warning on approving a Reopening request (#103). The test claims
 // a year of its own (tests/support/fee-years.ts), so the seeded 2027 seats
@@ -44,7 +44,7 @@ test.afterEach(async () => {
 })
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

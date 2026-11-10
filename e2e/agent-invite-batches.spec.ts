@@ -4,7 +4,7 @@ import { expect, test, type Page } from "@playwright/test"
 
 import { asSystem, signedIn } from "../tests/support/db"
 import { MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Invite batches (#192) end to end: the Manager sends a batch from "Approved,
 // no account yet" over one import of the test's own, with invented names and
@@ -14,7 +14,7 @@ import { logIn } from "./log-in"
 const MAILPIT = "http://127.0.0.1:55424"
 
 async function signInStaff(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

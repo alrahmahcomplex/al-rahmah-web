@@ -27,7 +27,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
+  // The JSON report is what scripts/e2e-shards.mjs checks after a shard ran,
+  // and where the shards' measured seconds come from.
+  reporter: process.env.CI
+    ? [["list"], ["html", { open: "never" }], ["json", { outputFile: "test-results/e2e-results.json" }]]
+    : "list",
   use: {
     baseURL: `http://localhost:${E2E_PORT}`,
     trace: "retain-on-failure",

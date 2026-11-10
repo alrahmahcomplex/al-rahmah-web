@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // The Reopening requests queue and its navigation count (#100). It only reads
 // the seeded Pending request on ADMSN-90080 Asha Kibwana, raised by Test
@@ -11,7 +11,7 @@ import { logIn } from "./log-in"
 const SEEDED_PENDING_LEAD = "1ead0000-0000-4000-8000-000000000080"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

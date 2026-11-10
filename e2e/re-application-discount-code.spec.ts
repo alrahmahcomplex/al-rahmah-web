@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { admissionYears } from "../lib/admission-form"
 import { secretClient } from "../tests/support/db"
 import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // A Discount code on a Re-application (#84): the review view compares it with
 // the lead's Referral code, Apply moves a recognised code onto the lead, and
@@ -20,7 +20,7 @@ const PENDING_CODE = "ZNM-401"
 const APPROVED_CODE = "BJN-402"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

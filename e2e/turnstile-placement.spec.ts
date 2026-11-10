@@ -242,11 +242,22 @@ for (const { name, size } of VIEWPORTS) {
         // Below the send question's title and above Send, measured once the
         // question has finished unfolding.
         await expect(openQuestion(page)).toHaveClass(/gf-settled/)
-        const title = await openQuestion(page).getByRole("heading", { name: APPLY[lang].review }).boundingBox()
-        const check = await page.locator("[data-fake-check]").boundingBox()
-        const send = await page.getByRole("button", { name: APPLY[lang].send }).boundingBox()
-        expect(check!.y).toBeGreaterThan(title!.y)
-        expect(check!.y + check!.height).toBeLessThan(send!.y)
+        // All three are read in one go. Read one after the other, a page that
+        // is still scrolling into place moves between the readings, and the
+        // check then seems to sit a few pixels below Send's top edge.
+        const [title, check, send] = await page.evaluate(
+          (elements) => elements.map((element) => {
+            const { top, height } = element!.getBoundingClientRect()
+            return { y: top, height }
+          }),
+          [
+            await openQuestion(page).getByRole("heading", { name: APPLY[lang].review }).elementHandle(),
+            await page.locator("[data-fake-check]").elementHandle(),
+            await page.getByRole("button", { name: APPLY[lang].send }).elementHandle(),
+          ],
+        )
+        expect(check.y).toBeGreaterThan(title.y)
+        expect(check.y + check.height).toBeLessThan(send.y)
         await expectSendBringsCheckIntoView(page, lang, APPLY[lang].send)
       })
     }

@@ -8,7 +8,7 @@ All times are seconds unless a unit is given. "Not measured" means no number exi
 
 | Event | Runs before | Dates before | Median before | p90 before | Runs after | Median after | p90 after | Ratio |
 |---|---|---|---|---|---|---|---|---|
-| `pull_request`, full suite | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 3, change 8 | 309 | 327 | 4.2 |
+| `pull_request`, full suite | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 5, change 14 | 247 | 295 | 5.3 |
 | `pull_request`, all 30 runs | 30 | 2026-11-08 to 2026-11-10 | 1277 | 1539 | not measured | not measured | not measured | not measured |
 | `push` to main, full suite | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | not measured | not measured | not measured | not measured |
 | `push` to main, all 30 runs | 30 | 2026-11-06 to 2026-11-10 | 1120 | 1535 | not measured | not measured | not measured | not measured |
@@ -135,6 +135,7 @@ Each change is one commit, measured on pull request #285 by three successful run
 | 11 | 2 | removed | Pull two Supabase images beside the first ones | 3 | 309 | 332, with change 10 | none | no |
 | 12 | 7 | `862665e` | Sign in once per worker in browser tests that only need a session | 5 | 309 | 303 | 6 in run time, 41.5 in each shard's test step | yes |
 | 13 | 8 and 6 | `dae0684`, `5d42654`, `e66b0ae` | Retry an integration test that fails from load, then two integration shards, with the browser shards' seconds measured again | 5 | 303 | 262 | 41 | yes |
+| 14 | 6 | `bde05b6` | Browser tests as eight shards | 5 | 262 | 247 | 15 | yes |
 
 Notes on each change:
 
@@ -151,6 +152,7 @@ Notes on each change:
 11. **Early image pull.** The Supabase CLI pulls the realtime and storage images only after the database is up (3.3 s and 10.9 s in one shard of run `42831286387`). Pulling them in the background from the start did not help: Start local Supabase took 80 in the integration job against 71 before, and the browser shards' setup step took up to 147 against 104. The commit is gone from the branch.
 12. **Sign in once per worker.** Nearly every browser test began by signing in through the form: the page, Cloudflare's security check and the password check, about 390 times a run. `signInOnce` in `e2e/log-in.ts` signs in on the page the first time a worker needs an account and keeps the session cookies. A later test puts them into its own fresh browser and opens `/login`, which sends a signed-in browser home. Only helpers that sign in as setup and then expect the staff home changed, one line each in 58 files. The specs about signing in itself keep the form: `login`, `auth-captcha`, `sign-in-notices`, `staff-invites`, `staff-shell`, `super-admin` and both password-reset specs. No test is removed and no assertion changed. The test step went from 156.5 per shard to 115 (97 to 150 over 30 shard jobs), the tests' summed time from 1707 to 1391, and runner time from 1936 to 1729. All five attempts passed. The run barely moved, because the integration job, at 278, is now the slowest job. Data: `change-12-sign-in-once.json`, runs 279, 291, 303, 313 and 320.
 13. **Integration retry and two integration shards.** Three commits went up together, and their effects show in different jobs. In CI, Vitest now tries a test again, up to two times, when it fails with "unavailable" or `AuthRetryableFetchError`, the two load errors seen here. Any other failure fails at once. With that in place the integration tests run as two shards again: 183 and 172 where the single job took 278. The browser shards' seconds were measured again after change 12, which had left them at 192 to 275: the slowest shard job went from 248 to 237. Runner time went from 1729 to 1837. Data: `change-13-integration-retry-and-shards.json`, runs 262, 262, 262, 274 and 300. One more attempt failed on a search test, see "Flaky tests". The retry was needed once in the six attempts: in attempt 4 the two colliding tests failed again, and `interview-release-status` passed on its first retry and `leads-search` on its second, which is the last one it gets. That run took 274.
+14. **Eight shards.** The test step went from 118 per shard to 94 (71 to 103 over 40 shard jobs), with 92 of setup before it. Setup is now half of a shard job, so more shards would buy little. Runner time went from 1837 to 2053. All five attempts passed. Data: `change-14-eight-shards.json`, runs 234, 238, 247, 247 and 295. The 295 had a Supabase start of 157 in one integration shard. The same push carried `cc6fc9d`, the search test's fix. One thing these runs cannot show: a run now starts 12 jobs at once, 13 on main, and GitHub runs 20 at a time for this account. Two runs that overlap will queue. In the baseline, 18 of 87 runs started within 250 s of the run before. If queue time grows in the monthly numbers, go back to six shards: set `shards` to 6 in `e2e/shards.json` and the `browser` matrix to match.
 
 ## Status of each method
 

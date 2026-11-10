@@ -8,6 +8,13 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Every night, main's full suite again with no cache restored: a cache that
+  # has gone stale, or a test that only passes on cached files, shows here.
+  # 01:17 UTC is 04:17 in Tanzania.
+  schedule:
+    - cron: "17 1 * * *"
+  # The same uncached full run, started by hand from the Actions tab.
+  workflow_dispatch:
 
 # A new commit on a pull request cancels that pull request's older run. A push
 # to main gets a group of its own, so the next merge never cancels or replaces
@@ -64,6 +71,7 @@ jobs:
       # version and this runner. Any other lockfile misses and installs.
       - name: Restore node_modules
         id: modules
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
@@ -107,6 +115,7 @@ jobs:
           node-version: 24
       - name: Restore node_modules
         id: modules
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules
@@ -147,6 +156,7 @@ jobs:
           node-version: 24
       - name: Restore node_modules
         id: modules
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: node_modules

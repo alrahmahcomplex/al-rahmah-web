@@ -50,6 +50,22 @@ test("only the caches job can save to the Actions cache", () => {
   }
 });
 
+test("the nightly and the manual run restore no cache", () => {
+  assert.match(workflow, /^ {2}schedule:\n {4}- cron: "\d+ \d+ \* \* \*"$/m, "the nightly run is missing");
+  assert.match(workflow, /^ {2}workflow_dispatch:$/m);
+  const onlyOnPullRequestsAndPushes = "if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}";
+  let restores = 0;
+  for (const [name, block] of jobs) {
+    if (name === "caches") continue;
+    block.forEach((line, index) => {
+      if (!/uses: actions\/cache\/restore@/.test(line)) return;
+      restores += 1;
+      assert.equal(block[index - 1].trim(), onlyOnPullRequestsAndPushes, `${name} restores a cache in a scheduled run`);
+    });
+  }
+  assert.ok(restores > 0);
+});
+
 test("the documents-only path skips every runtime job, and the gate always runs", () => {
   for (const [name, block] of jobs) {
     const text = uncommented(block);

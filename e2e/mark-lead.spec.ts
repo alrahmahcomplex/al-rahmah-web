@@ -10,7 +10,7 @@ import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { chooseMore, moreActions } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Marking a lead Inactive or Archived from the lead screen (#98). Each test
 // marks a lead of its own; the seeded ones are only read.
@@ -25,7 +25,7 @@ const INACTIVE = "1ead0000-0000-4000-8000-000000000083"
 const DECLINED_AND_ARCHIVED = "1ead0000-0000-4000-8000-000000000084"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

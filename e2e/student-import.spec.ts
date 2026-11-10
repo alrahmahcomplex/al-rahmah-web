@@ -9,7 +9,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { secretClient } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 
 // Importing applicants from a CSV on the Applicants list: upload the fixture
@@ -21,7 +21,7 @@ import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 const thisYear = Number(tanzaniaToday().slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

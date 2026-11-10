@@ -12,7 +12,7 @@ import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // A retaken interview after a Retake reopening (#71), on the lead screen's
 // interview panel. The test that registers and records a retake reopens a
@@ -28,7 +28,7 @@ const SEEDED_RETAKE = "1ead0000-0000-4000-8000-000000000087"
 const SEEDED_ENROL_WITHOUT_RETAKE = "1ead0000-0000-4000-8000-000000000086"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

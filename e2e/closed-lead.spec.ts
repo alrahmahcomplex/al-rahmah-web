@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
 import { moreActions, openLeadTab } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // A closed lead on the lead screen (#96). Reads the seeded leads only:
 // ADMSN-90005 Archived, ADMSN-90006 Declined, and ADMSN-90081, an open child
@@ -14,7 +14,7 @@ const DECLINED = "1ead0000-0000-4000-8000-000000000006"
 const OPEN_WITH_CLOSED_SISTER = "1ead0000-0000-4000-8000-000000000081"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

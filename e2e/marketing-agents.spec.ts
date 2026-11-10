@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { registerPendingAgent as makePendingAgent } from "../tests/support/agents"
 import { secretClient } from "../tests/support/db"
 import { ACCOUNTANT, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // The Marketing Agents screen, as the Admissions Manager and the Accountant
 // use it. The Manager's test makes a Pending agent of its own, as public
@@ -13,7 +13,7 @@ import { logIn } from "./log-in"
 // The seeded agents stay as they are.
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

@@ -10,7 +10,7 @@ import { raiseReopeningRequest } from "@/lib/services/reopening-requests"
 import { asSystem, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Approving and rejecting a Reopening request from the lead (#101). Each test
 // decides a request on a Declined lead of its own, raised by Test Admissions.
@@ -19,7 +19,7 @@ const today = tanzaniaToday()
 const thisYear = Number(today.slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

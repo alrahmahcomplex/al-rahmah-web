@@ -14,7 +14,7 @@ import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
 import { leadUrl } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Seats (#111): the Accountant records a payment into a full class through
 // the warning, and the Manager sees the class ranked on the Seats screen. The
@@ -47,7 +47,7 @@ test.afterEach(async () => {
 })
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

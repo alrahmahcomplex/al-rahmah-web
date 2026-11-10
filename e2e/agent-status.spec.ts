@@ -11,7 +11,7 @@ import { registerApprovedAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { family, openQuestion, PHONE_WIDTH, toCode, toSend, setLanguageCookie, WORDS, type Lang } from "./admission-form"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Switching an agent off and retiring them (#187): the Manager's dialog with
 // the families it changes, the Retired filter, the lead's fee line, and the
@@ -21,7 +21,7 @@ import { logIn } from "./log-in"
 const thisYear = Number(tanzaniaToday().slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

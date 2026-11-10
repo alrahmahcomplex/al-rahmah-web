@@ -13,7 +13,7 @@ import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Adjusting and voiding school-fee payments on the lead screen (#110). The
 // test that adjusts claims a year of its own with a schedule of its own
@@ -26,7 +26,7 @@ const thisYear = Number(today.slice(0, 4))
 const SEEDED_DECLINED = "1ead0000-0000-4000-8000-000000000905"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

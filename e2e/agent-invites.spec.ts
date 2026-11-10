@@ -5,7 +5,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test"
 import { createThrowawayStaff, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER, SEEDED_AGENT, type FixtureStaff } from "../tests/support/fixtures"
 import { chooseLanguage } from "./discount-code"
-import { logIn } from "./log-in"
+import { logIn, signInOnce } from "./log-in"
 
 // Agent invites and the Discount code sign-in (#191) end to end: the Manager
 // sends the invite from the Agents screen, the email lands in local Mailpit,
@@ -28,7 +28,7 @@ test.beforeEach(async ({ context }) => {
 })
 
 async function signInStaff(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

@@ -6,7 +6,7 @@ import { roleTemplate } from "../lib/role-templates"
 import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
 import { MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { signInAsSuperAdmin } from "./super-admin"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Roles v2 (#241) end to end: the Super Admin makes a role from a template
 // and invites into it; the seeded Manager manages Admissions Staff only and
@@ -14,7 +14,7 @@ import { logIn } from "./log-in"
 
 async function signIn(page: Page, person: FixtureStaff) {
   await page.context().clearCookies()
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

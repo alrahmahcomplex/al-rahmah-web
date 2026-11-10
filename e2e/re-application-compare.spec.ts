@@ -6,7 +6,7 @@ import { admissionYears } from "../lib/admission-form"
 import { secretClient } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Comparing a Re-application with its lead and acting on it (#78): the side by
 // side view with its highlights, Apply on a differing class and phone, and
@@ -20,7 +20,7 @@ const nextYear = admissionYears()[1]
 const ARCHIVED = "1ead0000-0000-4000-8000-000000000005"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

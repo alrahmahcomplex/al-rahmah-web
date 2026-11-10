@@ -12,7 +12,7 @@ import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl, openLeadTab } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // The Sibling discount (#113): the seeded confirmed and unconfirmed Families
 // in supabase/seeds/90_fees.sql, read only, and the prior-sibling tick on a
@@ -49,7 +49,7 @@ test.afterEach(async () => {
 
 async function signIn(page: Page, person: FixtureStaff) {
   await page.context().clearCookies()
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

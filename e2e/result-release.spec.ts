@@ -13,7 +13,7 @@ import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Releasing an interview result through WhatsApp or by SMS from the lead
 // screen's interview panel. The wa.me tab is checked by its address and never reaches
@@ -27,7 +27,7 @@ const OFFICE_PHONE = "+255 673 526 644"
 const SEEDED_PAID = "1ead0000-0000-4000-8000-000000000601"
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

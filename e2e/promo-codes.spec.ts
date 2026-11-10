@@ -9,7 +9,7 @@ import { setLeadReferralCode } from "@/lib/services/referral"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { leadUrl } from "./lead-page"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // The Promo codes page: the Manager creates a code, an application carrying
 // it shows the code's own amount with no agent, and pausing it moves the
@@ -20,7 +20,7 @@ import { logIn } from "./log-in"
 const thisYear = Number(tanzaniaToday().slice(0, 4))
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

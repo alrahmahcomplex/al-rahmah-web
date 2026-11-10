@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises"
 import { expect, test, type Page } from "@playwright/test"
 
 import { ADMISSIONS, MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // Exporting applicants from the Applicants list. Admissions Staff hold
 // leads.view only: the applicant columns. The Manager holds leads.export:
@@ -13,7 +13,7 @@ import { logIn } from "./log-in"
 const DATED_NAME = (preset: string) => new RegExp(`^attachment; filename="students-${preset}-[0-9]{4}-[0-9]{2}-[0-9]{2}[.]csv"$`)
 
 async function signIn(page: Page, person: FixtureStaff | typeof SUPER_ADMIN) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

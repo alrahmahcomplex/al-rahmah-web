@@ -8,7 +8,7 @@ import { createLead } from "@/lib/services/leads"
 
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { signInOnce } from "./log-in"
 
 // The Follow-ups queue (#92): its sections in order with the nav badge,
 // recording a contact from a row, and the Accountant reading it. The tests
@@ -38,7 +38,7 @@ test.afterAll(async () => {
 })
 
 async function signIn(page: Page, person: FixtureStaff) {
-  await logIn(page, person.email, person.password)
+  await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 

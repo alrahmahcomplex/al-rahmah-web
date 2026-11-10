@@ -49,7 +49,7 @@ test("the agent sees a card per student, with the result only once it is out", a
   await expect(page.getByRole("link", { name: "Onyesha zaidi" })).toHaveCount(0)
 
   // The language lives in the top bar's menu, under the COMPLEX badge.
-  await expect(page.getByText("AL-RAHMAH COMPLEX")).toBeVisible()
+  await expect(page.getByText("AL-RAHMAH COMPLEX", { exact: true })).toBeVisible()
   await page.getByRole("button", { name: "Menyu" }).click()
   await page.getByRole("button", { name: "English" }).click()
   await expect(page.getByRole("heading", { name: `Students using Discount code ${agent.code} (4)` })).toBeVisible()

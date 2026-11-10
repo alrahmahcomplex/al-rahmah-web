@@ -348,7 +348,8 @@ test.describe("shaping roles, the Super Admin's alone", () => {
     await dialog.getByLabel("Role name").fill(renamed)
     await dialog.getByRole("button", { name: "Save name" }).click()
     await expect(callout(page)).toHaveText(`Renamed the role to ${renamed}.`)
-    await expect(page.getByRole("heading", { name: renamed, level: 2 })).toBeVisible()
+    // Exact, or the closing dialog's title "Rename <name>" matches as well.
+    await expect(page.getByRole("heading", { name: renamed, level: 2, exact: true })).toBeVisible()
 
     await page.getByRole("button", { name: "Retire role" }).click()
     await expect(page.getByRole("alertdialog").getByRole("heading")).toHaveText(`Retire ${renamed}?`)

@@ -326,6 +326,19 @@ describe("numbers a sibling row links", () => {
       expect(error?.message).toBe("invalid")
       expect(JSON.parse(error?.details ?? "{}")).toEqual({ field: "duplicate_student" })
     }
+
+    // A later row with the phone supplies the link, among several WhatsApps.
+    const three = importPhone()
+    const later = [
+      sent(2, `Baraka Mfano ${s}`, one.stored, null),
+      sent(3, `Juma Mfano ${s}`, one.stored, two.stored),
+      sent(4, `Neema Mfano ${s}`, one.stored, three.stored),
+      sent(5, `Asha Mfano ${s}`, one.stored, null),
+      sent(6, `Asha Mfano ${s}`, three.stored, null),
+    ]
+    const { error } = await manager.rpc("check_student_import", { rows: later })
+    expect(error?.message).toBe("invalid")
+    expect(JSON.parse(error?.details ?? "{}")).toEqual({ field: "duplicate_student" })
   })
 
   test("siblings who share the linked numbers import as two children in one Family", async () => {

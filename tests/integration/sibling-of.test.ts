@@ -376,6 +376,47 @@ describe("the father's-name check", () => {
     expect(await feeOf(third)).toMatchObject({ discount: null })
   })
 
+  test("a lead waiting on a request stays waiting when it is linked again elsewhere, after its name was made the same", async () => {
+    const year = await yearWithSchedule()
+    const name = father()
+    const dear = await child(year, name, "FORM 1")
+    const waiting = await child(year, father(), "KG 1")
+    await together(dear, await child(year, name, "STD 2"))
+    await link({ leadId: waiting, siblingOfLeadId: dear })
+    expect(await membershipOf(waiting)).toMatchObject({ basis: "request_needed" })
+
+    const admissions = await signedIn(ADMISSIONS)
+    expect((await admissions.rpc("update_lead_details", { lead_id: waiting, changes: { father_full_name: name } })).error).toBeNull()
+
+    // Linked to an ungrouped child of the same father, it would bring its
+    // group along: refused, since it still waits on a request. Nothing moves.
+    const loose = await child(year, name, "STD 2")
+    const group = (await membershipOf(waiting))?.group_id
+    expect(await linkSibling(admissions, { leadId: waiting, siblingOfLeadId: loose })).toEqual({
+      ok: false,
+      error: { kind: "invalid", field: "sibling_of" },
+    })
+    expect(await membershipOf(waiting)).toMatchObject({ group_id: group, basis: "request_needed" })
+    expect(await membershipOf(loose)).toBeNull()
+    expect(await feeOf(waiting)).toMatchObject({ schoolFee: KG1, discount: null })
+
+    // A waiting lead alone in its group moves, still waiting.
+    const alone = await child(year, father(), "KG 1")
+    const first = await child(year, father(), "STD 2")
+    await link({ leadId: alone, siblingOfLeadId: first })
+    // Its only sibling leaves the group (as an unlink will).
+    await asSystem(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(
+        "update public.sibling_group_members set group_id = null, basis = null, joined_at = null, cause = 'family' where lead_id = $1",
+        [first],
+      )
+    })
+    expect((await admissions.rpc("update_lead_details", { lead_id: alone, changes: { father_full_name: name } })).error).toBeNull()
+    expect(await link({ leadId: alone, siblingOfLeadId: dear })).toMatchObject({ kind: "linked", basis: "request_needed" })
+    expect(await feeOf(alone)).toMatchObject({ schoolFee: KG1, discount: null })
+  })
+
   test("a linked member's correction: different takes the 10% away, close asks the question first", async () => {
     const year = await yearWithSchedule()
     const stem = father()

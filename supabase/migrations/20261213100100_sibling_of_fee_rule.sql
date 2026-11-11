@@ -1319,7 +1319,12 @@ begin
             case when public.sibling_basis_counts(t_basis) then t_name end
         );
 
-        if checked.verdict = 'same' then
+        if gx is not null and not mx.legacy and not public.sibling_basis_counts(mx.basis) then
+            -- A linked lead that waits on a request (or was refused) keeps
+            -- that state wherever it is linked next: only a granted request
+            -- makes it count (S2, R36). No question, no new check.
+            x_basis := mx.basis;
+        elsif checked.verdict = 'same' then
             x_basis := 'matched';
         elsif checked.verdict = 'close' then
             if link_sibling.answer is null then

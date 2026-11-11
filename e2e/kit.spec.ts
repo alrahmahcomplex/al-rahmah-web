@@ -586,3 +586,52 @@ test("under reduced motion the staff guided form opens each question at once, wi
   await expect(card.getByRole("heading", { level: 2, name: "1 student registered" })).toBeFocused()
   await expect(page.locator(".kit-cf")).toHaveCount(0)
 })
+
+test("removing a student keeps the names being typed for another", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await openKit(page)
+  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const open = card.locator(".gf-step.gf-open")
+  await answerNames(open, ["Neema", "Juma", "Salim"])
+  await pick(open, "STD 5")
+  await pick(open, "Day")
+  await open.getByRole("button", { name: "Yes, add a student" }).click()
+  await open.getByRole("textbox", { name: "First name", exact: true }).fill("Hamisi")
+  await card.getByRole("button", { name: "Remove Neema Juma Salim" }).click()
+  await expect(open.getByRole("textbox", { name: "First name", exact: true })).toHaveValue("Hamisi")
+})
+
+test("inside a stage scroll area the bar sits flush with its top, and a new question is scrolled into view there", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 })
+  await openKit(page)
+  // Until the new shell (#322) the kit page scrolls the window. Here its wrapper becomes the stage's
+  // scroll area, as the shell's will be: data-stage-scroll and its top padding in --kit-stage-pt.
+  const area = page.locator("[data-kit]")
+  await area.evaluate((el) => {
+    el.setAttribute("data-stage-scroll", "")
+    Object.assign((el as HTMLElement).style, { height: "100dvh", overflow: "auto", paddingTop: "26px" })
+    ;(el as HTMLElement).style.setProperty("--kit-stage-pt", "26px")
+  })
+  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const bar = card.locator(".gf-bar-row")
+  const areaTop = async () => (await area.boundingBox())!.y
+
+  await card.locator(".kit-task").evaluate((el) => {
+    const stage = el.closest<HTMLElement>("[data-stage-scroll]")!
+    stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top + 120
+  })
+  expect(await page.evaluate(() => window.scrollY)).toBe(0)
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.y - (await areaTop()))).toBe(0)
+
+  // Answering scrolls the stage, not the window, to bring the next question into its top third.
+  const open = card.locator(".gf-step.gf-open")
+  await answerNames(open, ["Neema", "Juma", "Salim"])
+  await expect(open.getByRole("heading", { level: 2, name: "Which class is Neema joining?" })).toBeFocused()
+  await expect
+    .poll(async () => {
+      const top = (await open.boundingBox())!.y - (await areaTop())
+      return top > 0 && top < 700 * 0.4
+    })
+    .toBe(true)
+  expect(await page.evaluate(() => window.scrollY)).toBe(0)
+})

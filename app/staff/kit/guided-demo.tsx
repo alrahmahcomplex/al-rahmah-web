@@ -219,9 +219,11 @@ function buildSteps(a: Answers, t: Tools): Step[] {
   let head: Head = { key: "s0", title: "Student 1" }
   a.students.forEach((s, i) => {
     const f = first(s.name)
-    head = { key: `s${i}`, title: s.name ?? `Student ${i + 1}`, remove: n > 1 ? i : undefined }
+    // Ids follow the student's key, not its place, so removing another student keeps this one's open question as it is.
+    const sid = `s${s.key}`
+    head = { key: sid, title: s.name ?? `Student ${i + 1}`, remove: n > 1 ? i : undefined }
     steps.push({
-      id: `s${i}.name`,
+      id: `${sid}.name`,
       group: 0,
       head,
       label: "Full name",
@@ -232,10 +234,10 @@ function buildSteps(a: Answers, t: Tools): Step[] {
           <small className="kp-fa">Father: {s.father}</small>
         </>
       ),
-      body: () => <NameQuestion key={`name:${s.key}:${s.name ?? ""}`} index={i} student={s} onDone={(parts) => t.answer(`s${i}.name`, nameAnswer(i, parts, t))} />,
+      body: () => <NameQuestion key={`name:${s.key}:${s.name ?? ""}`} index={i} student={s} onDone={(parts) => t.answer(`${sid}.name`, nameAnswer(i, parts, t))} />,
     })
-    steps.push(pickStep(`s${i}.cls`, head, "Class", s.cls, `Which class is ${f} joining?`, CLASSES, "four", (v) => t.answer(`s${i}.cls`, t.setStudent(i, { cls: v })), t))
-    steps.push(pickStep(`s${i}.board`, head, "Day or boarding", s.board, `Will ${f} be a day or a boarding student?`, ["Day", "Boarding"], "two", (v) => t.answer(`s${i}.board`, t.setStudent(i, { board: v })), t))
+    steps.push(pickStep(`${sid}.cls`, head, "Class", s.cls, `Which class is ${f} joining?`, CLASSES, "four", (v) => t.answer(`${sid}.cls`, t.setStudent(i, { cls: v })), t))
+    steps.push(pickStep(`${sid}.board`, head, "Day or boarding", s.board, `Will ${f} be a day or a boarding student?`, ["Day", "Boarding"], "two", (v) => t.answer(`${sid}.board`, t.setStudent(i, { board: v })), t))
   })
 
   steps.push({

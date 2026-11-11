@@ -249,7 +249,7 @@ The approved staff prototype is the visual reference for every staff screen it s
 - Exo is always italic: page titles, questions, card titles, buttons, the current sidebar item. Everything people read in quantity or type is Geist, upright.
 - Pills wherever a person presses or types. Large soft corners on cards.
 - White cards with a thin indigo outline and a soft indigo shadow. Only the card that holds the task is lifted.
-- A clean desk: whitespace, one idea per block, subtle motion, nothing that counts at people.
+- A clean desk: whitespace, one idea per block, subtle motion, no count badges (The One Pip Rule).
 
 ### Conversion status
 
@@ -305,8 +305,8 @@ Exo italic is the flyer's voice: geometric, fast, leaning toward the reader. Gei
 | Question | Exo italic | 800, 26px/1.18 | An open question in a guided form, a lifted task card's title, a sheet's title, a finished screen's title. |
 | Card title | Exo italic | 800, 17px/1.3, Rahmah Indigo | A card's heading, the bell popover's heading. |
 | Section title | Exo italic | 800, 15px/1.3, Rahmah Indigo | A section inside a card or sheet ("Student", "Custodian"). |
-| Action | Exo italic | 600, 16px (14px small, 18px wide) | Every button label. |
-| Current sidebar item | Exo italic | 700, 13.5px | The one current entry in the sidebar, and a pressed filter pill (13.5px). |
+| Action | Exo italic | 600, 16px (14px small, 18px wide) | Button labels (Go, Ghost, Small, Wide). Filter pills and chip buttons rest in Geist 600 and turn Exo italic only when pressed. |
+| Current sidebar item | Exo italic | 700, 13.5px | The one current entry in the sidebar, and a pressed filter pill. |
 | Sidebar group | Exo italic | 700, 10.5px, uppercase, 0.06em, indigo at 62% | "FRONT DESK", "ADMISSIONS"… |
 | Brand title | Exo italic | 800, 11–14px, Rahmah Indigo | "Al-Rahmah Complex" in the sidebar; its size follows the sidebar's width. |
 | Label band | Exo italic | 800, 15px, uppercase, 1px | The badge in the brand top bar. |
@@ -322,11 +322,11 @@ Exo italic is the flyer's voice: geometric, fast, leaning toward the reader. Gei
 Numbers that line up (money, Admission Numbers, times, counts in tables) use `font-variant-numeric: tabular-nums`. An Admission Number shown as the result of a finished task is Exo 800 italic 20px, Rahmah Indigo.
 
 ### Named Rules
-**The Lean Forward Rule.** Exo is always italic. Upright Exo never appears, on any page. A reviewer can check it with a search for Exo without `italic`.
+**The Lean Forward Rule.** Exo is always italic. Upright Exo never appears, on any page. Check it on the rendered page: no element whose computed `font-family` starts with Exo has `font-style: normal`.
 
 **The Geist Work Rule.** Typed text, table cells, names, numbers and paragraphs are Geist, upright. Exo never sets a table cell, a field's value or a paragraph.
 
-**The Readable Field Rule.** Text a person types is at least 16px on a phone, so iOS does not zoom. The full field is 17px. The compact 44px field (the top-bar search, a filter field) is 15px from 861px up and 16px below.
+**The Readable Field Rule.** Text a person types is at least 16px on a phone, so iOS does not zoom. The full field is 17px. The compact 44px field and the 40px top-bar search are 15px from 861px up and 16px below.
 
 ## Layout
 
@@ -338,7 +338,7 @@ A white frame holds a sidebar on the left and one rounded **stage** on the right
 - **Frame:** the body is Paper, with 16px side padding (or the safe-area inset if larger), 4px above and 12px below the shell.
 - **Top bar:** 54px tall, in the white frame above the stage, not inside it. From left: the sidebar toggle (aligned with the stage's left edge, so it moves with the stage when the sidebar folds or resizes), the search field (`flex: 0 1 340px`), a spacer, the notification bell, and the signed-in person's pill.
 - **Stage:** fills the rest. 28px corners, the lavender wash, `overflow: hidden`. Its 1.5px outline (`rgb(9 0 187 / 0.18)`, inset) is drawn on a layer above the content, so the border stays visible while content scrolls beneath it.
-- **Page:** inside the stage, a scroll area with 26px top, 40px side and 56px bottom padding, and a page column capped at 1180px, centred. Task pages (Today, a guided form) use a 660px centred column.
+- **Page:** inside the stage, a scroll area with 26px top, 40px side and 56px bottom padding, and a page column capped at 1180px, centred. Narrow pages such as Today use a 660px centred column; a guided form uses a 640px centred column.
 - **Outside scrollbar:** the stage's native scrollbar is hidden. A 6px bar is drawn in the white gutter right of the stage (11px outside its edge, from 72px below the top to 18px above the bottom): a `#cbc5f6` thumb at least 36px tall, Line Strong on hover and while dragged. Pressing the track jumps there; dragging the thumb scrolls. It shows only when the page can scroll, and it is not drawn on a touch screen (`pointer: coarse`), where the stage scrolls natively.
 - **Grids:** cards and columns are 24px apart. A two-column page is `minmax(0, 1.25fr) minmax(280px, 0.9fr)`; a list beside a detail is `320px minmax(0, 1fr)`. Both fall to one column at 1000px.
 
@@ -346,10 +346,10 @@ A white frame holds a sidebar on the left and one rounded **stage** on the right
 - **Head:** 54px. The round logo (36px circle, 1.5px Indigo Line outline) at 6px from the left; beside it "Al-Rahmah Complex" (Brand title) over "Admissions Portal" (Geist, 0.8× the title's size, Slate Quiet), the pair centred on the logo's centre line at every title size.
 - **Groups:** Front desk, Admissions, Referrals, Money, Admin, in that order, each named in the Sidebar group style. A group with nothing the person may see is left out (`app/staff/navigation.ts`).
 - **Rows:** 26px tall, 10px side padding, 10px gap, 14px corners, a 16px icon. Hover: Lavender Chrome, indigo text, the icon's highlight grows in, and the label rolls up to a second copy of itself (340ms). Current: Lavender Whisper, indigo, Exo 700 italic 13.5px, icon highlighted, `aria-current="page"`.
-- **Always fits:** the sidebar never scrolls and never shows a scrollbar. On a short screen rows shrink toward 21px and group gaps toward 15px before anything overflows.
+- **Always fits:** the sidebar never shows a scrollbar. On a short screen rows shrink from 26px and group gaps from 25px toward 15px. Rows stop shrinking at 24px (WCAG 2.2's minimum target); if the entries still do not fit, the list scrolls with its bar hidden, so no entry is ever cut off.
 - **Folded:** 60px wide. Labels and the title fade out; the logo stays. Group names become 1px Lavender Mist lines. Each row becomes a circle up to 30px (at least 24px) around its icon; the current one is a 30px Lavender Whisper circle. Each folded icon has a tooltip with its label. Folding takes 460ms on the ease-out curve.
 - **Toggle:** a 40px round button in the top bar with no outline at rest, Slate Soft. While the sidebar is open it is pressed: a Lavender Whisper circle, indigo, its icon highlighted (`aria-pressed="true"`).
-- **Resize:** a 14px handle straddles the stage's left edge (from 62px below the top to 8px above the bottom) and shows a 2px indigo line at 45% on hover, drag and focus. Dragging sets the open width between two limits. The narrowest leaves the same gap after the longest label as the 16px before the icons; the widest is 252px plus half the distance from the stage's edge to the page column. The brand title shrinks from 14px toward 11px as the sidebar narrows. Double-click returns to the narrowest. Arrow keys move it 8px. It is a `role="separator"` with its value and limits. The handle is gone while the sidebar is folded and under 861px.
+- **Resize:** a 14px handle straddles the stage's left edge (from 62px below the top to 8px above the bottom) and shows a 2px indigo line at 45% on hover, drag and focus. Dragging sets the open width between two limits. The narrowest is the larger of two widths: the one that leaves the same gap after the longest label as before the icons (page padding plus row padding), and the one that fits the brand title at its smallest size (11px) plus an 8px gap. The widest is 252px plus half the distance, measured with the sidebar at 252px, from the stage's edge to the page column. Between the two, the brand title scales from 11px to 14px with the width. Double-click returns to the narrowest. Arrow keys move it 8px. It is a `role="separator"` with its value and limits. The handle is gone while the sidebar is folded and under 861px.
 - **Remembered:** the folded state and the open width are kept in cookies, so a reload paints the sidebar as it was, with no jump.
 
 ### The staff shell on a phone or small tablet (up to 860px)
@@ -357,7 +357,7 @@ One column. The top bar sits above the stage; the toggle gives way to a 40px Men
 
 ## Elevation & Depth
 
-Depth is soft, coloured and rare. Shadows are tinted indigo or orange, never grey.
+Shadows are tinted indigo or orange, never grey, and only the four below exist.
 
 ### Shadow Vocabulary
 - **Card** (`0 1px 2px rgb(9 0 187 / 0.04), 0 12px 28px -18px rgb(9 0 187 / 0.22)`): every resting white card on the stage.
@@ -370,7 +370,7 @@ Depth is soft, coloured and rare. Shadows are tinted indigo or orange, never gre
 
 ## Shapes
 
-The form language is the capsule. Anything a person presses or types into is a full pill: buttons, inputs, filter pills, chips, the person's pill, the toast. Round buttons are circles. Corners grow with the surface: 14px sidebar rows, 16px notes, 20px choice rows and summary boxes, 22px menus, 24px cards, 28px stage and sheets, 40px task cards. Outlines are 1.5px Indigo Line. Dividers inside a card are 1px Lavender Mist. Nothing has a square corner.
+The form language is the capsule. Buttons, fields, filter pills, chip buttons, status chips, the person's pill and the toast are full pills; round buttons are circles. Choice tiles are the exception: segmented choices have 16px corners, choice rows 20px, the default tile 24px. Corners grow with the surface: 14px sidebar rows, 16px notes, 20px choice rows and summary boxes, 22px menus, 24px cards, 28px stage and sheets, 40px task cards. Outlines are 1.5px Indigo Line. Dividers inside a card are 1px Lavender Mist. Nothing has a square corner.
 
 ## Components
 
@@ -383,12 +383,12 @@ All of these are built once and shared. Parent pages and staff pages import the 
 - **Wide:** full width, at least 52px, 18px label, at the foot of a task card or sheet. A wide ghost that adds something is 64px with 24px corners.
 - **Round:** a 44px outlined circle in a guided form (Back, Start over, the brand menu); a 40px outlined circle in the staff top bar (the bell, the Menu button); a 36px borderless circle to close a sheet. Lavender Whisper on hover, scale 0.92 on press.
 - **Text link:** indigo, 600, 14px, underlined 3px below ("Edit", "Add", "Clear").
-- **Focus:** every control shows a 3px indigo outline at 45%, 2px out.
+- **Focus:** buttons, choices, links and rows show a 3px indigo outline at 45%, 2px out. Fields instead turn their outline solid indigo with a 4px ring at 12% (see Inputs). `ContinuePill` and the `orange` button variant keep their existing 3px ring at 40%.
 
 ### Inputs
 - **Pill field:** 52px, 1.5px Indigo Line, Paper, 17px Geist, centred text, orange caret, 20px padding (48px with a field icon, which sits 18px in, Slate Quiet). Focus: solid indigo outline and a 4px indigo ring at 12%. Invalid (`aria-invalid="true"`): Alert Red outline and a 4px red ring at 10%, with an error line under the field that folds open, has `role="alert"` and says what to do.
 - **Left-aligned** fields (`alignStart`) for long free text and the search field.
-- **Compact field:** 44px, 15px. The top-bar search is compact, rests on Lavender Chrome and turns Paper on focus, with a 17px search icon 14px in. Searching opens Applicants with the term.
+- **Compact field:** 44px, 15px. The top-bar search is 40px, rests on Lavender Chrome and turns Paper on focus, with a 17px search icon 14px in and 40px left padding. Searching opens Applicants with the term.
 - Every field has a label: the open question's title, or an `sr-only` label where the icon and placeholder carry the meaning.
 
 ### Choices
@@ -399,15 +399,15 @@ From the Admission form, unchanged:
 - **Chip buttons:** 40px pills for many short options; pressed indigo.
 
 ### Guided form
-The Admission form and every staff task that collects answers (registering students, check-in, recording a payment in steps) ask one question at a time through `components/guided-form/`. Its README documents the props.
-- **Progress bar:** a sticky row on top of the task card. Back on the left, Start over in its place on the first question, both 44px round. Groups of 6px chips follow, one chip per step, each group led by its number in Exo italic. When a group finishes, its chips close into one bar, a light runs through it, a green tick lands on its end, and 820ms later the number cheers and turns Sunrise Deep. An outlined section chip on the right names the group; it hides under 380px.
+The Admission form and the staff flows the prototype shows as guided (registering students and check-in) ask one question at a time through `components/guided-form/`. Small edits on a record (a fee, the father's name, the previous school) stay inline editors inside the record's sheet, as the prototype shows. Its README documents the props.
+- **Progress bar:** a sticky row on top of the task card. Back on the left, Start over in its place on the first question, both 44px round. Groups of 6px chips follow, one chip per step, each group led by its number in Exo italic. When a group finishes, its chips close into one bar, a light runs through it, a green tick lands on its end, and the number cheers and turns Sunrise Deep (after 820ms in the React `ProgressBar`, which staff pages reuse). An outlined section chip on the right names the group; it hides under 380px.
 - **Questions:** the open question is centred, its title in the Question style. Answering folds the card into a summary row: a 28px Lavender Whisper dot with a tick, the label (13px, Slate Quiet) over the value (16px, 600), and a two-word change link on the right. The folded rows are the review; there is no separate check page. Group titles sit between groups.
 - **Continue:** a wide Go button ending in ›.
 - **Finished:** see States.
 
 ### Cards
 - **Card:** Paper, 24px corners, 1.5px Indigo Line, the Card shadow, 22px × 24px padding (18px under 860px). Card title in the Card title style; an optional caption under it.
-- **Task card:** Paper, 40px corners, no outline, the Indigo lift, 30px × 28px padding. One per page.
+- **Task card:** Paper, 40px corners, no outline, the Indigo lift, 30px × 28px padding (32px corners and 24px × 18px padding up to 860px). One per page.
 
 ### Lists
 - **List row:** 12px gap, 11px vertical padding, a 1px Lavender Mist line between rows (none above the first). An optional 36px Lavender Whisper disc with an 18px icon; the title in Row title style over a Caption; a trailing chip, small button or 16px chevron in Slate Quiet. A row that opens something is a link or button with Lavender Chrome on hover.
@@ -437,7 +437,7 @@ The lifecycle colours mean only lifecycle. Other tags on a lead (Returning famil
 A note is a 16px-cornered box, 12px × 14px padding, 14px/1.45 text, with a 16px icon at the start: `NoticeBox` with tone `info` (Lavender Whisper, indigo text), `good` (Green Tint, dark green), `wait` (warm orange tint, dark orange) or `bad` (Red Tint, dark red). A note says one thing and what to do about it.
 
 ### Sheets and dialogs
-Anything a row edits, and every confirmation, opens in a sheet over a frosted Indigo Night backdrop (40%, 6px blur). One component, three placements:
+Opening a row's record, a review or a confirmation uses a sheet over a frosted Indigo Night backdrop (40%, 6px blur). Small edits inside an open sheet (a fee, a name, a previous school) open inline in that sheet's body, not as a second sheet. One component, three placements:
 - **Bottom** (always on a phone): rises from the bottom, up to 520px wide and 92% of the screen tall, 28px top corners, the Sheet shadow.
 - **Centre** (from 720px): a 28px-cornered card in the middle; it settles from 96% scale.
 - **Side** (from 720px): 440px wide, 12px from the right, top and bottom of the window, 28px corners; it slides in from the right.
@@ -455,7 +455,7 @@ Paper, 1.5px Indigo Line, 22px corners, the Indigo lift, opening from their butt
 A save that closes its sheet confirms with a toast: an Indigo Night pill at the bottom centre, white Geist 600 13.5px, 10px × 18px padding, `role="status"`. It rises 20px in 280ms and leaves after 2.6s. It says what happened and anything the person must do next, in one sentence.
 
 ### Confetti
-Confetti in orange, indigo, `#ffb066` and `#7b73ff` follows a finished registration and a sent Admission form: 46 pieces falling for 1.7s. It is skipped under reduced motion.
+Two confetti moments, both skipped under reduced motion. A sent Admission form keeps its existing burst (`components/guided-form/confetti.tsx`: 70 pieces from the success mark over 2.6s, after 820ms). A finished staff registration rains 46 pieces in orange, indigo, `#ffb066` and `#7b73ff` from the top of the window for 1.7s, as in the prototype.
 
 ### Brand top bar
 Public form pages (the Admission form and the Discount code pages) open with `BrandTopBar` (`components/brand/`) in a 44px | 1fr | 44px grid: the round logo in a 44px circle linking to alrahmahcomplex.or.tz; the badge, a 44px Rahmah Indigo pill in the Label band style reading "AL-RAHMAH SCHOOLS" for parents and "AL-RAHMAH COMPLEX" for code holders, stepping its text down at 380, 330 and 300px; and the 44px outlined Menu button, whose panel holds the Kiswahili | English control and, where the page has a form, a red "Futa fomu yote" that asks once. The page title is an `sr-only` `<h1>`. On a first visit (no `lang` cookie) a language card grows out of the Menu button over a frosted indigo backdrop, waits 5 seconds unless the visitor is using it, confirms for 3 seconds and shrinks back into the button, which pops with an orange ring. `/login` keeps its own card with the indigo name band.
@@ -466,7 +466,7 @@ The price box sets the full fee on an orange-tint half against the saving on a g
 ### Icons
 One library, set 2 ("Soft highlight"), drawn for this app. It replaces lucide on every screen as that screen converts.
 - **Grid:** 24 × 24 viewBox, 2px stroke, round caps and joins, no fill on lines. Shown at 20px (16px small; 16px in the sidebar; 18px in a row disc; 19px in the sidebar toggle).
-- **Two layers:** each icon is a main outline and a second detail (for example the calendar and its tick), plus a soft circle placed off-centre, partly outside the outline.
+- **Two layers:** each icon is a main outline and a second detail (for example the calendar and its tick), plus a soft circle placed off-centre, partly outside the outline. Utility glyphs (back, right, check, plus, x) are a single line with no circle.
 - **At rest:** both layers take the text colour; the circle is invisible at half size.
 - **Active** (hovered, current, inside a pressed button, or featured in a row disc): both layers turn Rahmah Indigo and the circle fills Peach Glow and grows to full size (420ms on the ease-out curve). On indigo, the lines turn white and the circle Sunrise Orange.
 - **Names:** today, checkin, register, applicants, interviews, followups, reapps, agents, promo, groups, fees, seats, discounts, reopen, reports, roles, audit, search, bell, panel, menu, back, right, check, plus, x, reset, alert, info, phone, user, school, link. The prototype holds each path and circle. A new icon follows the same grid and gets its own circle; it is added to the library, never drawn inline in a page.
@@ -498,17 +498,17 @@ A finished task replaces its form with a task card: the Finished illustration at
 - A missing record shows `app/staff/not-found.tsx`. Public `app/not-found.tsx` and `app/error.tsx` say it in Swahili and English at once, with one orange way home.
 
 ### Motion
-Motion is quiet and says something. Durations come from the `--gf-*` tokens.
+Only the motions in this table exist. Durations come from the `--gf-*` tokens.
 
 | Moment | Motion |
 |---|---|
-| Page change | Each block of the page rises 10px and fades in over 460ms, 50ms apart (at most 140ms late). |
+| Page change | Each block of the page rises 10px and fades in over 460ms. Top-level blocks start 0, 50, 100 and 140ms in; blocks inside a narrow column or a grid start 0, 70, 130 and 180ms in. |
 | Hover and colour | 280ms on `cubic-bezier(0.16, 1, 0.3, 1)` (`--gf-ease-out`). |
 | Press | Scale 0.92 (round), 0.96 (pill), 0.98 (row) in 140ms. |
 | Question folds | 300ms (`--gf-fold`) on the ease-out curve. |
 | Sidebar fold and drawer | 460ms; the drawer 420ms. |
 | Sheet | 320ms. Popover 180ms. Toast 280ms. |
-| Progress group finishes | Bar closes 420ms, light runs 1.1s, tick lands at 380ms, number cheers 720ms. |
+| Progress group finishes | Bar closes in 420ms; light runs for 1.1s after 120ms; the tick waits 380ms, then pops in over 380ms; the number cheers for 720ms. |
 
 **The Reduced Motion Rule.** Under `prefers-reduced-motion: reduce` the tokens collapse (fast 1ms, medium 120ms, slow 160ms, fold 0ms, fade 120ms, sidebar 1ms). The page rise, label roll, illustration bob, number cheer, bubbles and confetti are off, and sheets fade in place instead of sliding. Every new animation adds its reduced-motion rule in the same change.
 
@@ -522,7 +522,7 @@ The site installs as an app from `app/manifest.ts`. Every icon is the full Al-Ra
 ### Do:
 - **Do** put every page on the lavender wash, and every staff page inside the stage with its border on top.
 - **Do** use Exo italic for titles, questions, buttons and the current sidebar item, and Geist for everything people read in quantity or type.
-- **Do** make every press target a pill or a circle, at least 44px on a phone and 36px for a small button on a desktop.
+- **Do** keep press targets at the sizes in Components: 44px for Go, Ghost and round buttons in a guided form; 40px for top-bar circles and chip buttons; 36px for small buttons and filter pills; never under 24px.
 - **Do** make the next step the one Go button: white Exo 600 italic on `#ee7300` (The ShuleFasta Button Rule).
 - **Do** ask a task's questions one at a time through the guided form, and let folded answers be the review.
 - **Do** open edits and confirmations in a sheet whose title and buttons stay put while its middle scrolls.
@@ -534,7 +534,7 @@ The site installs as an app from `app/manifest.ts`. Every icon is the full Al-Ra
 - **Don't** use upright Exo, anywhere.
 - **Don't** put two orange buttons on one screen, or dark text on an orange button.
 - **Don't** show a count badge in the sidebar, a tab or a page title. The bell's pip is the only unread marker.
-- **Don't** let the sidebar scroll or show a scrollbar.
+- **Don't** show a scrollbar in the sidebar, or cut off one of its entries.
 - **Don't** lift more than one card on a page, or use grey shadows.
 - **Don't** use lucide or any other icon set on a converted screen, or draw an icon inline in a page.
 - **Don't** put an illustration on a working screen, beside a field, or in a card header.

@@ -9,7 +9,7 @@ import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
 import { declineLead } from "@/lib/services/lead-closure"
 import { getLeadFee } from "@/lib/services/lead-fees"
-import { createLead, getLead, recordVisit, type CreateLeadInput, type LeadClass, type NewContact } from "@/lib/services/leads"
+import { createLead, getLead, recordVisit, updateLeadDetails, type CreateLeadInput, type LeadClass, type NewContact } from "@/lib/services/leads"
 import { adjustPayment } from "@/lib/services/payment-adjustments"
 import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 import { setPriorSibling } from "@/lib/services/sibling-discount"
@@ -276,6 +276,51 @@ describe("other ways into Enrolled, and lock order", () => {
       const created = await creating
       expect(created.ok).toBe(true)
       if (created.ok) expect(await resultOf(created.data.leadId)).toEqual({ result: "none", source: "auto", locked_result: null })
+    })
+  })
+})
+
+describe("a lead correction's lock order", () => {
+  test("a rename with a class change takes the Family lock before the phone locks", async () => {
+    const [child] = await family(await yearWithSchedule(), 1)
+    const contactId = await contactOf(child)
+    const lead = await getLead(await signedIn(ADMISSIONS), child)
+    if (!lead.ok) throw new Error("setup failed")
+    const phone = lead.data.contact.phone
+
+    await inRolledBackTransaction(async (holder) => {
+      await holder.query("select public.lock_families(array[$1::uuid])", [contactId])
+      const correcting = updateLeadDetails(await signedIn(ADMISSIONS), child, {
+        fullName: `Renamed ${randomUUID().slice(0, 8)}`,
+        className: "STD 3",
+      })
+
+      const waiting = async () =>
+        (
+          await holder.query<{ n: number }>(
+            `select count(*)::int as n from pg_locks
+             where locktype = 'advisory' and not granted and classid::int = hashtext('lead_family') and objid::int = hashtext($1)`,
+            [contactId],
+          )
+        ).rows[0].n
+      for (let tries = 0; (await waiting()) === 0; tries++) {
+        if (tries > 100) throw new Error("the correction never waited on the Family lock")
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+
+      const free = await inRolledBackTransaction(async (other) => {
+        const normalized = (await other.query<{ p: string }>("select public.normalize_phone($1) as p", [phone])).rows[0].p
+        return (
+          await other.query<{ got: boolean }>("select pg_try_advisory_xact_lock(hashtextextended('lead-phone:' || $1, 0)) as got", [
+            normalized,
+          ])
+        ).rows[0].got
+      })
+      expect(free).toBe(true)
+
+      await holder.query("rollback")
+      await holder.query("begin")
+      expect((await correcting).ok).toBe(true)
     })
   })
 })

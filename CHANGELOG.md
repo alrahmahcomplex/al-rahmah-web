@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- A browser holding an empty language setting no longer sees the "choose a language" card again on
+  the home page, the Admission form or the forgotten-password page. It gets Swahili with no card, as
+  it did before v0.95.0.
+
 ## November 11, 2026 `v0.95.0`
 
 ### IMPROVED

@@ -7,7 +7,7 @@ import { DEFAULT_LANGUAGE, LANGUAGE_COOKIE, type Language } from "./languages"
 //
 // The three states match what a page read from the cookie before: no `lang`
 // cookie (Swahili, with the first-visit language card), `lang=en` (English),
-// and any other value (Swahili, no card).
+// and any other value, empty included (Swahili, no card).
 
 export const LANGUAGE_STATES = ["first", "sw", "en"] as const
 
@@ -45,17 +45,26 @@ export function statePath(state: LanguageState, path: CachedPublicPath): string 
   return `${LANGUAGE_STATE_PREFIX}/${state}${path === "/" ? "" : path}`
 }
 
-type CookieCondition = { type: "cookie"; key: string; value?: string }
-type Rewrite = { source: string; destination: string; has?: CookieCondition[]; missing?: CookieCondition[] }
+type Condition = { type: "cookie" | "header"; key: string; value?: string }
+type Rewrite = { source: string; destination: string; has?: Condition[]; missing?: Condition[] }
+
+// A Cookie header holding `lang` with an empty value: `lang=` or `lang=""`,
+// first or after a `;`, and last or before one.
+const EMPTY_LANGUAGE_COOKIE = String.raw`(?:.*;\s*)?${LANGUAGE_COOKIE}=(?:"")?(?:;.*)?`
 
 // Checked in order, first match wins: English, then any other `lang` value,
-// then no cookie. Next.js anchors a `has` value as a whole-value regular
-// expression, so `english` or `en-GB` is "any other value", as it was for
-// getLanguage().
+// then an empty `lang` value, then no cookie. Next.js anchors a `has` value as
+// a whole-value regular expression, so `english` or `en-GB` is "any other
+// value", as it was for getLanguage().
+//
+// A cookie condition treats an empty value as no cookie, but getLanguage()
+// counted `lang=` as a cookie, so no card showed (#292). The raw Cookie
+// header still holds `lang=`, so a header condition catches it.
 export function languageStateRewrites(): Rewrite[] {
   return CACHED_PUBLIC_PATHS.flatMap((path) => [
     { source: path, has: [{ type: "cookie", key: LANGUAGE_COOKIE, value: "en" }], destination: statePath("en", path) },
     { source: path, has: [{ type: "cookie", key: LANGUAGE_COOKIE }], destination: statePath("sw", path) },
+    { source: path, has: [{ type: "header", key: "cookie", value: EMPTY_LANGUAGE_COOKIE }], destination: statePath("sw", path) },
     { source: path, missing: [{ type: "cookie", key: LANGUAGE_COOKIE }], destination: statePath("first", path) },
   ])
 }

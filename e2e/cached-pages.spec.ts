@@ -25,6 +25,9 @@ test.describe("pages served from a prerendered copy", () => {
         ["lang=sw", "sw"],
         ["lang=fr", "sw"],
         ["lang=english", "sw"],
+        // Empty still counts as a cookie (#292).
+        ["lang=", "sw"],
+        ["a=1; lang=", "sw"],
       ] as const) {
         const response = await request.get(path, { headers: cookie ? { cookie } : {} })
         expect(response.status(), `${path} with ${cookie ?? "no cookie"}`).toBe(200)

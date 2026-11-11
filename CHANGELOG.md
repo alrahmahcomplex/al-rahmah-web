@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 11, 2026 `v0.97.2`
+
+### NEW
+
+- Each application now has room for who brought the student (a name, phone and relationship)
+  and the previous school (its name, private or public, and its region, or "Not known yet").
+  Staff can't enter them yet: the screens come in a later release. They show only in the
+  application's history, under their database names.
+- Each application now keeps its own copy of the custodian's relationship to the student,
+  taken from the parent or guardian. It stays the same as the parent or guardian's for now and
+  follows any correction to it, so nothing changes on screen. It prepares a later release where
+  one person can be Mother to one child and Aunt to another. Every application on file got its
+  copy, with an entry in its history, and no fee, discount, status or seat count moved.
+
 ## November 11, 2026 `v0.97.1`
 
 ### FIXED

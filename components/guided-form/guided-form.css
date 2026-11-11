@@ -195,6 +195,8 @@ html.rm .gf-gn.gf-cheer { animation: none; }
   border-radius: 16px; border: 1.5px solid var(--gf-line); background: var(--gf-paper); font-weight: 600; font-size: 16px; line-height: 1.2;
   transition: background var(--gf-t-med) var(--gf-ease-out), color var(--gf-t-med), border-color var(--gf-t-med), transform var(--gf-t-fast);
 }
+/* The big segmented tile (ChoiceTiles `big`): no public page uses it. */
+.gf-seg.gf-big span { min-height: 56px; font-family: var(--font-exo), "Exo", sans-serif; font-style: italic; font-weight: 800; font-size: 17px; line-height: 1.15; color: var(--gf-indigo); }
 .gf-seg label:hover span { border-color: var(--gf-line-strong); background: var(--gf-chrome); }
 .gf-seg input:active + span { transform: scale(0.97); }
 .gf-seg input:focus-visible + span { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }

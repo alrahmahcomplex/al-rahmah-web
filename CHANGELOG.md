@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 11, 2026 `v0.98.0`
+
+### NEW
+
+- Staff can open a Design system page at /staff/kit. It shows every building block of the new
+  staff look (buttons, fields, choices, chips, cards, lists, tables, notes and the empty, loading
+  and finished states) with example data, so each screen that moves to the new look can be
+  checked against one place. It is not in the sidebar, and no other page changes.
+
 ## November 11, 2026 `v0.97.2`
 
 ### NEW

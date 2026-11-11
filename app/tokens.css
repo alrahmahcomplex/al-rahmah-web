@@ -47,6 +47,22 @@
   --gf-fade: 300ms;
   /* the staff sidebar folding and unfolding */
   --gf-side: 460ms;
+  /* the placeholder in a field */
+  --gf-placeholder: #8a94a6;
+  /* status and tag chips (DESIGN.md, Chips): one tint and one dark text each */
+  --gf-chip-slate: #f1f5f9;
+  --gf-chip-slate-ink: #314158;
+  --gf-chip-peach: #fff4ec;
+  --gf-chip-peach-ink: #9f2d00;
+  --gf-chip-green: #f0fdf4;
+  --gf-chip-green-ink: #016630;
+  --gf-chip-red-ink: #c10007;
+  --gf-chip-inactive-ink: #45556c;
+  --gf-chip-archived: #e2e8f0;
+  /* the dark text of a good, wait or bad note (DESIGN.md, Notes) */
+  --gf-note-good-ink: #0b5a2d;
+  --gf-note-wait-ink: #6b2a00;
+  --gf-note-bad-ink: #a11717;
 }
 html.rm {
   --gf-t-fast: 1ms;

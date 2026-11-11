@@ -1,0 +1,41 @@
+/* The kit page's own layout: the prototype's stage padding and its "Design
+   system" grid (.ds, .sw, .icg, .rowx, .spec). Until the new shell (F6) the
+   page draws the lavender wash itself. */
+
+.kp-stage {
+  min-height: 100dvh; background: var(--gf-wash); color: var(--gf-ink);
+  font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif; padding: 26px 40px 56px;
+}
+.kp-page { max-width: 1180px; margin: 0 auto; }
+@media (max-width: 860px) { .kp-stage { padding: 16px 14px 36px; } }
+
+.kp-ds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 18px; align-items: start; }
+.kp-ds + .kp-ds { margin-top: 24px; }
+.kp-ds .kit-card { display: flex; flex-direction: column; gap: 12px; }
+.kp-ds .kp-full { grid-column: 1 / -1; }
+.kp-ds .kit-ph { margin-bottom: 0; }
+
+.kp-sw { display: flex; flex-wrap: wrap; gap: 10px; }
+.kp-sw > div { width: 84px; font-size: 11.5px; color: var(--gf-quiet); }
+.kp-sw i { display: block; height: 44px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--gf-line-soft); margin-bottom: 4px; }
+.kp-sw b { display: block; color: var(--gf-ink); font-size: 12px; font-weight: 600; }
+
+.kp-rowx { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.kp-icg { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; color: var(--gf-indigo); }
+.kp-icg > span { height: 44px; border-radius: 14px; background: var(--gf-chrome); display: grid; place-items: center; }
+.kp-icg .gf-ic { width: 22px; height: 22px; }
+
+.kp-spec { margin: 0; font-size: 13px; color: var(--gf-ink-soft); }
+.kp-spec code { font: 600 12px ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--gf-indigo); background: var(--gf-whisper); border-radius: 6px; padding: 1px 6px; }
+.kp-question {
+  font: italic 800 26px/1.18 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: -0.01em; text-wrap: balance; color: var(--gf-indigo);
+}
+.kp-reading { margin: 0; font-size: 16px; }
+.kp-fig { margin: 0; text-align: center; }
+
+/* The progress bar sits still inside its card here, not sticky on a task card. */
+.kp-static.gf-bar-row { position: static; margin: 0; padding-top: 12px; }
+.kp-task { max-width: 640px; width: 100%; margin: 0 auto; }
+.kp-detail { display: flex; flex-direction: column; gap: 14px; }
+.kp-skel { display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 400px) { .kp-question { font-size: 23px; } }

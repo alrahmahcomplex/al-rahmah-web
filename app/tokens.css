@@ -19,6 +19,8 @@
   --gf-ember: #cc6200;
   --gf-orange-deep: #b35500;
   --gf-orange-tint: #fff4e8;
+  /* the soft circle inside an active icon (DESIGN.md, Icons) */
+  --gf-peach-glow: #ffcfa6;
   --gf-paper: #ffffff;
   --gf-ink: #1e293b;
   --gf-ink-soft: #475569;

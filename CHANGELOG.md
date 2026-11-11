@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The Design system page at /staff/kit now plays the staff guided form: a short registration,
+  one question at a time, that folds each answer into a line with Change, cheers each finished
+  group in the progress bar and ends on the finished screen with the Admission Numbers and
+  confetti. Registration and Check-in will use it. The page also shows a link drawn as a
+  button, a button that can't be pressed yet, and a red note.
+
 ## November 11, 2026 `v0.100.0`
 
 ### IMPROVED

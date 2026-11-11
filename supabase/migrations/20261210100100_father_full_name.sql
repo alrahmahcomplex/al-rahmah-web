@@ -6,7 +6,8 @@
 --    `backfilled` (by this migration, never counted as staff-confirmed),
 --    `edited` (corrected by staff) or `typo_confirmed` (a typing mistake
 --    staff confirmed). Both are empty together.
--- 2. A trigger fills it on every insert, whatever path creates the lead, and
+-- 2. A trigger fills it on every insert from a name of two or more words,
+--    whatever path creates the lead, and
 --    fills it again when the student's name changes while the source is
 --    `derived` or `backfilled`, or while it is empty. A staff-entered value
 --    (`edited`, `typo_confirmed`) never moves with the student's name. Name
@@ -42,7 +43,8 @@ comment on column public.leads.father_full_name_source is
 
 -- ---------------------------------------------------------------------------
 -- The student's name in words. Words are separated by any run of
--- whitespace, as normalize_student_name collapses them.
+-- whitespace. Whitespace at either end, tabs and line breaks included, is
+-- dropped first: btrim alone removes only spaces.
 -- ---------------------------------------------------------------------------
 
 create function public.student_name_words(name text)
@@ -52,31 +54,33 @@ immutable
 set search_path = ''
 as $$
     select case
-        when btrim(coalesce(student_name_words.name, '')) = '' then array[]::text[]
-        else regexp_split_to_array(btrim(student_name_words.name), '\s+')
-    end;
+        when t = '' then array[]::text[]
+        else regexp_split_to_array(t, '\s+')
+    end
+    from (select regexp_replace(coalesce(student_name_words.name, ''), '^\s+|\s+$', '', 'g') as t) trimmed;
 $$;
 
 revoke execute on function public.student_name_words(text) from public, anon, authenticated, service_role;
 
 -- The father's full name a student's name gives: the words after the first,
--- joined with single spaces. Only from three or more words: a two-word name
--- ("Juma Ali") would give a one-word father's name, and two unrelated
--- children whose fathers share a common first name would then compare as
--- the same father. Empty otherwise; staff add it at check-in or on linking.
-create function public.derive_father_full_name(student_name text)
+-- joined with single spaces, when the name has at least `min_words` words
+-- (never fewer than 2); empty otherwise. New leads and name corrections use
+-- 2 (#299). The backfill uses 3, since a stored two-word name may not hold
+-- the father's name at all; staff add it at check-in or on linking.
+create function public.derive_father_full_name(student_name text, min_words integer default 2)
 returns text
 language sql
 immutable
 set search_path = ''
 as $$
     select case
-        when cardinality(w) >= 3 then array_to_string(w[2:], ' ')
+        when cardinality(w) >= greatest(coalesce(derive_father_full_name.min_words, 2), 2)
+            then array_to_string(w[2:], ' ')
     end
     from (select public.student_name_words(derive_father_full_name.student_name) as w) words;
 $$;
 
-revoke execute on function public.derive_father_full_name(text) from public, anon, authenticated, service_role;
+revoke execute on function public.derive_father_full_name(text, integer) from public, anon, authenticated, service_role;
 
 -- The four parts the check-in form prefills from one stored name (S2): words
 -- 1, 2 and 3, then every later word as the Surname. A part the name doesn't
@@ -322,10 +326,10 @@ cross join lateral public.lead_seat_priority(l.id) s;
 alter table public.leads disable trigger refuse_closed_lead_change;
 
 update public.leads l
-set father_full_name = public.derive_father_full_name(l.student_name),
+set father_full_name = public.derive_father_full_name(l.student_name, 3),
     father_full_name_source = 'backfilled'
 where l.father_full_name is null
-  and public.derive_father_full_name(l.student_name) is not null;
+  and public.derive_father_full_name(l.student_name, 3) is not null;
 
 alter table public.leads enable trigger refuse_closed_lead_change;
 

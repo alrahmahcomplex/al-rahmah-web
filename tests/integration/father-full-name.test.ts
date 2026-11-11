@@ -94,6 +94,7 @@ describe("the three-level father's-name check", () => {
     ["Mohamed Hassan Juma", "Mohammed Hasan Jumaa", "different"],
     // A word of 4 letters or fewer takes at most 1.
     ["Juma", "Jumaa", "close"],
+    ["Ali", "Alibu", "different"],
     ["Omar", "Amir", "different"],
     ["Ali Hassan", "Ali Hussein", "different"],
     // Words are compared in order.
@@ -146,6 +147,8 @@ describe("splitting a stored name into the four check-in fields", () => {
     ["  Amina  Hassan Juma Mwinyi   Bakari ", ["Amina", "Hassan", "Juma", "Mwinyi Bakari"]],
     ["Amina Hassan", ["Amina", "Hassan", null, null]],
     ["Amina", ["Amina", null, null, null]],
+    ["\tAmina Hassan\n", ["Amina", "Hassan", null, null]],
+    ["\r\n Amina\tHassan  Juma \t", ["Amina", "Hassan", "Juma", null]],
   ])("%s", async (name, parts) => {
     const [row] = await owner<Record<string, string | null>>("select * from public.split_student_name($1)", [name])
     expect([row.first_name, row.fathers_name, row.last_name, row.surname]).toEqual(parts)
@@ -159,9 +162,26 @@ describe("deriving the father's name", () => {
     expect(await father(lead)).toEqual({ father_full_name: `${a} ${b} ${c}`, father_full_name_source: "derived" })
   })
 
-  test("a name of fewer than three words leaves it empty", async () => {
-    const lead = await walkIn(`Amina ${word()}`)
-    expect(await father(lead)).toEqual({ father_full_name: null, father_full_name_source: null })
+  test("a two-word name derives its second word", async () => {
+    const a = word()
+    const lead = await walkIn(`Amina ${a}`)
+    expect(await father(lead)).toEqual({ father_full_name: a, father_full_name_source: "derived" })
+  })
+
+  test("a one-word name leaves it empty", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      const lead = await insertLead(sql, await newContact(sql), "Amina", null, null)
+      expect(lead).toMatchObject({ father_full_name: null, father_full_name_source: null })
+    })
+  })
+
+  test("tabs and line breaks at either end are not words", async () => {
+    const rows = await owner<{ d: string | null }>(
+      "select public.derive_father_full_name(n) as d from unnest($1::text[]) with ordinality u(n, i) order by i",
+      [["\tJuma Ali", "Juma Ali\n", "\r\nJuma\tHassan  Ali\t", " \t "]],
+    )
+    expect(rows.map((row) => row.d)).toEqual(["Ali", "Ali", "Hassan Ali", null])
   })
 
   test("an Admission form child derives it", async () => {
@@ -218,24 +238,48 @@ describe("re-deriving on a student name correction", () => {
     expect(await father(lead)).toEqual({ father_full_name: `${a} ${b}`, father_full_name_source: "backfilled" })
   })
 
-  test("a new name of two words empties a derived name", async () => {
+  test("a new name of two words derives its second word", async () => {
     const lead = await walkIn(`Amina ${word()} ${word()}`)
-    expect((await updateLeadDetails(await signedIn(ADMISSIONS), lead, { fullName: `Amina ${word()}` })).ok).toBe(true)
-    expect(await father(lead)).toEqual({ father_full_name: null, father_full_name_source: null })
+    const a = word()
+    expect((await updateLeadDetails(await signedIn(ADMISSIONS), lead, { fullName: `Amina ${a}` })).ok).toBe(true)
+    expect(await father(lead)).toEqual({ father_full_name: a, father_full_name_source: "derived" })
   })
 
-  test("an empty one is derived once the name has three words", async () => {
-    const lead = await walkIn(`Amina ${word()}`)
-    const [a, b] = [word(), word()]
-    expect((await updateLeadDetails(await signedIn(ADMISSIONS), lead, { fullName: `Amina ${a} ${b}` })).ok).toBe(true)
-    expect(await father(lead)).toEqual({ father_full_name: `${a} ${b}`, father_full_name_source: "derived" })
+  test("a new name of one word empties a derived name, and a later name fills it again", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      const lead = await insertLead(sql, await newContact(sql), "Amina Hassan Juma", null, null)
+      const rename = async (name: string) =>
+        (
+          await sql.query<FatherRow>(
+            "update public.leads set student_name = $2 where id = $1 returning father_full_name, father_full_name_source::text",
+            [lead.id, name],
+          )
+        ).rows[0]
+      expect(await rename("Amina")).toEqual({ father_full_name: null, father_full_name_source: null })
+      expect(await rename("Amina Bakari Ali")).toEqual({ father_full_name: "Bakari Ali", father_full_name_source: "derived" })
+    })
+  })
+
+  test("an update that sets the father's name with the student's name keeps what it set", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      const lead = await insertLead(sql, await newContact(sql), "Amina Hassan Juma", null, null)
+      const { rows } = await sql.query<FatherRow>(
+        `update public.leads set student_name = 'Amina Bakari Ali', father_full_name = 'Bakari Ali Mussa',
+                father_full_name_source = 'edited'
+         where id = $1 returning father_full_name, father_full_name_source::text`,
+        [lead.id],
+      )
+      expect(rows[0]).toEqual({ father_full_name: "Bakari Ali Mussa", father_full_name_source: "edited" })
+    })
   })
 
   test.each(["edited", "typo_confirmed"])("a %s name never moves with the student name", async (source) => {
     const lead = await walkIn(`Amina ${word()} ${word()}`)
     await setFather(lead, "Staff Entered Name", source)
     expect((await updateLeadDetails(await signedIn(ADMISSIONS), lead, { fullName: `Amina ${word()} ${word()}` })).ok).toBe(true)
-    expect((await updateLeadDetails(await signedIn(ADMISSIONS), lead, { fullName: `Amina ${word()}` })).ok).toBe(true)
+    expect((await updateLeadDetails(await signedIn(ADMISSIONS), lead, { fullName: `Amina` })).ok).toBe(true)
     expect(await father(lead)).toEqual({ father_full_name: "Staff Entered Name", father_full_name_source: source })
   })
 
@@ -323,6 +367,21 @@ describe("the migration's backfill", () => {
         [[three, four, declined].map((row) => row.id)],
       )
       expect(audit.rows[0].n).toBe(3)
+    })
+  })
+
+  test("the fee check raises when a lead's fee, discount, status or Seat priority moved", async () => {
+    const text = backfillSection()
+    const snapshot = text.slice(text.indexOf("create temporary table"), text.indexOf("alter table public.leads disable trigger"))
+    const check = text.slice(text.indexOf("do $$"), text.indexOf("drop table father_name_fee_snapshot"))
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query(snapshot)
+      // As if the backfill had moved one lead's fee.
+      await sql.query(
+        `update father_name_fee_snapshot set fee = fee || '{"school_fee": -1}'
+         where id = (select id from father_name_fee_snapshot order by id limit 1)`,
+      )
+      await expect(sql.query(check)).rejects.toThrow(/father_name_backfill_moved_a_fee/)
     })
   })
 })

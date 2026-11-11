@@ -1,4 +1,4 @@
-import { DEFAULT_LANGUAGE, LANGUAGE_COOKIE, type Language } from "./language"
+import { DEFAULT_LANGUAGE, LANGUAGE_COOKIE, type Language } from "./languages"
 
 // The public pages Vercel serves from its cache (#286, ADR 0006). Each is
 // built once per language state, under /by-language/<state>, and a rewrite
@@ -18,7 +18,7 @@ export const LANGUAGE_STATE_PREFIX = "/by-language"
 // The public addresses served this way. The language switch sends a visitor
 // back to one of these after setting the cookie, so the next request picks
 // the other copy.
-export const CACHED_PUBLIC_PATHS = ["/"] as const
+export const CACHED_PUBLIC_PATHS = ["/", "/apply", "/login/forgot-password"] as const
 
 export type CachedPublicPath = (typeof CACHED_PUBLIC_PATHS)[number]
 

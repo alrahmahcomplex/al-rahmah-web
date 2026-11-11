@@ -3,16 +3,16 @@ import userEvent from "@testing-library/user-event"
 import { forwardRef, useImperativeHandle, type ImgHTMLAttributes } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const jar = vi.hoisted(() => ({ values: new Map<string, string>() }))
 const stubs = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), refresh: vi.fn(), token: "fake-token" }))
 
 vi.mock("server-only", () => ({}))
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
+// The page is built once per language state and served to every visitor, so
+// it reads nothing from the request: any read of the cookies fails this test.
 vi.mock("next/headers", () => ({
-  cookies: async () => ({
-    get: (name: string) => (jar.values.has(name) ? { name, value: jar.values.get(name) } : undefined),
-    has: (name: string) => jar.values.has(name),
-  }),
+  cookies: () => {
+    throw new Error("the Admission form page must not read the request")
+  },
 }))
 // The form page must render with Supabase down: any use of a Supabase client
 // fails this test.
@@ -40,7 +40,7 @@ vi.mock("@/components/turnstile-widget", () => ({
 
 import { AdmissionFormSteps } from "@/app/apply/admission-form"
 import { DRAFT_KEY } from "@/app/apply/draft"
-import ApplyPage from "@/app/apply/page"
+import ApplyPage, { generateStaticParams } from "@/app/by-language/[state]/apply/page"
 import { admissionYears } from "@/lib/admission-form"
 import { FORM_NOTICE, FORM_NOTICE_VERSION } from "@/lib/referral-notice"
 
@@ -52,8 +52,7 @@ type User = ReturnType<typeof userEvent.setup>
 let live: { applications: number | null; discount: number | null } = { applications: null, discount: null }
 
 beforeEach(() => {
-  jar.values.clear()
-  jar.values.set("lang", "sw")
+  document.cookie = "discount_code=; Max-Age=0; Path=/"
   // Each test opens a fresh tab: no draft, and no question in the URL.
   window.sessionStorage.clear()
   window.history.replaceState(null, "", "/apply")
@@ -164,6 +163,20 @@ function form(language: "sw" | "en" = "en", extra: Partial<Parameters<typeof Adm
   return <AdmissionFormSteps language={language} years={years} defaultYear={DEFAULT_YEAR} officePhone="+255 700 000 001" {...extra} />
 }
 
+// The page opened from a Referral link: `/apply?ref=<code>`.
+function openedFromLink(code: string) {
+  window.history.replaceState(null, "", `/apply?ref=${code}`)
+}
+
+// The code the browser remembers from an earlier link.
+function remembered(code: string) {
+  document.cookie = `discount_code=${code}; Path=/`
+}
+
+function renderPage(state: "first" | "sw" | "en") {
+  return ApplyPage({ params: Promise.resolve({ state }) })
+}
+
 function sentBody(call = 0) {
   const [, data] = stubs.submit.mock.calls[call] as [unknown, FormData]
   return JSON.parse(String(data.get("form")))
@@ -172,8 +185,7 @@ function sentBody(call = 0) {
 // Each test walks a whole form, which takes seconds on a loaded machine.
 describe("the Admission form page", { timeout: 30_000 }, () => {
   it("renders in Swahili by default under the brand top bar, reading no Supabase", async () => {
-    jar.values.clear()
-    render(await ApplyPage({ searchParams: Promise.resolve({}) }))
+    render(await renderPage("first"))
 
     expect(screen.getByRole("main")).toHaveAttribute("lang", "sw")
     expect(screen.getByText("AL-RAHMAH SCHOOLS")).toBeInTheDocument()
@@ -190,13 +202,34 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
   })
 
   it("renders in English when the language cookie says so, without the language card", async () => {
-    jar.values.set("lang", "en")
-    render(await ApplyPage({ searchParams: Promise.resolve({}) }))
+    render(await renderPage("en"))
 
     expect(screen.getByRole("main")).toHaveAttribute("lang", "en")
     expect(screen.getByRole("heading", { level: 1, name: "Admission Form" })).toBeInTheDocument()
     expect(open().getByRole("heading", { name: "What is the student's name?" })).toBeInTheDocument()
     expect(screen.queryByText("Karibu!")).not.toBeInTheDocument()
+  })
+
+  it("renders in Swahili without the language card for any other language cookie", async () => {
+    render(await renderPage("sw"))
+
+    expect(screen.getByRole("main")).toHaveAttribute("lang", "sw")
+    expect(open().getByRole("heading", { name: "Mwanafunzi anaitwa nani?" })).toBeInTheDocument()
+    expect(screen.queryByText("Karibu!")).not.toBeInTheDocument()
+  })
+
+  it("is built once per language state", () => {
+    expect(generateStaticParams()).toEqual([{ state: "first" }, { state: "sw" }, { state: "en" }])
+  })
+
+  it.each(["first", "sw", "en"] as const)("holds no Discount code in the %s copy, whatever the link or cookie", async (state) => {
+    openedFromLink("BJN-402")
+    remembered("ZERO26")
+    const page = await renderPage(state)
+    const { renderToString } = await import("react-dom/server")
+    const html = renderToString(page)
+    expect(html).not.toContain("BJN-402")
+    expect(html).not.toContain("ZERO26")
   })
 
   it("asks one question at a time in the prototype's order, folding each answer with a two-word Change link", async () => {
@@ -536,7 +569,8 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
   })
 
   it("sends the parent back to the student's class when the year has closed", async () => {
-    stubs.submit.mockResolvedValue({ status: "invalid", field: "enrollment_year", child: 0 })
+    const next: [number, number] = [years[1], years[1] + 1]
+    stubs.submit.mockResolvedValue({ status: "invalid", field: "enrollment_year", child: 0, calendar: { years: next, defaultYear: next[0] } })
     const user = userEvent.setup()
     render(form("en"))
     await fillToSend(user)
@@ -545,8 +579,9 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await waitForQuestion("Which class is Zawadi applying for?")
     expect(open().getByText("That year no longer takes applications. Choose another year.")).toBeInTheDocument()
     expect(open().getAllByRole("radio")).toHaveLength(2)
-    // The page renders again, with the new years.
-    expect(stubs.refresh).toHaveBeenCalledTimes(1)
+    expect(open().getAllByRole("radio").map((radio) => radio.closest("label")?.textContent)).toEqual(next.map((year) => expect.stringContaining(String(year))))
+    // The cached page isn't rendered again: the refusal's years show in place.
+    expect(stubs.refresh).not.toHaveBeenCalled()
   })
 
   it("makes a new key when the server says the key was used for a different form", async () => {
@@ -625,13 +660,42 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
 
   it.each(["sw", "en"] as const)("never says agent, referral, wakala, idhini or mtoto in %s", async (language) => {
     const user = userEvent.setup()
-    render(form(language, { discountCode: "BJN-402" }))
+    remembered("BJN-402")
+    render(form(language))
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     await fillToSend(user, language).catch(() => undefined)
     // The code holder's notice is versioned wording from lib/referral-notice.ts.
     document.querySelectorAll("[data-notice-version]").forEach((notice) => notice.remove())
     const text = document.body.textContent ?? ""
     expect(text).not.toMatch(/agent|referral|wakala|idhini|approval|\bmtoto\b|\bwatoto\b/i)
+  })
+})
+
+// The page is built ahead of time, so a copy built in December can still be
+// served in January. The form works the years out again as it opens.
+describe("the admission years of a cached copy", { timeout: 30_000 }, () => {
+  afterEach(() => vi.useRealTimers())
+
+  it.each([
+    // 23:59 on 31 December in Tanzania (UTC+3): this year and next, from April.
+    ["2026-12-31T20:59:00Z", 2027],
+    // Midnight on 1 January: the new year and the one after; before April.
+    ["2026-12-31T21:00:00Z", 2027],
+    // 23:59 on 31 March: still before April.
+    ["2027-03-31T20:59:00Z", 2027],
+    // Midnight on 1 April: next year's intake.
+    ["2027-03-31T21:00:00Z", 2028],
+  ])("at %s a copy built on 30 December sends year %i by default", async (now, expected) => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(now))
+    stubs.submit.mockResolvedValue({ status: "unavailable" })
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={[2026, 2027]} defaultYear={2027} officePhone="+255 700 000 001" />)
+    await fillToSend(user)
+
+    await send(user, "Send application")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalled())
+    expect(sentBody().children[0].enrollmentYear).toBe(expected)
   })
 })
 
@@ -716,7 +780,8 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
   it("starts from the link's code, remembers it for 30 days, and checks it as the question opens", async () => {
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     const user = userEvent.setup()
-    render(form("sw", { discountCode: "BJN-402", rememberDiscountCode: "BJN-402" }))
+    openedFromLink("BJN-402")
+    render(form("sw"))
     expect(document.cookie).toContain("discount_code=BJN-402")
     await toCode(user, "sw")
 
@@ -800,7 +865,8 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     live = { applications: null, discount: 10000 }
     stubs.check.mockResolvedValue({ status: "approved", amount: 25000 })
     const user = userEvent.setup()
-    render(form("en", { discountCode: "INSTA26" }))
+    remembered("INSTA26")
+    render(form("en"))
     await toCode(user)
     expect(await screen.findByText("Well done! You save TZS 25,000 for each student.")).toBeInTheDocument()
     await user.click(open().getByRole("button", { name: "Continue" }))
@@ -811,7 +877,8 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
   it("promises no saving for a confirmed code set to nothing off", async () => {
     stubs.check.mockResolvedValue({ status: "approved", amount: 50000 })
     const user = userEvent.setup()
-    render(form("en", { discountCode: "ZERO26" }))
+    remembered("ZERO26")
+    render(form("en"))
     await toCode(user)
     expect(await screen.findByText("This code gives no discount at the moment. You can still send the form.")).toBeInTheDocument()
     expect(screen.queryByText(/You save/)).not.toBeInTheDocument()
@@ -823,7 +890,8 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     stubs.submit.mockResolvedValue({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
     const user = userEvent.setup()
-    render(form("sw", { discountCode: "BJN-402" }))
+    remembered("BJN-402")
+    render(form("sw"))
     await toCode(user, "sw")
     await screen.findByText(/Hongera!/)
     await user.click(open().getByRole("button", { name: "Endelea" }))

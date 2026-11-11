@@ -5,6 +5,7 @@ import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useSt
 import { setLanguage } from "@/app/actions/language"
 import { Icon } from "@/components/guided-form/icons"
 import { prefersReducedMotion } from "@/components/guided-form/motion"
+import { useChooseLanguage } from "@/components/page-language"
 import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
 
@@ -48,6 +49,7 @@ function canAnimate(el: HTMLElement | null): el is HTMLElement {
 export function LanguagePrompt({ show, menuButtonRef }: LanguagePromptProps) {
   // The server stops sending `show` once the cookie is set, mid-confirmation; the card finishes anyway.
   // Opened after hydration, so no unusable modal sits in the page before its script runs.
+  const chooseLanguage = useChooseLanguage()
   const [open, setOpen] = useState(false)
   const shown = useRef(show)
   useEffect(() => {
@@ -126,7 +128,10 @@ export function LanguagePrompt({ show, menuButtonRef }: LanguagePromptProps) {
           await setLanguage(data)
         } catch {
           // The cookie didn't stick; the card shows again next visit. Nothing to tell the visitor now.
+          return
         }
+        // A page served from Vercel's cache shows the pick from here; others re-render with it too.
+        chooseLanguage(lang)
       })
 
       const swap = () => {
@@ -144,7 +149,7 @@ export function LanguagePrompt({ show, menuButtonRef }: LanguagePromptProps) {
         el.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "ease-out" })
       }
     },
-    [finish],
+    [finish, chooseLanguage],
   )
 
   // Grow out of the menu button, then start the 5 seconds.

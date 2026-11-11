@@ -1,16 +1,17 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
 
 import { BrandTopBar } from "@/components/brand"
 import { buzz, GuidedStack, ProgressBar, prefersReducedMotion, revealStep } from "@/components/guided-form"
 import type { TurnstileWidgetHandle } from "@/components/turnstile-widget"
-import { childNameKey, MAX_CHILDREN, type FieldProblem, type FormField } from "@/lib/admission-form"
+import { usePageLanguage } from "@/components/page-language"
+import { admissionYears, childNameKey, MAX_CHILDREN, type FieldProblem, type FormField } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
 import { formatCount, shownApplicationCount } from "@/lib/live-apply"
-import { discountCodeCookie, normalizeDiscountCode, STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
+import { discountCodeCookie, DISCOUNT_CODE_COOKIE, initialDiscountCode, normalizeDiscountCode, STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
 import { FORM_NOTICE_VERSION } from "@/lib/referral-notice"
+import { tanzaniaToday } from "@/lib/school-calendar"
 
 import { checkDiscountCode, submitAdmissionForm } from "./actions"
 import { Confirmation } from "./confirmation"
@@ -19,6 +20,7 @@ import { clearDraft, emptyChild, EMPTY_PARENT, readDraft, writeDraft, type Child
 import {
   asChild,
   asParent,
+  defaultYear as defaultYearFor,
   firstOpenable,
   furthest,
   keyToParam,
@@ -34,7 +36,7 @@ import {
   type StepKey,
 } from "./flow"
 import { useLiveApply } from "./live"
-import type { AdmissionFormState, DiscountCodeCheck } from "./outcome"
+import type { AdmissionCalendar, AdmissionFormState, DiscountCodeCheck } from "./outcome"
 import { questionItems, stepId } from "./questions"
 import { ClassSheet, OfferSheet } from "./sheets"
 
@@ -44,7 +46,7 @@ import { ClassSheet, OfferSheet } from "./sheets"
 // ./flow.ts, the drawing in ./questions.tsx.
 //
 // Every entry lives in this component's state, so switching language (which
-// re-renders the page around it) never loses one, and a draft in
+// changes the words in place, components/page-language.tsx) never loses one, and a draft in
 // sessionStorage (./draft.ts) brings them back after a reload, with the
 // questions already answered.
 //
@@ -143,32 +145,52 @@ const PROBLEM_FIELDS: Record<string, readonly FormField[]> = {
   dayOrBoarding: ["day_or_boarding"],
 }
 
+// The years a parent may pick and the coming intake, from the browser's clock
+// in Tanzania time.
+function browserCalendar(): AdmissionCalendar {
+  const years = admissionYears()
+  return { years, defaultYear: defaultYearFor(years, tanzaniaToday()) }
+}
+
+// The Discount code the browser remembers from the latest Referral link.
+function rememberedCode(): string | undefined {
+  const prefix = `${DISCOUNT_CODE_COOKIE}=`
+  return document.cookie
+    .split("; ")
+    .find((part) => part.startsWith(prefix))
+    ?.slice(prefix.length)
+}
+
 export function AdmissionFormSteps({
-  language,
-  years,
-  defaultYear,
+  language: copyLanguage,
+  years: builtYears,
+  defaultYear: builtDefaultYear,
   officePhone,
-  discountCode: startingCode = "",
-  rememberDiscountCode = null,
   showLanguagePrompt = false,
 }: {
+  // The language of the copy the page was built for.
   language: Language
+  // The years when the page was built. The form works them out again as it
+  // opens, and takes the server's from a refusal.
   years: [number, number]
   // The coming intake, which a student's year starts from.
   defaultYear: number
   officePhone: string
-  // Where the Discount code field starts: the Referral link's code, else the
-  // one remembered from an earlier link, else empty.
-  discountCode?: string
-  // The Referral link's code, when the page opened from one: remembered for
-  // 30 days from now, replacing any earlier one.
-  rememberDiscountCode?: string | null
   // No language cookie yet: the first-visit language card shows.
   showLanguagePrompt?: boolean
 }) {
+  const language = usePageLanguage(copyLanguage)
   const copy = COPY[language]
+  const [{ years, defaultYear }, setCalendar] = useState<AdmissionCalendar>({ years: builtYears, defaultYear: builtDefaultYear })
+  // Where the Discount code field starts: the Referral link's code, else the
+  // one remembered from an earlier link, else empty. Read from the address
+  // and the cookie once the page is up: the server's copy is the same for
+  // every visitor and holds no code.
+  const [startingCode, setStartingCode] = useState("")
+  // The Referral link's code, when the page opened from one: remembered for
+  // 30 days from now, replacing any earlier one.
+  const [rememberDiscountCode, setRememberDiscountCode] = useState<string | null>(null)
   const live = useLiveApply()
-  const router = useRouter()
   const [form, setFormState] = useState<FormState>(() => ({
     parent: EMPTY_PARENT,
     children: [emptyChild(1)],
@@ -223,18 +245,32 @@ export function AdmissionFormSteps({
   const trail = useRef<StepKey[]>([])
   const pos = useRef(0)
   // Sent back to an earlier question's own entry: the problems to show once
-  // its popstate arrives, and whether to refresh the page then.
-  const arriving = useRef<{ key: StepKey; shown: Shown[]; refresh: boolean } | null>(null)
+  // its popstate arrives.
+  const arriving = useRef<{ key: StepKey; shown: Shown[] } | null>(null)
 
   useEffect(() => {
     if (!rememberDiscountCode) return
     document.cookie = discountCodeCookie(rememberDiscountCode, { secure: window.location.protocol === "https:" })
   }, [rememberDiscountCode])
 
-  // Brings back the tab's draft and opens the question the URL names, or the
-  // first one not answered. Runs once, after hydration, since the server
-  // can't see the tab's storage.
+  // Keeps the tab's title in the page's language after a switch.
   useEffect(() => {
+    document.title = `${copy.title} · Al-Rahmah Complex`
+  }, [copy.title])
+
+  // Brings back the tab's draft and opens the question the URL names, or the
+  // first one not answered. Runs once, after hydration: the page is the same
+  // for every visitor, so the tab's storage, the address's `ref` and the
+  // remembered code are read here, and the years are worked out again in
+  // case the copy was built before 1 January or 1 April.
+  useEffect(() => {
+    const calendar = browserCalendar()
+    const { years } = calendar
+    const refs = new URLSearchParams(window.location.search).getAll("ref")
+    const { code: startingCode, remember: rememberDiscountCode } = initialDiscountCode({
+      ref: refs.length > 1 ? refs : refs[0],
+      cookie: rememberedCode(),
+    })
     const draft = readDraft(years)
     // The draft's code stands unless a different Referral link opened the
     // page: a reload keeps `ref` in the URL, so the same link again is the
@@ -260,12 +296,14 @@ export function AdmissionFormSteps({
       setTimeout(() => window.history.replaceState(null, "", url), 0)
     }
     /* eslint-disable react-hooks/set-state-in-effect -- reading the tab's storage after hydration */
+    setCalendar(calendar)
+    setStartingCode(startingCode)
+    setRememberDiscountCode(rememberDiscountCode)
     setForm({ ...entries, done, open })
     setWhatsappOn(entries.parent.whatsapp !== "")
     setRestored(true)
     /* eslint-enable react-hooks/set-state-in-effect */
     // Once, on mount: later changes are the form's own.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Keeps the draft in step with the entries, until a confirmation shows.
@@ -335,13 +373,10 @@ export function AdmissionFormSteps({
       reveal(shown)
       if (target !== f.open) setForm({ ...f, open: target })
       else if (shown[0]) focusSoon(problemSelector(shown[0], f.children))
-      // After Next.js has handled this popstate too, so the refresh doesn't
-      // race its restore of the entry.
-      if (arrival?.refresh) setTimeout(() => router.refresh(), 0)
     }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
-  }, [confirmed, years, router])
+  }, [confirmed, years])
 
   function announce(text: string) {
     setAnnouncement("")
@@ -380,10 +415,10 @@ export function AdmissionFormSteps({
   // Sends the parent back to fix a question: to its own history entry when
   // this page has one earlier, so no later question's entry is left behind
   // it; else by swapping the current entry.
-  function goTo(key: StepKey, shown: Shown[], refresh = false) {
+  function goTo(key: StepKey, shown: Shown[]) {
     const earlier = trail.current.indexOf(key)
     if (earlier >= 0 && earlier < pos.current) {
-      arriving.current = { key, shown, refresh }
+      arriving.current = { key, shown }
       window.history.go(earlier - pos.current)
       return
     }
@@ -392,7 +427,6 @@ export function AdmissionFormSteps({
     const f = formRef.current
     if (f.open === key && shown[0]) focusSoon(problemSelector(shown[0], f.children))
     show({ ...f, open: key }, "replace")
-    if (refresh) router.refresh()
   }
 
   function showProblems(found: FieldProblem[]) {
@@ -700,13 +734,13 @@ export function AdmissionFormSteps({
       turnstile.current?.reset()
       if (result.status === "invalid") {
         if (result.field === "submission_key") setSubmissionKey(newSubmissionKey())
-        // The year turned since the page loaded: render the new year tiles.
-        // The entries are client state, so a refresh keeps them.
-        const refresh = result.field === "enrollment_year"
+        // The year turned since the page loaded, or the phone's clock is off:
+        // the refusal brings the server's years, and the year tiles change in
+        // place with the entries kept.
+        if (result.calendar) setCalendar(result.calendar)
         const shown: Shown = { field: result.field, child: result.child, server: true }
         const key = stepForProblem(shown, formRef.current.children)
-        if (key) return goTo(key, [shown], refresh)
-        if (refresh) router.refresh()
+        if (key) return goTo(key, [shown])
         setProblems([shown])
         focusSoon("[data-form-problem]")
         return
@@ -764,7 +798,13 @@ export function AdmissionFormSteps({
 
   return (
     <>
-      <BrandTopBar variant="schools" language={language} showLanguagePrompt={showLanguagePrompt} onClearForm={() => restart(copy.cleared)} />
+      <BrandTopBar
+        variant="schools"
+        language={language}
+        showLanguagePrompt={showLanguagePrompt}
+        returnTo="/apply"
+        onClearForm={() => restart(copy.cleared)}
+      />
       <h1 className="sr-only">{copy.title}</h1>
       <section className="rounded-[32px] bg-white px-5 py-6 shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[40px] sm:px-7 sm:py-8 max-[330px]:rounded-[26px] max-[330px]:px-3">
         {confirmed ? (

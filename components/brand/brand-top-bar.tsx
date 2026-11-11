@@ -4,7 +4,9 @@ import Image from "next/image"
 import { useRef, type RefObject } from "react"
 
 import { DocumentLanguage } from "@/components/document-language"
+import { useLanguageChosen } from "@/components/page-language"
 import type { Language } from "@/lib/language"
+import type { CachedPublicPath } from "@/lib/language-state"
 import { cn } from "@/lib/utils"
 
 import { BrandMenu } from "./brand-menu"
@@ -24,6 +26,8 @@ export type BrandTopBarProps = {
   showLanguagePrompt?: boolean
   /** The menu button, if the page needs it too (e.g. its own `LanguagePrompt`). */
   menuButtonRef?: RefObject<HTMLButtonElement | null>
+  /** On a page served from Vercel's cache, its public address (see `BrandMenu`). */
+  returnTo?: CachedPublicPath
   className?: string
 }
 
@@ -33,7 +37,19 @@ export type BrandTopBarProps = {
  * language control. Grid 44px | 1fr | 44px. It also keeps `<html lang>` in
  * step with the page, as `LanguageSwitch` did.
  */
-export function BrandTopBar({ variant, language, onClearForm, labels, showLanguagePrompt = false, menuButtonRef, className }: BrandTopBarProps) {
+export function BrandTopBar({
+  variant,
+  language,
+  onClearForm,
+  labels,
+  showLanguagePrompt = false,
+  menuButtonRef,
+  returnTo,
+  className,
+}: BrandTopBarProps) {
+  // A pick made on this page load set the cookie, so a copy built for no
+  // cookie, brought back from the router's cache, doesn't ask again.
+  const chosen = useLanguageChosen()
   const ownRef = useRef<HTMLButtonElement | null>(null)
   const buttonRef = menuButtonRef ?? ownRef
   const words = { ...BRAND_COPY[language], ...labels }
@@ -54,10 +70,10 @@ export function BrandTopBar({ variant, language, onClearForm, labels, showLangua
       >
         {BADGE_TEXT[variant]}
       </span>
-      <BrandMenu language={language} labels={words} onClearForm={onClearForm} buttonRef={buttonRef} />
+      <BrandMenu language={language} labels={words} onClearForm={onClearForm} buttonRef={buttonRef} returnTo={returnTo} />
       {/* Always mounted: it reads `show` once, so the cookie that setLanguage sets
           mid-confirmation doesn't cut the confirmation or the shrink short. */}
-      <LanguagePrompt show={showLanguagePrompt} language={language} menuButtonRef={buttonRef} />
+      <LanguagePrompt show={showLanguagePrompt && !chosen} language={language} menuButtonRef={buttonRef} />
     </header>
   )
 }

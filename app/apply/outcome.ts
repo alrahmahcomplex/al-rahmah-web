@@ -11,8 +11,13 @@ export type AdmissionFormState =
   | { status: "already-sent"; children: { fullName: string; admissionNumber: string }[]; complete: boolean }
   | { status: "rate-limited" }
   | { status: "check-failed" }
-  | { status: "invalid"; field: FormField; child: number | null }
+  // A refused year comes with the server's years, so the form can offer
+  // them without a fresh render of its cached page.
+  | { status: "invalid"; field: FormField; child: number | null; calendar?: AdmissionCalendar }
   | { status: "unavailable" }
+
+// The years a parent may pick and the coming intake, in Tanzania time.
+export type AdmissionCalendar = { years: [number, number]; defaultYear: number }
 
 export const IDLE: AdmissionFormState = { status: "idle" }
 

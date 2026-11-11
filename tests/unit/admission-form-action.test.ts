@@ -42,6 +42,7 @@ vi.mock("@/lib/services/referral", () => ({
 
 import { checkDiscountCode, submitAdmissionForm } from "@/app/apply/actions"
 import { admissionYears } from "@/lib/admission-form"
+import { tanzaniaToday } from "@/lib/school-calendar"
 
 const [thisYear] = admissionYears()
 const KEY = "3f2b7c1e-8d4a-4b6f-9a0e-1c2d3e4f5a6b"
@@ -116,7 +117,14 @@ describe("sending the Admission form", () => {
 
   it("refuses an enrollment year that is no longer on offer, on its child card", async () => {
     const children = [{ fullName: "Z", className: "STD 2", enrollmentYear: thisYear - 1, dayOrBoarding: "Day" }]
-    expect(await send(posted({ children }))).toEqual({ status: "invalid", field: "enrollment_year", child: 0 })
+    // With the server's years, so the cached page can offer them in place.
+    const years = [thisYear, thisYear + 1]
+    expect(await send(posted({ children }))).toEqual({
+      status: "invalid",
+      field: "enrollment_year",
+      child: 0,
+      calendar: { years, defaultYear: Number(tanzaniaToday().slice(5, 7)) < 4 ? years[0] : years[1] },
+    })
     expect(stubs.save).not.toHaveBeenCalled()
   })
 

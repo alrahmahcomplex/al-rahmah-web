@@ -7,10 +7,19 @@ import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { normalizeDiscountCode } from "@/lib/referral-link"
 import { submitAdmissionForm as saveAdmissionForm } from "@/lib/services/admission-form"
 import { estimateDiscountCode } from "@/lib/services/referral"
+import { tanzaniaToday } from "@/lib/school-calendar"
 import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
-import type { AdmissionFormState, DiscountCodeCheck } from "./outcome"
+import { defaultYear } from "./flow"
+import type { AdmissionCalendar, AdmissionFormState, DiscountCodeCheck } from "./outcome"
+
+// The server's years, sent with a refused year.
+function calendarFor(field: string): { calendar?: AdmissionCalendar } {
+  if (field !== "enrollment_year") return {}
+  const years = admissionYears()
+  return { calendar: { years, defaultYear: defaultYear(years, tanzaniaToday()) } }
+}
 
 // Sends the public Admission form. In this order, so nothing is written
 // unless both checks pass: the rate limit, Turnstile, the form's own checks,
@@ -37,7 +46,7 @@ export async function submitAdmissionForm(
   if (!check.ok) return { status: "check-failed" }
 
   const parsed = parseAdmissionForm(formData.get("form"), admissionYears())
-  if (!parsed.ok) return { status: "invalid", ...parsed.error }
+  if (!parsed.ok) return { status: "invalid", ...parsed.error, ...calendarFor(parsed.error.field) }
 
   let supabase
   try {
@@ -58,7 +67,7 @@ export async function submitAdmissionForm(
   if (saved.ok) return { status: "confirmed", children: saved.data }
   switch (saved.error.kind) {
     case "invalid":
-      return { status: "invalid", field: saved.error.field, child: saved.error.child }
+      return { status: "invalid", field: saved.error.field, child: saved.error.child, ...calendarFor(saved.error.field) }
     case "already-sent":
       return { status: "already-sent", children: saved.error.children, complete: saved.error.complete }
     case "unavailable":

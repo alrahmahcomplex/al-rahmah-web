@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- The home page, the Admission form and the forgotten-password page open faster. They now
+  come from a copy kept near the visitor instead of being built in Europe on every visit.
+  Nothing on them looks or works differently.
+- Small database tidy-ups from Supabase's advisors: indexes on staff columns that grow, a
+  key on the password-link counter, and one read rule for imports in place of two. Nothing
+  on screen changes.
+
 ## November 11, 2026 `v0.94.2`
 
 ### FIXED

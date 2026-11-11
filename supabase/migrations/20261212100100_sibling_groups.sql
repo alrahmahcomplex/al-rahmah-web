@@ -401,7 +401,19 @@ begin
     set search_path = ''
     as $fn$
     #variable_conflict use_column
+    declare
+        own_group uuid;
+        own_family uuid;
     begin
+        -- The lead's group and the contact it stands for, read first, so the
+        -- check below is one probe of the contact and status index. Joined
+        -- in, the planner may take the contact index alone and read every
+        -- lead on the contact for each lead written.
+        select grp.id, grp.legacy_contact_id into own_group, own_family
+        from public.sibling_group_members own
+        join public.sibling_groups grp on grp.id = own.group_id
+        where own.lead_id = sibling_rule_result.lead_id;
+
         select coalesce(answer.result, 'none'), coalesce(answer.source, 'auto')
         into sibling_rule_result.result, sibling_rule_result.source
         from (select 1) one
@@ -418,13 +430,12 @@ begin
                            -- contact and status index; #301 replaces this
                            -- for groups that span contacts.
                            select 1
-                           from public.sibling_group_members own
-                           join public.sibling_groups grp on grp.id = own.group_id
-                           join public.leads s
-                               on s.guardian_contact_id = grp.legacy_contact_id and s.status = 'Enrolled' and s.id <> own.lead_id
-                           join public.sibling_group_members other
-                               on other.lead_id = s.id and other.group_id = own.group_id
-                           where own.lead_id = l.id
+                           from public.leads s
+                           where s.guardian_contact_id = own_family
+                             and s.status = 'Enrolled'
+                             and s.id <> l.id
+                             -- By the member's own key: a group can hold many.
+                             and (select other.group_id from public.sibling_group_members other where other.lead_id = s.id) = own_group
                        ) then 'ten'
                        else 'none'
                    end::public.sibling_result as result,

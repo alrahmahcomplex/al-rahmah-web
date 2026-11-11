@@ -123,9 +123,9 @@ export type ChoiceTilesProps = {
   onChange: (value: string) => void
   /**
    * `rows`: big radio rows with the tick on the right (`.choice`), for Day or Boarding.
-   * `two` / `four`: the segmented grid (`.seg`), for the year or the relationship.
+   * `two` / `three` / `four`: the segmented grid (`.seg`), for the year or the relationship.
    */
-  layout?: "rows" | "two" | "four"
+  layout?: "rows" | "two" | "three" | "four"
   /** Segmented tiles only: 56px, the label in Exo 800 italic indigo, as the kit page shows a class choice. */
   big?: boolean
   describedBy?: string
@@ -156,7 +156,7 @@ export function ChoiceTiles({ name, legend, options, value, onChange, layout = "
           </label>
         ))
       ) : (
-        <div className={cn("gf-seg", layout === "two" ? "gf-two" : "gf-four", big && "gf-big")}>
+        <div className={cn("gf-seg", `gf-${layout}`, big && "gf-big")}>
           {options.map((o) => (
             <label key={o.value} lang={o.lang}>
               {radio(o)}

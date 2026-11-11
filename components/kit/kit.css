@@ -179,6 +179,7 @@ a.kit-row { border-radius: 14px; }
 .kit-kv dt { color: var(--gf-quiet); }
 .kit-kv dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .kit-kv dd small { display: block; font-weight: 400; font-size: 12.5px; line-height: 1.35; color: var(--gf-quiet); }
+.kit-kv dd .kit-link { margin-left: 6px; font-size: 13px; }
 .kit-sec { padding: 14px 0; border-top: 1px solid var(--gf-mist); }
 .kit-sec:first-child { border-top: 0; }
 .kit-sec-title { margin: 0 0 8px; font: italic 800 15px/1.3 var(--font-exo), "Exo", system-ui, sans-serif; color: var(--gf-indigo); }
@@ -219,3 +220,120 @@ a.kit-row { border-radius: 14px; }
 .kit-bone { display: block; background: var(--gf-whisper); border-radius: 8px; }
 .kit-bone[data-shape="pill"] { border-radius: 999px; }
 .kit-bone[data-shape="card"] { border-radius: 24px; }
+
+/* ---------- sheets (DESIGN.md, Sheets and dialogs) ---------- */
+.kit-sheet-back {
+  position: fixed; inset: 0; z-index: 60; background: rgb(3 0 77 / 0.4);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity 320ms var(--gf-ease-out);
+}
+.kit-sheet-back:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+/* Bottom: always on a phone. --kit-kb and --kit-vvh keep the foot above the on-screen keyboard. */
+.kit-sheet {
+  position: fixed; z-index: 61; left: 0; right: 0; bottom: var(--kit-kb, 0px); margin: 0 auto; max-width: 520px;
+  max-height: min(92dvh, calc(var(--kit-vvh, 100dvh) * 0.92)); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--gf-paper); color: var(--gf-ink); border-radius: 28px 28px 0 0; box-shadow: 0 -20px 60px -10px rgb(9 0 187 / 0.3);
+  font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif; outline: none;
+  transition: transform 320ms var(--gf-ease-out), opacity 320ms var(--gf-ease-out);
+}
+.kit-sheet:is([data-starting-style], [data-ending-style]) { transform: translateY(100%); }
+@media (min-width: 720px) {
+  /* A tablet's keyboard (--kit-kb) lifts the centre and side sheets too. */
+  .kit-sheet[data-placement="centre"] { bottom: auto; top: calc(50% - var(--kit-kb, 0px) / 2); border-radius: 28px; transform: translateY(-50%); }
+  .kit-sheet[data-placement="centre"]:is([data-starting-style], [data-ending-style]) { transform: translateY(-46%) scale(0.96); opacity: 0; }
+  .kit-sheet[data-placement="side"] {
+    left: auto; right: 12px; top: 12px; bottom: calc(12px + var(--kit-kb, 0px)); margin: 0; width: 440px; max-width: calc(100vw - 24px); max-height: none; border-radius: 28px;
+  }
+  .kit-sheet[data-placement="side"]:is([data-starting-style], [data-ending-style]) { transform: translateX(112%); }
+}
+.kit-sheet-head {
+  position: relative; flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  padding: 22px 64px 14px 24px; border-bottom: 1px solid var(--gf-mist);
+}
+.kit-sheet-title {
+  margin: 0; font: italic 800 26px/1.18 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: -0.01em; text-wrap: balance;
+  color: var(--gf-indigo); overflow-wrap: anywhere; outline: none;
+}
+.kit-sheet-hint { margin: 0; font-size: 14px; color: var(--gf-quiet); }
+.kit-sheet-x { position: absolute; right: 14px; top: 16px; }
+.kit-sheet-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 14px;
+  padding: 16px 24px 18px; scrollbar-width: thin; scrollbar-color: var(--gf-mist) transparent; outline: none;
+}
+.kit-sheet-body > * { flex: none; }
+.kit-sheet-body:focus-visible { box-shadow: inset 0 0 0 3px rgb(9 0 187 / 0.3); }
+.kit-sheet-body .kit-sec { padding: 4px 0 14px; border-top: 0; border-bottom: 1px solid var(--gf-mist); }
+.kit-sheet-foot {
+  flex: none; display: flex; flex-direction: column; gap: 10px; padding: 14px 24px calc(18px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--gf-mist); background: var(--gf-paper);
+}
+@media (max-width: 719px) {
+  .kit-sheet-head { padding: 20px 60px 12px 20px; }
+  .kit-sheet-body { padding: 14px 20px 16px; }
+  .kit-sheet-foot { padding-inline: 20px; }
+}
+@media (max-width: 400px) { .kit-sheet-title { font-size: 23px; } }
+
+/* A small edit inside a sheet's body. */
+.kit-inline { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--gf-line); text-align: center; }
+.kit-inline-act { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; }
+.kit-inline .kit-sheet-hint { text-align: center; }
+
+/* ---------- menus and popovers ---------- */
+.kit-pop-pos { z-index: 50; }
+.kit-pop {
+  width: min(340px, calc(100vw - 32px)); background: var(--gf-paper); color: var(--gf-ink); border: 1.5px solid var(--gf-line); border-radius: 22px;
+  box-shadow: var(--gf-lift); padding: 14px 16px 8px; outline: none; transform-origin: var(--transform-origin);
+  font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif;
+  transition: opacity 180ms var(--gf-ease-out), transform 180ms var(--gf-ease-out);
+}
+.kit-pop:is([data-starting-style], [data-ending-style]) { opacity: 0; transform: translateY(-6px) scale(0.96); }
+.kit-pop[data-size="narrow"] { width: 230px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.kit-pop[data-size="narrow"] .kit-btn { width: 100%; margin-top: 8px; }
+/* Beats `.kit-card-title + p`: the line under a popover's title is Ink Soft with no gap. */
+.kit-pop .kit-pop-desc { margin: 0; font-size: 13px; color: var(--gf-ink-soft); }
+/* The prototype removes a popover at once; only its opening moves. */
+.kit-pop[data-ending-style] { transition: none; }
+
+/* ---------- toast ---------- */
+.kit-toaster [data-sonner-toast] {
+  left: 0; right: 0; width: 100%; display: flex; justify-content: center; pointer-events: none;
+  transition: transform var(--gf-t-med) var(--gf-ease-out), opacity var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-toaster [data-sonner-toast][data-mounted="false"],
+.kit-toaster [data-sonner-toast][data-removed="true"][data-front="true"][data-swipe-out="false"],
+.kit-toaster [data-sonner-toast][data-removed="true"] { --y: translateY(20px); opacity: 0; }
+.kit-toast {
+  max-width: calc(100vw - 32px); background: var(--gf-indigo-night); color: var(--gf-paper); border-radius: 999px; padding: 10px 18px;
+  font: 600 13.5px/1.5 var(--font-sans), system-ui, sans-serif; pointer-events: none;
+}
+
+/* ---------- confetti: the staff registration rain ---------- */
+.kit-cf { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: hidden; }
+.kit-cf i { position: absolute; top: -16px; width: 8px; height: 14px; border-radius: 2px; animation: kit-cf 1700ms var(--gf-ease-io) forwards; }
+@keyframes kit-cf { to { transform: translate(var(--x), 108vh) rotate(var(--r)); } }
+
+/* Reduced motion: sheets fade in place, popovers and toasts appear, no confetti. */
+@media (prefers-reduced-motion: reduce) {
+  .kit-sheet { transition: opacity var(--gf-fade) linear; }
+  .kit-sheet:is([data-starting-style], [data-ending-style]) { transform: none; opacity: 0; }
+  .kit-sheet-back { transition-duration: var(--gf-fade); }
+  .kit-pop { transition: none; }
+  .kit-toaster [data-sonner-toast][data-mounted="false"], .kit-toaster [data-sonner-toast][data-removed="true"],
+  .kit-toaster [data-sonner-toast][data-removed="true"][data-front="true"][data-swipe-out="false"] { --y: none; }
+  .kit-cf { display: none; }
+}
+@media (prefers-reduced-motion: reduce) and (min-width: 720px) {
+  .kit-sheet[data-placement="centre"]:is([data-starting-style], [data-ending-style]) { transform: translateY(-50%); }
+  .kit-sheet[data-placement="side"]:is([data-starting-style], [data-ending-style]) { transform: none; }
+}
+html.rm .kit-sheet { transition: opacity var(--gf-fade) linear; }
+html.rm .kit-sheet:is([data-starting-style], [data-ending-style]) { transform: none; opacity: 0; }
+html.rm .kit-sheet-back { transition-duration: var(--gf-fade); }
+html.rm .kit-pop { transition: none; }
+html.rm .kit-toaster [data-sonner-toast][data-mounted="false"], html.rm .kit-toaster [data-sonner-toast][data-removed="true"],
+html.rm .kit-toaster [data-sonner-toast][data-removed="true"][data-front="true"][data-swipe-out="false"] { --y: none; }
+html.rm .kit-cf { display: none; }
+@media (min-width: 720px) {
+  html.rm .kit-sheet[data-placement="centre"]:is([data-starting-style], [data-ending-style]) { transform: translateY(-50%); }
+  html.rm .kit-sheet[data-placement="side"]:is([data-starting-style], [data-ending-style]) { transform: none; }
+}

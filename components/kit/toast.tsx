@@ -11,6 +11,9 @@ import "./kit.css"
 const TOASTER_ID = "kit"
 const DURATION = 2600
 
+// 24px up, or above the home indicator when that is taller.
+const SAFE_BOTTOM = "max(24px, env(safe-area-inset-bottom, 0px))"
+
 let shown: string | number | undefined
 
 /**
@@ -24,8 +27,8 @@ export function Toaster() {
       position="bottom-center"
       visibleToasts={1}
       duration={DURATION}
-      offset={24}
-      mobileOffset={24}
+      offset={{ bottom: SAFE_BOTTOM }}
+      mobileOffset={{ bottom: SAFE_BOTTOM }}
       className="kit-toaster"
       // No Alt+T: the root Toaster keeps that key, and these toasts hold nothing to reach.
       hotkey={[]}

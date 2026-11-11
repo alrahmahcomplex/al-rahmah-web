@@ -16,7 +16,7 @@ export type PopoverProps = {
   description?: ReactNode
   /** `wide` 340px (the bell's list), `narrow` 230px (the account menu). */
   size?: "wide" | "narrow"
-  /** Read by screen readers only: the popover's own Close, so touch readers can leave it. */
+  /** Names a Close that only screen readers reach, so touch readers can leave it. Tab skips it; Escape closes. */
   closeLabel: string
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -40,7 +40,9 @@ export function Popover({ trigger, title, description, size = "wide", closeLabel
             <BasePopover.Title className="kit-card-title">{title}</BasePopover.Title>
             {description && <BasePopover.Description className="kit-pop-desc">{description}</BasePopover.Description>}
             {children}
-            <BasePopover.Close className="sr-only">{closeLabel}</BasePopover.Close>
+            <BasePopover.Close className="sr-only" tabIndex={-1}>
+              {closeLabel}
+            </BasePopover.Close>
           </BasePopover.Popup>
         </BasePopover.Positioner>
       </BasePopover.Portal>

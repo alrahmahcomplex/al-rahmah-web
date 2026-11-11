@@ -285,6 +285,13 @@ test("a side sheet keeps its head and foot while only the details scroll; the in
   await sheet.getByRole("button", { name: "Cancel" }).click()
   await expect(father).toHaveCount(0)
   await expect(edit).toBeFocused()
+  // Saving gives focus back to Edit too.
+  await edit.click()
+  await father.fill("Ali Mussa Khamis Juma")
+  await father.press("Enter")
+  await expect(page.getByRole("status").filter({ hasText: "Father’s name saved. The sibling check runs again." })).toBeVisible()
+  await expect(sheet.getByText("Ali Mussa Khamis Juma")).toBeVisible()
+  await expect(edit).toBeFocused()
 
   await tabStaysInside(page, sheet, 12)
   await page.keyboard.press("Escape")
@@ -366,6 +373,11 @@ test("the popovers: the bell's new requests and the account menu", async ({ page
   await expect(card.locator(".kp-pip")).toHaveCount(0)
   await expect(requests).toHaveCSS("border-radius", "22px")
   await expect(requests.getByRole("button", { name: /New discount request/ })).toBeVisible()
+  // Tab never lands on something unseen: the screen-reader Close is out of the tab order.
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press("Tab")
+    await expect.poll(() => page.evaluate(() => (document.activeElement as HTMLElement | null)?.className ?? "")).not.toContain("sr-only")
+  }
   await tabStaysInside(page, requests, 4)
   await page.keyboard.press("Escape")
   await expect(requests).toHaveCount(0)
@@ -375,6 +387,7 @@ test("the popovers: the bell's new requests and the account menu", async ({ page
   await me.click()
   const account = page.getByRole("dialog", { name: "Rehema M." })
   await expect(account).toHaveAccessibleDescription("Admissions Manager")
+  await expect(account.getByText("Admissions Manager")).toHaveCSS("color", "rgb(71, 85, 105)")
   await account.getByRole("button", { name: "Sign out" }).click()
   await expect(account).toHaveCount(0)
   await expect(me).toBeFocused()

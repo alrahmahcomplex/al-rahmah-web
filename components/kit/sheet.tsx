@@ -114,6 +114,8 @@ export function InlineEditor({
   useEffect(() => {
     const form = formRef.current
     return () => {
+      // Still in the page: React's development re-run of effects, not a real close.
+      if (form?.isConnected) return
       const lost = !document.activeElement || document.activeElement === document.body || form?.contains(document.activeElement)
       if (lost && opener?.isConnected) opener.focus()
     }

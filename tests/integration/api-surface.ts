@@ -1253,6 +1253,15 @@ export const RELATIONS: Record<string, RelationEntry> = {
     anon: ["select", "references", "trigger", "maintain"],
   },
   "public.sibling_rule_settings": { authenticated: [], anon: [] },
+  // Sibling groups and their members (#300).
+  "public.sibling_groups": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
+  "public.sibling_group_members": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
 }
 
 export const POLICIES: Record<string, PolicyEntry> = {
@@ -1441,6 +1450,18 @@ export const POLICIES: Record<string, PolicyEntry> = {
     check: null,
   },
   "public.lead_sibling_results: Staff who may view leads read Sibling results": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.sibling_groups: Staff who may view leads read sibling groups": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.sibling_group_members: Staff who may view leads read sibling group members": {
     command: "SELECT",
     roles: ["authenticated"],
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",

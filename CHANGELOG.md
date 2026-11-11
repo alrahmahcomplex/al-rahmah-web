@@ -5,6 +5,17 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 11, 2026 `v0.100.0`
+
+### IMPROVED
+
+- Brothers and sisters are now kept together as a sibling group, and the Sibling discount is
+  worked out from the group. Every Family on file with two or more children became one group,
+  and new children join their Family's group as before, so the discount follows the same rule as
+  today. This prepares a later release where siblings are matched by their father's name. No
+  fee, discount, status or seat count changed when this shipped; the update checked that before
+  finishing. Joining a group shows in the application's history under its database name.
+
 ## November 11, 2026 `v0.99.0`
 
 ### NEW

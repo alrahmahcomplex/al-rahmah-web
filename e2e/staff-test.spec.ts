@@ -30,6 +30,16 @@ test.describe("the console-error guard", () => {
     await page.close()
   })
 
+  test("passes a message the test allows for itself", async ({ page, allowConsoleError }) => {
+    allowConsoleError(/^console\.error: broken render$/, "this test writes it on purpose")
+    await page.setContent(logs)
+  })
+
+  test.fail("still fails on a message the test did not allow", async ({ page, allowConsoleError }) => {
+    allowConsoleError(/^console\.error: something else$/, "a different message")
+    await page.setContent(logs)
+  })
+
   test("passes a page that only logs and warns", async ({ page }) => {
     await page.setContent("<p>quiet</p><script>console.log('fine'); console.warn('fine')</script>")
   })

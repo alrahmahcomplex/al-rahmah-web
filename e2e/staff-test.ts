@@ -8,18 +8,40 @@ import { expect, test as base, type BrowserContext } from "@playwright/test"
 // browser.newPage(). tests/unit/staff-spec-guard.test.ts checks that every
 // spec opening /staff imports `test` from here; e2e/staff-test.spec.ts shows
 // the guard failing a test.
+//
+// A test that makes a request fail on purpose (aborts it, or answers it with
+// an error) names the message it expects, for that test only:
+//
+//   test("…", async ({ page, allowConsoleError }) => {
+//     allowConsoleError(/ERR_FAILED \(http:\/\/[^)]+\/staff\/check-in\)$/, "this test drops the request")
 
-/** Messages that are expected, each with the reason it is not a defect. */
-export const ALLOWED_CONSOLE_ERRORS: { pattern: RegExp; reason: string }[] = [
+type Allowance = { pattern: RegExp; reason: string }
+
+/** Messages expected in every test, each with the reason it is not a defect. */
+export const ALLOWED_CONSOLE_ERRORS: Allowance[] = [
   {
     pattern: /^console\.error: Failed to load resource: .*\(https?:\/\/[^/]+\/_vercel\/(insights|speed-insights)\/script\.js\)$/,
     reason: "Vercel serves the Analytics and Speed Insights scripts only on its own hosts; next start answers 404",
   },
 ]
 
-export const test = base.extend<{ consoleGuard: void }>({
+export const test = base.extend<{
+  consoleAllowances: Allowance[]
+  /** Allows a message in this test only, for a failure the test causes on purpose. */
+  allowConsoleError: (pattern: RegExp, reason: string) => void
+  consoleGuard: void
+}>({
+  consoleAllowances: async ({}, provide) => {
+    await provide([])
+  },
+  allowConsoleError: async ({ consoleAllowances }, provide) => {
+    await provide((pattern, reason) => {
+      if (!reason.trim()) throw new Error("allowConsoleError needs a reason")
+      consoleAllowances.push({ pattern, reason })
+    })
+  },
   consoleGuard: [
-    async ({ context, browser }, runTest) => {
+    async ({ context, browser, consoleAllowances }, runTest) => {
       const errors: string[] = []
       const watched = new WeakSet<BrowserContext>()
       const watch = (watching: BrowserContext) => {
@@ -47,7 +69,8 @@ export const test = base.extend<{ consoleGuard: void }>({
       } finally {
         browser.newContext = newContext
       }
-      const unexpected = errors.filter((error) => !ALLOWED_CONSOLE_ERRORS.some(({ pattern }) => pattern.test(error)))
+      const allowed = [...ALLOWED_CONSOLE_ERRORS, ...consoleAllowances]
+      const unexpected = errors.filter((error) => !allowed.some(({ pattern }) => pattern.test(error)))
       expect(unexpected, "the page wrote errors to the console").toEqual([])
     },
     { auto: true },

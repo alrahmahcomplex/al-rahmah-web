@@ -139,7 +139,8 @@ async function setAgentEmail(agentId: string, email: string) {
 // Server Actions post to the page with a Next-Action header.
 const isAction = (method: string, headers: Record<string, string>) => method === "POST" && "next-action" in headers
 
-test("a check whose answer never arrives asks to try again", async ({ page }) => {
+test("a check whose answer never arrives asks to try again", async ({ page, allowConsoleError }) => {
+  allowConsoleError(/^console\.error: Failed to load resource: net::ERR_CONNECTION_RESET \(http:\/\/[^)]+\/staff\/agents\/import\)$/, "this test drops the check's answer")
   const file = fixtureFile()
   await signIn(page, MANAGER)
   await page.goto("/staff/agents/import")
@@ -155,7 +156,8 @@ test("a check whose answer never arrives asks to try again", async ({ page }) =>
   await expect(page.getByRole("heading", { name: `Check ${file.name}` })).toBeVisible()
 })
 
-test("a confirm whose answer never arrives asks to check the same file again, which finds the saved rows already present", async ({ page }) => {
+test("a confirm whose answer never arrives asks to check the same file again, which finds the saved rows already present", async ({ page, allowConsoleError }) => {
+  allowConsoleError(/^console\.error: Failed to load resource: net::ERR_CONNECTION_RESET \(http:\/\/[^)]+\/staff\/agents\/import\)$/, "this test drops the confirm's answer")
   const file = fixtureFile()
   const rows = [[file.first.code, file.first.fullName, file.first.mobile, "", ""]]
   await signIn(page, MANAGER)

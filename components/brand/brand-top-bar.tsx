@@ -4,7 +4,7 @@ import Image from "next/image"
 import { useRef, type RefObject } from "react"
 
 import { DocumentLanguage } from "@/components/document-language"
-import { useLanguageChosen } from "@/components/page-language"
+import { SyncPageLanguage, useLanguageChosen } from "@/components/page-language"
 import type { Language } from "@/lib/language"
 import type { CachedPublicPath } from "@/lib/language-state"
 import { cn } from "@/lib/utils"
@@ -57,6 +57,8 @@ export function BrandTopBar({
   return (
     <header className={cn("gf-top", className)}>
       <DocumentLanguage language={language} />
+      {/* A page rendered per request reads the cookie, so it reports the language. */}
+      {returnTo ? null : <SyncPageLanguage language={language} />}
       <a className="gf-mark-link" href={HOME_URL} aria-label={words.home}>
         <Image className="gf-mark" src="/brand/logo-round.png" alt="" width={44} height={44} priority />
       </a>

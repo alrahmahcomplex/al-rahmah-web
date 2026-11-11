@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, startTransition, use, useState, type ComponentProps, type FormEvent, type ReactNode } from "react"
+import { createContext, startTransition, use, useCallback, useEffect, useState, type ComponentProps, type FormEvent, type ReactNode } from "react"
 
 import { isLanguage, type Language } from "@/lib/languages"
 
@@ -14,29 +14,52 @@ import { isLanguage, type Language } from "@/lib/languages"
 // outlasts navigation and a copy restored from the router's cache shows the
 // language the cookie now holds. A full page load starts it empty again, and
 // the cookie picks the copy.
+//
+// Every switch records its pick here, and a page rendered per request (which
+// reads the cookie itself) reports the cookie's language with
+// `SyncPageLanguage`, so the value never lags behind the cookie.
 
-type PageLanguage = { chosen: Language | null; choose: (language: Language) => void }
-
-const PageLanguageContext = createContext<PageLanguage>({ chosen: null, choose: () => {} })
-
-export function PageLanguageProvider({ children }: { children: ReactNode }) {
-  const [chosen, choose] = useState<Language | null>(null)
-  return <PageLanguageContext value={{ chosen, choose }}>{children}</PageLanguageContext>
+type PageLanguage = {
+  // The cookie's language as this page load last knew it, or null before anything set or reported it.
+  current: Language | null
+  // True once the visitor picked a language on this page load, so a `lang` cookie exists.
+  picked: boolean
+  choose: (language: Language) => void
+  report: (language: Language) => void
 }
 
-/** The page's language: the one switched to on this page load, else the copy's. */
+const PageLanguageContext = createContext<PageLanguage>({ current: null, picked: false, choose: () => {}, report: () => {} })
+
+export function PageLanguageProvider({ children }: { children: ReactNode }) {
+  const [current, setCurrent] = useState<Language | null>(null)
+  const [picked, setPicked] = useState(false)
+  const choose = useCallback((language: Language) => {
+    setCurrent(language)
+    setPicked(true)
+  }, [])
+  return <PageLanguageContext value={{ current, picked, choose, report: setCurrent }}>{children}</PageLanguageContext>
+}
+
+/** The page's language: the cookie's, as last set or reported on this page load, else the copy's. */
 export function usePageLanguage(copyLanguage: Language): Language {
-  return use(PageLanguageContext).chosen ?? copyLanguage
+  return use(PageLanguageContext).current ?? copyLanguage
 }
 
 /** True once the visitor has picked a language on this page load, so a `lang` cookie exists. */
 export function useLanguageChosen(): boolean {
-  return use(PageLanguageContext).chosen !== null
+  return use(PageLanguageContext).picked
 }
 
-/** Records a pick made through `setLanguage` elsewhere (the first-visit card). */
+/** Records a pick, however it reached the cookie. */
 export function useChooseLanguage(): (language: Language) => void {
   return use(PageLanguageContext).choose
+}
+
+/** On a page rendered per request: reports the language its cookie holds. */
+export function SyncPageLanguage({ language }: { language: Language }) {
+  const { report } = use(PageLanguageContext)
+  useEffect(() => report(language), [language, report])
+  return null
 }
 
 /**
@@ -80,4 +103,16 @@ export function useSwitchInPlace(): (event: FormEvent<HTMLFormElement>) => void 
 /** A public page's `<main>`, with `lang` following the page's language. */
 export function PageMain({ language, ...props }: ComponentProps<"main"> & { language: Language }) {
   return <main {...props} lang={usePageLanguage(language)} />
+}
+
+/**
+ * A language switch form's submit handler for a cached page that leaves for
+ * the other copy (`/`): records the pick, and lets the form's action run.
+ */
+export function useRecordPick(): (event: FormEvent<HTMLFormElement>) => void {
+  const choose = useChooseLanguage()
+  return (event) => {
+    const lang = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value")
+    if (isLanguage(lang)) choose(lang)
+  }
 }

@@ -4,7 +4,7 @@ import { setLanguage } from "@/app/actions/language"
 import { DocumentLanguage } from "@/components/document-language"
 import type { Language } from "@/lib/language"
 import type { CachedPublicPath } from "@/lib/language-state"
-import { usePageLanguage, useSwitchInPlace } from "@/components/page-language"
+import { SyncPageLanguage, usePageLanguage, useRecordPick, useSwitchInPlace } from "@/components/page-language"
 import { cn } from "@/lib/utils"
 
 const OPTIONS: readonly { lang: Language; label: string }[] = [
@@ -42,9 +42,12 @@ export function LanguageSwitch({
   const shown = usePageLanguage(copyLanguage)
   const language = inPlace ? shown : copyLanguage
   const switchInPlace = useSwitchInPlace()
+  const recordPick = useRecordPick()
   return (
-    <form action={setLanguage} onSubmit={inPlace ? switchInPlace : undefined} className={className}>
+    <form action={setLanguage} onSubmit={inPlace ? switchInPlace : returnTo ? recordPick : undefined} className={className}>
       <DocumentLanguage language={language} />
+      {/* A page rendered per request reads the cookie, so it reports the language. */}
+      {returnTo ? null : <SyncPageLanguage language={language} />}
       {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
       <div
         role="group"

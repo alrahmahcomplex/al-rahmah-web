@@ -100,6 +100,23 @@ test.describe("pages served from a prerendered copy", () => {
     await expect(page).toHaveTitle("Forgot your password? · Al-Rahmah Complex")
   })
 
+  test("a switch on a page rendered per request wins over an earlier in-place switch", async ({ page, context }) => {
+    await context.addCookies([{ name: "lang", value: "sw", url: "http://localhost:" + E2E_PORT }])
+    await page.goto("/login/forgot-password")
+    await page.getByRole("button", { name: "English" }).click()
+    await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible()
+
+    await page.getByRole("link", { name: "Go to sign-in" }).click()
+    await expect(page).toHaveURL(/\/login$/)
+    await page.getByRole("button", { name: "Kiswahili" }).click()
+    await expect(page.getByRole("main")).toHaveAttribute("lang", "sw")
+
+    await page.getByRole("link", { name: "Umesahau nenosiri?" }).click()
+    await expect(page).toHaveURL(/\/login\/forgot-password$/)
+    await expect(page.getByRole("heading", { name: "Umesahau nenosiri?" })).toBeVisible()
+    await expect(page.getByRole("main")).toHaveAttribute("lang", "sw")
+  })
+
   test("the session pages still answer private, no-store", async ({ request }) => {
     for (const path of ["/login", "/login/reset-password", "/discount-code"]) {
       const response = await request.get(path, { maxRedirects: 0 })

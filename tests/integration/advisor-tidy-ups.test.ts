@@ -71,6 +71,49 @@ describe("the schema as the advisors read it", () => {
   })
 })
 
+describe("the migration's indexes and key", () => {
+  // The migration's section between two of its headings, as written in the file.
+  function section(from: string, to: string) {
+    const text = readFileSync(FILE, "utf8")
+    const start = text.indexOf(from)
+    const end = text.indexOf(to, start)
+    if (start < 0 || end < 0) throw new Error(`${FILE}: no section from "${from}" to "${to}"`)
+    return text.slice(start, end)
+  }
+
+  test("the actor index carries the history screen's order", async () => {
+    const definition = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ def: string }>("select pg_get_indexdef('public.audit_log_actor_staff_id_idx'::regclass) as def")
+      return rows[0].def
+    })
+    expect(definition).toBe(
+      "CREATE INDEX audit_log_actor_staff_id_idx ON public.audit_log USING btree (actor_staff_id, created_at DESC, id DESC) WHERE (actor_staff_id IS NOT NULL)",
+    )
+  })
+
+  test("the agent_link_requests key goes on even when two identical rows are there", async () => {
+    const result = await inRolledBackTransaction(async (sql) => {
+      // Back to the table as it was before the migration, holding a duplicate.
+      await sql.query("alter table public.agent_link_requests drop constraint agent_link_requests_pkey")
+      await sql.query("create index agent_link_requests_email_idx on public.agent_link_requests (email_hash, requested_at)")
+      const hash = "a".repeat(64)
+      await sql.query(
+        `insert into public.agent_link_requests (email_hash, requested_at)
+         values ($1, '2026-11-11 10:00:00+00'), ($1, '2026-11-11 10:00:00+00'), ($1, '2026-11-11 10:00:01+00')`,
+        [hash],
+      )
+      await sql.query(section("-- 2. agent_link_requests: a primary key", "-- 3. import_batches: one read policy"))
+      const { rows } = await sql.query<{ n: string }>("select count(*) as n from public.agent_link_requests where email_hash = $1", [hash])
+      const { rows: key } = await sql.query<{ def: string }>(
+        "select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'agent_link_requests_pkey'",
+      )
+      const { rows: old } = await sql.query<{ name: string | null }>("select to_regclass('public.agent_link_requests_email_idx')::text as name")
+      return { rows: Number(rows[0].n), key: key[0]?.def, old: old[0].name }
+    })
+    expect(result).toEqual({ rows: 2, key: "PRIMARY KEY (email_hash, requested_at)", old: null })
+  })
+})
+
 describe("reading import_batches", () => {
   async function insertBatches(sql: Client): Promise<string[]> {
     await sql.query("select public.set_audit_actor('system')")

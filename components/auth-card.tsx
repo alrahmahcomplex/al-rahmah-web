@@ -22,12 +22,9 @@ export function AuthCard({
   returnTo?: CachedPublicPath
   children: ReactNode
 }) {
-  const Main = returnTo ? PageMain : "main"
-  return (
-    <Main
-      language={language}
-      className="relative flex min-h-dvh w-full flex-col items-center bg-gradient-to-br from-blue-50 via-blue-100/50 to-white p-4 sm:p-8"
-    >
+  const className = "relative flex min-h-dvh w-full flex-col items-center bg-gradient-to-br from-blue-50 via-blue-100/50 to-white p-4 sm:p-8"
+  const content = (
+    <>
       <LanguageSwitch language={language} returnTo={returnTo} inPlace={!!returnTo} className="shrink-0" />
       <div className="flex w-full flex-1 items-center justify-center py-6">
         <div className="flex w-[325px] max-w-full shrink-0 flex-col items-center rounded-[40px] bg-white px-8 py-[40px] shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px]">
@@ -49,7 +46,16 @@ export function AuthCard({
           <div className="flex w-full flex-col">{children}</div>
         </div>
       </div>
-    </Main>
+    </>
+  )
+  return returnTo ? (
+    <PageMain language={language} className={className}>
+      {content}
+    </PageMain>
+  ) : (
+    <main lang={language} className={className}>
+      {content}
+    </main>
   )
 }
 

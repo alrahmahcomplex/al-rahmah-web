@@ -135,8 +135,9 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
         try {
           await setLanguage(data)
         } catch {
-          // See above.
+          return
         }
+        chooseLanguage(lang)
       })
 
       const swap = () => {

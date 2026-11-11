@@ -5,6 +5,15 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- On the Design system page at /staff/kit, three pieces now match the approved design: the
+  toast is at most half the window wide, so on a phone it wraps onto a few short lines; the
+  sections of a record's side sheet have their full space around the facts; and the rows of
+  New requests sit straight under the title with rounded corners on hover.
+
 ## November 12, 2026 `v0.104.0`
 
 ### IMPROVED

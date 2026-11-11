@@ -1318,10 +1318,10 @@ export const POLICIES: Record<string, PolicyEntry> = {
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
     check: null,
   },
-  "public.import_batches: Staff who may view leads read agent imports": {
+  "public.import_batches: Staff who may view leads read imports": {
     command: "SELECT",
     roles: ["authenticated"],
-    using: "((kind = 'agents'::text) AND ( SELECT has_permission('leads.view'::text) AS has_permission))",
+    using: "((kind = ANY (ARRAY['agents'::text, 'students'::text])) AND ( SELECT has_permission('leads.view'::text) AS has_permission))",
     check: null,
   },
   "public.interviews: Staff who may view leads read interviews": {
@@ -1426,12 +1426,6 @@ export const POLICIES: Record<string, PolicyEntry> = {
     command: "SELECT",
     roles: ["authenticated"],
     using: "( SELECT has_permission('audit.view'::text) AS has_permission)",
-    check: null,
-  },
-  "public.import_batches: Staff who may view leads read student imports": {
-    command: "SELECT",
-    roles: ["authenticated"],
-    using: "((kind = 'students'::text) AND ( SELECT has_permission('leads.view'::text) AS has_permission))",
     check: null,
   },
   "public.promo_codes: Staff who may view leads read Promo codes": {

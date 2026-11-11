@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { LANGUAGE_STATE_PREFIX, languageStateRewrites } from "./lib/language-state";
+
 const nextConfig: NextConfig = {
   experimental: {
     // Lets staff pages call forbidden() for someone whose role lacks the
@@ -14,6 +16,10 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // The per-language copies are reached only through the rewrites below
+      // (#286). Opened directly, they send the visitor to the public address,
+      // where the cookie picks the copy.
+      { source: `${LANGUAGE_STATE_PREFIX}/:state/:path*`, destination: "/:path*", permanent: false },
       // One sign-in page for everyone (#264). Old emails, bookmarks and
       // printed links to the Discount code sign-in pages keep working.
       { source: "/discount-code/sign-in", destination: "/login", permanent: true },
@@ -51,6 +57,16 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
     ];
+  },
+  async rewrites() {
+    return {
+      // Before the filesystem and dynamic routes: the public address of a
+      // cached page goes to its copy for the visitor's `lang` cookie, with no
+      // function run (lib/language-state.ts, ADR 0006).
+      beforeFiles: languageStateRewrites(),
+      afterFiles: [],
+      fallback: [],
+    };
   },
 };
 

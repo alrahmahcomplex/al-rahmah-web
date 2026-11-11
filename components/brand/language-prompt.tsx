@@ -5,6 +5,7 @@ import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useSt
 import { setLanguage } from "@/app/actions/language"
 import { Icon } from "@/components/guided-form/icons"
 import { prefersReducedMotion } from "@/components/guided-form/motion"
+import { storeLanguage, useChooseLanguage } from "@/components/page-language"
 import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
 
@@ -23,6 +24,8 @@ export type LanguagePromptProps = {
   language: Language
   /** The top bar's menu button: the card grows out of it and shrinks back into it. */
   menuButtonRef: RefObject<HTMLButtonElement | null>
+  /** On a page served from Vercel's cache: the pick changes the words in place (components/page-language.tsx). */
+  inPlace?: boolean
 }
 
 function towardButton(card: HTMLElement, button: HTMLElement | null) {
@@ -45,7 +48,8 @@ function canAnimate(el: HTMLElement | null): el is HTMLElement {
  * which pops. Hover, a finger on the card or the keyboard stops the 5 seconds.
  * It stays mounted through the re-render `setLanguage` causes.
  */
-export function LanguagePrompt({ show, menuButtonRef }: LanguagePromptProps) {
+export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: LanguagePromptProps) {
+  const chooseLanguage = useChooseLanguage()
   // The server stops sending `show` once the cookie is set, mid-confirmation; the card finishes anyway.
   // Opened after hydration, so no unusable modal sits in the page before its script runs.
   const [open, setOpen] = useState(false)
@@ -122,11 +126,18 @@ export function LanguagePrompt({ show, menuButtonRef }: LanguagePromptProps) {
       const data = new FormData()
       data.set("lang", lang)
       startTransition(async () => {
+        // If the cookie doesn't stick, the card shows again next visit. Nothing to tell the visitor now.
+        if (inPlace) {
+          // A page served from Vercel's cache shows the pick from here.
+          if (await storeLanguage(lang)) chooseLanguage(lang)
+          return
+        }
         try {
           await setLanguage(data)
         } catch {
-          // The cookie didn't stick; the card shows again next visit. Nothing to tell the visitor now.
+          return
         }
+        chooseLanguage(lang)
       })
 
       const swap = () => {
@@ -144,7 +155,7 @@ export function LanguagePrompt({ show, menuButtonRef }: LanguagePromptProps) {
         el.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { duration: 220, easing: "ease-out" })
       }
     },
-    [finish],
+    [finish, chooseLanguage, inPlace],
   )
 
   // Grow out of the menu button, then start the 5 seconds.

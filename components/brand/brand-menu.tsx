@@ -5,7 +5,9 @@ import { useCallback, useEffect, useId, useRef, useState, type RefObject } from 
 import { setLanguage } from "@/app/actions/language"
 import { trapTab } from "@/components/guided-form/bottom-sheet"
 import { Icon } from "@/components/guided-form/icons"
+import { useSwitchInPlace } from "@/components/page-language"
 import type { Language } from "@/lib/language"
+import type { CachedPublicPath } from "@/lib/language-state"
 import { cn } from "@/lib/utils"
 
 import { LANGUAGE_OPTIONS, type BrandCopy } from "./copy"
@@ -30,6 +32,12 @@ export type BrandMenuProps = {
   onClearForm?: () => void
   /** The 44px menu button, for the language card's balloon and `catchMenuButton`. */
   buttonRef?: RefObject<HTMLButtonElement | null>
+  /**
+   * On a page served from Vercel's cache, its public address: with JavaScript
+   * the switch changes the page in place, and without it the visitor returns
+   * there and the new cookie picks the other copy (components/page-language.tsx).
+   */
+  returnTo?: CachedPublicPath
 }
 
 /**
@@ -40,7 +48,8 @@ export type BrandMenuProps = {
  * Escape and an outside click close it; Tab stays inside while it is open;
  * focus goes back to the button.
  */
-export function BrandMenu({ language, labels, onClearForm, buttonRef }: BrandMenuProps) {
+export function BrandMenu({ language, labels, onClearForm, buttonRef, returnTo }: BrandMenuProps) {
+  const switchInPlace = useSwitchInPlace()
   const menuId = useId()
   const [open, setOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -109,7 +118,8 @@ export function BrandMenu({ language, labels, onClearForm, buttonRef }: BrandMen
           <Icon name="globe" small />
           <span>{labels.language}</span>
         </p>
-        <form action={setLanguage}>
+        <form action={setLanguage} onSubmit={returnTo ? switchInPlace : undefined}>
+          {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
           <div role="group" aria-label={labels.language} className="flex w-full rounded-full border border-blue-600/22 bg-white p-[3px]">
             {LANGUAGE_OPTIONS.map(({ lang, label }) => {
               const current = lang === language

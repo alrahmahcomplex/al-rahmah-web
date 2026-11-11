@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next"
 import localFont from "next/font/local"
 
+import { PageLanguageProvider } from "@/components/page-language"
 import { Toaster } from "@/components/ui/sonner"
 import { VercelInsights } from "@/components/vercel-insights"
 import { cn } from "@/lib/utils"
@@ -45,7 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={cn("font-sans", geist.variable, exo.variable)}>
       <body className="bg-slate-100 text-slate-800 min-h-screen antialiased">
-        {children}
+        <PageLanguageProvider>{children}</PageLanguageProvider>
         <Toaster />
         <VercelInsights />
       </body>

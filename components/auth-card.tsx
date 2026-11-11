@@ -2,19 +2,30 @@ import Image from "next/image"
 import type { ReactNode } from "react"
 
 import { LanguageSwitch } from "@/components/language-switch"
+import { PageMain } from "@/components/page-language"
 import type { Language } from "@/lib/language"
+import type { CachedPublicPath } from "@/lib/language-state"
 
 // The card every sign-in page uses (#264): /login, /login/forgot-password,
 // and the pages the set-password and reset emails open. The language switch
 // sits above it, centred; the logo and name sit inside it, so moving between
 // these pages looks like the card's contents changing.
-export function AuthCard({ language, children }: { language: Language; children: ReactNode }) {
-  return (
-    <main
-      lang={language}
-      className="relative flex min-h-dvh w-full flex-col items-center bg-gradient-to-br from-blue-50 via-blue-100/50 to-white p-4 sm:p-8"
-    >
-      <LanguageSwitch language={language} className="shrink-0" />
+//
+// A page served from Vercel's cache passes its public address as `returnTo`,
+// and its language switch then works in place (components/page-language.tsx).
+export function AuthCard({
+  language,
+  returnTo,
+  children,
+}: {
+  language: Language
+  returnTo?: CachedPublicPath
+  children: ReactNode
+}) {
+  const className = "relative flex min-h-dvh w-full flex-col items-center bg-gradient-to-br from-blue-50 via-blue-100/50 to-white p-4 sm:p-8"
+  const content = (
+    <>
+      <LanguageSwitch language={language} returnTo={returnTo} inPlace={!!returnTo} className="shrink-0" />
       <div className="flex w-full flex-1 items-center justify-center py-6">
         <div className="flex w-[325px] max-w-full shrink-0 flex-col items-center rounded-[40px] bg-white px-8 py-[40px] shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px]">
           <div className="mb-5 shrink-0">
@@ -35,6 +46,15 @@ export function AuthCard({ language, children }: { language: Language; children:
           <div className="flex w-full flex-col">{children}</div>
         </div>
       </div>
+    </>
+  )
+  return returnTo ? (
+    <PageMain language={language} className={className}>
+      {content}
+    </PageMain>
+  ) : (
+    <main lang={language} className={className}>
+      {content}
     </main>
   )
 }

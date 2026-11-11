@@ -56,6 +56,7 @@ Al-Rahmah Complex (Al-Rahmah Schools) offers Islamic values alongside academic r
 - Name: **Al-Rahmah Complex**; the schools are **Al-Rahmah Schools**.
 - Official logo: `public/Al-Rahmah_Official_Logo.svg`. Official palette SVG, kept as the print reference: `public/Al-Rahmah Color Palette (Digital & Web).svg`.
 - Screen palette: Al-Rahmah Indigo `#0900bb` with the action orange `#ee7300`. The owner tried ShuleFasta's deep blue in v0.81.0 and returned to Al-Rahmah Indigo the same day (2026-11-06), kept ShuleFasta's orange `#fd6914` for every action button, and replaced it with `#ee7300` as the global default on 2026-11-09. Every orange button is white text on orange ([DESIGN.md](DESIGN.md), The ShuleFasta Button Rule).
+- **One design language** (owner, 2026-11-11): the staff app looks and moves like the Admission form, with the same pills, lavender wash, Exo italic, progress bar and folding questions. It replaces the earlier quiet, neutral staff look. The approved staff prototype is <https://claude.ai/artifact/5Hs5yCjHeifmHpvHg2yeYr>; [DESIGN.md](DESIGN.md) records its rules so that new screens do not drift from it.
 - Brand source material, read-only: workspace `branding-elements/` (admission and Pre-Form One flyers, business card, palette). The archived repo `alrahmahcomplex/Al-Rahmah_Complex` is a reference for branded styling and sign-in.
 - Parent-facing Swahili messages are warm and expressive: congratulatory on a pass, empathetic on a fail.
 
@@ -80,7 +81,8 @@ Until the user supplies them, no page may invent exam figures, rankings, testimo
 3. **Every path ends at the Admission form.** The landing page exists to turn interest into an Applied lead, with or without a referral.
 4. **Nothing is lost.** Staff screens make history visible and make destructive actions impossible rather than merely discouraged.
 5. **Speak the family's language.** Swahili and English carry equal weight on the public side.
+6. **Staff enjoy the desk.** In the owner's words: "I want the Staff to enjoy when they register a student." Staff tasks get the same care as the parent's Admission form: one question at a time, clear progress, and a small celebration when the work is done.
 
 ## Accessibility & Inclusion
 
-Public pages must stay readable and usable on small screens and slow connections, and in both languages. No formal WCAG level has been set yet.
+Public pages must stay readable and usable on small screens and slow connections, and in both languages. Every animation honours reduced motion. No formal WCAG level has been set yet; white text on the orange buttons (about 3.0:1) is the owner's accepted exception.

@@ -15,7 +15,7 @@ import {
 import { cn } from "@/lib/utils"
 
 import { Icon } from "./icons"
-import { foldMs, prefersReducedMotion } from "./motion"
+import { foldMs, prefersReducedMotion, useReducedMotion } from "./motion"
 import "./guided-form.css"
 
 type ItemProps = { leaving?: boolean; instant?: boolean }
@@ -71,7 +71,12 @@ export function GuidedStack({ children, instant = false, className }: { children
 
 /** Unfold on mount, fold before leaving. Returns the classes for the `li`. */
 function useItemMotion(leaving: boolean | undefined, instant: boolean | undefined) {
-  const [pre, setPre] = useState(!instant && !prefersReducedMotion())
+  // The server can't know about reduced motion, so every item starts about
+  // to unfold, in the browser too. Under reduced motion the classes are left
+  // off instead: a first browser render that differed from the server's HTML
+  // kept the server's classes and left the question folded (#334).
+  const reduced = useReducedMotion()
+  const [pre, setPre] = useState(!instant)
   const [moving, setMoving] = useState(pre)
 
   useLayoutEffect(() => {
@@ -87,7 +92,7 @@ function useItemMotion(leaving: boolean | undefined, instant: boolean | undefine
     return () => window.clearTimeout(timer)
   }, [pre, moving])
 
-  return cn((pre || leaving) && "gf-pre", (moving || leaving) && "gf-moving", leaving && "gf-leaving")
+  return cn(((pre && !reduced) || leaving) && "gf-pre", ((moving && !reduced) || leaving) && "gf-moving", leaving && "gf-leaving")
 }
 
 export type StepState = "open" | "folded"

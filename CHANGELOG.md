@@ -5,6 +5,14 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- On a phone or computer set to reduce motion (battery saver or "Remove animations" often turns
+  this on), the Admission form and the Discount code sign-up page showed no question and could not
+  be filled in. The first question shows again. This broke in v0.93.0.
+
 ## November 11, 2026 `v0.97.0`
 
 ### IMPROVED

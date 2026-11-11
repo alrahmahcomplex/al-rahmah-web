@@ -311,6 +311,14 @@ test("on a 360×640 phone the sheet rises from the bottom and its foot stays abo
       return [box.width, box.y + box.height].map(Math.round)
     })
     .toEqual([360, 640])
+  // The keyboard works the same on a bottom sheet: title first, Tab stays inside, Escape returns focus.
+  await expect(record.getByRole("heading", { name: "Rehema Said Abdallah" })).toBeFocused()
+  await tabStaysInside(page, record, 10)
+  await page.keyboard.press("Escape")
+  await expect(record).toHaveCount(0)
+  await expect(row).toBeFocused()
+  await row.press("Enter")
+  await expect(record).toBeVisible()
 
   // Previous school: Not known yet, added inline.
   await record.getByRole("button", { name: "Add", exact: true }).click()

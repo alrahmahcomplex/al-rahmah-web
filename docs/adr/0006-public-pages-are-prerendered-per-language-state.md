@@ -32,7 +32,7 @@ links already shared on WhatsApp.
 |---|---|---|
 | `first` | none | Swahili, with the first-visit language card |
 | `en` | `en` | English |
-| `sw` | any other value | Swahili, no card |
+| `sw` | any other value, empty included | Swahili, no card |
 
 The pages take the state from the route parameter and read nothing from the
 request. `beforeFiles` rewrites in `next.config.ts` (`languageStateRewrites()` in
@@ -74,7 +74,9 @@ they read the session, the Standard discount or a one-time link token.
   and into `CACHED_PUBLIC_PATHS`; its words come from the route parameter, and a
   form on it uses the in-place switch.
 - The proxy matcher doesn't change: rewrites run no app code.
-- An empty `lang=` cookie counts as no cookie, so that browser sees the
-  first-visit card once more. The site never writes an empty value.
+- `has` and `missing` cookie conditions treat an empty `lang=` as no cookie.
+  A `header` condition on the raw Cookie header catches it before the
+  `missing` rule, so an empty value is Swahili with no card, as it was for
+  `getLanguage()` (#292).
 - If the visitor changes language in one tab, another tab already open keeps its
   language until it loads a page.

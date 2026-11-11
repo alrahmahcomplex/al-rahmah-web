@@ -38,6 +38,33 @@ describe("picking a page's copy from the lang cookie", () => {
     expect(copyFor("/", `lang=${value}`)).toBe(statePath("sw", "/"))
   })
 
+  // Before #286 an empty value still counted as a cookie, so no card showed
+  // (#292). Next.js's cookie conditions treat an empty value as missing.
+  it.each(CACHED_PUBLIC_PATHS)("%s: an empty lang cookie is Swahili with no card", (path) => {
+    for (const cookie of [
+      "lang=",
+      "lang=; a=1",
+      "a=1; lang=",
+      "a=1;lang=",
+      "a=1; lang=; b=2",
+      'lang=""',
+      // Spaces Next.js's cookie parser trims away.
+      "lang= ; a=1",
+      'lang="" ; a=1',
+      "a=1;lang= ;b=2",
+      "a=1; lang =; b=2",
+    ]) {
+      expect(copyFor(path, cookie), cookie).toBe(statePath("sw", path))
+    }
+  })
+
+  it.each(["xlang=", "x_lang=; a=1", "a=1; flang=", "a=lang=", "langx=", 'a="x;lang="'])(
+    "isn't fooled by another cookie: %s",
+    (cookie) => {
+      expect(copyFor("/apply", cookie)).toBe(statePath("first", "/apply"))
+    },
+  )
+
   it("maps / to the state's root copy", () => {
     expect(statePath("en", "/")).toBe("/by-language/en")
     expect(statePath("first", "/")).toBe("/by-language/first")

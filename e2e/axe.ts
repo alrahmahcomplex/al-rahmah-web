@@ -12,8 +12,20 @@ export async function settled(overlay: Locator) {
   await expect.poll(() => overlay.evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0)
 }
 
+/** Waits until every animation that ends has ended (a page's rise, a fade), so colours are read at rest. Endless ones (an illustration's bob) are left running. */
+export async function finishedMoving(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.getAnimations().filter((a) => a.playState === "running" && a.effect?.getComputedTiming().iterations !== Infinity).length,
+      ),
+    )
+    .toBe(0)
+}
+
 /** Axe's findings as "rule: target", less the two accepted ones; `include` narrows the scan, as to an open overlay. */
 export async function axeProblems(page: Page, include?: string): Promise<string[]> {
+  await finishedMoving(page)
   if (include) await settled(page.locator(include))
   const builder = new AxeBuilder({ page })
   if (include) builder.include(include)

@@ -2,7 +2,7 @@ import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 
-import { ByLook, NewLookNotice } from "./_new-shell/page-states"
+import { NoticeByLook } from "./_new-shell/page-states"
 
 const TITLE = "This page does not exist"
 const TEXT = "The link may be wrong or out of date. Check the address, or go back to the staff area."
@@ -12,8 +12,9 @@ const TEXT = "The link may be wrong or out of date. Check the address, or go bac
 // the forbidden page beside it.
 export default function StaffNotFound() {
   return (
-    <ByLook
-      fresh={<NewLookNotice title={TITLE} text={TEXT} />}
+    <NoticeByLook
+      title={TITLE}
+      text={TEXT}
       legacy={
         <div className="flex flex-col items-start gap-3">
           <h1 className="staff-heading">{TITLE}</h1>

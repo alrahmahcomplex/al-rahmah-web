@@ -2,7 +2,7 @@
 
 import { Dialog } from "@base-ui/react/dialog"
 import { usePathname } from "next/navigation"
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react"
 
 import { RoundButton, Toaster } from "@/components/kit"
 
@@ -33,6 +33,7 @@ const TITLE_LEFT = 50
 const TITLE_WIDTH_GUESS = 132
 
 let canvas: CanvasRenderingContext2D | null = null
+const noSubscribe = () => () => {}
 
 type Parts = {
   root: HTMLDivElement
@@ -188,6 +189,8 @@ export function NewShell({
   const [title, setTitle] = useState(() => titleSize(chosen ?? FIRST_WIDTH, TITLE_LEFT, TITLE_WIDTH_GUESS))
   const [limits, setLimits] = useState<SidebarLimits | null>(null)
   const [resizing, setResizing] = useState(false)
+  // False while the server's HTML is shown, true once the shell has hydrated.
+  const live = useSyncExternalStore(noSubscribe, () => true, () => false)
 
   const rootRef = useRef<HTMLDivElement>(null)
   const asideRef = useRef<HTMLElement>(null)
@@ -261,7 +264,11 @@ export function NewShell({
   useLayoutEffect(() => {
     const scroll = scrollRef.current
     if (!scroll) return
-    const target = savedScroll() ?? 0
+    const saved = savedScroll()
+    // On the page the document loaded on there is nothing to put back: leave
+    // any scroll the person made before the page came alive.
+    if (saved === undefined && !navigated) return
+    const target = saved ?? 0
     let frame = 0
     let tries = 0
     const place = () => {
@@ -340,13 +347,34 @@ export function NewShell({
       data-staff-shell=""
       data-folded={folded ? "" : undefined}
       data-resizing={resizing ? "" : undefined}
+      data-live={live ? "" : undefined}
       className="ns"
       style={style}
     >
       <aside ref={asideRef} id="staff-sidebar" aria-label="Sidebar" className="ns-sb">
-        <SidebarBoundary items={items}>
-          <SidebarContent items={items} current={current} folded={folded} nameRef={nameRef} />
-        </SidebarBoundary>
+        <div className="ns-sb-in">
+          <SidebarBoundary items={items}>
+            <SidebarContent items={items} current={current} folded={folded} nameRef={nameRef} />
+          </SidebarBoundary>
+        </div>
+        {!folded && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize the sidebar. Arrow keys move it, double-click resets it."
+            aria-controls="staff-sidebar"
+            aria-valuenow={width}
+            aria-valuemin={limits?.min}
+            aria-valuemax={limits?.max}
+            aria-valuetext={`${width} pixels wide`}
+            tabIndex={0}
+            className="ns-rz"
+            data-drag={resizing ? "" : undefined}
+            onPointerDown={startResize}
+            onDoubleClick={() => apply(null, "clear")}
+            onKeyDown={resizeByKey}
+          />
+        )}
       </aside>
 
       <div className="ns-main">
@@ -378,31 +406,14 @@ export function NewShell({
         </header>
 
         <div ref={stageRef} className="ns-stage">
-          <div ref={scrollRef} className="ns-scroll" tabIndex={-1}>
+          {/* data-stage-scroll and --kit-stage-pt: the guided form scrolls this area and pins its progress bar to its top (#321). */}
+          <div ref={scrollRef} className="ns-scroll" data-stage-scroll="" tabIndex={-1}>
             <main ref={pageRef} className="ns-page">
               {children}
             </main>
           </div>
         </div>
         <OutsideScrollbar scrollRef={scrollRef} pageRef={pageRef} />
-        {!folded && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize the sidebar. Arrow keys move it, double-click resets it."
-            aria-controls="staff-sidebar"
-            aria-valuenow={width}
-            aria-valuemin={limits?.min}
-            aria-valuemax={limits?.max}
-            aria-valuetext={`${width} pixels wide`}
-            tabIndex={0}
-            className="ns-rz"
-            data-drag={resizing ? "" : undefined}
-            onPointerDown={startResize}
-            onDoubleClick={() => apply(null, "clear")}
-            onKeyDown={resizeByKey}
-          />
-        )}
       </div>
       <Toaster />
     </div>

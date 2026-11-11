@@ -16,6 +16,7 @@ async function openKit(page: Page) {
   await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
   await page.goto("/staff/kit")
   await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible()
+  await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
 }
 
 const glow = (icon: Locator) =>

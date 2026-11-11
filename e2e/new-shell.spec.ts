@@ -32,7 +32,9 @@ const MANAGER_ENTRIES = [
 async function open(page: Page, person: FixtureStaff, path: string) {
   await signInOnce(page, person.email, person.password)
   await page.goto(path)
-  await expect(page.locator('[data-shell="new"]')).toBeVisible()
+  await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
+  // The page streams in after the shell; its heading means it is there.
+  await expect(page.getByRole("main").getByRole("heading", { level: 1 })).toBeVisible()
 }
 
 const shell = (page: Page) => page.locator('[data-shell="new"]')
@@ -399,3 +401,21 @@ test("a role that may approve discounts but not view applicants gets a bell whos
   else await expect(list.getByRole("link", { name: /^New discount request/ })).toHaveCount(waiting)
   await expect(list.getByRole("link", { name: /^New reopening request/ })).toHaveCount(0)
 })
+
+// The contract with the guided form (#321): it scrolls the stage's scroll
+// area, found by data-stage-scroll, and pins its progress bar to the stage's
+// top with --kit-stage-pt, the area's top padding.
+for (const [label, viewport, padding] of [
+  ["1280px", { width: 1280, height: 800 }, "26px"],
+  ["390px", { width: 390, height: 844 }, "16px"],
+] as const) {
+  test(`the stage's scroll area carries data-stage-scroll and --kit-stage-pt at ${label}`, async ({ page }) => {
+    await page.setViewportSize(viewport)
+    await open(page, MANAGER, "/staff/reopenings")
+    const area = page.locator("[data-stage-scroll]")
+    await expect(area).toHaveCount(1)
+    expect(await area.evaluate((el) => getComputedStyle(el).getPropertyValue("--kit-stage-pt").trim())).toBe(padding)
+    await expect(area).toHaveCSS("padding-top", padding)
+    expect(await area.evaluate((el) => el.contains(document.querySelector("main")))).toBe(true)
+  })
+}

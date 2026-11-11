@@ -2,7 +2,7 @@ import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 
-import { ByLook, NewLookNotice } from "./_new-shell/page-states"
+import { NoticeByLook } from "./_new-shell/page-states"
 
 const TITLE = "Not available to your role"
 const TEXT = "Your role doesn't include this page. Ask an Admissions Manager if you need it."
@@ -11,8 +11,9 @@ const TEXT = "Your role doesn't include this page. Ask an Admissions Manager if 
 // permission a page needs, in the look of the shell around it.
 export default function StaffForbidden() {
   return (
-    <ByLook
-      fresh={<NewLookNotice title={TITLE} text={TEXT} />}
+    <NoticeByLook
+      title={TITLE}
+      text={TEXT}
       legacy={
         <div className="flex flex-col items-start gap-3">
           <h1 className="staff-heading">{TITLE}</h1>

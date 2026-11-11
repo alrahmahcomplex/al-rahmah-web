@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 11, 2026 `v0.97.0`
+
+### IMPROVED
+
+- A student's Sibling discount is now fixed when the student becomes Enrolled, at the full fee
+  as well as at 10%. If a payment correction later takes the student out of Enrolled, the fee
+  stays as it was at enrolment. Before, a student Enrolled at the full fee could pick up the 10%
+  from an Enrolled sibling after such a correction.
+- The database now stores each student's Sibling discount instead of working it out on every
+  read, with a history entry for every change. No fee, discount, status or seat count changed
+  when this shipped; the update checked that before finishing.
+- The Super Admin can pause new Sibling 10% discounts from the database if the rule ever
+  misbehaves. Fees of Enrolled students stay as they are while it is paused.
+
 ## November 11, 2026 `v0.96.0`
 
 ### NEW

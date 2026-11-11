@@ -370,6 +370,8 @@ describe("the daily job", () => {
         [first, last],
       )
       expect(history.rows).toEqual([
+        // The Sibling result locked at enrolment (#297).
+        { table_name: "lead_sibling_results", action: "insert", actor_kind: "system", actor_staff_id: null, status: null },
         { table_name: "lead_fee_profiles", action: "insert", actor_kind: "system", actor_staff_id: null, status: null },
         { table_name: "leads", action: "update", actor_kind: "system", actor_staff_id: null, status: "Enrolled" },
       ])

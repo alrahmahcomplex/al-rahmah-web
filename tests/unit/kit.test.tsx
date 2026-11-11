@@ -85,6 +85,11 @@ describe("Button", () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it("keeps the native disabled state", () => {
+    render(<Button disabled>Find</Button>)
+    expect(screen.getByRole("button", { name: "Find" })).toBeDisabled()
+  })
+
   it("refuses clicks when aria-disabled", () => {
     const onClick = vi.fn()
     render(

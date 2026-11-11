@@ -9,7 +9,7 @@
 .kp-page { max-width: 1180px; margin: 0 auto; }
 @media (max-width: 860px) { .kp-stage { padding: 16px 14px 36px; } }
 
-.kp-ds { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+.kp-ds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 18px; align-items: start; }
 .kp-ds + .kp-ds { margin-top: 24px; }
 .kp-ds .kit-card { display: flex; flex-direction: column; gap: 12px; }
 .kp-ds .kp-full { grid-column: 1 / -1; }

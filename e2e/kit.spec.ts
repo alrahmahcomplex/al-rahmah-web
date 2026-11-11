@@ -90,7 +90,8 @@ test("the controls answer: selectors, filter pills, rows, chip buttons and the p
 
   await more.getByRole("button", { name: "Applied", exact: true }).click()
   await expect(more.getByRole("button", { name: "Applied", exact: true })).toHaveAttribute("aria-pressed", "true")
-  await expect(more.getByText("No applicant matches").first()).toBeVisible()
+  const filtered = more.getByRole("region", { name: "Filter pills and table" })
+  await expect(filtered.getByText("No applicant matches")).toBeVisible()
   await expect(more.getByRole("table", { name: "Applicants" })).toHaveCount(0)
   await more.getByRole("button", { name: "Clear" }).first().click()
   await expect(more.getByRole("table", { name: "Applicants" })).toBeVisible()

@@ -41,7 +41,7 @@ Sheets, menus, popovers, toasts and confetti come with #320; the guided form on 
 <TextLink onClick={edit}>Edit</TextLink>
 ```
 
-One `go` button per screen (The One Invitation Rule). `pending` keeps the button focusable, sets `aria-busy` and `aria-disabled`, drops the chevron and refuses clicks and form submits; change the label in the same render. A `RoundButton` hosts its icon's active state on hover.
+One `go` button per screen (The One Invitation Rule). `pending` keeps the button focusable, sets `aria-busy` and `aria-disabled`, drops the chevron and refuses clicks and form submits; change the label in the same render. A `RoundButton` hosts its icon's active state on hover. That state, like a `ListRow`'s featured disc, shows only inside the new shell (`data-shell="new"`) or the kit page (`data-kit`); see `components/icons/icons.css`.
 
 ## Fields
 

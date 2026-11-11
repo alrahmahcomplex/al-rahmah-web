@@ -33,9 +33,9 @@
 .kit-wide.kit-ghost { min-height: 64px; border-radius: 24px; background: transparent; }
 .kit-wide.kit-ghost:hover { background: var(--gf-whisper); }
 /* Pending: the label says what is happening; no rise, no press. */
-.kit-btn[aria-busy="true"], .kit-btn[aria-disabled="true"] { opacity: 0.7; transform: none; cursor: default; }
-.kit-go[aria-busy="true"]:hover, .kit-go[aria-disabled="true"]:hover { background: var(--gf-orange); }
-.kit-ghost[aria-busy="true"]:hover, .kit-ghost[aria-disabled="true"]:hover { background: var(--gf-paper); }
+.kit-btn:is([aria-busy="true"], [aria-disabled="true"], :disabled) { opacity: 0.7; transform: none; cursor: default; }
+.kit-go:is([aria-busy="true"], [aria-disabled="true"], :disabled):hover { background: var(--gf-orange); }
+.kit-ghost:is([aria-busy="true"], [aria-disabled="true"], :disabled):hover { background: var(--gf-paper); }
 
 .kit-round {
   position: relative; width: 44px; height: 44px; flex: none; border-radius: 50%; padding: 0; cursor: pointer;
@@ -152,8 +152,9 @@
 }
 .kit-row + .kit-row { border-top: 1px solid var(--gf-mist); }
 :is(.kit-card-title, .kit-card-cap) + .kit-row { margin-top: 6px; }
-:is(a, button).kit-row { cursor: pointer; border-radius: 14px; }
-:is(a, button).kit-row:hover { background: var(--gf-chrome); }
+:is(a, button).kit-row { cursor: pointer; }
+a.kit-row { border-radius: 14px; }
+:is(a, button).kit-row:hover, :is(a, button).kit-row[aria-current]:not([aria-current="false"]) { background: var(--gf-chrome); }
 .kit-row-disc { width: 36px; height: 36px; border-radius: 50%; background: var(--gf-whisper); color: var(--gf-indigo); display: grid; place-items: center; flex: none; }
 .kit-row-text { flex: 1; min-width: 0; }
 .kit-row-title { display: block; font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }

@@ -49,9 +49,11 @@ const readSlot = () => document.getElementById(PAGE_ACTIONS_ID)
 const noSlot = () => null
 
 /**
- * Puts an action into the page header's slot from a client part of the page,
- * such as a form's Cancel. The slot exists only in the browser, so the server
+ * Puts an action, such as a form's Cancel, into the page header's slot from a
+ * client part of the page. The slot exists only in the browser, so the server
  * renders nothing here and the action appears once the header is on screen.
+ * The slot is found once, on mount: keep this under the same page as its
+ * header, so the two mount and unmount together.
  */
 export function PageActions({ children }: { children: ReactNode }) {
   const slot = useSyncExternalStore(subscribe, readSlot, noSlot)

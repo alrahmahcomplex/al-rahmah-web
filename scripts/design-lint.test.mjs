@@ -101,6 +101,12 @@ test("a conditional string lends no italic; each branch is checked on its own", 
   // italic in every branch, or applied whatever the condition
   assert.deepEqual(lines(uprightExoInScript(`cn("font-exo", big ? "italic text-lg" : "italic")`)), [])
   assert.deepEqual(lines(uprightExoInScript(`cn(on && "font-exo", "italic")`)), [])
+  // an array lends only where a class call flattens it; elsewhere it is
+  // joined with commas, as in "font-exo italic,text-sm"
+  assert.deepEqual(lines(uprightExoInScript(`cn("font-exo", ["italic"], on ? ["text-sm", ["italic"]] : ["italic"])`)), [])
+  assert.deepEqual(lines(uprightExoInScript('<p className={`font-exo ${["italic", "text-sm"]}`} />')), [1])
+  assert.deepEqual(lines(uprightExoInScript('<p className={["font-exo", "italic"]} />')), [1])
+  assert.deepEqual(lines(uprightExoInScript(`cn(["font-exo", "italic"][i])`)), [1])
   assert.deepEqual(lines(uprightExoInScript(`cn("font-exo", "italic" as const, ("italic" satisfies string), "italic"!)`)), [])
   assert.deepEqual(lines(uprightExoInScript(`<p className={on ? cn("font-exo", ["italic"]) : "font-sans"} />`)), [])
   assert.deepEqual(lines(uprightExoInScript(`cva("italic", { variants: { tone: { brand: "font-exo" } } })`)), [])
@@ -154,6 +160,8 @@ test("CountPill is found by name, not in comments", () => {
   assert.deepEqual(lines(countPills(`import { CountPill } from "x"\n<CountPill />`)), [1, 2])
   assert.deepEqual(lines(countPills(`<CountPills />`)), [])
   assert.deepEqual(lines(countPills(`// CountPill was removed here (#323)\n{/* <CountPill /> */}`)), [])
+  // a string naming the export counts; a sentence that mentions it does not
+  assert.deepEqual(lines(countPills(`import { "CountPill" as Pill } from "x";\nexport { Pill as "CountPill" };\nkit["CountPill"];\nconst s = "CountPill"`)), [1, 2, 3])
 })
 
 test("route-looks entries marked new are read in any quote style, comments aside", () => {

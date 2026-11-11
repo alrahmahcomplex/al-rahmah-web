@@ -159,25 +159,44 @@ function outermostGroup(node) {
  */
 function alwaysItalic(expr) {
   // ("italic"), "italic" as const, "italic" satisfies string, "italic"!
-  if (ts.isParenthesizedExpression(expr) || ts.isAsExpression(expr) || ts.isSatisfiesExpression(expr) || ts.isNonNullExpression(expr)) {
-    return alwaysItalic(expr.expression)
-  }
+  if (isWrapper(expr)) return alwaysItalic(expr.expression)
   if (isClassString(expr)) {
     if (lendsItalic(staticTokens(expr))) return true
     return ts.isTemplateExpression(expr) && standaloneSpans(expr).some((span) => alwaysItalic(span.expression))
   }
   if (ts.isConditionalExpression(expr)) return alwaysItalic(expr.whenTrue) && alwaysItalic(expr.whenFalse)
   if (isClassCall(expr)) return expr.arguments.some(alwaysItalic)
-  if (ts.isArrayLiteralExpression(expr)) return expr.elements.some(alwaysItalic)
+  if (ts.isArrayLiteralExpression(expr)) return flattened(expr) && expr.elements.some(alwaysItalic)
   return false
 }
 
+const isWrapper = (node) => ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node) || ts.isNonNullExpression(node)
+const isLogical = (node) =>
+  ts.isBinaryExpression(node) &&
+  [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(node.operatorToken.kind)
+
+// Whether an array is flattened into a class list: an argument of a class
+// call, as in cn(["italic"]), or inside such an array. Anywhere else, such
+// as `${["italic", "x"]}` or className={["italic"]}, it is joined with
+// commas and makes no bare italic.
+function flattened(array) {
+  let child = array
+  let node = array.parent
+  while (node && (isWrapper(node) || isLogical(node) || (ts.isConditionalExpression(node) && node.condition !== child))) {
+    child = node
+    node = node.parent
+  }
+  if (!node) return false
+  if (isClassCall(node)) return node.arguments.includes(child)
+  return ts.isArrayLiteralExpression(node) && flattened(node)
+}
+
 // The parts of `node` applied whenever its part `child` is: the other
-// arguments of a class call, the other elements of an array, the other
-// ${…} of a template.
+// arguments of a class call, the other elements of a flattened array, the
+// other ${…} of a template.
 function companions(node, child) {
   if (isClassCall(node)) return node.arguments.filter((a) => a !== child)
-  if (ts.isArrayLiteralExpression(node)) return node.elements.filter((e) => e !== child)
+  if (ts.isArrayLiteralExpression(node)) return flattened(node) ? node.elements.filter((e) => e !== child) : []
   if (ts.isTemplateExpression(node)) return standaloneSpans(node).filter((s) => s !== child).map((s) => s.expression)
   return []
 }
@@ -321,12 +340,24 @@ export function hexColours(text, file = "x.tsx") {
   return problems
 }
 
-/** Finds the name CountPill: an import, a JSX tag or any other reference. */
+// A string that names CountPill as code does: import { "CountPill" as P },
+// export { P as "CountPill" }, kit["CountPill"]. Other strings are words.
+function namesCountPill(node) {
+  if (!ts.isStringLiteralLike(node) || node.text !== "CountPill") return false
+  const parent = node.parent
+  if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) return true
+  return ts.isElementAccessExpression(parent) && parent.argumentExpression === node
+}
+
+/**
+ * Finds CountPill named in code: an import, an export, a JSX tag or any
+ * other reference, by name or as kit["CountPill"].
+ */
 export function countPills(text, file = "x.tsx") {
   const source = parse(text, file)
   const problems = []
   visit(source, (node) => {
-    if (ts.isIdentifier(node) && node.text === "CountPill") {
+    if ((ts.isIdentifier(node) && node.text === "CountPill") || namesCountPill(node)) {
       problems.push({ line: lineAt(source, node.getStart(source)), message: "CountPill in a converted route: the bell is the only count (#316)" })
     }
   })

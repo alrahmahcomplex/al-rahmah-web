@@ -185,7 +185,7 @@ begin
     declare
         family_key integer;
         groups uuid[];
-        read_again uuid[];
+        one_group uuid;
     begin
         perform pg_advisory_xact_lock_shared(hashtext('sibling_grants_pause'));
         for family_key in
@@ -202,13 +202,23 @@ begin
         -- bulk insert) make every later read slow. A legacy group is made
         -- only under its contact's Family lock, held from here on, so the
         -- re-read finds the same groups; any it adds are locked in turn.
-        groups := public.family_sibling_groups(contact_ids);
+        -- One index read, and no function calls: this runs for every lead
+        -- written.
+        select array_agg(g.id order by hashtext(g.id::text)) into groups
+        from public.sibling_groups g
+        where g.legacy_contact_id = any (contact_ids);
+        if groups is null then
+            return;
+        end if;
+        foreach one_group in array groups loop
+            perform pg_advisory_xact_lock(hashtext('sibling_group'), hashtext(one_group::text));
+        end loop;
+        for one_group in
+            select g.id from public.sibling_groups g
+            where g.legacy_contact_id = any (contact_ids) and g.id <> all (groups)
+            order by hashtext(g.id::text)
         loop
-            exit when groups = '{}';
-            perform public.lock_sibling_groups(groups);
-            read_again := public.family_sibling_groups(contact_ids);
-            exit when read_again <@ groups;
-            groups := groups || read_again;
+            perform pg_advisory_xact_lock(hashtext('sibling_group'), hashtext(one_group::text));
         end loop;
     end;
     $fn$;
@@ -247,16 +257,32 @@ begin
     declare
         target uuid;
         only_lead uuid := sync_family_sibling_group.lead_id;
+        confirmed boolean;
     begin
-        if contact_id is null or not exists (
-            select 1 from public.guardian_contacts g
-            where g.id = sync_family_sibling_group.contact_id and g.pending_family_match_id is null
-        ) then
+        select c.pending_family_match_id is null into confirmed
+        from public.guardian_contacts c where c.id = sync_family_sibling_group.contact_id;
+        if not coalesce(confirmed, false) then
             return;
         end if;
         perform public.lock_families(array[contact_id]);
 
         select g.id into target from public.sibling_groups g where g.legacy_contact_id = sync_family_sibling_group.contact_id;
+        if target is not null and only_lead is not null then
+            -- The common case, one lead joining: by its key, not by the contact.
+            insert into public.sibling_group_members as m (lead_id, group_id, legacy, cause, joined_at)
+            select l.id, target, true, sync_family_sibling_group.cause, now()
+            from public.leads l
+            where l.id = only_lead and l.guardian_contact_id = sync_family_sibling_group.contact_id
+            on conflict on constraint sibling_group_members_lead_id_key do update
+            set group_id = excluded.group_id,
+                legacy = true,
+                sibling_of_lead_id = null,
+                cause = excluded.cause,
+                joined_at = excluded.joined_at,
+                updated_at = now()
+            where m.group_id is null;
+            return;
+        end if;
         if target is null then
             if (select count(*) from (
                     select 1 from public.leads l where l.guardian_contact_id = sync_family_sibling_group.contact_id limit 2
@@ -267,14 +293,13 @@ begin
             values (sync_family_sibling_group.contact_id, sync_family_sibling_group.cause)
             returning id into target;
             perform public.lock_sibling_groups(array[target]);
-            only_lead := null;
         end if;
 
+        -- Every lead on the contact: a new group, or a rejected match.
         insert into public.sibling_group_members as m (lead_id, group_id, legacy, cause, joined_at)
         select l.id, target, true, sync_family_sibling_group.cause, now()
         from public.leads l
         where l.guardian_contact_id = sync_family_sibling_group.contact_id
-          and (only_lead is null or l.id = only_lead)
         order by l.id
         on conflict on constraint sibling_group_members_lead_id_key do update
         set group_id = excluded.group_id,
@@ -369,11 +394,16 @@ begin
         out result public.sibling_result,
         out source public.sibling_result_source
     )
-    language sql
+    -- plpgsql, not sql: it runs for every lead written, and a sql function
+    -- plans its query again on every call, where plpgsql keeps the plan.
+    language plpgsql
     stable
     set search_path = ''
     as $fn$
+    #variable_conflict use_column
+    begin
         select coalesce(answer.result, 'none'), coalesce(answer.source, 'auto')
+        into sibling_rule_result.result, sibling_rule_result.source
         from (select 1) one
         left join lateral (
             select case
@@ -411,6 +441,7 @@ begin
             left join public.lead_sibling_results r on r.lead_id = l.id
             where l.id = sibling_rule_result.lead_id
         ) answer on true;
+    end;
     $fn$;
 
     revoke execute on function public.sibling_rule_result(uuid) from public, anon, authenticated, service_role;

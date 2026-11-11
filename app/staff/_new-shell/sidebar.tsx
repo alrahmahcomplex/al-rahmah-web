@@ -67,8 +67,12 @@ export function SidebarContent({ items, current, folded = false, onChoose, nameR
   )
 }
 
-/** If the sidebar fails to draw, a plain list of the same links stands in, so every page stays reachable. */
-export class SidebarBoundary extends Component<{ items: ShellItem[]; children: ReactNode }, { failed: boolean }> {
+/**
+ * If the sidebar fails to draw, a plain list of the same links stands in, so
+ * every page stays reachable: it scrolls on a short window, and choosing a
+ * link closes the phone drawer as the sidebar's own links do.
+ */
+export class SidebarBoundary extends Component<{ items: ShellItem[]; onChoose?: () => void; children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
 
   static getDerivedStateFromError() {
@@ -82,11 +86,13 @@ export class SidebarBoundary extends Component<{ items: ShellItem[]; children: R
   render() {
     if (!this.state.failed) return this.props.children
     return (
-      <nav aria-label="Staff">
+      <nav aria-label="Staff" className="ns-plain-nav">
         <ul className="ns-plain">
           {this.props.items.map((item) => (
             <li key={item.href}>
-              <Link href={item.href}>{item.label}</Link>
+              <Link href={item.href} onClick={this.props.onChoose}>
+                {item.label}
+              </Link>
             </li>
           ))}
         </ul>

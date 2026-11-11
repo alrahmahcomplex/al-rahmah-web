@@ -385,7 +385,7 @@ export function NewShell({
               <Dialog.Portal>
                 <Dialog.Backdrop className="ns-drawer-back" />
                 <Dialog.Popup aria-label="Menu" data-shell="new" className="ns-drawer">
-                  <SidebarBoundary items={items}>
+                  <SidebarBoundary items={items} onChoose={() => setDrawer(false)}>
                     <SidebarContent items={items} current={current} onChoose={() => setDrawer(false)} />
                   </SidebarBoundary>
                 </Dialog.Popup>

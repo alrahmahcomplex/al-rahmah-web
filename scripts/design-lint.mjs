@@ -165,6 +165,8 @@ function alwaysItalic(expr) {
     return ts.isTemplateExpression(expr) && standaloneSpans(expr).some((span) => alwaysItalic(span.expression))
   }
   if (ts.isConditionalExpression(expr)) return alwaysItalic(expr.whenTrue) && alwaysItalic(expr.whenFalse)
+  // ...["italic"] in a class call or a flattened array
+  if (ts.isSpreadElement(expr)) return alwaysItalic(expr.expression)
   if (isClassCall(expr)) return expr.arguments.some(alwaysItalic)
   if (ts.isArrayLiteralExpression(expr)) return flattened(expr) && expr.elements.some(alwaysItalic)
   return false
@@ -182,7 +184,7 @@ const isLogical = (node) =>
 function flattened(array) {
   let child = array
   let node = array.parent
-  while (node && (isWrapper(node) || isLogical(node) || (ts.isConditionalExpression(node) && node.condition !== child))) {
+  while (node && (isWrapper(node) || ts.isSpreadElement(node) || isLogical(node) || (ts.isConditionalExpression(node) && node.condition !== child))) {
     child = node
     node = node.parent
   }
@@ -341,12 +343,24 @@ export function hexColours(text, file = "x.tsx") {
 }
 
 // A string that names CountPill as code does: import { "CountPill" as P },
-// export { P as "CountPill" }, kit["CountPill"]. Other strings are words.
+// export { P as "CountPill" }, kit["CountPill"], kit[("CountPill")],
+// const { "CountPill": P } = kit and const { ["CountPill"]: P } = kit.
+// Other strings are words.
 function namesCountPill(node) {
   if (!ts.isStringLiteralLike(node) || node.text !== "CountPill") return false
-  const parent = node.parent
+  let child = node
+  let parent = node.parent
+  while (isWrapper(parent)) {
+    child = parent
+    parent = parent.parent
+  }
   if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) return true
-  return ts.isElementAccessExpression(parent) && parent.argumentExpression === node
+  if (ts.isElementAccessExpression(parent)) return parent.argumentExpression === child
+  if (ts.isComputedPropertyName(parent)) {
+    child = parent
+    parent = parent.parent
+  }
+  return ts.isBindingElement(parent) && parent.propertyName === child
 }
 
 /**

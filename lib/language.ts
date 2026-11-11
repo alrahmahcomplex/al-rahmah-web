@@ -17,3 +17,16 @@ export async function getLanguage(): Promise<Language> {
   const value = (await cookies()).get(LANGUAGE_COOKIE)?.value
   return isLanguage(value) ? value : DEFAULT_LANGUAGE
 }
+
+const ONE_YEAR = 60 * 60 * 24 * 365
+
+// The `lang` cookie the switch sets: the whole site, one year, and HttpOnly.
+export function languageCookieOptions() {
+  return {
+    path: "/",
+    maxAge: ONE_YEAR,
+    sameSite: "lax" as const,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  }
+}

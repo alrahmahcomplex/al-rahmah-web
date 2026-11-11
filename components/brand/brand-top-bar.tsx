@@ -73,7 +73,7 @@ export function BrandTopBar({
       <BrandMenu language={language} labels={words} onClearForm={onClearForm} buttonRef={buttonRef} returnTo={returnTo} />
       {/* Always mounted: it reads `show` once, so the cookie that setLanguage sets
           mid-confirmation doesn't cut the confirmation or the shrink short. */}
-      <LanguagePrompt show={showLanguagePrompt && !chosen} language={language} menuButtonRef={buttonRef} />
+      <LanguagePrompt show={showLanguagePrompt && !chosen} language={language} menuButtonRef={buttonRef} inPlace={!!returnTo} />
     </header>
   )
 }

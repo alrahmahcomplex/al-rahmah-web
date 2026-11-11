@@ -49,8 +49,12 @@ The language switch on these pages:
   addresses are accepted.
 - **With JavaScript on `/`**, does the same; the page has no entries to keep.
 - **With JavaScript on `/apply` and `/login/forgot-password`**, sets the cookie
-  through `setLanguage` with no address and then changes the words in the
-  browser (`components/page-language.tsx`). The page's words come from a
+  with a plain POST to `/api/language` and then changes the words in the
+  browser (`components/page-language.tsx`). Not the Server Action: an action
+  that sets a cookie makes Next.js render the page again, and that render is
+  the copy for the cookie the request carried, which can be a different copy
+  from the one on screen and would remount the form. The first-visit card on
+  these pages uses the same POST. The page's words come from a
   client-side language that starts as the copy's and follows the switch, so the
   form never remounts. The value lives in the root layout, so a copy brought back
   from the router's cache shows the language the cookie now holds.

@@ -2,7 +2,6 @@
 
 import { createContext, startTransition, use, useState, type ComponentProps, type FormEvent, type ReactNode } from "react"
 
-import { setLanguage } from "@/app/actions/language"
 import { isLanguage, type Language } from "@/lib/languages"
 
 // The language a visitor switched to on this page load, for the public pages
@@ -41,11 +40,27 @@ export function useChooseLanguage(): (language: Language) => void {
 }
 
 /**
+ * Sets the `lang` cookie without rendering the page again (app/api/language).
+ * The switch's Server Action would make Next.js render the page again, and
+ * here that render is the copy for the cookie the request carried, so the
+ * form would remount. False when the cookie couldn't be set.
+ */
+export async function storeLanguage(language: Language): Promise<boolean> {
+  const data = new FormData()
+  data.set("lang", language)
+  try {
+    return (await fetch("/api/language", { method: "POST", body: data })).ok
+  } catch {
+    return false
+  }
+}
+
+/**
  * A language switch form's submit handler for a page that switches in place.
- * With JavaScript it sets the cookie through `setLanguage` with no address to
- * return to, then shows the new language once the cookie is set, as the
- * re-render did before. Without JavaScript the form posts with its
- * `return_to`, and the visitor lands on the other copy.
+ * With JavaScript it sets the cookie (`storeLanguage`), then shows the new
+ * language once the cookie is set, as the re-render did before. Without
+ * JavaScript the form posts to `setLanguage` with its `return_to`, and the
+ * visitor lands on the other copy.
  */
 export function useSwitchInPlace(): (event: FormEvent<HTMLFormElement>) => void {
   const choose = useChooseLanguage()
@@ -54,15 +69,9 @@ export function useSwitchInPlace(): (event: FormEvent<HTMLFormElement>) => void 
     // No submitter to read: let the form's action run and return to the page.
     if (!isLanguage(lang)) return
     event.preventDefault()
-    const data = new FormData()
-    data.set("lang", lang)
     startTransition(async () => {
-      try {
-        await setLanguage(data)
-      } catch {
-        // The cookie didn't change, and neither does the page.
-        return
-      }
+      // The cookie didn't change, and neither does the page.
+      if (!(await storeLanguage(lang))) return
       choose(lang)
     })
   }

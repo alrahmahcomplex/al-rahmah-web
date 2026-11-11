@@ -245,6 +245,33 @@ begin
 end;
 $$;
 
+-- lock_families, as 20261106901100_sibling_discount.sql made it, now first
+-- taking the pause lock shared. Every Family lock goes through here, so a
+-- transaction that may hold back a 10% under the pause holds this lock until
+-- it commits, and set_sibling_grants_paused, which takes it exclusive before
+-- anything else, waits for it and then sees what it enrolled. Same signature.
+create or replace function public.lock_families(contact_ids uuid[])
+returns void
+language plpgsql
+set search_path = ''
+as $$
+declare
+    family_key integer;
+begin
+    perform pg_advisory_xact_lock_shared(hashtext('sibling_grants_pause'));
+    for family_key in
+        select distinct hashtext(c::text)
+        from unnest(contact_ids) c
+        where c is not null
+        order by 1
+    loop
+        perform pg_advisory_xact_lock(hashtext('lead_family'), family_key);
+    end loop;
+end;
+$$;
+
+revoke execute on function public.lock_families(uuid[]) from public, anon, authenticated, service_role;
+
 -- The one reader of the switch. Internal.
 create function public.sibling_grants_paused()
 returns boolean
@@ -906,6 +933,11 @@ begin
     if actor.kind is null or actor.kind not in ('staff', 'system') then
         raise exception 'not_permitted';
     end if;
+
+    -- Before any other lock: waits for every transaction holding a Family
+    -- lock, so a payment enrolling a child while new grants were paused has
+    -- committed, and the Families read below include it.
+    perform pg_advisory_xact_lock(hashtext('sibling_grants_pause'));
 
     select s.new_grants_paused into was_paused from public.sibling_rule_settings s for update;
     if was_paused is not distinct from set_sibling_grants_paused.paused then

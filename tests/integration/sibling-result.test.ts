@@ -452,6 +452,41 @@ describe("the kill switch", () => {
     })
   })
 
+  test("resuming waits for every transaction holding a Family lock, so it sees what they enrolled", async () => {
+    const [child] = await family(await yearWithSchedule(), 1)
+    const contactId = await contactOf(child)
+
+    // Stands in for a payment that is enrolling a child while grants are paused.
+    await inRolledBackTransaction(async (holder) => {
+      await holder.query("select public.lock_families(array[$1::uuid])", [contactId])
+
+      let resumed = false
+      const resuming = inRolledBackTransaction(async (owner) => {
+        await owner.query("select public.set_audit_actor('system')")
+        await owner.query("select public.set_sibling_grants_paused(false)")
+        resumed = true
+      })
+
+      const waiting = async () =>
+        (
+          await holder.query<{ n: number }>(
+            `select count(*)::int as n from pg_locks
+             where locktype = 'advisory' and not granted and objsubid = 1 and objid::int = hashtext('sibling_grants_pause')`,
+          )
+        ).rows[0].n
+      for (let tries = 0; (await waiting()) === 0; tries++) {
+        if (tries > 100) throw new Error("resuming never waited on the pause lock")
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      expect(resumed).toBe(false)
+
+      await holder.query("rollback")
+      await holder.query("begin")
+      await resuming
+      expect(resumed).toBe(true)
+    })
+  })
+
   test("is refused without an actor and turned only by the owner", async () => {
     await inRolledBackTransaction(async (sql) => {
       await expect(sql.query("select public.set_sibling_grants_paused(true)")).rejects.toThrow(/not_permitted/)

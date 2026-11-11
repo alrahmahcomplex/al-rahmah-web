@@ -3,6 +3,7 @@
 .td-narrow { max-width: 660px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
 .td-narrow > .kit-ph { margin-bottom: 0; text-align: center; justify-content: center; }
 .td-narrow > .kit-ph .kit-ph-title { font-size: 34px; }
+@media (max-width: 860px) { .td-narrow > .kit-ph .kit-ph-title { font-size: 26px; } }
 .td-narrow > .kit-ph .kit-ph-sub { margin-inline: auto; }
 .td-narrow > .kit-ph .kit-ph-act { flex-basis: 100%; justify-content: center; }
 
@@ -13,7 +14,7 @@
 .td-more { margin: 10px 0 0; text-align: right; }
 .td-gap { margin-top: 10px; }
 
-.td-notices { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; color: var(--gf-ink); }
+.td-notices { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; color: var(--gf-ink); }
 .td-notices-act { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
 
 .td-loading { align-items: center; gap: 14px; }

@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs"
+import { existsSync, readdirSync, statSync } from "node:fs"
 import { join, relative, sep } from "node:path"
 
 import { describe, expect, it } from "vitest"
@@ -29,6 +29,13 @@ describe("the staff route map", () => {
     const pages = pagePatterns()
     expect(pages.length).toBeGreaterThan(20)
     expect(pages.filter((pattern) => !(pattern in ROUTE_LOOKS))).toEqual([])
+  })
+
+  it("gives every route but Today its own loading.tsx, so none falls back to Today's new-look skeleton (#323)", () => {
+    const missing = Object.keys(ROUTE_LOOKS)
+      .filter((pattern) => pattern !== "/staff")
+      .filter((pattern) => !existsSync(join(process.cwd(), "app", ...pattern.split("/").filter(Boolean), "loading.tsx")))
+    expect(missing).toEqual([])
   })
 
   it("names no route that has no page", () => {

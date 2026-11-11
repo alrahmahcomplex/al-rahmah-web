@@ -309,7 +309,7 @@ Greptile then reviewed commit `126624b` and scored it 4 of 5 with four findings.
 
 ## Decisions for the owner
 
-- **Sign-in reuse, change 12.** It touches 58 spec files. It is one commit, `862665e`, and can be dropped on its own. It took 41.5 s off each shard's test step when there were six shards.
+- **Sign-in reuse, change 12. Decided on 2026-11-11: the owner keeps it.** It touches 58 spec files in one commit, `862665e`. It took 41.5 s off each shard's test step when there were six shards.
 - **Eight shards, change 14.** A run starts 12 jobs at once, 13 on main, against GitHub's 20 for this account. Two runs that overlap will queue. Six shards is `shards` in `e2e/shards.json` and the `browser` matrix.
 - **Skipped browser tests fail CI.** This follows the rule that no test is skipped without approval. To allow a skip, change `verifyErrors` in `scripts/e2e-shards.mjs`.
 - **Documents-only merges now run the full suite on main.** That run takes about four minutes where it took 20 s. Nothing waits for it.

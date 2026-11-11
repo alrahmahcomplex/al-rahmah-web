@@ -1247,6 +1247,12 @@ export const RELATIONS: Record<string, RelationEntry> = {
     authenticated: ["select", "references", "trigger", "maintain"],
     anon: ["select", "references", "trigger", "maintain"],
   },
+  // The stored Sibling result and its kill switch (#297).
+  "public.lead_sibling_results": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
+  "public.sibling_rule_settings": { authenticated: [], anon: [] },
 }
 
 export const POLICIES: Record<string, PolicyEntry> = {
@@ -1429,6 +1435,12 @@ export const POLICIES: Record<string, PolicyEntry> = {
     check: null,
   },
   "public.promo_codes: Staff who may view leads read Promo codes": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.lead_sibling_results: Staff who may view leads read Sibling results": {
     command: "SELECT",
     roles: ["authenticated"],
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",

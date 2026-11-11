@@ -317,14 +317,17 @@ describe("the cascade", () => {
     expect(await feeOf(first)).toMatchObject({ schoolFee: FULL, discount: null })
   })
 
-  test("the first child, taken out of Enrolled while a sibling is Enrolled, counts the live discount again", async () => {
+  // Until #297 the first child went back to the live discount here and
+  // re-enrolled at the discounted fee. Its full fee is now locked at
+  // enrolment and survives the correction (R27, R35).
+  test("the first child, taken out of Enrolled while a sibling is Enrolled, keeps the full fee it enrolled with", async () => {
     const [first, second] = await family(await yearWithSchedule())
     await pay(second, WITH_SIBLING)
     const firstPayment = await pay(first, FULL, "full_payment")
     expect(await statusOf(second)).toBe("Enrolled")
 
-    // Corrected down to 1,900,000: short of the full fee, but over the
-    // discounted one the first child counts once it is no longer Enrolled.
+    // Corrected down to 1,900,000: short of the full fee, and the first
+    // child doesn't count the sibling's Enrolled once it is out of Enrolled.
     const corrected = await adjustPayment(
       await signedIn(ACCOUNTANT),
       firstPayment,
@@ -332,9 +335,9 @@ describe("the cascade", () => {
       randomUUID(),
     )
     expect(corrected.ok).toBe(true)
-    expect(await statusOf(first)).toBe("Enrolled")
-    expect(await feeOf(first)).toMatchObject({ schoolFee: WITH_SIBLING, discount: SIBLING })
-    expect(await profileOf(first)).toMatchObject({ sibling_kept: true })
+    expect(await statusOf(first)).toBe("Interviewed")
+    expect(await feeOf(first)).toMatchObject({ schoolFee: FULL, discount: null, balance: FULL - 1_900_000 })
+    expect(await profileOf(first)).toMatchObject({ sibling_kept: false })
   })
 })
 

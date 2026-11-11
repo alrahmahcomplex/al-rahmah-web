@@ -445,3 +445,28 @@ test("the stage fills the window down to 12px above its bottom, however short th
   await page.setViewportSize({ width: 1280, height: 2400 })
   await expect.poll(bottom).toBe(2400 - 12)
 })
+
+// Inside a grid the stage marks data-rise="group" (the kit page's card grids),
+// each card rises on its own, starting 0, 70, 130 and 180ms in.
+const groupRise = (page: Page) =>
+  page.locator('[data-part="more"][data-rise="group"] > *').evaluateAll((cards) =>
+    cards.slice(0, 5).map((card) => {
+      const style = getComputedStyle(card)
+      return `${style.animationName} ${style.animationDelay}`
+    }),
+  )
+
+test("the cards of a grid rise one after another", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await open(page, MANAGER, "/staff/kit")
+  expect(await groupRise(page)).toEqual(["ns-rise 0s", "ns-rise 0.07s", "ns-rise 0.13s", "ns-rise 0.18s", "ns-rise 0.18s"])
+})
+
+test.describe("under reduced motion, in a grid", () => {
+  test.use({ reducedMotion: "reduce", viewport: { width: 1280, height: 800 } })
+
+  test("no card moves", async ({ page }) => {
+    await open(page, MANAGER, "/staff/kit")
+    for (const value of await groupRise(page)) expect(value.startsWith("none ")).toBe(true)
+  })
+})

@@ -20,14 +20,17 @@ const PICK_MS = 240
 const RESET_MS = 460
 const FINISH_MS = 950
 
-type Student = { parts?: string[]; name?: string; father?: string; cls?: string; board?: string }
+// `key` stays with a student when another is removed, so a half-typed answer stays with its student.
+type Student = { key: number; parts?: string[]; name?: string; father?: string; cls?: string; board?: string }
 type Custodian = { dad: boolean; phone: string; name: string; rel: string }
 type Answers = { students: Student[]; more?: boolean; custodian?: Custodian; code?: string; submitted?: boolean }
 
 type Head = { key: string; title: string; remove?: number }
 type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; summary: () => ReactNode; body: () => ReactNode }
 
-const fresh = (): Answers => ({ students: [{}] })
+let nextKey = 0
+const newStudent = (): Student => ({ key: ++nextKey })
+const fresh = (): Answers => ({ students: [newStudent()] })
 const clean = (v: string) => v.trim().replace(/\s+/g, " ")
 const first = (name?: string) => (name ?? "").trim().split(/\s+/)[0] || "the student"
 const list = (a: string[]) => (a.length < 2 ? (a[0] ?? "") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`)
@@ -78,7 +81,11 @@ export function GuidedDemo() {
     setFinished(false)
   }
 
+  // Once Register is pressed the answers are final; nothing changes them while the finished screen comes in.
+  const locked = !!answers.submitted
+
   function removeStudent(i: number) {
+    if (locked) return
     setInteracted(true)
     setInstant(true)
     // The custodian is asked again: the students it covers have changed.
@@ -144,7 +151,7 @@ export function GuidedDemo() {
               label={s.label}
               value={s.summary()}
               action={
-                <TextLink onClick={() => setEdit(s.id)} aria-label={`Change ${s.label}${s.group === 0 && s.id !== "more" ? `, ${s.head.title}` : ""}`}>
+                <TextLink onClick={() => !locked && setEdit(s.id)} aria-label={`Change ${s.label}${s.group === 0 && s.id !== "more" ? `, ${s.head.title}` : ""}`}>
                   Change
                 </TextLink>
               }
@@ -225,7 +232,7 @@ function buildSteps(a: Answers, t: Tools): Step[] {
           <small className="kp-fa">Father: {s.father}</small>
         </>
       ),
-      body: () => <NameQuestion key={`name:${i}:${s.name ?? ""}`} index={i} student={s} onDone={(parts) => t.answer(`s${i}.name`, nameAnswer(i, parts, t))} />,
+      body: () => <NameQuestion key={`name:${s.key}:${s.name ?? ""}`} index={i} student={s} onDone={(parts) => t.answer(`s${i}.name`, nameAnswer(i, parts, t))} />,
     })
     steps.push(pickStep(`s${i}.cls`, head, "Class", s.cls, `Which class is ${f} joining?`, CLASSES, "four", (v) => t.answer(`s${i}.cls`, t.setStudent(i, { cls: v })), t))
     steps.push(pickStep(`s${i}.board`, head, "Day or boarding", s.board, `Will ${f} be a day or a boarding student?`, ["Day", "Boarding"], "two", (v) => t.answer(`s${i}.board`, t.setStudent(i, { board: v })), t))
@@ -249,7 +256,8 @@ function buildSteps(a: Answers, t: Tools): Step[] {
             variant="ghost"
             icon="plus"
             onClick={() => {
-              t.answer("more", (x) => ({ ...x, more: undefined, students: [...x.students, {}] }))
+              // The custodian is asked again, for the new student too.
+              t.answer("more", (x) => ({ ...x, more: undefined, custodian: undefined, students: [...x.students, newStudent()] }))
             }}
           >
             Yes, add a student

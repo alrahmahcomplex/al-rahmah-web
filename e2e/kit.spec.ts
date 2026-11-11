@@ -521,16 +521,31 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
   await open.getByRole("button", { name: "Continue" }).click()
   await expect(card.getByText("Juma Salim · Father · 0712 345 678")).toBeVisible()
 
+  // A student added after that is covered by a custodian answer of its own.
+  await card.getByRole("button", { name: "Change Students on this form" }).click()
+  await open.getByRole("button", { name: "Yes, add a student" }).click()
+  await answerNames(open, ["Hamisi", "Juma", "Salim"])
+  await pick(open, "FORM 1")
+  await pick(open, "Boarding")
+  await open.getByRole("button", { name: "No, go to custodians" }).click()
+  await expect(question("Is the father the main custodian of Neema and Hamisi?")).toBeFocused()
+  await pick(open, "Yes, the father")
+  await open.getByRole("textbox", { name: "Custodian’s mobile number" }).fill("0712 345 678")
+  await open.getByRole("button", { name: "Continue" }).click()
+
   await expect(question("Does the family have a Discount code?")).toBeFocused()
   await open.getByRole("button", { name: /NO CODE/ }).click()
-  await expect(question("Register 1 student?")).toBeFocused()
-  await open.getByRole("button", { name: "Register 1 student" }).click()
+  await expect(question("Register 2 students?")).toBeFocused()
+  await open.getByRole("button", { name: "Register 2 students" }).click()
+  // Once Register is pressed, the answers can't change on the way to the finished screen.
+  await card.getByRole("button", { name: "Remove Hamisi Juma Salim" }).click()
 
   // The last group cheers before the Finished screen takes its place (950ms).
   await expect(bar.locator('[data-group="2"] .gf-gn.gf-cheer')).toHaveCount(1, { timeout: 800 })
-  const done = card.getByRole("heading", { level: 2, name: "1 student registered" })
+  const done = card.getByRole("heading", { level: 2, name: "2 students registered" })
   await expect(done).toBeFocused()
   await expect(card.getByText("DMSN-90013")).toBeVisible()
+  await expect(card.getByText("DMSN-90014")).toBeVisible()
   await expect(card.locator(".gf-bar-row")).toHaveCount(0)
   await expect(page.locator(".kit-cf")).toHaveCount(1)
   await expect(card.getByRole("link", { name: "Open Applicants" })).toHaveAttribute("href", "/staff/applicants")

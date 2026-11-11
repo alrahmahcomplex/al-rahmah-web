@@ -41,6 +41,23 @@ test.describe("pages served from a prerendered copy", () => {
     })
   }
 
+  // The first-visit card mounts in the browser, so the HTML holds only the
+  // flag the copy was built with. An empty value is still a cookie (#292).
+  test("/apply: only a missing lang cookie gets the first-visit card", async ({ request }) => {
+    for (const [cookie, card] of [
+      [undefined, true],
+      ["other=1", true],
+      ["lang=", false],
+      ["a=1; lang=", false],
+      ['lang=""', false],
+      ["lang=sw", false],
+      ["lang=en", false],
+    ] as const) {
+      const html = await (await request.get("/apply", { headers: cookie ? { cookie } : {} })).text()
+      expect(html, `/apply with ${cookie ?? "no cookie"}`).toContain(`showLanguagePrompt\\":${card}`)
+    }
+  })
+
   test("the copy of /apply opened from a Referral link holds no Discount code", async ({ request }) => {
     for (const cookie of [undefined, "lang=en", "lang=sw"]) {
       const response = await request.get("/apply?ref=BJN-402", {

@@ -158,7 +158,10 @@ function outermostGroup(node) {
  * lends nothing.
  */
 function alwaysItalic(expr) {
-  if (ts.isParenthesizedExpression(expr)) return alwaysItalic(expr.expression)
+  // ("italic"), "italic" as const, "italic" satisfies string, "italic"!
+  if (ts.isParenthesizedExpression(expr) || ts.isAsExpression(expr) || ts.isSatisfiesExpression(expr) || ts.isNonNullExpression(expr)) {
+    return alwaysItalic(expr.expression)
+  }
   if (isClassString(expr)) {
     if (lendsItalic(staticTokens(expr))) return true
     return ts.isTemplateExpression(expr) && standaloneSpans(expr).some((span) => alwaysItalic(span.expression))

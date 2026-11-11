@@ -101,6 +101,7 @@ test("a conditional string lends no italic; each branch is checked on its own", 
   // italic in every branch, or applied whatever the condition
   assert.deepEqual(lines(uprightExoInScript(`cn("font-exo", big ? "italic text-lg" : "italic")`)), [])
   assert.deepEqual(lines(uprightExoInScript(`cn(on && "font-exo", "italic")`)), [])
+  assert.deepEqual(lines(uprightExoInScript(`cn("font-exo", "italic" as const, ("italic" satisfies string), "italic"!)`)), [])
   assert.deepEqual(lines(uprightExoInScript(`<p className={on ? cn("font-exo", ["italic"]) : "font-sans"} />`)), [])
   assert.deepEqual(lines(uprightExoInScript(`cva("italic", { variants: { tone: { brand: "font-exo" } } })`)), [])
   assert.deepEqual(lines(uprightExoInScript(`cva("font-sans", { variants: { tone: { brand: "font-exo", lean: "italic" } } })`)), [1])

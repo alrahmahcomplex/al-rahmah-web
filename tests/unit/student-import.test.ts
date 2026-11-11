@@ -192,6 +192,48 @@ describe("the file's own checks", () => {
       null,
     ])
   })
+
+  // #284: rows sharing a parent phone share one contact, the first row's, so
+  // each row's application is stored under its phone and the WhatsApp numbers
+  // of the rows sharing that phone.
+  it("refuses a student named twice under two numbers a sibling row links", () => {
+    const rows = read([
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,0712000002,,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000002,,,,",
+    ])
+    expect(rows.map((row) => row.problem?.reason ?? null)).toEqual([
+      null,
+      "Same student twice in the file (rows 3, 4)",
+      "Same student twice in the file (rows 3, 4)",
+    ])
+  })
+
+  it("links the WhatsApp of every row with the phone, not only the first row's", () => {
+    const rows = read([
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,,,,",
+      "Juma Mfano,STD 2,2027,,Mama,,0712000001,0712000002,,,",
+      "Neema Mfano,STD 4,2027,,Mama,,0712000001,0712000003,,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000003,,,,",
+    ])
+    expect(rows.map((row) => row.problem?.reason ?? null)).toEqual([
+      null,
+      null,
+      null,
+      "Same student twice in the file (rows 5, 6)",
+      "Same student twice in the file (rows 5, 6)",
+    ])
+  })
+
+  it("keeps siblings who share the linked numbers as two children", () => {
+    const rows = read([
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,0712000002,,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,",
+      "Juma Mfano,STD 2,2027,,Mama,,0712000002,,,,",
+    ])
+    expect(rows.map((row) => row.problem)).toEqual([null, null, null])
+  })
 })
 
 describe("the database's verdicts", () => {

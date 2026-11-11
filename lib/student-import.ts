@@ -297,12 +297,21 @@ export function screenStudentRows(
   })
 
   // The same student twice: the same name with any parent number in common,
-  // phone or WhatsApp, as the database matches a student already on file.
+  // as the database matches a student already on file. A row's numbers are
+  // those its application is stored under: rows sharing a parent phone share
+  // the first row's contact, so a row's numbers are its own phone and
+  // WhatsApp plus the WhatsApp of every row with the same phone (#284). The
+  // database compares the same numbers (student_import_rows).
+  const linked = new Map<string, string[]>()
+  for (const { phone, whatsapp } of rows.map((row) => row.normalized)) {
+    if (phone !== null && whatsapp !== null) linked.set(phone, [...(linked.get(phone) ?? []), whatsapp])
+  }
   const students = findDuplicates(
     rows.flatMap((row) => {
       const { studentName, phone, whatsapp } = row.normalized
       if (!studentName) return []
-      return [phone, whatsapp].filter((number) => number !== null).map((number) => ({ sheetRow: row.sheetRow, key: `${studentNameKey(studentName)}|${number}` }))
+      const numbers = new Set([phone, whatsapp, ...(phone === null ? [] : (linked.get(phone) ?? []))].filter((number) => number !== null))
+      return [...numbers].map((number) => ({ sheetRow: row.sheetRow, key: `${studentNameKey(studentName)}|${number}` }))
     }),
   )
 

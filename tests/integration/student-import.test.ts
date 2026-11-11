@@ -276,6 +276,96 @@ describe("importing a workbook", () => {
   })
 })
 
+// #284: rows sharing a parent phone share the first row's contact, so a row's
+// application is stored under its phone and the WhatsApp numbers of the rows
+// sharing that phone. The duplicate and on-file checks compare those numbers.
+describe("numbers a sibling row links", () => {
+  const sent = (sheetRow: number, studentName: string, phone: string, whatsapp: string | null) => ({
+    sheet_row: sheetRow,
+    student_name: studentName,
+    class_name: "STD 1",
+    pre_form_one: false,
+    enrollment_year: nextYear,
+    day_or_boarding: "Day",
+    guardian_name: "Mama Mfano",
+    relationship: "Mother",
+    relationship_description: null,
+    phone,
+    whatsapp,
+    visit_date: null,
+    referral_code: null,
+    status: "Applied",
+  })
+
+  test("the same child under the two linked numbers is refused in the review and in the database", async () => {
+    const s = randomUUID().slice(0, 6)
+    const [one, two] = [importPhone(), importPhone()]
+    const manager = await signedIn(MANAGER)
+    const file = [
+      HEADER,
+      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},,,`,
+      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,,,`,
+      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${two.typed},,,,`,
+    ].join("\r\n")
+
+    const checked = await checkStudentImportFile(manager, "linked.csv", bytes(file))
+    if (!checked.ok) throw new Error(JSON.stringify(checked.error))
+    expect(checked.data.rows.map((row) => [row.class, row.reason])).toEqual([
+      ["create", null],
+      ["refused", "Same student twice in the file (rows 3, 4)"],
+      ["refused", "Same student twice in the file (rows 3, 4)"],
+    ])
+
+    // The database refuses the two rows sent on their own, check and confirm.
+    const rows = [sent(2, `Baraka Mfano ${s}`, one.stored, two.stored), sent(3, `Asha Mfano ${s}`, one.stored, null), sent(4, `Asha Mfano ${s}`, two.stored, null)]
+    for (const call of [
+      manager.rpc("check_student_import", { rows }),
+      manager.rpc("confirm_student_import", { file_name: "linked.csv", row_count: 3, rows }),
+    ]) {
+      const { error } = await call
+      expect(error?.message).toBe("invalid")
+      expect(JSON.parse(error?.details ?? "{}")).toEqual({ field: "duplicate_student" })
+    }
+  })
+
+  test("siblings who share the linked numbers import as two children in one Family", async () => {
+    const s = randomUUID().slice(0, 6)
+    const [one, two] = [importPhone(), importPhone()]
+    const manager = await signedIn(MANAGER)
+    const file = [
+      HEADER,
+      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},,,`,
+      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,,,`,
+      `Juma Mfano ${s},STD 2,${nextYear},,Mama Mfano,Mother,${two.typed},,,,`,
+    ].join("\r\n")
+
+    const checked = await checkStudentImportFile(manager, "siblings.csv", bytes(file))
+    if (!checked.ok) throw new Error(JSON.stringify(checked.error))
+    expect(checked.data.rows.map((row) => row.class)).toEqual(["create", "create", "create"])
+    const confirmed = await confirmStudentImport(manager, confirmationOf(checked.data))
+    if (!confirmed.ok || confirmed.data.kind !== "imported") throw new Error(JSON.stringify(confirmed))
+    expect(confirmed.data).toMatchObject({ created: 3, skipped: 0 })
+    const leads = await leadsOfBatch(confirmed.data.batchId)
+    expect(leads.get("Asha Mfano")?.guardian_contact_id).toBe(leads.get("Baraka Mfano")?.guardian_contact_id)
+  })
+
+  test("a child on file under a sibling row's WhatsApp is already on file, not a new application", async () => {
+    const s = randomUUID().slice(0, 6)
+    const [one, two] = [importPhone(), importPhone()]
+    const known = await existingLead(`Asha Mfano ${s}`, two.stored)
+    const manager = await signedIn(MANAGER)
+    const file = [
+      HEADER,
+      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},,,`,
+      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,,,`,
+    ].join("\r\n")
+
+    const checked = await checkStudentImportFile(manager, "on-file.csv", bytes(file))
+    if (!checked.ok) throw new Error(JSON.stringify(checked.error))
+    expect(checked.data.rows[1]).toMatchObject({ class: "present", verdict: { verdict: "present", lead: { id: known.leadId } } })
+  })
+})
+
 describe("an import's Enrolled", () => {
   // STD 2 Day: TZS 2,000,000; First instalment from 800,000; Deposit from 300,000.
   const AMOUNTS: FeeAmounts = {

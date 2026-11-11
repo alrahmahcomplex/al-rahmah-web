@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- The applicant import no longer creates two applications for one student listed under two
+  parent numbers when a sibling's row carries both numbers. Both rows are refused as "Same
+  student twice in the file". Siblings on those numbers still import as separate students. A
+  student already on file under the sibling row's WhatsApp number now shows as already on file
+  instead of joining a family.
+
 ## November 11, 2026 `v0.94.1`
 
 ### FIXED

@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 11, 2026 `v0.96.0`
+
+### NEW
+
+- Each new application now keeps the father's full name, taken from the student's name: every
+  word after the first. Applications already on file get it when the name has three words or
+  more, marked as not yet checked by staff. No fee moves. The only place it shows is the
+  application's history, under its database names. It prepares the coming sibling check, which
+  compares two fathers' names as the same, close (probably a typing mistake) or different.
+
 ## November 11, 2026 `v0.95.1`
 
 ### FIXED

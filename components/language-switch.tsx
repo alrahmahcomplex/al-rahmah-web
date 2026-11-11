@@ -1,6 +1,7 @@
 import { setLanguage } from "@/app/actions/language"
 import { DocumentLanguage } from "@/components/document-language"
 import type { Language } from "@/lib/language"
+import type { CachedPublicPath } from "@/lib/language-state"
 import { cn } from "@/lib/utils"
 
 const OPTIONS: readonly { lang: Language; label: string }[] = [
@@ -14,14 +15,27 @@ const GROUP_LABEL: Record<Language, string> = { sw: "Lugha", en: "Language" }
 // language. It posts to a Server Action, so it works before the page's
 // JavaScript loads, and with JavaScript the page re-renders in place.
 //
+// A page served from Vercel's cache passes its public address as `returnTo`:
+// the action then sends the visitor back there, and the new cookie picks the
+// other language's copy (lib/language-state.ts).
+//
 // Every bilingual page shows it, so it also keeps `<html lang>` matching the
 // page. Each option is 44px tall on a phone. When the phone's text is made
 // so large the two options can't sit side by side, they stack rather than
 // push the page sideways.
-export function LanguageSwitch({ language, className }: { language: Language; className?: string }) {
+export function LanguageSwitch({
+  language,
+  returnTo,
+  className,
+}: {
+  language: Language
+  returnTo?: CachedPublicPath
+  className?: string
+}) {
   return (
     <form action={setLanguage} className={className}>
       <DocumentLanguage language={language} />
+      {returnTo ? <input type="hidden" name="return_to" value={returnTo} /> : null}
       <div
         role="group"
         aria-label={GROUP_LABEL[language]}

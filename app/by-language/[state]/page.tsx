@@ -5,12 +5,16 @@ import Link from "next/link"
 
 import { LanguageSwitch } from "@/components/language-switch"
 import { buttonVariants } from "@/components/ui/button"
-import { getLanguage, type Language } from "@/lib/language"
+import type { Language } from "@/lib/language"
+import { isLanguageState, LANGUAGE_STATES, languageOfState, type LanguageState } from "@/lib/language-state"
 import { OFFICE_PHONE } from "@/lib/office"
 import { cn } from "@/lib/utils"
 
-// The basic landing page a parent opens from a WhatsApp link. It reads no
+// The basic landing page a parent opens from a WhatsApp link, at `/`. It reads no
 // Supabase and stays out of the proxy matcher, so it loads with Supabase down.
+// It reads nothing from the request either: it is built once per language
+// state and served from Vercel's cache, and a rewrite picks the copy from the
+// `lang` cookie (lib/language-state.ts).
 // The full School Landing Page (programmes, photos, fees) is a later Feature.
 
 const COPY: Record<
@@ -39,13 +43,26 @@ const COPY: Record<
   },
 }
 
-export async function generateMetadata(): Promise<Metadata> {
-  const language = await getLanguage()
+type Props = { params: Promise<{ state: string }> }
+
+export const dynamicParams = false
+
+export function generateStaticParams(): { state: LanguageState }[] {
+  return LANGUAGE_STATES.map((state) => ({ state }))
+}
+
+async function languageOf(params: Props["params"]): Promise<Language> {
+  const { state } = await params
+  return isLanguageState(state) ? languageOfState(state) : languageOfState("sw")
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const language = await languageOf(params)
   return { title: "Al-Rahmah Complex", description: COPY[language].description }
 }
 
-export default async function HomePage() {
-  const language = await getLanguage()
+export default async function HomePage({ params }: Props) {
+  const language = await languageOf(params)
   const copy = COPY[language]
 
   return (
@@ -53,7 +70,7 @@ export default async function HomePage() {
       lang={language}
       className="min-h-dvh flex flex-col items-center bg-gradient-to-br from-blue-50 via-blue-100/50 to-white px-4 py-4 sm:px-8 sm:py-6"
     >
-      <LanguageSwitch language={language} className="self-end" />
+      <LanguageSwitch language={language} returnTo="/" className="self-end" />
 
       <div className="flex w-full flex-1 flex-col items-center justify-center py-6">
         <section className="w-full max-w-[420px] rounded-[40px] bg-white px-6 py-10 shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[50px] sm:px-8">

@@ -343,7 +343,8 @@ export function hexColours(text, file = "x.tsx") {
 }
 
 // A string that names CountPill as code does: import { "CountPill" as P },
-// export { P as "CountPill" }, kit["CountPill"], kit[("CountPill")],
+// export { P as "CountPill" }, export * as "CountPill" from …,
+// kit["CountPill"], kit[("CountPill")], kit["CountPill" as const],
 // const { "CountPill": P } = kit and const { ["CountPill"]: P } = kit.
 // Other strings are words.
 function namesCountPill(node) {
@@ -354,7 +355,7 @@ function namesCountPill(node) {
     child = parent
     parent = parent.parent
   }
-  if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent)) return true
+  if (ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent) || ts.isNamespaceExport(parent)) return true
   if (ts.isElementAccessExpression(parent)) return parent.argumentExpression === child
   if (ts.isComputedPropertyName(parent)) {
     child = parent

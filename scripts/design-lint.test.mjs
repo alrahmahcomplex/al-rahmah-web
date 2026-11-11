@@ -167,6 +167,7 @@ test("CountPill is found by name, not in comments", () => {
   // a string naming the export counts; a sentence that mentions it does not
   assert.deepEqual(lines(countPills(`import { "CountPill" as Pill } from "x";\nexport { Pill as "CountPill" };\nkit["CountPill"];\nconst s = "CountPill"`)), [1, 2, 3])
   assert.deepEqual(lines(countPills(`kit[("CountPill")];\nconst { "CountPill": A } = kit;\nconst { ["CountPill"]: B } = kit;\nconst o = { label: "CountPill" }`)), [1, 2, 3])
+  assert.deepEqual(lines(countPills(`const C = kit["CountPill" as const];\nexport * as "CountPill" from "./pill";`)), [1, 2])
 })
 
 test("route-looks entries marked new are read in any quote style, comments aside", () => {

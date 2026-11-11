@@ -305,7 +305,7 @@ Exo italic is the flyer's voice: geometric, fast, leaning toward the reader. Gei
 | Question | Exo italic | 800, 26px/1.18 | An open question in a guided form, a lifted task card's title, a sheet's title, a finished screen's title. |
 | Card title | Exo italic | 800, 17px/1.3, Rahmah Indigo | A card's heading, the bell popover's heading. |
 | Section title | Exo italic | 800, 15px/1.3, Rahmah Indigo | A section inside a card or sheet ("Student", "Custodian"). |
-| Action | Exo italic | 600, 16px (14px small, 18px wide) | Button labels (Go, Ghost, Small, Wide). Filter pills and chip buttons rest in Geist 600 and turn Exo italic only when pressed. |
+| Action | Exo italic | 600, 16px (14px small, 18px wide) | Button labels (Go, Ghost, Small, Wide). Filter pills rest in Geist 600 and turn Exo italic only when pressed; chip buttons stay Geist 600 when pressed. |
 | Current sidebar item | Exo italic | 700, 13.5px | The one current entry in the sidebar, and a pressed filter pill. |
 | Sidebar group | Exo italic | 700, 10.5px, uppercase, 0.06em, indigo at 62% | "FRONT DESK", "ADMISSIONS"… |
 | Brand title | Exo italic | 800, 11–14px, Rahmah Indigo | "Al-Rahmah Complex" in the sidebar; its size follows the sidebar's width. |
@@ -383,7 +383,7 @@ All of these are built once and shared. Parent pages and staff pages import the 
 - **Wide:** full width, at least 52px, 18px label, at the foot of a task card or sheet. A wide ghost that adds something is 64px with 24px corners.
 - **Round:** a 44px outlined circle in a guided form (Back, Start over, the brand menu); a 40px outlined circle in the staff top bar (the bell, the Menu button); a 36px borderless circle to close a sheet. Lavender Whisper on hover, scale 0.92 on press.
 - **Text link:** indigo, 600, 14px, underlined 3px below ("Edit", "Add", "Clear").
-- **Focus:** buttons, choices, links and rows show a 3px indigo outline at 45%, 2px out. Fields instead turn their outline solid indigo with a 4px ring at 12% (see Inputs). `ContinuePill` and the `orange` button variant keep their existing 3px ring at 40%.
+- **Focus:** buttons, choices, links and rows show a 3px indigo outline at 45%, 2px out. Fields instead turn their outline solid indigo with a 4px ring at 12% (see Inputs). The existing guided-form controls keep their 3px ring at 40%: `ContinuePill`, `MarkLink`, `OfferPill`, `InfoButton` and the `orange` button variant.
 
 ### Inputs
 - **Pill field:** 52px, 1.5px Indigo Line, Paper, 17px Geist, centred text, orange caret, 20px padding (48px with a field icon, which sits 18px in, Slate Quiet). Focus: solid indigo outline and a 4px indigo ring at 12%. Invalid (`aria-invalid="true"`): Alert Red outline and a 4px red ring at 10%, with an error line under the field that folds open, has `role="alert"` and says what to do.
@@ -498,7 +498,7 @@ A finished task replaces its form with a task card: the Finished illustration at
 - A missing record shows `app/staff/not-found.tsx`. Public `app/not-found.tsx` and `app/error.tsx` say it in Swahili and English at once, with one orange way home.
 
 ### Motion
-Only the motions in this table exist. Durations come from the `--gf-*` tokens.
+The table gives the timing of each motion; the illustration bob, confetti, the sidebar label roll and the progress bubbles are described with their components. Durations come from the `--gf-*` tokens.
 
 | Moment | Motion |
 |---|---|
@@ -522,7 +522,7 @@ The site installs as an app from `app/manifest.ts`. Every icon is the full Al-Ra
 ### Do:
 - **Do** put every page on the lavender wash, and every staff page inside the stage with its border on top.
 - **Do** use Exo italic for titles, questions, buttons and the current sidebar item, and Geist for everything people read in quantity or type.
-- **Do** keep press targets at the sizes in Components: 44px for Go, Ghost and round buttons in a guided form; 40px for top-bar circles and chip buttons; 36px for small buttons and filter pills; never under 24px.
+- **Do** keep press targets at the sizes in Components: 44px for Go, Ghost and round buttons in a guided form; 40px for top-bar circles and chip buttons; 36px for small buttons and filter pills; sidebar rows never under 24px. The Admission form's 22px `InfoButton` keeps its size, with an invisible hit area 11px wider on every side.
 - **Do** make the next step the one Go button: white Exo 600 italic on `#ee7300` (The ShuleFasta Button Rule).
 - **Do** ask a task's questions one at a time through the guided form, and let folded answers be the review.
 - **Do** open edits and confirmations in a sheet whose title and buttons stay put while its middle scrolls.

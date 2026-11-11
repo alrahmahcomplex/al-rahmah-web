@@ -1,7 +1,7 @@
 import { type Locator, type Page } from "@playwright/test"
 
 import { ADMISSIONS } from "../tests/support/fixtures"
-import { axeProblems } from "./axe"
+import { axeProblems, settled } from "./axe"
 import { signInOnce } from "./log-in"
 import { expect, test } from "./staff-test"
 
@@ -541,9 +541,12 @@ test("the guided form's progress bar sticks to the top while the questions scrol
   await openKit(page)
   const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
   const bar = card.locator(".gf-bar-row")
-  await card.locator(".kit-task").scrollIntoViewIfNeeded()
-  await card.locator(".kit-task").evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top + 200))
-  await expect.poll(async () => Math.round((await bar.boundingBox())!.y)).toBe(0)
+  const area = page.locator("[data-stage-scroll]")
+  await card.locator(".kit-task").evaluate((el) => {
+    const stage = el.closest<HTMLElement>("[data-stage-scroll]")!
+    stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top + 200
+  })
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.y - (await area.boundingBox())!.y)).toBe(0)
 })
 
 test("under reduced motion the staff guided form opens each question at once, with no confetti", async ({ page }) => {
@@ -586,14 +589,9 @@ test("removing a student keeps the names being typed for another", async ({ page
 test("inside a stage scroll area the bar sits flush with its top, and a new question is scrolled into view there", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 700 })
   await openKit(page)
-  // Until the new shell (#322) the kit page scrolls the window. Here its wrapper becomes the stage's
-  // scroll area, as the shell's will be: data-stage-scroll and its top padding in --kit-stage-pt.
-  const area = page.locator("[data-kit]")
-  await area.evaluate((el) => {
-    el.setAttribute("data-stage-scroll", "")
-    Object.assign((el as HTMLElement).style, { height: "100dvh", overflow: "auto", paddingTop: "26px" })
-    ;(el as HTMLElement).style.setProperty("--kit-stage-pt", "26px")
-  })
+  // The new shell (#322) draws the page in the stage's scroll area: data-stage-scroll, with its
+  // top padding in --kit-stage-pt.
+  const area = page.locator("[data-stage-scroll]")
   const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
   const bar = card.locator(".gf-bar-row")
   const areaTop = async () => (await area.boundingBox())!.y

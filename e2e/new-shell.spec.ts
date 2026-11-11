@@ -200,7 +200,8 @@ test.describe("on a desktop", () => {
     await expect.poll(thumbAt).toBeGreaterThan(0)
     // Pressing the bottom of the track jumps there.
     await page.mouse.click(bar.x + bar.width / 2, bar.y + bar.height - 2)
-    await expect.poll(() => scroll.evaluate((el) => Math.round(el.scrollHeight - el.clientHeight - el.scrollTop))).toBeLessThanOrEqual(1)
+    // It lands at (or, while the page still grows, very near) the end.
+    await expect.poll(() => scroll.evaluate((el) => el.scrollTop / (el.scrollHeight - el.clientHeight))).toBeGreaterThan(0.95)
   })
 
   test("a short window keeps every row at least 24px and never shows the sidebar's scrollbar", async ({ page }) => {

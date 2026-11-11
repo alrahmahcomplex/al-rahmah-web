@@ -206,6 +206,80 @@ describe("the lock at enrolment", () => {
   })
 })
 
+describe("other ways into Enrolled, and lock order", () => {
+  test("the student import's Enrolled locks with the answer an Enrolled lead had, and keeps it out of Enrolled", async () => {
+    const [first, imported] = await family(await yearWithSchedule())
+    await pay(first, FULL, "full_payment")
+    expect(await resultOf(imported)).toEqual({ result: "ten", source: "auto", locked_result: null })
+
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      // As confirm_student_import sets Enrolled, with no payment.
+      await sql.query("select public.set_lead_lifecycle_override('import')")
+      await sql.query("update public.leads set status = 'Enrolled', enrolled_by_import = true where id = $1", [imported])
+      // An Enrolled lead's live answer was the kept discount or the tick: full.
+      expect(await resultOf(imported, sql)).toEqual({ result: "full", source: "locked", locked_result: "full" })
+      expect(await discountOf(sql, imported)).toEqual({ discount: null, school_fee: FULL })
+
+      // Taken out of Enrolled while its sibling is Enrolled: the lock holds.
+      await sql.query("select public.set_lead_lifecycle_override('payment_recompute')")
+      await sql.query("update public.leads set status = 'Interviewed' where id = $1", [imported])
+      await sql.query("select public.recompute_lead_fee($1, 'payment_adjustment')", [imported])
+      expect(await resultOf(imported, sql)).toEqual({ result: "full", source: "locked", locked_result: "full" })
+      expect(await discountOf(sql, imported)).toEqual({ discount: null, school_fee: FULL })
+    })
+  })
+
+  test("a child added to a known Family takes the Family lock before the phone locks, as confirming a match does", async () => {
+    const [known] = await family(await yearWithSchedule(), 1)
+    const contactId = await contactOf(known)
+    const contact = await getLead(await signedIn(ADMISSIONS), known)
+    if (!contact.ok) throw new Error("setup failed")
+    const phone = contact.data.contact.phone
+
+    // Holds the Family lock, as confirm_family_match does before its phone locks.
+    await inRolledBackTransaction(async (holder) => {
+      await holder.query("select public.lock_families(array[$1::uuid])", [contactId])
+      const creating = createLead(await signedIn(ADMISSIONS), {
+        guardian: { contactId },
+        student: student(),
+        start: { kind: "walk-in", visitDate: yesterday },
+      })
+
+      // Wait until the creation waits on the Family lock.
+      const waiting = async () =>
+        (
+          await holder.query<{ n: number }>(
+            `select count(*)::int as n from pg_locks
+             where locktype = 'advisory' and not granted and classid::int = hashtext('lead_family') and objid::int = hashtext($1)`,
+            [contactId],
+          )
+        ).rows[0].n
+      for (let tries = 0; (await waiting()) === 0; tries++) {
+        if (tries > 100) throw new Error("the creation never waited on the Family lock")
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+
+      // It holds no phone lock while it waits.
+      const free = await inRolledBackTransaction(async (other) => {
+        const normalized = (await other.query<{ p: string }>("select public.normalize_phone($1) as p", [phone])).rows[0].p
+        return (
+          await other.query<{ got: boolean }>("select pg_try_advisory_xact_lock(hashtextextended('lead-phone:' || $1, 0)) as got", [
+            normalized,
+          ])
+        ).rows[0].got
+      })
+      expect(free).toBe(true)
+
+      await holder.query("rollback")
+      await holder.query("begin")
+      const created = await creating
+      expect(created.ok).toBe(true)
+      if (created.ok) expect(await resultOf(created.data.leadId)).toEqual({ result: "none", source: "auto", locked_result: null })
+    })
+  })
+})
+
 describe("today's rule, stored", () => {
   test("a new child on a contact with an Enrolled child holds the 10% from the start, and a Declined child follows the rule", async () => {
     const year = await yearWithSchedule()

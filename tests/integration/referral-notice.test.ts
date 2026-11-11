@@ -1,11 +1,13 @@
 import { randomInt, randomUUID } from "node:crypto"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 
 import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
 import type { AdmissionChild, AdmissionForm } from "@/lib/admission-form"
-import { admissionYears } from "@/lib/admission-form"
+import { admissionYears, parseAdmissionForm } from "@/lib/admission-form"
 import { FORM_NOTICE_V1_VERSION, FORM_NOTICE_VERSION, STAFF_REMINDER_VERSION } from "@/lib/referral-notice"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
@@ -89,6 +91,19 @@ describe("the notice version on leads the Admission form creates", () => {
     const sent = form({ discountCode: PENDING })
     expect((await submitAdmissionForm(secretClient(), sent)).ok).toBe(true)
     expect(await leadOf(sent.children[0].fullName)).toMatchObject({ code: PENDING, version: null })
+  })
+
+  test("a page from the build before #282 that posts form_v1 keeps its code and records no version", async () => {
+    // Through the same parser the Server Action uses: this server shows
+    // form_v2, so it vouches for no other notice.
+    const posted = { ...form({ children: [child(), child()], discountCode: APPROVED }), noticeVersion: FORM_NOTICE_V1_VERSION }
+    const parsed = parseAdmissionForm(JSON.stringify(posted), admissionYears())
+    if (!parsed.ok) throw new Error(`parse failed: ${JSON.stringify(parsed.error)}`)
+    expect((await submitAdmissionForm(secretClient(), parsed.data)).ok).toBe(true)
+
+    for (const c of posted.children) {
+      expect(await leadOf(c.fullName)).toMatchObject({ code: APPROVED, version: null })
+    }
   })
 
   test("a form without a code records no version", async () => {
@@ -285,6 +300,26 @@ describe("the referral_notice_version column", () => {
         await sql.query("update public.leads set referral_notice_version = 'form_v9' where id = '1ead0000-0000-4000-8000-000000000431'")
       }),
     ).rejects.toThrow(/leads_referral_notice_version_known/)
+  })
+
+  test("the form_v2 migration keeps a row that already recorded form_v1", async () => {
+    // Replays the migration's constraint change, in a rolled-back
+    // transaction, over a row saved with form_v1, as hosted rows were before
+    // #282. Re-adding the constraint checks every existing row.
+    const migration = readFileSync(join(process.cwd(), "supabase/migrations/20261205400100_referral_notice_form_v2.sql"), "utf8")
+    const constraintChange = migration.match(/alter table public\.leads[\s\S]*?;/)?.[0]
+    expect(constraintChange).toMatch(/'form_v1', 'form_v2', 'staff_reminder'/)
+
+    const version = await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("update public.leads set referral_notice_version = 'form_v1' where id = '1ead0000-0000-4000-8000-000000000431'")
+      await sql.query(constraintChange!)
+      const { rows } = await sql.query<{ version: string }>(
+        "select referral_notice_version as version from public.leads where id = '1ead0000-0000-4000-8000-000000000431'",
+      )
+      return rows[0].version
+    })
+    expect(version).toBe(FORM_NOTICE_V1_VERSION)
   })
 
   test("holds a version only beside a code", async () => {

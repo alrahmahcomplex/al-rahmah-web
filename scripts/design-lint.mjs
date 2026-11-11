@@ -10,13 +10,17 @@
 //
 // A converted route is one app/staff/route-looks.ts marks "new". Until that
 // file exists (F6, #322), rules 2 and 3 cover only components/kit/ and
-// components/icons/. Comments never count.
+// components/icons/. Scripts are read with the TypeScript parser, so
+// comments, regex literals and JSX text are never taken for strings.
 //
-// Run: node scripts/design-lint.mjs. CI runs it in the lint job.
+// Run: node scripts/design-lint.mjs, after `npm ci` (it needs typescript).
+// CI runs it and its tests in the lint job.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+
+import ts from "typescript"
 
 export const TOKEN_STYLESHEET = "app/tokens.css"
 export const EXO_ROOTS = ["app", "components"]
@@ -25,6 +29,7 @@ export const ROUTE_LOOKS = "app/staff/route-looks.ts"
 
 const SOURCE = /\.(tsx?|css|mjs|jsx?)$/
 const HEX_SOURCE = /\.(tsx?|css|mjs|jsx?|svg)$/
+const SCRIPT = /\.(tsx?|mjs|jsx?)$/
 
 // Upright Exo already on the public pages when this check arrived. Making it
 // italic changes how those pages look, which needs the owner's approval of a
@@ -53,81 +58,36 @@ function lineOf(text, index) {
 
 const blank = (text) => text.replace(/[^\n]/g, " ")
 
+const SCRIPT_KINDS = { ".tsx": ts.ScriptKind.TSX, ".ts": ts.ScriptKind.TS, ".jsx": ts.ScriptKind.JSX }
+
 /**
- * Reads a TS/TSX/JS source: its string and template literals ({ start, end,
- * value } without the quotes) and its code with comments blanked to spaces,
- * line breaks kept. A quote that reaches a line break before it closes is an
- * apostrophe in JSX text, not a string; a JSX attribute value (a quote right
- * after `=`) may span lines.
+ * Parses a TS/TSX/JS source with the TypeScript parser, so comments, regex
+ * literals, JSX text and nested templates are read the way the compiler
+ * reads them. The parser recovers from a syntax error, and a recovered tree
+ * can leave code out, so lint() reports syntax errors as problems.
  */
-export function scan(text) {
-  const literals = []
-  let code = ""
-  let i = 0
-  while (i < text.length) {
-    const c = text[i]
-    const next = text[i + 1]
-    if (c === "/" && next === "/") {
-      const newline = text.indexOf("\n", i)
-      const end = newline === -1 ? text.length : newline
-      code += blank(text.slice(i, end))
-      i = end
-    } else if (c === "/" && next === "*") {
-      const close = text.indexOf("*/", i + 2)
-      const end = close === -1 ? text.length : close + 2
-      code += blank(text.slice(i, end))
-      i = end
-    } else if (c === '"' || c === "'" || c === "`") {
-      const attribute = c !== "`" && /=\s*$/.test(text.slice(Math.max(0, i - 8), i))
-      let j = i + 1
-      let closed = false
-      while (j < text.length) {
-        if (text[j] === "\\") j += 2
-        else if (text[j] === c) {
-          closed = true
-          break
-        } else if (text[j] === "\n" && c !== "`" && !attribute) break
-        else j++
-      }
-      if (!closed) {
-        code += c
-        i++
-        continue
-      }
-      literals.push({ start: i, end: j + 1, value: text.slice(i + 1, j) })
-      code += text.slice(i, j + 1)
-      i = j + 1
-    } else {
-      code += c
-      i++
-    }
-  }
-  return { code, literals }
+export function parse(text, file = "x.tsx") {
+  const kind = SCRIPT_KINDS[file.slice(file.lastIndexOf("."))] ?? ts.ScriptKind.JS
+  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, kind)
 }
 
-// Class expressions whose strings are read together, so cn("font-exo",
-// "italic") counts as italic: a className={…} and a call to cn, clsx, cva,
-// twMerge or a cva-made function such as buttonVariants.
-function classGroups(code, literals) {
-  const skip = new Map(literals.map((l) => [l.start, l.end]))
-  const groups = []
-  for (const match of code.matchAll(/className=\{|\b(?:cn|clsx|cva|twMerge|\w+Variants)\(/g)) {
-    const open = match.index + match[0].length - 1
-    if (groups.some((g) => open > g.start && open < g.end)) continue
-    const [o, c] = code[open] === "{" ? ["{", "}"] : ["(", ")"]
-    let depth = 0
-    let i = open
-    for (; i < code.length; i++) {
-      if (skip.has(i)) {
-        i = skip.get(i) - 1
-        continue
-      }
-      if (code[i] === o) depth++
-      else if (code[i] === c && --depth === 0) break
-    }
-    groups.push({ start: open, end: i })
-  }
-  return groups
+const lineAt = (source, pos) => source.getLineAndCharacterOfPosition(pos).line + 1
+
+/**
+ * The first syntax error of a TS/TSX/JS source, as [{ line, message }], or
+ * []. One error often brings others after it, so only the first is told.
+ */
+export function syntaxErrors(text, file = "x.tsx") {
+  const source = parse(text, file)
+  return (source.parseDiagnostics ?? []).slice(0, 1).map((d) => ({
+    line: lineAt(source, d.start ?? 0),
+    message: `cannot parse: ${ts.flattenDiagnosticMessageText(d.messageText, " ")} (design-lint reads the syntax tree)`,
+  }))
+}
+
+function visit(node, each) {
+  each(node)
+  ts.forEachChild(node, (child) => visit(child, each))
 }
 
 // A class token whose utility (after any variants such as md: or hover:)
@@ -141,28 +101,137 @@ const words = (value) => value.split(/\s+/).filter(Boolean)
 const hasItalic = (tokens) => tokens.includes("italic")
 const hasUpright = (tokens) => tokens.some((token) => /(^|:)not-italic$/.test(token))
 
+const isClassString = (node) => ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)
+
+/** The words of a string or template literal, its ${…} parts left out. */
+function staticTokens(node) {
+  if (!ts.isTemplateExpression(node)) return words(node.text)
+  // A placeholder, not a space, where each ${…} stood, so `font-exo${x}` is
+  // not read as font-exo.
+  return words([node.head.text, ...node.templateSpans.map((span) => span.literal.text)].join("\u0000"))
+}
+
+// A string that lends its italic: a bare italic, no font of its own and no
+// not-italic.
+const lendsItalic = (tokens) => hasItalic(tokens) && !hasUpright(tokens) && !tokens.some(isExoClass)
+
+// Calls whose arguments make one class list, and cva-made functions such as
+// buttonVariants.
+const CLASS_CALL = /^(?:cn|clsx|cva|twMerge|\w+Variants)$/
+function isClassCall(node) {
+  if (!ts.isCallExpression(node)) return false
+  const callee = node.expression
+  const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : ""
+  return CLASS_CALL.test(name)
+}
+
+const isClassNameExpression = (node) => ts.isJsxExpression(node) && ts.isJsxAttribute(node.parent) && node.parent.name.getText() === "className"
+
+// A class expression: a className={…}, a class call or a template literal.
+// The strings of the outermost one around a string are read together.
+const isGroup = (node) => isClassNameExpression(node) || isClassCall(node) || ts.isTemplateExpression(node)
+
+function outermostGroup(node) {
+  let group
+  for (let n = node.parent; n; n = n.parent) if (isGroup(n)) group = n
+  return group
+}
+
 /**
- * Finds upright Exo in a TSX/TS/JS source: a string holding an Exo class
- * without a bare `italic`, or with any `not-italic`. In one class expression
- * the italic may come from another string that sets no font, as in
- * cn("font-exo", "italic"); one branch of a ternary that sets Exo does not
- * lend its italic to the other.
+ * Whether expr yields a lending italic string every time it is evaluated:
+ * "italic", c ? "italic" : "italic", cn("italic"), ["italic"]. A string
+ * behind && or ||, in one branch of ?: only, inside an object such as clsx's
+ * { italic: c }, or passed to any other function may not be applied, so it
+ * lends nothing.
  */
-export function uprightExoInScript(text) {
-  const problems = []
-  const { code, literals } = scan(text)
-  const groups = classGroups(code, literals)
-  const groupOf = (l) => groups.find((g) => l.start > g.start && l.end <= g.end)
-  for (const literal of literals) {
-    const tokens = words(literal.value)
-    if (!tokens.some(isExoClass)) continue
-    if (hasItalic(tokens) && !hasUpright(tokens)) continue
-    const group = groupOf(literal)
-    const siblings = group ? literals.filter((l) => l !== literal && groupOf(l) === group).map((l) => words(l.value)) : []
-    const lent = siblings.some((t) => hasItalic(t) && !t.some(isExoClass))
-    if (lent && !hasUpright(tokens) && !siblings.some(hasUpright)) continue
-    problems.push({ line: lineOf(text, literal.start), message: EXO_MESSAGE })
+function alwaysItalic(expr) {
+  if (ts.isParenthesizedExpression(expr)) return alwaysItalic(expr.expression)
+  if (isClassString(expr)) {
+    if (lendsItalic(staticTokens(expr))) return true
+    return ts.isTemplateExpression(expr) && expr.templateSpans.some((span) => alwaysItalic(span.expression))
   }
+  if (ts.isConditionalExpression(expr)) return alwaysItalic(expr.whenTrue) && alwaysItalic(expr.whenFalse)
+  if (isClassCall(expr)) return expr.arguments.some(alwaysItalic)
+  if (ts.isArrayLiteralExpression(expr)) return expr.elements.some(alwaysItalic)
+  return false
+}
+
+// The parts of `node` applied whenever its part `child` is: the other
+// arguments of a class call, the other elements of an array, the other
+// ${…} of a template.
+function companions(node, child) {
+  if (isClassCall(node)) return node.arguments.filter((a) => a !== child)
+  if (ts.isArrayLiteralExpression(node)) return node.elements.filter((e) => e !== child)
+  if (ts.isTemplateExpression(node)) return node.templateSpans.filter((s) => s !== child).map((s) => s.expression)
+  return []
+}
+
+/**
+ * Whether an Exo string gets its italic from what is applied with it every
+ * time it is applied: its own ${…}, and, going out to its class expression,
+ * the companions at each level and the text of any template it sits in.
+ */
+function italicLent(exo) {
+  if (ts.isTemplateExpression(exo) && exo.templateSpans.some((span) => alwaysItalic(span.expression))) return true
+  const group = outermostGroup(exo)
+  if (!group) return false
+  for (let child = exo, node = exo.parent; child !== group; child = node, node = node.parent) {
+    if (companions(node, child).some(alwaysItalic)) return true
+    if (ts.isTemplateExpression(node) && lendsItalic(staticTokens(node))) return true
+  }
+  return false
+}
+
+// The child of `node` on the way down to `inner`.
+function childOn(node, inner) {
+  let child = inner
+  while (child.parent !== node) child = child.parent
+  return child
+}
+
+// Two parts in different branches of one ?: are never applied together.
+function exclusive(a, b) {
+  const above = new Set()
+  for (let n = a; n; n = n.parent) above.add(n)
+  let common = b
+  while (!above.has(common)) common = common.parent
+  if (!ts.isConditionalExpression(common) || common === a || common === b) return false
+  const branches = [common.whenTrue, common.whenFalse]
+  const [ca, cb] = [childOn(common, a), childOn(common, b)]
+  return ca !== cb && branches.includes(ca) && branches.includes(cb)
+}
+
+// Whether a not-italic in the same class expression may be applied with the
+// Exo string.
+function uprightBeside(exo) {
+  let found = false
+  visit(outermostGroup(exo) ?? exo, (node) => {
+    if (found || node === exo || !isClassString(node)) return
+    if (hasUpright(staticTokens(node)) && !exclusive(exo, node)) found = true
+  })
+  return found
+}
+
+/**
+ * Finds upright Exo in a TSX/TS/JS source: a string or template literal
+ * holding an Exo class without a bare `italic`, or with any `not-italic`. In
+ * one class expression the italic may come from another string that sets no
+ * font and is applied every time the Exo string is, as in cn("font-exo",
+ * "italic"). One that may not be, as in cn("font-exo", c && "italic"), lends
+ * nothing, and each branch of a ?: is checked on its own. A not-italic that
+ * may be applied with the Exo string makes it upright.
+ */
+export function uprightExoInScript(text, file = "x.tsx") {
+  const source = parse(text, file)
+  const problems = []
+  visit(source, (node) => {
+    if (!isClassString(node)) return
+    const tokens = staticTokens(node)
+    if (!tokens.some(isExoClass)) return
+    if (hasItalic(tokens) && !hasUpright(tokens)) return
+    if (!hasUpright(tokens) && italicLent(node) && !uprightBeside(node)) return
+    problems.push({ line: lineAt(source, node.getStart(source)), message: EXO_MESSAGE })
+  })
   return problems
 }
 
@@ -190,51 +259,89 @@ export function uprightExoInCss(text) {
   return problems
 }
 
-// The source with comments blanked, by the file's own comment syntax.
-function withoutComments(text, file) {
+// The parts of a script a colour can be written in: string and template
+// text, JSX text and regex literals. Comments and names (a #private field)
+// are not among them.
+const TEXT_KINDS = new Set([
+  ts.SyntaxKind.StringLiteral,
+  ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+  ts.SyntaxKind.TemplateHead,
+  ts.SyntaxKind.TemplateMiddle,
+  ts.SyntaxKind.TemplateTail,
+  ts.SyntaxKind.JsxText,
+  ts.SyntaxKind.RegularExpressionLiteral,
+])
+
+// The source with everything a colour cannot be written in blanked to
+// spaces, line breaks and positions kept.
+function colourText(text, file) {
   if (file.endsWith(".css")) return cssWithoutComments(text)
   if (file.endsWith(".svg")) return text.replace(/<!--[\s\S]*?-->/g, blank)
-  return scan(text).code
+  const source = parse(text, file)
+  const kept = blank(text).split("")
+  visit(source, (node) => {
+    if (!TEXT_KINDS.has(node.kind)) return
+    // JSX text has no leading trivia: all of it is text, even where it reads
+    // like a comment, as in <p>// x</p>.
+    const start = node.kind === ts.SyntaxKind.JsxText ? node.pos : node.getStart(source)
+    for (let i = start; i < node.end; i++) kept[i] = text[i]
+  })
+  return kept.join("")
 }
 
 /**
- * Finds hex colours (#abc, #abcd, #aabbcc, #aabbccdd) outside comments. A
- * fragment reference (href="#a1b", url(#abc), id="#abc") is not a colour.
+ * Finds hex colours (#abc, #abcd, #aabbcc, #aabbccdd) in strings, templates,
+ * JSX text and stylesheet or SVG text, never in comments. A fragment
+ * reference (href="#a1b", url(#abc), id="#abc") is not a colour.
  */
 export function hexColours(text, file = "x.tsx") {
   const problems = []
-  const code = withoutComments(text, file)
-  for (const match of code.matchAll(/(?<![\w&#])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/g)) {
-    const before = code.slice(Math.max(0, match.index - 16), match.index)
+  const kept = colourText(text, file)
+  for (const match of kept.matchAll(/(?<![\w&#])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/g)) {
+    const before = text.slice(Math.max(0, match.index - 16), match.index)
     if (/(?:href|id)\s*=\s*\{?\s*["'`]$|url\(\s*["']?$/i.test(before)) continue
     problems.push({ line: lineOf(text, match.index), message: `hex colour ${match[0]}: use a token from ${TOKEN_STYLESHEET}` })
   }
   return problems
 }
 
-/** Finds CountPill outside comments. */
-export function countPills(text) {
+/** Finds the name CountPill: an import, a JSX tag or any other reference. */
+export function countPills(text, file = "x.tsx") {
+  const source = parse(text, file)
   const problems = []
-  for (const match of scan(text).code.matchAll(/\bCountPill\b/g)) {
-    problems.push({ line: lineOf(text, match.index), message: "CountPill in a converted route: the bell is the only count (#316)" })
-  }
+  visit(source, (node) => {
+    if (ts.isIdentifier(node) && node.text === "CountPill") {
+      problems.push({ line: lineAt(source, node.getStart(source)), message: "CountPill in a converted route: the bell is the only count (#316)" })
+    }
+  })
   return problems
 }
 
+function keyText(name) {
+  if (ts.isStringLiteralLike(name)) return name.text
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) return name.expression.text
+  return undefined
+}
+
 /**
- * Reads route-looks.ts: every "/staff…" key must map straight to "new" or
- * "legacy", comments aside. Anything else is reported instead of being
- * skipped, so the lint never quietly stops covering a converted route.
+ * Reads route-looks.ts: every "/staff…" key of an object must map straight
+ * to "new" or "legacy", comments aside. Anything else, a syntax error
+ * included, is reported instead of being skipped, so the lint never quietly
+ * stops covering a converted route.
  */
-export function readRouteLooks(source) {
-  const code = scan(source).code
+export function readRouteLooks(text) {
+  const source = parse(text, ROUTE_LOOKS)
   const routes = []
-  const errors = []
-  for (const match of code.matchAll(/["'`](\/staff[^"'`]*)["'`]\s*:\s*([^,}\n]*)/g)) {
-    const look = match[2].trim().match(/^["'`](new|legacy)["'`]$/)?.[1]
-    if (look) routes.push({ pattern: match[1], look })
-    else errors.push({ line: lineOf(source, match.index), message: `"${match[1]}" must map to "new" or "legacy", not ${match[2].trim() || "nothing"}` })
-  }
+  const errors = syntaxErrors(text, ROUTE_LOOKS)
+  visit(source, (node) => {
+    if (!ts.isPropertyAssignment(node)) return
+    const pattern = keyText(node.name)
+    if (!pattern?.startsWith("/staff")) return
+    const value = node.initializer
+    const look = ts.isStringLiteralLike(value) && /^(new|legacy)$/.test(value.text) ? value.text : undefined
+    if (look) routes.push({ pattern, look })
+    else errors.push({ line: lineAt(source, node.name.getStart(source)), message: `"${pattern}" must map to "new" or "legacy", not ${value.getText(source)}` })
+  })
   if (!routes.length && !errors.length) errors.push({ line: 1, message: 'no "/staff…": "new" | "legacy" entries found, so design-lint cannot tell which routes are converted' })
   return { routes, errors }
 }
@@ -276,9 +383,17 @@ export function lint(root) {
   const problems = []
   const add = (file, found) => found.forEach((p) => problems.push({ file, ...p }))
   const read = (file) => readFileSync(join(root, file), "utf8")
+  // Each script's syntax errors, once. readRouteLooks reports its own.
+  const parsed = new Set([ROUTE_LOOKS])
+  const checkSyntax = (file) => {
+    if (parsed.has(file) || !SCRIPT.test(file)) return
+    parsed.add(file)
+    add(file, syntaxErrors(read(file), file))
+  }
 
   for (const file of EXO_ROOTS.flatMap((dir) => walk(root, dir)).filter((f) => SOURCE.test(f))) {
-    const found = file.endsWith(".css") ? uprightExoInCss(read(file)) : uprightExoInScript(read(file))
+    checkSyntax(file)
+    const found = file.endsWith(".css") ? uprightExoInCss(read(file)) : uprightExoInScript(read(file), file)
     const allowance = UPRIGHT_EXO_ALLOWED[file]
     const allowed = allowance?.count ?? 0
     if (found.length > allowed) {
@@ -305,8 +420,9 @@ export function lint(root) {
   }
   for (const file of [...scoped].sort()) {
     if (file === TOKEN_STYLESHEET || !HEX_SOURCE.test(file)) continue
+    checkSyntax(file)
     add(file, hexColours(read(file), file))
-    if (converted.has(file) && SOURCE.test(file) && !file.endsWith(".css")) add(file, countPills(read(file)))
+    if (converted.has(file) && SCRIPT.test(file)) add(file, countPills(read(file), file))
   }
   return problems
 }

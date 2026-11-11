@@ -365,6 +365,13 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  "public.dismiss_sibling_fee_edit(lead_id uuid, reason text)": {
+    roles: ["authenticated"],
+    setup:
+      "with g as (insert into public.sibling_groups (id, cause) values ('5b100000-0000-4000-8000-000000000302', 'sibling_link') returning id) insert into public.discount_requests (lead_id, kind, note, requested_by, state, decided_by, decided_at, group_id, fee_edit) select '1ead0000-0000-4000-8000-000000000431', 'sibling', 'A note', 'a1a1a1a1-0000-4000-8000-000000000001', 'granted', 'a1a1a1a1-0000-4000-8000-000000000001', now(), g.id, 'needed' from g",
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'", reason: "'A reason'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.dismiss_notices(through bigint)": {
     roles: ["authenticated"],
     setup:
@@ -520,6 +527,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "not_permitted" },
   },
+  "public.lead_sibling_requests(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.lead_family(lead_id uuid)": {
     roles: ["authenticated"],
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
@@ -649,6 +661,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     agent: { returns: ["sample role"] },
   },
   "public.pending_discount_requests()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.pending_sibling_requests()": {
     roles: ["authenticated"],
     args: {},
     agent: { refused: "not_permitted" },
@@ -837,7 +854,18 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       request_id: "'00000000-0000-4000-8000-000000000188'",
     },
     agent: { refused: "not_permitted" },
+  },  "public.request_sibling_discount(lead_id uuid, note text, request_id uuid, sibling_of_lead_id uuid)": {
+    roles: ["authenticated"],
+    setup: "with g as (insert into public.sibling_groups (id, cause) values ('5b100000-0000-4000-8000-000000000302', 'sibling_link') returning id) insert into public.sibling_group_members as m (lead_id, group_id, legacy, basis, cause, joined_at) select '1ead0000-0000-4000-8000-000000000431', g.id, false, 'request_needed', 'sibling_link', now() from g on conflict (lead_id) do update set group_id = excluded.group_id, legacy = false, basis = excluded.basis, cause = excluded.cause, joined_at = excluded.joined_at",
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      note: "'A note'",
+      request_id: "'00000000-0000-4000-8000-000000000302'",
+      sibling_of_lead_id: "null",
+    },
+    agent: { refused: "not_permitted" },
   },
+
   "public.resendable_invite(staff_id uuid)": {
     roles: ["authenticated"],
     args: { staff_id: "'a1a1a1a1-0000-4000-8000-000000000007'" },

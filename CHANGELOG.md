@@ -5,6 +5,20 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- The database can now take a Sibling discount request when two siblings' fathers' names don't
+  match, and the Admissions Manager can grant or refuse it. A granted child counts as a sibling
+  and gets the Sibling fee rule; a refused child gets no Sibling discount, and a name change, a
+  new link or a second request can't get round the refusal until a new request is granted. A
+  request for a student already Enrolled is allowed: the grant keeps that student's fee as it is
+  and marks it for the Accountant's fee edit. A Sibling request and a Staff child request can
+  wait on one student at once. No screen uses this yet, so nothing changes for staff or families
+  today, and the Discount requests screen shows exactly what it shows now. No fee, discount,
+  status or seat count changed when this shipped; the update checked that before finishing.
+
 ## November 12, 2026 `v0.103.0`
 
 ### NEW

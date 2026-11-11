@@ -7,10 +7,11 @@ import type { Result } from "./result"
 // close or different, who in the group pays full and who gets the Sibling
 // 10%. This module only calls it. The screens come in #308 to #310.
 
-// The outcome of a linked lead's father's-name check. Only `matched` and
-// `typo_confirmed` count for the Sibling discount; `request_needed` waits for
-// a Sibling request the Admissions Manager grants (#302).
-export type SiblingBasis = "matched" | "typo_confirmed" | "request_needed"
+// Why a linked lead is in its group. `matched`, `typo_confirmed` and
+// `granted` count for the Sibling discount; `request_needed` waits for a
+// Sibling request the Admissions Manager grants, and `refused` stays so until
+// a new request is granted (#302).
+export type SiblingBasis = "matched" | "typo_confirmed" | "request_needed" | "granted" | "refused"
 
 export type LinkSiblingInput = {
   leadId: string

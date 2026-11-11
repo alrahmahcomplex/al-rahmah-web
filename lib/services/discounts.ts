@@ -292,8 +292,9 @@ export async function listPendingDiscountRequests(
   }
 }
 
-// How many requests are Pending, for the navigation's count. Read through
-// the table, which staff who may view leads can read.
+// How many Staff child and Qualified orphan requests are Pending, for the
+// navigation's count. Read through the table, which staff who may view leads
+// can read. Sibling requests (#302) wait on their own screen (#310).
 export async function countPendingDiscountRequests(
   supabase: SupabaseClient,
 ): Promise<Result<number, "unavailable">> {
@@ -301,6 +302,7 @@ export async function countPendingDiscountRequests(
     .from("discount_requests")
     .select("id", { count: "exact", head: true })
     .eq("state", "pending")
+    .in("kind", [...DISCOUNT_KINDS])
   if (error || count === null) {
     console.error("Could not count pending discount requests", error)
     return { ok: false, error: "unavailable" }

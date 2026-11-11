@@ -114,3 +114,27 @@ describe("ProgressBar", () => {
     expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent("Msimamizi: hatua 1 kati ya 3")
   })
 })
+
+describe("ProgressBar cheer timing", () => {
+  it("waits 820ms on the Admission form and cheers at once with cheerDelay 0", () => {
+    vi.useFakeTimers()
+    try {
+      const groups = (done: number) => [{ label: "Students", steps: 2, done }]
+      const props = { activeGroup: 0, canBack: true, onBack: () => {}, labels: { back: "Back", reset: "Start over" }, status: "" }
+      const form = render(<ProgressBar {...props} groups={groups(1)} />)
+      form.rerender(<ProgressBar {...props} groups={groups(2)} />)
+      act(() => vi.advanceTimersByTime(800))
+      expect(form.container.querySelector(".gf-gn.gf-cheer")).toBeNull()
+      act(() => vi.advanceTimersByTime(40))
+      expect(form.container.querySelector(".gf-gn.gf-cheer")).not.toBeNull()
+      form.unmount()
+
+      const staff = render(<ProgressBar {...props} groups={groups(1)} cheerDelay={0} />)
+      staff.rerender(<ProgressBar {...props} groups={groups(2)} cheerDelay={0} />)
+      act(() => vi.advanceTimersByTime(1))
+      expect(staff.container.querySelector(".gf-gn.gf-cheer")).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

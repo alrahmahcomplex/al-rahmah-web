@@ -21,7 +21,7 @@ export type GuidedTaskFinished = {
 
 export type GuidedTaskProps = {
   /** The progress bar, with English labels: `labels={{ back: "Back", reset: "Start over" }}`. */
-  progress: Omit<ProgressBarProps, "kitIcons">
+  progress: Omit<ProgressBarProps, "kitIcons" | "cheerDelay">
   /** The questions: a `GuidedStack` from the guided form. */
   children: ReactNode
   /** Set once the task is saved: the card shows the Finished screen instead, and the confetti rains. */
@@ -34,7 +34,7 @@ export type GuidedTaskProps = {
  * card in a 640px centred column, the progress bar sticky at the top of the
  * stage's scroll area, then the questions. When `finished` is set, the card
  * gives way to the Finished screen; its title takes focus and the confetti
- * rains once.
+ * rains once. Set it 950ms after the save, so the last group's cheer plays first.
  *
  * The bar sticks to the top of the nearest scroll area. A staff stage whose
  * scroll area is padded sets `--kit-stage-pt` to that top padding, so the bar
@@ -48,7 +48,8 @@ export function GuidedTask({ progress, children, finished, className }: GuidedTa
         <FinishedCard finished={finished} />
       ) : (
         <TaskCard>
-          <ProgressBar {...progress} kitIcons />
+          {/* The prototype cheers a finished group at once, so the last group's cheer ends before the Finished screen. */}
+          <ProgressBar {...progress} kitIcons cheerDelay={0} />
           {children}
         </TaskCard>
       )}

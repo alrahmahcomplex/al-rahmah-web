@@ -39,6 +39,10 @@ export function GuidedDemo() {
   const [edit, setEdit] = useState<string | null>(null)
   const [finished, setFinished] = useState(false)
   const [instant, setInstant] = useState(false)
+  // After the first answer a new question takes focus and scrolls into view as it opens, not on page load.
+  const [interacted, setInteracted] = useState(false)
+  // Start over draws a fresh form, so a half-typed answer goes too.
+  const [round, setRound] = useState(0)
   // Pending taps, the reset spin and the finish delay; cleared on unmount and on a restart.
   const [timers] = useState(() => new Set<number>())
 
@@ -58,6 +62,7 @@ export function GuidedDemo() {
   }
 
   function answer(id: string, change: (a: Answers) => Answers) {
+    setInteracted(true)
     setAnswers(change)
     setEdit((e) => (e === id ? null : e))
   }
@@ -67,12 +72,14 @@ export function GuidedDemo() {
     timers.forEach((t) => window.clearTimeout(t))
     timers.clear()
     setInstant(true)
+    setRound((r) => r + 1)
     setAnswers(fresh())
     setEdit(null)
     setFinished(false)
   }
 
   function removeStudent(i: number) {
+    setInteracted(true)
     setInstant(true)
     // The custodian is asked again: the students it covers have changed.
     setAnswers((a) => ({ ...a, students: a.students.filter((_, k) => k !== i), custodian: undefined }))
@@ -97,9 +104,10 @@ export function GuidedDemo() {
   const g = groups[activeGroup]
 
   function onOpened(li: HTMLLIElement) {
-    const field = li.querySelector<HTMLInputElement>('.gf-fold input:not([type="radio"])')
+    // The first text field, unless it waits in a part that hasn't unfolded yet; else the question.
+    const field = [...li.querySelectorAll<HTMLInputElement>('.gf-fold input:not([type="radio"])')].find((input) => !input.closest("[inert]"))
     const title = li.querySelector<HTMLElement>(".gf-fold h2")
-    ;(field && field.getBoundingClientRect().height > 20 ? field : title)?.focus({ preventScroll: true })
+    ;(field ?? title)?.focus({ preventScroll: true })
     revealStep(li)
   }
 
@@ -129,6 +137,7 @@ export function GuidedDemo() {
         key={s.id}
         state={s.id === openId ? "open" : "folded"}
         onOpened={onOpened}
+        openOnMount={interacted}
         summary={
           s.done && (
             <SummaryRow
@@ -181,7 +190,9 @@ export function GuidedDemo() {
           : null
       }
     >
-      <GuidedStack instant={instant}>{items}</GuidedStack>
+      <GuidedStack key={round} instant={instant}>
+        {items}
+      </GuidedStack>
     </GuidedTask>
   )
 }
@@ -238,8 +249,7 @@ function buildSteps(a: Answers, t: Tools): Step[] {
             variant="ghost"
             icon="plus"
             onClick={() => {
-              t.setAnswers((x) => ({ ...x, more: undefined, students: [...x.students, {}] }))
-              t.setEdit(null)
+              t.answer("more", (x) => ({ ...x, more: undefined, students: [...x.students, {}] }))
             }}
           >
             Yes, add a student

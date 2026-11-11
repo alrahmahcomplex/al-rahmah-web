@@ -47,6 +47,11 @@ export type ProgressBarProps = {
    * new shell (components/icons/icons.css). The public forms leave it off.
    */
   kitIcons?: boolean
+  /**
+   * How long a finished group's number waits before it cheers, in ms. The
+   * Admission form waits 820 for the liquid; the staff prototype cheers at once.
+   */
+  cheerDelay?: number
   className?: string
 }
 
@@ -72,7 +77,7 @@ function makeBubbles(): Bubble[] {
 }
 
 /** One group: its number, its chips, the liquid merge and the green tick. Cheers once each time it fills. */
-function Group({ group, index, active, who }: { group: ProgressGroup; index: number; active: boolean; who?: string }) {
+function Group({ group, index, active, who, cheerDelay }: { group: ProgressGroup; index: number; active: boolean; who?: string; cheerDelay: number }) {
   const full = group.steps > 0 && group.done >= group.steps
   // A group already full on first paint (a restored draft) shows its orange number without the cheer.
   const [won, setWon] = useState(full)
@@ -91,16 +96,16 @@ function Group({ group, index, active, who }: { group: ProgressGroup; index: num
     wasFull.current = full
     if (!full || was) return
     const calm = prefersReducedMotion()
-    // The number waits for the liquid to run through the bar, then pops.
+    // On the Admission form the number waits for the liquid to run through the bar, then pops.
     const timer = window.setTimeout(() => {
       setWon(true)
       if (calm) return
       setCheer((n) => n + 1)
       setBubbles(makeBubbles())
       buzz()
-    }, calm ? 0 : 820)
+    }, calm ? 0 : cheerDelay)
     return () => window.clearTimeout(timer)
-  }, [full])
+  }, [full, cheerDelay])
 
   useEffect(() => {
     if (bubbles.length === 0) return
@@ -142,7 +147,7 @@ function Group({ group, index, active, who }: { group: ProgressGroup; index: num
  * question), the grouped step chips, and the outlined section chip.
  * Maps to `.bar-row`, `.navslot`, `.prog`, `.pg`, `.gn`, `.secname` in c2.html.
  */
-export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, canReset = false, onReset, labels, status, kitIcons = false, className }: ProgressBarProps) {
+export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, canReset = false, onReset, labels, status, kitIcons = false, cheerDelay = 820, className }: ProgressBarProps) {
   const [spin, setSpin] = useState(0)
   const host = kitIcons ? "" : undefined
   const glyph = (name: "back" | "reset") => (kitIcons ? <KitIcon name={name} /> : <Icon name={name} />)
@@ -189,7 +194,7 @@ export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, ca
       </div>
       <div className="gf-prog" aria-hidden="true">
         {groups.map((group, i) => (
-          <Group key={i} group={group} index={i} active={i === activeGroup} who={i === 0 ? whoLabel : undefined} />
+          <Group key={i} group={group} index={i} active={i === activeGroup} who={i === 0 ? whoLabel : undefined} cheerDelay={cheerDelay} />
         ))}
       </div>
       {section && (

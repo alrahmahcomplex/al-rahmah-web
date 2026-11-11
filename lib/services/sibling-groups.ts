@@ -103,3 +103,145 @@ export async function linkSibling(
       }
   }
 }
+
+// The manual Sibling fee edit (#303). Only staff with payments.record (the
+// Accountant) may preview or save one. The screen is #311.
+
+// Full fee, 10% or Back to automatic.
+export type SiblingFeeEditValue = "full" | "ten" | "automatic"
+
+export type SiblingFeeEditReason = "full_fee_sibling_not_enrolled" | "sibling_proof_after_enrolment" | "data_entry_correction"
+
+export type SiblingResult = { result: "full" | "ten" | "none"; source: "auto" | "locked" | "manual" | "legacy" | "prior_sibling" }
+
+export type SiblingFeeFigures = {
+  status: string
+  schoolFee: number | null
+  discount: string | null
+  discountPercent: number | null
+  firstAmount: number | null
+  secondAmount: number | null
+  thirdAmount: number | null
+  priority: string | null
+}
+
+// A lead whose fee the edit moves: the edited lead or a sibling.
+export type SiblingFeeChange = {
+  leadId: string
+  edited: boolean
+  // After minus before; negative when the fee goes down.
+  schoolFeeChange: number | null
+  before: SiblingFeeFigures
+  after: SiblingFeeFigures
+}
+
+export type SiblingFeeEditOutcome = {
+  leadId: string
+  value: SiblingFeeEditValue
+  old: SiblingResult
+  new: SiblingResult
+  changes: SiblingFeeChange[]
+}
+
+export type SiblingFeeEditError =
+  // Signed out, or without payments.record.
+  | { kind: "forbidden" }
+  | { kind: "not-found" }
+  | { kind: "lead-closed" }
+  // The same manual value again, or Back to automatic on an automatic result.
+  | { kind: "unchanged" }
+  // `value`, `reason` or `note`.
+  | { kind: "invalid"; field: string | null }
+  // The request id was used before for another edit.
+  | { kind: "request-reused" }
+  | { kind: "unavailable" }
+
+type FiguresRow = {
+  status: string
+  school_fee: number | null
+  discount: string | null
+  discount_percent: number | null
+  first_amount: number | null
+  second_amount: number | null
+  third_amount: number | null
+  priority: string | null
+}
+
+type EditRow = {
+  edit_id?: string
+  lead_id: string
+  value: SiblingFeeEditValue
+  old: SiblingResult
+  new: SiblingResult
+  changes: { lead_id: string; edited: boolean; school_fee_change: number | null; before: FiguresRow; after: FiguresRow }[]
+}
+
+function figures(row: FiguresRow): SiblingFeeFigures {
+  return {
+    status: row.status,
+    schoolFee: row.school_fee,
+    discount: row.discount,
+    discountPercent: row.discount_percent,
+    firstAmount: row.first_amount,
+    secondAmount: row.second_amount,
+    thirdAmount: row.third_amount,
+    priority: row.priority,
+  }
+}
+
+function outcome(row: EditRow): SiblingFeeEditOutcome {
+  return {
+    leadId: row.lead_id,
+    value: row.value,
+    old: row.old,
+    new: row.new,
+    changes: row.changes.map((c) => ({
+      leadId: c.lead_id,
+      edited: c.edited,
+      schoolFeeChange: c.school_fee_change,
+      before: figures(c.before),
+      after: figures(c.after),
+    })),
+  }
+}
+
+function feeEditError(error: { message: string; code?: string; details?: string | null }, what: string): SiblingFeeEditError {
+  if (error.message === "not_permitted" || error.code === "42501") return { kind: "forbidden" }
+  if (error.message === "not_found" || error.code === "22P02") return { kind: "not-found" }
+  if (error.message === "lead_closed") return { kind: "lead-closed" }
+  if (error.message === "unchanged") return { kind: "unchanged" }
+  if (error.message === "invalid") return { kind: "invalid", field: detailField(error.details) }
+  if (error.message === "request_reused") return { kind: "request-reused" }
+  console.error(what, error)
+  return { kind: "unavailable" }
+}
+
+// Which fees an edit would move, and by how much. Saves nothing.
+export async function previewSiblingFeeEdit(
+  supabase: SupabaseClient,
+  leadId: string,
+  value: SiblingFeeEditValue,
+): Promise<Result<SiblingFeeEditOutcome, SiblingFeeEditError>> {
+  const { data, error } = await supabase.rpc("preview_sibling_fee_edit", { lead_id: leadId, value })
+  if (error) return { ok: false, error: feeEditError(error, "Could not preview a Sibling fee edit") }
+  return { ok: true, data: outcome(data as EditRow) }
+}
+
+// Saves the edit with its reason. `requestId` is the caller's id for this
+// edit: a retry with the same id returns the first answer and saves nothing.
+export async function editSiblingFee(
+  supabase: SupabaseClient,
+  input: { leadId: string; value: SiblingFeeEditValue; reason: SiblingFeeEditReason; note?: string },
+  requestId: string,
+): Promise<Result<SiblingFeeEditOutcome & { editId: string }, SiblingFeeEditError>> {
+  const { data, error } = await supabase.rpc("edit_sibling_fee", {
+    lead_id: input.leadId,
+    value: input.value,
+    reason: input.reason,
+    note: input.note ?? null,
+    request_id: requestId,
+  })
+  if (error) return { ok: false, error: feeEditError(error, "Could not save a Sibling fee edit") }
+  const row = data as EditRow
+  return { ok: true, data: { ...outcome(row), editId: row.edit_id as string } }
+}

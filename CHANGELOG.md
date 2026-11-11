@@ -29,6 +29,13 @@ stay in the `0.x` range.
   wait on one student at once. No screen uses this yet, so nothing changes for staff or families
   today, and the Discount requests screen shows exactly what it shows now. No fee, discount,
   status or seat count changed when this shipped; the update checked that before finishing.
+- The database can now let the Accountant change a student's Sibling discount by hand: Full fee,
+  10%, or Back to automatic, with a reason from a fixed list and an optional note. Before saving,
+  the Accountant can see which siblings' fees would change and by how much. Each change is kept
+  in the student's history with who made it, when, the old and new value and the reason. Back to
+  automatic on an Enrolled student puts back the result fixed at enrolment. No screen uses this
+  yet, so nothing changes for staff or families today. No fee, discount, status or seat count
+  changed when this shipped; the update checked that before finishing.
 
 ## November 12, 2026 `v0.103.0`
 

@@ -126,12 +126,14 @@ export type ChoiceTilesProps = {
    * `two` / `four`: the segmented grid (`.seg`), for the year or the relationship.
    */
   layout?: "rows" | "two" | "four"
+  /** Segmented tiles only: 56px, the label in Exo 800 italic indigo, as the kit page shows a class choice. */
+  big?: boolean
   describedBy?: string
   children?: ReactNode
 }
 
 /** Real radios drawn as pills. The fieldset keeps arrow-key movement and the legend. */
-export function ChoiceTiles({ name, legend, options, value, onChange, layout = "rows", describedBy, children }: ChoiceTilesProps) {
+export function ChoiceTiles({ name, legend, options, value, onChange, layout = "rows", big, describedBy, children }: ChoiceTilesProps) {
   const radio = (o: ChoiceOption) => (
     <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} aria-describedby={describedBy} />
   )
@@ -154,7 +156,7 @@ export function ChoiceTiles({ name, legend, options, value, onChange, layout = "
           </label>
         ))
       ) : (
-        <div className={cn("gf-seg", layout === "two" ? "gf-two" : "gf-four")}>
+        <div className={cn("gf-seg", layout === "two" ? "gf-two" : "gf-four", big && "gf-big")}>
           {options.map((o) => (
             <label key={o.value} lang={o.lang}>
               {radio(o)}

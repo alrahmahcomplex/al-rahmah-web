@@ -39,6 +39,8 @@ export function StaffShell({
   const current = currentNavHref(pathname, items.map((item) => item.href))
   const title = items.find((item) => item.href === current)?.label ?? "Staff"
   const [collapsed, setCollapsed] = useState(initialCollapsed)
+  // The kit page draws the new look on its own until the new shell (#322) arrives.
+  if (pathname === "/staff/kit") return children
 
   function toggleCollapsed() {
     const next = !collapsed

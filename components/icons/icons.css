@@ -1,0 +1,35 @@
+/* Set 2 line icons (DESIGN.md, Icons), as the approved prototype draws them.
+   At rest both layers take the text colour and the circle is invisible at
+   half size. Active, the lines turn indigo and the circle fills Peach Glow
+   and grows to full size; on indigo the lines turn white and the circle
+   orange. The active look is scoped to the new staff shell and the kit page,
+   so the old shell and the public pages never see it. */
+
+.gf-ic { flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.gf-ic-line { stroke: var(--icon-line, currentColor); transition: stroke var(--gf-t-med) var(--gf-ease-out); }
+.gf-ic-glow {
+  fill: var(--icon-glow, transparent); stroke: none;
+  transform-box: fill-box; transform-origin: center; transform: scale(var(--icon-scale, 0.5));
+  transition: fill var(--gf-t-med) var(--gf-ease-out), transform var(--gf-t-slow) var(--gf-ease-out);
+}
+
+:is([data-shell="new"], [data-kit]) :is(
+  [data-icon-host]:hover,
+  [data-icon-host][aria-current]:not([aria-current="false"]),
+  [data-icon-host][aria-pressed="true"]
+) .gf-ic,
+:is([data-shell="new"], [data-kit]) .gf-ic[data-featured] {
+  --icon-line: var(--gf-indigo);
+  --icon-glow: var(--gf-peach-glow);
+  --icon-scale: 1;
+}
+
+:is([data-shell="new"], [data-kit]) :is(
+  [data-icon-host="indigo"]:hover,
+  [data-icon-host="indigo"][aria-current]:not([aria-current="false"]),
+  [data-icon-host="indigo"][aria-pressed="true"]
+) .gf-ic,
+:is([data-shell="new"], [data-kit]) [data-icon-host="indigo"] .gf-ic[data-featured] {
+  --icon-line: var(--gf-paper);
+  --icon-glow: var(--gf-orange);
+}

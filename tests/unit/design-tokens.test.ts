@@ -8,6 +8,7 @@ const read = (path: string) => readFileSync(join(process.cwd(), path), "utf8")
 const tokens = read("app/tokens.css")
 const guidedForm = read("components/guided-form/guided-form.css")
 const globals = read("app/globals.css")
+const icons = read("components/icons/icons.css")
 
 function declared(css: string, selector: string): Map<string, string> {
   const start = css.indexOf(`${selector} {`)
@@ -60,6 +61,7 @@ describe("design tokens", () => {
     expect(root.get("--gf-card-shadow")).toBe("0 1px 2px rgb(9 0 187 / 0.04), 0 12px 28px -18px rgb(9 0 187 / 0.22)")
     expect(root.get("--gf-wash")).toBe("linear-gradient(135deg, #f2f0fc 0%, rgb(224 220 249 / 0.5) 45%, #fff 100%)")
     expect(root.get("--gf-side")).toBe("460ms")
+    expect(root.get("--gf-peach-glow")).toBe("#ffcfa6")
     expect(declared(tokens, "html.rm").get("--gf-side")).toBe("1ms")
     expect(declared(tokens, "@media (prefers-reduced-motion: reduce) {\n  :root").get("--gf-side")).toBe("1ms")
   })
@@ -67,7 +69,7 @@ describe("design tokens", () => {
   it("lets the guided form read the tokens instead of declaring its own", () => {
     expect(guidedForm).not.toMatch(/--gf-[\w-]+\s*:/)
     const all = new Set(tokens.matchAll(/(--gf-[\w-]+)\s*:/g).map((m) => m[1]))
-    for (const css of [guidedForm, globals]) {
+    for (const css of [guidedForm, globals, icons]) {
       for (const [, name] of css.matchAll(/var\((--gf-[\w-]+)/g)) expect(all, name).toContain(name)
     }
   })

@@ -579,6 +579,19 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { link_year: "2027" },
     agent: { returns: [] },
   },
+  // "Sibling of" linking (#301).
+  "public.link_sibling(lead_id uuid, sibling_of_lead_id uuid, father_full_name text, sibling_father_full_name text, answer text, spelling text)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000432'",
+      sibling_of_lead_id: "'1ead0000-0000-4000-8000-000000000431'",
+      father_full_name: "null",
+      sibling_father_full_name: "null",
+      answer: "null",
+      spelling: "null",
+    },
+    agent: { refused: "not_permitted" },
+  },
   "public.list_contact_staff()": {
     roles: ["authenticated"],
     args: {},

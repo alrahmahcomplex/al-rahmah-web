@@ -551,10 +551,14 @@ describe("the migration-day snapshot check", () => {
       // Every lead, seeded ones too, rebuilt as the migration builds it: no
       // fee, discount, status or seat count moves. Left out: leads locked at
       // full and out of Enrolled since, the one case the lock changes on
-      // purpose, where the backfill gives today's live answer instead.
+      // purpose, where the backfill gives today's live answer instead. Also
+      // left out: leads other suites linked as "Sibling of" (#301), which
+      // follow the new rule rather than the Family rule this rebuilds.
+      const linked = `select m.lead_id from public.sibling_group_members m
+        where m.group_id in (select c.group_id from public.sibling_group_members c where c.group_id is not null and not c.legacy)`
       const rebuilt = `r.lead_id not in (
         select x.lead_id from public.lead_sibling_results x join public.leads l on l.id = x.lead_id
-        where x.locked_result = 'full' and l.status <> 'Enrolled')`
+        where x.locked_result = 'full' and l.status <> 'Enrolled') and r.lead_id not in (${linked})`
       await sql.query(
         `update public.lead_sibling_results r
          set result = b.result, source = b.source, locked_result = b.locked_result,
@@ -571,6 +575,7 @@ describe("the migration-day snapshot check", () => {
         `insert into public.lead_sibling_results (lead_id, result, source, locked_result, locked_at, cause)
          select b.lead_id, b.result, b.source, b.locked_result, case when b.locked_result is not null then now() end, 'migration'
          from public.sibling_result_backfill() b
+         where b.lead_id not in (${linked})
          on conflict (lead_id) do nothing`,
       )
       await sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.result_snapshot_before')")

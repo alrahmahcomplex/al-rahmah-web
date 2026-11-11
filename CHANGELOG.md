@@ -5,6 +5,19 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- The database can now link a student as "Sibling of" another and check their fathers' names:
+  the same name makes them siblings, a close name asks staff whether it is a typing mistake, and
+  a different name needs the Admissions Manager. Linked siblings follow the new Sibling fee
+  rule: when siblings register together, the child with the highest fee pays full and the
+  others get 10% at once, whoever pays first; a sibling who comes later, or joins a sibling
+  already Enrolled at full, gets 10%. No screen uses this yet, so nothing changes for staff or
+  families today. No fee, discount, status or seat count changed when this shipped; the update
+  checked that before finishing.
+
 ## November 12, 2026 `v0.101.0`
 
 ### NEW

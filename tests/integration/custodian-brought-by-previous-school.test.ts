@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 import { readFileSync } from "node:fs"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Client } from "pg"
 import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
@@ -9,6 +10,7 @@ vi.mock("server-only", () => ({}))
 import { admissionYears } from "@/lib/admission-form"
 import { getLeadHistory } from "@/lib/services/audit"
 import { declineLead } from "@/lib/services/lead-closure"
+import { approveReopeningRequest, raiseReopeningRequest } from "@/lib/services/reopening-requests"
 import { createLead, updateGuardianContact, updateLeadDetails, type NewContact } from "@/lib/services/leads"
 import { tanzaniaToday } from "@/lib/school-calendar"
 
@@ -302,6 +304,14 @@ describe("correcting who brought the student", () => {
       field: "brought_by_name",
     })
 
+    // The table refuses a malformed phone from any writer, not only this function.
+    await expect(
+      inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        await sql.query("update public.leads set brought_by_name = 'Asha Ali', brought_by_phone = '12' where id = $1", [lead])
+      }),
+    ).rejects.toThrow(/leads_brought_by_phone_normalized/)
+
     // Clearing all three together is a correction like any other.
     await correct(staff, lead, { brought_by_name: "Asha Ali", brought_by_relationship: "neighbour" })
     expect(await correct(staff, lead, { brought_by_name: "", brought_by_relationship: null })).toEqual({
@@ -404,6 +414,76 @@ describe("correcting the previous school", () => {
       data: null,
     })
     expect(await row(lead)).toMatchObject({ previous_school_name: null, previous_school_not_known: false })
+  })
+})
+
+// Contact corrections take the Family lock, then the contact's leads, then
+// the contact. Declining and approving a reopening, which recompute under the
+// Family lock, now take it before their row locks, so neither can hold a lead
+// a contact correction waits for while it waits for the Family lock.
+describe("the lock order", () => {
+  async function familyLockWaiters(sql: Client, contactId: string): Promise<number> {
+    const { rows } = await sql.query<{ n: number }>(
+      `select count(*)::int as n from pg_locks
+       where locktype = 'advisory' and not granted and classid::int = hashtext('lead_family') and objid::int = hashtext($1)`,
+      [contactId],
+    )
+    return rows[0].n
+  }
+
+  // Holds the lead's Family lock while `work` starts, checks that `work` waits
+  // for it holding no lock on the lead's row, then lets it finish.
+  async function waitsForFamilyFirst<T>(leadId: string, work: () => Promise<T>): Promise<T> {
+    const { guardian_contact_id: contactId } = await row(leadId)
+    return inRolledBackTransaction(async (holder) => {
+      await holder.query("select public.lock_families(array[$1::uuid])", [contactId])
+      const running = work()
+      for (let tries = 0; (await familyLockWaiters(holder, contactId)) === 0; tries++) {
+        if (tries > 100) throw new Error("it never waited on the Family lock")
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      const rowFree = await inRolledBackTransaction(async (other) => {
+        await other.query("select public.set_audit_actor('system')")
+        const locked = await other.query("select id from public.leads where id = $1 for update skip locked", [leadId])
+        return locked.rowCount === 1
+      })
+      expect(rowFree).toBe(true)
+      await holder.query("rollback")
+      await holder.query("begin")
+      return running
+    })
+  }
+
+  test("a decline takes the Family lock before the lead's row", async () => {
+    const lead = await walkIn({ contact: parent() })
+    const manager = await signedIn(MANAGER)
+    expect(await waitsForFamilyFirst(lead, () => declineLead(manager, lead, { reason: "Fees or cost" }))).toEqual({
+      ok: true,
+      data: null,
+    })
+  })
+
+  test("approving a reopening takes the Family lock before the request and the lead's row", async () => {
+    const lead = await walkIn({ contact: parent() })
+    const manager = await signedIn(MANAGER)
+    expect(await declineLead(manager, lead, { reason: "Fees or cost" })).toEqual({ ok: true, data: null })
+    const raised = await raiseReopeningRequest(await signedIn(ADMISSIONS), lead, { reason: "The family is back.", source: "lead" })
+    if (!raised.ok) throw new Error(`raise failed: ${JSON.stringify(raised.error)}`)
+    expect(await waitsForFamilyFirst(lead, () => approveReopeningRequest(manager, raised.data))).toEqual({
+      ok: true,
+      data: null,
+    })
+  })
+
+  test("a contact correction takes the Family lock before the contact's leads", async () => {
+    const lead = await walkIn({ contact: parent() })
+    const { guardian_contact_id: contactId } = await row(lead)
+    const staff = await signedIn(ADMISSIONS)
+    expect(await waitsForFamilyFirst(lead, () => updateGuardianContact(staff, contactId, { relationship: "Father" }))).toEqual({
+      ok: true,
+      data: null,
+    })
+    expect((await row(lead)).custodian_relationship).toBe("Father")
   })
 })
 

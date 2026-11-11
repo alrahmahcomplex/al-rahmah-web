@@ -28,10 +28,20 @@
 -- 5. update_lead_details also corrects who brought the student and the
 --    previous school. The audit trigger records every change with who and
 --    when, so lead_history shows it.
+-- 6. Lock order: contact corrections take the Family lock, then the
+--    contact's leads, then the contact row; decline_lead and
+--    approve_reopening_request now take the Family lock before their row
+--    locks too, so none of them can deadlock with another.
 --
 -- No fee, discount, status or Seat priority moves: the backfill runs inside
 -- one `do` block that compares fee_snapshot() before and after, and raises on
 -- any difference.
+--
+-- If the backfill raises, the statements before it (the type, the region
+-- functions, the columns and the copy triggers) stay; they change no fee and
+-- no screen reads them. Find the moved lead in the error's detail, fix the
+-- cause in a new migration, and apply the rest of this file from the backfill
+-- on.
 
 -- ---------------------------------------------------------------------------
 -- The region list and the previous-school check. Internal: no API role may
@@ -136,7 +146,7 @@ alter table public.leads
         check (brought_by_name is null
                or (brought_by_name = btrim(brought_by_name) and char_length(brought_by_name) between 1 and 120)),
     add constraint leads_brought_by_phone_normalized
-        check (brought_by_phone is null or brought_by_phone = public.normalize_phone(brought_by_phone)),
+        check (brought_by_phone is null or brought_by_phone is not distinct from public.normalize_phone(brought_by_phone)),
     add constraint leads_brought_by_relationship_check
         check (brought_by_relationship is null
                or (brought_by_relationship = btrim(brought_by_relationship)
@@ -773,3 +783,176 @@ $$;
 
 revoke execute on function public.update_lead_details(uuid, jsonb) from public, anon;
 grant execute on function public.update_lead_details(uuid, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- decline_lead, as 20261017800100_decline_lead.sql made it, now taking the
+-- lead's Family lock before any row lock, in the documented order (Family,
+-- rows). Contact corrections now take the Family lock and then the contact's leads, so a decline holding its row first could deadlock with one (review of #298). Nothing else changes.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.decline_lead(lead_id uuid, reason text, explanation text default null)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    target public.leads;
+    chosen public.declined_reason;
+    note text := nullif(btrim(coalesce(decline_lead.explanation, '')), '');
+    staff_id uuid;
+begin
+    if auth.role() is distinct from 'authenticated' or not public.has_permission('leads.decline') then
+        raise exception 'not_permitted';
+    end if;
+
+    begin
+        chosen := decline_lead.reason::public.declined_reason;
+    exception when invalid_text_representation then
+        chosen := null;
+    end;
+    if chosen is null then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'reason')::text;
+    end if;
+    if chosen = 'No seat available' and not public.has_permission('academic_years.manage') then
+        raise exception 'not_permitted';
+    end if;
+    if (chosen = 'Other' and note is null) or char_length(note) > 1000 then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'explanation')::text;
+    end if;
+
+    -- The Family lock first (#298): declining an Enrolled lead recomputes its
+    -- siblings under this lock, and a contact correction takes it before the
+    -- contact's leads, so taking it after the row lock could deadlock.
+    perform public.lock_lead_family(decline_lead.lead_id);
+    -- Locked, so two staff declining the same lead at once decline it once:
+    -- whoever comes second finds it closed.
+    select * into target from public.leads l where l.id = decline_lead.lead_id for update;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    perform public.assert_lead_open(target.id);
+
+    select s.id into staff_id from public.staff_members s where s.user_id = auth.uid();
+
+    update public.leads l
+    set status = 'Declined',
+        declined_reason = chosen,
+        declined_explanation = note,
+        declined_at = now(),
+        declined_by = staff_id,
+        status_before_decline = target.status
+    where l.id = target.id;
+end;
+$$;
+
+revoke execute on function public.decline_lead(uuid, text, text) from public, anon;
+grant execute on function public.decline_lead(uuid, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- approve_reopening_request, as 20261029800400_approve_reopening.sql made it, now taking the
+-- lead's Family lock before any row lock, in the documented order (Family,
+-- rows). Same reason as decline_lead above. Nothing else changes.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.approve_reopening_request(request_id uuid, enrol_without_retake boolean default null)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    request public.reopening_requests;
+    target public.leads;
+    staff_id uuid;
+    was_declined boolean;
+    status_before public.lead_status;
+    restored public.lead_status;
+    retake_applies boolean;
+    earlier_override text;
+begin
+    if auth.role() is distinct from 'authenticated' or not public.has_permission('reopenings.approve') then
+        raise exception 'not_permitted';
+    end if;
+
+    -- The Family lock first (#298): reopening recomputes the lead under this
+    -- lock, and a contact correction takes it before the contact's leads, so
+    -- taking it after the lead's row lock could deadlock. A request never
+    -- changes lead, so its lead is read before the request is locked.
+    perform public.lock_lead_family(
+        (select r.lead_id from public.reopening_requests r where r.id = approve_reopening_request.request_id)
+    );
+
+    -- Locked, so an approval, a rejection and a withdrawal at the same moment
+    -- take the request out of Pending once.
+    select * into request from public.reopening_requests r where r.id = approve_reopening_request.request_id for update;
+    if not found then
+        raise exception 'not_found';
+    end if;
+
+    select s.id into staff_id from public.staff_members s where s.user_id = auth.uid();
+
+    if request.state <> 'pending' then
+        -- The same approval again, as a retried click sends: already done.
+        if request.state = 'approved'
+           and request.decided_by = staff_id
+           and request.enrol_without_retake is not distinct from approve_reopening_request.enrol_without_retake then
+            return;
+        end if;
+        raise exception 'not_pending';
+    end if;
+
+    -- Locked, so a mark or a payment recompute on the lead waits for this.
+    select * into target from public.leads l where l.id = request.lead_id for update;
+
+    was_declined := target.status = 'Declined';
+    if was_declined then
+        -- A lead declined before declines recorded the earlier status goes
+        -- back to the earliest status its Visit date allows.
+        status_before := coalesce(
+            target.status_before_decline,
+            case when target.visit_date is null then 'Applied' else 'Visited' end::public.lead_status
+        );
+        restored := case when status_before = 'Enrolled' then 'Interviewed' else status_before end;
+    else
+        restored := target.status;
+    end if;
+
+    retake_applies := was_declined and status_before in ('Interviewed', 'Enrolled');
+    if retake_applies is distinct from (approve_reopening_request.enrol_without_retake is not null) then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'enrol_without_retake')::text;
+    end if;
+
+    earlier_override := coalesce(current_setting('app.lead_lifecycle_override', true), '');
+    perform public.set_lead_lifecycle_override('reopen');
+
+    update public.leads l
+    set status = restored,
+        declined_reason = null,
+        declined_explanation = null,
+        declined_at = null,
+        declined_by = null,
+        status_before_decline = null,
+        initially_declined = l.initially_declined or was_declined,
+        closure = null,
+        closure_reason = null,
+        closure_note = null,
+        closed_at = null,
+        closed_by = null
+    where l.id = target.id;
+
+    perform set_config('app.lead_lifecycle_override', earlier_override, true);
+
+    update public.reopening_requests r
+    set state = 'approved',
+        decided_by = staff_id,
+        decided_at = now(),
+        enrol_without_retake = approve_reopening_request.enrol_without_retake,
+        lead_was_declined = was_declined,
+        restored_status = restored
+    where r.id = request.id;
+end;
+$$;
+
+revoke execute on function public.approve_reopening_request(uuid, boolean) from public, anon;
+grant execute on function public.approve_reopening_request(uuid, boolean) to authenticated;

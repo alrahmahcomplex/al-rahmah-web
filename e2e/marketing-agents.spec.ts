@@ -16,6 +16,9 @@ import { signInOnce } from "./log-in"
 async function signIn(page: Page, person: FixtureStaff) {
   await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
+  // Today is in the new shell, which shows no counts (#323); Check-in keeps the old one.
+  await page.goto("/staff/check-in")
+  await expect(page.getByRole("heading", { level: 1, name: "Who has arrived?" })).toBeVisible()
 }
 
 async function registerPendingAgent() {

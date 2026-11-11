@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### FIXED
+
+- The note under the Discount code on the Admission form now says the person who gave the
+  code will see the admission progress of each student on the form ("kila mwanafunzi kwenye
+  fomu hii"), not "your child". This is right when a form has several students or comes from a
+  guardian. The staff reminder now says "this student's" in place of "their child's".
+  Applications sent before this change keep the record of the old wording.
+
 ## November 10, 2026 `v0.94.0`
 
 ### NEW

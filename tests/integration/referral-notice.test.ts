@@ -6,7 +6,7 @@ vi.mock("server-only", () => ({}))
 
 import type { AdmissionChild, AdmissionForm } from "@/lib/admission-form"
 import { admissionYears } from "@/lib/admission-form"
-import { FORM_NOTICE_VERSION, STAFF_REMINDER_VERSION } from "@/lib/referral-notice"
+import { FORM_NOTICE_V1_VERSION, FORM_NOTICE_VERSION, STAFF_REMINDER_VERSION } from "@/lib/referral-notice"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
 import { createLead } from "@/lib/services/leads"
@@ -166,13 +166,23 @@ describe("apply_form_discount_code with a notice version", () => {
     expect(await versionOf(id)).toBe(FORM_NOTICE_VERSION)
   })
 
-  test("a version the database doesn't know is refused, and the code isn't written", async () => {
+  test("a page from the build before #282 may still record form_v1, the words it showed", async () => {
     const sent = form()
     await submitAdmissionForm(secretClient(), sent)
     const { id } = await leadOf(sent.children[0].fullName)
 
-    const { error } = await secretClient().rpc("apply_form_discount_code", { lead_id: id, code: APPROVED, notice_version: "form_v0" })
+    expect(await applyFormDiscountCode(secretClient(), id, APPROVED, FORM_NOTICE_V1_VERSION)).toEqual({ ok: true, data: { code: APPROVED } })
+    expect(await versionOf(id)).toBe(FORM_NOTICE_V1_VERSION)
+  })
+
+  test.each(["form_v0", "form_v3", "", "FORM_V2"])("the unknown version %j is refused, and the code isn't written", async (version) => {
+    const sent = form()
+    await submitAdmissionForm(secretClient(), sent)
+    const { id } = await leadOf(sent.children[0].fullName)
+
+    const { error } = await secretClient().rpc("apply_form_discount_code", { lead_id: id, code: APPROVED, notice_version: version })
     expect(error?.message).toBe("invalid")
+    expect(JSON.parse(error?.details ?? "null")).toEqual({ field: "notice_version" })
     expect(await leadOf(sent.children[0].fullName)).toMatchObject({ code: null, version: null })
   })
 
@@ -259,6 +269,20 @@ describe("the referral_notice_version column", () => {
     await expect(
       inRolledBackTransaction(async (sql) => {
         await sql.query("update public.leads set referral_notice_version = 'something_else' where id = '1ead0000-0000-4000-8000-000000000431'")
+      }),
+    ).rejects.toThrow(/leads_referral_notice_version_known/)
+
+    // Both Admission form versions and the staff reminder are known: rows
+    // saved with form_v1 before #282 stay valid beside new form_v2 ones.
+    for (const version of [FORM_NOTICE_V1_VERSION, FORM_NOTICE_VERSION, STAFF_REMINDER_VERSION]) {
+      await inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        await sql.query("update public.leads set referral_notice_version = $1 where id = '1ead0000-0000-4000-8000-000000000431'", [version])
+      })
+    }
+    await expect(
+      inRolledBackTransaction(async (sql) => {
+        await sql.query("update public.leads set referral_notice_version = 'form_v9' where id = '1ead0000-0000-4000-8000-000000000431'")
       }),
     ).rejects.toThrow(/leads_referral_notice_version_known/)
   })

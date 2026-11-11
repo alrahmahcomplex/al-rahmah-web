@@ -253,6 +253,39 @@ describe("groups follow the confirmed Family", () => {
     await inRolledBackTransaction(async (sql) => expect(await mirrorMismatches(sql, [known, form.data.leadId])).toEqual([]))
   })
 
+  test("confirming two form children into a Family: both join its group once, with one history entry each", async () => {
+    const [known] = await family(await yearWithSchedule(), 1)
+    const lead = await getLead(await signedIn(ADMISSIONS), known)
+    if (!lead.ok) throw new Error("setup failed")
+    const formClient = secretClient()
+    const first = await createLead(formClient, {
+      guardian: { contact: { fullName: "Typed On The Form", relationship: "Mother", phone: lead.data.contact.phone } },
+      student: student(),
+      start: { kind: "admission-form" },
+    })
+    if (!first.ok) throw new Error("setup failed")
+    const second = await createLead(formClient, {
+      guardian: { contactId: await contactOf(first.data.leadId) },
+      student: student(),
+      start: { kind: "admission-form" },
+    })
+    if (!second.ok) throw new Error("setup failed")
+
+    expect(await confirmFamilyMatch(await signedIn(ADMISSIONS), first.data.leadId)).toEqual({ ok: true, data: null })
+    const group = await groupOf(known)
+    expect(group).not.toBeNull()
+    for (const id of [first.data.leadId, second.data.leadId]) {
+      expect(await membershipOf(id)).toEqual({ group_id: group, legacy: true, sibling_of_lead_id: null, cause: "family" })
+      const entries = await inRolledBackTransaction(async (sql) =>
+        (await sql.query("select action from public.audit_log where lead_id = $1 and table_name = 'sibling_group_members'", [id])).rows,
+      )
+      expect(entries).toEqual([{ action: "insert" }])
+    }
+    await inRolledBackTransaction(async (sql) =>
+      expect(await mirrorMismatches(sql, [known, first.data.leadId, second.data.leadId])).toEqual([]),
+    )
+  })
+
   test("settling a pending match: rejecting makes the contact's children a group of their own", async () => {
     const [known] = await family(await yearWithSchedule(), 1)
     const lead = await getLead(await signedIn(ADMISSIONS), known)
@@ -417,10 +450,17 @@ describe("the migration-day backfill", () => {
       start: { kind: "admission-form" },
     })
     if (!pending.ok) throw new Error("setup failed")
+    // A second child on the same unconfirmed contact, so the contact has 2 leads.
+    const pendingSecond = await createLead(secretClient(), {
+      guardian: { contactId: await contactOf(pending.data.leadId) },
+      student: student(),
+      start: { kind: "admission-form" },
+    })
+    if (!pendingSecond.ok) throw new Error("setup failed")
 
     const everyone = [
       enrolledFull, kept, waiting, declined, archived, imported, separatedEnrolled, separatedKept, ticked, staffSibling, staffChild,
-      pending.data.leadId,
+      pending.data.leadId, pendingSecond.data.leadId,
     ]
 
     await inRolledBackTransaction(async (sql) => {
@@ -454,8 +494,8 @@ describe("the migration-day backfill", () => {
       for (const id of [kept, waiting, declined, archived, imported]) {
         expect(await membershipOf(id, sql)).toEqual({ group_id: family1, legacy: true, sibling_of_lead_id: null, cause: "migration" })
       }
-      // A Family of one child, a separated child, a tick and a pending match: no group.
-      for (const id of [separatedEnrolled, separatedKept, ticked, pending.data.leadId]) {
+      // A Family of one child, a separated child, a tick and a pending match of two children: no group.
+      for (const id of [separatedEnrolled, separatedKept, ticked, pending.data.leadId, pendingSecond.data.leadId]) {
         expect(await membershipOf(id, sql)).toBeNull()
       }
       expect(await groupOf(staffChild, sql)).toBe(await groupOf(staffSibling, sql))

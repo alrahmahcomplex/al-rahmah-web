@@ -472,6 +472,10 @@ begin
         select coalesce(array_agg(distinct l.guardian_contact_id), '{}') into contacts
         from public.sibling_group_members m join public.leads l on l.id = m.lead_id
         where m.group_id = recompute_sibling_group.group_id;
+        -- A second pass, for contacts that joined the group meanwhile, takes
+        -- Family locks after the group lock. It cannot happen while a group's
+        -- members all sit on one contact; #301, whose groups span contacts,
+        -- takes every lock up front instead.
         loop
             perform public.lock_families(contacts);
             perform public.lock_sibling_groups(array[group_id]);
@@ -570,7 +574,15 @@ begin
         if old.guardian_contact_id is distinct from new.guardian_contact_id then
             perform public.lock_families(array[old.guardian_contact_id, new.guardian_contact_id]);
             old_group := public.lead_sibling_group(new.id);
-            perform public.leave_legacy_sibling_group(new.id, 'family');
+            -- Confirming moves every child in one update. An earlier child's sync
+            -- may already have put this one in the new contact's group: it stays.
+            if old_group is null or not exists (
+                select 1 from public.sibling_group_members m join public.leads l on l.id = m.lead_id
+                where m.group_id = old_group and m.lead_id <> new.id
+                  and l.guardian_contact_id = new.guardian_contact_id
+            ) then
+                perform public.leave_legacy_sibling_group(new.id, 'family');
+            end if;
             perform public.sync_family_sibling_group(new.guardian_contact_id, 'family');
             perform public.recompute_lead_fee(new.id, 'family');
             perform public.recompute_sibling_group(old_group, 'family');

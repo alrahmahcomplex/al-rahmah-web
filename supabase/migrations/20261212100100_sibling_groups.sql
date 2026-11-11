@@ -33,10 +33,9 @@
 --
 -- Lock order: the Academic-year lock, then Family locks, then group locks,
 -- then rows, each set sorted by key. lock_families now takes the group
--- locks of every group with a member on the contacts it locks, right after
--- the Family locks, reading the groups again under the locks and trying
--- again (releasing them) when they changed, as lock_lead_family does for a
--- lead's contact. Every function that locks a lead row already takes the
+-- locks of the contacts' groups (each legacy group names its contact),
+-- right after the Family locks, reading the groups again under the locks
+-- and locking any that appeared. Every function that locks a lead row already takes the
 -- Family lock first through lock_families or lock_lead_family, or takes no
 -- Family lock at all (the rest of #337), so each one now takes the group
 -- lock before the row. Until #301, a group's members all sit on one
@@ -81,6 +80,10 @@ begin
         -- (S1 rule 2). Chosen by #301; empty until then.
         full_payer_lead_id uuid references public.leads (id),
         full_payer_chosen_at timestamptz,
+        -- The confirmed Family (guardian contact) a legacy group stands for.
+        -- Until #301, every group is one and its members are exactly that
+        -- contact's leads, so finding a contact's group is one index read.
+        legacy_contact_id uuid unique references public.guardian_contacts (id),
         cause text not null check (cause in ('migration', 'lead_created', 'family')),
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now(),
@@ -153,26 +156,26 @@ begin
 
     revoke execute on function public.lock_sibling_groups(uuid[]) from public, anon, authenticated, service_role;
 
-    -- family_sibling_groups(contact_ids): the groups with a member on these
-    -- contacts, sorted. Internal.
+    -- family_sibling_groups(contact_ids): the legacy groups of these
+    -- contacts, sorted. While every group is a legacy Family group, these are
+    -- the groups of every lead on the contacts. #301, whose groups span
+    -- contacts, adds the rest. Internal.
     create function public.family_sibling_groups(contact_ids uuid[])
     returns uuid[]
     language sql
     stable
     set search_path = ''
     as $fn$
-        select coalesce(array_agg(distinct m.group_id order by m.group_id), '{}')
-        from public.leads l
-        join public.sibling_group_members m on m.lead_id = l.id
-        where l.guardian_contact_id = any (contact_ids) and m.group_id is not null;
+        select coalesce(array_agg(g.id order by g.id), '{}')
+        from public.sibling_groups g
+        where g.legacy_contact_id = any (contact_ids);
     $fn$;
 
     revoke execute on function public.family_sibling_groups(uuid[]) from public, anon, authenticated, service_role;
 
     -- lock_families, as 20261211100100_sibling_result.sql made it, now
     -- taking the group locks of the contacts' groups after the Family locks.
-    -- The groups are read again under their locks; when they changed, the
-    -- try is rolled back, which releases its group locks, and taken again.
+    -- The groups are read again under their locks.
     -- Same signature.
     create or replace function public.lock_families(contact_ids uuid[])
     returns void
@@ -194,21 +197,18 @@ begin
             perform pg_advisory_xact_lock(hashtext('lead_family'), family_key);
         end loop;
 
+        -- No subtransaction here: this runs several times for every lead
+        -- written, and thousands of subtransactions in one transaction (a
+        -- bulk insert) make every later read slow. A legacy group is made
+        -- only under its contact's Family lock, held from here on, so the
+        -- re-read finds the same groups; any it adds are locked in turn.
         groups := public.family_sibling_groups(contact_ids);
-        if groups = '{}' then
-            return;
-        end if;
         loop
-            begin
-                perform public.lock_sibling_groups(groups);
-                read_again := public.family_sibling_groups(contact_ids);
-                if read_again <@ groups then
-                    return;
-                end if;
-                raise exception using errcode = 'P0114', message = 'sibling_groups_moved';
-            exception when sqlstate 'P0114' then
-                groups := read_again;
-            end;
+            exit when groups = '{}';
+            perform public.lock_sibling_groups(groups);
+            read_again := public.family_sibling_groups(contact_ids);
+            exit when read_again <@ groups;
+            groups := groups || read_again;
         end loop;
     end;
     $fn$;
@@ -231,11 +231,14 @@ begin
     -- Groups follow the Family, as legacy members.
     -- -----------------------------------------------------------------------
 
-    -- sync_family_sibling_group(contact_id, cause): on a confirmed contact
-    -- with 2 or more leads, every lead in no group joins the contact's
-    -- legacy group, which is made when there is none. A contact with a
-    -- pending match is left alone. Takes the Family lock. Internal.
-    create function public.sync_family_sibling_group(contact_id uuid, cause text)
+    -- sync_family_sibling_group(contact_id, cause, lead_id): on a confirmed
+    -- contact, the contact's legacy group takes in its leads. With a lead,
+    -- only that lead joins, when the group exists; it is made, with every
+    -- lead on the contact, when the contact has 2 or more leads and no group
+    -- yet. Without a lead (a rejected match), every lead in no group joins.
+    -- A contact with a pending match is left alone. Takes the Family lock.
+    -- Internal.
+    create function public.sync_family_sibling_group(contact_id uuid, cause text, lead_id uuid default null)
     returns void
     language plpgsql
     security definer
@@ -243,6 +246,7 @@ begin
     as $fn$
     declare
         target uuid;
+        only_lead uuid := sync_family_sibling_group.lead_id;
     begin
         if contact_id is null or not exists (
             select 1 from public.guardian_contacts g
@@ -252,34 +256,27 @@ begin
         end if;
         perform public.lock_families(array[contact_id]);
 
-        if (select count(*) from public.leads l where l.guardian_contact_id = sync_family_sibling_group.contact_id) < 2
-           or not exists (
-               select 1 from public.leads l
-               left join public.sibling_group_members m on m.lead_id = l.id
-               where l.guardian_contact_id = sync_family_sibling_group.contact_id and m.group_id is null
-           ) then
-            return;
-        end if;
-
-        select m.group_id into target
-        from public.leads l
-        join public.sibling_group_members m on m.lead_id = l.id
-        join public.sibling_groups g on g.id = m.group_id
-        where l.guardian_contact_id = sync_family_sibling_group.contact_id and m.legacy
-        order by g.created_at, g.id
-        limit 1;
-
+        select g.id into target from public.sibling_groups g where g.legacy_contact_id = sync_family_sibling_group.contact_id;
         if target is null then
-            insert into public.sibling_groups (cause) values (sync_family_sibling_group.cause) returning id into target;
+            if (select count(*) from (
+                    select 1 from public.leads l where l.guardian_contact_id = sync_family_sibling_group.contact_id limit 2
+                ) two) < 2 then
+                return;
+            end if;
+            insert into public.sibling_groups (legacy_contact_id, cause)
+            values (sync_family_sibling_group.contact_id, sync_family_sibling_group.cause)
+            returning id into target;
             perform public.lock_sibling_groups(array[target]);
+            only_lead := null;
         end if;
 
         insert into public.sibling_group_members as m (lead_id, group_id, legacy, cause, joined_at)
         select l.id, target, true, sync_family_sibling_group.cause, now()
         from public.leads l
         where l.guardian_contact_id = sync_family_sibling_group.contact_id
+          and (only_lead is null or l.id = only_lead)
         order by l.id
-        on conflict (lead_id) do update
+        on conflict on constraint sibling_group_members_lead_id_key do update
         set group_id = excluded.group_id,
             legacy = true,
             sibling_of_lead_id = null,
@@ -290,7 +287,7 @@ begin
     end;
     $fn$;
 
-    revoke execute on function public.sync_family_sibling_group(uuid, text) from public, anon, authenticated, service_role;
+    revoke execute on function public.sync_family_sibling_group(uuid, text, uuid) from public, anon, authenticated, service_role;
 
     -- leave_legacy_sibling_group(lead_id, cause): a lead that left its
     -- Family's contact leaves its legacy group. A member that isn't legacy
@@ -385,14 +382,19 @@ begin
                        when coalesce(p.prior_sibling, false) then 'ten'
                        when r.locked_result = 'full' then 'full'
                        when l.status <> 'Enrolled' and exists (
+                           -- Another member of the lead's group that is
+                           -- Enrolled. A legacy group's members are its
+                           -- contact's leads, so they are found through the
+                           -- contact and status index; #301 replaces this
+                           -- for groups that span contacts.
                            select 1
                            from public.sibling_group_members own
+                           join public.sibling_groups grp on grp.id = own.group_id
+                           join public.leads s
+                               on s.guardian_contact_id = grp.legacy_contact_id and s.status = 'Enrolled' and s.id <> own.lead_id
                            join public.sibling_group_members other
-                               on other.group_id = own.group_id and other.lead_id <> own.lead_id
-                           join public.leads s on s.id = other.lead_id
+                               on other.lead_id = s.id and other.group_id = own.group_id
                            where own.lead_id = l.id
-                             and own.group_id is not null
-                             and s.status = 'Enrolled'
                        ) then 'ten'
                        else 'none'
                    end::public.sibling_result as result,
@@ -583,7 +585,7 @@ begin
             ) then
                 perform public.leave_legacy_sibling_group(new.id, 'family');
             end if;
-            perform public.sync_family_sibling_group(new.guardian_contact_id, 'family');
+            perform public.sync_family_sibling_group(new.guardian_contact_id, 'family', new.id);
             perform public.recompute_lead_fee(new.id, 'family');
             perform public.recompute_sibling_group(old_group, 'family');
             perform public.recompute_sibling_group(public.lead_sibling_group(new.id), 'family');
@@ -644,7 +646,7 @@ begin
     set search_path = ''
     as $fn$
     begin
-        perform public.sync_family_sibling_group(new.guardian_contact_id, 'lead_created');
+        perform public.sync_family_sibling_group(new.guardian_contact_id, 'lead_created', new.id);
         if new.status = 'Enrolled' then
             perform public.lock_sibling_result(new.id, 'lead_created', true);
         else
@@ -744,14 +746,15 @@ begin
             from public.guardian_contacts g
             where g.pending_family_match_id is null
               and (select count(*) from public.leads l where l.guardian_contact_id = g.id) >= 2
+              and not exists (select 1 from public.sibling_groups x where x.legacy_contact_id = g.id)
               and not exists (
                   select 1 from public.leads l join public.sibling_group_members m on m.lead_id = l.id
                   where l.guardian_contact_id = g.id
               )
         ),
         made as (
-            insert into public.sibling_groups (id, cause)
-            select f.group_id, 'migration' from families f
+            insert into public.sibling_groups (id, legacy_contact_id, cause)
+            select f.group_id, f.contact_id, 'migration' from families f
             returning id
         ),
         joined as (

@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactElement,
   type ReactNode,
 } from "react"
@@ -69,9 +70,30 @@ export function GuidedStack({ children, instant = false, className }: { children
   return <ol className={cn("gf-stack", className)}>{out}</ol>
 }
 
+function subscribeReducedMotion(onChange: () => void): () => void {
+  if (typeof window.matchMedia !== "function") return () => {}
+  const query = window.matchMedia("(prefers-reduced-motion: reduce)")
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
+/**
+ * `prefersReducedMotion()` for render code. It is false on the server and
+ * while hydrating, then the browser's answer, so the server's HTML and the
+ * first browser render always match (#334).
+ */
+function useReducedMotion(): boolean {
+  return useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false)
+}
+
 /** Unfold on mount, fold before leaving. Returns the classes for the `li`. */
 function useItemMotion(leaving: boolean | undefined, instant: boolean | undefined) {
-  const [pre, setPre] = useState(!instant && !prefersReducedMotion())
+  // The server can't know about reduced motion, so every item starts about
+  // to unfold, in the browser too. Under reduced motion the classes are left
+  // off instead: a first browser render that differed from the server's HTML
+  // kept the server's classes and left the question folded (#334).
+  const reduced = useReducedMotion()
+  const [pre, setPre] = useState(!instant)
   const [moving, setMoving] = useState(pre)
 
   useLayoutEffect(() => {
@@ -87,7 +109,7 @@ function useItemMotion(leaving: boolean | undefined, instant: boolean | undefine
     return () => window.clearTimeout(timer)
   }, [pre, moving])
 
-  return cn((pre || leaving) && "gf-pre", (moving || leaving) && "gf-moving", leaving && "gf-leaving")
+  return cn(((pre && !reduced) || leaving) && "gf-pre", ((moving && !reduced) || leaving) && "gf-moving", leaving && "gf-leaving")
 }
 
 export type StepState = "open" | "folded"

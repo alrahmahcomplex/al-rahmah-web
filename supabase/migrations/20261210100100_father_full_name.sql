@@ -7,10 +7,11 @@
 --    `edited` (corrected by staff) or `typo_confirmed` (a typing mistake
 --    staff confirmed). Both are empty together.
 -- 2. A trigger fills it on every insert from a name of two or more words,
---    whatever path creates the lead, and
---    fills it again when the student's name changes while the source is
---    `derived` or `backfilled`, or while it is empty. A staff-entered value
---    (`edited`, `typo_confirmed`) never moves with the student's name. Name
+--    whatever path creates the lead, and fills it again when the student's
+--    name changes while the source is `derived` or `backfilled` (#299). An
+--    empty one stays empty; staff add it at check-in or on linking. A
+--    staff-entered value (`edited`, `typo_confirmed`) never moves with the
+--    student's name. Name
 --    corrections already pass the duplicate check in update_lead_details
 --    before the row changes, so every re-derivation does too.
 -- 3. father_name_match(a, b): `same`, `close` or `different` (S5). It only
@@ -127,7 +128,7 @@ begin
     if new.student_name is distinct from old.student_name
        and new.father_full_name is not distinct from old.father_full_name
        and new.father_full_name_source is not distinct from old.father_full_name_source
-       and (old.father_full_name_source is null or old.father_full_name_source in ('derived', 'backfilled')) then
+       and old.father_full_name_source in ('derived', 'backfilled') then
         new.father_full_name := public.derive_father_full_name(new.student_name);
         new.father_full_name_source := case
             when new.father_full_name is null then null

@@ -245,7 +245,7 @@ describe("re-deriving on a student name correction", () => {
     expect(await father(lead)).toEqual({ father_full_name: a, father_full_name_source: "derived" })
   })
 
-  test("a new name of one word empties a derived name, and a later name fills it again", async () => {
+  test("a new name of one word empties a derived name, and it stays empty after", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       const lead = await insertLead(sql, await newContact(sql), "Amina Hassan Juma", null, null)
@@ -257,7 +257,8 @@ describe("re-deriving on a student name correction", () => {
           )
         ).rows[0]
       expect(await rename("Amina")).toEqual({ father_full_name: null, father_full_name_source: null })
-      expect(await rename("Amina Bakari Ali")).toEqual({ father_full_name: "Bakari Ali", father_full_name_source: "derived" })
+      // Only a derived or backfilled name moves with the student's name (#299).
+      expect(await rename("Amina Bakari Ali")).toEqual({ father_full_name: null, father_full_name_source: null })
     })
   })
 

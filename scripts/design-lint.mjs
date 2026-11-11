@@ -111,6 +111,19 @@ function staticTokens(node) {
   return words([node.head.text, ...node.templateSpans.map((span) => span.literal.text)].join("\u0000"))
 }
 
+// The ${…} of a template that stand as classes of their own: space or the
+// template's start before, space or its end after. `md:${"italic"}` and
+// `${"italic"}x` make other classes, so they lend nothing.
+function standaloneSpans(template) {
+  const spans = template.templateSpans
+  return spans.filter((span, i) => {
+    const before = i === 0 ? template.head.text : spans[i - 1].literal.text
+    const after = span.literal.text
+    const last = i === spans.length - 1
+    return (before === "" ? i === 0 : /\s$/.test(before)) && (after === "" ? last : /^\s/.test(after))
+  })
+}
+
 // A string that lends its italic: a bare italic, no font of its own and no
 // not-italic.
 const lendsItalic = (tokens) => hasItalic(tokens) && !hasUpright(tokens) && !tokens.some(isExoClass)
@@ -148,7 +161,7 @@ function alwaysItalic(expr) {
   if (ts.isParenthesizedExpression(expr)) return alwaysItalic(expr.expression)
   if (isClassString(expr)) {
     if (lendsItalic(staticTokens(expr))) return true
-    return ts.isTemplateExpression(expr) && expr.templateSpans.some((span) => alwaysItalic(span.expression))
+    return ts.isTemplateExpression(expr) && standaloneSpans(expr).some((span) => alwaysItalic(span.expression))
   }
   if (ts.isConditionalExpression(expr)) return alwaysItalic(expr.whenTrue) && alwaysItalic(expr.whenFalse)
   if (isClassCall(expr)) return expr.arguments.some(alwaysItalic)
@@ -162,7 +175,7 @@ function alwaysItalic(expr) {
 function companions(node, child) {
   if (isClassCall(node)) return node.arguments.filter((a) => a !== child)
   if (ts.isArrayLiteralExpression(node)) return node.elements.filter((e) => e !== child)
-  if (ts.isTemplateExpression(node)) return node.templateSpans.filter((s) => s !== child).map((s) => s.expression)
+  if (ts.isTemplateExpression(node)) return standaloneSpans(node).filter((s) => s !== child).map((s) => s.expression)
   return []
 }
 
@@ -172,7 +185,7 @@ function companions(node, child) {
  * the companions at each level and the text of any template it sits in.
  */
 function italicLent(exo) {
-  if (ts.isTemplateExpression(exo) && exo.templateSpans.some((span) => alwaysItalic(span.expression))) return true
+  if (ts.isTemplateExpression(exo) && standaloneSpans(exo).some((span) => alwaysItalic(span.expression))) return true
   const group = outermostGroup(exo)
   if (!group) return false
   for (let child = exo, node = exo.parent; child !== group; child = node, node = node.parent) {

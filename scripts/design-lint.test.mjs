@@ -84,6 +84,13 @@ test("nested template literals are read one by one", () => {
   assert.deepEqual(lines(uprightExoInScript("<p className={`font-exo ${x ? `italic` : ``}`} />")), [1])
   assert.deepEqual(lines(uprightExoInScript("<p className={`px-2 ${x ? `a` : `b`} font-exo`} />")), [1])
   assert.deepEqual(lines(uprightExoInScript("const a = `${`x`}`\nconst b = `font-exo ${`y`} italic`")), [])
+  // a ${…} glued to other text makes another class, not a bare italic
+  assert.deepEqual(lines(uprightExoInScript('const a = `font-exo ${"italic"}`')), [])
+  assert.deepEqual(lines(uprightExoInScript('const a = `font-exo md:${"italic"}`')), [1])
+  assert.deepEqual(lines(uprightExoInScript('const a = `font-exo ${"italic"}x`')), [1])
+  assert.deepEqual(lines(uprightExoInScript('const a = `font-exo ${"italic"}${b}`')), [1])
+  assert.deepEqual(lines(uprightExoInScript('cn(`md:${"italic"}`, "font-exo")')), [1])
+  assert.deepEqual(lines(uprightExoInScript('const a = `md:${on ? "font-exo" : ""} ${"italic"}`')), [])
 })
 
 test("a conditional string lends no italic; each branch is checked on its own", () => {

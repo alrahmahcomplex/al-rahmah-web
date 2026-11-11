@@ -32,7 +32,7 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 | `toast` and `Toaster` from the kit | `toast` from `sonner`, `ui/sonner` |
 | `rainConfetti` | the Admission form's `Confetti` (that burst stays on the Admission form) |
 
-The new shell comes with #322.
+The new shell (#322) draws a route marked `"new"` in `app/staff/route-looks.ts`; ESLint then refuses the old parts in that route's folder.
 
 ## Buttons
 
@@ -172,4 +172,4 @@ toast("Fee saved. The change and its reason are in the audit log.")
 rainConfetti()
 ```
 
-`toast` shows one sentence in the Indigo Night pill at the bottom centre for 2.6s; a new one replaces it. It goes to the kit's `Toaster`, which the new shell mounts once (the kit page mounts its own until then); the old shell's toasts keep their look. `rainConfetti` is the finished registration's rain. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, and there is no confetti.
+`toast` shows one sentence in the Indigo Night pill at the bottom centre for 2.6s; a new one replaces it. It goes to the kit's `Toaster`, which the new shell mounts once; the old shell's toasts keep their look. `rainConfetti` is the finished registration's rain. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, and there is no confetti.

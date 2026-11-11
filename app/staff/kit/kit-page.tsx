@@ -30,7 +30,6 @@ import {
   Tag,
   TaskCard,
   TextLink,
-  Toaster,
 } from "@/components/kit"
 import type { LeadStatus } from "@/lib/services/leads"
 
@@ -514,15 +513,13 @@ function MorePieces() {
   )
 }
 
+// Drawn in the new shell (#322), which holds the stage, the page column and the kit Toaster.
 export function KitPage() {
   return (
-    <div data-kit="" className="kp-stage">
-      <main className="kp-page">
-        <PageHeader title="Design system" subtitle="Every piece below is copied from the Admission form’s code, so the staff side and the parent side stay one family." />
-        <DesignSystem />
-        <MorePieces />
-      </main>
-      <Toaster />
-    </div>
+    <>
+      <PageHeader title="Design system" subtitle="Every piece below is copied from the Admission form’s code, so the staff side and the parent side stay one family." />
+      <DesignSystem />
+      <MorePieces />
+    </>
   )
 }

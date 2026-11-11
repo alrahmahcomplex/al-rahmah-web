@@ -1,0 +1,222 @@
+/* The new staff shell (DESIGN.md, Layout: The staff shell), measured from
+   the approved prototype, version 13: a white frame holding the sidebar and
+   one rounded stage with its border drawn above the content, the top bar in
+   the frame, the stage's scrollbar outside it, and a drawer on phones.
+   Colours, curves and timings come from app/tokens.css. */
+
+.ns {
+  --ns-w: var(--ns-open, 190px);
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: var(--ns-w) minmax(0, 1fr);
+  padding: 4px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px));
+  overflow: hidden;
+  background: var(--gf-paper);
+  color: var(--gf-ink);
+  font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: grid-template-columns var(--gf-side) var(--gf-ease-out);
+}
+html:has(.ns) body { background: var(--gf-paper); }
+.ns[data-folded] { --ns-w: 60px; }
+.ns[data-resizing] { transition: none; cursor: col-resize; user-select: none; }
+
+/* ---------- the sidebar, and the same list inside the phone drawer ---------- */
+.ns-sb { min-width: 0; display: flex; flex-direction: column; padding-right: 12px; overflow: hidden; }
+
+.ns-head { position: relative; height: 54px; flex: none; }
+.ns-logo {
+  position: absolute; left: 6px; top: 9px; width: 36px; height: 36px; border-radius: 50%;
+  border: 1.5px solid var(--gf-line); background: var(--gf-paper); object-fit: cover;
+}
+.ns-name {
+  position: absolute; left: 50px; top: 9px; height: 36px; display: flex; flex-direction: column; justify-content: center;
+  white-space: nowrap;
+  transition: opacity var(--gf-t-med) var(--gf-ease-out), transform var(--gf-side) var(--gf-ease-out);
+}
+.ns-name b {
+  display: block; color: var(--gf-indigo);
+  font: italic 800 var(--ns-title, 14px) / 1.2 var(--font-exo), "Exo", system-ui, sans-serif;
+}
+.ns-name small { display: block; font-size: calc(var(--ns-title, 14px) * 0.8); line-height: 1.2; color: var(--gf-quiet); }
+.ns[data-folded] .ns-name { opacity: 0; transform: translateX(-10px); pointer-events: none; }
+
+/* The list always fits: rows shrink from 26px to 24px and group gaps from
+   25px to 15px on a short screen; past that it scrolls with no bar. */
+.ns-nav {
+  flex: 1; min-height: 0; overflow: hidden auto; padding: 0 0 6px; display: flex; flex-direction: column;
+  scrollbar-width: none;
+}
+.ns-nav::-webkit-scrollbar { display: none; }
+
+.ns-group {
+  flex: 0 1 25px; min-height: 15px; display: flex; align-items: flex-end; margin: 0; padding: 0 10px 4px;
+  white-space: nowrap; overflow: hidden; letter-spacing: 0.06em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--gf-indigo) 62%, transparent);
+  font: italic 700 10.5px/1 var(--font-exo), "Exo", system-ui, sans-serif;
+  transition: padding var(--gf-side) var(--gf-ease-out), margin var(--gf-side) var(--gf-ease-out), background var(--gf-t-med);
+}
+.ns-group:first-child { flex-basis: 17px; }
+
+.ns-link {
+  position: relative; flex: 0 1 26px; min-height: 24px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
+  border-radius: 14px; color: var(--gf-ink-soft); font-weight: 500; font-size: 13px; white-space: nowrap; text-decoration: none;
+  outline: none;
+  transition: background var(--gf-t-med) var(--gf-ease-out), color var(--gf-t-med), padding var(--gf-side) var(--gf-ease-out),
+    margin var(--gf-side) var(--gf-ease-out), border-radius var(--gf-side) var(--gf-ease-out);
+}
+.ns-link:hover { background: var(--gf-chrome); color: var(--gf-indigo); }
+/* Inside the ring, as the list clips anything past its edges. */
+.ns-link:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offset: -3px; }
+.ns-link[aria-current="page"] {
+  background: var(--gf-whisper); color: var(--gf-indigo);
+  font: italic 700 13.5px var(--font-exo), "Exo", system-ui, sans-serif;
+}
+.ns-link .gf-ic { width: 16px; height: 16px; }
+
+/* A hovered label rolls up to a second copy of itself. */
+.ns-label { position: relative; height: 20px; line-height: 20px; overflow: hidden; transition: opacity var(--gf-t-med) var(--gf-ease-out); }
+.ns-roll { position: relative; display: block; transition: transform 340ms var(--gf-ease-out); }
+.ns-copy { position: absolute; left: 0; top: 100%; }
+.ns-link:not([aria-current="page"]):hover .ns-roll { transform: translateY(-100%); }
+
+/* A touch screen gets 44px rows. */
+@media (pointer: coarse) {
+  .ns-link { flex: 0 0 44px; min-height: 44px; }
+}
+
+/* Folded: group names become lines, each row a circle up to 30px. */
+.ns[data-folded] .ns-group { flex: none; height: 1px; min-height: 1px; padding: 0; margin: 5px 14px 5px 12px; background: var(--gf-mist); }
+.ns[data-folded] .ns-group:first-child { margin-top: 0; background: transparent; }
+.ns[data-folded] .ns-group span {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.ns[data-folded] .ns-link {
+  flex: 0 1 30px; min-height: 24px; height: auto; width: auto; aspect-ratio: 1; align-self: center; margin: 0; padding: 0; gap: 0;
+  justify-content: center; border-radius: 50%; overflow: hidden;
+}
+.ns[data-folded] .ns-label { width: 0; flex: none; opacity: 0; }
+
+/* The plain list the sidebar falls back to if it fails. */
+.ns-plain { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; margin: 0; list-style: none; }
+.ns-plain a { color: var(--gf-indigo); font-size: 13px; }
+
+/* ---------- the top bar, in the frame above the stage ---------- */
+.ns-main { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.ns-tb { position: relative; z-index: 30; flex: none; height: 54px; display: flex; align-items: center; gap: 10px; padding: 0 2px 2px 0; }
+.ns-spacer { flex: 1; }
+.ns-search { position: relative; flex: 0 1 340px; min-width: 0; margin: 0; }
+.ns-search .kit-fieldwrap { width: 100%; }
+
+/* The sidebar toggle: no outline at rest, a Lavender Whisper circle while the sidebar is open. */
+.ns .ns-tog { border-color: transparent; background: transparent; color: var(--gf-ink-soft); }
+.ns .ns-tog:hover { background: var(--gf-chrome); color: var(--gf-indigo); }
+.ns .ns-tog[aria-pressed="true"] { background: var(--gf-whisper); color: var(--gf-indigo); }
+.ns .ns-tog .gf-ic { width: 19px; height: 19px; }
+
+.ns-bellw { position: relative; flex: none; }
+.ns-pip {
+  position: absolute; right: -3px; top: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; pointer-events: none;
+  display: grid; place-items: center; background: var(--gf-orange); color: var(--gf-paper); box-shadow: 0 0 0 2px var(--gf-paper);
+  font: 700 10.5px/1 var(--font-sans), system-ui, sans-serif; font-style: normal; font-variant-numeric: tabular-nums;
+}
+
+.ns-me {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 4px; border-radius: 999px; border: 1.5px solid var(--gf-line);
+  background: var(--gf-paper); color: var(--gf-ink); flex: none; text-align: left; cursor: pointer; font: inherit;
+  transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.ns-me:hover, .ns-me[aria-expanded="true"] { background: var(--gf-whisper); }
+.ns-me:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offset: 2px; }
+.ns-me i {
+  width: 30px; height: 30px; border-radius: 50%; background: var(--gf-indigo); color: var(--gf-paper); display: grid; place-items: center;
+  font: italic 800 12px var(--font-exo), "Exo", system-ui, sans-serif;
+}
+.ns-me b { display: block; font-size: 12.5px; font-weight: 600; line-height: 1.2; }
+.ns-me small { display: block; font-size: 11px; line-height: 1.2; color: var(--gf-quiet); }
+
+/* The bell's list: it scrolls when it is longer than the window. */
+.ns-requests { display: flex; flex-direction: column; max-height: calc(100dvh - 160px); overflow-y: auto; overscroll-behavior: contain; }
+.ns-pop-line { margin: 4px 0 8px; font-size: 13px; color: var(--gf-ink-soft); }
+.ns-signout { display: flex; flex-direction: column; }
+
+/* ---------- the stage ---------- */
+.ns-stage {
+  position: relative; flex: 1; min-height: 0; border-radius: 28px; background: var(--gf-wash); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+/* The border sits above the content, so it stays visible while the page scrolls beneath it. */
+.ns-stage::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 8;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gf-indigo) 18%, transparent);
+}
+.ns-scroll { flex: 1; min-height: 0; overflow: auto; padding: 26px 40px 56px; outline: none; scrollbar-width: none; }
+.ns-scroll::-webkit-scrollbar { display: none; }
+.ns-page { max-width: 1180px; margin: 0 auto; }
+
+/* Each block of a page rises in on a page change. */
+.ns-page > * { animation: ns-rise 460ms var(--gf-ease-out) both; }
+.ns-page > :nth-child(2) { animation-delay: 50ms; }
+.ns-page > :nth-child(3) { animation-delay: 100ms; }
+.ns-page > :nth-child(n + 4) { animation-delay: 140ms; }
+@keyframes ns-rise { from { opacity: 0; transform: translateY(10px); } }
+
+/* ---------- the stage's scrollbar, in the white gutter right of the stage ---------- */
+.ns-vbar {
+  position: absolute; right: -11px; top: 72px; bottom: 18px; width: 6px; border-radius: 999px; opacity: 0; pointer-events: none;
+  touch-action: none; transition: opacity var(--gf-t-med) var(--gf-ease-out);
+}
+.ns-vbar[data-on] { opacity: 1; pointer-events: auto; }
+.ns-vbar::before { content: ""; position: absolute; inset: 0 -5px; }
+.ns-vbar i {
+  position: absolute; left: 0; top: 0; width: 100%; height: 36px; border-radius: 999px; background: var(--gf-scroll-thumb);
+  transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.ns-vbar:hover i, .ns-vbar[data-drag] i { background: var(--gf-line-strong); }
+@media (pointer: coarse) { .ns-vbar { display: none; } }
+
+/* ---------- the edge between the sidebar and the stage ---------- */
+.ns-rz { position: absolute; left: -7px; top: 62px; bottom: 8px; width: 14px; cursor: col-resize; z-index: 9; touch-action: none; outline: none; }
+.ns-rz::after {
+  content: ""; position: absolute; left: 6px; top: 22px; bottom: 22px; width: 2px; border-radius: 2px; background: var(--gf-indigo);
+  opacity: 0; transition: opacity var(--gf-t-med) var(--gf-ease-out);
+}
+.ns-rz:hover::after, .ns-rz[data-drag]::after, .ns-rz:focus-visible::after { opacity: 0.45; }
+
+/* ---------- the error, not-found and forbidden pages ---------- */
+.ns-state-act { display: flex; flex-wrap: wrap; gap: 10px; }
+.ns-state-ref { margin: 14px 0 0; font: 400 12.5px ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--gf-quiet); }
+
+/* ---------- the phone drawer ---------- */
+.ns-drawer-back {
+  position: fixed; inset: 0; z-index: 45; background: color-mix(in srgb, var(--gf-indigo-night) 40%, transparent);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); transition: opacity var(--gf-t-slow) var(--gf-ease-out);
+}
+.ns-drawer-back:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+.ns-drawer {
+  position: fixed; z-index: 50; inset: 0 auto 0 0; width: 272px; max-width: calc(100vw - 32px); display: flex; flex-direction: column;
+  padding: 12px 12px 12px max(16px, env(safe-area-inset-left, 0px)); border-radius: 0 28px 28px 0; background: var(--gf-paper);
+  box-shadow: var(--gf-lift); color: var(--gf-ink); font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif; outline: none;
+  transition: transform var(--gf-t-slow) var(--gf-ease-out);
+}
+.ns-drawer:is([data-starting-style], [data-ending-style]) { transform: translateX(-105%); }
+
+/* ---------- phones and small tablets ---------- */
+@media (min-width: 861px) {
+  .ns .ns-menu { display: none; }
+}
+@media (max-width: 860px) {
+  .ns, .ns[data-folded] { grid-template-columns: minmax(0, 1fr); }
+  .ns-sb, .ns-rz, .ns .ns-tog { display: none; }
+  .ns-tb { padding: 0 0 2px; }
+  .ns-scroll { padding: 16px 14px 36px; }
+  .ns-me { padding: 0 4px; }
+  .ns-me span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ns-page > * { animation: none; }
+  .ns-roll { transition: none; }
+}
+html.rm .ns-page > * { animation: none; }
+html.rm .ns-roll { transition: none; }

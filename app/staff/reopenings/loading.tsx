@@ -1,14 +1,13 @@
-import { CardSkeleton, HeadingSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// Reopening requests: one card per closed lead waiting, oldest first.
+// Reopening requests while it opens: the header, then the table's card.
 export default function Loading() {
   return (
-    <PageSkeleton label="reopening requests">
-      <HeadingSkeleton width="w-52" subline />
-      <div className="flex max-w-3xl flex-col gap-3">
-        <CardSkeleton lines={3} />
-        <CardSkeleton lines={3} />
-      </div>
-    </PageSkeleton>
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <span className="sr-only">Loading reopening requests…</span>
+      <SkeletonBlock width={280} height={32} />
+      <SkeletonBlock width="60%" height={16} />
+      <SkeletonBlock height={220} shape="card" />
+    </div>
   )
 }

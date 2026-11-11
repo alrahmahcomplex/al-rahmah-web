@@ -4,48 +4,36 @@ import { PanelLeftIcon } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState, type ReactNode } from "react"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 import { currentNavHref, groupNav } from "../navigation"
-import { SIDEBAR_COOKIE_MAX_AGE, SIDEBAR_RAIL_COOKIE } from "../shell-cookies"
+import { SIDEBAR_RAIL_COOKIE, sidebarCookie } from "../shell-cookies"
+import type { ShellProps } from "../shell-types"
 import { AccountMenu } from "./account-menu"
 import { HEADER_ACTIONS_ID } from "./header-actions"
 import { CountPill } from "./count-pill"
-import type { ShellItem, ShellPerson } from "./items"
+import type { ShellItem } from "./items"
 import { PhoneNav } from "./phone-nav"
 
-export type { ShellItem, ShellPerson } from "./items"
-
-// The chrome around every staff page: the sidebar from `md` up, folding to a
-// 72px rail; the slim top bar; and on a phone the bottom tab bar with its
-// More sheet. The rail is kept in a cookie the browser writes itself, which
-// the layout reads, so a reload paints it folded from the start.
-export function StaffShell({
-  items,
-  initialCollapsed,
-  person,
-  children,
-}: {
-  items: ShellItem[]
-  initialCollapsed: boolean
-  person: ShellPerson
-  children: ReactNode
-}) {
+// The old chrome, around the staff pages that have not converted yet
+// (app/staff/route-looks.ts): the sidebar from `md` up, folding to a 72px
+// rail; the slim top bar; and on a phone the bottom tab bar with its More
+// sheet. The rail is kept in a cookie the browser writes itself, which the
+// layout reads, so a reload paints it folded from the start.
+export function LegacyShell({ items, folded, person, children }: ShellProps) {
   const pathname = usePathname()
   const current = currentNavHref(pathname, items.map((item) => item.href))
   const title = items.find((item) => item.href === current)?.label ?? "Staff"
-  const [collapsed, setCollapsed] = useState(initialCollapsed)
-  // The kit page draws the new look on its own until the new shell (#322) arrives.
-  if (pathname === "/staff/kit") return children
+  const [collapsed, setCollapsed] = useState(folded)
 
   function toggleCollapsed() {
     const next = !collapsed
     setCollapsed(next)
-    document.cookie = `${SIDEBAR_RAIL_COOKIE}=${next ? "1" : "0"}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; samesite=lax`
+    document.cookie = sidebarCookie(SIDEBAR_RAIL_COOKIE, next ? "1" : "0")
   }
 
   return (

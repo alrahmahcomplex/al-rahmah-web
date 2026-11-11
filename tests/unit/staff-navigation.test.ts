@@ -12,8 +12,8 @@ import {
 } from "@/app/staff/navigation"
 
 const ENTRIES: StaffNavEntry[] = [
-  { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: STAFF_HOME.icon, permission: "academic_years.manage" },
-  { href: "/staff/applicants", label: "Applicants", group: "Admissions", icon: STAFF_HOME.icon, permission: "leads.view" },
+  { href: "/staff/roles", label: "Staff and roles", group: "Admin", icon: STAFF_HOME.icon, iconName: "today", permission: "academic_years.manage" },
+  { href: "/staff/applicants", label: "Applicants", group: "Admissions", icon: STAFF_HOME.icon, iconName: "today", permission: "leads.view" },
 ]
 
 // The seeded roles' permissions, from the roles migration.
@@ -56,6 +56,7 @@ describe("navFor", () => {
       label: "Either",
       group: "Money",
       icon: STAFF_HOME.icon,
+      iconName: "today",
       permission: ["payments.view", "leads.view"],
     }
     expect(navFor(["payments.view"], [either])).toEqual([either])

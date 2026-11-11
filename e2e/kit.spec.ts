@@ -461,7 +461,8 @@ test.describe("under reduced motion", () => {
     await openKit(page)
     const more = page.locator('[data-part="more"]')
     await more.getByRole("region", { name: "Confetti" }).getByRole("button", { name: "Play it" }).click()
-    await expect(page.locator(".kit-cf")).toHaveCount(0)
+    // Checked at once: the rain would remove itself after 2.4s, so a retrying check could pass anyway.
+    expect(await page.locator(".kit-cf").count()).toBe(0)
 
     await more.getByRole("row", { name: "Zuhura Ali Mussa Khamis" }).click()
     const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
@@ -502,7 +503,8 @@ test("with html.rm, sheets fade in place, the toast does not rise and confetti i
   await page.evaluate(() => document.documentElement.classList.add("rm"))
   const more = page.locator('[data-part="more"]')
   await more.getByRole("region", { name: "Confetti" }).getByRole("button", { name: "Play it" }).click()
-  await expect(page.locator(".kit-cf")).toHaveCount(0)
+  // Checked at once: the rain would remove itself after 2.4s, so a retrying check could pass anyway.
+  expect(await page.locator(".kit-cf").count()).toBe(0)
 
   await more.getByRole("row", { name: "Zuhura Ali Mussa Khamis" }).click()
   const side = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })

@@ -11,9 +11,10 @@ stay in the `0.x` range.
 
 - On the Design system page at /staff/kit, three pieces now match the approved design: the
   toast is at most half the window wide, so on a phone it wraps onto a few short lines; the
-  sections of a record's side sheet have their full space around the facts; and the rows of
-  New requests, on that page and under the bell, sit straight under the title with rounded
-  corners on hover and no arrow at the end.
+  facts in a record's side sheet and in the payment review have their full space around them;
+  and the New requests rows sit straight under the title with rounded corners on hover.
+- The bell's New requests list in the new top bar no longer shows an arrow at the end of each
+  row, on every page with the new look.
 
 ## November 12, 2026 `v0.104.0`
 

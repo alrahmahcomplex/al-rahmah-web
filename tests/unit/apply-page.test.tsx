@@ -697,6 +697,31 @@ describe("the admission years of a cached copy", { timeout: 30_000 }, () => {
     await waitFor(() => expect(stubs.submit).toHaveBeenCalled())
     expect(sentBody().children[0].enrollmentYear).toBe(expected)
   })
+
+  it.each([
+    ["2026-12-31T20:59:00Z", [2026, 2027]],
+    ["2026-12-31T21:00:00Z", [2027, 2028]],
+    ["2027-03-31T20:59:00Z", [2027, 2028]],
+    ["2027-03-31T21:00:00Z", [2027, 2028]],
+  ])("at %s a copy built on 30 December offers the years %j", async (now, offered) => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(now))
+    // A refusal with no years of its own opens the year tiles as the form has them.
+    stubs.submit.mockResolvedValue({ status: "invalid", field: "enrollment_year", child: 0 })
+    const user = userEvent.setup()
+    render(<AdmissionFormSteps language="en" years={[2026, 2027]} defaultYear={2027} officePhone="+255 700 000 001" />)
+    await fillToSend(user)
+
+    await send(user, "Send application")
+    await waitForQuestion("Which class is Zawadi applying for?")
+    const tiles = open()
+      .getAllByRole("radio")
+      .map((radio) => radio.closest("label")?.textContent ?? "")
+    expect(tiles).toHaveLength(2)
+    offered.forEach((year, i) => expect(tiles[i]).toContain(String(year)))
+    // The year that closed at midnight on 31 December is gone.
+    if (offered[0] === 2027) expect(tiles.join(" ")).not.toContain("2026")
+  })
 })
 
 describe("the Discount code question", { timeout: 30_000 }, () => {

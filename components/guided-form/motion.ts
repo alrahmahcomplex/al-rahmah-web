@@ -1,5 +1,3 @@
-import { useSyncExternalStore } from "react"
-
 // Shared timing for concept C. The CSS custom properties in guided-form.css
 // carry the same numbers; JavaScript needs them for timeouts.
 
@@ -8,22 +6,6 @@ export function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false
   if (document.documentElement.classList.contains("rm")) return true
   return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
-}
-
-function subscribeReducedMotion(onChange: () => void): () => void {
-  if (typeof window.matchMedia !== "function") return () => {}
-  const query = window.matchMedia("(prefers-reduced-motion: reduce)")
-  query.addEventListener("change", onChange)
-  return () => query.removeEventListener("change", onChange)
-}
-
-/**
- * `prefersReducedMotion()` for render code. It is false on the server and
- * while hydrating, then the browser's answer, so the server's HTML and the
- * first browser render always match (#334).
- */
-export function useReducedMotion(): boolean {
-  return useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false)
 }
 
 /** How long a card takes to fold or unfold, in ms (0 under reduced motion). */

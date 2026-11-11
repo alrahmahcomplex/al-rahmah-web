@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactElement,
   type ReactNode,
 } from "react"
@@ -15,7 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 
 import { Icon } from "./icons"
-import { foldMs, prefersReducedMotion, useReducedMotion } from "./motion"
+import { foldMs, prefersReducedMotion } from "./motion"
 import "./guided-form.css"
 
 type ItemProps = { leaving?: boolean; instant?: boolean }
@@ -67,6 +68,22 @@ export function GuidedStack({ children, instant = false, className }: { children
     .forEach((l) => out.push(cloneElement(l.el, { leaving: true })))
 
   return <ol className={cn("gf-stack", className)}>{out}</ol>
+}
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  if (typeof window.matchMedia !== "function") return () => {}
+  const query = window.matchMedia("(prefers-reduced-motion: reduce)")
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
+/**
+ * `prefersReducedMotion()` for render code. It is false on the server and
+ * while hydrating, then the browser's answer, so the server's HTML and the
+ * first browser render always match (#334).
+ */
+function useReducedMotion(): boolean {
+  return useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false)
 }
 
 /** Unfold on mount, fold before leaving. Returns the classes for the `li`. */

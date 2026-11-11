@@ -63,8 +63,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
+      # No dependencies are installed here. design-lint reads sources with
+      # the typescript package, so its tests run in the static job.
       - name: Test repository helpers
-        run: node --test "scripts/*.test.mjs"
+        run: node --test "scripts/!(design-lint).test.mjs"
       - name: Check tracked documents
         run: node scripts/check-docs.mjs
 
@@ -97,6 +99,7 @@ jobs:
       - run: npm run lint
       # DESIGN.md rules a script can see: Exo italic, no stray hex in the
       # kit or converted staff routes, no CountPill there.
+      - run: node --test scripts/design-lint.test.mjs
       - run: node scripts/design-lint.mjs
       - run: npm run typecheck
       - run: npm run test

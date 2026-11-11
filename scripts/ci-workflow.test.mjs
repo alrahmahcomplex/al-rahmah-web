@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
+import { sep } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 // The safety rules of .github/workflows/ci.yml, checked on the text of the
 // file: this test runs in the scope job, before any dependency is installed.
@@ -104,4 +106,18 @@ test("the documents-only path skips every runtime job, and the gate always runs"
     assert.match(text, /^ {4}if: \$\{\{ needs\.scope\.outputs\.full_suite == 'true'/m, `${name} must run only for the full suite`);
   }
   assert.doesNotMatch(workflow, /^\s+paths(-ignore)?:/m, "the workflow must stay unfiltered by file paths");
+});
+
+test("every helper test file runs in some job", () => {
+  const cwd = fileURLToPath(new URL("..", import.meta.url));
+  const files = (pattern) => globSync(pattern, { cwd }).map((file) => file.split(sep).join("/"));
+  const tested = (text) => [...text.matchAll(/node --test "?([^"\s]+)"?/g)].flatMap(([, pattern]) => files(pattern));
+  const ran = new Set(tested(uncommented(lines)));
+  const all = files("scripts/*.test.mjs");
+  assert.ok(all.length > 1);
+  assert.deepEqual(all.filter((file) => !ran.has(file)), []);
+  // design-lint needs the typescript package, which only the static job
+  // installs; the repository job installs nothing.
+  assert.ok(tested(uncommented(jobs.get("static"))).includes("scripts/design-lint.test.mjs"));
+  assert.ok(!tested(uncommented(jobs.get("repository"))).includes("scripts/design-lint.test.mjs"));
 });

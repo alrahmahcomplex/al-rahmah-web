@@ -9,6 +9,7 @@ vi.mock("server-only", () => ({}))
 
 import { admissionYears } from "@/lib/admission-form"
 import { getLeadHistory } from "@/lib/services/audit"
+import { recordFollowUp, scheduleFollowUp } from "@/lib/services/follow-ups"
 import { declineLead } from "@/lib/services/lead-closure"
 import { approveReopeningRequest, raiseReopeningRequest } from "@/lib/services/reopening-requests"
 import { createLead, updateGuardianContact, updateLeadDetails, type NewContact } from "@/lib/services/leads"
@@ -433,7 +434,7 @@ describe("the lock order", () => {
 
   // Holds the lead's Family lock while `work` starts, checks that `work` waits
   // for it holding no lock on the lead's row, then lets it finish.
-  async function waitsForFamilyFirst<T>(leadId: string, work: () => Promise<T>): Promise<T> {
+  async function waitsForFamilyFirst<T>(leadId: string, work: () => Promise<T>, requestId?: string): Promise<T> {
     const { guardian_contact_id: contactId } = await row(leadId)
     return inRolledBackTransaction(async (holder) => {
       await holder.query("select public.lock_families(array[$1::uuid])", [contactId])
@@ -445,7 +446,11 @@ describe("the lock order", () => {
       const rowFree = await inRolledBackTransaction(async (other) => {
         await other.query("select public.set_audit_actor('system')")
         const locked = await other.query("select id from public.leads where id = $1 for update skip locked", [leadId])
-        return locked.rowCount === 1
+        if (requestId === undefined) return locked.rowCount === 1
+        const request = await other.query("select id from public.reopening_requests where id = $1 for update skip locked", [
+          requestId,
+        ])
+        return locked.rowCount === 1 && request.rowCount === 1
       })
       expect(rowFree).toBe(true)
       await holder.query("rollback")
@@ -469,10 +474,30 @@ describe("the lock order", () => {
     expect(await declineLead(manager, lead, { reason: "Fees or cost" })).toEqual({ ok: true, data: null })
     const raised = await raiseReopeningRequest(await signedIn(ADMISSIONS), lead, { reason: "The family is back.", source: "lead" })
     if (!raised.ok) throw new Error(`raise failed: ${JSON.stringify(raised.error)}`)
-    expect(await waitsForFamilyFirst(lead, () => approveReopeningRequest(manager, raised.data))).toEqual({
+    expect(await waitsForFamilyFirst(lead, () => approveReopeningRequest(manager, raised.data), raised.data)).toEqual({
       ok: true,
       data: null,
     })
+  })
+
+  test("a decline recorded as a follow-up outcome takes the Family lock before the lead's row", async () => {
+    const lead = await walkIn({ contact: parent() })
+    const scheduledFollowUp = await scheduleFollowUp(await signedIn(ADMISSIONS), lead, {
+      dueOn: new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10),
+    })
+    if (!scheduledFollowUp.ok) throw new Error(`schedule failed: ${JSON.stringify(scheduledFollowUp.error)}`)
+    const manager = await signedIn(MANAGER)
+    const recorded = await waitsForFamilyFirst(lead, () =>
+      recordFollowUp(manager, lead, {
+        followUpId: scheduledFollowUp.data.followUpId,
+        comment: "The family chose a school nearer home.",
+        method: "Phone call",
+        contactedBy: ADMISSIONS.id,
+        contactedAt: new Date(Date.now() - 60_000).toISOString(),
+        outcome: { kind: "lead_declined", reason: "Enrolled elsewhere" },
+      }),
+    )
+    expect(recorded.ok).toBe(true)
   })
 
   test("a contact correction takes the Family lock before the contact's leads", async () => {

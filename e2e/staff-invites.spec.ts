@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 
-import { expect, test, type Browser, type Page } from "@playwright/test"
+import { type Browser, type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { firstName } from "@/app/staff/_today/greeting"
 

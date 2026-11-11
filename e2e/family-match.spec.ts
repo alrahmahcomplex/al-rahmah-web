@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test, type Page } from "@playwright/test"
+import { type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
@@ -178,7 +179,8 @@ test.describe("a parent whose number is on file", () => {
     await expect(page.getByText("Returning family", { exact: true })).toHaveCount(0)
   })
 
-  test("a Family check that fails can be skipped, and the duplicate check still runs on register", async ({ page }) => {
+  test("a Family check that fails can be skipped, and the duplicate check still runs on register", async ({ page, allowConsoleError }) => {
+    allowConsoleError(/^console\.error: Failed to load resource: net::ERR_CONNECTION_FAILED \(http:\/\/[^)]+\/staff\/check-in\/new\)$/, "this test drops the Family check")
     const family = await knownFamily()
     await signIn(page, ADMISSIONS)
 

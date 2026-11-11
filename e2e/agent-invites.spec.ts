@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test, type Browser, type Page } from "@playwright/test"
+import { type Browser, type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { createThrowawayStaff, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER, SEEDED_AGENT, type FixtureStaff } from "../tests/support/fixtures"

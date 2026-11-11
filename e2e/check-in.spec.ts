@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test, type Page } from "@playwright/test"
+import { type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 
@@ -117,7 +118,8 @@ test.describe("registering a new family", () => {
     await expect(page.getByLabel("Admission Number")).toHaveText(/^ADMSN-\d{5}$/)
   })
 
-  test("a request that never comes back says so, and registering again is safe", async ({ page }) => {
+  test("a request that never comes back says so, and registering again is safe", async ({ page, allowConsoleError }) => {
+    allowConsoleError(/^console\.error: Failed to load resource: net::ERR_CONNECTION_FAILED \(http:\/\/[^)]+\/staff\/check-in\/new\)$/, "this test drops the first submit")
     const family = newFamily()
     await signIn(page, ADMISSIONS)
     await startNewStudent(page)
@@ -265,7 +267,9 @@ test.describe("a family who gives their Admission Number", () => {
 
   test("a lookup that never comes back says so, not that there is no lead, and the field stays locked meanwhile", async ({
     page,
+    allowConsoleError,
   }) => {
+    allowConsoleError(/^console\.error: Failed to load resource: net::ERR_CONNECTION_FAILED \(http:\/\/[^)]+\/staff\/check-in\)$/, "this test drops the first lookup")
     await signIn(page, ADMISSIONS)
     await page.goto("/staff/check-in")
 

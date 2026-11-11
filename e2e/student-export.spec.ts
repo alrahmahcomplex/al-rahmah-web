@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 
-import { expect, test, type Page } from "@playwright/test"
+import { type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { ADMISSIONS, MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { signInOnce } from "./log-in"
@@ -122,7 +123,12 @@ test("the Super Admin exports Full data", async ({ page }) => {
   expect(header).toEqual(expect.arrayContaining(["Parent phone", "Interview fee status", "Follow-up notes", "History entries"]))
 })
 
-test("an export the route refuses says why in the sheet, and never says Exported", async ({ page }) => {
+test("an export the route refuses says why in the sheet, and never says Exported", async ({ page, allowConsoleError }) => {
+  allowConsoleError(
+    /^console\.error: Failed to load resource: the server responded with a status of 413 \(Payload Too Large\) \(http:\/\/[^)]+\/staff\/applicants\/export\?[^)]*\)$/,
+    "this test answers the export with 413",
+  )
+  allowConsoleError(/^console\.error: Failed to load resource: net::ERR_FAILED \(http:\/\/[^)]+\/staff\/applicants\/export\?[^)]*\)$/, "this test then drops the export")
   await signIn(page, MANAGER)
   const sheet = await openExport(page)
   // More applicants than one export holds: the route answers 413 and records nothing.

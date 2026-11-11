@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test, type Page } from "@playwright/test"
+import { type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { admissionYears } from "../lib/admission-form"
 import { FORM_NOTICE, FORM_NOTICE_VERSION, STAFF_REMINDER } from "../lib/referral-notice"

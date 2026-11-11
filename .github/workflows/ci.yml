@@ -95,6 +95,9 @@ jobs:
         if: ${{ steps.modules.outputs.cache-hit != 'true' }}
         run: npm ci
       - run: npm run lint
+      # DESIGN.md rules a script can see: Exo italic, no stray hex in the
+      # kit or converted staff routes, no CountPill there.
+      - run: node scripts/design-lint.mjs
       - run: npm run typecheck
       - run: npm run test
       # The shards are worked out from the spec files on disk. Playwright's

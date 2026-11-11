@@ -1,4 +1,5 @@
-import { expect, test, type Browser, type Page } from "@playwright/test"
+import { type Browser, type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { createThrowawayStaff, inRolledBackTransaction } from "../tests/support/db"
 import { INVITED, MANAGER } from "../tests/support/fixtures"

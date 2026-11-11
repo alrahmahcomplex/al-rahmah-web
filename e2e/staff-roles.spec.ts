@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 
-import { expect, test, type Page } from "@playwright/test"
+import { type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { asSystem, createThrowawayStaff, inRolledBackTransaction } from "../tests/support/db"
 import { ACCOUNTANT, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"

@@ -1,4 +1,4 @@
-// Shared timing for concept C. The CSS custom properties in guided-form.css
+// Shared timing for concept C. The CSS custom properties in app/tokens.css
 // carry the same numbers; JavaScript needs them for timeouts.
 
 /** True when the visitor asked for less motion (OS setting or `html.rm`). */

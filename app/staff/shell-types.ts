@@ -30,3 +30,13 @@ export type ShellProps = {
   canSearch: boolean
   children: ReactNode
 }
+
+// What the switch adds for the shell it draws. It owns the sidebar
+// preferences, so a fold or a width set in one shell is still there when a
+// link leads into the other.
+export type ShellViewProps = ShellProps & {
+  onFoldedChange: (folded: boolean) => void
+  onSidebarWidthChange: (width: number | null) => void
+  /** True once the person has moved from the page the document loaded on: the new page's stage then takes focus. */
+  navigated: boolean
+}

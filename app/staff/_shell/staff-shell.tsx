@@ -4,7 +4,6 @@ import { PanelLeftIcon } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -12,7 +11,7 @@ import { cn } from "@/lib/utils"
 
 import { currentNavHref, groupNav } from "../navigation"
 import { SIDEBAR_RAIL_COOKIE, sidebarCookie } from "../shell-cookies"
-import type { ShellProps } from "../shell-types"
+import type { ShellViewProps } from "../shell-types"
 import { AccountMenu } from "./account-menu"
 import { HEADER_ACTIONS_ID } from "./header-actions"
 import { CountPill } from "./count-pill"
@@ -24,15 +23,15 @@ import { PhoneNav } from "./phone-nav"
 // rail; the slim top bar; and on a phone the bottom tab bar with its More
 // sheet. The rail is kept in a cookie the browser writes itself, which the
 // layout reads, so a reload paints it folded from the start.
-export function LegacyShell({ items, folded, person, children }: ShellProps) {
+// The switch keeps the fold, so it carries over to the new shell and back.
+export function LegacyShell({ items, folded: collapsed, onFoldedChange, person, children }: ShellViewProps) {
   const pathname = usePathname()
   const current = currentNavHref(pathname, items.map((item) => item.href))
   const title = items.find((item) => item.href === current)?.label ?? "Staff"
-  const [collapsed, setCollapsed] = useState(folded)
 
   function toggleCollapsed() {
     const next = !collapsed
-    setCollapsed(next)
+    onFoldedChange(next)
     document.cookie = sidebarCookie(SIDEBAR_RAIL_COOKIE, next ? "1" : "0")
   }
 

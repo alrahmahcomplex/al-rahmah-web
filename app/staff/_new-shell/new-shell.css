@@ -96,6 +96,10 @@ html:has(.ns) body { background: var(--gf-paper); }
   justify-content: center; border-radius: 50%; overflow: hidden;
 }
 .ns[data-folded] .ns-label { width: 0; flex: none; opacity: 0; }
+/* A touch screen keeps 44px targets folded too: each row is a 44px circle. */
+@media (pointer: coarse) {
+  .ns[data-folded] .ns-link { flex: 0 0 44px; min-height: 44px; }
+}
 
 /* The plain list the sidebar falls back to if it fails. */
 .ns-plain { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; margin: 0; list-style: none; }

@@ -8,7 +8,7 @@ import { RoundButton, Toaster } from "@/components/kit"
 
 import { currentNavHref } from "../navigation"
 import { SIDEBAR_RAIL_COOKIE, SIDEBAR_WIDTH_COOKIE, clearedSidebarCookie, sidebarCookie } from "../shell-cookies"
-import type { ShellProps } from "../shell-types"
+import type { ShellViewProps } from "../shell-types"
 import "./new-shell.css"
 import { rememberScroll, savedScroll } from "./scroll-memory"
 import { SidebarBoundary, SidebarContent } from "./sidebar"
@@ -166,16 +166,26 @@ function OutsideScrollbar({ scrollRef, pageRef }: { scrollRef: RefObject<HTMLDiv
  * sidebar folds to its icons and can be dragged wider; up to 860px it is a
  * drawer opened from the Menu button.
  */
-export function NewShell({ items, person, bell, folded: foldedAtFirst, sidebarWidth, canSearch, children }: ShellProps) {
+export function NewShell({
+  items,
+  person,
+  bell,
+  folded,
+  onFoldedChange,
+  sidebarWidth: chosen,
+  onSidebarWidthChange,
+  navigated,
+  canSearch,
+  children,
+}: ShellViewProps) {
   const pathname = usePathname()
   const current = currentNavHref(pathname, items.map((item) => item.href))
 
-  const [folded, setFolded] = useState(foldedAtFirst)
   const [drawer, setDrawer] = useState(false)
-  // The open width; null keeps the sidebar at its narrowest, which is measured.
-  const [chosen, setChosen] = useState<number | null>(sidebarWidth)
-  const [width, setWidth] = useState(sidebarWidth ?? FIRST_WIDTH)
-  const [title, setTitle] = useState(() => titleSize(sidebarWidth ?? FIRST_WIDTH, TITLE_LEFT, TITLE_WIDTH_GUESS))
+  // `chosen` is the open width the person set (null keeps the narrowest,
+  // which is measured); `width` is what is drawn, within the limits.
+  const [width, setWidth] = useState(chosen ?? FIRST_WIDTH)
+  const [title, setTitle] = useState(() => titleSize(chosen ?? FIRST_WIDTH, TITLE_LEFT, TITLE_WIDTH_GUESS))
   const [limits, setLimits] = useState<SidebarLimits | null>(null)
   const [resizing, setResizing] = useState(false)
 
@@ -200,13 +210,13 @@ export function NewShell({ items, person, bell, folded: foldedAtFirst, sidebarWi
     setWidth(value)
     setTitle(titleSize(value, found.titleLeft, found.titleWidth))
     if (remember === "keep") {
-      setChosen(value)
+      onSidebarWidthChange(value)
       document.cookie = sidebarCookie(SIDEBAR_WIDTH_COOKIE, String(value))
     } else if (remember === "clear") {
-      setChosen(null)
+      onSidebarWidthChange(null)
       document.cookie = clearedSidebarCookie(SIDEBAR_WIDTH_COOKIE)
     }
-  }, [])
+  }, [onSidebarWidthChange])
 
   // The limits depend on the labels (the current one is wider), the fonts and
   // the window, so they are measured again whenever one of those changes.
@@ -244,9 +254,10 @@ export function NewShell({ items, person, bell, folded: foldedAtFirst, sidebarWi
 
   // Each history entry keeps its own scroll position: a new page starts at
   // the top, Back returns to where it was. After a navigation the stage takes
-  // focus, so the keyboard scrolls the new page. Runs in the layout phase,
-  // before any scroll event of the new page can be saved under its entry.
-  const firstPage = useRef(true)
+  // focus, so the keyboard scrolls the new page, also when a link from the
+  // old shell led here; not on the page the document loaded on. Runs in the
+  // layout phase, before any scroll event of the new page can be saved under
+  // its entry.
   useLayoutEffect(() => {
     const scroll = scrollRef.current
     if (!scroll) return
@@ -258,10 +269,9 @@ export function NewShell({ items, person, bell, folded: foldedAtFirst, sidebarWi
       if (scroll.scrollTop < target - 1 && tries++ < 60) frame = requestAnimationFrame(place)
     }
     place()
-    if (firstPage.current) firstPage.current = false
-    else scroll.focus({ preventScroll: true })
+    if (navigated) scroll.focus({ preventScroll: true })
     return () => cancelAnimationFrame(frame)
-  }, [pathname])
+  }, [pathname, navigated])
   useEffect(() => {
     const scroll = scrollRef.current
     if (!scroll) return
@@ -282,7 +292,7 @@ export function NewShell({ items, person, bell, folded: foldedAtFirst, sidebarWi
 
   function toggle() {
     const next = !folded
-    setFolded(next)
+    onFoldedChange(next)
     document.cookie = sidebarCookie(SIDEBAR_RAIL_COOKIE, next ? "1" : "0")
   }
 

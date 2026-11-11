@@ -4,7 +4,7 @@ import { MotionProvider } from "@/components/motion-provider"
 import { managesStaff } from "@/lib/services/staff-auth"
 
 import { BELL_SCREENS } from "./bell-screens"
-import { navCounts } from "./nav-counts"
+import { bellPending, navCounts } from "./nav-counts"
 import { navFor, STAFF_HOME } from "./navigation"
 import { requireStaff } from "./session"
 import { parseSidebarCookies, SIDEBAR_RAIL_COOKIE, SIDEBAR_WIDTH_COOKIE } from "./shell-cookies"
@@ -39,7 +39,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   // The bell is for whoever may open a request screen, and counts what waits there.
   const bellScreens = entries.filter((entry) => BELL_SCREENS.includes(entry.href))
   const bell: ShellBell = bellScreens.length
-    ? { pending: bellScreens.reduce((sum, entry) => sum + (counts[entry.href]?.count ?? 0), 0) }
+    ? { pending: await bellPending(staff, bellScreens.map((entry) => entry.href), counts) }
     : null
 
   return (

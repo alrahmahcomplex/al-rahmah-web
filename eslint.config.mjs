@@ -33,13 +33,13 @@ const eslintConfig = defineConfig([
         {
           paths: [
             { name: "lucide-react", message: `lucide-react ${OLD_PARTS}` },
-            { name: "@/components/status-chip", message: `The old StatusChip ${OLD_PARTS}` },
             { name: "sonner", message: `sonner's toast ${OLD_PARTS}` },
           ],
           patterns: [
-            { group: ["@/components/staff", "@/components/staff/*"], message: `components/staff ${OLD_PARTS}` },
-            { group: ["@/components/ui", "@/components/ui/*"], message: `components/ui ${OLD_PARTS}` },
-            { group: ["**/_shell", "**/_shell/*", "@/app/staff/_shell/*"], message: `The old shell ${OLD_PARTS}` },
+            { regex: "(^@/|/)components/staff(/|$)", message: `components/staff ${OLD_PARTS}` },
+            { regex: "(^@/|/)components/ui(/|$)", message: `components/ui ${OLD_PARTS}` },
+            { regex: "(^|/)_shell(/|$)", message: `The old shell ${OLD_PARTS}` },
+            { regex: "(^@/|/)components/status-chip$", message: `The old StatusChip ${OLD_PARTS}` },
           ],
         },
       ],

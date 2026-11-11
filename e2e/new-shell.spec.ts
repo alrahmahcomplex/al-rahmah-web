@@ -336,3 +336,66 @@ test.describe("under reduced motion", () => {
     for (const value of await riseOf(page)) expect(value.startsWith("none ")).toBe(true)
   })
 })
+
+test.describe("crossing between the shells by links", () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test("keeps the fold and the width both ways", async ({ page }) => {
+    await open(page, MANAGER, "/staff/reopenings")
+    const min = Number(await handle(page).getAttribute("aria-valuemin"))
+    await handle(page).focus()
+    await page.keyboard.press("ArrowRight")
+    await page.keyboard.press("ArrowRight")
+    await expect(handle(page)).toHaveAttribute("aria-valuenow", String(min + 16))
+
+    await toggle(page).click()
+    await expect.poll(() => width(page)).toBe(60)
+    await entry(page, "Interviews").click()
+    await expect(page).toHaveURL(/\/staff\/interviews$/)
+    await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
+
+    await page.getByRole("button", { name: "Expand sidebar" }).click()
+    await staffNav(page).getByRole("link", { name: /^Reopening requests/ }).click()
+    await expect(page).toHaveURL(/\/staff\/reopenings$/)
+    await expect(toggle(page)).toHaveAttribute("aria-pressed", "true")
+    await expect(handle(page)).toHaveAttribute("aria-valuenow", String(min + 16))
+    await handle(page).focus()
+    await page.keyboard.press("Home")
+  })
+
+  test("a link from the old shell gives the new page's stage the focus; a fresh load does not", async ({ page }) => {
+    await open(page, MANAGER, "/staff/reopenings")
+    await expect(page.locator(".ns-scroll")).not.toBeFocused()
+    await page.goto("/staff/interviews")
+    await staffNav(page).getByRole("link", { name: /^Reopening requests/ }).click()
+    await expect(page).toHaveURL(/\/staff\/reopenings$/)
+    await expect(page.locator(".ns-scroll")).toBeFocused()
+  })
+})
+
+test.describe("on a touch screen wider than a phone", () => {
+  test.use({ viewport: { width: 1024, height: 768 }, isMobile: true, hasTouch: true })
+
+  test("folded rows stay 44px targets", async ({ page }) => {
+    await open(page, MANAGER, "/staff/reopenings")
+    await toggle(page).click()
+    await expect.poll(() => width(page)).toBe(60)
+    const box = (await entry(page, "Applicants").boundingBox())!
+    expect(box.height).toBe(44)
+    expect(box.width).toBe(44)
+    await toggle(page).click()
+  })
+})
+
+test("a role that may approve discounts but not view applicants gets a bell whose number matches its list", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const person = await createThrowawayStaff(["discounts.approve"])
+  await open(page, person, "/staff/kit")
+  const bell = page.getByRole("banner").getByRole("button", { name: /^New requests/ })
+  const waiting = Number((await bell.getAttribute("aria-label"))!.match(/(\d+) waiting/)?.[1] ?? 0)
+  await bell.click()
+  const list = page.getByRole("dialog", { name: "New requests" })
+  if (waiting === 0) await expect(list.getByText("Nothing is waiting.")).toBeVisible()
+  else await expect(list.getByRole("link", { name: /^New discount request/ })).toHaveCount(waiting)
+  await expect(list.getByRole("link", { name: /^New reopening request/ })).toHaveCount(0)
+})

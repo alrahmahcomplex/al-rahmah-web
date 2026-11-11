@@ -419,3 +419,19 @@ for (const [label, viewport, padding] of [
     expect(await area.evaluate((el) => el.contains(document.querySelector("main")))).toBe(true)
   })
 }
+
+test("the brand title fits the sidebar at its narrowest and at its widest", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await open(page, ADMISSIONS, "/staff/reopenings")
+  const fits = () =>
+    page.evaluate(() => {
+      const aside = document.querySelector("#staff-sidebar")!.getBoundingClientRect()
+      const name = document.querySelector(".ns-name")!.getBoundingClientRect()
+      return name.right <= aside.right
+    })
+  await expect.poll(fits).toBe(true)
+  await handle(page).focus()
+  await page.keyboard.press("End")
+  await expect.poll(fits).toBe(true)
+  await page.keyboard.press("Home")
+})

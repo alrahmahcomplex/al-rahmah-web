@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path"
 import test from "node:test"
 import { fileURLToPath } from "node:url"
 
-import { countPills, hexColours, lint, newRoutes, readRouteLooks, syntaxErrors, UPRIGHT_EXO_ALLOWED, uprightExoInCss, uprightExoInScript } from "./design-lint.mjs"
+import { countPills, hexColours, lint, newRoutes, readRouteLooks, routeFiles, syntaxErrors, UPRIGHT_EXO_ALLOWED, uprightExoInCss, uprightExoInScript } from "./design-lint.mjs"
 
 const lines = (problems) => problems.map((p) => p.line)
 
@@ -222,6 +222,28 @@ test("a converted route may hold no hex and no CountPill; its nested routes are 
         lint(root).map((p) => `${p.file}:${p.line}`),
         ["app/staff/reopenings/_parts/row.tsx:1", "app/staff/reopenings/page.tsx:1"],
       ),
+  )
+})
+
+test("the staff home, marked new, owns only its page, its loading and _today, not the shared staff files", () => {
+  withTree(
+    {
+      "app/staff/route-looks.ts": `export const looks = { "/staff": "new", "/staff/fees": "legacy" }`,
+      "app/staff/page.tsx": `<CountPill />`,
+      "app/staff/loading.tsx": `const c = "#fff"`,
+      "app/staff/_today/queue.ts": `const c = "#fff"`,
+      "app/staff/layout.tsx": `const c = "#fff"`,
+      "app/staff/error.tsx": `<CountPill />`,
+      "app/staff/_shell/count-pill.tsx": `<CountPill />`,
+      "app/staff/fees/page.tsx": `<CountPill />`,
+    },
+    (root) => {
+      assert.deepEqual(routeFiles(root, "/staff").files, ["app/staff/page.tsx", "app/staff/loading.tsx", "app/staff/_today/queue.ts"])
+      assert.deepEqual(
+        lint(root).map((p) => `${p.file}:${p.line}`),
+        ["app/staff/_today/queue.ts:1", "app/staff/loading.tsx:1", "app/staff/page.tsx:1"],
+      )
+    },
   )
 })
 

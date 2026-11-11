@@ -5,9 +5,10 @@ import { firstName } from "@/app/staff/_today/greeting"
 import { formatLongDate, tanzaniaToday } from "@/lib/school-calendar"
 
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { axeProblems } from "./axe"
 import { signInOnce } from "./log-in"
 
-// Today, the staff home (#226): the greeting, the two front-desk actions, the
+// Today, the staff home (#226), in the new shell since #323: the greeting, the two front-desk actions, the
 // work waiting for the signed-in person and the newest registrations. The
 // seeds plant overdue follow-ups, unreviewed re-applications, paid results
 // nobody has sent, a Pending Marketing Agent and a pending Discount request;
@@ -36,7 +37,8 @@ test.describe("on a desktop", () => {
     await expect(greeting(page, ADMISSIONS)).toBeVisible()
     await expect(page.getByTestId("today-summary")).toContainText(formatLongDate(tanzaniaToday()))
     await expect(page.getByTestId("today-summary")).toContainText(/overdue follow-up/)
-    await expect(page.getByRole("banner")).toContainText("Today")
+    await expect(page.locator('[data-shell="new"]')).toBeVisible()
+    await expect(staffNav(page).getByRole("link", { name: "Today", exact: true })).toHaveAttribute("aria-current", "page")
 
     await expect(main(page).getByRole("link", { name: "Check in a family" })).toHaveAttribute("href", "/staff/check-in")
     await expect(main(page).getByRole("link", { name: "Register a student" })).toHaveAttribute("href", "/staff/check-in/new")
@@ -44,12 +46,12 @@ test.describe("on a desktop", () => {
     const overdue = queue(page).getByTestId("today-overdue")
     await expect(overdue).toContainText(/^\d[\d,]* follow-ups? (is|are) overdue/)
     await expect(overdue).toContainText("Oldest:")
-    await expect(overdue).toHaveAttribute("href", "/staff/follow-ups")
+    await expect(overdue.getByRole("link")).toHaveAttribute("href", "/staff/follow-ups")
     await expect(queue(page).getByTestId("today-reApplications")).toContainText(/^\d[\d,]* re-applications? to review/)
-    await expect(queue(page).getByTestId("today-reApplications")).toHaveAttribute("href", "/staff/re-applications")
+    await expect(queue(page).getByTestId("today-reApplications").getByRole("link")).toHaveAttribute("href", "/staff/re-applications")
     const results = queue(page).getByTestId("today-results")
     await expect(results).toContainText(/^\d[\d,]* results? ready to send/)
-    await expect(results).toHaveAttribute("href", /^\/staff\/interviews\?year=\d{4}&release=ready$/)
+    await expect(results.getByRole("link")).toHaveAttribute("href", /^\/staff\/interviews\?year=\d{4}&release=ready$/)
     // The Manager's decisions are not theirs to make.
     for (const key of ["agents", "discounts", "reopenings"]) await expect(queue(page).getByTestId(`today-${key}`)).toHaveCount(0)
     await expect(page.getByTestId("today-empty")).toHaveCount(0)
@@ -68,7 +70,7 @@ test.describe("on a desktop", () => {
     await expect(latest(page).getByRole("link", { name: "All applicants" })).toHaveAttribute("href", "/staff/applicants")
 
     // A queue row opens the screen the work is done on.
-    await overdue.click()
+    await overdue.getByRole("link").click()
     await expect(page).toHaveURL(/\/staff\/follow-ups$/)
     await expect(page.getByRole("heading", { name: "Follow-ups" })).toBeVisible()
   })
@@ -80,10 +82,10 @@ test.describe("on a desktop", () => {
     await expect(queue(page).getByTestId("today-overdue")).toBeVisible()
     const agents = queue(page).getByTestId("today-agents")
     await expect(agents).toContainText(/^\d[\d,]* Marketing Agents? waiting for approval/)
-    await expect(agents).toHaveAttribute("href", "/staff/agents?status=pending")
+    await expect(agents.getByRole("link")).toHaveAttribute("href", "/staff/agents?status=pending")
     const discounts = queue(page).getByTestId("today-discounts")
     await expect(discounts).toContainText(/^\d[\d,]* Discount requests? pending/)
-    await expect(discounts).toHaveAttribute("href", "/staff/discounts")
+    await expect(discounts.getByRole("link")).toHaveAttribute("href", "/staff/discounts")
 
     const reports = staffNav(page).getByRole("link", { name: "Reports" })
     await expect(reports).toBeVisible()
@@ -104,7 +106,8 @@ test.describe("on a desktop", () => {
     await expect(main(page).getByRole("link", { name: "Check in a family" })).toBeVisible()
     await expect(main(page).getByRole("link", { name: "Register a student" })).toHaveCount(0)
 
-    await expect(page.getByTestId("today-empty")).toHaveText("Nothing is waiting. Families you check in will appear here.")
+    await expect(page.getByTestId("today-empty")).toContainText("Nothing is waiting.")
+    await expect(page.getByTestId("today-empty")).toContainText("Families you check in will appear here.")
     await expect(queue(page).getByRole("link")).toHaveCount(0)
     // They read leads to find the student being paid for.
     await expect(latest(page).getByRole("listitem")).toHaveCount(5)
@@ -136,3 +139,19 @@ test.describe("on a phone", () => {
     expect(row!.x + row!.width).toBeLessThanOrEqual(390)
   })
 })
+
+for (const size of [
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test.describe(`axe at ${size.width}px`, () => {
+    test.use({ viewport: size })
+
+    test("Today has no accessibility problems beyond the accepted ones", async ({ page }) => {
+      await signIn(page, MANAGER)
+      await expect(greeting(page, MANAGER)).toBeVisible()
+      await expect(latest(page).getByRole("listitem").first()).toBeVisible()
+      expect(await axeProblems(page)).toEqual([])
+    })
+  })
+}

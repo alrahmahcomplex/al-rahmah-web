@@ -5,7 +5,8 @@ import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixture
 import { logIn } from "./log-in"
 
 // The shell around every staff page (#225): the grouped sidebar and its rail,
-// and the phone's tab bar with its More sheet.
+// and the phone's tab bar with its More sheet. Today moved to the new shell
+// (#323), so these tests start on Check-in, which keeps the old one.
 
 const MANAGER_ENTRIES = [
   "Today",
@@ -28,6 +29,9 @@ const MANAGER_ENTRIES = [
 async function signIn(page: Page, person: FixtureStaff) {
   await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
+  await page.goto("/staff/check-in")
+  await expect(page.getByRole("heading", { level: 1, name: "Who has arrived?" })).toBeVisible()
+  await expect(page.locator('[data-shell="new"]')).toHaveCount(0)
 }
 
 const sidebar = (page: Page) => page.getByRole("complementary", { name: "Sidebar" })
@@ -50,12 +54,12 @@ test.describe("on a desktop", () => {
     for (const label of MANAGER_ENTRIES) await expect(entry(page, label)).toBeVisible()
     expect(await scrollsSideways(page)).toBe(false)
 
-    await expect(entry(page, "Today")).toHaveAttribute("aria-current", "page")
-    await expect(page.getByRole("banner")).toContainText("Today")
+    await expect(entry(page, "Check-in")).toHaveAttribute("aria-current", "page")
+    await expect(page.getByRole("banner")).toContainText("Check-in")
     await entry(page, "Staff and roles").click()
     await expect(page).toHaveURL(/\/staff\/roles$/)
     await expect(entry(page, "Staff and roles")).toHaveAttribute("aria-current", "page")
-    await expect(entry(page, "Today")).not.toHaveAttribute("aria-current", "page")
+    await expect(entry(page, "Check-in")).not.toHaveAttribute("aria-current", "page")
     await expect(page.getByRole("banner")).toContainText("Staff and roles")
   })
 
@@ -106,7 +110,7 @@ test.describe("on a phone", () => {
     await expect(sidebar(page)).toBeHidden()
     const tabs = staffNav(page)
     await expect(tabs.getByRole("link")).toHaveText(["Today", "Check-in", "Applicants"])
-    await expect(tabs.getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page")
+    await expect(tabs.getByRole("link", { name: "Check-in" })).toHaveAttribute("aria-current", "page")
     expect(await scrollsSideways(page)).toBe(false)
 
     await tabs.getByRole("button", { name: "More" }).click()
@@ -123,7 +127,7 @@ test.describe("on a phone", () => {
     await expect(page).toHaveURL(/\/staff\/interviews$/)
     await expect(sheet).toBeHidden()
     await expect(page.getByRole("banner")).toContainText("Interviews")
-    await expect(tabs.getByRole("link", { name: "Today" })).not.toHaveAttribute("aria-current", "page")
+    await expect(tabs.getByRole("link", { name: "Check-in" })).not.toHaveAttribute("aria-current", "page")
     expect(await scrollsSideways(page)).toBe(false)
   })
 })

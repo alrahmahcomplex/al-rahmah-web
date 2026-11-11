@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### IMPROVED
+
+- Today now opens in the new staff look, in one centred column. Your greeting is the title,
+  with the date and what is waiting under it, and Check in a family and Register a student
+  sit just below. What needs you today and the latest registrations are white cards, each row
+  opening its page as before. Changes to your account show in a card of their own until you
+  dismiss them.
+
 ## November 12, 2026 `v0.105.0`
 
 ### IMPROVED

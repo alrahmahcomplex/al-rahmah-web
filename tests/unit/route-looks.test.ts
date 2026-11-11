@@ -36,15 +36,16 @@ describe("the staff route map", () => {
     expect(Object.keys(ROUTE_LOOKS).filter((pattern) => !pages.has(pattern))).toEqual([])
   })
 
-  it("puts only the kit page and Reopening requests in the new shell (#322)", () => {
-    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual(["/staff/kit", "/staff/reopenings"])
+  it("puts the kit page, Reopening requests and Today in the new shell (#322, #323)", () => {
+    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual(["/staff", "/staff/kit", "/staff/reopenings"])
   })
 })
 
 describe("routeFor and lookFor", () => {
   it("matches exactly: /staff is only the home", () => {
     expect(routeFor("/staff")).toBe("/staff")
-    expect(lookFor("/staff")).toBe("legacy")
+    expect(lookFor("/staff")).toBe("new")
+    expect(lookFor("/staff/unknown")).toBe("legacy")
     expect(lookFor("/staff/kit")).toBe("new")
     expect(lookFor("/staff/reopenings")).toBe("new")
   })

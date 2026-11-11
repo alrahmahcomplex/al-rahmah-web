@@ -1,21 +1,22 @@
-import { Bone, HeadingSkeleton, ListSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// Today: the greeting with its two front-desk actions, then what needs you
-// beside the latest registrations.
+import "./_today/today.css"
+
+// Today while it opens: the centred greeting with its date line and the two
+// front-desk actions, then the cards for what needs you and the latest
+// registrations.
 export default function Loading() {
   return (
-    <PageSkeleton label="Today">
-      <HeadingSkeleton width="w-64" subline actions={2} pill />
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.25fr_0.9fr]">
-        <div className="flex flex-col gap-2.5">
-          <Bone className="h-3 w-28" />
-          <ListSkeleton rows={3} lines={2} />
-        </div>
-        <div className="flex flex-col gap-2.5">
-          <Bone className="h-3 w-36" />
-          <ListSkeleton rows={5} lines={2} />
-        </div>
+    <div role="status" aria-busy="true" className="td-narrow td-loading">
+      <span className="sr-only">Loading Today…</span>
+      <SkeletonBlock width={340} height={40} />
+      <SkeletonBlock width="70%" height={16} />
+      <div className="td-loading-act">
+        <SkeletonBlock width={190} height={44} shape="pill" />
+        <SkeletonBlock width={190} height={44} shape="pill" />
       </div>
-    </PageSkeleton>
+      <SkeletonBlock height={220} shape="card" />
+      <SkeletonBlock height={340} shape="card" />
+    </div>
   )
 }

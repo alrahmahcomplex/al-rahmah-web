@@ -134,6 +134,19 @@ describe("the import guard", () => {
     }
   })
 
+  it.each(OLD_IMPORTS)("refuses %s on Today, which shares app/staff/ with what every staff route uses", async (line) => {
+    for (const file of ["app/staff/page.tsx", "app/staff/loading.tsx", "app/staff/_today/needs-you.tsx"]) {
+      expect(await restricted(file, source(line))).toHaveLength(1)
+    }
+  })
+
+  it("leaves the shared staff files beside Today, and the old shell, alone (#323)", async () => {
+    const line = `import { Button } from "@/components/ui/button"`
+    for (const file of ["app/staff/layout.tsx", "app/staff/error.tsx", "app/staff/_shell/staff-shell.tsx"]) {
+      expect(await restricted(file, source(line))).toEqual([])
+    }
+  })
+
   it("allows the kit, the icons and the shared staff modules in a converted route", async () => {
     const ok = [
       `import { Card } from "@/components/kit"`,

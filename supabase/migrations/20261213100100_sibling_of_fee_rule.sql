@@ -1155,7 +1155,10 @@ begin
     revoke execute on function public.sibling_check_on_father_name_change() from public, anon, authenticated, service_role;
 
     create trigger sibling_check_on_father_name_change
-        after update of father_full_name on public.leads
+        -- student_name too: an update of the student's name alone changes the
+        -- father's name through the derive trigger, and UPDATE OF fires only
+        -- for columns the statement names.
+        after update of student_name, father_full_name on public.leads
         for each row
         when (old.father_full_name is distinct from new.father_full_name)
         execute function public.sibling_check_on_father_name_change();

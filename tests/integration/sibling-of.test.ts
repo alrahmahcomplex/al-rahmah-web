@@ -417,6 +417,19 @@ describe("the father's-name check", () => {
     expect(await feeOf(alone)).toMatchObject({ schoolFee: KG1, discount: null })
   })
 
+  test("a write that sets only the student's name still runs the check on the father's name it re-derives", async () => {
+    const year = await yearWithSchedule()
+    const name = father()
+    const first = await child(year, name, "STD 2")
+    const second = await child(year, name, "KG 1")
+    await together(first, second)
+    expect(await feeOf(second)).toMatchObject({ discount: SIBLING })
+
+    await asSystem((sql) => sql.query("update public.leads set student_name = $2 where id = $1", [second, `Kidz ${father()}`]))
+    expect(await membershipOf(second)).toMatchObject({ basis: "request_needed" })
+    expect(await feeOf(second)).toMatchObject({ schoolFee: KG1, discount: null })
+  })
+
   test("a linked member's correction: different takes the 10% away, close asks the question first", async () => {
     const year = await yearWithSchedule()
     const stem = father()

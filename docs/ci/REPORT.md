@@ -1,6 +1,6 @@
 # CI time report
 
-Branch `claude/ci-time`, pull request #285, measured on 2026-11-10. Commit hashes in this file are of that branch.
+Branch `claude/ci-time`, pull request #285, measured on 2026-11-10 and merged that day as commit `ff7e8fd` of main. Commit hashes in this file are of that branch unless the text says main.
 
 All times are seconds unless a unit is given. "Not measured" means no number exists. Nothing here is an estimate.
 
@@ -11,11 +11,12 @@ All times are seconds unless a unit is given. "Not measured" means no number exi
 | `pull_request`, full suite, warm cache | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 10 | 2026-11-10 | 236 | 246 | 5.5 | 6.9 |
 | `pull_request`, full suite, cold cache | 24 | 2026-11-08 to 2026-11-10 | 1305 | 1696 | 3 | 2026-11-10 | 297 | 300 | 4.4 | 5.7 |
 | `pull_request`, documents only | 6 | 2026-11-08 to 2026-11-09 | 24.5 | 30 | not measured | | not measured | not measured | not measured | not measured |
-| `push` to main, full suite | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | not measured | | not measured | not measured | not measured | not measured |
+| `push` to main, full suite, warm cache | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | 10 | 2026-11-10 | 234.5 | 240 | 4.8 | 6.4 |
+| `push` to main, full suite, cold cache | 28 | 2026-11-06 to 2026-11-10 | 1123.5 | 1541 | 1 | 2026-11-10 | 301 | not measured | 3.7 | not measured |
 | `merge_group` | 0 | none | not measured | not measured | 0 | | not measured | not measured | not measured | not measured |
 
 - The repository has no merge queue, so GitHub has never sent a `merge_group` event.
-- Pushes to main can only be measured after the merge. "After the merge" below has the commands.
+- Main's numbers are the eleven attempts of the merge's own run. The first attempt found no cache and saved one. One run has no p90. "Main after the merge" below has the details.
 - No documents-only pull request ran on this branch, so that path has no "after" number. It now runs three jobs where it ran two: the helper tests moved to a job of their own.
 - The baseline's runs restored npm's download cache, apart from the first run after a lockfile change, so the warm row is the like-for-like one.
 
@@ -49,17 +50,35 @@ The warm runs measured `c2000ee`. The commits after it add two things, and only 
 
 The commits after `7411e32` are not in either measurement. They add the `caches` job to the gate's list and change the two measuring scripts and the unit test setup. None adds a step to a pull request run.
 
-Re-run rate after: not measured. Every run of this branch was re-run on purpose to measure it. The baseline's 7.5% for pull requests and 0% for main are the numbers to compare against after a month of normal use.
+Re-run rate after: not measured. Every run of this branch, and the merge's run on main, was re-run on purpose to measure it. The baseline's 7.5% for pull requests and 0% for main are the numbers to compare against after a month of normal use.
 
-### After the merge
+### Main after the merge
 
-Main's numbers need the merge. The first push to main is a cold run, and its `caches` job saves `node_modules` for every later run. Then, after 30 pushes or a month:
+Pull request #285 merged on 2026-11-10 at 20:04 UTC as commit `ff7e8fd` of main. Its push run, `42891666899`, was re-run until it had eleven attempts. All eleven passed. Data: `data/after-push-main.json`.
+
+| | Runs | Median | p90 | Min | Max | Queue median | Queue p90 | Runner median |
+|---|---|---|---|---|---|---|---|---|
+| Baseline, push to main, full suite | 28 | 1123.5 | 1541 | 863 | 1746 | 9 | 10 | 1266.5 |
+| Main, warm cache | 10 | 234.5 | 240 | 225 | 240 | 8 | 10 | 2041.5 |
+| Main, cold cache | 1 | 301 | not measured | 301 | 301 | 6 | not measured | 2761 |
+
+The ten warm runs took 225, 225, 230, 233, 233, 236, 237, 240, 240 and 240.
+
+- **The cold run** is the first attempt. No cache held the key, so the twelve jobs that need `node_modules` installed from the registry, in 50 to 70 each. The `caches` job installed in 54, saved `node_modules` in 5 and took 64 in all.
+- **The warm runs** restored that cache in 4 at the median, 3 to 7 over 110 jobs. The `caches` job found the cache in place and took 7.
+- **Jobs at the median, warm:** the browser shards 179.5 to 203 by shard (setup 91, tests 91), the integration shards 171.5 and 177 (Supabase 72, tests 88.5), lint, typecheck and unit tests 116 (unit tests 69), scope 6.5 and the gate 6.5. The slowest job of a run was a browser shard every time, 210 at the median.
+- **Queue time** stayed at 8 at the median and 10 at the most with thirteen jobs. No other CI run overlapped these, so they do not answer the question under change 14.
+- **Retries.** `node scripts/ci-flaky.mjs --limit 1 --out docs/ci/data/flaky-after-main.json` read every job log of the eleven attempts. Three browser tests passed only on their retry, once each. No test failed after its retry, and no integration test needed Vitest's retry. "Flaky tests" has the three.
+
+**The run with no cache.** The nightly run was due at 01:17 UTC on 2026-11-11. At 03:21 UTC GitHub had started no scheduled run, and why is not known. So I started the same path by hand at 03:14 UTC: run `42951457909`, a `workflow_dispatch` run of `ff7e8fd`. Every job skipped the restore step and installed from the registry in 39 to 69. The `caches` job was skipped, and the gate passed. The run took 292. Data: `data/after-manual-main.json`. Check after a week that scheduled runs exist: `gh run list --workflow ci.yml --event schedule`.
+
+Still open: the re-run rate and queue time in normal use, and a documents-only pull request. After 30 pushes or a month:
 
 ```bash
-node scripts/ci-measure.mjs fetch --event push --branch main --limit 30 --out docs/ci/data/after-push-main.json
-node scripts/ci-measure.mjs fetch --event pull_request --limit 30 --out docs/ci/data/after-pull_request.json
-node scripts/ci-measure.mjs summary docs/ci/data/after-push-main.json docs/ci/data/after-pull_request.json
-node scripts/ci-flaky.mjs --limit 100 --out docs/ci/data/flaky-after.json
+node scripts/ci-measure.mjs fetch --event push --branch main --limit 30 --out docs/ci/data/monthly-push-main.json
+node scripts/ci-measure.mjs fetch --event pull_request --limit 30 --out docs/ci/data/monthly-pull_request.json
+node scripts/ci-measure.mjs summary docs/ci/data/monthly-push-main.json docs/ci/data/monthly-pull_request.json
+node scripts/ci-flaky.mjs --limit 100 --out docs/ci/data/flaky-monthly.json
 ```
 
 To measure the shards' seconds again, download the reports of a run on main and let the script rewrite `e2e/shards.json`:
@@ -232,7 +251,7 @@ Notes on each change:
 | 12 | Faster runners | APPROVAL NECESSARY | The repository is public, so it already gets GitHub's 4-CPU standard runner for free. Larger GitHub runners need an organization on a paid plan, and other runner services are new paid or third-party services. Not measured. |
 | Added | Install Chromium without `apt-get`'s font packages | DONE | Change 6. Source: Playwright's command line reference, where `--with-deps` is an option of `playwright install`. |
 | Added | Start Supabase again when a port is taken | DONE | See "The Supabase port failure". It lowers the re-run rate, not the run time. |
-| Added | A nightly run of all tests without caches | DONE | Pull requests with only documents run no runtime test, and every other run now restores a cache. The nightly run and the manual run restore none. It first runs after the merge, because GitHub schedules workflows from main only. |
+| Added | A nightly run of all tests without caches | DONE | Pull requests with only documents run no runtime test, and every other run now restores a cache. The nightly run and the manual run restore none. The manual run passed on main on 2026-11-11 in 292. GitHub had started no scheduled run by then, see "Main after the merge". |
 
 ## Tests that now run only after the merge
 
@@ -244,7 +263,7 @@ None. A pull request runs every test unless it changes only allowlisted Markdown
 
 | Test | Flaky | Failed after the retry | What happens |
 |---|---|---|---|
-| `e2e/marketing-agents.spec.ts` › the Manager confirms a Pending agent's name and code, approves them, and the Pending count drops | 16 | 0 | The test waits for the sidebar's Pending count to equal the database's. Another test that registers an agent in the same seconds makes them differ, and the page does not redraw. Not changed: a fix alters what the test asserts, which is the owner's call. |
+| `e2e/marketing-agents.spec.ts` › the Manager confirms a Pending agent's name and code, approves them, and the Pending count drops | 16 | 0 | The test waits for the sidebar's Pending count to equal the database's. Another test that registers an agent in the same seconds makes them differ, and the page does not redraw. Not changed: a fix alters what the test asserts, which is the owner's call. On main after the merge it was flaky in 1 of the eleven attempts of run `42891666899`. |
 | `e2e/turnstile-placement.spec.ts` › on a phone (390px) › a check that needs a click sits above Send on the Admission review step, in `en` and in `sw` | 3 | 3 attempts on this branch | The test read the title's, the check's and Send's positions one after the other while the page was still scrolling the question into place, so Send's reading came a frame later and a few pixels higher (805.64 where under 798.97 was expected, twice). With six shards it failed both tries in 2 of 5 attempts of run `42844460009`. Fixed in `b571cda`: one reading gives all three positions, and the assertions are the same. |
 | `e2e/turnstile-placement.spec.ts`, four other tests | 0 | 1 each | Three in run `42648081424` on `claude/272-273-turnstile-followups`, the branch that was changing that screen, and one in run `42656397158` on `claude/apply-ux-concepts`. Work in progress or flaky, the logs do not say. |
 | `e2e/agent-students.spec.ts` › the agent sees a card per student | 0 | 1 | Run `42773356261` on `claude/discounts-promo-import-export`. Same doubt. |
@@ -252,6 +271,7 @@ None. A pull request runs every test unless it changes only allowlisted Markdown
 | `e2e/staff-roles.spec.ts` › a role is renamed, retired, then reactivated | 0 | 3 of 6 attempts of run `42804913691` | New with change 2. After Save name the closing dialog's title, "Rename <new name>", also matched the heading locator. Fixed in `0ec9b50` by matching the heading exactly. |
 | `e2e/record-visit.spec.ts` › a visit someone else recorded first is refused | 1 | 0 | Not analysed. |
 | `e2e/admission-form-draft.spec.ts` › Forward to a question the answers no longer allow stays put | 1 | 0 | Not analysed. |
+| The Admission form's next question, in two tests on main: `e2e/turnstile-placement.spec.ts` › on a phone (390px) › a check that needs a click sits above Send on the Admission review step, in `en`, and `e2e/admission-form-draft.spec.ts` › switching language on a later question keeps the form's Back in history | 1 each in the eleven attempts of run `42891666899` | 0 | In both, a helper in `e2e/admission-form.ts` waited 5 s for the next question to open and it did not: line 142 after the student's name, line 109 after a language switch. Both passed on the retry. This is not the position reading that `b571cda` fixed. The job keeps no trace of a test that passes on its retry, so the cause is not known. Not changed. |
 | `tests/integration/leads-search.test.ts` › pages 50 at a time, and `tests/integration/interview-release-status.test.ts` › a result never sent | 1 attempt, passed on a retry | 2 attempts, before the retry existed | Both create and lock leads. In the same seconds they fill the connection pool, and each gets "unavailable" after about 10 s. Seen only with two integration shards, where Vitest puts both files in one shard. Vitest now retries these load errors, change 13. The contention itself is not fixed. |
 | `tests/integration/leads-search.test.ts` › finds a Declined lead, and a number that matches nothing finds nothing | 0 | 1 attempt of run `42863416438` | It searched for `ADMSN-00000` and expected no lead, but Admission Numbers are random and another test's lead held it. Fixed in `cc6fc9d`: it asks `unusedAdmissionNumber` for a free one. |
 | Unit tests, an error with no failed test | | 3 attempts: `42697498569` on main, and attempts 1 and 10 of `42872902972` | "ReferenceError: window is not defined" at `components/guided-form/stack.tsx:196`. A timer the guided form sets fires after the test's browser environment is gone. Every test passes and Vitest still fails the run. It came from `tests/unit/apply-page.test.tsx` once and `tests/unit/discount-code-page.test.tsx` twice, the second time in attempt 10 of the same run. `revealStep` sets a 340 ms timer that nothing cancels. Since `bb7b1fb` a unit test file that rendered a guided step waits 400 ms before its environment goes, and the three runs after it passed. The timer itself is application code and is not changed. |
@@ -296,4 +316,6 @@ Greptile then reviewed commit `126624b` and scored it 4 of 5 with four findings.
 - **`revealStep`'s timer.** Cancelling it on unmount in `components/guided-form/stack.tsx` is the real fix for the unit-test error. The 400 ms wait in `tests/unit/setup.ts` can go after that.
 - **Two integration test files collide.** `leads-search` and `interview-release-status` create and lock leads in the same seconds. The retry gets past it, once on its last try. Shorter or fewer table locks in those tests would remove the cause.
 - **The Pending count test.** `e2e/marketing-agents.spec.ts` passed only on its retry in 16 of 77 runs. Fixing it changes what it asserts.
+- **The Admission form's next question.** On main, two browser tests each waited 5 s once for the next question to open and passed on the retry. The cause is not known.
+- **The nightly run.** GitHub had started none by 03:21 UTC on 2026-11-11. If there is still none after a week, the schedule needs a look.
 - **Approval needed:** a remote build cache, a merge queue, faster runners. The status table has the reason for each.

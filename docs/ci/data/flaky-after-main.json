@@ -1,0 +1,12 @@
+{
+  "fetched_at": "2026-11-11T03:14:30.438Z",
+  "scanned": {"runs":1,"from":"2026-11-10T20:04:49Z","to":"2026-11-10T20:04:49Z"},
+  "records": [
+    {"run":42891666899,"attempt":1,"attempts":11,"event":"push","branch":"main","sha":"ff7e8fd","created_at":"2026-11-10T20:04:49Z","job":"Browser tests (7/8)","conclusion":"success","failedStep":null,"flaky":["[chromium] › e2e/marketing-agents.spec.ts › Marketing Agents › the Manager confirms a Pending agent's name and code, approves them, and the Pending count drops"],"failed":[],"vitestFlaky":[],"vitestFailed":[]},
+    {"run":42891666899,"attempt":3,"attempts":11,"event":"push","branch":"main","sha":"ff7e8fd","created_at":"2026-11-10T20:04:49Z","job":"Browser tests (1/8)","conclusion":"success","failedStep":null,"flaky":["[chromium] › e2e/turnstile-placement.spec.ts › on a phone (390px) › a check that needs a click sits above Send on the Admission review step, in en"],"failed":[],"vitestFlaky":[],"vitestFailed":[]},
+    {"run":42891666899,"attempt":9,"attempts":11,"event":"push","branch":"main","sha":"ff7e8fd","created_at":"2026-11-10T20:04:49Z","job":"Browser tests (8/8)","conclusion":"success","failedStep":null,"flaky":["[chromium] › e2e/admission-form-draft.spec.ts › switching language on a later question keeps the form's Back in history"],"failed":[],"vitestFlaky":[],"vitestFailed":[]}
+  ],
+  "unreadable": [
+
+  ]
+}

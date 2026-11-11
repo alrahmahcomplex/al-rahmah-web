@@ -1,0 +1,66 @@
+/* The design tokens for the whole app (DESIGN.md, Colors, Elevation and
+   Motion). The root layout loads this file on every page, so the Admission
+   form, the staff app and the kit read one set of values. The `--gf-` prefix
+   stays even though it now means the whole app: renaming would touch every
+   public page for nothing a person can see.
+
+   Only add tokens here. Renaming or retuning one changes the public pages.
+   This is the one stylesheet where a hex colour may be written
+   (scripts/design-lint.mjs). */
+
+:root {
+  --gf-indigo: #0900bb;
+  --gf-indigo-deep: #070099;
+  --gf-indigo-night: #03004d;
+  --gf-mist: #e0dcf9;
+  --gf-whisper: #f2f0fc;
+  --gf-chrome: #f8f7fd;
+  --gf-orange: #ee7300;
+  --gf-ember: #cc6200;
+  --gf-orange-deep: #b35500;
+  --gf-orange-tint: #fff4e8;
+  --gf-paper: #ffffff;
+  --gf-ink: #1e293b;
+  --gf-ink-soft: #475569;
+  --gf-quiet: #64748b;
+  --gf-line: rgb(9 0 187 / 0.22);
+  --gf-line-strong: rgb(9 0 187 / 0.45);
+  --gf-line-soft: rgb(9 0 187 / 0.12);
+  --gf-red: #c81e1e;
+  --gf-red-tint: #fef2f2;
+  --gf-green: #0f7a3d;
+  --gf-green-tint: #eefbf3;
+  --gf-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --gf-ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+  --gf-lift: 0 30px 80px -15px rgb(9 0 187 / 0.25);
+  --gf-sun: 0 4px 6px -1px rgb(238 115 0 / 0.25), 0 2px 4px -2px rgb(238 115 0 / 0.25);
+  /* every resting white card on the stage */
+  --gf-card-shadow: 0 1px 2px rgb(9 0 187 / 0.04), 0 12px 28px -18px rgb(9 0 187 / 0.22);
+  /* the lavender wash under every page body and the staff stage */
+  --gf-wash: linear-gradient(135deg, #f2f0fc 0%, rgb(224 220 249 / 0.5) 45%, #fff 100%);
+  --gf-t-fast: 140ms;
+  --gf-t-med: 280ms;
+  --gf-t-slow: 420ms;
+  --gf-fold: 300ms;
+  --gf-fade: 300ms;
+  /* the staff sidebar folding and unfolding */
+  --gf-side: 460ms;
+}
+html.rm {
+  --gf-t-fast: 1ms;
+  --gf-t-med: 120ms;
+  --gf-t-slow: 160ms;
+  --gf-fold: 0ms;
+  --gf-fade: 120ms;
+  --gf-side: 1ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --gf-t-fast: 1ms;
+    --gf-t-med: 120ms;
+    --gf-t-slow: 160ms;
+    --gf-fold: 0ms;
+    --gf-fade: 120ms;
+    --gf-side: 1ms;
+  }
+}

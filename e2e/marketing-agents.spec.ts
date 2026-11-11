@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { expect, test, type Page } from "@playwright/test"
+import { type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { registerPendingAgent as makePendingAgent } from "../tests/support/agents"
 import { secretClient } from "../tests/support/db"

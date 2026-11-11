@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test"
+import { type Page } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { firstName } from "@/app/staff/_today/greeting"
 import { formatLongDate, tanzaniaToday } from "@/lib/school-calendar"

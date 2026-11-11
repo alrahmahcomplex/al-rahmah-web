@@ -257,7 +257,7 @@ The staff screens move to this language ticket by ticket (the "staff app redesig
 
 ## Colors
 
-The tokens live in `components/guided-form/guided-form.css` as `--gf-*` custom properties, and in `app/globals.css` as Tailwind's `blue-*` and `orange-*` scales (Rahmah Indigo is `blue-600`, Sunrise Orange is `orange-500`). Use a token, never a new hex value.
+The tokens live in `app/tokens.css` as `--gf-*` custom properties, which the root layout loads on every page. `app/globals.css` maps them to Tailwind utilities (`bg-gf-whisper`, `text-gf-indigo`, `shadow-gf-card`, `bg-gf-wash`) and also keeps Tailwind's `blue-*` and `orange-*` scales (Rahmah Indigo is `blue-600`, Sunrise Orange is `orange-500`). Use a token, never a new hex value: `scripts/design-lint.mjs` fails CI on a hex value in `components/kit/`, `components/icons/` or a converted staff route, and on upright Exo anywhere.
 
 ### Primary
 - **Rahmah Indigo** (`--gf-indigo`, `#0900bb`): titles, links, the current sidebar item, selected choices, outlines of round buttons, line icons when active.
@@ -322,7 +322,7 @@ Exo italic is the flyer's voice: geometric, fast, leaning toward the reader. Gei
 Numbers that line up (money, Admission Numbers, times, counts in tables) use `font-variant-numeric: tabular-nums`. An Admission Number shown as the result of a finished task is Exo 800 italic 20px, Rahmah Indigo.
 
 ### Named Rules
-**The Lean Forward Rule.** Exo is always italic. Upright Exo never appears, on any page. Check it on the rendered page: no element whose computed `font-family` starts with Exo has `font-style: normal`.
+**The Lean Forward Rule.** Exo is always italic. Upright Exo never appears, on any page. Check it on the rendered page: no element whose computed `font-family` starts with Exo has `font-style: normal`. A few small lines on the sign-in, password and Discount code pages still set Exo upright; `scripts/design-lint.mjs` lists them by file and allows no more, until a prototype the owner approves turns them italic.
 
 **The Geist Work Rule.** Typed text, table cells, names, numbers and paragraphs are Geist, upright. Exo never sets a table cell, a field's value or a paragraph.
 

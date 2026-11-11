@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test } from "./staff-test"
 
 import { createThrowawayStaff } from "../tests/support/db"
 import { MANAGER, SEEDED_AGENT } from "../tests/support/fixtures"

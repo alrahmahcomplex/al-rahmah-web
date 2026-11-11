@@ -6,6 +6,9 @@ import { Toaster } from "@/components/ui/sonner"
 import { VercelInsights } from "@/components/vercel-insights"
 import { cn } from "@/lib/utils"
 
+// The design tokens (DESIGN.md): every page, globals.css and each component
+// stylesheet read the --gf-* values from here.
+import "./tokens.css"
 import "./globals.css"
 
 // Self-hosted from Fontsource's variable fonts (latin), so no build depends on

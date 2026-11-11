@@ -1,6 +1,6 @@
 # Guided form and brand top bar (concept C)
 
-React ports of the approved prototype (`c2.html` in the UX scratchpad, v2.10). Each component imports `guided-form.css`, which holds the tokens (`--gf-*`), keyframes and reduced-motion rules. All classes there start with `gf-`. No component holds page words: pass every string as a prop, or take it from `components/brand/copy.ts`.
+React ports of the approved prototype (`c2.html` in the UX scratchpad, v2.10). Each component imports `guided-form.css`, which holds the keyframes and reduced-motion rules; it reads the tokens (`--gf-*`) from `app/tokens.css`, which the root layout loads. All classes there start with `gf-`. No component holds page words: pass every string as a prop, or take it from `components/brand/copy.ts`.
 
 Import from `@/components/guided-form` and `@/components/brand`. The server helper `languagePromptNeeded` comes from `@/components/brand/language-cookie`.
 

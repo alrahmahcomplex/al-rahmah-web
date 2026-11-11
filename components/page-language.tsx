@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { createContext, startTransition, use, useCallback, useEffect, useState, type ComponentProps, type FormEvent, type ReactNode } from "react"
 
 import { isLanguage, type Language } from "@/lib/languages"
@@ -106,13 +107,24 @@ export function PageMain({ language, ...props }: ComponentProps<"main"> & { lang
 }
 
 /**
- * A language switch form's submit handler for a cached page that leaves for
- * the other copy (`/`): records the pick, and lets the form's action run.
+ * A language switch form's submit handler for a cached page with nothing to
+ * keep (`/`). With JavaScript it sets the cookie (`storeLanguage`), records
+ * the pick once the cookie is set, and renders the page again, which fetches
+ * the other language's copy. If the cookie can't be set, nothing changes.
+ * Without JavaScript the form posts to `setLanguage` with its `return_to`.
  */
-export function useRecordPick(): (event: FormEvent<HTMLFormElement>) => void {
+export function useSwitchAndRefresh(): (event: FormEvent<HTMLFormElement>) => void {
   const choose = useChooseLanguage()
+  const router = useRouter()
   return (event) => {
     const lang = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value")
-    if (isLanguage(lang)) choose(lang)
+    // No submitter to read: let the form's action run and return to the page.
+    if (!isLanguage(lang)) return
+    event.preventDefault()
+    startTransition(async () => {
+      if (!(await storeLanguage(lang))) return
+      choose(lang)
+      router.refresh()
+    })
   }
 }

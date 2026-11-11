@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 
 // lib/office.ts is server-only, which vitest can't load. Stand in a different
 // number, so the test shows the page takes the phone from that constant.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 // The page reads nothing from the request: its language comes from the
 // language state it was built for. Any read of the cookies fails this test.

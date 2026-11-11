@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react"
 import type { ImgHTMLAttributes } from "react"
 import { describe, expect, it, vi } from "vitest"
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
 vi.mock("next/image", () => ({
   default: ({ priority, ...props }: ImgHTMLAttributes<HTMLImageElement> & { priority?: boolean }) => {

@@ -42,6 +42,7 @@ import { AdmissionFormSteps } from "@/app/apply/admission-form"
 import { DRAFT_KEY } from "@/app/apply/draft"
 import ApplyPage from "@/app/apply/page"
 import { admissionYears } from "@/lib/admission-form"
+import { FORM_NOTICE, FORM_NOTICE_VERSION } from "@/lib/referral-notice"
 
 const years = admissionYears()
 const DEFAULT_YEAR = years[1]
@@ -490,10 +491,10 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     render(form("en"))
 
     await waitFor(() => expect(open().getByRole("button", { name: "Send application" })).toBeInTheDocument())
-    expect(open().getByText("The person who gave you this code will see your child's admission progress.")).toBeInTheDocument()
+    expect(open().getByText(FORM_NOTICE.en)).toBeInTheDocument()
     await send(user, "Send application")
     await waitFor(() => expect(stubs.submit).toHaveBeenCalled())
-    expect(sentBody()).toMatchObject({ discountCode: "BJN-402", noticeVersion: "form_v1" })
+    expect(sentBody()).toMatchObject({ discountCode: "BJN-402", noticeVersion: FORM_NOTICE_VERSION })
   })
 
   it("leaves the words to a security check that needs a click", async () => {
@@ -723,7 +724,7 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     await waitFor(() => expect(stubs.check).toHaveBeenCalledWith("BJN-402"))
     expect(await screen.findByText("Hongera! Umeokoa TZS 10,000 kwa kila mwanafunzi.")).toBeInTheDocument()
     expect(open().getByText("Ofa hii ni ya muda mfupi")).toBeInTheDocument()
-    expect(open().getByText(/Mtu aliyekupa code hii/)).toHaveAttribute("data-notice-version", "form_v1")
+    expect(open().getByText(FORM_NOTICE.sw)).toHaveAttribute("data-notice-version", FORM_NOTICE_VERSION)
   })
 
   it("checks a typed code with Hakiki Punguzo, and only when it changed", async () => {
@@ -783,7 +784,7 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
 
     await send(user, "Tuma maombi")
     expect(await screen.findByRole("heading", { name: "Maombi yamepokelewa!" })).toBeInTheDocument()
-    expect(sentBody()).toMatchObject({ discountCode: "BJN-402", noticeVersion: "form_v1" })
+    expect(sentBody()).toMatchObject({ discountCode: "BJN-402", noticeVersion: FORM_NOTICE_VERSION })
     expect(screen.getByText("Punguzo lako la TZS 10,000 linakusubiri")).toBeInTheDocument()
     const offer = screen.getByRole("note")
     expect(offer).toHaveTextContent(

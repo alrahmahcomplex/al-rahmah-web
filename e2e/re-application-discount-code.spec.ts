@@ -47,7 +47,7 @@ async function reApplied(code: string) {
   })
   if (created.error || created.data?.result !== "created") throw new Error(`could not create a lead: ${created.error?.message}`)
   const leadId = created.data.lead_id as string
-  const coded = await supabase.rpc("apply_form_discount_code", { lead_id: leadId, code: PENDING_CODE, notice_version: "form_v1" })
+  const coded = await supabase.rpc("apply_form_discount_code", { lead_id: leadId, code: PENDING_CODE, notice_version: "form_v2" })
   if (coded.error) throw new Error(`could not put a code on the lead: ${coded.error.message}`)
   const recorded = await supabase.rpc("record_re_application", {
     lead_id: leadId,

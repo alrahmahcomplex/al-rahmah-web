@@ -84,7 +84,7 @@ const newChild = (): AdmissionChild => ({
 })
 
 function form(parent: AdmissionParent, children: AdmissionChild[], discountCode?: string): AdmissionForm {
-  return { submissionKey: randomUUID(), parent, children, discountCode, noticeVersion: discountCode ? "form_v1" : undefined }
+  return { submissionKey: randomUUID(), parent, children, discountCode, noticeVersion: discountCode ? "form_v2" : undefined }
 }
 
 async function leadCode(id: string): Promise<{ referral_code: string | null; referral_notice_version: string | null }> {
@@ -180,7 +180,7 @@ describe("a Discount code sent for a child already on file", () => {
 
     expect(await leadCode(await leadNamed(fresh.fullName))).toEqual({
       referral_code: APPROVED_CODE,
-      referral_notice_version: "form_v1",
+      referral_notice_version: "form_v2",
     })
     expect(await leadCode(lead.id)).toEqual({ referral_code: null, referral_notice_version: null })
     const entry = await onlyReApplication(lead.id)

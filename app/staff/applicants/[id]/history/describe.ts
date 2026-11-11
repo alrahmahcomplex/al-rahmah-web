@@ -170,9 +170,11 @@ const CAUSES: Record<string, string> = {
 
 const CONTACT_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Dar_es_Salaam" })
 
-// Which code-holder notice went with a Referral code (#182).
+// Which code-holder notice went with a Referral code (#182). form_v1 is the
+// one-child wording used until #282; form_v2 covers every student on the form.
 const NOTICE_VERSIONS: Record<string, string> = {
   form_v1: "Shown on the Admission form (form_v1)",
+  form_v2: "Shown on the Admission form (form_v2)",
   staff_reminder: "Staff reminded to tell the family",
 }
 

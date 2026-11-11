@@ -59,6 +59,9 @@ describe("a Referral code change in the lead's history", () => {
         { label: "Code holder notice", from: "Shown on the Admission form (form_v1)", to: "Staff reminded to tell the family" },
       ],
     })
+    expect(described(withNotice(null, "BJN-402", [null, "form_v2"])).changes).toContainEqual(
+      expect.objectContaining({ label: "Code holder notice", from: "None", to: "Shown on the Admission form (form_v2)" }),
+    )
     expect(described(withNotice("BJN-402", null, ["staff_reminder", null])).summary).toBe("cleared the Referral code")
   })
 

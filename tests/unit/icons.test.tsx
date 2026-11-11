@@ -78,8 +78,12 @@ describe("the Admission form's Icon", () => {
       expect(svg).toHaveClass("gf-icon")
       expect(svg.querySelector("circle.gf-ic-glow, g"), name).toBeNull()
       const staff = render(<Icon name={name} />)
-      const lines = [...staff.container.querySelectorAll("g.gf-ic-line")].map((g) => g.innerHTML).join("")
-      expect(svg.innerHTML, name).toBe(lines)
+      const layers = [...staff.container.querySelectorAll("g.gf-ic-line")]
+      if (name === "menu") {
+        // One path holding both layers' lines, as the form always drew it.
+        const d = layers.map((g) => g.querySelector("path")!.getAttribute("d")).join("")
+        expect(svg.innerHTML).toBe(`<path d="${d}"></path>`)
+      } else expect(svg.innerHTML, name).toBe(layers.map((g) => g.innerHTML).join(""))
       staff.unmount()
       unmount()
     }

@@ -3,14 +3,14 @@
 // staff app redesign (#316) cannot drift screen by screen:
 //
 // 1. Exo is always italic (The Lean Forward Rule), in app/ and components/.
-// 2. No hex colour in the kit, the icons or a converted staff route: those
-//    use the tokens of app/tokens.css, the one file where a hex may be written.
+// 2. No hex colour in the kit, the icons, the new staff shell or a converted
+//    staff route: those use the tokens of app/tokens.css, the one file where
+//    a hex may be written.
 // 3. No CountPill in a converted staff route: the bell is the only count
 //    (#316, lead's answer 2).
 //
-// A converted route is one app/staff/route-looks.ts marks "new". Until that
-// file exists (F6, #322), rules 2 and 3 cover only components/kit/ and
-// components/icons/. Scripts are read with the TypeScript parser, so
+// A converted route is one app/staff/route-looks.ts marks "new". Without
+// that file, rules 2 and 3 cover only HEX_ROOTS. Scripts are read with the TypeScript parser, so
 // comments, regex literals and JSX text are never taken for strings.
 //
 // Run: node scripts/design-lint.mjs, after `npm ci` (it needs typescript).
@@ -24,7 +24,7 @@ import ts from "typescript"
 
 export const TOKEN_STYLESHEET = "app/tokens.css"
 export const EXO_ROOTS = ["app", "components"]
-export const HEX_ROOTS = ["components/kit", "components/icons"]
+export const HEX_ROOTS = ["components/kit", "components/icons", "app/staff/_new-shell"]
 export const ROUTE_LOOKS = "app/staff/route-looks.ts"
 
 const SOURCE = /\.(tsx?|css|mjs|jsx?)$/

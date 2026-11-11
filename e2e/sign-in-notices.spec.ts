@@ -6,7 +6,7 @@ import { firstName } from "@/app/staff/_today/greeting"
 import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
 import { SUPER_ADMIN } from "../tests/support/fixtures"
 import type { FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { logIn, signOut } from "./log-in"
 
 // The notice a staff member sees on the staff home at sign-in when someone
 // else changed their role or account, and dismissing it. Each test changes a
@@ -15,12 +15,6 @@ import { logIn } from "./log-in"
 async function signIn(page: Page, person: FixtureStaff) {
   await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
-}
-
-async function signOut(page: Page) {
-  await page.getByRole("complementary", { name: "Sidebar" }).getByRole("button", { name: /^Account menu/ }).click()
-  await page.getByRole("menuitem", { name: "Sign out" }).click()
-  await expect(page).toHaveURL(/\/login$/)
 }
 
 async function roleId(name: string) {

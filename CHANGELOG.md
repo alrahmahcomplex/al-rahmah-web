@@ -5,6 +5,19 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 12, 2026 `v0.103.0`
+
+### NEW
+
+- Reopening requests and the Design system page now open in the new staff look. The page sits in
+  one rounded box with the sidebar beside it. The sidebar is grouped, shows no counts, folds to
+  its icons from the button in the top bar, and can be dragged wider or narrower; a double-click
+  on its edge puts it back. The top bar has a search that opens Applicants, a bell for staff who
+  decide Discount and Reopening requests (its number counts the requests waiting for them, and
+  opening it lists them), and your name, which opens a menu with Sign out. On a phone the Menu
+  button opens a drawer with every page. Reopening requests are listed in a table. Every other
+  staff page keeps its current look until its turn comes.
+
 ## November 12, 2026 `v0.102.0`
 
 ### IMPROVED

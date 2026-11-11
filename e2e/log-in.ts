@@ -43,3 +43,25 @@ export async function signInOnce(page: Page, email: string, password: string): P
     (await page.context().cookies()).filter((cookie) => /^sb-.+-auth-token/.test(cookie.name)),
   )
 }
+
+// Signs out from whichever shell the page is in (#322): the old shell's
+// account menu at the foot of the sidebar, or the new shell's person pill in
+// the top bar. On a phone the old shell has Sign out in its More sheet.
+export async function signOut(page: Page): Promise<void> {
+  if (await page.locator('[data-shell="new"]').count()) {
+    // A click that lands before the page has hydrated opens nothing; press again until the menu shows.
+    const signOutButton = page.getByRole("dialog").getByRole("button", { name: "Sign out" })
+    await expect(async () => {
+      if (!(await signOutButton.isVisible())) await page.getByRole("banner").locator(".ns-me").click()
+      await expect(signOutButton).toBeVisible({ timeout: 2_000 })
+    }).toPass({ timeout: 20_000 })
+    await signOutButton.click()
+  } else if (await page.getByRole("complementary", { name: "Sidebar" }).isVisible()) {
+    await page.getByRole("complementary", { name: "Sidebar" }).getByRole("button", { name: /^Account menu/ }).click()
+    await page.getByRole("menuitem", { name: "Sign out" }).click()
+  } else {
+    await page.getByRole("navigation", { name: "Staff" }).getByRole("button", { name: "More" }).click()
+    await page.getByRole("dialog", { name: "More" }).getByRole("button", { name: "Sign out" }).click()
+  }
+  await page.waitForURL((url) => url.pathname === "/login")
+}

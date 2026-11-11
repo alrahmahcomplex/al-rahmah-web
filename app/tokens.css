@@ -66,6 +66,8 @@
   /* the two light pieces of the staff registration's confetti (DESIGN.md, Confetti) */
   --gf-confetti-peach: #ffb066;
   --gf-confetti-violet: #7b73ff;
+  /* the thumb of the staff stage's scrollbar, drawn outside the stage (DESIGN.md, Layout) */
+  --gf-scroll-thumb: #cbc5f6;
 }
 html.rm {
   --gf-t-fast: 1ms;

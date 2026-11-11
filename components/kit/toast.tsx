@@ -18,7 +18,7 @@ let shown: string | number | undefined
 
 /**
  * Where the new look's toasts appear: bottom centre, one at a time. The new
- * shell mounts it once (the kit page does until then).
+ * shell mounts it once.
  */
 export function Toaster() {
   return (

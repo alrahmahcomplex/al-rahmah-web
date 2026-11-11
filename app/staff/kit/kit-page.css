@@ -1,13 +1,5 @@
-/* The kit page's own layout: the prototype's stage padding and its "Design
-   system" grid (.ds, .sw, .icg, .rowx, .spec). Until the new shell (F6) the
-   page draws the lavender wash itself. */
-
-.kp-stage {
-  min-height: 100dvh; background: var(--gf-wash); color: var(--gf-ink);
-  font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif; padding: 26px 40px 56px;
-}
-.kp-page { max-width: 1180px; margin: 0 auto; }
-@media (max-width: 860px) { .kp-stage { padding: 16px 14px 36px; } }
+/* The kit page's own layout: the prototype's "Design system" grid (.ds, .sw,
+   .icg, .rowx, .spec). The new shell (#322) draws the stage around it. */
 
 .kp-ds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 18px; align-items: start; }
 .kp-ds + .kp-ds { margin-top: 24px; }

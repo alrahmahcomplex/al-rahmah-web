@@ -1,13 +1,13 @@
-import AxeBuilder from "@axe-core/playwright"
 import { type Locator, type Page } from "@playwright/test"
 
 import { ADMISSIONS } from "../tests/support/fixtures"
+import { axeProblems, settled } from "./axe"
 import { signInOnce } from "./log-in"
 import { expect, test } from "./staff-test"
 
 // The kit page (#319): the prototype's Design system page rebuilt with
 // components/kit, then the kit's other pieces. Any signed-in staff member may
-// open it; it sits outside the old shell until F6.
+// open it; it is drawn in the new shell (#322).
 
 const INDIGO = "rgb(9, 0, 187)"
 const PEACH_GLOW = "rgb(255, 207, 166)"
@@ -16,6 +16,7 @@ async function openKit(page: Page) {
   await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
   await page.goto("/staff/kit")
   await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible()
+  await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
 }
 
 const glow = (icon: Locator) =>
@@ -30,12 +31,12 @@ test("a signed-out visitor is sent to sign in", async ({ page }) => {
   await expect(page).toHaveURL(/\/login/)
 })
 
-test("shows both parts on the lavender wash, outside the old shell, and is not indexed", async ({ page }) => {
+test("shows both parts on the stage of the new shell, and is not indexed", async ({ page }) => {
   await openKit(page)
   await expect(page).toHaveTitle("Design system · Al-Rahmah Complex")
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/)
-  await expect(page.getByRole("navigation", { name: "Staff" })).toHaveCount(0)
-  await expect(page.locator("[data-kit]")).toHaveCSS("background-image", /linear-gradient/)
+  await expect(page.locator('[data-shell="new"]').getByRole("navigation", { name: "Staff" })).toBeVisible()
+  await expect(page.locator(".ns-stage")).toHaveCSS("background-image", /linear-gradient/)
 
   const top = page.locator('[data-part="design-system"]')
   for (const title of ["Icons: one colour at rest, two in use", "Illustrations", "Colour", "Type", "Buttons", "Fields", "Selectors", "Progress bar", "Cards and chips"])
@@ -124,25 +125,6 @@ test("Exo is never upright on the page", async ({ page }) => {
   )
   expect(upright).toEqual([])
 })
-
-/** Waits until an overlay has finished opening, so colours are not caught mid-fade. */
-async function settled(overlay: Locator) {
-  await expect.poll(() => overlay.evaluate((el) => el.getAnimations({ subtree: true }).length)).toBe(0)
-}
-
-/** Axe's findings, less the accepted white on orange; `include` narrows the scan to an open overlay. */
-async function axeProblems(page: Page, include?: string) {
-  if (include) await settled(page.locator(include))
-  const builder = new AxeBuilder({ page })
-  if (include) builder.include(include)
-  const results = await builder.analyze()
-  return results.violations.flatMap((violation) =>
-    violation.nodes
-      // White on #ee7300 is the owner's accepted risk (DESIGN.md, The ShuleFasta Button Rule).
-      .filter((node) => !(violation.id === "color-contrast" && node.any.some((check) => check.data?.fgColor === "#ffffff" && check.data?.bgColor === "#ee7300")))
-      .map((node) => `${violation.id}: ${node.target.join(" ")}`),
-  )
-}
 
 for (const width of [1280, 390]) {
   test(`axe finds nothing but the accepted white-on-orange contrast at ${width}px`, async ({ page }) => {
@@ -559,9 +541,12 @@ test("the guided form's progress bar sticks to the top while the questions scrol
   await openKit(page)
   const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
   const bar = card.locator(".gf-bar-row")
-  await card.locator(".kit-task").scrollIntoViewIfNeeded()
-  await card.locator(".kit-task").evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top + 200))
-  await expect.poll(async () => Math.round((await bar.boundingBox())!.y)).toBe(0)
+  const area = page.locator("[data-stage-scroll]")
+  await card.locator(".kit-task").evaluate((el) => {
+    const stage = el.closest<HTMLElement>("[data-stage-scroll]")!
+    stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top + 200
+  })
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.y - (await area.boundingBox())!.y)).toBe(0)
 })
 
 test("under reduced motion the staff guided form opens each question at once, with no confetti", async ({ page }) => {
@@ -604,14 +589,9 @@ test("removing a student keeps the names being typed for another", async ({ page
 test("inside a stage scroll area the bar sits flush with its top, and a new question is scrolled into view there", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 700 })
   await openKit(page)
-  // Until the new shell (#322) the kit page scrolls the window. Here its wrapper becomes the stage's
-  // scroll area, as the shell's will be: data-stage-scroll and its top padding in --kit-stage-pt.
-  const area = page.locator("[data-kit]")
-  await area.evaluate((el) => {
-    el.setAttribute("data-stage-scroll", "")
-    Object.assign((el as HTMLElement).style, { height: "100dvh", overflow: "auto", paddingTop: "26px" })
-    ;(el as HTMLElement).style.setProperty("--kit-stage-pt", "26px")
-  })
+  // The new shell (#322) draws the page in the stage's scroll area: data-stage-scroll, with its
+  // top padding in --kit-stage-pt.
+  const area = page.locator("[data-stage-scroll]")
   const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
   const bar = card.locator(".gf-bar-row")
   const areaTop = async () => (await area.boundingBox())!.y

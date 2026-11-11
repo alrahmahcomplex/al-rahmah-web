@@ -30,7 +30,6 @@ import {
   Tag,
   TaskCard,
   TextLink,
-  Toaster,
 } from "@/components/kit"
 import type { LeadStatus } from "@/lib/services/leads"
 
@@ -109,10 +108,10 @@ function DesignSystem() {
   }
 
   return (
-    <div className="kp-ds" data-part="design-system">
+    <div className="kp-ds" data-part="design-system" data-rise="group">
       <Card title="Icons: one colour at rest, two in use" className="kp-full">
         <p className="kp-spec">One colour at rest. Two colours when hovered, current, or shown large. Hover the icons to see it.</p>
-        <div className="kp-ds">
+        <div className="kp-ds" data-rise="group">
           <Card title="Set 2 · Soft highlight">
             <p className="kp-spec">From your second picture: an indigo outline over a faint light-orange shape that grows in.</p>
             <div className="kp-icg" data-icons="hover">
@@ -312,7 +311,7 @@ function MorePieces() {
   const current = APPLICANTS.find((a) => a.number === picked) ?? APPLICANTS[0]
 
   return (
-    <div className="kp-ds" data-part="more">
+    <div className="kp-ds" data-part="more" data-rise="group">
       <Card title="Page header" className="kp-full">
         <PageHeader
           level={2}
@@ -514,15 +513,13 @@ function MorePieces() {
   )
 }
 
+// Drawn in the new shell (#322), which holds the stage, the page column and the kit Toaster.
 export function KitPage() {
   return (
-    <div data-kit="" className="kp-stage">
-      <main className="kp-page">
-        <PageHeader title="Design system" subtitle="Every piece below is copied from the Admission form’s code, so the staff side and the parent side stay one family." />
-        <DesignSystem />
-        <MorePieces />
-      </main>
-      <Toaster />
-    </div>
+    <>
+      <PageHeader title="Design system" subtitle="Every piece below is copied from the Admission form’s code, so the staff side and the parent side stay one family." />
+      <DesignSystem />
+      <MorePieces />
+    </>
   )
 }

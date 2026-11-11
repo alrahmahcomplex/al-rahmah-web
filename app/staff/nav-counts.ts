@@ -1,6 +1,6 @@
 import "server-only"
 
-import { countPendingDiscountRequests } from "@/lib/services/discounts"
+import { countPendingDiscountRequests, listPendingDiscountRequests } from "@/lib/services/discounts"
 import { getOverdueCount } from "@/lib/services/follow-ups"
 import { getPendingAgentCount } from "@/lib/services/marketing-agents"
 import { countUnreviewedReApplications } from "@/lib/services/re-applications"
@@ -32,4 +32,26 @@ export async function navCounts(staff: Pick<StaffMember, "permissions">): Promis
   if (discounts?.ok) counts["/staff/discounts"] = { count: discounts.data, label: "Pending" }
   if (reopenings?.ok) counts["/staff/reopenings"] = { count: reopenings.data, label: "Pending" }
   return counts
+}
+
+// The bell's number (#322): the Pending requests on the request screens this
+// staff member may open (app/staff/bell-screens.ts). The navigation's counts
+// cover them for staff who may view leads; a role that may approve
+// discounts without viewing leads has its discount requests counted through
+// the queue it would open, which needs only discounts.approve.
+export async function bellPending(
+  staff: Pick<StaffMember, "permissions">,
+  screens: readonly string[],
+  counts: Partial<Record<string, NavCount>>,
+): Promise<number> {
+  let pending = 0
+  for (const href of screens) {
+    const known = counts[href]?.count
+    if (known !== undefined) pending += known
+    else if (href === "/staff/discounts" && staff.permissions.includes("discounts.approve")) {
+      const queue = await listPendingDiscountRequests(await createClient())
+      if (queue.ok) pending += queue.data.length
+    }
+  }
+  return pending
 }

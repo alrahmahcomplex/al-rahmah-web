@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties } from "react"
 
+import { Icon as KitIcon } from "@/components/icons"
 import { cn } from "@/lib/utils"
 
 import { Icon } from "./icons"
@@ -40,6 +41,12 @@ export type ProgressBarProps = {
   labels: ProgressBarLabels
   /** The screen-reader progress line, e.g. "Msimamizi: hatua 2 kati ya 3". Read politely when it changes. */
   status: string
+  /**
+   * Staff pages: draw Back and Start over with the set 2 icons and mark the
+   * buttons as icon hosts, so they take the active look on hover inside the
+   * new shell (components/icons/icons.css). The public forms leave it off.
+   */
+  kitIcons?: boolean
   className?: string
 }
 
@@ -135,8 +142,10 @@ function Group({ group, index, active, who }: { group: ProgressGroup; index: num
  * question), the grouped step chips, and the outlined section chip.
  * Maps to `.bar-row`, `.navslot`, `.prog`, `.pg`, `.gn`, `.secname` in c2.html.
  */
-export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, canReset = false, onReset, labels, status, className }: ProgressBarProps) {
+export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, canReset = false, onReset, labels, status, kitIcons = false, className }: ProgressBarProps) {
   const [spin, setSpin] = useState(0)
+  const host = kitIcons ? "" : undefined
+  const glyph = (name: "back" | "reset") => (kitIcons ? <KitIcon name={name} /> : <Icon name={name} />)
   const showReset = canReset && !canBack
   const section = groups[Math.min(Math.max(activeGroup, 0), groups.length - 1)]?.label
 
@@ -156,9 +165,10 @@ export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, ca
           title={labels.back}
           tabIndex={canBack ? 0 : -1}
           aria-hidden={canBack ? undefined : true}
+          data-icon-host={host}
           onClick={() => canBack && onBack()}
         >
-          <Icon name="back" />
+          {glyph("back")}
         </button>
         <button
           type="button"
@@ -167,13 +177,14 @@ export function ProgressBar({ groups, activeGroup, whoLabel, canBack, onBack, ca
           title={labels.reset}
           tabIndex={showReset ? 0 : -1}
           aria-hidden={showReset ? undefined : true}
+          data-icon-host={host}
           onClick={() => {
             if (!showReset) return
             setSpin((n) => n + 1)
             onReset?.()
           }}
         >
-          <Icon name="reset" />
+          {glyph("reset")}
         </button>
       </div>
       <div className="gf-prog" aria-hidden="true">

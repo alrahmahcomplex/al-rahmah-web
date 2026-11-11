@@ -9,7 +9,7 @@ import { MANAGER } from "../support/fixtures"
 // What #287's migration leaves behind, read the way Supabase's advisors read
 // the schema, plus its import_batches read rule and its hosted-only grant step.
 
-const FILE = "supabase/migrations/20261206990100_advisor_tidy_ups.sql"
+const FILE = "supabase/migrations/20261208990100_advisor_tidy_ups.sql"
 
 // Foreign keys left without an index on purpose (#287): two single-row
 // tables, a table only migrations write, and a column a check ties to one

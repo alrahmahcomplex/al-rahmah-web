@@ -63,6 +63,9 @@
   --gf-note-good-ink: #0b5a2d;
   --gf-note-wait-ink: #6b2a00;
   --gf-note-bad-ink: #a11717;
+  /* the two light pieces of the staff registration's confetti (DESIGN.md, Confetti) */
+  --gf-confetti-peach: #ffb066;
+  --gf-confetti-violet: #7b73ff;
 }
 html.rm {
   --gf-t-fast: 1ms;

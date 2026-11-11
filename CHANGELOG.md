@@ -5,6 +5,16 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The Design system page at /staff/kit now also shows the new look's pop-up parts, each opened
+  from a button: the review sheet, a student's record sliding in from the side (with its small
+  edits for the fee, the father's name and the previous school), the payment sheet, the bell's
+  list of new requests, the account menu, the confirmation message at the bottom of the screen,
+  and the confetti for a finished registration. No other page changes.
+
 ## November 11, 2026 `v0.98.0`
 
 ### NEW

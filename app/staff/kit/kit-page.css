@@ -39,3 +39,30 @@
 .kp-detail { display: flex; flex-direction: column; gap: 14px; }
 .kp-skel { display: flex; flex-direction: column; gap: 12px; }
 @media (max-width: 400px) { .kp-question { font-size: 23px; } }
+
+/* The overlay cards (#320). */
+.kp-pay, .kp-pay form { display: flex; flex-direction: column; gap: 14px; text-align: center; }
+.kp-pay .kit-kv { text-align: left; }
+.kp-fee-act { margin-top: 12px; }
+.kp-fee-act .kit-link { font-size: 13px; }
+/* The bell and the person's pill, drawn as the prototype's top bar holds them until the new shell (F6). */
+.kp-topbar { justify-content: flex-end; }
+.kp-bellw { position: relative; flex: none; }
+.kp-pip {
+  position: absolute; right: -3px; top: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; pointer-events: none;
+  display: grid; place-items: center; background: var(--gf-orange); color: var(--gf-paper); box-shadow: 0 0 0 2px var(--gf-paper);
+  font: 700 10.5px/1 var(--font-sans), system-ui, sans-serif; font-style: normal;
+}
+.kp-me {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 4px; border-radius: 999px; border: 1.5px solid var(--gf-line);
+  background: var(--gf-paper); color: var(--gf-ink); flex: none; text-align: left; cursor: pointer; font: inherit;
+  transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.kp-me:hover, .kp-me[aria-expanded="true"] { background: var(--gf-whisper); }
+.kp-me:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.kp-me i {
+  width: 30px; height: 30px; border-radius: 50%; background: var(--gf-indigo); color: var(--gf-paper); display: grid; place-items: center;
+  font: italic 800 12px var(--font-exo), "Exo", system-ui, sans-serif;
+}
+.kp-me b { display: block; font-size: 12.5px; font-weight: 600; line-height: 1.2; }
+.kp-me small { display: block; font-size: 11px; line-height: 1.2; color: var(--gf-quiet); }

@@ -29,11 +29,13 @@ import {
   Tag,
   TaskCard,
   TextLink,
+  Toaster,
 } from "@/components/kit"
 import type { LeadStatus } from "@/lib/services/leads"
 
 import { APPLICANTS, CAMPUS, DISCOUNT_REQUESTS, FEE_SCHEDULE, FILTERS, PAYMENT_KINDS, type Applicant } from "./fixtures"
 import "./kit-page.css"
+import { OverlayCards } from "./overlays"
 
 // The approved prototype's "Design system" page (version 13), rebuilt with
 // the kit, card for card; then the kit's other pieces, filled with the
@@ -493,6 +495,8 @@ function MorePieces() {
           </FinishedState>
         </TaskCard>
       </Card>
+
+      <OverlayCards />
     </div>
   )
 }
@@ -505,6 +509,7 @@ export function KitPage() {
         <DesignSystem />
         <MorePieces />
       </main>
+      <Toaster />
     </div>
   )
 }

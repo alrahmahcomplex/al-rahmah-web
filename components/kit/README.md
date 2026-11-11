@@ -27,8 +27,12 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 | `SkeletonBlock` | `staff/page-skeleton`'s `Bone`, `ui/skeleton` |
 | `Icon` from `@/components/icons` | `lucide-react` |
 | `ContinuePill` from the guided form | stays the guided form's own Continue; elsewhere use `Button size="wide" chevron` |
+| `Sheet`, `InlineEditor` | `ui/dialog`, `ui/sheet`, `ui/alert-dialog`, `guided-form/bottom-sheet` |
+| `Popover`, `PopoverClose` | `ui/popover`, `ui/dropdown-menu` |
+| `toast` and `Toaster` from the kit | `toast` from `sonner`, `ui/sonner` |
+| `rainConfetti` | the Admission form's `Confetti` (that burst stays on the Admission form) |
 
-Sheets, menus, popovers, toasts and confetti come with #320; the guided form on staff pages with #321; the new shell with #322.
+The guided form on staff pages comes with #321; the new shell with #322.
 
 ## Buttons
 
@@ -87,3 +91,61 @@ export const metadata = { title: pageTitle("Applicants") }
 - `LoadingState label="Finding the family…"` while a task waits; `role="status"`.
 - `FinishedState` inside a `TaskCard`: title, hint, `results` (Admission Numbers), then notes and the next actions as children.
 - `SkeletonBlock` builds a page's `loading.tsx`: still Lavender Whisper blocks at the real sizes (`shape="pill"` or `"card"`), inside an element with `role="status"` that names what is loading.
+
+## Sheets
+
+```tsx
+<Sheet
+  open={open}
+  onOpenChange={setOpen}
+  placement="centre"
+  title="Sibling · 10%"
+  hint="Latifa Omari Juma Hassan"
+  closeLabel="Close"
+  foot={
+    <>
+      <Button size="wide" chevron onClick={grant}>Grant the discount</Button>
+      <Button variant="ghost" size="wide" onClick={refuse}>Refuse</Button>
+    </>
+  }
+>
+  <Note tone="wait">…</Note>
+</Sheet>
+```
+
+`placement`: `centre` for a review or a confirmation, `side` for a row's record, `bottom` to rise from the bottom everywhere. Under 720px every sheet rises from the bottom. The head (title, `hint`, `chips`, Close) and the foot stay put; only the children scroll. Focus moves to the title, Tab stays inside, Escape and the backdrop close it, and focus returns to whatever opened it. On a phone the foot follows `visualViewport`, so it stays above the keyboard. Keep the sheet mounted and drive `open`, so it can slide out; remount it with a `key` to start a form afresh.
+
+A small edit on the record opens inline in the sheet's body, not as a second sheet:
+
+```tsx
+{editing && (
+  <InlineEditor saveLabel="Save" cancelLabel="Cancel" onSave={save} onCancel={() => setEditing(false)}>
+    <Field size="compact" autoFocus aria-label="Father’s full name" … />
+    <FieldError id="father-error" message={error} />
+  </InlineEditor>
+)}
+```
+
+It draws the dashed line and the small Save and Cancel; when it closes, focus goes back to the link that opened it.
+
+## Menus and popovers
+
+```tsx
+<Popover trigger={<RoundButton icon="bell" label="New requests" size={40} />} title="New requests" closeLabel="Close">
+  <ListRow icon="discounts" title="New discount request" caption="…" onClick={open} />
+</Popover>
+<Popover size="narrow" trigger={<button …>…</button>} title="Rehema M." description="Admissions Manager" closeLabel="Close">
+  <PopoverClose render={<Button variant="ghost">Sign out</Button>} />
+</Popover>
+```
+
+`size`: `wide` 340px (the bell), `narrow` 230px (the account menu). It opens below its button, aligned to its end. Tab stays inside; Escape or a click outside closes it and focus returns to the button. `closeLabel` names a Close that only screen readers see.
+
+## Toasts and confetti
+
+```tsx
+toast("Fee saved. The change and its reason are in the audit log.")
+rainConfetti()
+```
+
+`toast` shows one sentence in the Indigo Night pill at the bottom centre for 2.6s; a new one replaces it. It goes to the kit's `Toaster`, which the new shell mounts once (the kit page mounts its own until then); the old shell's toasts keep their look. `rainConfetti` is the finished registration's rain. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, and there is no confetti.

@@ -186,6 +186,7 @@ html.rm .gf-gn.gf-cheer { animation: none; }
 
 .gf-seg { display: grid; gap: 8px; border: 0; margin: 0; padding: 0; min-width: 0; }
 .gf-seg.gf-two { grid-template-columns: 1fr 1fr; }
+.gf-seg.gf-three { grid-template-columns: repeat(3, 1fr); }
 .gf-seg.gf-four { grid-template-columns: repeat(2, 1fr); }
 @media (min-width: 420px) { .gf-seg.gf-four { grid-template-columns: repeat(4, 1fr); } }
 .gf-seg label { position: relative; }

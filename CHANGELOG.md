@@ -12,7 +12,8 @@ stay in the `0.x` range.
 - On the Design system page at /staff/kit, three pieces now match the approved design: the
   toast is at most half the window wide, so on a phone it wraps onto a few short lines; the
   sections of a record's side sheet have their full space around the facts; and the rows of
-  New requests sit straight under the title with rounded corners on hover.
+  New requests, on that page and under the bell, sit straight under the title with rounded
+  corners on hover and no arrow at the end.
 
 ## November 12, 2026 `v0.104.0`
 

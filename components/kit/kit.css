@@ -294,9 +294,11 @@ a.kit-row { border-radius: 14px; }
 .kit-pop[data-size="narrow"] .kit-btn { width: 100%; margin-top: 8px; }
 /* Beats `.kit-card-title + p`: the line under a popover's title is Ink Soft with no gap. */
 .kit-pop .kit-pop-desc { margin: 0; font-size: 13px; color: var(--gf-ink-soft); }
-/* The bell's rows sit straight under the title and round to 14px on hover, as the prototype's a.lr do. */
+/* The bell's rows sit straight under the title, round to 14px on hover and end without a chevron,
+   as the prototype's a.lr in .pop do. */
 .kit-pop .kit-card-title + .kit-row { margin-top: 0; }
 .kit-pop .kit-row { border-radius: 14px; }
+.kit-pop .kit-row-chev { display: none; }
 /* The prototype removes a popover at once; only its opening moves. */
 .kit-pop[data-ending-style] { transition: none; }
 

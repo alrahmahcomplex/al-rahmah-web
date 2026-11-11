@@ -163,7 +163,7 @@ It draws the dashed line and the small Save and Cancel; when it closes, focus go
 </Popover>
 ```
 
-`size`: `wide` 340px (the bell), `narrow` 230px (the account menu). It opens below its button, aligned to its end. Rows sit straight under the title and round to 14px on hover. Tab stays inside; Escape or a click outside closes it and focus returns to the button. `closeLabel` names a Close that only screen readers see.
+`size`: `wide` 340px (the bell), `narrow` 230px (the account menu). It opens below its button, aligned to its end. Rows sit straight under the title, round to 14px on hover and drop the link chevron. Tab stays inside; Escape or a click outside closes it and focus returns to the button. `closeLabel` names a Close that only screen readers see.
 
 ## Toasts and confetti
 

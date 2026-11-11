@@ -152,6 +152,12 @@ test.describe("on a desktop", () => {
     await bell.click()
     const list = page.getByRole("dialog", { name: "New requests" })
     await expect(list.getByRole("link", { name: /New reopening request.*Asha Kibwana/ })).toBeVisible()
+    // As the prototype's bell (#349): link rows straight under the title, 14px corners, no chevron.
+    const first = list.getByRole("link").first()
+    const [title, row] = await Promise.all([list.getByRole("heading", { name: "New requests" }).boundingBox(), first.boundingBox()])
+    expect(Math.round(row!.y - (title!.y + title!.height))).toBe(0)
+    await expect(first).toHaveCSS("border-radius", "14px")
+    await expect(list.locator(".kit-row-chev").first()).toBeHidden()
     await expect(page.locator(".ns-pip")).toHaveCount(0)
     await page.keyboard.press("Escape")
     await expect(list).toHaveCount(0)

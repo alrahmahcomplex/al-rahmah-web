@@ -337,3 +337,27 @@ html.rm .kit-cf { display: none; }
   html.rm .kit-sheet[data-placement="centre"]:is([data-starting-style], [data-ending-style]) { transform: translateY(-50%); }
   html.rm .kit-sheet[data-placement="side"]:is([data-starting-style], [data-ending-style]) { transform: none; }
 }
+
+/* ---------- the guided form on a staff page (GuidedTask) ---------- */
+/* A 640px centred column. The bar sticks flush with the top of the stage's
+   scroll area: the stage sets --kit-stage-pt to its top padding. */
+.kit-guided { max-width: 640px; width: 100%; margin: 0 auto; min-width: 0; }
+.kit-guided .gf-bar-row { top: calc(-1 * var(--kit-stage-pt, 0px)); padding-top: 12px; border-radius: 0 0 16px 16px; }
+/* The prototype pads every question alike, the first and the last too; :nth-child(n) outweighs
+   the Admission form's first- and last-child rules in guided-form.css. */
+.kit-guided .gf-stack > .gf-item:nth-child(n) .gf-body { padding: 20px 4px 24px; }
+.kit-guided .gf-body form { display: flex; flex-direction: column; gap: 14px; }
+.kit-guided .gf-body legend { margin-bottom: 16px; }
+.kit-guided .gf-head .kit-link { font-size: 13px; }
+/* The question shrinks on a small phone, as the prototype's .gf-title does; the Admission form keeps 26px. */
+@media (max-width: 400px) { .kit-guided .gf-body h2 { font-size: 23px; } }
+
+/* Part of an open question that unfolds when it is needed (GuidedReveal). Closed, the
+   negative margins cancel the form's 14px gap. */
+.kit-rv {
+  display: grid; grid-template-rows: 0fr; grid-template-columns: minmax(0, 1fr); opacity: 0; margin: -7px -6px;
+  transition: grid-template-rows var(--gf-fold) var(--gf-ease-out), opacity var(--gf-fade) var(--gf-ease-out), margin var(--gf-fold) var(--gf-ease-out);
+}
+.kit-rv > div { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 12px; padding: 0 6px; }
+.kit-rv[data-open] { grid-template-rows: 1fr; opacity: 1; margin: 0 -6px; }
+.kit-rv[data-open] > div { padding: 6px; }

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   Button,
+  ButtonLink,
   Card,
   ChipButtons,
   EmptyState,
@@ -35,6 +36,19 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }))
+
+describe("ButtonLink", () => {
+  it("is a link named by its label, drawn as a button", () => {
+    render(
+      <ButtonLink href="/staff/applicants" size="wide" chevron>
+        Open Applicants
+      </ButtonLink>,
+    )
+    const link = screen.getByRole("link", { name: "Open Applicants" })
+    expect(link).toHaveAttribute("href", "/staff/applicants")
+    expect(link).toHaveClass("kit-btn", "kit-go", "kit-wide")
+  })
+})
 
 describe("Button", () => {
   it("is named by its label and calls onClick", () => {

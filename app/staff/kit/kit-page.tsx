@@ -7,6 +7,7 @@ import { Icon, ICONS, type IconName } from "@/components/icons"
 import { Illustration, type IllustrationName } from "@/components/illustrations"
 import {
   Button,
+  ButtonLink,
   Card,
   ChipButtons,
   ChoiceTiles,
@@ -34,6 +35,7 @@ import {
 import type { LeadStatus } from "@/lib/services/leads"
 
 import { APPLICANTS, CAMPUS, DISCOUNT_REQUESTS, FEE_SCHEDULE, FILTERS, PAYMENT_KINDS, type Applicant } from "./fixtures"
+import { GuidedDemo } from "./guided-demo"
 import "./kit-page.css"
 import { OverlayCards } from "./overlays"
 
@@ -431,6 +433,12 @@ function MorePieces() {
           >
             {finding ? "Finding the family…" : "Find the family"}
           </Button>
+          <ButtonLink href="/staff/applicants" size="small" chevron>
+            Open Applicants
+          </ButtonLink>
+          <Button disabled chevron>
+            Continue
+          </Button>
         </div>
         <div className="kp-rowx">
           <RoundButton icon="bell" label="New requests" size={40} />
@@ -456,6 +464,7 @@ function MorePieces() {
         <Note tone="wait" icon="info">
           Sent from the Admission form. Check-in fills in the missing answers.
         </Note>
+        <Note tone="bad">The payment form could not open. Check your connection and try again.</Note>
       </Card>
 
       <Card title="Empty state">
@@ -494,6 +503,10 @@ function MorePieces() {
             </Button>
           </FinishedState>
         </TaskCard>
+      </Card>
+
+      <Card title="Guided form" className="kp-full">
+        <GuidedDemo />
       </Card>
 
       <OverlayCards />

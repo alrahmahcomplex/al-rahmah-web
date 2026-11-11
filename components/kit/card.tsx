@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, type HTMLAttributes, type ReactNode } from "react"
+import { useId, type HTMLAttributes, type ReactNode, type Ref } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -33,9 +33,9 @@ export function Card({ title, caption, titleId, className, children, ...props }:
 }
 
 /** The one card on a page that holds the task: 40px corners, no outline, the Indigo lift (The One Lift Rule). */
-export function TaskCard({ className, children, ...props }: HTMLAttributes<HTMLElement>) {
+export function TaskCard({ className, children, ref, ...props }: HTMLAttributes<HTMLElement> & { ref?: Ref<HTMLElement> }) {
   return (
-    <section className={cn("kit-task", className)} {...props}>
+    <section ref={ref} className={cn("kit-task", className)} {...props}>
       {children}
     </section>
   )

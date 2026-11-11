@@ -32,7 +32,7 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 | `toast` and `Toaster` from the kit | `toast` from `sonner`, `ui/sonner` |
 | `rainConfetti` | the Admission form's `Confetti` (that burst stays on the Admission form) |
 
-The guided form on staff pages comes with #321; the new shell with #322.
+The new shell comes with #322.
 
 ## Buttons
 
@@ -91,6 +91,30 @@ export const metadata = { title: pageTitle("Applicants") }
 - `LoadingState label="Finding the family…"` while a task waits; `role="status"`.
 - `FinishedState` inside a `TaskCard`: title, hint, `results` (Admission Numbers), then notes and the next actions as children.
 - `SkeletonBlock` builds a page's `loading.tsx`: still Lavender Whisper blocks at the real sizes (`shape="pill"` or `"card"`), inside an element with `role="status"` that names what is loading.
+
+## Guided form
+
+A staff task that asks one question at a time (registration, check-in) uses the Admission form's engine inside `GuidedTask`. The questions are `GuidedStack`, `GuidedStep`, `GuidedHead`, `SummaryRow`, `QuestionTitle`, `Hint` and `ContinuePill` from `@/components/guided-form` (see its README); the fields, choices, notes and links are the kit's.
+
+```tsx
+<GuidedTask
+  progress={{ groups, activeGroup, canBack, onBack, canReset, onReset, labels: { back: "Back", reset: "Start over" }, status }}
+  finished={saved ? { title: "2 students registered", hint: "Give the family these Admission Numbers.", results, children: actions } : null}
+>
+  <GuidedStack>
+    <GuidedHead key="h:s0" aside={<TextLink onClick={remove}>Remove</TextLink>}>Neema Juma Salim Mrisho</GuidedHead>
+    <GuidedStep key="s0.cls" state="folded" summary={<SummaryRow label="Class" value="STD 5" action={<TextLink onClick={change}>Change</TextLink>} />}>…</GuidedStep>
+  </GuidedStack>
+</GuidedTask>
+```
+
+- The task card sits in a 640px centred column. The progress bar sticks to the top of the stage's scroll area, with Back and Start over drawn with the set 2 icons (Start over takes the Peach Glow on hover; Back is a plain chevron).
+- The stage's scroll area sets `--kit-stage-pt` to its top padding and carries `data-stage-scroll`; `revealStep` then scrolls it instead of the window. Without them the bar sticks to the window's top.
+- `finished` swaps the card for `FinishedState`: its title takes focus and `rainConfetti` runs once. Wait 950ms after the save before setting it, so the last group's cheer plays first.
+- `GuidedReveal open` unfolds part of an open question once the answers before it allow (a phone field after a choice, Continue once the question is complete); closed, it takes no space and is inert.
+- Reduced motion: folds are instant with a 120ms fade; the cheer, bubbles and confetti are off.
+
+The kit page's "Guided form" card plays a registration with the prototype's questions.
 
 ## Sheets
 

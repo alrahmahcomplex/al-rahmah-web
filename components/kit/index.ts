@@ -6,6 +6,7 @@ export { ChipButtons, ChoiceTiles, DefaultTile, type ChipOption, type ChoiceOpti
 export { StatusChip, Tag, type TagTone } from "./chips"
 export { KeyValueList, Note, Section, type KeyValueItem, type NoteTone } from "./details"
 export { Field, FieldError, type FieldProps, type FieldSize } from "./field"
+export { GuidedReveal, GuidedTask, type GuidedTaskFinished, type GuidedTaskProps } from "./guided-task"
 export { FilterPills, type FilterOption } from "./filter-pills"
 export { ListRow, type ListRowProps } from "./list-row"
 export { PAGE_ACTIONS_ID, PageActions, PageHeader } from "./page-header"

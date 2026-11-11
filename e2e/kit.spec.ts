@@ -44,7 +44,7 @@ test("shows both parts on the lavender wash, outside the old shell, and is not i
   await expect(top.getByText("#0900bb")).toBeVisible()
 
   const more = page.locator('[data-part="more"]')
-  for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Sheet", "Side sheet", "Popover", "Toast", "Confetti"])
+  for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Guided form", "Sheet", "Side sheet", "Popover", "Toast", "Confetti"])
     await expect(more.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible()
 })
 
@@ -104,6 +104,12 @@ test("the controls answer: selectors, filter pills, rows, chip buttons and the p
   const pending = more.getByRole("button", { name: "Finding the family…" })
   await expect(pending).toHaveAttribute("aria-busy", "true")
   await expect(more.getByRole("button", { name: "Find the family" })).toBeVisible()
+
+  // #348: a link drawn as a button, a disabled button and the bad note are shown too.
+  const states = more.getByRole("region", { name: "Button states" })
+  await expect(states.getByRole("link", { name: "Open Applicants" })).toHaveAttribute("href", "/staff/applicants")
+  await expect(states.getByRole("button", { name: "Continue" })).toBeDisabled()
+  await expect(more.getByRole("region", { name: "Note" }).getByText("The payment form could not open. Check your connection and try again.")).toBeVisible()
 })
 
 test("Exo is never upright on the page", async ({ page }) => {
@@ -142,6 +148,8 @@ for (const width of [1280, 390]) {
   test(`axe finds nothing but the accepted white-on-orange contrast at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await openKit(page)
+    // The guided form's first question fades in; mid-fade its colours are blended.
+    await settled(page.locator(".kit-guided"))
     expect(await axeProblems(page)).toEqual([])
   })
 
@@ -423,4 +431,207 @@ test.describe("under reduced motion", () => {
     await expect(sheet).toHaveCSS("transition-property", "opacity")
     await expect(sheet).toHaveCSS("transform", "none")
   })
+})
+
+// #321: the guided form on a staff page, played with the prototype's registration questions.
+async function answerNames(open: Locator, names: string[]) {
+  const parts = ["First name", "Father’s name", "Last name"]
+  for (const [i, name] of names.entries()) await open.getByRole("textbox", { name: parts[i], exact: true }).fill(name)
+  await open.getByRole("button", { name: "Continue" }).click()
+}
+// A tile is a label around its hidden radio; clicking the label picks it.
+const pick = (open: Locator, name: string) =>
+  open
+    .locator("label")
+    .filter({ has: open.page().getByRole("radio", { name, exact: true }) })
+    .click()
+
+test("the guided form folds each answer, finishes its groups and ends on the finished screen", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await openKit(page)
+  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const open = card.locator(".gf-step.gf-open")
+  const bar = card.locator(".gf-bar-row")
+  const question = (name: string) => open.getByRole("heading", { level: 2, name })
+
+  // Start over hosts the Peach Glow on hover; Back is a plain chevron. Pressed, it empties the form.
+  const reset = bar.getByRole("button", { name: "Start over" })
+  await reset.hover()
+  await expect.poll(() => glow(reset.locator("svg"))).toEqual({ fill: PEACH_GLOW, scale: 1 })
+  await expect(bar.locator(".gf-secname")).toHaveText("Students")
+  await open.getByRole("textbox", { name: "First name", exact: true }).fill("Neema")
+  await reset.click()
+  await expect(open.getByRole("textbox", { name: "First name", exact: true })).toHaveValue("")
+
+  await open.getByRole("button", { name: "Continue" }).click()
+  await expect(open.getByRole("alert")).toHaveText("Type at least three names: the student’s own name, the father’s name and the last name.")
+
+  // Keyboard only: Enter sends the names, and each new question takes focus as it opens.
+  const parts = ["First name", "Father’s name", "Last name"]
+  for (const [i, name] of ["Neema", "Juma", "Salim"].entries()) await open.getByRole("textbox", { name: parts[i], exact: true }).fill(name)
+  await page.keyboard.press("Enter")
+  await expect(question("Which class is Neema joining?")).toBeFocused()
+  await expect(card.getByRole("heading", { level: 3, name: "Neema Juma Salim" })).toBeVisible()
+  await expect(card.locator(".kp-fa")).toHaveText("Father: Juma Salim")
+  await page.keyboard.press("Tab")
+  await page.keyboard.press("Space")
+  await expect(question("Will Neema be a day or a boarding student?")).toBeFocused()
+  await pick(open, "Day")
+  await expect(question("Is there another student?")).toBeFocused()
+  await expect(card.getByText("DAY CARE", { exact: true }).first()).toBeVisible()
+
+  // Change reopens an answer; answering it again folds it and returns to the open question.
+  await card.getByRole("button", { name: "Change Class, Neema Juma Salim" }).click()
+  await expect(question("Which class is Neema joining?")).toBeFocused()
+  await pick(open, "STD 5")
+  await expect(question("Is there another student?")).toBeFocused()
+  await expect(card.locator(".gf-folded").filter({ hasText: "Class" })).toContainText("STD 5")
+
+  // Back reopens the answer before.
+  await bar.getByRole("button", { name: "Back" }).click()
+  await expect(question("Will Neema be a day or a boarding student?")).toBeVisible()
+  await pick(open, "Day")
+  await expect(question("Is there another student?")).toBeVisible()
+
+  // A second student gets its own heading and Remove; removing an answered one reads the toast.
+  await open.getByRole("button", { name: "Yes, add a student" }).click()
+  await expect(open.getByRole("textbox", { name: "First name", exact: true })).toBeFocused()
+  await answerNames(open, ["Hamisi", "Juma", "Salim"])
+  await pick(open, "FORM 1")
+  await pick(open, "Boarding")
+  await expect(card.getByRole("button", { name: /^Remove/ })).toHaveCount(2)
+  await card.getByRole("button", { name: "Remove Hamisi Juma Salim" }).click()
+  await expect(page.getByText("Student removed. Check the custodians again.")).toBeVisible()
+  await expect(card.getByRole("button", { name: /^Remove/ })).toHaveCount(0)
+  await expect(card.getByText("Hamisi Juma Salim")).toHaveCount(0)
+
+  await open.getByRole("button", { name: "No, go to custodians" }).click()
+  await expect(question("Is the father the main custodian of Neema?")).toBeFocused()
+  // The first group closes into one bar with the tick, and its number cheers.
+  await expect(bar.locator('[data-group="0"]')).toHaveClass(/gf-full/)
+  await expect(bar.locator('[data-group="0"] .gf-gn')).toHaveAttribute("data-won", "true")
+  await expect(bar.locator(".gf-secname")).toHaveText("Custodians")
+
+  // Continue unfolds only once the question is complete; until then it is folded away and inert.
+  const goReveal = open.locator(".kit-rv").filter({ has: page.getByRole("button", { name: "Continue" }) })
+  await expect(goReveal).toHaveAttribute("inert")
+  await pick(open, "Yes, the father")
+  await open.getByRole("textbox", { name: "Custodian’s mobile number" }).fill("0712 345 678")
+  await expect(goReveal).toHaveAttribute("data-open")
+  await open.getByRole("button", { name: "Continue" }).click()
+  await expect(card.getByText("Juma Salim · Father · 0712 345 678")).toBeVisible()
+
+  // A student added after that is covered by a custodian answer of its own.
+  await card.getByRole("button", { name: "Change Students on this form" }).click()
+  await open.getByRole("button", { name: "Yes, add a student" }).click()
+  await answerNames(open, ["Hamisi", "Juma", "Salim"])
+  await pick(open, "FORM 1")
+  await pick(open, "Boarding")
+  await open.getByRole("button", { name: "No, go to custodians" }).click()
+  await expect(question("Is the father the main custodian of Neema and Hamisi?")).toBeFocused()
+  await pick(open, "Yes, the father")
+  await open.getByRole("textbox", { name: "Custodian’s mobile number" }).fill("0712 345 678")
+  await open.getByRole("button", { name: "Continue" }).click()
+
+  await expect(question("Does the family have a Discount code?")).toBeFocused()
+  await open.getByRole("button", { name: /NO CODE/ }).click()
+  await expect(question("Register 2 students?")).toBeFocused()
+  await open.getByRole("button", { name: "Register 2 students" }).click()
+  // Once Register is pressed, the answers can't change on the way to the finished screen.
+  await card.getByRole("button", { name: "Remove Hamisi Juma Salim" }).click()
+
+  // The last group cheers before the Finished screen takes its place (950ms).
+  await expect(bar.locator('[data-group="2"] .gf-gn.gf-cheer')).toHaveCount(1, { timeout: 800 })
+  const done = card.getByRole("heading", { level: 2, name: "2 students registered" })
+  await expect(done).toBeFocused()
+  await expect(card.getByText("DMSN-90013")).toBeVisible()
+  await expect(card.getByText("DMSN-90014")).toBeVisible()
+  await expect(card.locator(".gf-bar-row")).toHaveCount(0)
+  await expect(page.locator(".kit-cf")).toHaveCount(1)
+  await expect(card.getByRole("link", { name: "Open Applicants" })).toHaveAttribute("href", "/staff/applicants")
+
+  await card.getByRole("button", { name: "Register another family" }).click()
+  await expect(open.getByRole("textbox", { name: "First name", exact: true })).toBeFocused()
+})
+
+test("the guided form's progress bar sticks to the top while the questions scroll", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 600 })
+  await openKit(page)
+  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const bar = card.locator(".gf-bar-row")
+  await card.locator(".kit-task").scrollIntoViewIfNeeded()
+  await card.locator(".kit-task").evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().top + 200))
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.y)).toBe(0)
+})
+
+test("under reduced motion the staff guided form opens each question at once, with no confetti", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openKit(page)
+  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const open = card.locator(".gf-step.gf-open")
+  expect((await open.boundingBox())!.height).toBeGreaterThan(200)
+  await expect(card.locator(".gf-item").first()).toHaveCSS("transition-duration", "0s, 0.12s")
+  await answerNames(open, ["Neema", "Juma", "Salim"])
+  await expect(open.getByRole("heading", { name: "Which class is Neema joining?" })).toBeVisible()
+  expect((await open.boundingBox())!.height).toBeGreaterThan(200)
+  await pick(open, "STD 5")
+  await pick(open, "Day")
+  await open.getByRole("button", { name: "No, go to custodians" }).click()
+  await pick(open, "Yes, the father")
+  await open.getByRole("textbox", { name: "Custodian’s mobile number" }).fill("0712 345 678")
+  await open.getByRole("button", { name: "Continue" }).click()
+  await open.getByRole("button", { name: /NO CODE/ }).click()
+  await open.getByRole("button", { name: "Register 1 student" }).click()
+  await expect(card.getByRole("heading", { level: 2, name: "1 student registered" })).toBeFocused()
+  await expect(page.locator(".kit-cf")).toHaveCount(0)
+})
+
+test("removing a student keeps the names being typed for another", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await openKit(page)
+  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const open = card.locator(".gf-step.gf-open")
+  await answerNames(open, ["Neema", "Juma", "Salim"])
+  await pick(open, "STD 5")
+  await pick(open, "Day")
+  await open.getByRole("button", { name: "Yes, add a student" }).click()
+  await open.getByRole("textbox", { name: "First name", exact: true }).fill("Hamisi")
+  await card.getByRole("button", { name: "Remove Neema Juma Salim" }).click()
+  await expect(open.getByRole("textbox", { name: "First name", exact: true })).toHaveValue("Hamisi")
+})
+
+test("inside a stage scroll area the bar sits flush with its top, and a new question is scrolled into view there", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 700 })
+  await openKit(page)
+  // Until the new shell (#322) the kit page scrolls the window. Here its wrapper becomes the stage's
+  // scroll area, as the shell's will be: data-stage-scroll and its top padding in --kit-stage-pt.
+  const area = page.locator("[data-kit]")
+  await area.evaluate((el) => {
+    el.setAttribute("data-stage-scroll", "")
+    Object.assign((el as HTMLElement).style, { height: "100dvh", overflow: "auto", paddingTop: "26px" })
+    ;(el as HTMLElement).style.setProperty("--kit-stage-pt", "26px")
+  })
+  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const bar = card.locator(".gf-bar-row")
+  const areaTop = async () => (await area.boundingBox())!.y
+
+  await card.locator(".kit-task").evaluate((el) => {
+    const stage = el.closest<HTMLElement>("[data-stage-scroll]")!
+    stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top + 120
+  })
+  expect(await page.evaluate(() => window.scrollY)).toBe(0)
+  await expect.poll(async () => Math.round((await bar.boundingBox())!.y - (await areaTop()))).toBe(0)
+
+  // Answering scrolls the stage, not the window, to bring the next question into its top third.
+  const open = card.locator(".gf-step.gf-open")
+  await answerNames(open, ["Neema", "Juma", "Salim"])
+  await expect(open.getByRole("heading", { level: 2, name: "Which class is Neema joining?" })).toBeFocused()
+  await expect
+    .poll(async () => {
+      const top = (await open.boundingBox())!.y - (await areaTop())
+      return top > 0 && top < 700 * 0.4
+    })
+    .toBe(true)
+  expect(await page.evaluate(() => window.scrollY)).toBe(0)
 })

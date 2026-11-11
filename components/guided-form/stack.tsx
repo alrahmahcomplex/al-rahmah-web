@@ -211,12 +211,23 @@ export function GuidedNote({ children, leaving, instant, className }: ItemProps 
 /**
  * Scrolls so a newly opened step sits in the top third of the screen, once
  * now and again when the fold has finished (the prototype's `scrollToItem`).
+ * Inside a staff stage it scrolls the stage's scroll area, the nearest
+ * element marked `data-stage-scroll`; elsewhere it scrolls the window.
  */
 export function revealStep(li: HTMLElement) {
+  const area = li.closest<HTMLElement>("[data-stage-scroll]")
   const go = () => {
+    const behavior = prefersReducedMotion() ? "auto" : "smooth"
+    if (area) {
+      const top = li.getBoundingClientRect().top - area.getBoundingClientRect().top
+      const height = area.clientHeight
+      if (top > height * 0.06 && top < height * 0.36) return
+      area.scrollTo({ top: Math.max(0, top + area.scrollTop - height * 0.18), behavior })
+      return
+    }
     const top = li.getBoundingClientRect().top
     if (top > window.innerHeight * 0.06 && top < window.innerHeight * 0.36) return
-    window.scrollTo({ top: Math.max(0, top + window.scrollY - window.innerHeight * 0.18), behavior: prefersReducedMotion() ? "auto" : "smooth" })
+    window.scrollTo({ top: Math.max(0, top + window.scrollY - window.innerHeight * 0.18), behavior })
   }
   go()
   window.setTimeout(go, foldMs() + 40)

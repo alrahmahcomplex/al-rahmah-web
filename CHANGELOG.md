@@ -9,11 +9,11 @@ stay in the `0.x` range.
 
 ### NEW
 
-- Each application now keeps the father's full name, taken from the student's name: every word
-  after the first, when the name has three words or more. Applications already on file get it the
-  same way, marked as not yet checked by staff. Nothing on screen changes yet, and no fee moves.
-  It prepares the coming sibling check, which compares two fathers' names as the same, close
-  (probably a typing mistake) or different.
+- Each new application now keeps the father's full name, taken from the student's name: every
+  word after the first. Applications already on file get it when the name has three words or
+  more, marked as not yet checked by staff. No fee moves. The only place it shows is the
+  application's history, under its database names. It prepares the coming sibling check, which
+  compares two fathers' names as the same, close (probably a typing mistake) or different.
 
 ## November 11, 2026 `v0.95.1`
 

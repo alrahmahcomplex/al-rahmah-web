@@ -317,14 +317,16 @@ describe("re-deriving on a student name correction", () => {
 })
 
 describe("the migration's backfill", () => {
-  // The migration from its audit actor to the end: the snapshot, the
-  // backfill and the fee check, as written in the file.
+  // The migration's backfill: its one do block (snapshot, update and fee
+  // check), as written in the file.
   function backfillSection(): string {
-    const text = readFileSync(MIGRATION, "utf8")
-    const start = text.indexOf("select public.set_audit_actor('system');")
-    if (start < 0) throw new Error(`${MIGRATION}: no backfill section`)
+    const text = readFileSync(MIGRATION, "utf8").replace(/\r\n/g, "\n")
+    const start = text.indexOf("do $$\ndeclare\n    moved uuid;")
+    if (start < 0) throw new Error(`${MIGRATION}: no backfill block`)
     return text.slice(start)
   }
+
+  const SNAPSHOT_TAKEN = "    -- (snapshot taken)\n"
 
   test("fills names of three or more words as backfilled, closed leads too, and moves no fee", async () => {
     await inRolledBackTransaction(async (sql) => {
@@ -339,7 +341,7 @@ describe("the migration's backfill", () => {
       const staffEntered = await insertLead(sql, contact, "Elia Hassan Juma", "Someone Else", "edited")
       await sql.query("alter table public.leads enable trigger derive_lead_father_full_name")
 
-      const feesBefore = await fees(sql)
+      const feesBefore = await fees(sql, contact)
       await sql.query(backfillSection())
 
       const rows = await sql.query<{ father_full_name: string | null; father_full_name_source: string | null }>(
@@ -354,7 +356,7 @@ describe("the migration's backfill", () => {
         ["Hassan Juma", "backfilled"],
         ["Someone Else", "edited"],
       ])
-      expect(await fees(sql)).toEqual(feesBefore)
+      expect(await fees(sql, contact)).toEqual(feesBefore)
 
       // The closed-lead guard is back on.
       await sql.query("savepoint s")
@@ -372,17 +374,32 @@ describe("the migration's backfill", () => {
   })
 
   test("the fee check raises when a lead's fee, discount, status or Seat priority moved", async () => {
-    const text = backfillSection()
-    const snapshot = text.slice(text.indexOf("create temporary table"), text.indexOf("alter table public.leads disable trigger"))
-    const check = text.slice(text.indexOf("do $$"), text.indexOf("drop table father_name_fee_snapshot"))
+    const block = backfillSection()
+    expect(block).toContain(SNAPSHOT_TAKEN)
+    // As if the backfill had moved the lead's fee: the snapshot says otherwise.
+    const tampered = block.replace(
+      SNAPSHOT_TAKEN,
+      () => "    update father_name_fee_snapshot set fee = fee || '{\"school_fee\": -1}';\n",
+    )
     await inRolledBackTransaction(async (sql) => {
-      await sql.query(snapshot)
-      // As if the backfill had moved one lead's fee.
-      await sql.query(
-        `update father_name_fee_snapshot set fee = fee || '{"school_fee": -1}'
-         where id = (select id from father_name_fee_snapshot order by id limit 1)`,
+      await sql.query("select public.set_audit_actor('system')")
+      // A lead the backfill would write, so the snapshot holds it.
+      await sql.query("alter table public.leads disable trigger derive_lead_father_full_name")
+      const lead = await insertLead(sql, await newContact(sql), "Amina Hassan Juma", null, null)
+      await sql.query("alter table public.leads enable trigger derive_lead_father_full_name")
+      await sql.query("savepoint s")
+      await expect(sql.query(tampered)).rejects.toThrow(/father_name_backfill_moved_a_fee/)
+      await sql.query("rollback to savepoint s")
+      // Nothing the block did stays: the lead is not backfilled, and the guard is on.
+      const after = await sql.query<FatherRow>(
+        "select father_full_name, father_full_name_source::text from public.leads where id = $1",
+        [lead.id],
       )
-      await expect(sql.query(check)).rejects.toThrow(/father_name_backfill_moved_a_fee/)
+      expect(after.rows[0]).toEqual({ father_full_name: null, father_full_name_source: null })
+      const guard = await sql.query<{ on: string }>(
+        "select tgenabled as on from pg_trigger where tgrelid = 'public.leads'::regclass and tgname = 'refuse_closed_lead_change'",
+      )
+      expect(guard.rows[0].on).toBe("O")
     })
   })
 })
@@ -431,13 +448,16 @@ async function contactIdOf(leadId: string): Promise<string> {
   return row.id
 }
 
-async function fees(sql: Client) {
+// The fee, discount, status and Seat priority of every lead on one contact.
+async function fees(sql: Client, contactId: string) {
   const { rows } = await sql.query(
     `select l.id, l.status, to_jsonb(f) as fee, to_jsonb(s) as seat
      from public.leads l
      cross join lateral public.lead_fee_amounts(l.id) f
      cross join lateral public.lead_seat_priority(l.id) s
+     where l.guardian_contact_id = $1
      order by l.id`,
+    [contactId],
   )
   return rows
 }

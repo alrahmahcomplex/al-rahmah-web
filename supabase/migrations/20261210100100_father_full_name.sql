@@ -306,48 +306,60 @@ revoke execute on function public.father_name_match(text, text) from public, ano
 -- ---------------------------------------------------------------------------
 -- Backfill (S2, R40): every lead whose stored student name has three or more
 -- words gets the words after the first, as `backfilled`. Closed leads too,
--- so a reopened one has it; the closed-lead guard is off for this statement
--- only. The father's name feeds no fee yet, and the check below proves no
--- fee, discount, status or Seat priority moved.
+-- so a reopened one has it; the closed-lead guard is off for the update
+-- only. The father's name feeds no fee yet, and the check proves no fee,
+-- discount, status or Seat priority moved for any lead the backfill writes
+-- or any lead in the same Family (on the same contact). It looks at those
+-- leads only, so a payment recorded elsewhere is not mistaken for a moved
+-- fee.
+--
+-- One `do` block, so it is one statement and one transaction whether or not
+-- the migration runner wraps the file in one: the audit actor holds for the
+-- update, and a raised check undoes the update and turns the guard back on.
 -- ---------------------------------------------------------------------------
-
-select public.set_audit_actor('system');
-
-create temporary table father_name_fee_snapshot as
-select
-    l.id,
-    l.status,
-    l.closure,
-    to_jsonb(f) as fee,
-    to_jsonb(s) as seat
-from public.leads l
-cross join lateral public.lead_fee_amounts(l.id) f
-cross join lateral public.lead_seat_priority(l.id) s;
-
-alter table public.leads disable trigger refuse_closed_lead_change;
-
-update public.leads l
-set father_full_name = public.derive_father_full_name(l.student_name, 3),
-    father_full_name_source = 'backfilled'
-where l.father_full_name is null
-  and public.derive_father_full_name(l.student_name, 3) is not null;
-
-alter table public.leads enable trigger refuse_closed_lead_change;
 
 do $$
 declare
     moved uuid;
 begin
-    select coalesce(b.id, a.id) into moved
+    perform public.set_audit_actor('system');
+
+    -- No lead changes from here to the check but by this backfill.
+    lock table public.leads in share row exclusive mode;
+
+    create temporary table father_name_fee_snapshot on commit drop as
+    select l.id, l.status, l.closure, to_jsonb(f) as fee, to_jsonb(s) as seat
+    from public.leads l
+    cross join lateral public.lead_fee_amounts(l.id) f
+    cross join lateral public.lead_seat_priority(l.id) s
+    where l.guardian_contact_id in (
+        select b.guardian_contact_id
+        from public.leads b
+        where b.father_full_name is null
+          and public.derive_father_full_name(b.student_name, 3) is not null
+    );
+    -- (snapshot taken)
+
+    alter table public.leads disable trigger refuse_closed_lead_change;
+
+    update public.leads l
+    set father_full_name = public.derive_father_full_name(l.student_name, 3),
+        father_full_name_source = 'backfilled'
+    where l.father_full_name is null
+      and public.derive_father_full_name(l.student_name, 3) is not null;
+
+    alter table public.leads enable trigger refuse_closed_lead_change;
+
+    select b.id into moved
     from father_name_fee_snapshot b
-    full join (
+    left join lateral (
         select l.id, l.status, l.closure, to_jsonb(f) as fee, to_jsonb(s) as seat
         from public.leads l
         cross join lateral public.lead_fee_amounts(l.id) f
         cross join lateral public.lead_seat_priority(l.id) s
-    ) a on a.id = b.id
+        where l.id = b.id
+    ) a on true
     where a.id is null
-       or b.id is null
        or a.status is distinct from b.status
        or a.closure is distinct from b.closure
        or a.fee is distinct from b.fee
@@ -356,7 +368,7 @@ begin
     if moved is not null then
         raise exception 'father_name_backfill_moved_a_fee' using detail = moved::text;
     end if;
+
+    drop table father_name_fee_snapshot;
 end;
 $$;
-
-drop table father_name_fee_snapshot;

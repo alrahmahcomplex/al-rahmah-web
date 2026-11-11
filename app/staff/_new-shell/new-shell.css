@@ -9,6 +9,7 @@
   height: 100dvh;
   display: grid;
   grid-template-columns: var(--ns-w) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   padding: 4px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px));
   overflow: hidden;
   background: var(--gf-paper);

@@ -435,3 +435,13 @@ test("the brand title fits the sidebar at its narrowest and at its widest", asyn
   await expect.poll(fits).toBe(true)
   await page.keyboard.press("Home")
 })
+
+test("the stage fills the window down to 12px above its bottom, however short the page", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 })
+  await open(page, ADMISSIONS, "/staff/kit")
+  await page.getByRole("button", { name: "Fold or open the sidebar" }).focus()
+  const bottom = () => page.locator(".ns-stage").evaluate((el) => Math.round(el.getBoundingClientRect().bottom))
+  await expect.poll(bottom).toBe(1000 - 12)
+  await page.setViewportSize({ width: 1280, height: 2400 })
+  await expect.poll(bottom).toBe(2400 - 12)
+})

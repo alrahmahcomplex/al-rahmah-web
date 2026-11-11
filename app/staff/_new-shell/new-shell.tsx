@@ -341,81 +341,84 @@ export function NewShell({
   const style = { "--ns-open": `${width}px`, "--ns-title": `${title.toFixed(2)}px` } as CSSProperties
 
   return (
-    <div
-      ref={rootRef}
-      data-shell="new"
-      data-staff-shell=""
-      data-folded={folded ? "" : undefined}
-      data-resizing={resizing ? "" : undefined}
-      data-live={live ? "" : undefined}
-      className="ns"
-      style={style}
-    >
-      <aside ref={asideRef} id="staff-sidebar" aria-label="Sidebar" className="ns-sb">
-        <div className="ns-sb-in">
-          <SidebarBoundary items={items}>
-            <SidebarContent items={items} current={current} folded={folded} nameRef={nameRef} />
-          </SidebarBoundary>
-        </div>
-        {!folded && (
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize the sidebar. Arrow keys move it, double-click resets it."
-            aria-controls="staff-sidebar"
-            aria-valuenow={width}
-            aria-valuemin={limits?.min}
-            aria-valuemax={limits?.max}
-            aria-valuetext={`${width} pixels wide`}
-            tabIndex={0}
-            className="ns-rz"
-            data-drag={resizing ? "" : undefined}
-            onPointerDown={startResize}
-            onDoubleClick={() => apply(null, "clear")}
-            onKeyDown={resizeByKey}
-          />
-        )}
-      </aside>
-
-      <div className="ns-main">
-        <header className="ns-tb">
-          <Dialog.Root open={drawer} onOpenChange={(next) => setDrawer(next)}>
-            <Dialog.Trigger render={<RoundButton icon="menu" label="Open the menu" size={40} className="ns-menu" />} />
-            <Dialog.Portal>
-              <Dialog.Backdrop className="ns-drawer-back" />
-              <Dialog.Popup aria-label="Menu" data-shell="new" className="ns-drawer">
-                <SidebarBoundary items={items}>
-                  <SidebarContent items={items} current={current} onChoose={() => setDrawer(false)} />
-                </SidebarBoundary>
-              </Dialog.Popup>
-            </Dialog.Portal>
-          </Dialog.Root>
-          <RoundButton
-            icon="panel"
-            label="Fold or open the sidebar"
-            size={40}
-            className="ns-tog"
-            aria-pressed={!folded}
-            aria-controls="staff-sidebar"
-            onClick={toggle}
-          />
-          {canSearch && <TopBarSearch />}
-          <span className="ns-spacer" />
-          {bell && <Bell pending={bell.pending} />}
-          <PersonMenu person={person} />
-        </header>
-
-        <div ref={stageRef} className="ns-stage">
-          {/* data-stage-scroll and --kit-stage-pt: the guided form scrolls this area and pins its progress bar to its top (#321). */}
-          <div ref={scrollRef} className="ns-scroll" data-stage-scroll="" tabIndex={-1}>
-            <main ref={pageRef} className="ns-page">
-              {children}
-            </main>
+    <>
+      <div
+        ref={rootRef}
+        data-shell="new"
+        data-staff-shell=""
+        data-folded={folded ? "" : undefined}
+        data-resizing={resizing ? "" : undefined}
+        data-live={live ? "" : undefined}
+        className="ns"
+        style={style}
+      >
+        <aside ref={asideRef} id="staff-sidebar" aria-label="Sidebar" className="ns-sb">
+          <div className="ns-sb-in">
+            <SidebarBoundary items={items}>
+              <SidebarContent items={items} current={current} folded={folded} nameRef={nameRef} />
+            </SidebarBoundary>
           </div>
+          {!folded && (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize the sidebar. Arrow keys move it, double-click resets it."
+              aria-controls="staff-sidebar"
+              aria-valuenow={width}
+              aria-valuemin={limits?.min}
+              aria-valuemax={limits?.max}
+              aria-valuetext={`${width} pixels wide`}
+              tabIndex={0}
+              className="ns-rz"
+              data-drag={resizing ? "" : undefined}
+              onPointerDown={startResize}
+              onDoubleClick={() => apply(null, "clear")}
+              onKeyDown={resizeByKey}
+            />
+          )}
+        </aside>
+
+        <div className="ns-main">
+          <header className="ns-tb">
+            <Dialog.Root open={drawer} onOpenChange={(next) => setDrawer(next)}>
+              <Dialog.Trigger render={<RoundButton icon="menu" label="Open the menu" size={40} className="ns-menu" />} />
+              <Dialog.Portal>
+                <Dialog.Backdrop className="ns-drawer-back" />
+                <Dialog.Popup aria-label="Menu" data-shell="new" className="ns-drawer">
+                  <SidebarBoundary items={items}>
+                    <SidebarContent items={items} current={current} onChoose={() => setDrawer(false)} />
+                  </SidebarBoundary>
+                </Dialog.Popup>
+              </Dialog.Portal>
+            </Dialog.Root>
+            <RoundButton
+              icon="panel"
+              label="Fold or open the sidebar"
+              size={40}
+              className="ns-tog"
+              aria-pressed={!folded}
+              aria-controls="staff-sidebar"
+              onClick={toggle}
+            />
+            {canSearch && <TopBarSearch />}
+            <span className="ns-spacer" />
+            {bell && <Bell pending={bell.pending} />}
+            <PersonMenu person={person} />
+          </header>
+
+          <div ref={stageRef} className="ns-stage">
+            {/* data-stage-scroll and --kit-stage-pt: the guided form scrolls this area and pins its progress bar to its top (#321). */}
+            <div ref={scrollRef} className="ns-scroll" data-stage-scroll="" tabIndex={-1}>
+              <main ref={pageRef} className="ns-page">
+                {children}
+              </main>
+            </div>
+          </div>
+          <OutsideScrollbar scrollRef={scrollRef} pageRef={pageRef} />
         </div>
-        <OutsideScrollbar scrollRef={scrollRef} pageRef={pageRef} />
       </div>
+      {/* Outside the grid: the toaster renders a section of its own. */}
       <Toaster />
-    </div>
+    </>
   )
 }

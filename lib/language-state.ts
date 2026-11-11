@@ -49,8 +49,9 @@ type Condition = { type: "cookie" | "header"; key: string; value?: string }
 type Rewrite = { source: string; destination: string; has?: Condition[]; missing?: Condition[] }
 
 // A Cookie header holding `lang` with an empty value: `lang=` or `lang=""`,
-// first or after a `;`, and last or before one.
-const EMPTY_LANGUAGE_COOKIE = String.raw`(?:.*;\s*)?${LANGUAGE_COOKIE}=(?:"")?(?:;.*)?`
+// first or after a `;`, and last or before one. Spaces around the name and
+// the value are allowed, since Next.js's cookie parser trims them.
+const EMPTY_LANGUAGE_COOKIE = String.raw`(?:.*;)?\s*${LANGUAGE_COOKIE}\s*=\s*(?:""\s*)?(?:;.*)?`
 
 // Checked in order, first match wins: English, then any other `lang` value,
 // then an empty `lang` value, then no cookie. Next.js anchors a `has` value as

@@ -11,8 +11,10 @@ import { chooseLanguage, newcomer, openQuestion as openCodeQuestion, WORDS as CO
 
 test.use({ reducedMotion: "reduce" })
 
-// React reports a hydration mismatch as a console error (minified #418,
-// #423 and #425 in a production build).
+// Fails on any hydration error React reports (minified #418, #423 and #425
+// in a production build). A production build stays silent about a
+// mismatched attribute, the kind behind #334, so the height checks below
+// are what catch that one.
 function watchHydration(page: Page) {
   const errors: string[] = []
   page.on("console", (m) => {

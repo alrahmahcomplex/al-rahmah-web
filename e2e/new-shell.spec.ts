@@ -306,3 +306,33 @@ for (const [label, size] of [
     }
   })
 }
+
+// The page-change motion (DESIGN.md, Motion), drawn by the stage for every
+// page in it: each top-level block rises 10px and fades in over 460ms,
+// starting 0, 50, 100 and 140ms in; nothing moves under reduced motion.
+const riseOf = (page: Page) =>
+  page.locator(".ns-page > *").evaluateAll((blocks) =>
+    blocks.slice(0, 4).map((block) => {
+      const style = getComputedStyle(block)
+      return `${style.animationName} ${style.animationDuration} ${style.animationDelay}`
+    }),
+  )
+
+for (const path of ["/staff/kit", "/staff/reopenings"]) {
+  test(`the blocks of ${path} rise in, staggered`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await open(page, MANAGER, path)
+    const rise = await riseOf(page)
+    expect(rise.length).toBeGreaterThanOrEqual(2)
+    expect(rise).toEqual(["ns-rise 0.46s 0s", "ns-rise 0.46s 0.05s", "ns-rise 0.46s 0.1s", "ns-rise 0.46s 0.14s"].slice(0, rise.length))
+  })
+}
+
+test.describe("under reduced motion", () => {
+  test.use({ reducedMotion: "reduce", viewport: { width: 1280, height: 800 } })
+
+  test("no block of the page moves", async ({ page }) => {
+    await open(page, MANAGER, "/staff/kit")
+    for (const value of await riseOf(page)) expect(value.startsWith("none ")).toBe(true)
+  })
+})

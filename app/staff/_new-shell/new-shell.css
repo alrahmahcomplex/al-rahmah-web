@@ -154,11 +154,17 @@ html:has(.ns) body { background: var(--gf-paper); }
 .ns-scroll::-webkit-scrollbar { display: none; }
 .ns-page { max-width: 1180px; margin: 0 auto; }
 
-/* Each block of a page rises in on a page change. */
-.ns-page > * { animation: ns-rise 460ms var(--gf-ease-out) both; }
+/* Each block of a page rises 10px and fades in on a page change (DESIGN.md,
+   Motion): top-level blocks start 0, 50, 100 and 140ms in. Inside a narrow
+   column or a grid, a page marks the container data-rise="group" and its
+   blocks start 0, 70, 130 and 180ms in instead. */
+.ns-page > *, .ns-page [data-rise="group"] > * { animation: ns-rise 460ms var(--gf-ease-out) both; }
 .ns-page > :nth-child(2) { animation-delay: 50ms; }
 .ns-page > :nth-child(3) { animation-delay: 100ms; }
 .ns-page > :nth-child(n + 4) { animation-delay: 140ms; }
+.ns-page [data-rise="group"] > :nth-child(2) { animation-delay: 70ms; }
+.ns-page [data-rise="group"] > :nth-child(3) { animation-delay: 130ms; }
+.ns-page [data-rise="group"] > :nth-child(n + 4) { animation-delay: 180ms; }
 @keyframes ns-rise { from { opacity: 0; transform: translateY(10px); } }
 
 /* ---------- the stage's scrollbar, in the white gutter right of the stage ---------- */
@@ -215,8 +221,8 @@ html:has(.ns) body { background: var(--gf-paper); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ns-page > * { animation: none; }
+  .ns-page > *, .ns-page [data-rise="group"] > * { animation: none; }
   .ns-roll { transition: none; }
 }
-html.rm .ns-page > * { animation: none; }
+html.rm .ns-page > *, html.rm .ns-page [data-rise="group"] > * { animation: none; }
 html.rm .ns-roll { transition: none; }

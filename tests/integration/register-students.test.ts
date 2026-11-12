@@ -675,46 +675,120 @@ describe("siblings on file", () => {
 })
 
 describe("locks", () => {
-  async function groupLockWaiters(sql: Client, groupId: string): Promise<number> {
-    const { rows } = await sql.query<{ n: number }>(
-      `select count(*)::int as n from pg_locks
-       where locktype = 'advisory' and not granted and classid::int = hashtext('sibling_group') and objid::int = hashtext($1)`,
-      [groupId],
+  // The backend waiting on this advisory lock: (class, key) as lock_families
+  // and lock_sibling_groups take it.
+  async function waiterOn(sql: Client, lockClass: string, key: string): Promise<number | null> {
+    const { rows } = await sql.query<{ pid: number }>(
+      `select pid from pg_locks
+       where locktype = 'advisory' and not granted and classid::int = hashtext($1) and objid::int = hashtext($2)`,
+      [lockClass, key],
     )
-    return rows[0].n
+    return rows[0]?.pid ?? null
   }
 
-  test("every lock is taken before the first write, the group of an on-file child picked as Sibling of included", async () => {
+  async function waitForWaiter(sql: Client, lockClass: string, key: string): Promise<number> {
+    for (let tries = 0; tries <= 100; tries++) {
+      const pid = await waiterOn(sql, lockClass, key)
+      if (pid !== null) return pid
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    throw new Error(`it never waited on the ${lockClass} lock`)
+  }
+
+  // What the waiting save holds: the Family locks it has, whether it has
+  // written any row (a row write takes RowExclusiveLock on its table), the
+  // phone locks it has, and whether it holds the rows it will later lock.
+  async function heldBy(sql: Client, pid: number, contacts: string[], phones: string[], leadId: string) {
+    const families = await sql.query<{ contact: string }>(
+      `select c::text as contact from unnest($2::uuid[]) c
+       where exists (select 1 from pg_locks l where l.pid = $1 and l.granted and l.locktype = 'advisory'
+                     and l.classid::int = hashtext('lead_family') and l.objid::int = hashtext(c::text))`,
+      [pid, contacts],
+    )
+    const writes = await sql.query<{ n: number }>(
+      `select count(*)::int as n from pg_locks l
+       where l.pid = $1 and l.locktype = 'relation' and l.mode = 'RowExclusiveLock'
+         and l.relation in ('public.leads'::regclass, 'public.guardian_contacts'::regclass,
+                            'public.sibling_group_members'::regclass, 'public.sibling_groups'::regclass,
+                            'public.discount_requests'::regclass, 'public.lead_sibling_results'::regclass)`,
+      [pid],
+    )
+    const phoneLocks = await sql.query<{ n: number }>(
+      `select count(*)::int as n
+       from unnest($2::text[]) p
+       cross join lateral (select hashtextextended('lead-phone:' || public.normalize_phone(p), 0) as k) x
+       join pg_locks l on l.pid = $1 and l.granted and l.locktype = 'advisory' and l.objsubid = 1
+            and l.classid = ((x.k >> 32) & 4294967295)::oid and l.objid = (x.k & 4294967295)::oid`,
+      [pid, phones],
+    )
+    const rowsFree = await inRolledBackTransaction(async (other) => {
+      const lead = await other.query("select id from public.leads where id = $1 for update skip locked", [leadId])
+      const people = await other.query("select id from public.guardian_contacts where id = any ($1::uuid[]) for update skip locked", [contacts])
+      return lead.rowCount === 1 && people.rowCount === contacts.length
+    })
+    return { families: families.rows.map((r) => r.contact).sort(), writes: writes.rows[0].n, phoneLocks: phoneLocks.rows[0].n, rowsFree }
+  }
+
+  // A known person (on file with a child of another father), a new person,
+  // and an on-file sibling in a group of two on two other contacts.
+  async function setup() {
     const year = await registrationYear()
     const family = fatherParts()
     const a = await onFile(nameOf(family), "STD 2")
     const b = await onFile(nameOf(family), "KG 1")
     const linked = await linkSibling(await signedIn(ADMISSIONS), { leadId: b, siblingOfLeadId: a })
     if (!linked.ok || linked.data.kind !== "linked") throw new Error("setup failed")
-    const group = linked.data.groupId
-    const number = phone()
+    const knownContact = await contactOf(await onFile(`${word()} ${word()}`, "KG 2"))
+    const knownPhone = await inRolledBackTransaction(
+      async (sql) => (await sql.query<{ phone: string }>("select phone from public.guardian_contacts where id = $1", [knownContact])).rows[0].phone,
+    )
+    const newPhone = phone()
+    const input = {
+      people: [{ contactId: knownContact }, { fullName: "Waiting Parent", phone: newPhone }],
+      students: [
+        student(family, year, { siblingOf: { leadId: a } }),
+        student(fatherParts(), year, { custodian: { person: 2, relationship: "Mother" } }),
+      ],
+    }
+    return { a, group: linked.data.groupId, aContact: await contactOf(a), knownContact, phones: [knownPhone, newPhone], input }
+  }
+
+  test("every lock is taken before the first write, the group of an on-file child picked as Sibling of included", async () => {
+    const { a, group, aContact, knownContact, phones, input } = await setup()
 
     const saved = await inRolledBackTransaction(async (holder) => {
       await holder.query("select pg_advisory_xact_lock(hashtext('sibling_group'), hashtext($1))", [group])
-      const running = register({
-        people: [{ fullName: "Waiting Parent", phone: number }],
-        students: [student(family, year, { siblingOf: { leadId: a } })],
+      const running = register(input)
+      const pid = await waitForWaiter(holder, "sibling_group", group)
+      // Waiting on the group: every Family lock is held, and nothing else yet.
+      expect(await heldBy(holder, pid, [aContact, knownContact], phones, a)).toEqual({
+        families: [aContact, knownContact].sort(),
+        writes: 0,
+        phoneLocks: 0,
+        rowsFree: true,
       })
-      for (let tries = 0; (await groupLockWaiters(holder, group)) === 0; tries++) {
-        if (tries > 100) throw new Error("it never waited on the group lock")
-        await new Promise((resolve) => setTimeout(resolve, 50))
-      }
-      // While it waits it holds no row: the sibling's row is free.
-      const rowFree = await inRolledBackTransaction(async (other) => {
-        const locked = await other.query("select id from public.leads where id = $1 for update skip locked", [a])
-        return locked.rowCount === 1
-      })
-      expect(rowFree).toBe(true)
       await holder.query("rollback")
       await holder.query("begin")
       return running
     })
-    expect(saved).toMatchObject({ ok: true, data: { kind: "created", students: [{ student: 1, sibling: { basis: "matched", groupId: group } }] } })
+    expect(saved).toMatchObject({ ok: true, data: { kind: "created", students: [{ student: 1, sibling: { basis: "matched", groupId: group } }, { student: 2 }] } })
+  })
+
+  test("waiting on a known person's Family lock, the save has written nothing and holds no phone or row", async () => {
+    const { a, aContact, knownContact, phones, input } = await setup()
+
+    const saved = await inRolledBackTransaction(async (holder) => {
+      await holder.query("select pg_advisory_xact_lock(hashtext('lead_family'), hashtext($1))", [knownContact])
+      const running = register(input)
+      const pid = await waitForWaiter(holder, "lead_family", knownContact)
+      const held = await heldBy(holder, pid, [aContact, knownContact], phones, a)
+      expect(held).toMatchObject({ writes: 0, phoneLocks: 0, rowsFree: true })
+      expect(held.families).not.toContain(knownContact)
+      await holder.query("rollback")
+      await holder.query("begin")
+      return running
+    })
+    expect(saved).toMatchObject({ ok: true, data: { kind: "created" } })
   })
 })
 

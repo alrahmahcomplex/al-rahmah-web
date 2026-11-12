@@ -87,6 +87,7 @@ The parts from prototype version 18 (the card "Form parts on the student’s rec
 - **Checkbox and Switch:** with `label`, the whole row is the target; without it, name the box with a `<label htmlFor={id}>`. A tick box is saved with its form; a switch takes effect at once, with no Save button.
 - **Disclosure:** `plain` (chevron first) or `boxed`. `open` opens or closes it from outside; the person can still fold it after. Closed content is inert.
 - **FilePicker:** a real file input inside the area, so `required` and the form's post work. Drop a file on it or press Choose file.
+- They are built on the primitives themselves (base-ui Select, Checkbox, Switch and Popover; react-day-picker), not on `components/ui/*`, on purpose: those files carry lucide icons and shadcn styles the kit cannot use. Do not swap them back.
 - These parts carry their own fixed words (the two messages, the calendar's names) in `DATE_WORDS`; pass `words` to change one.
 
 Under reduced motion the popups appear at once and the tick and chevrons do not move.

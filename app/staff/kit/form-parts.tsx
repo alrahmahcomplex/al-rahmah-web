@@ -48,7 +48,14 @@ const WHY_NOT = [
   "School decision",
   "Other",
 ].map((t) => ({ value: t, label: t }))
-const CLASSES = [{ value: "", label: "Any class" }, ...["STD 5", "STD 6", "STD 7", "FORM 1", "FORM 2"].map((t) => ({ value: t, label: t }))]
+// The Reports panel filter's own words and choices (app/staff/reports/_dashboard/panel-filter.tsx).
+const PERIODS = [
+  { value: "all", label: "All time" },
+  { value: "date", label: "Date" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+  { value: "year", label: "Year" },
+]
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const short = (day: string) => `${+day.slice(8)} ${MONTHS[+day.slice(5, 7) - 1]}`
@@ -284,23 +291,26 @@ export function FormPartsCard({ tab }: { tab: string }) {
   )
 }
 
-/** The choice list inside a kit Popover, as the Reports panel filters hold it (#331). */
+/** The choice list inside a kit Popover, as the Reports panel filters hold it (#331), with the Reports panel's words. */
 export function ListInPopoverCard() {
-  const [cls, setCls] = useState("")
+  const [period, setPeriod] = useState("all")
+  const id = useId()
   return (
     <Card title="Choice list in a popover">
       <div className="kp-rowx">
         <Popover
-          trigger={<RoundButton icon="filter" label="Filter Visited applicants" size={40} on={cls !== ""} />}
-          title="Filter Visited applicants"
+          trigger={<RoundButton icon="filter" label="Filter Visited applicants" size={40} on={period !== "all"} />}
+          title="Visited applicants"
           closeLabel="Close"
         >
           <div className="kp-fld kp-pop-fld">
-            <Select aria-label="Class" options={CLASSES} value={cls} onValueChange={setCls} />
+            <label className="kp-fl" htmlFor={id}>
+              Period
+            </label>
+            <Select id={id} options={PERIODS} value={period} onValueChange={setPeriod} />
           </div>
         </Popover>
       </div>
-      <p className="kp-spec">Escape closes the list first, then the popover.</p>
     </Card>
   )
 }

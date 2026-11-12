@@ -41,16 +41,22 @@ const UNREADABLE = "data-kit-unreadable"
 function revealFirst(form: HTMLFormElement | null, fallback: HTMLElement) {
   const first = form?.querySelector<HTMLElement>(`[${UNREADABLE}]:not(:disabled)`) ?? fallback
   first.dispatchEvent(new Event("kit:reveal", { bubbles: true }))
-  first.focus()
-  // Inside a section that has only just opened, the field can take focus a frame later.
-  if (document.activeElement !== first) requestAnimationFrame(() => first.focus())
+  const land = () => {
+    if (document.activeElement !== first) first.focus()
+  }
+  land()
+  // Checked again once the browser has finished the submit (a clicked Apply button keeps focus
+  // otherwise), and a frame later, when a section that has just opened is no longer inert.
+  setTimeout(land, 0)
+  requestAnimationFrame(() => requestAnimationFrame(land))
 }
 
 /**
  * Keeps `input` invalid with `message` while it holds text that cannot be
  * read, so its form cannot submit. The browser's bubble never shows: the
  * part's own `invalid` handler cancels it, shows the part's line and moves
- * focus to the first field that is wrong. A form that skips validation
+ * focus to the first field that is wrong. A required field left empty is not
+ * this case: the browser's own required message shows. A form that skips validation
  * (`noValidate`) is stopped too: the part's own submit listener on the form
  * runs before React's `onSubmit` and a form action, cancels the submit and
  * keeps it from reaching them.
@@ -72,6 +78,8 @@ function useUnreadableGuard(input: RefObject<HTMLInputElement | null>, message: 
     if (!el) return
     const form = el.form
     const onInvalid = (event: Event) => {
+      // Required and empty: the browser's own required message shows, as on a kit Field.
+      if (!el.hasAttribute(UNREADABLE)) return
       event.preventDefault()
       latest.current()
       const first = form?.querySelector<HTMLElement>(":invalid:not(form):not(fieldset)")
@@ -118,7 +126,7 @@ export type DateFieldProps = {
   /** "YYYY-MM-DD" bounds: the calendar greys out the days outside them. A typed date outside them is still submitted as typed. */
   min?: string
   max?: string
-  /** Announced as required. An empty field is left to the screen's own check, so no browser bubble shows. */
+  /** Required and empty, the form is held back with the browser's own required message, as on a kit Field. */
   required?: boolean
   disabled?: boolean
   /** Draws the red outline and sets aria-invalid, for the server's refusal. */
@@ -165,7 +173,7 @@ function DateBox({ id, text, onText, min, max, required, disabled, invalid, word
           placeholder="DD/MM/YYYY"
           value={text}
           disabled={disabled}
-          aria-required={required || undefined}
+          required={required}
           aria-label={aria["aria-label"]}
           aria-describedby={aria["aria-describedby"]}
           aria-invalid={invalid || aria["aria-invalid"] === true || aria["aria-invalid"] === "true" || undefined}
@@ -381,7 +389,7 @@ export function DateTimeField({ id, value, onChange, name, defaultValue = "", mi
           maxLength={5}
           value={time}
           disabled={props.disabled}
-          aria-required={props.required || undefined}
+          required={props.required}
           aria-label={words.time}
           aria-describedby={joinIds(props["aria-describedby"], timeWrong && timeError)}
           aria-invalid={timeWrong || invalid || undefined}

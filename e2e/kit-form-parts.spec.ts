@@ -2,6 +2,7 @@ import { type Locator, type Page } from "@playwright/test"
 
 import { ADMISSIONS } from "../tests/support/fixtures"
 import { axeProblems, settled } from "./axe"
+import { chooseOption, dayFirst } from "./kit-parts"
 import { signInOnce } from "./log-in"
 import { expect, test } from "./staff-test"
 
@@ -175,8 +176,7 @@ test("the empty string is a real choice: Anyone is shown, picked, posted and dra
   await expect(who).not.toHaveAttribute("data-empty")
   expect(await actor()).toBe("")
 
-  await who.click()
-  await page.getByRole("option", { name: "System" }).click()
+  await chooseOption(who, "System")
   await expect(who).toHaveText("System")
   expect(await actor()).toBe("system")
 
@@ -294,6 +294,8 @@ test.describe("the date field", () => {
       el.dataset.submits = "0"
       el.addEventListener("submit", () => (el.dataset.submits = String(Number(el.dataset.submits) + 1)))
     })
+    // The required list has its answer, so only the date can hold the form back.
+    await chooseOption(card.getByRole("combobox", { name: "Payment type" }), "Full payment")
     const date = card.getByLabel("Payment date")
     await date.fill("31/02/2026")
     let bubble = false
@@ -305,15 +307,104 @@ test.describe("the date field", () => {
     expect(await date.evaluate((el: HTMLInputElement) => el.validationMessage)).toBe(WRONG_DATE)
     expect(bubble).toBe(false)
 
-    // Cleared, it is a true empty again and the form submits.
-    await date.fill("")
+    // A real date: the form submits.
+    await date.fill(dayFirst("2026-11-02"))
     await form.evaluate((el: HTMLFormElement) => el.requestSubmit())
     await expect(form).toHaveAttribute("data-submits", "1")
-    expect((await posted(card)).paid_on).toBe("")
+    expect((await posted(card)).paid_on).toBe("2026-11-02")
+  })
+
+  test("a required date left empty holds the form with the browser's own required message, not the part's sentence", async ({ page }) => {
+    const card = await openKit(page)
+    const form = card.locator("form[data-kit-form]")
+    await form.evaluate((el: HTMLFormElement) => {
+      el.dataset.submits = "0"
+      el.addEventListener("submit", () => (el.dataset.submits = String(Number(el.dataset.submits) + 1)))
+    })
+    await chooseOption(card.getByRole("combobox", { name: "Payment type" }), "Full payment")
+    const date = card.getByLabel("Payment date")
+    await expect(date).toHaveAttribute("required", "")
+    await expect(date).toHaveValue("")
+    // The browser's own message, in its own words (the part adds none for "empty").
+    const native = await page.evaluate(() => {
+      const probe = document.createElement("input")
+      probe.required = true
+      return probe.validationMessage
+    })
+    expect(await date.evaluate((el: HTMLInputElement) => el.validationMessage)).toBe(native)
+    // The browser's check runs and is not cancelled: the invalid event reaches it.
+    const cancelled = date.evaluate(
+      (el: HTMLInputElement) => new Promise<boolean>((resolve) => el.addEventListener("invalid", (event) => setTimeout(() => resolve(event.defaultPrevented)), { once: true })),
+    )
+    await form.evaluate((el: HTMLFormElement) => el.requestSubmit())
+    expect(await cancelled).toBe(false)
+    await expect(form).toHaveAttribute("data-submits", "0")
+    await expect(date).toBeFocused()
+    await expect(card.getByText(WRONG_DATE)).toHaveCount(0)
   })
 })
 
 // A device behind UTC: no date may move by a day, across a month end either.
+test("a required list with nothing chosen holds the form and puts focus on the pill, at 1280px and 390px", async ({ page }) => {
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 800 })
+    const card = await openKit(page)
+    const form = card.locator("form[data-kit-form]")
+    await form.evaluate((el: HTMLFormElement) => {
+      el.dataset.submits = "0"
+      el.addEventListener("submit", () => (el.dataset.submits = String(Number(el.dataset.submits) + 1)))
+    })
+    const list = card.getByRole("combobox", { name: "Payment type" })
+    await expect(list).toHaveAttribute("aria-required", "true")
+    // The validity sits on the list's posted input, in the browser's own words for a missing value.
+    const hidden = form.locator('input[name="payment_type"]')
+    expect(await hidden.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true)
+    expect(await hidden.evaluate((el: HTMLInputElement) => el.validationMessage)).not.toBe("")
+    await form.evaluate((el: HTMLFormElement) => el.requestSubmit())
+    await expect(form).toHaveAttribute("data-submits", "0")
+    await expect(list).toBeFocused()
+
+    await chooseOption(list, "Initial deposit")
+    expect(await hidden.evaluate((el: HTMLInputElement) => el.validity.valid)).toBe(true)
+  }
+})
+
+test("in a plain GET form, an unreadable date stops the search and focus moves to the field from the clicked Apply", async ({ page }) => {
+  await openKit(page)
+  const form = page.getByRole("form", { name: "Filter the audit" })
+  await form.scrollIntoViewIfNeeded()
+  const from = form.getByLabel("From")
+  await from.fill("31/02/2026")
+  const before = page.url()
+  await form.getByRole("button", { name: "Apply" }).click()
+  await expect(from).toBeFocused()
+  await expect(form.getByRole("alert").filter({ hasText: WRONG_DATE })).toBeVisible()
+  expect(page.url()).toBe(before)
+
+  // A real date is sent as YYYY-MM-DD, with "" for Anyone.
+  await from.fill(dayFirst("2026-11-02"))
+  await form.getByRole("button", { name: "Apply" }).click()
+  await expect(page).toHaveURL(/\/staff\/kit\?from=2026-11-02&actor=$/)
+})
+
+test("the 40px and 36px round buttons keep a 44px target without looking bigger", async ({ page }) => {
+  const card = await openKit(page)
+  const filter = card.getByRole("button", { name: "Filter Visited applicants" }).first()
+  const box = (await filter.boundingBox())!
+  expect(Math.round(box.width)).toBe(40)
+  const target = await filter.evaluate((el) => {
+    const after = getComputedStyle(el, "::after")
+    const rect = el.getBoundingClientRect()
+    return { inset: parseFloat(after.top), width: rect.width - 2 * parseFloat(after.left), content: after.content }
+  })
+  expect(target.content).toBe('""')
+  expect(target.width).toBeGreaterThanOrEqual(44)
+  // A click on the ring just outside the drawn circle still presses the button (the first one is off).
+  await expect(filter).not.toHaveAttribute("data-on")
+  await page.mouse.click(box.x - 1.5, box.y + box.height / 2)
+  await expect(filter).toHaveAttribute("data-on", "")
+})
+
 test.describe("in a time zone behind UTC", () => {
   test.use({ timezoneId: "America/Los_Angeles" })
 
@@ -321,7 +412,7 @@ test.describe("in a time zone behind UTC", () => {
     const card = await openKit(page)
     await card.getByRole("button", { name: "More options" }).click()
     const ends = card.getByLabel("Ends on")
-    await ends.fill("31/10/2026")
+    await ends.fill(dayFirst("2026-10-31"))
     await ends.blur()
     expect((await posted(card)).ends_on).toBe("2026-10-31")
 

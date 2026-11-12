@@ -46,6 +46,13 @@
 .kit-round[data-size="36"] { width: 36px; height: 36px; border-color: transparent; }
 .kit-round:hover { background: var(--gf-whisper); }
 .kit-round:active { transform: scale(0.92); }
+/* The 40px and 36px sizes keep a 44px target (WCAG 2.5.5 and the 44px touch rule) without looking bigger:
+   an invisible ring past the box takes the clicks. Neighbours sit at least 4px away (the top bar's gap is 10px). */
+.kit-round[data-size="40"]::after, .kit-round[data-size="36"]::after, .kit-round.kit-cal-arrow::after {
+  content: ""; position: absolute; inset: -2px; border-radius: 50%;
+}
+.kit-round[data-size="36"]::after { inset: -4px; }
+.kit-round.kit-cal-arrow::after { inset: -5px; }
 
 .kit-link {
   display: inline; padding: 0; border: 0; background: none; cursor: pointer; color: var(--gf-indigo);

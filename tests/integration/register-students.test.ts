@@ -120,6 +120,7 @@ type LeadRow = {
   guardian_contact_id: string
   custodian_relationship: string
   custodian_relationship_description: string | null
+  custodian_relationship_own: boolean
   brought_by_name: string | null
   brought_by_phone: string | null
   previous_school_name: string | null
@@ -205,15 +206,26 @@ async function contactOf(leadId: string): Promise<string> {
   return (await rowOf(leadId)).guardian_contact_id
 }
 
-// Passed in a claimed year and paid in full: Enrolled at full.
-async function enrolled(fatherName: string, year: number): Promise<string> {
-  const leadId = await onFile(fatherName, "STD 2")
+// Passed, in a claimed year.
+async function passed(fatherName: string, year: number, className: LeadClass = "STD 2"): Promise<string> {
+  const leadId = await onFile(fatherName, className)
   const admissions = await signedIn(ADMISSIONS)
   const registered = await registerForInterview(admissions, leadId)
   if (!registered.ok) throw new Error(`registration failed: ${registered.error}`)
   const recorded = await recordInterviewResult(admissions, registered.data.interviewId, { interviewDate: today, result: "Passed", score: 80 })
   if (!recorded.ok) throw new Error(`result failed: ${recorded.error}`)
   await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [leadId, year]))
+  return leadId
+}
+
+async function pay(leadId: string, type: "first_instalment" | "second_instalment" | "third_instalment", amount: number) {
+  const paid = await recordPayment(await signedIn(ACCOUNTANT), leadId, { type, amount, paidOn: today }, randomUUID())
+  if (!paid.ok) throw new Error(`payment failed: ${paid.error}`)
+}
+
+// Passed in a claimed year and paid in full: Enrolled at full.
+async function enrolled(fatherName: string, year: number): Promise<string> {
+  const leadId = await passed(fatherName, year)
   const paid = await recordPayment(
     await signedIn(ACCOUNTANT),
     leadId,
@@ -337,6 +349,23 @@ describe("one save for the whole form", () => {
     })
     expect((await rowOf(own.leadId)).custodian_relationship).toBe("Guardian")
     expect(await rowOf(niece.leadId)).toMatchObject({ custodian_relationship: "Other", custodian_relationship_description: "Aunt" })
+
+    // More corrections, one of them to the niece's own value: the niece's
+    // relationship is hers, not a copy that happens to match.
+    const staff = await signedIn(ADMISSIONS)
+    for (const changes of [
+      { relationship: "Other" as const, relationshipDescription: "Aunt" },
+      { relationship: "Mother" as const, relationshipDescription: null },
+    ]) {
+      expect(await updateGuardianContact(staff, ownRow.guardian_contact_id, changes)).toEqual({ ok: true, data: null })
+      expect(await rowOf(own.leadId)).toMatchObject({
+        custodian_relationship: changes.relationship,
+        custodian_relationship_description: changes.relationshipDescription,
+      })
+      expect(await rowOf(niece.leadId)).toMatchObject({ custodian_relationship: "Other", custodian_relationship_description: "Aunt" })
+    }
+    expect(await rowOf(own.leadId)).toMatchObject({ custodian_relationship_own: false })
+    expect(await rowOf(niece.leadId)).toMatchObject({ custodian_relationship_own: true })
   })
 
   test("the father as custodian: the person takes the father's full name, and the relationship is Father", async () => {
@@ -542,6 +571,27 @@ describe("siblings on file", () => {
     expect(await feeOf(anchor)).toEqual(before)
     expect(await storedResultOf(anchor)).toMatchObject({ result: "full", source: "locked", locked_result: "full" })
     expect((await rowOf(anchor)).status).toBe("Enrolled")
+  })
+
+  test("a link that gives an on-file sibling the 10% can enrol it: it locks at the 10%, and the new dearer child pays full", async () => {
+    const family = fatherParts()
+    // KG 1 is 1,100,000 a year here. 990,000 is paid: the whole fee once
+    // the 10% applies, not before.
+    const cheaper = await passed(nameOf(family), await claimedYear(), "KG 1")
+    await pay(cheaper, "first_instalment", 396_000)
+    await pay(cheaper, "second_instalment", 396_000)
+    await pay(cheaper, "third_instalment", 198_000)
+    expect((await rowOf(cheaper)).status).not.toBe("Enrolled")
+
+    const [dearer] = await created({
+      people: [person()],
+      students: [student(family, await registrationYear(), { className: "FORM 1", siblingOf: { leadId: cheaper } })],
+    })
+    // With the 10% the fee is 990,000, which is paid in full.
+    expect((await rowOf(cheaper)).status).toBe("Enrolled")
+    expect(await storedResultOf(cheaper)).toMatchObject({ result: "ten", source: "locked", locked_result: "ten" })
+    expect(await fullPayerOf(dearer.sibling!.groupId)).toBe(dearer.leadId)
+    expect(await feeOf(dearer.leadId)).toMatchObject({ discount: null })
   })
 
   test("a child on a known custodian never joins the Family's old group, not even when today's form adds another child later", async () => {

@@ -48,11 +48,13 @@
 --    its caller. link_sibling takes the locks and calls it, so its answers
 --    are the same as before.
 --
--- 5. The contact-to-lead relationship copy (20261211200100) now updates
---    only the leads that still hold the contact's previous relationship.
---    A lead given its own relationship here keeps it when someone corrects
---    the person on today's screens. Every lead on file today holds its
---    contact's, so nothing changes for them.
+-- 5. leads.custodian_relationship_own marks a child given its own
+--    relationship here, different from the person's. The contact-to-lead
+--    relationship copy (20261211200100) leaves those leads alone, however
+--    often the person is corrected on today's screens; a lead moved to
+--    another contact takes that contact's relationship and loses the mark.
+--    Every lead on file today holds its contact's and no mark, so nothing
+--    changes for them.
 --
 -- Locks, all taken before the first write, in the documented order: Family
 -- locks of every known person and of every on-file sibling's contact, with
@@ -199,8 +201,8 @@ begin
 
     -- Until now every writer of a lead's relationship copied its contact's
     -- (20261211200100: the backfill, the insert and contact-move trigger,
-    -- and the copy below), so every lead on file holds its contact's and
-    -- the narrower copy changes nothing for them. Checked, not assumed: a
+    -- and the copy below), so every lead on file holds its contact's, gets
+    -- no mark, and the copy keeps reaching it. Checked, not assumed: a
     -- lead that differs stops the migration.
     if exists (
         select 1
@@ -212,9 +214,47 @@ begin
         raise exception 'custodian_relationship_differs';
     end if;
 
+    alter table public.leads
+        add column custodian_relationship_own boolean not null default false;
+
+    comment on column public.leads.custodian_relationship_own is
+        'Staff gave this child its own relationship to the custodian, different from the person''s (#304). A correction of the person''s relationship leaves it alone.';
+
+    -- set_lead_custodian_relationship, as 20261211200100 made it. A lead
+    -- moved to another contact that takes the contact's relationship no
+    -- longer holds its own. Same trigger.
+    create or replace function public.set_lead_custodian_relationship()
+    returns trigger
+    language plpgsql
+    set search_path = ''
+    as $fn$
+    declare
+        contact public.guardian_contacts;
+    begin
+        if tg_op = 'INSERT' then
+            if new.custodian_relationship is not null then
+                return new;
+            end if;
+        elsif new.guardian_contact_id is not distinct from old.guardian_contact_id
+              or new.custodian_relationship is distinct from old.custodian_relationship
+              or new.custodian_relationship_description is distinct from old.custodian_relationship_description then
+            return new;
+        end if;
+
+        select * into contact from public.guardian_contacts g where g.id = new.guardian_contact_id for key share;
+        if found then
+            new.custodian_relationship := contact.relationship;
+            new.custodian_relationship_description := contact.relationship_description;
+            new.custodian_relationship_own := false;
+        end if;
+        return new;
+    end;
+    $fn$;
+
+    revoke execute on function public.set_lead_custodian_relationship() from public, anon, authenticated, service_role;
+
     -- sync_lead_custodian_relationship, as 20261211200100 made it, now
-    -- copying only to leads that still hold the contact's previous
-    -- relationship. Same trigger.
+    -- leaving out every lead that holds its own relationship. Same trigger.
     create or replace function public.sync_lead_custodian_relationship()
     returns trigger
     language plpgsql
@@ -229,8 +269,7 @@ begin
         set custodian_relationship = new.relationship,
             custodian_relationship_description = new.relationship_description
         where l.guardian_contact_id = new.id
-          and l.custodian_relationship is not distinct from old.relationship
-          and l.custodian_relationship_description is not distinct from old.relationship_description
+          and not l.custodian_relationship_own
           and (l.custodian_relationship is distinct from new.relationship
                or l.custodian_relationship_description is distinct from new.relationship_description);
         perform set_config('app.lead_lifecycle_override', earlier_override, true);
@@ -1036,6 +1075,9 @@ begin
         p_desc text[] := '{}';
         p_used boolean[] := '{}';
         p_father_name text[] := '{}';
+        -- The relationship stored on each person once saved.
+        p_stored_rel public.guardian_relationship[] := '{}';
+        p_stored_desc text[] := '{}';
         one_phone text;
         extra text[];
         -- Students, by number.
@@ -1358,6 +1400,11 @@ begin
                 end if;
                 p_phone[k] := contact.phone;
                 p_whatsapp[k] := contact.whatsapp;
+                p_stored_rel[k] := contact.relationship;
+                p_stored_desc[k] := contact.relationship_description;
+            else
+                p_stored_rel[k] := p_rel[k];
+                p_stored_desc[k] := p_desc[k];
             end if;
         end loop;
 
@@ -1503,7 +1550,7 @@ begin
                             admission_number, student_name, class_name, enrollment_year, day_or_boarding,
                             status, visit_date, guardian_contact_id, returning_family_joined,
                             father_full_name, father_full_name_source,
-                            custodian_relationship, custodian_relationship_description,
+                            custodian_relationship, custodian_relationship_description, custodian_relationship_own,
                             brought_by_name, brought_by_phone, brought_by_relationship,
                             previous_school_name, previous_school_type, previous_school_region, previous_school_not_known
                         ) values (
@@ -1513,6 +1560,8 @@ begin
                             p_contact[k] = any (existing),
                             s_father[i], 'derived',
                             s_rel[i], s_desc[i],
+                            -- Its own when it differs from the person's.
+                            (s_rel[i], s_desc[i]) is distinct from (p_stored_rel[k], p_stored_desc[k]),
                             s_by_name[i], s_by_phone[i], s_by_rel[i],
                             s_school[i], s_school_type[i], s_school_region[i], s_school_unknown[i]
                         )

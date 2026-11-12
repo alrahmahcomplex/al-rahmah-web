@@ -1,77 +1,67 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+"use client"
+
+import { Card, KeyValueList, Table } from "@/components/kit"
 import { formatDate } from "@/lib/school-calendar"
-import { BAND_NAMES, FEE_BANDS, type FeeSchedule } from "@/lib/services/fees"
+import { BAND_NAMES, FEE_BANDS, type FeeBand, type FeeSchedule } from "@/lib/services/fees"
 
 import { bandClasses, formatShillings, INSTALMENTS } from "./format"
+
+type Instalment = (typeof INSTALMENTS)[number]
 
 // A year's schedule as read-only tables, for everyone who may read it.
 export function ScheduleView({ schedule }: { schedule: FeeSchedule }) {
   return (
-    <div className="flex flex-col gap-6">
-      <section aria-labelledby="fees-annual" className="flex flex-col gap-2">
-        <h2 id="fees-annual" className="staff-section-heading">
-          Annual school fees
-        </h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Band</TableHead>
-              <TableHead className="text-right">Day (TZS)</TableHead>
-              <TableHead className="text-right">Boarding (TZS)</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {FEE_BANDS.map((band) => (
-              <TableRow key={band}>
-                <TableCell className="whitespace-normal">
-                  <span className="font-medium">{BAND_NAMES[band]}</span>
-                  <span className="block text-xs text-muted-foreground">{bandClasses(band)}</span>
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{formatShillings(schedule.bands[band].day)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatShillings(schedule.bands[band].boarding)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </section>
+    <div className="fs-stack">
+      <Card title="Annual school fees" titleId="fees-annual">
+        <div className="fs-card-body">
+          <Table<FeeBand>
+            label="Fees by band"
+            rows={[...FEE_BANDS]}
+            rowKey={(band) => band}
+            columns={[
+              {
+                header: "Band",
+                cell: (band) => (
+                  <span className="fs-band">
+                    <b>{BAND_NAMES[band]}</b>
+                    <small>{bandClasses(band)}</small>
+                  </span>
+                ),
+              },
+              { header: "Day (TZS)", align: "end", cell: (band) => formatShillings(schedule.bands[band].day) },
+              { header: "Boarding (TZS)", align: "end", cell: (band) => formatShillings(schedule.bands[band].boarding) },
+            ]}
+          />
+        </div>
+      </Card>
 
-      <section aria-labelledby="fees-instalments" className="flex flex-col gap-2">
-        <h2 id="fees-instalments" className="staff-section-heading">
-          Instalments
-        </h2>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Instalment</TableHead>
-              <TableHead className="text-right">Share</TableHead>
-              <TableHead className="text-right">Due</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {INSTALMENTS.map(([label, key]) => (
-              <TableRow key={key}>
-                <TableCell>{label}</TableCell>
-                <TableCell className="text-right tabular-nums">{schedule.split[key]}%</TableCell>
-                <TableCell className="text-right">{formatDate(schedule.dueDates[key])}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </section>
+      <Card title="Instalments" titleId="fees-instalments">
+        <div className="fs-card-body">
+          <Table<Instalment>
+            label="Shares and due dates"
+            rows={[...INSTALMENTS]}
+            rowKey={([, key]) => key}
+            columns={[
+              { header: "Instalment", cell: ([label]) => label },
+              { header: "Share", align: "end", cell: ([, key]) => `${schedule.split[key]}%` },
+              { header: "Due", align: "end", cell: ([, key]) => formatDate(schedule.dueDates[key]) },
+            ]}
+          />
+        </div>
+      </Card>
 
-      <section aria-labelledby="fees-other" className="flex flex-col gap-2">
-        <h2 id="fees-other" className="staff-section-heading">
-          Deposit and programmes
-        </h2>
-        <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Minimum Initial deposit</dt>
-          <dd className="text-right tabular-nums">TZS {formatShillings(schedule.minimumDeposit)}</dd>
-          <dt className="text-muted-foreground">Pre-Form One programme, Day</dt>
-          <dd className="text-right tabular-nums">TZS {formatShillings(schedule.preFormOne.day)}</dd>
-          <dt className="text-muted-foreground">Pre-Form One programme, Boarding</dt>
-          <dd className="text-right tabular-nums">TZS {formatShillings(schedule.preFormOne.boarding)}</dd>
-        </dl>
-      </section>
+      <Card title="Deposit and programmes" titleId="fees-other">
+        <div className="fs-card-body">
+          <KeyValueList
+            className="fs-kv-end"
+            items={[
+              { key: "Minimum Initial deposit", value: `TZS ${formatShillings(schedule.minimumDeposit)}`, numeric: true },
+              { key: "Pre-Form One programme, Day", value: `TZS ${formatShillings(schedule.preFormOne.day)}`, numeric: true },
+              { key: "Pre-Form One programme, Boarding", value: `TZS ${formatShillings(schedule.preFormOne.boarding)}`, numeric: true },
+            ]}
+          />
+        </div>
+      </Card>
     </div>
   )
 }

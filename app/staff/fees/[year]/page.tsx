@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden, notFound } from "next/navigation"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card, Note, PageHeader, pageTitle } from "@/components/kit"
 import { getFeeSchedule } from "@/lib/services/fees"
 import { createClient } from "@/utils/supabase/server"
 
@@ -20,13 +20,16 @@ import {
   parseScheduleYear,
 } from "../years"
 
+import "../fees.css"
+
 export const metadata: Metadata = {
-  title: "Fee schedule · Al-Rahmah Complex",
+  title: pageTitle("Fee schedule"),
 }
 
 // One enrollment year's Fee schedule. The amounts are editable for staff who
 // may record payments, the Academic-year start and seats for staff who manage
 // academic years, and everything is read-only for everyone else who may open it.
+// Drawn in the new shell (#329).
 export default async function FeeSchedulePage({ params }: { params: Promise<{ year: string }> }) {
   const staff = await requireStaff()
   if (!canReadFeeSchedule(staff.permissions)) forbidden()
@@ -41,49 +44,48 @@ export default async function FeeSchedulePage({ params }: { params: Promise<{ ye
   const schedule = canSeeFeeAmounts(staff.permissions) ? await getFeeSchedule(await createClient(), year) : null
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link href="/staff/fees" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
-          All years
-        </Link>
-        <h1 className="staff-heading">Fee schedule {year}</h1>
+    <>
+      <Link href="/staff/fees" className="kit-link fs-back">
+        All years
+      </Link>
+      <PageHeader title={`Fee schedule ${year}`} />
+
+      <div className="fs-stack">
+        {schedule === null ? (
+          <p className="fs-text">{NOT_SHOWN_WITHOUT_PAYMENTS_VIEW}</p>
+        ) : !schedule.ok && schedule.error === "unavailable" ? (
+          <Note tone="bad" role="alert">
+            This fee schedule could not be loaded. Try again in a moment.
+          </Note>
+        ) : canEdit ? (
+          // One editor whether or not the year has a schedule yet, so the
+          // confirmation outlasts the refresh that brings the new schedule in.
+          <ScheduleEditor year={year} amounts={schedule.ok ? schedule.data : null}>
+            {schedule.ok && <ScheduleView schedule={schedule.data} />}
+          </ScheduleEditor>
+        ) : schedule.ok ? (
+          <ScheduleView schedule={schedule.data} />
+        ) : (
+          <p className="fs-text">
+            No fee schedule for {year} yet.
+            {canSetYear && " Once the Accountant creates it, you can set the Academic-year start and seats here."}
+          </p>
+        )}
+
+        {schedule?.ok && (
+          <Card title="Academic year and seats" titleId="fees-academic-year">
+            <div className="fs-card-body">
+              {canSetYear ? (
+                <AcademicYearEditor year={year} start={schedule.data.academicYearStart} seats={schedule.data.seats}>
+                  <AcademicYearView schedule={schedule.data} />
+                </AcademicYearEditor>
+              ) : (
+                <AcademicYearView schedule={schedule.data} />
+              )}
+            </div>
+          </Card>
+        )}
       </div>
-
-      {schedule === null ? (
-        <p className="text-sm text-slate-700">{NOT_SHOWN_WITHOUT_PAYMENTS_VIEW}</p>
-      ) : !schedule.ok && schedule.error === "unavailable" ? (
-        <Alert variant="destructive">
-          <AlertDescription>This fee schedule could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
-      ) : canEdit ? (
-        // One editor whether or not the year has a schedule yet, so the
-        // confirmation outlasts the refresh that brings the new schedule in.
-        <ScheduleEditor year={year} amounts={schedule.ok ? schedule.data : null}>
-          {schedule.ok && <ScheduleView schedule={schedule.data} />}
-        </ScheduleEditor>
-      ) : schedule.ok ? (
-        <ScheduleView schedule={schedule.data} />
-      ) : (
-        <p className="text-sm text-slate-700">
-          No fee schedule for {year} yet.
-          {canSetYear && " Once the Accountant creates it, you can set the Academic-year start and seats here."}
-        </p>
-      )}
-
-      {schedule?.ok && (
-        <section aria-labelledby="fees-academic-year" className="flex flex-col gap-4 border-t pt-6">
-          <h2 id="fees-academic-year" className="staff-section-heading">
-            Academic year and seats
-          </h2>
-          {canSetYear ? (
-            <AcademicYearEditor year={year} start={schedule.data.academicYearStart} seats={schedule.data.seats}>
-              <AcademicYearView schedule={schedule.data} />
-            </AcademicYearEditor>
-          ) : (
-            <AcademicYearView schedule={schedule.data} />
-          )}
-        </section>
-      )}
-    </div>
+    </>
   )
 }

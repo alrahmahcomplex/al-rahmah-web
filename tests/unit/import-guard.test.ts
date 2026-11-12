@@ -1,6 +1,10 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs"
+
 import { ESLint } from "eslint"
 import { describe, expect, it } from "vitest"
+
+import { config } from "../../eslint.config.mjs"
 
 // The ESLint guard of converted staff routes (#322, eslint.config.mjs): a
 // route marked "new" in app/staff/route-looks.ts, and the new shell itself,
@@ -37,6 +41,28 @@ describe("the import guard", () => {
 
   it.each(OLD_IMPORTS)("allows %s in a legacy route", async (line) => {
     expect(await restricted("app/staff/discounts/page.tsx", source(line))).toEqual([])
+  })
+
+  // A route folder with brackets is a literal name, not a glob (#360). No
+  // such route is "new" yet, so the test marks three of them new in a copy
+  // of the route map and lints their real files with that config.
+  it.each([
+    ["/staff/applicants/[id]", "app/staff/applicants/[id]/page.tsx"],
+    ["/staff/fees/[year]", "app/staff/fees/[year]/page.tsx"],
+    ["/staff/[...rest]", "app/staff/[...rest]/page.tsx"],
+  ])("refuses an old part in %s once it is marked new", async (route, filePath) => {
+    const map = readFileSync("app/staff/route-looks.ts", "utf8")
+    const legacy = `"${route}": "legacy"`
+    expect(map).toContain(legacy)
+    const marked = new ESLint({
+      cwd: process.cwd(),
+      overrideConfigFile: true,
+      overrideConfig: config(map.replace(legacy, `"${route}": "new"`)),
+    })
+    const [result] = await marked.lintText(source(OLD_IMPORTS[0]), { filePath })
+    expect(result.messages.filter((m) => m.ruleId === "no-restricted-imports")).toHaveLength(1)
+    // As the map stands, the route is legacy and may still import it.
+    expect(await restricted(filePath, source(OLD_IMPORTS[0]))).toEqual([])
   })
 
   it("allows the kit, the icons and the shared staff modules in a converted route", async () => {

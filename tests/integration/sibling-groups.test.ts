@@ -484,6 +484,9 @@ describe("the migration-day backfill", () => {
       // As before the migration: no groups at all. Then the backfill.
       await sql.query("alter table public.sibling_group_members disable trigger refuse_delete")
       await sql.query("alter table public.sibling_groups disable trigger refuse_delete")
+      // Sibling requests (#302) name groups, so they go first.
+      await sql.query("alter table public.discount_requests disable trigger refuse_delete")
+      await sql.query("delete from public.discount_requests where kind = 'sibling'")
       await sql.query("delete from public.sibling_group_members")
       await sql.query("delete from public.sibling_groups")
       await sql.query("select public.backfill_sibling_groups()")

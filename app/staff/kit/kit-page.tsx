@@ -34,6 +34,7 @@ import {
 import type { LeadStatus } from "@/lib/services/leads"
 
 import { APPLICANTS, CAMPUS, DISCOUNT_REQUESTS, FEE_SCHEDULE, FILTERS, PAYMENT_KINDS, type Applicant } from "./fixtures"
+import { FormPartsCard, ListInPopoverCard } from "./form-parts"
 import { GuidedDemo } from "./guided-demo"
 import "./kit-page.css"
 import { OverlayCards } from "./overlays"
@@ -83,7 +84,7 @@ function Swatch({ name, token }: { name: string; token: string }) {
   )
 }
 
-function DesignSystem() {
+function DesignSystem({ tab }: { tab: string }) {
   const [popPressed, setPopPressed] = useState(true)
   const [cls, setCls] = useState<string | null>("STD 6")
   const [sibling, setSibling] = useState<string | null>("sibling")
@@ -211,6 +212,8 @@ function DesignSystem() {
           onChange={setSibling}
         />
       </Card>
+
+      <FormPartsCard tab={tab} />
 
       <Card title="Progress bar">
         <ProgressBar
@@ -509,16 +512,17 @@ function MorePieces() {
       </Card>
 
       <OverlayCards />
+      <ListInPopoverCard />
     </div>
   )
 }
 
 // Drawn in the new shell (#322), which holds the stage, the page column and the kit Toaster.
-export function KitPage() {
+export function KitPage({ tab = "" }: { tab?: string }) {
   return (
     <>
       <PageHeader title="Design system" subtitle="Every piece below is copied from the Admission form’s code, so the staff side and the parent side stay one family." />
-      <DesignSystem />
+      <DesignSystem tab={tab} />
       <MorePieces />
     </>
   )

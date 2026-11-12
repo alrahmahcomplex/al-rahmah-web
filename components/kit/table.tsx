@@ -13,6 +13,8 @@ export type TableColumn<Row> = {
   cell: (row: Row) => ReactNode
   /** `end` right-aligns and never wraps: money and counts. */
   align?: "start" | "end"
+  /** The cell names its row (a <th scope="row">), as the record's name does. */
+  rowHeader?: boolean
 }
 
 export type TableProps<Row> = {
@@ -66,11 +68,14 @@ export function Table<Row>({ label, columns, rows, rowKey, onOpen, rowLabel, tot
               onClick={onOpen ? () => onOpen(row) : undefined}
               onKeyDown={onOpen ? open(row) : undefined}
             >
-              {columns.map((column, i) => (
-                <td key={i} data-align={column.align === "end" ? "end" : undefined}>
-                  {column.cell(row)}
-                </td>
-              ))}
+              {columns.map((column, i) => {
+                const Cell = column.rowHeader ? "th" : "td"
+                return (
+                  <Cell key={i} scope={column.rowHeader ? "row" : undefined} data-align={column.align === "end" ? "end" : undefined}>
+                    {column.cell(row)}
+                  </Cell>
+                )
+              })}
             </tr>
           ))}
         </tbody>

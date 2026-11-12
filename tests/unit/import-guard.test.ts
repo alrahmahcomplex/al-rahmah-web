@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -32,6 +32,14 @@ const OLD_IMPORTS = [
   `import { LegacyShell } from "@/app/staff/_shell/staff-shell"`,
   `import { toast } from "sonner"`,
 ]
+
+const lstatSafe = (path: string) => {
+  try {
+    return lstatSync(path)
+  } catch {
+    return undefined
+  }
+}
 
 const source = (line: string) => `${line}\nexport const used = [${line.match(/\{ (\w+) \}/)![1]}]\n`
 
@@ -96,6 +104,33 @@ describe("the import guard", () => {
       for (const parts of outside) expect(matches(join(base, ...parts)), parts.join("/")).toBe(false)
     } finally {
       rmSync(base, { recursive: true, force: true })
+    }
+  })
+
+  // Node loads eslint.config.mjs by its real path; ESLint names the files
+  // through the folder it was started in. Through a junction (a symlink off
+  // Windows) the two differ, and the guard must still apply.
+  it("refuses an old part in a converted route when the checkout is reached through a junction", async () => {
+    const outer = mkdtempSync(join(tmpdir(), "import-guard-link-"))
+    const link = join(outer, "checkout")
+    try {
+      symlinkSync(process.cwd(), link, "junction")
+      const linked = new ESLint({ cwd: link })
+      const [result] = await linked.lintText(source(OLD_IMPORTS[0]), { filePath: join(link, "app/staff/reopenings/page.tsx") })
+      expect(result.messages.filter((m) => m.ruleId === "no-restricted-imports")).toHaveLength(1)
+    } finally {
+      // Remove the link itself, never what it points to. The temp folder
+      // goes only once the link is gone.
+      let linkGone = !lstatSafe(link)
+      if (!linkGone) {
+        try {
+          unlinkSync(link)
+        } catch {
+          rmdirSync(link)
+        }
+        linkGone = !lstatSafe(link)
+      }
+      if (linkGone) rmdirSync(outer)
     }
   })
 

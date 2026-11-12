@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { dirname, relative, sep } from "node:path";
+import { readFileSync, realpathSync } from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig, globalIgnores } from "eslint/config";
@@ -18,15 +18,30 @@ const root = dirname(fileURLToPath(import.meta.url));
 // Each route file is matched by its exact path, not as a glob: Next.js folder
 // names such as `[id]`, `[...rest]`, `(group)` or `@slot` are glob syntax, so
 // a glob made from them matched none of that route's files (#360).
+// Both sides are compared as real paths: Node loads this file by its real
+// path, while ESLint may name the file through a junction or symlink.
+function realPath(path) {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    // A file linted by name only (lintText) need not exist; its folder does.
+    try {
+      return join(realpathSync.native(dirname(path)), basename(path));
+    } catch {
+      return resolve(path);
+    }
+  }
+}
 
 /** The files the guard covers, for a route-looks.ts source and the checkout (`base`) it describes. */
 export function convertedFiles(routeLooksSource, base = root) {
+  const realBase = realPath(base);
   const files = new Set(
     newRoutes(routeLooksSource)
       .flatMap((pattern) => routeFiles(base, pattern).files)
       .filter((file) => /\.(tsx?|jsx?)$/.test(file)),
   );
-  return ["app/staff/_new-shell/**", (filePath) => files.has(relative(base, filePath).split(sep).join("/"))];
+  return ["app/staff/_new-shell/**", (filePath) => files.has(relative(realBase, realPath(filePath)).split(sep).join("/"))];
 }
 
 const OLD_PARTS = "is an old part: a converted staff screen uses components/kit and components/icons only (components/kit/README.md).";

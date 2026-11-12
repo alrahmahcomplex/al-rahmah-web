@@ -765,14 +765,28 @@ begin
         where l.status = 'Enrolled' and r.locked_result is null
         union all
         -- A stored full payer that choose_full_payer would replace: out of the
-        -- group, not counting, Declined, closed or holding a manual 10%.
+        -- group, not counting, Declined, closed or holding a manual 10%. Only
+        -- in a group with a member that is not legacy, the groups
+        -- choose_full_payer looks after: nothing reads the full payer of an
+        -- all-legacy or empty group (a check-in can empty one, #305), and it
+        -- is chosen again when a counting member joins.
         select 'full_payer_not_counting', g.id, g.full_payer_lead_id, '{}'::jsonb
         from public.sibling_groups g
         left join public.sibling_group_members m on m.lead_id = g.full_payer_lead_id and m.group_id = g.id
         left join public.leads l on l.id = g.full_payer_lead_id
         left join public.lead_sibling_results r on r.lead_id = g.full_payer_lead_id
         where g.full_payer_lead_id is not null
-          and exists (select 1 from in_year y where y.id = g.full_payer_lead_id)
+          and exists (
+              select 1 from public.sibling_group_members c
+              where c.group_id = g.id and not c.legacy
+          )
+          and (
+              exists (select 1 from in_year y where y.id = g.full_payer_lead_id)
+              or exists (
+                  select 1 from public.sibling_group_members c join in_year y on y.id = c.lead_id
+                  where c.group_id = g.id
+              )
+          )
           and (
               m.id is null
               or not (m.legacy or public.sibling_basis_counts(m.basis))

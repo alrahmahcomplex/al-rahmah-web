@@ -985,6 +985,21 @@ describe("the invariant check", () => {
       ]),
     )
 
+    // A full payer that left its group, while a counting member stays: the
+    // group must choose again. A group everyone left keeps the pointer
+    // harmlessly (a check-in can do that, #305): nothing reads it.
+    const leave = `update public.sibling_group_members
+                   set group_id = null, basis = null, joined_at = null, sibling_of_lead_id = null, cause = 'sibling_link'
+                   where lead_id = any($1::uuid[])`
+    const payerLeft = await broken(leave, [[dear]])
+    expect(payerLeft).toEqual(
+      expect.arrayContaining([
+        { kind: "full_payer_not_counting", group_id: group, lead_id: dear, detail: {} },
+      ]),
+    )
+    const emptied = await broken(leave, [[dear, cheap]])
+    expect(emptied.filter((b) => b.kind === "full_payer_not_counting")).toEqual([])
+
     // A manual edit is the one path that may change it.
     const manual = await broken(
       "update public.lead_sibling_results set result = 'ten', source = 'manual' where lead_id = $1",

@@ -170,8 +170,8 @@ a.kit-row { border-radius: 14px; }
 .kit-tbl .kit-tr-open { cursor: pointer; }
 .kit-tbl .kit-tr-open:hover { background: var(--gf-chrome); }
 .kit-tbl tbody th { text-align: left; font-weight: 600; }
-.kit-tbl td b { font-weight: 600; display: block; }
-.kit-tbl td small { color: var(--gf-quiet); font-size: 12.5px; }
+.kit-tbl :is(td, tbody th) b { font-weight: 600; display: block; }
+.kit-tbl :is(td, tbody th) small { color: var(--gf-quiet); font-size: 12.5px; font-weight: 400; }
 .kit-tbl [data-align="end"] { text-align: right; white-space: nowrap; }
 .kit-tbl tfoot td { font-weight: 700; border-top: 1.5px solid var(--gf-line); }
 

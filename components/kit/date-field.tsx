@@ -31,15 +31,37 @@ function useFormReset(input: RefObject<HTMLInputElement | null>, run: () => void
   }, [input])
 }
 
+/** Marks a date or time input that holds text it cannot read; the guards find the first one by it. */
+const UNREADABLE = "data-kit-unreadable"
+
+/**
+ * Brings the first unreadable field in `form` into view: a fold-open section
+ * around it opens (it listens for "kit:reveal"), then the field takes focus.
+ */
+function revealFirst(form: HTMLFormElement | null, fallback: HTMLElement) {
+  const first = form?.querySelector<HTMLElement>(`[${UNREADABLE}]`) ?? fallback
+  first.dispatchEvent(new Event("kit:reveal", { bubbles: true }))
+  first.focus()
+  // Inside a section that has only just opened, the field can take focus a frame later.
+  if (document.activeElement !== first) requestAnimationFrame(() => first.focus())
+}
+
 /**
  * Keeps `input` invalid with `message` while it holds text that cannot be
- * read, so a form cannot submit. The browser's bubble never shows: the
- * part's own `invalid` handler cancels it, shows the part's line and
- * moves focus to the first field that is wrong.
+ * read, so its form cannot submit. The browser's bubble never shows: the
+ * part's own `invalid` handler cancels it, shows the part's line and moves
+ * focus to the first field that is wrong. A form that skips validation
+ * (`noValidate`) is stopped too: the part's own submit listener on the form
+ * runs before React's `onSubmit` and a form action, cancels the submit and
+ * keeps it from reaching them.
  */
 function useUnreadableGuard(input: RefObject<HTMLInputElement | null>, message: string | null, show: () => void) {
   useEffect(() => {
-    input.current?.setCustomValidity(message ?? "")
+    const el = input.current
+    if (!el) return
+    el.setCustomValidity(message ?? "")
+    if (message) el.setAttribute(UNREADABLE, "")
+    else el.removeAttribute(UNREADABLE)
   }, [input, message])
   const latest = useRef(show)
   useEffect(() => {
@@ -48,14 +70,26 @@ function useUnreadableGuard(input: RefObject<HTMLInputElement | null>, message: 
   useEffect(() => {
     const el = input.current
     if (!el) return
+    const form = el.form
     const onInvalid = (event: Event) => {
       event.preventDefault()
       latest.current()
-      const first = el.form?.querySelector<HTMLElement>(":invalid:not(form):not(fieldset)")
-      if (!first || first === el) el.focus()
+      const first = form?.querySelector<HTMLElement>(":invalid:not(form):not(fieldset)")
+      if (!first || first === el) revealFirst(form, el)
+    }
+    const onSubmit = (event: Event) => {
+      if (!el.hasAttribute(UNREADABLE)) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      latest.current()
+      revealFirst(form, el)
     }
     el.addEventListener("invalid", onInvalid)
-    return () => el.removeEventListener("invalid", onInvalid)
+    form?.addEventListener("submit", onSubmit)
+    return () => {
+      el.removeEventListener("invalid", onInvalid)
+      form?.removeEventListener("submit", onSubmit)
+    }
   }, [input])
 }
 

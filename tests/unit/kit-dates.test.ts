@@ -143,3 +143,27 @@ describe("in a time zone behind UTC", () => {
     expect(mondayOf("2026-11-01")).toBe("2026-10-26")
   })
 })
+
+// Tanzania is UTC+3: the usual slip there (toISOString on local midnight) moves a date back a day.
+describe("in a time zone ahead of UTC (Dar es Salaam)", () => {
+  const zone = process.env.TZ
+  beforeAll(() => {
+    process.env.TZ = "Africa/Dar_es_Salaam"
+  })
+  afterAll(() => {
+    process.env.TZ = zone
+  })
+
+  it("is really ahead of UTC", () => {
+    expect(new Date(2026, 0, 1).getTimezoneOffset()).toBe(-180)
+  })
+
+  it("turns a calendar day into YYYY-MM-DD and back without a shift, across month and year ends", () => {
+    for (const day of ["2026-01-01", "2026-02-28", "2026-03-01", "2026-10-31", "2026-11-01", "2026-12-31", "2028-02-29"]) {
+      expect(isoOf(localOf(day))).toBe(day)
+      expect(parseDayFirst(showDayFirst(day))).toBe(day)
+    }
+    expect(addDays("2026-10-31", 1)).toBe("2026-11-01")
+    expect(mondayOf("2026-11-01")).toBe("2026-10-26")
+  })
+})

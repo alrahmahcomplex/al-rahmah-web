@@ -97,7 +97,15 @@ export function FilePicker({
       <Icon name="upload" className="kit-file-ic" />
       <p className="kit-file-t">{file ?? title}</p>
       {hint && <p className="kit-file-hint">{hint}</p>}
-      <button type="button" className="kit-btn kit-ghost kit-sm" disabled={disabled} onClick={() => input.current?.click()}>
+      <button
+        type="button"
+        className="kit-btn kit-ghost kit-sm"
+        disabled={disabled}
+        // The button is what a keyboard reaches; it carries the field's hint, and its name says which file.
+        aria-describedby={describedBy}
+        aria-label={inputLabel ? `${chooseLabel}: ${inputLabel}` : undefined}
+        onClick={() => input.current?.click()}
+      >
         <span>{chooseLabel}</span>
       </button>
       <input

@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { readFileSync, realpathSync } from "node:fs";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig, globalIgnores } from "eslint/config";
@@ -15,49 +15,88 @@ const root = dirname(fileURLToPath(import.meta.url));
 // treats as the route's, read from app/staff/route-looks.ts, so a route
 // marked "new" there is guarded here with no other change. The new shell's
 // own folder is held to the same rule.
-const convertedFiles = [
-  "app/staff/_new-shell/**",
-  ...newRoutes(readFileSync(`${root}/${ROUTE_LOOKS}`, "utf8")).flatMap((pattern) => routeFiles(root, pattern).files),
-].filter((file) => file.endsWith("/**") || /\.(tsx?|jsx?)$/.test(file));
+// Each route file is matched by its exact path, not as a glob: Next.js folder
+// names such as `[id]`, `[...rest]`, `(group)` or `@slot` are glob syntax, so
+// a glob made from them matched none of that route's files (#360).
+// Both sides are compared as real paths: Node loads this file by its real
+// path, while ESLint may name the file through a junction or symlink.
+function realPath(path) {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    // A file linted by name only (lintText) need not exist; its folder does.
+    try {
+      return join(realpathSync.native(dirname(path)), basename(path));
+    } catch {
+      return resolve(path);
+    }
+  }
+}
+
+/** The files the guard covers, for a route-looks.ts source and the checkout (`base`) it describes. */
+export function convertedFiles(routeLooksSource, base = root) {
+  const realBase = realPath(base);
+  const files = new Set(
+    newRoutes(routeLooksSource)
+      .flatMap((pattern) => routeFiles(base, pattern).files)
+      .filter((file) => /\.(tsx?|jsx?)$/.test(file)),
+  );
+  return ["app/staff/_new-shell/**", (filePath) => files.has(relative(realBase, realPath(filePath)).split(sep).join("/"))];
+}
 
 const OLD_PARTS = "is an old part: a converted staff screen uses components/kit and components/icons only (components/kit/README.md).";
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  {
-    files: convertedFiles,
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [
-            { name: "lucide-react", message: `lucide-react ${OLD_PARTS}` },
-            { name: "sonner", message: `sonner's toast ${OLD_PARTS}` },
-          ],
-          patterns: [
-            { regex: "(^@/|/)components/staff(/|$)", message: `components/staff ${OLD_PARTS}` },
-            { regex: "(^@/|/)components/ui(/|$)", message: `components/ui ${OLD_PARTS}` },
-            { regex: "(^|/)_shell(/|$)", message: `The old shell ${OLD_PARTS}` },
-            { regex: "(^@/|/)components/status-chip$", message: `The old StatusChip ${OLD_PARTS}` },
-          ],
-        },
-      ],
+/** The whole config, guarding the routes a route-looks.ts source marks "new". The tests pass their own. */
+export function config(routeLooksSource) {
+  return defineConfig([
+    ...nextVitals,
+    ...nextTs,
+    {
+      files: convertedFiles(routeLooksSource),
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              { name: "lucide-react", message: `lucide-react ${OLD_PARTS}` },
+              { name: "sonner", message: `sonner's toast ${OLD_PARTS}` },
+            ],
+            patterns: [
+              {
+                regex: "(^@/|/)components/staff(/|$)",
+                message: `components/staff ${OLD_PARTS}`,
+              },
+              {
+                regex: "(^@/|/)components/ui(/|$)",
+                message: `components/ui ${OLD_PARTS}`,
+              },
+              {
+                regex: "(^|/)_shell(/|$)",
+                message: `The old shell ${OLD_PARTS}`,
+              },
+              {
+                regex: "(^@/|/)components/status-chip$",
+                message: `The old StatusChip ${OLD_PARTS}`,
+              },
+            ],
+          },
+        ],
+      },
     },
-  },
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-    // Agent folders. Worktrees under .claude/ and .worktrees/ are full
-    // checkouts, each with its own .next build output.
-    ".claude/**",
-    ".codex/**",
-    ".worktrees/**",
-  ]),
-]);
+    // Override default ignores of eslint-config-next.
+    globalIgnores([
+      // Default ignores of eslint-config-next:
+      ".next/**",
+      "out/**",
+      "build/**",
+      "next-env.d.ts",
+      // Agent folders. Worktrees under .claude/ and .worktrees/ are full
+      // checkouts, each with its own .next build output.
+      ".claude/**",
+      ".codex/**",
+      ".worktrees/**",
+    ]),
+  ]);
+}
 
-export default eslintConfig;
+export default config(readFileSync(`${root}/${ROUTE_LOOKS}`, "utf8"));

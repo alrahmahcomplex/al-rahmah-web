@@ -21,7 +21,7 @@ import {
   type NewContact,
 } from "@/lib/services/leads";
 import { recordPayment } from "@/lib/services/school-fee-payments";
-import { setPriorSibling } from "@/lib/services/sibling-discount";
+import { setPriorSibling } from "@/lib/services/sibling-groups";
 import {
   editSiblingFee,
   linkSibling,

@@ -19,7 +19,7 @@ import {
   type NewContact,
 } from "@/lib/services/leads"
 import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
-import { setPriorSibling } from "@/lib/services/sibling-discount"
+import { setPriorSibling } from "@/lib/services/sibling-groups"
 
 import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"

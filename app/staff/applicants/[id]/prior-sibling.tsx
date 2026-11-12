@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
-import { PRIOR_SIBLING_NAME_MAX, type PriorSibling } from "@/lib/services/sibling-discount"
+import { PRIOR_SIBLING_NAME_MAX, type PriorSibling } from "@/lib/services/sibling-groups"
 
 import { Field, SELECT_CLASS } from "./lead-editors"
 import { setPriorSiblingAction } from "./prior-sibling-actions"

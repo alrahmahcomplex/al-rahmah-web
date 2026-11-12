@@ -1,4 +1,4 @@
-import type { SetPriorSiblingError } from "@/lib/services/sibling-discount"
+import type { SetPriorSiblingError } from "@/lib/services/sibling-groups"
 
 // What the prior-sibling tick on the discount panel says (#113). The fees
 // module's codes never reach the screen.

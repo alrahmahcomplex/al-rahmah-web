@@ -163,12 +163,15 @@ describe("the previous-school check", () => {
 })
 
 describe("the custodian relationship on each lead", () => {
-  test("every lead holds its contact's relationship", async () => {
+  // Since #304 a child may hold its own relationship, marked as such; every
+  // other lead holds its contact's.
+  test("every lead without its own relationship holds its contact's", async () => {
     const [{ differing }] = await owner<{ differing: number }>(
       `select count(*)::int as differing
        from public.leads l join public.guardian_contacts g on g.id = l.guardian_contact_id
-       where l.custodian_relationship is distinct from g.relationship
-          or l.custodian_relationship_description is distinct from g.relationship_description`,
+       where not l.custodian_relationship_own
+         and (l.custodian_relationship is distinct from g.relationship
+              or l.custodian_relationship_description is distinct from g.relationship_description)`,
     )
     expect(differing).toBe(0)
   })

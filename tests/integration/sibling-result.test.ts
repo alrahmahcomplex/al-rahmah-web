@@ -12,7 +12,7 @@ import { getLeadFee } from "@/lib/services/lead-fees"
 import { createLead, getLead, recordVisit, updateLeadDetails, type CreateLeadInput, type LeadClass, type NewContact } from "@/lib/services/leads"
 import { adjustPayment } from "@/lib/services/payment-adjustments"
 import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
-import { setPriorSibling } from "@/lib/services/sibling-discount"
+import { setPriorSibling } from "@/lib/services/sibling-groups"
 
 import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
-import { setPriorSibling } from "@/lib/services/sibling-discount"
+import { setPriorSibling } from "@/lib/services/sibling-groups"
 import { getStaffUser } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 

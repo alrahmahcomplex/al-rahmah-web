@@ -171,6 +171,27 @@ async function fullPayerOf(groupId: string): Promise<string | null> {
   )
 }
 
+// Nothing the check-in deferred is left undone: recomputing these groups
+// and leads again, now, moves no fee, discount, status or seat count.
+async function expectNothingLeftToRecompute(groupIds: string[], leadIds: string[]) {
+  await inRolledBackTransaction(async (sql) => {
+    await sql.query("select public.set_audit_actor('system')")
+    // Only these leads: other suites write to the rest while this runs.
+    const items = leadIds.map((id) => `lead:${id}`)
+    await sql.query("select public.lock_registration('{}'::uuid[], $1::uuid[])", [leadIds])
+    await sql.query("create temp table recheck_before as select * from public.fee_snapshot() where item = any($1::text[])", [items])
+    for (const id of groupIds) await sql.query("select public.recompute_sibling_group($1, 'sibling')", [id])
+    for (const id of leadIds) await sql.query("select public.recompute_lead_fee($1, 'sibling')", [id])
+    const { rows } = await sql.query(
+      `select a.item, b.value as before, a.value as after
+       from public.fee_snapshot() a join pg_temp.recheck_before b using (item)
+       where a.item = any($1::text[]) and a.value is distinct from b.value`,
+      [items],
+    )
+    expect(rows).toEqual([])
+  })
+}
+
 async function storedResultOf(leadId: string) {
   return inRolledBackTransaction(
     async (sql) =>
@@ -315,6 +336,32 @@ describe("check-in of an Admission form family", () => {
     expect(contacts).toEqual([r0.guardian_contact_id])
     const fees = await Promise.all(leadIds.map(feeOf))
     expect(fees.filter((f) => f.discount?.kind === "sibling")).toHaveLength(1)
+    await expectNothingLeftToRecompute([group], leadIds)
+  })
+
+  test("a question after a custodian move saves nothing: no new person, no move", async () => {
+    const year = await registrationYear()
+    const family = { fathersName: "Abdallah", lastName: word(), surname: word() }
+    const typo = { ...family, fathersName: "Abdalla" }
+    const kids = [child(family), child(typo)]
+    const { leadIds, contactId } = await applied(kids, year)
+    const fathersPhone = phone()
+    const asked = await complete({
+      people: [{ phone: fathersPhone }],
+      students: [
+        checkIn(leadIds[0], kids[0], { custodian: { person: 1, father: true } }),
+        checkIn(leadIds[1], kids[1], { custodian: { person: 1, relationship: "Father" }, siblingOf: { student: 1 } }),
+      ],
+    })
+    expect(asked).toMatchObject({ ok: true, data: { kind: "questions", questions: [{ kind: "name", student: 2 }] } })
+    for (const id of leadIds) expect(await rowOf(id)).toMatchObject({ guardian_contact_id: contactId, status: "Applied" })
+    expect(await membershipOf(leadIds[0])).toMatchObject({ legacy: true, sibling_choice_made: false })
+    const people = await inRolledBackTransaction(
+      async (sql) =>
+        (await sql.query<{ n: number }>("select count(*)::int as n from public.guardian_contacts where phone = public.normalize_phone($1)", [fathersPhone]))
+          .rows[0].n,
+    )
+    expect(people).toBe(0)
   })
 
   test("a custodian move before a merge does not hand the merged group a new full payer", async () => {
@@ -363,6 +410,7 @@ describe("check-in of an Admission form family", () => {
     expect(await fullPayerOf(h)).toBe(other.leadIds[0])
     expect((await feeOf(other.leadIds[0])).discount?.kind).not.toBe("sibling")
     expect(await feeOf(form.leadIds[0])).toMatchObject({ discount: SIBLING })
+    await expectNothingLeftToRecompute([h, g], [...form.leadIds, ...other.leadIds])
   })
 
   test("a dearer child left out of the check-in stays legacy and does not take the full-fee place", async () => {
@@ -674,6 +722,71 @@ describe("a child's own relationship", () => {
       custodian_relationship_own: true,
     })
     expect((await rowOf(leadIds[0])).custodian_relationship).toBe("Mother")
+  })
+})
+
+// The deferral flag on the contact-move trigger.
+describe("app.sibling_defer_contact_recompute", () => {
+  test("only the check-in sets it, always for its own transaction, and the trigger only reads it", async () => {
+    const rows = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query<{ name: string; body: string }>(
+            `select n.nspname || '.' || p.proname as name, p.prosrc as body
+             from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where p.prosrc like '%sibling_defer_contact_recompute%' order by 1`,
+          )
+        ).rows,
+    )
+    expect(rows.map((r) => r.name)).toEqual(["public.complete_admission_visit", "public.recompute_lead_fee_on_lead_change"])
+    const [rpc, trigger] = rows
+    const sets = [...rpc.body.matchAll(/set_config\('app\.sibling_defer_contact_recompute', '([^']*)', (\w+)\)/g)]
+    expect(sets.map((m) => [m[1], m[2]])).toEqual([
+      ["on", "true"],
+      ["", "true"],
+    ])
+    expect(trigger.body).not.toMatch(/set_config\('app\.sibling_defer_contact_recompute'/)
+    // No API role may call the trigger function.
+    const { rows: grants } = await inRolledBackTransaction((sql) =>
+      sql.query<{ ok: boolean }>(
+        "select has_function_privilege('authenticated', 'public.recompute_lead_fee_on_lead_change()', 'execute') as ok",
+      ),
+    )
+    expect(grants[0].ok).toBe(false)
+  })
+
+  test("a transaction-local setting is gone once its transaction ends", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("commit")
+      await sql.query("begin")
+      await sql.query("select set_config('app.sibling_defer_contact_recompute', 'on', true)")
+      await sql.query("commit")
+      const { rows } = await sql.query<{ v: string | null }>("select current_setting('app.sibling_defer_contact_recompute', true) as v")
+      expect(rows[0].v ?? "").toBe("")
+      await sql.query("begin")
+    })
+  })
+
+  test("with it off, a custodian move recomputes the moved lead at once, as before", async () => {
+    // A legacy child holding today's 10% from its Enrolled sibling, moved
+    // off the Family's contact outside a check-in: the trigger takes it out
+    // of the legacy group and recomputes it in the same statement.
+    const { youngerId } = await legacyFamily(fatherParts())
+    await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      const fresh = await sql.query<{ id: string }>(
+        "insert into public.guardian_contacts (full_name, relationship, phone, origin) values ('Move Test', 'Mother', public.normalize_phone($1), 'front_desk') returning id",
+        [phone()],
+      )
+      await sql.query("update public.leads set guardian_contact_id = $2 where id = $1", [youngerId, fresh.rows[0].id])
+      const { rows } = await sql.query<{ result: string; group_id: string | null }>(
+        `select coalesce(r.result::text, 'none') as result, m.group_id
+         from public.sibling_group_members m left join public.lead_sibling_results r on r.lead_id = m.lead_id
+         where m.lead_id = $1`,
+        [youngerId],
+      )
+      expect(rows[0]).toEqual({ result: "none", group_id: null })
+    })
   })
 })
 

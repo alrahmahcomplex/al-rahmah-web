@@ -788,6 +788,8 @@ begin
                         -- Joining a known Family at the front desk.
                         returning_family_joined = p_known[k]
                     where l.id = lead.id;
+                    -- The group the move left the child in, should it differ.
+                    touched := touched || public.lead_sibling_group(lead.id);
                 end if;
                 -- Its own relationship when it differs from the person's.
                 update public.leads l

@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { describe, expect, onTestFinished, test } from "vitest"
+import { beforeEach, describe, expect, onTestFinished, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
@@ -213,6 +213,8 @@ async function correct(leadId: string, changes: Record<string, unknown>) {
 // with the numbers worked out from them.
 const mine = new Set<string>()
 const own = (ids: string[]) => ids.filter((id) => mine.has(id))
+// Years are claimed per test and reused, so a test owns only its own leads.
+beforeEach(() => mine.clear())
 
 function byStaffOf(rows: { staffId: string | null }[], names: StaffCount[]): StaffCount[] {
   const counts = new Map<string | null, number>()

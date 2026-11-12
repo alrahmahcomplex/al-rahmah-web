@@ -6,6 +6,7 @@ import { Button, ChoiceTiles, Note } from "@/components/kit"
 import type { InterviewResult } from "@/lib/services/interviews"
 
 import { visitDateToday } from "./actions"
+import { DateField } from "./form-controls"
 import { recordResult } from "./interview-actions"
 import type { RecordOutcome, ResultField } from "./interview-outcome"
 import { Field, Input, Saved } from "./lead-editors"
@@ -133,9 +134,8 @@ function ResultForm({
       )}
       <Field label="Interview date" hint="The day of the interview: today or earlier.">
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             id={id}
-            type="date"
             required
             min={interview.registeredOn}
             max={today}

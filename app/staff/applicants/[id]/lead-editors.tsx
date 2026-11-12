@@ -18,7 +18,7 @@ import {
 
 import { correctContact, correctStudent, correctVisit } from "./actions"
 import type { CorrectionOutcome } from "./correction-outcome"
-import { Select } from "./form-controls"
+import { DateField, Select } from "./form-controls"
 import { CardHeading } from "./lead-card"
 
 // A field in a lead form: the kit's compact pill, left-aligned.
@@ -301,9 +301,8 @@ function VisitDateForm({ lead, today, onDone }: { lead: Lead; today: string; onD
       <Refusal refusal={refusal} />
       <Field label="Visit date" hint="The day the family came to campus: today or earlier.">
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             id={id}
-            type="date"
             required
             max={today}
             value={visitDate}

@@ -14,7 +14,7 @@ import {
 
 import { formatShillings } from "../../fees/format"
 import { visitDateToday } from "./actions"
-import { Select } from "./form-controls"
+import { DateField, Select } from "./form-controls"
 import { Field, Input, Saved } from "./lead-editors"
 import { previewSchoolFeePayment, recordSchoolFeePayment } from "./payment-actions"
 import { overfillWarning, type PaymentField, type PaymentRefusal } from "./payment-outcome"
@@ -295,9 +295,8 @@ function PaymentForm({
       )}
       <Field label="Payment date" hint="The day the family paid: today or earlier.">
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             id={id}
-            type="date"
             required
             max={today}
             className="max-w-48"

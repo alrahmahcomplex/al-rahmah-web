@@ -21,7 +21,7 @@ import {
 import { formatShillings } from "../../fees/format"
 import { adjustSchoolFeePayment } from "./adjustment-actions"
 import type { AdjustmentField, AdjustmentRefusal } from "./adjustment-outcome"
-import { Select, TextArea } from "./form-controls"
+import { DateField, Select, TextArea } from "./form-controls"
 import { Field, Input, Saved } from "./lead-editors"
 import { paymentSummary } from "./payment-text"
 
@@ -291,9 +291,8 @@ function AdjustForm({
             )}
             <Field label="Payment date" hint="The day the family paid: today or earlier.">
               {({ id, describedBy }) => (
-                <Input
+                <DateField
                   id={id}
-                  type="date"
                   required
                   max={today}
                   className="max-w-48"

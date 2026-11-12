@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, useTransition } from "react"
 import { Button, Note } from "@/components/kit"
 
 import { recordArrival, visitDateToday } from "./actions"
-import { Field, Input, Refusal, Saved, useCorrection } from "./lead-editors"
+import { DateField } from "./form-controls"
+import { Field, Refusal, Saved, useCorrection } from "./lead-editors"
 
 // Record visit, in the lead's Next step card, for an Applied family who has
 // come to campus. The Visit date starts at today in Tanzania, asked of the
@@ -111,10 +112,9 @@ function RecordVisitForm({
       <Refusal refusal={refusal} />
       <Field label="Visit date" hint="The day the family came to campus: today or earlier.">
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             ref={visitDateRef}
             id={id}
-            type="date"
             required
             max={today}
             value={visitDate}

@@ -39,10 +39,12 @@
 --   3. Until this call, Admission form children stay legacy members of
 --      their Family's group, as today (#300's moved item): no fee moves for
 --      a family that has not been checked in. Here each child's sibling
---      choice is made (sibling_choice_made): "Sibling of" links it (R32
---      confirms a legacy target's father's name first; a form child target
---      gives its confirmed one), and every other child leaves its legacy
---      group. It never joins a Family's legacy group again.
+--      choice is made (sibling_choice_made). Every child leaves its legacy
+--      group first, so its "Sibling of" choice alone decides its group: two
+--      pairs of siblings on one form make two groups, and a child left out
+--      of the check-in stays legacy, outside them. Linking to a legacy lead
+--      on file confirms its father's name first (R32). The child never
+--      joins a Family's legacy group again.
 --   4. Leaving legacy or linking never raises a fee (R38): every automatic
 --      10% in a group this call touches, and each child's own, is kept with
 --      source `legacy`, cause `left_legacy`, for the Accountant's count. A
@@ -68,8 +70,8 @@
 -- it. A new person's Family lock is taken as it is inserted; no other
 -- transaction knows its key.
 --
--- Write order: the children's details and visits; the links (deferred);
--- the remaining legacy children leave their groups; the custodian moves,
+-- Write order: the children's details and visits; the children leave
+-- their legacy groups; the links (deferred); the custodian moves,
 -- whose trigger recomputes the lead's group with its final members; then
 -- each touched group once and each child's own result. The cascade ends for
 -- the reason in 20261106901100.
@@ -121,6 +123,8 @@ begin
         p_name text[] := '{}';
         p_phone text[] := '{}';
         p_whatsapp text[] := '{}';
+        p_extra jsonb[] := '{}';
+        extra text[];
         p_rel public.guardian_relationship[] := '{}';
         p_desc text[] := '{}';
         p_stored_rel public.guardian_relationship[] := '{}';
@@ -175,7 +179,6 @@ begin
         blocked boolean[] := '{}';
         progressed boolean;
         target uuid;
-        choice jsonb;
         saved jsonb;
         old_group uuid;
         result_rows jsonb := '[]';
@@ -235,6 +238,20 @@ begin
                    or nullif(btrim(coalesce(person ->> 'whatsapp', '')), '') is not null then
                     raise exception 'invalid' using detail = jsonb_build_object('person', k, 'field', 'contact')::text;
                 end if;
+                -- The numbers staff typed for the person they confirmed,
+                -- which the stored person may not hold: the duplicate check
+                -- covers them too.
+                extra := '{}';
+                if person -> 'also_check_phones' is not null and jsonb_typeof(person -> 'also_check_phones') <> 'null' then
+                    if jsonb_typeof(person -> 'also_check_phones') <> 'array' then
+                        raise exception 'invalid' using detail = jsonb_build_object('person', k, 'field', 'also_check_phones')::text;
+                    end if;
+                    extra := array(
+                        select x from jsonb_array_elements_text(person -> 'also_check_phones') e, public.normalize_phone(e) x
+                        where x is not null
+                    );
+                end if;
+                p_extra[k] := to_jsonb(extra);
                 p_known[k] := true;
                 p_name[k] := null;
                 p_phone[k] := null;
@@ -242,6 +259,7 @@ begin
                 existing := existing || p_contact[k];
             else
                 p_known[k] := false;
+                p_extra[k] := '[]';
                 p_contact[k] := null;
                 p_name[k] := public.clean_name_part(person ->> 'full_name');
                 if char_length(p_name[k]) > 200 then
@@ -423,8 +441,12 @@ begin
         for i in 2..n loop
             for j in 1..i - 1 loop
                 if public.normalize_student_name(s_name[i]) = public.normalize_student_name(s_name[j])
-                   and array_remove(array[p_phone[s_person[i]], p_whatsapp[s_person[i]]], null)
-                       && array_remove(array[p_phone[s_person[j]], p_whatsapp[s_person[j]]], null) then
+                   and array_remove(
+                           array[p_phone[s_person[i]], p_whatsapp[s_person[i]]]
+                               || array(select jsonb_array_elements_text(p_extra[s_person[i]])), null)
+                       && array_remove(
+                           array[p_phone[s_person[j]], p_whatsapp[s_person[j]]]
+                               || array(select jsonb_array_elements_text(p_extra[s_person[j]])), null) then
                     raise exception 'invalid'
                         using detail = jsonb_build_object('student', i, 'field', 'student_name', 'reason', 'repeated_on_form', 'same_as_student', j)::text;
                 end if;
@@ -435,6 +457,7 @@ begin
             select distinct p from (
                 select unnest(p_phone) as p
                 union all select unnest(p_whatsapp)
+                union all select jsonb_array_elements_text(e) from unnest(p_extra) e
             ) s where p is not null order by p
         );
         foreach one_phone in array phones loop
@@ -516,16 +539,18 @@ begin
         end loop;
 
         -- ------------------------------------------------------------------
-        -- Duplicates: a corrected name, or the new custodian's phones.
+        -- Duplicates: a corrected name, the new custodian's phones, or a number
+        -- staff typed for the person they confirmed.
         -- ------------------------------------------------------------------
         for i in 1..n loop
             k := s_person[i];
             select * into lead from public.leads l where l.id = s_lead[i];
             if public.normalize_student_name(s_name[i]) <> lead.student_name_key
-               or p_contact[k] is distinct from lead.guardian_contact_id then
+               or p_contact[k] is distinct from lead.guardian_contact_id
+               or jsonb_array_length(p_extra[k]) > 0 then
                 match := public.find_duplicate_lead(
                     public.normalize_student_name(s_name[i]),
-                    array_remove(array[p_phone[k], p_whatsapp[k]], null),
+                    array_remove(array[p_phone[k], p_whatsapp[k]] || array(select jsonb_array_elements_text(p_extra[k])), null),
                     lead.id
                 );
                 if match.id is not null then
@@ -682,6 +707,19 @@ begin
                 where l.id = s_lead[i];
             end loop;
 
+            -- Every child leaves its Family's legacy group before any link,
+            -- so the links alone make the groups: two pairs of siblings on
+            -- one form make two groups, and a child left out of the check-in
+            -- stays legacy in the old one, outside them.
+            for i in 1..n loop
+                select * into member from public.sibling_group_members m where m.lead_id = s_lead[i];
+                if member.legacy and member.group_id is not null then
+                    touched := touched || member.group_id;
+                    perform public.leave_legacy_sibling_group(s_lead[i], 'visit_completion');
+                    perform public.refresh_sibling_group_contacts(member.group_id);
+                end if;
+            end loop;
+
             -- The links, as register_students makes them: a student after
             -- the student it links to.
             pending := array(select x from generate_series(1, n) x where s_sib_student[x] is not null or s_sib_lead[x] is not null);
@@ -703,15 +741,7 @@ begin
                         continue;
                     end if;
                     target := coalesce(s_lead[j], s_sib_lead[i]);
-                    choice := s_choice[i];
-                    -- A form child as target gives the name staff confirmed
-                    -- for it, when the link needs one (R32).
-                    if j is not null and exists (
-                        select 1 from public.sibling_group_members m where m.lead_id = target and m.legacy
-                    ) then
-                        choice := choice || jsonb_build_object('sibling_father_full_name', s_father[j]);
-                    end if;
-                    saved := public.save_sibling_choice(s_lead[i], target, choice, i);
+                    saved := public.save_sibling_choice(s_lead[i], target, s_choice[i], i);
                     if saved ->> 'result' = 'question' then
                         blocked[i] := true;
                         questions := questions || jsonb_build_array(saved - 'result');
@@ -724,14 +754,7 @@ begin
                     -- Students linked in a ring: the lowest number goes first.
                     i := (select min(x) from unnest(pending) x);
                     pending := array_remove(pending, i);
-                    j := s_sib_student[i];
-                    choice := s_choice[i];
-                    if exists (
-                        select 1 from public.sibling_group_members m where m.lead_id = s_lead[j] and m.legacy
-                    ) then
-                        choice := choice || jsonb_build_object('sibling_father_full_name', s_father[j]);
-                    end if;
-                    saved := public.save_sibling_choice(s_lead[i], s_lead[j], choice, i);
+                    saved := public.save_sibling_choice(s_lead[i], s_lead[s_sib_student[i]], s_choice[i], i);
                     if saved ->> 'result' = 'question' then
                         blocked[i] := true;
                         questions := questions || jsonb_build_array(saved - 'result');
@@ -745,16 +768,6 @@ begin
             if jsonb_array_length(questions) > 0 then
                 raise exception using errcode = 'P0114', message = 'registration_questions';
             end if;
-
-            -- Every child still legacy is not a sibling: it leaves its group.
-            for i in 1..n loop
-                select * into member from public.sibling_group_members m where m.lead_id = s_lead[i];
-                if member.legacy and member.group_id is not null then
-                    touched := touched || member.group_id;
-                    perform public.leave_legacy_sibling_group(s_lead[i], 'visit_completion');
-                    perform public.refresh_sibling_group_contacts(member.group_id);
-                end if;
-            end loop;
 
             -- The custodians. A child moving to another person takes it;
             -- the move's trigger recomputes the child's group as it now is.

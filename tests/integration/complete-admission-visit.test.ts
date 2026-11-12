@@ -259,6 +259,63 @@ describe("check-in of an Admission form family", () => {
     expect(r2.class_name).toBe("STD 1")
   })
 
+  test("two pairs of siblings on one form make two groups, each matched", async () => {
+    const year = await registrationYear()
+    const [x, y] = [fatherParts(), fatherParts()]
+    const kids = [child(x, "KG 2"), child(x), child(y, "KG 2"), child(y)]
+    const { leadIds, contactId } = await applied(kids, year)
+    const students = await completed({
+      people: [{ contactId }],
+      students: [
+        checkIn(leadIds[0], kids[0]),
+        checkIn(leadIds[1], kids[1], { siblingOf: { student: 1 } }),
+        checkIn(leadIds[2], kids[2], { notASibling: true }),
+        checkIn(leadIds[3], kids[3], { siblingOf: { student: 3 } }),
+      ],
+    })
+    expect(students[1].sibling).toMatchObject({ basis: "matched" })
+    expect(students[3].sibling).toMatchObject({ basis: "matched" })
+    expect(students[1].sibling!.groupId).not.toBe(students[3].sibling!.groupId)
+    expect(await membershipOf(leadIds[2])).toMatchObject({ group_id: students[3].sibling!.groupId, basis: "matched" })
+    expect(await feeOf(leadIds[1])).toMatchObject({ discount: SIBLING })
+    expect(await feeOf(leadIds[3])).toMatchObject({ discount: SIBLING })
+  })
+
+  test("a dearer child left out of the check-in stays legacy and does not take the full-fee place", async () => {
+    const year = await registrationYear()
+    const family = fatherParts()
+    const kids = [child(family, "FORM 1"), child(family, "STD 1"), child(family)]
+    const { leadIds, contactId } = await applied(kids, year)
+    const students = await completed({
+      people: [{ contactId }],
+      // Staff answer the same-father question about the child left out.
+      students: [checkIn(leadIds[1], kids[1], { notASibling: true }), checkIn(leadIds[2], kids[2], { siblingOf: { student: 1 } })],
+    })
+    const group = students[1].sibling!.groupId
+    expect(await membershipOf(leadIds[0])).toMatchObject({ legacy: true })
+    expect((await membershipOf(leadIds[0]))!.group_id).not.toBe(group)
+    expect(await membershipOf(leadIds[1])).toMatchObject({ group_id: group, basis: "matched" })
+    // One of the two checked-in siblings pays full and the other gets 10%.
+    const fees = await Promise.all([feeOf(leadIds[1]), feeOf(leadIds[2])])
+    expect(fees.filter((f) => f.discount?.kind === "sibling")).toHaveLength(1)
+  })
+
+  test("a number staff typed for the confirmed person is checked for duplicates too", async () => {
+    const year = await registrationYear()
+    const kid = child(fatherParts())
+    const { leadIds, contactId } = await applied([kid], year)
+    const otherPhone = phone()
+    const onFile = await createLead(await signedIn(ADMISSIONS), {
+      guardian: { contact: { fullName: `Other Number ${word()}`, relationship: "Mother", phone: otherPhone } },
+      student: { fullName: `${kid.first} ${nameOf(kid.father)}`, className: "KG 1", enrollmentYear: year, dayOrBoarding: "Day" },
+      start: { kind: "walk-in", visitDate: yesterday },
+    })
+    if (!onFile.ok) throw new Error("setup failed")
+    const result = await complete({ people: [{ contactId, alsoCheckPhones: [otherPhone] }], students: [checkIn(leadIds[0], kid)] })
+    expect(result).toMatchObject({ ok: false, error: { kind: "duplicate", duplicates: [{ student: 1, id: onFile.data.leadId }] } })
+    expect((await rowOf(leadIds[0])).status).toBe("Applied")
+  })
+
   test("KG 2 and STD 1 are asked no previous school; an STD 3 child needs an answer, and Not known yet is one", async () => {
     const year = await registrationYear()
     const a = child(fatherParts(), "KG 2")

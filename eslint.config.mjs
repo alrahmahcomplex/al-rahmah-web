@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { defineConfig, globalIgnores } from "eslint/config";
@@ -15,20 +15,18 @@ const root = dirname(fileURLToPath(import.meta.url));
 // treats as the route's, read from app/staff/route-looks.ts, so a route
 // marked "new" there is guarded here with no other change. The new shell's
 // own folder is held to the same rule.
-// ESLint reads `files` as globs, so each route file's path is escaped first:
-// unescaped, the brackets of `[id]` or `[...rest]` are a character class and
-// the guard would match none of that route's files (#360).
-const literal = (path) => path.replace(/[[\]{}()*?!+@]/g, "\\$&");
+// Each route file is matched by its exact path, not as a glob: Next.js folder
+// names such as `[id]`, `[...rest]`, `(group)` or `@slot` are glob syntax, so
+// a glob made from them matched none of that route's files (#360).
 
-/** The files the guard covers, for a given app/staff/route-looks.ts source. */
-export function convertedFiles(routeLooksSource) {
-  return [
-    "app/staff/_new-shell/**",
-    ...newRoutes(routeLooksSource)
-      .flatMap((pattern) => routeFiles(root, pattern).files)
-      .filter((file) => /\.(tsx?|jsx?)$/.test(file))
-      .map(literal),
-  ];
+/** The files the guard covers, for a route-looks.ts source and the checkout (`base`) it describes. */
+export function convertedFiles(routeLooksSource, base = root) {
+  const files = new Set(
+    newRoutes(routeLooksSource)
+      .flatMap((pattern) => routeFiles(base, pattern).files)
+      .filter((file) => /\.(tsx?|jsx?)$/.test(file)),
+  );
+  return ["app/staff/_new-shell/**", (filePath) => files.has(relative(base, filePath).split(sep).join("/"))];
 }
 
 const OLD_PARTS = "is an old part: a converted staff screen uses components/kit and components/icons only (components/kit/README.md).";

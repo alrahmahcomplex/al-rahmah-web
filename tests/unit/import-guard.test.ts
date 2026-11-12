@@ -1,10 +1,12 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 import { ESLint } from "eslint"
 import { describe, expect, it } from "vitest"
 
-import { config } from "../../eslint.config.mjs"
+import { config, convertedFiles } from "../../eslint.config.mjs"
 
 // The ESLint guard of converted staff routes (#322, eslint.config.mjs): a
 // route marked "new" in app/staff/route-looks.ts, and the new shell itself,
@@ -63,6 +65,38 @@ describe("the import guard", () => {
     expect(result.messages.filter((m) => m.ruleId === "no-restricted-imports")).toHaveLength(1)
     // As the map stands, the route is legacy and may still import it.
     expect(await restricted(filePath, source(OLD_IMPORTS[0]))).toEqual([])
+  })
+
+  // Every Next.js folder name that is also glob syntax, in a checkout of the
+  // test's own: each file of the "new" route is covered by its exact path,
+  // and a file a glob made from those names would also match is not.
+  it("covers a new route's files whatever glob syntax their names hold", () => {
+    const base = mkdtempSync(join(tmpdir(), "import-guard-"))
+    try {
+      const route = ["app", "staff", "demo", "[id]"]
+      const inside = [
+        [...route, "page.tsx"],
+        [...route, "@(dialog).tsx"],
+        [...route, "+(x).tsx"],
+        [...route, "a{b,c}.tsx"],
+        [...route, "(group)", "panel.tsx"],
+        [...route, "@slot", "panel.tsx"],
+      ]
+      const outside = [
+        ["app", "staff", "demo", "i", "page.tsx"],
+        ["app", "staff", "demo", "[id]", "nested", "page.tsx"],
+      ]
+      for (const parts of [...inside, ...outside]) {
+        mkdirSync(join(base, ...parts.slice(0, -1)), { recursive: true })
+        writeFileSync(join(base, ...parts), "export {}\n")
+      }
+      const map = `export const ROUTE_LOOKS = { "/staff/demo/[id]": "new", "/staff/demo/i": "legacy", "/staff/demo/[id]/nested": "legacy" }\n`
+      const matches = convertedFiles(map, base).find((entry) => typeof entry === "function")!
+      for (const parts of inside) expect(matches(join(base, ...parts)), parts.join("/")).toBe(true)
+      for (const parts of outside) expect(matches(join(base, ...parts)), parts.join("/")).toBe(false)
+    } finally {
+      rmSync(base, { recursive: true, force: true })
+    }
   })
 
   it("allows the kit, the icons and the shared staff modules in a converted route", async () => {

@@ -83,11 +83,14 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
                 </Card>
               )}
 
-              <Card
-                title="Seats by class"
-                titleId="seats-by-class"
-                caption="An applicant takes a seat once they have a Seat priority. Declined applicants take none; Inactive and Archived applicants keep theirs."
-              >
+              {/* Titled by hand: the table is the region named "Seats by class", so the card is not a second one (axe landmark-unique). */}
+              <Card>
+                <h2 id="seats-by-class" className="kit-card-title">
+                  Seats by class
+                </h2>
+                <p className="kit-card-cap">
+                  An applicant takes a seat once they have a Seat priority. Declined applicants take none; Inactive and Archived applicants keep theirs.
+                </p>
                 <div className="st-body">
                   <SeatsTable rows={seats.data} />
                 </div>

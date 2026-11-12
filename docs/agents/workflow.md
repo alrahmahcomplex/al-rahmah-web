@@ -71,7 +71,7 @@ The full suite runs as parallel jobs. Every test runs on every push to main, and
 
 Choose evidence that demonstrates the acceptance criteria:
 
-- **Appearance:** inspect relevant viewport sizes and attach screenshots. Use `before-and-after` for a production/Preview pair when comparison makes the change assessable; a focused screenshot can be enough for a small styling change.
+- **Appearance:** inspect relevant viewport sizes and attach screenshots. Use `before-and-after` for a production/Preview pair when comparison makes the change assessable. Agent branches get no Preview, so compare against a local build, or ask the lead for one ([Hosted services → Deployment limit and Previews](hosted-services.md#deployment-limit-and-previews)); a focused screenshot can be enough for a small styling change.
 - **Interaction:** exercise the changed user journey, including relevant failure paths. Use `evidence-driven-testing` when a recording explains a sequence better than test results or screenshots. UI work still requires hands-on inspection.
 - **Bug:** capture the failing behavior or regression test before fixing it, then the passing result. Existing reliable reproduction evidence may serve as the before state.
 - **Data or permissions:** provide migration/integration results and negative authorization checks, using fixtures.
@@ -87,7 +87,7 @@ Screenshots, recordings and report files (such as Lighthouse HTML and JSON) go i
 2. Wait until every `Uploading …` placeholder has become a link. Put those links in the PR description, then empty the comment box and check that no comment was posted.
 3. If uploads start failing, GitHub's upload rate limit (HTTP 429) is the usual cause. Wait for it to reset and carry on. A file GitHub refuses for its size is trimmed, re-encoded (a video with `ffmpeg`, for example) or split; a file type it refuses is zipped.
 
-This is the only way to attach evidence. Never push it to a branch (no `evidence/*` branches and no screenshots committed to any branch), never use a gist or `IMAGE_ADAPTER=gist`, never link files as `blob/...?raw=true`, and never use a third-party file host. `before-and-after` and `evidence-driven-testing` are for capturing only: skip their upload steps (`upload-and-copy.sh` with any adapter, 0x0.st included) and attach their files as above. Vercel builds every pushed branch, so each push to an evidence branch also fails a Preview build and emails the owner.
+This is the only way to attach evidence. Never push it to a branch (no `evidence/*` branches and no screenshots committed to any branch), never use a gist or `IMAGE_ADAPTER=gist`, never link files as `blob/...?raw=true`, and never use a third-party file host. `before-and-after` and `evidence-driven-testing` are for capturing only: skip their upload steps (`upload-and-copy.sh` with any adapter, 0x0.st included) and attach their files as above. Vercel builds every pushed branch outside `claude/**` and `codex/**`, so each push to an evidence branch also spends one of the day's deployments, fails a Preview build and emails the owner.
 
 If the in-app browser is not signed in to GitHub, or no in-app browser is available, ask the human to sign in or open one (`AskUserQuestion` in Claude Code), wait until they say it is done, then upload. A sub-agent that cannot ask the human reports the missing sign-in to its parent as a blocker. Do not switch to another way of hosting the files while you wait.
 

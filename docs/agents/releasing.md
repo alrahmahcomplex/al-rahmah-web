@@ -38,6 +38,7 @@ For internal maintenance, skip the app entry and version preparation. Fetch, reb
 
    The helper reads the committed release entry, verifies that the commit is on fetched `origin/main`, and rejects conflicting tags. Repeating the same completed tagging operation is safe. It does not merge, fetch or push. An app merge without its published tag is unfinished; complete or report the failure before starting another app release.
 3. For internal maintenance, skip tagging. A successful maintenance merge is complete once applicable migration checks and housekeeping are done.
+4. Check the production deployment with `gh api repos/alrahmahcomplex/al-rahmah-web/commits/<merge-sha>/status`. A `Vercel` status of `success` means the merge is live. A `failure` reading "Deployment rate limited" means the day's 100 deployments are spent ([Hosted services](hosted-services.md#deployment-limit-and-previews)): say so in the release report, and don't retry it or push to `main` to force it. The next production deployment that succeeds carries the merge. Any other failure is a broken production build; report it to the human.
 
 ## Confirm hosted migrations
 
@@ -60,4 +61,4 @@ Remove worktrees and local/remote branches whose PRs merged, including earlier c
 
 Keep and report anything that fails a check. On Windows, resolve and verify absolute paths within the intended worktree directory before removal; use Git worktree removal or native PowerShell file operations. Never delete another agent's unfinished work. Finish with `git worktree prune` and `git fetch --prune`, and remove this task's disposable scratch copies outside the repo.
 
-Report the merged PR, app tag and release entry if applicable, migration versions confirmed or missing, and what housekeeping removed or retained with the reason. For internal maintenance, say that no app version was needed.
+Report the merged PR, app tag and release entry if applicable, whether production deployed, migration versions confirmed or missing, and what housekeeping removed or retained with the reason. For internal maintenance, say that no app version was needed.

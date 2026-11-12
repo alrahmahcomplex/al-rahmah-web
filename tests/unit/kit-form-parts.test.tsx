@@ -128,6 +128,65 @@ describe("DateField", () => {
     expect(input).toHaveAccessibleDescription(`Today or earlier. ${WRONG_DATE}`)
   })
 
+  it("stops a noValidate form's submit before React sees it, for a controlled field too", () => {
+    const saved = vi.fn()
+    function PromoSheet() {
+      const [endsOn, setEndsOn] = useState("2026-11-30")
+      return (
+        <form
+          noValidate
+          data-testid="form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            saved(endsOn || null)
+          }}
+        >
+          <label htmlFor="ends">Ends on</label>
+          <DateField id="ends" value={endsOn} onChange={setEndsOn} />
+        </form>
+      )
+    }
+    render(<PromoSheet />)
+    const form = screen.getByTestId("form")
+    const input = screen.getByLabelText("Ends on")
+    fireEvent.change(input, { target: { value: "31/11/2026" } })
+    let reached = true
+    act(() => {
+      reached = fireEvent.submit(form)
+    })
+    expect(reached).toBe(false)
+    expect(saved).not.toHaveBeenCalled()
+    expect(screen.getByText(WRONG_DATE)).toBeInTheDocument()
+
+    fireEvent.change(input, { target: { value: "" } })
+    fireEvent.submit(form)
+    expect(saved).toHaveBeenLastCalledWith(null)
+    fireEvent.change(input, { target: { value: "30/11/2026" } })
+    fireEvent.submit(form)
+    expect(saved).toHaveBeenLastCalledWith("2026-11-30")
+  })
+
+  it("opens a closed fold-open section around a field that stops the submit", () => {
+    render(
+      <form noValidate data-testid="form" onSubmit={(event) => event.preventDefault()}>
+        <Disclosure variant="boxed" label="More options">
+          <label htmlFor="ends">Ends on</label>
+          <DateField id="ends" name="ends_on" />
+        </Disclosure>
+      </form>,
+    )
+    const toggle = screen.getByRole("button", { name: "More options" })
+    fireEvent.click(toggle)
+    fireEvent.change(screen.getByLabelText("Ends on"), { target: { value: "tomorrow" } })
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    act(() => {
+      fireEvent.submit(screen.getByTestId("form"))
+    })
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByText(WRONG_DATE)).toBeInTheDocument()
+  })
+
   it("renders no alert while there is no message", () => {
     inForm(
       <>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useState, type ReactNode } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 
 import { Icon } from "@/components/icons"
 import { cn } from "@/lib/utils"
@@ -44,6 +44,32 @@ export function Disclosure({
     if (openProp !== undefined) setOpen(openProp)
   }
 
+  // A field inside that is wrong when its form is sent (an unreadable date, a required field)
+  // opens the section, so the person sees the field and its line.
+  const panelRef = useRef<HTMLDivElement>(null)
+  const changed = useRef(onOpenChange)
+  const isOpen = useRef(open)
+  useEffect(() => {
+    changed.current = onOpenChange
+    isOpen.current = open
+  })
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    const reveal = () => {
+      if (isOpen.current) return
+      isOpen.current = true
+      setOpen(true)
+      changed.current?.(true)
+    }
+    panel.addEventListener("kit:reveal", reveal)
+    panel.addEventListener("invalid", reveal, true)
+    return () => {
+      panel.removeEventListener("kit:reveal", reveal)
+      panel.removeEventListener("invalid", reveal, true)
+    }
+  }, [])
+
   const toggle = () => {
     setOpen(!open)
     onOpenChange?.(!open)
@@ -64,7 +90,7 @@ export function Disclosure({
           </>
         )}
       </button>
-      <div id={panelId} className="kit-dsc-panel">
+      <div ref={panelRef} id={panelId} className="kit-dsc-panel">
         <div className="kit-dsc-in" inert={!open}>
           <div className="kit-dsc-body">{children}</div>
         </div>

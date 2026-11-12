@@ -29,13 +29,22 @@ export type DateWords = typeof DATE_WORDS
 
 type DayButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { day: CalendarDay; modifiers: Modifiers }
 
-/** A day: today outlined (aria-current="date"); focus follows the keyboard, as react-day-picker's own button does. */
+/** A day: today outlined (aria-current="date"), the chosen week pressed; focus follows the keyboard, as react-day-picker's own button does. */
 function DayButton({ day, modifiers, ...props }: DayButtonProps) {
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (modifiers.focused) ref.current?.focus({ preventScroll: true })
   }, [modifiers.focused])
-  return <button ref={ref} {...props} data-day={isoOf(day.date)} aria-current={modifiers.today ? "date" : undefined} />
+  return (
+    <button
+      ref={ref}
+      {...props}
+      data-day={isoOf(day.date)}
+      aria-current={modifiers.today ? "date" : undefined}
+      // In week mode each day of the chosen week says so, as the prototype's pressed days do.
+      aria-pressed={modifiers.band ? true : undefined}
+    />
+  )
 }
 
 function Chevron({ orientation }: { orientation?: "up" | "down" | "left" | "right" }) {

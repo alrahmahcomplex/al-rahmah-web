@@ -395,6 +395,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  // The Sibling group explanation (#306).
+  "public.explain_sibling_group(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.expected_interview_amount(lead_id uuid, OUT amount integer, OUT discount_applied boolean)": {
     roles: ["authenticated"],
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
@@ -960,6 +966,22 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       due_on: "current_date + 7",
       note: "'A note'",
     },
+    agent: { refused: "not_permitted" },
+  },
+  // The Sibling counts (#306).
+  "public.sibling_fee_counts(year integer)": {
+    roles: ["authenticated"],
+    args: { year: "null" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.sibling_lead_counts(year integer)": {
+    roles: ["authenticated"],
+    args: { year: "null" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.sibling_request_counts(year integer)": {
+    roles: ["authenticated"],
+    args: { year: "null" },
     agent: { refused: "not_permitted" },
   },
   "public.seat_check(lead_id uuid)": {

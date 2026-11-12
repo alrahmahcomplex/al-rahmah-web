@@ -166,6 +166,28 @@ describe("DateField", () => {
     expect(saved).toHaveBeenLastCalledWith("2026-11-30")
   })
 
+  it("never holds its form back once it is disabled", () => {
+    const saved = vi.fn()
+    function Host() {
+      const [none, setNone] = useState(false)
+      return (
+        <form noValidate data-testid="form" onSubmit={(event) => (event.preventDefault(), saved())}>
+          <DateField aria-label="Ends on" name="ends_on" disabled={none} />
+          <button type="button" onClick={() => setNone(true)}>
+            No end date
+          </button>
+        </form>
+      )
+    }
+    render(<Host />)
+    fireEvent.change(screen.getByLabelText("Ends on"), { target: { value: "31/11/20" } })
+    fireEvent.submit(screen.getByTestId("form"))
+    expect(saved).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: "No end date" }))
+    fireEvent.submit(screen.getByTestId("form"))
+    expect(saved).toHaveBeenCalledTimes(1)
+  })
+
   it("opens a closed fold-open section around a field that stops the submit", () => {
     render(
       <form noValidate data-testid="form" onSubmit={(event) => event.preventDefault()}>

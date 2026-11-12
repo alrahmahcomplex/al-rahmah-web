@@ -19,7 +19,7 @@ import {
   type RegistrationStudent,
 } from "@/lib/services/leads"
 import { recordPayment } from "@/lib/services/school-fee-payments"
-import { linkSibling } from "@/lib/services/sibling-groups"
+import { editSiblingFee, linkSibling } from "@/lib/services/sibling-groups"
 import { decideSiblingRequest, requestSiblingDiscount } from "@/lib/services/sibling-requests"
 
 import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
@@ -625,6 +625,30 @@ describe("siblings on file", () => {
     expect(await storedResultOf(cheaper)).toMatchObject({ result: "ten", source: "locked", locked_result: "ten" })
     expect(await fullPayerOf(dearer.sibling!.groupId)).toBe(dearer.leadId)
     expect(await feeOf(dearer.leadId)).toMatchObject({ discount: null })
+  })
+
+  test("a group with a manually edited fee: linking a new sibling leaves the manual fee as the Accountant set it", async () => {
+    const family = fatherParts()
+    const dear = await onFile(nameOf(family), "STD 2")
+    const cheap = await onFile(nameOf(family), "KG 1")
+    const linked = await linkSibling(await signedIn(ADMISSIONS), { leadId: cheap, siblingOfLeadId: dear })
+    if (!linked.ok || linked.data.kind !== "linked") throw new Error("setup failed")
+    expect(await feeOf(cheap)).toMatchObject({ discount: SIBLING })
+    const edited = await editSiblingFee(
+      await signedIn(ACCOUNTANT),
+      { leadId: cheap, value: "full", reason: "data_entry_correction", note: "Invoiced at full." },
+      randomUUID(),
+    )
+    if (!edited.ok) throw new Error(`edit failed: ${JSON.stringify(edited.error)}`)
+    expect(await storedResultOf(cheap)).toMatchObject({ result: "full", source: "manual" })
+
+    const [newcomer] = await created({
+      people: [person()],
+      students: [student(family, await registrationYear(), { siblingOf: { leadId: dear } })],
+    })
+    expect(newcomer.sibling).toMatchObject({ basis: "matched", groupId: linked.data.groupId })
+    expect(await storedResultOf(cheap)).toMatchObject({ result: "full", source: "manual" })
+    expect(await feeOf(cheap)).toMatchObject({ discount: null })
   })
 
   test("a child on a known custodian never joins the Family's old group, not even when today's form adds another child later", async () => {

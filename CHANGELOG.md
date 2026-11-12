@@ -5,6 +5,21 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## November 12, 2026 `v0.107.0`
+
+### NEW
+
+- The database can now check in a family that applied through the Admission form in one go.
+  Staff confirm each child's four name fields, give each child its custodian and relationship,
+  who brought them, the previous school from STD 2 up ("Not known yet" allowed) and its "Sibling
+  of" choice, and the visit is recorded. Answers the family already gave stay as they are. A
+  cousin on the same form can get its own custodian. Until a family is checked in this way, its
+  Sibling discount works exactly as today, and checking in never raises a fee: a child that
+  would lose its 10% keeps it and shows in the Accountant's count. A refused Sibling request
+  stays refused. No screen uses this yet: today's Record visit works as before. No fee,
+  discount, status or seat count changed when this shipped; the update checked that before
+  finishing.
+
 ## November 12, 2026 `v0.106.0`
 
 ### NEW
@@ -20,16 +35,6 @@ stay in the `0.x` range.
   sibling never changes that sibling's fee. No screen uses this yet: today's New Student form
   works as before. No fee, discount, status or seat count changed when this shipped; the update
   checked that before finishing.
-- The database can now check in a family that applied through the Admission form in one go.
-  Staff confirm each child's four name fields, give each child its custodian and relationship,
-  who brought them, the previous school from STD 2 up ("Not known yet" allowed) and its "Sibling
-  of" choice, and the visit is recorded. Answers the family already gave stay as they are. A
-  cousin on the same form can get its own custodian. Until a family is checked in this way, its
-  Sibling discount works exactly as today, and checking in never raises a fee: a child that
-  would lose its 10% keeps it and shows in the Accountant's count. A refused Sibling request
-  stays refused. No screen uses this yet: today's Record visit works as before. No fee,
-  discount, status or seat count changed when this shipped; the update checked that before
-  finishing.
 
 ## November 12, 2026 `v0.105.0`
 

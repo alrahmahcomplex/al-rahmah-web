@@ -1,17 +1,14 @@
 "use client"
 
 import { useEffect, useId, useRef, useState, useTransition } from "react"
-import { toast } from "sonner"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Button, Note, Sheet } from "@/components/kit"
 import type { AgentStatusAction, FeeImpact as FeeImpactList } from "@/lib/services/marketing-agents"
 
 import { changeMarketingAgentStatus, readAgentFeeImpact } from "./actions"
 import { FeeImpact } from "./fee-impact"
+import { TextArea, toast } from "./form-parts"
+import "./agents.css"
 import { actionEffect, actionVerb, STATUS_LOST, STATUS_REASON_MAX } from "./outcome"
 
 type Agent = { id: string; fullName: string; code: string }
@@ -21,7 +18,7 @@ type Agent = { id: string; fullName: string; code: string }
 // change moves, with a Swahili line to read to them, and asks for a reason.
 export function AgentStatusActions({ agent, switchedOff }: { agent: Agent; switchedOff: boolean }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="ag-row">
       <StatusAction agent={agent} action={switchedOff ? "switch-on" : "switch-off"} />
       <StatusAction agent={agent} action="retire" />
     </div>
@@ -80,82 +77,74 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
       if (outcome.status === "refused") return setRefusal(outcome.message)
       setOpen(false)
       setReason("")
-      toast.success(outcome.message)
+      toast(outcome.message)
     })
   }
 
   return (
     <>
-      <Button
-        type="button"
-        size="sm"
-        variant={action === "switch-on" ? "default" : "outline"}
-        onClick={() => changeOpen(true)}
-        aria-label={`${verb} ${agent.fullName}`}
-      >
+      <Button size="small" variant="ghost" onClick={() => changeOpen(true)} aria-label={`${verb} ${agent.fullName}`}>
         {verb}
       </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        {/* Capped to the screen: on a short phone with many families the body
-            scrolls between the title and the buttons, which stay in view. */}
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-lg">
-          <form className="flex min-h-0 flex-col gap-4" onSubmit={confirm} noValidate>
-            <DialogHeader>
-              <DialogTitle>
-                {verb} {agent.fullName}?
-              </DialogTitle>
-              <DialogDescription>{actionEffect(action, agent.code)}</DialogDescription>
-            </DialogHeader>
+      <Sheet
+        open={open}
+        onOpenChange={changeOpen}
+        title={`${verb} ${agent.fullName}?`}
+        hint={actionEffect(action, agent.code)}
+        closeLabel="Close"
+        foot={
+          <>
+            <Button
+              type="submit"
+              form={`${reasonId}-form`}
+              size="wide"
+              disabled={pending || impact.status !== "ready" || reason.trim() === ""}
+            >
+              {pending ? "Saving…" : `${verb} ${agent.code}`}
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} disabled={pending}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        <form id={`${reasonId}-form`} className="ag-stack" onSubmit={confirm} noValidate>
+          <FeeImpact impact={impact.status === "ready" ? { status: "ready", families: impact.impact.families } : impact} />
 
-            <div className="-mx-4 -my-1 grid min-h-0 gap-4 overflow-y-auto px-4 py-1">
-              <FeeImpact impact={impact.status === "ready" ? { status: "ready", families: impact.impact.families } : impact} />
-
-              <div className="grid gap-1.5">
-                <Label htmlFor={reasonId}>Reason</Label>
-                <Textarea
-                  ref={reasonRef}
-                  id={reasonId}
-                  value={reason}
-                  maxLength={STATUS_REASON_MAX}
-                  // Tab can land on the field while it sits below the scrolling body's edge.
-                  onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
-                  onChange={(event) => {
-                    setReason(event.target.value)
-                    setMissing(false)
-                  }}
-                  aria-invalid={missing || undefined}
-                  aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
-                />
-                <p id={hintId} className="text-xs text-muted-foreground">
-                  Required. Kept with the agent&apos;s history.
-                </p>
-              </div>
-              {missing && (
-                <p id={errorId} role="alert" className="text-sm text-destructive">
-                  Write why you are making this change.
-                </p>
-              )}
-              {refusal && (
-                <Alert variant="destructive" role="alert">
-                  <AlertDescription>{refusal}</AlertDescription>
-                </Alert>
-              )}
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant={action === "switch-on" ? "default" : "destructive"}
-                disabled={pending || impact.status !== "ready" || reason.trim() === ""}
-              >
-                {pending ? "Saving…" : `${verb} ${agent.code}`}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          <div className="ag-field">
+            <label htmlFor={reasonId} className="ag-label">
+              Reason
+            </label>
+            <TextArea
+              ref={reasonRef}
+              id={reasonId}
+              value={reason}
+              maxLength={STATUS_REASON_MAX}
+              // Tab can land on the field while it sits below the scrolling body's edge.
+              onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
+              onChange={(event) => {
+                setReason(event.target.value)
+                setMissing(false)
+              }}
+              aria-invalid={missing || undefined}
+              aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
+            />
+            <p id={hintId} className="ag-hint">
+              Required. Kept with the agent&apos;s history.
+            </p>
+          </div>
+          {missing && (
+            <p id={errorId} role="alert" className="ag-error">
+              Write why you are making this change.
+            </p>
+          )}
+          {refusal && (
+            <Note tone="bad" role="alert">
+              {refusal}
+            </Note>
+          )}
+        </form>
+      </Sheet>
     </>
   )
 }

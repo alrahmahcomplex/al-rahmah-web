@@ -1,0 +1,151 @@
+import { randomInt, randomUUID } from "node:crypto"
+
+import { type Page } from "@playwright/test"
+
+import { lookFor } from "@/app/staff/route-looks"
+import { createPromoCode } from "@/lib/services/promo-codes"
+
+import { registerPendingAgent } from "../tests/support/agents"
+import { signedIn } from "../tests/support/db"
+import { MANAGER } from "../tests/support/fixtures"
+import { axeProblems } from "./axe"
+import { signInOnce } from "./log-in"
+import { expect, test } from "./staff-test"
+
+// Marketing Agents, its import, Promo codes and WhatsApp groups in the kit
+// (#330): axe on each screen and on each sheet a Manager can open, at desktop
+// and phone widths, then the sheets under reduced motion. Every sheet closes
+// again unsaved. Set R8_SHOTS to a folder to keep a capture of each.
+
+// The seeded Approved agent, whose row carries every action but Approve.
+const SEEDED = "Baraka Juma Njoroge"
+
+async function open(page: Page, url: string) {
+  await signInOnce(page, MANAGER.email, MANAGER.password)
+  await page.goto(url)
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
+  if (lookFor(new URL(url, "http://x").pathname) === "new") await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
+}
+
+async function shot(page: Page, name: string) {
+  const folder = process.env.R8_SHOTS
+  if (folder) await page.screenshot({ path: `${folder}/${name}.png`, fullPage: true })
+}
+
+/** Axe inside the open sheet, then Escape, which closes it unsaved. */
+async function checkSheet(page: Page, name: string | RegExp, file: string) {
+  const sheet = page.getByRole("dialog", { name })
+  await expect(sheet).toBeVisible()
+  expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
+  await shot(page, file)
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+}
+
+async function newPromo(): Promise<string> {
+  const code = `LOOK${randomInt(1000, 9999)}${randomUUID().slice(0, 2).toUpperCase()}`
+  const created = await createPromoCode(await signedIn(MANAGER), { name: `Look ${code}`, code, amount: 20_000, endsOn: null, note: null })
+  if (!created.ok) throw new Error(`setup failed: ${created.error}`)
+  return created.data.code
+}
+
+for (const width of [1280, 390]) {
+  test.describe(`at ${width}px`, () => {
+    test.beforeEach(async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 })
+    })
+
+    test("Marketing Agents and the sheets on an agent's row", async ({ page }) => {
+      await open(page, `/staff/agents?status=all&q=${encodeURIComponent(SEEDED)}`)
+      expect(await axeProblems(page)).toEqual([])
+      await shot(page, `agents-${width}`)
+
+      await page.getByRole("button", { name: "Add agent" }).click()
+      await checkSheet(page, "Add agent", `agents-add-${width}`)
+      await page.getByRole("button", { name: "Change the standard discount" }).click()
+      await checkSheet(page, "Standard discount", `agents-standard-${width}`)
+
+      const row = page.getByRole("row", { name: new RegExp(SEEDED) })
+      await row.getByRole("button", { name: /^Interview discount for/ }).click()
+      await checkSheet(page, SEEDED, `agents-discount-${width}`)
+      // A joined agent's email is theirs to change, so its button is off.
+      const email = row.getByRole("button", { name: /^(Add|Edit) email for/ })
+      if ((await email.count()) > 0 && (await email.isEnabled())) {
+        await email.click()
+        await checkSheet(page, /email for/, `agents-email-${width}`)
+      }
+      await row.getByRole("button", { name: `Switch off ${SEEDED}` }).click()
+      await checkSheet(page, `Switch off ${SEEDED}?`, `agents-switch-off-${width}`)
+      await row.getByRole("button", { name: `Retire ${SEEDED}` }).click()
+      await checkSheet(page, `Retire ${SEEDED}?`, `agents-retire-${width}`)
+      await row.getByRole("button", { name: `Recreate ${SEEDED}` }).click()
+      await expect(page.getByRole("dialog").getByLabel("Full name")).toHaveValue(SEEDED)
+      await checkSheet(page, `Recreate ${SEEDED}?`, `agents-recreate-${width}`)
+    })
+
+    test("Approve on a Pending agent's row", async ({ page }) => {
+      const fullName = `Look Pending ${randomUUID().slice(0, 6)}`
+      const { code } = await registerPendingAgent({ fullName, phone: `07${String(randomInt(10_000_000, 100_000_000))}` })
+      await open(page, `/staff/agents?status=pending&q=${encodeURIComponent(code)}`)
+      await page.getByRole("row", { name: new RegExp(fullName) }).getByRole("button", { name: `Approve ${fullName}` }).click()
+      await checkSheet(page, `Approve ${fullName}?`, `agents-approve-${width}`)
+    })
+
+    test("the account-state lists and Send invites", async ({ page }) => {
+      await open(page, "/staff/agents?account=no_account")
+      expect(await axeProblems(page)).toEqual([])
+      await shot(page, `agents-no-account-${width}`)
+      const send = page.getByRole("button", { name: "Send invites" })
+      // Off without an invite budget; the reason shows instead.
+      if (await send.isEnabled()) {
+        await send.click()
+        await checkSheet(page, /^Send invites/, `agents-send-invites-${width}`)
+      }
+      await page.goto("/staff/agents?account=awaiting_confirmation")
+      expect(await axeProblems(page)).toEqual([])
+      await shot(page, `agents-claims-${width}`)
+    })
+
+    test("Import agents", async ({ page }) => {
+      await open(page, "/staff/agents/import")
+      expect(await axeProblems(page)).toEqual([])
+      await shot(page, `import-${width}`)
+    })
+
+    test("Promo codes and its sheets", async ({ page }) => {
+      const code = await newPromo()
+      await open(page, "/staff/promo-codes")
+      expect(await axeProblems(page)).toEqual([])
+      await shot(page, `promo-${width}`)
+      await page.getByRole("button", { name: "New Promo code" }).click()
+      await checkSheet(page, "New Promo code", `promo-new-${width}`)
+      await page.getByRole("row", { name: `Open ${code}` }).click()
+      const sheet = page.getByRole("dialog", { name: code })
+      await sheet.getByText("More options").click()
+      await sheet.getByRole("button", { name: "Pause code" }).click()
+      await checkSheet(page, code, `promo-edit-${width}`)
+    })
+
+    test("WhatsApp groups", async ({ page }) => {
+      await open(page, "/staff/group-links")
+      expect(await axeProblems(page)).toEqual([])
+      await shot(page, `groups-${width}`)
+    })
+  })
+}
+
+test.describe("under reduced motion", () => {
+  test.use({ reducedMotion: "reduce" })
+
+  test("the agent and Promo code sheets fade in place", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await open(page, `/staff/agents?status=all&q=${encodeURIComponent(SEEDED)}`)
+    await page.getByRole("row", { name: new RegExp(SEEDED) }).getByRole("button", { name: /^Interview discount for/ }).click()
+    await expect(page.getByRole("dialog", { name: SEEDED })).toHaveCSS("transition-property", "opacity")
+    await page.keyboard.press("Escape")
+
+    await page.goto("/staff/promo-codes")
+    await page.getByRole("button", { name: "New Promo code" }).click()
+    await expect(page.getByRole("dialog", { name: "New Promo code" })).toHaveCSS("transition-property", "opacity")
+  })
+})

@@ -1,9 +1,11 @@
 import Link from "next/link"
 
+import { Card } from "@/components/kit"
 import type { BatchOutcome, InviteBatchReport } from "@/lib/services/agent-invite-batches"
 
 import { batchHeading, batchStopLine, skippedLine } from "./invite-batch-outcome"
 import { agentsHref, type AgentScreenSearch } from "./search-params"
+import "./agents.css"
 
 const COUNTS: { outcome: BatchOutcome; label: string; count: (report: InviteBatchReport) => number }[] = [
   { outcome: "sent", label: "sent", count: (report) => report.counts.sent },
@@ -17,30 +19,28 @@ const COUNTS: { outcome: BatchOutcome; label: string; count: (report: InviteBatc
 export function InviteBatchReportPanel({ report, search }: { report: InviteBatchReport; search: AgentScreenSearch }) {
   const skipped = skippedLine(report)
   return (
-    <section aria-labelledby="invite-batch-heading" className="flex flex-col gap-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
-      <h2 id="invite-batch-heading" className="staff-section-heading">
-        Invite batch
-      </h2>
-      <p className="text-muted-foreground">{batchHeading(report)}</p>
-      <p>
-        {COUNTS.map(({ outcome, label, count }, i) => {
-          const current = search.batchId === report.id && search.batchOutcome === outcome
-          return (
-            <span key={outcome}>
-              {i > 0 && ", "}
-              <Link
-                href={agentsHref(search, { batchId: report.id, batchOutcome: outcome, query: undefined, page: 1 })}
-                aria-current={current ? "page" : undefined}
-                className="font-medium text-slate-900 underline underline-offset-4 aria-[current=page]:no-underline"
-              >
-                {label} <span className="tabular-nums">{count(report)}</span>
-              </Link>
-            </span>
-          )
-        })}
-      </p>
-      <p>{batchStopLine(report)}</p>
-      {skipped && <p className="text-muted-foreground">{skipped}</p>}
-    </section>
+    <Card title="Invite batch" caption={batchHeading(report)}>
+      <div className="ag-card-body">
+        <p className="ag-p">
+          {COUNTS.map(({ outcome, label, count }, i) => {
+            const current = search.batchId === report.id && search.batchOutcome === outcome
+            return (
+              <span key={outcome}>
+                {i > 0 && ", "}
+                <Link
+                  href={agentsHref(search, { batchId: report.id, batchOutcome: outcome, query: undefined, page: 1 })}
+                  aria-current={current ? "page" : undefined}
+                  className="ag-link"
+                >
+                  {label} <span className="tabular-nums">{count(report)}</span>
+                </Link>
+              </span>
+            )
+          })}
+        </p>
+        <p className="ag-p">{batchStopLine(report)}</p>
+        {skipped && <p className="ag-p ag-quiet">{skipped}</p>}
+      </div>
+    </Card>
   )
 }

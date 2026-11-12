@@ -1,58 +1,33 @@
 "use client"
 
-import { ChevronRightIcon, LockIcon } from "lucide-react"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { cn } from "@/lib/utils"
+import { ChoiceTiles, Field, FieldError, KeyValueList, Note as KitNote, Tag, type TagTone } from "@/components/kit"
 
 import type { ImpactAnswer } from "./discount-actions"
 import { DISCOUNT_REASON_MAX, familyNotice, impactSummary, IMPACT_LOST, NO_IMPACT, PAID_KEEP, tzs } from "./discount-outcome"
 import type { ImpactState } from "./fee-impact"
+import { Disclosure } from "./form-parts"
+import "./agents.css"
 
 // The pieces the discount sheets share: the TZS amount field, the state
 // chip, the soft note, and the fee-impact disclosure.
 
 export type ChipTone = "good" | "warn" | "bad" | "plain"
 
-const TONES: Record<ChipTone, string> = {
-  good: "bg-green-50 text-green-800",
-  warn: "bg-amber-50 text-amber-800",
-  bad: "bg-red-50 text-red-700",
-  plain: "bg-slate-100 text-slate-700",
-}
+const TAG_TONES: Record<ChipTone, TagTone> = { good: "ok", warn: "wait", bad: "bad", plain: "line" }
 
 export function DiscountChip({ tone, children }: { tone: ChipTone; children: ReactNode }) {
-  return (
-    <span className={cn("inline-flex h-[22px] w-fit shrink-0 items-center rounded-md px-2 text-xs font-medium whitespace-nowrap", TONES[tone])}>
-      {children}
-    </span>
-  )
+  return <Tag tone={TAG_TONES[tone]}>{children}</Tag>
 }
 
 export function Note({ tone = "plain", children }: { tone?: "plain" | "good" | "warn"; children: ReactNode }) {
-  return (
-    <p
-      className={cn(
-        "flex items-start gap-2.5 rounded-xl px-3.5 py-3 text-[13px]/5",
-        tone === "good" ? "bg-green-50 text-green-800" : tone === "warn" ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-muted-foreground",
-      )}
-    >
-      {children}
-    </p>
-  )
+  return <KitNote tone={tone === "good" ? "good" : tone === "warn" ? "wait" : "info"}>{children}</KitNote>
 }
 
-// "Only a role with … can change this." with the lock.
+// "Only a role with … can change this."
 export function LockedNote({ children }: { children: ReactNode }) {
-  return (
-    <Note>
-      <LockIcon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-      <span>{children}</span>
-    </Note>
-  )
+  return <KitNote>{children}</KitNote>
 }
 
 // Whole TZS, with the currency set inside the field.
@@ -75,14 +50,16 @@ export function MoneyField({
 }) {
   const described = [help ? `${id}-help` : null, error ? `${id}-error` : null].filter(Boolean).join(" ") || undefined
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
-        <span aria-hidden className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
-          TZS
-        </span>
-        <Input
+    <div className="ag-field">
+      <label htmlFor={id} className="ag-label">
+        {label}
+      </label>
+      <div className="ag-money">
+        <span aria-hidden>TZS</span>
+        <Field
           id={id}
+          size="compact"
+          alignStart
           type="number"
           inputMode="numeric"
           min={0}
@@ -91,21 +68,16 @@ export function MoneyField({
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
-          aria-invalid={error ? true : undefined}
+          invalid={Boolean(error)}
           aria-describedby={described}
-          className="pl-12 tabular-nums"
         />
       </div>
       {help && (
-        <p id={`${id}-help`} className="text-xs text-muted-foreground">
+        <p id={`${id}-help`} className="ag-hint">
           {help}
         </p>
       )}
-      {error && (
-        <p id={`${id}-error`} role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FieldError id={`${id}-error`} message={error ?? undefined} alignStart />
     </div>
   )
 }
@@ -149,47 +121,48 @@ export function DiscountImpact({ impact }: { impact: ImpactState | null }) {
   if (!impact) return null
   if (impact.status === "loading") {
     return (
-      <p role="status" className="text-sm text-muted-foreground">
+      <p role="status" className="ag-p ag-quiet">
         Finding the families this changes…
       </p>
     )
   }
   if (impact.status === "refused") {
     return (
-      <Alert variant="destructive" role="alert">
-        <AlertDescription>{impact.message}</AlertDescription>
-      </Alert>
+      <KitNote tone="bad" role="alert">
+        {impact.message}
+      </KitNote>
     )
   }
   const families = impact.families
   if (families.length === 0) return <Note>{NO_IMPACT}</Note>
   return (
-    <details className="group overflow-hidden rounded-xl ring-1 ring-foreground/10">
-      <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3.5 py-3 text-sm font-medium text-slate-900 [&::-webkit-details-marker]:hidden">
-        {impactSummary(families.length)}
-        <ChevronRightIcon aria-hidden className="ml-auto size-4 text-slate-400 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
-      </summary>
-      <div className="flex flex-col gap-2.5 px-3.5 pb-3.5 text-[13px]/5 text-muted-foreground">
-        <ul aria-label="Families not yet Paid" className="flex max-h-48 list-disc flex-col gap-1 overflow-y-auto pl-4.5 text-slate-900">
+    <Disclosure label={impactSummary(families.length)}>
+      <div className="ag-fold">
+        <ul aria-label="Families not yet Paid" className="ag-families">
           {families.map((family) => (
             <li key={family.leadId}>
-              {family.studentName}, {family.className}
-              <span className="block text-muted-foreground">
+              <span className="ag-strong">
+                {family.studentName}, {family.className}
+              </span>
+              <small>
                 {family.contactName} ·{" "}
-                <a href={`tel:${family.contactPhone}`} className="underline-offset-4 hover:underline">
+                <a href={`tel:${family.contactPhone}`} className="ag-tel">
                   {family.contactPhone}
                 </a>{" "}
                 · {tzs(family.feeNow)} → {tzs(family.feeAfter)}
-              </span>
+              </small>
             </li>
           ))}
         </ul>
-        <p>{PAID_KEEP}</p>
-        <p>
-          Tell each family: <span lang="sw" className="text-slate-900">“{familyNotice(families)}”</span>
+        <p className="ag-p">{PAID_KEEP}</p>
+        <p className="ag-p">
+          Tell each family:{" "}
+          <span lang="sw" className="ag-strong">
+            “{familyNotice(families)}”
+          </span>
         </p>
       </div>
-    </details>
+    </Disclosure>
   )
 }
 
@@ -208,69 +181,59 @@ export function ReasonField({
   placeholder?: string
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>Reason</Label>
-      <Input
+    <div className="ag-field">
+      <label htmlFor={id} className="ag-label">
+        Reason
+      </label>
+      <Field
         id={id}
+        size="compact"
+        alignStart
         value={value}
         maxLength={DISCOUNT_REASON_MAX}
         placeholder={placeholder}
         autoComplete="off"
         onChange={(event) => onChange(event.target.value)}
-        aria-invalid={error ? true : undefined}
+        invalid={Boolean(error)}
         aria-describedby={error ? `${id}-error` : undefined}
       />
-      {error && (
-        <p id={`${id}-error`} role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FieldError id={`${id}-error`} message={error ?? undefined} alignStart />
     </div>
   )
 }
 
-// A radio drawn as a card: the title, and a line under it.
-export function ChoiceCard({
+// "Standard" or "Own amount", each with its line, as the kit's choice rows.
+export function DiscountKindChoice({
   name,
+  legend,
   value,
-  checked,
   onChange,
-  title,
-  line,
+  options,
+  children,
 }: {
   name: string
+  legend: ReactNode
   value: string
-  checked: boolean
-  onChange: () => void
-  title: ReactNode
-  line: ReactNode
+  onChange: (value: string) => void
+  options: { value: string; title: ReactNode; line: ReactNode }[]
+  // Inside the group, after the choices: the amount for "Own amount".
+  children?: ReactNode
 }) {
   return (
-    <label
-      className={cn(
-        "flex cursor-pointer items-start gap-3 rounded-xl px-3.5 py-3 ring-1 transition-colors motion-reduce:transition-none",
-        checked ? "bg-blue-50 ring-blue-600" : "ring-slate-300 hover:bg-slate-50",
-      )}
+    <ChoiceTiles
+      name={name}
+      legend={legend}
+      value={value}
+      onChange={onChange}
+      layout="rows"
+      options={options.map((option) => ({ value: option.value, label: option.title, description: option.line }))}
     >
-      <input type="radio" name={name} value={value} checked={checked} onChange={onChange} className="mt-1 accent-blue-600" />
-      <span className="flex flex-col gap-0.5">
-        <span className="text-sm font-medium text-slate-900">{title}</span>
-        <span className="text-[13px]/5 text-muted-foreground">{line}</span>
-      </span>
-    </label>
+      {children}
+    </ChoiceTiles>
   )
 }
 
 // Name: value pairs in a read-only sheet.
 export function Facts({ rows }: { rows: [string, ReactNode][] }) {
-  return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-      {rows.map(([term, value]) => (
-        <div key={term} className="contents">
-          <dt className="text-muted-foreground">{term}</dt>
-          <dd className="font-medium text-slate-900">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  )
+  return <KeyValueList items={rows.map(([key, value]) => ({ key, value }))} />
 }

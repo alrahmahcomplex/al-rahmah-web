@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Note } from "@/components/kit"
 import type { AgentAccess, AgentAccessError } from "@/lib/services/agent-access"
 import type { Result } from "@/lib/services/result"
 
@@ -23,21 +23,21 @@ export function agentAccessLine(access: AgentAccess): string {
 export function AgentAccessBanner({ access }: { access: Result<AgentAccess, AgentAccessError> }) {
   if (!access.ok) {
     return (
-      <Alert>
-        <AlertTitle>Agent access</AlertTitle>
-        <AlertDescription>Whether agent access is on could not be loaded. Reload the page to try again.</AlertDescription>
-      </Alert>
+      <Note role="alert">
+        <b>Agent access</b>
+        <br />
+        Whether agent access is on could not be loaded. Reload the page to try again.
+      </Note>
     )
   }
   const { enabled } = access.data
   return (
-    <Alert className={enabled ? undefined : "border-amber-300 bg-amber-50"}>
-      <AlertTitle>Agent access: {agentAccessLine(access.data)}</AlertTitle>
-      <AlertDescription>
-        {enabled
-          ? "Agents may sign up, claim a code, sign in and reset a password."
-          : `No agent can sign up, claim a code, sign in or reset a password. They see the reason code ${ACCESS_OFF_CODE}.`}
-      </AlertDescription>
-    </Alert>
+    <Note tone={enabled ? "info" : "wait"} role="alert">
+      <b>Agent access: {agentAccessLine(access.data)}</b>
+      <br />
+      {enabled
+        ? "Agents may sign up, claim a code, sign in and reset a password."
+        : `No agent can sign up, claim a code, sign in or reset a password. They see the reason code ${ACCESS_OFF_CODE}.`}
+    </Note>
   )
 }

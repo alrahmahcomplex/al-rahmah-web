@@ -1,18 +1,14 @@
 "use client"
 
 import { useId, useState, useTransition } from "react"
-import { toast } from "sonner"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Card, Field, KeyValueList, Note, Sheet, Tag } from "@/components/kit"
 import type { QueueClaim, QueueEntry } from "@/lib/services/agent-email-claims"
 
 import { confirmAgentEmailClaim, rejectAgentEmailClaim } from "./claim-actions"
 import type { ClaimOutcome } from "./claim-outcome"
+import { toast } from "./form-parts"
+import "./agents.css"
 
 // The "Awaiting email confirmation" queue (#193): each agent with a claim
 // waiting, oldest first, the stored record beside each typed name and email.
@@ -35,7 +31,7 @@ const LOST: ClaimOutcome = { status: "refused", message: "The request was lost. 
 
 export function ClaimQueue({ entries, canApprove }: { entries: QueueEntry[]; canApprove: boolean }) {
   return (
-    <ol aria-label="Awaiting email confirmation" className="flex flex-col gap-3">
+    <ol aria-label="Awaiting email confirmation" className="ag-claims">
       {entries.map((entry) => (
         <li key={entry.agentId}>
           <ClaimCard entry={entry} canApprove={canApprove} />
@@ -46,41 +42,45 @@ export function ClaimQueue({ entries, canApprove }: { entries: QueueEntry[]; can
 }
 
 function ClaimCard({ entry, canApprove }: { entry: QueueEntry; canApprove: boolean }) {
-  const headingId = useId()
   const others = entry.claims.length - 1
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3 rounded-lg p-4 ring-1 ring-foreground/10">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id={headingId} className="staff-section-heading">
-          {entry.fullName} <span className="font-mono text-sm text-muted-foreground">{entry.code}</span>
-        </h2>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {entry.status === "Pending" && <Badge variant="outline">Pending</Badge>}
+    <Card
+      title={
+        <>
+          {entry.fullName} <span className="ag-mono ag-quiet ag-small">{entry.code}</span>
+        </>
+      }
+      caption={
+        <span className="ag-row">
+          {entry.status === "Pending" && <Tag tone="wait">Pending</Tag>}
           <span>
             Claimed <time dateTime={entry.claimedAt}>{WHEN.format(new Date(entry.claimedAt))}</time>
           </span>
-        </div>
+        </span>
+      }
+    >
+      <div className="ag-card-body">
+        <Note tone="wait">
+          Phone {entry.fullName} on{" "}
+          <a href={`tel:${entry.phone}`} className="ag-link">
+            {displayPhone(entry.phone)}
+          </a>{" "}
+          to check this email is theirs.
+        </Note>
+        {others > 0 && (
+          <p className="ag-p ag-strong">
+            {others} other {others === 1 ? "attempt" : "attempts"}: confirming one rejects the rest.
+          </p>
+        )}
+        <ul className="ag-claims">
+          {entry.claims.map((claim) => (
+            <li key={claim.id}>
+              <ClaimRow entry={entry} claim={claim} canApprove={canApprove} />
+            </li>
+          ))}
+        </ul>
       </div>
-      <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950">
-        Phone {entry.fullName} on{" "}
-        <a href={`tel:${entry.phone}`} className="font-medium underline underline-offset-4">
-          {displayPhone(entry.phone)}
-        </a>{" "}
-        to check this email is theirs.
-      </p>
-      {others > 0 && (
-        <p className="text-sm font-medium text-amber-900">
-          {others} other {others === 1 ? "attempt" : "attempts"}: confirming one rejects the rest.
-        </p>
-      )}
-      <ul className="flex flex-col gap-2">
-        {entry.claims.map((claim) => (
-          <li key={claim.id}>
-            <ClaimRow entry={entry} claim={claim} canApprove={canApprove} />
-          </li>
-        ))}
-      </ul>
-    </section>
+    </Card>
   )
 }
 
@@ -97,28 +97,26 @@ function ClaimRow({ entry, claim, canApprove }: { entry: QueueEntry; claim: Queu
       } catch {
         outcome = LOST
       }
-      if (outcome.status === "done") toast.success(outcome.message)
+      if (outcome.status === "done") toast(outcome.message)
       else setRefusal(outcome.message)
     })
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-md bg-slate-50 px-3 py-2 sm:flex-row sm:items-start sm:justify-between">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
-        <dt className="text-muted-foreground">Typed name</dt>
-        <dd>{claim.fullName}</dd>
-        <dt className="text-muted-foreground">Email</dt>
-        <dd className="wrap-anywhere">{claim.email}</dd>
-        <dt className="text-muted-foreground">Claimed</dt>
-        <dd>
-          <time dateTime={claim.claimedAt}>{WHEN.format(new Date(claim.claimedAt))}</time>
-        </dd>
-      </dl>
+    <div className="ag-claim-attempt">
+      <KeyValueList
+        items={[
+          { key: "Typed name", value: claim.fullName },
+          { key: "Email", value: claim.email },
+          { key: "Claimed", value: <time dateTime={claim.claimedAt}>{WHEN.format(new Date(claim.claimedAt))}</time> },
+        ]}
+      />
       {canApprove && (
-        <div className="flex flex-col items-start gap-1 sm:items-end">
-          <div className="flex flex-wrap gap-2">
+        <div className="ag-cell">
+          <div className="ag-row">
             <Button
-              size="sm"
+              size="small"
+              variant="ghost"
               disabled={pending}
               aria-label={`Confirm ${claim.email} for ${entry.fullName}`}
               onClick={() => run(() => confirmAgentEmailClaim(claim.id, entry.fullName, null))}
@@ -127,8 +125,8 @@ function ClaimRow({ entry, claim, canApprove }: { entry: QueueEntry; claim: Queu
             </Button>
             <SaveAndSend entry={entry} claim={claim} disabled={pending} />
             <Button
-              size="sm"
-              variant="outline"
+              size="small"
+              variant="ghost"
               disabled={pending}
               aria-label={`Reject ${claim.email} for ${entry.fullName}`}
               onClick={() => run(() => rejectAgentEmailClaim(claim.id))}
@@ -137,7 +135,7 @@ function ClaimRow({ entry, claim, canApprove }: { entry: QueueEntry; claim: Queu
             </Button>
           </div>
           {refusal && (
-            <p role="alert" className="max-w-64 text-xs text-destructive">
+            <p role="alert" className="ag-error">
               {refusal}
             </p>
           )}
@@ -174,54 +172,58 @@ function SaveAndSend({ entry, claim, disabled }: { entry: QueueEntry; claim: Que
       }
       if (outcome.status === "refused") return setRefusal(outcome.message)
       setOpen(false)
-      toast.success(outcome.message)
+      toast(outcome.message)
     })
   }
 
   return (
     <>
-      <Button size="sm" variant="outline" disabled={disabled} onClick={() => changeOpen(true)} aria-label={`Save and send invite for ${entry.fullName}`}>
+      <Button size="small" variant="ghost" disabled={disabled} onClick={() => changeOpen(true)} aria-label={`Save and send invite for ${entry.fullName}`}>
         Save and send invite
       </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent>
-          <form onSubmit={save} className="flex flex-col gap-4">
-            <DialogHeader>
-              <DialogTitle>Save and send invite for {entry.fullName}</DialogTitle>
-              <DialogDescription id={hintId}>
-                Correct the email as {entry.fullName} gave it on the phone. Saving confirms this claim, rejects any other
-                attempts, and sends the invite.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={fieldId}>Email</Label>
-              <Input
-                id={fieldId}
-                type="email"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                required
-                aria-describedby={hintId}
-              />
-            </div>
-            {refusal && (
-              <Alert variant="destructive">
-                <AlertDescription>{refusal}</AlertDescription>
-              </Alert>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? "Saving…" : "Save and send invite"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <Sheet
+        open={open}
+        onOpenChange={changeOpen}
+        title={`Save and send invite for ${entry.fullName}`}
+        hint={`Correct the email as ${entry.fullName} gave it on the phone. Saving confirms this claim, rejects any other attempts, and sends the invite.`}
+        hintId={hintId}
+        closeLabel="Close"
+        foot={
+          <>
+            <Button type="submit" form={`${fieldId}-form`} size="wide" disabled={pending}>
+              {pending ? "Saving…" : "Save and send invite"}
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} disabled={pending}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        <form id={`${fieldId}-form`} onSubmit={save} className="ag-stack">
+          <div className="ag-field">
+            <label htmlFor={fieldId} className="ag-label">
+              Email
+            </label>
+            <Field
+              id={fieldId}
+              size="compact"
+              alignStart
+              type="email"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              required
+              aria-describedby={hintId}
+            />
+          </div>
+          {refusal && (
+            <Note tone="bad" role="alert">
+              {refusal}
+            </Note>
+          )}
+        </form>
+      </Sheet>
     </>
   )
 }

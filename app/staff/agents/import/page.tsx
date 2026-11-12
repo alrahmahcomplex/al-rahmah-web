@@ -2,14 +2,16 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
+import { Card, PageHeader, pageTitle } from "@/components/kit"
 import { listAgentImports } from "@/lib/services/agent-import"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../session"
 import { AgentImport } from "./agent-import"
+import "../agents.css"
 
 export const metadata: Metadata = {
-  title: "Import agents · Al-Rahmah Complex",
+  title: pageTitle("Import agents"),
 }
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
@@ -26,31 +28,28 @@ export default async function AgentImportPage() {
   const imports = await listAgentImports(await createClient(), 10)
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link href="/staff/agents" className="text-sm font-medium text-slate-700 underline underline-offset-4">
+    <div className="ag-page">
+      <div className="ag-stack">
+        <Link href="/staff/agents" className="ag-link ag-back">
           Marketing Agents
         </Link>
-        <h1 className="staff-heading">Import agents</h1>
-        <p className="max-w-2xl text-sm text-slate-700">
-          Add existing agents from a spreadsheet, keeping their codes. Imported agents start Approved. The import sends no email.
-        </p>
+        <PageHeader
+          title="Import agents"
+          subtitle="Add existing agents from a spreadsheet, keeping their codes. Imported agents start Approved. The import sends no email."
+        />
       </div>
 
       <AgentImport />
 
       {imports.ok && imports.data.length > 0 && (
-        <section aria-labelledby="earlier-heading" className="flex max-w-2xl flex-col gap-2">
-          <h2 id="earlier-heading" className="staff-section-heading">
-            Earlier imports
-          </h2>
-          <ul className="flex flex-col gap-1 text-sm">
+        <Card title="Earlier imports">
+          <ul className="ag-earlier ag-card-body">
             {imports.data.map((batch) => (
-              <li key={batch.id} className="wrap-anywhere">
-                <Link href={`/staff/agents?status=all&import=${batch.id}`} className="font-medium underline underline-offset-4">
+              <li key={batch.id} className="ag-wrap">
+                <Link href={`/staff/agents?status=all&import=${batch.id}`} className="ag-link">
                   {batch.fileName}
                 </Link>{" "}
-                <span className="text-muted-foreground">
+                <span className="ag-quiet">
                   <time dateTime={batch.importedAt}>{WHEN.format(new Date(batch.importedAt))}</time>
                   {batch.importedBy ? ` by ${batch.importedBy}` : ""}: {batch.createdCount} created,{" "}
                   {batch.updatedCount === 1 ? "1 email" : `${batch.updatedCount} emails`} added, {batch.skippedCount} skipped
@@ -58,7 +57,7 @@ export default async function AgentImportPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
     </div>
   )

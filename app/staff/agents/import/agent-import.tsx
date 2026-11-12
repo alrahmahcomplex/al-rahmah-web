@@ -1,13 +1,8 @@
 "use client"
 
-import Link from "next/link"
-import { useId, useState, useTransition } from "react"
+import { useEffect, useId, useRef, useState, useTransition } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Button, buttonVariants } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, ButtonLink, Card, FilterPills, FinishedState, Note, Tag, TaskCard, type TagTone } from "@/components/kit"
 import {
   AGENT_IMPORT_CLASSES,
   AGENT_IMPORT_COLUMNS,
@@ -22,10 +17,11 @@ import {
   type AgentImportRow,
 } from "@/lib/agent-import"
 import { IMPORT_LIMITS, importFileMessage } from "@/lib/import"
-import { cn } from "@/lib/utils"
 
+import { FilePicker } from "../form-parts"
 import { checkAgentImportUpload, confirmAgentImportRows } from "./actions"
 import { CHECK_LOST, CONFIRM_LOST, type ImportMessage } from "./messages"
+import "../agents.css"
 
 const CLASS_LABELS: Record<AgentImportClass, string> = {
   create: "To create",
@@ -37,14 +33,14 @@ const CLASS_LABELS: Record<AgentImportClass, string> = {
   refused: "Refused",
 }
 
-const CLASS_STYLES: Record<AgentImportClass, string> = {
-  create: "bg-emerald-50 text-emerald-800",
-  present: "bg-slate-100 text-slate-700",
-  "email-to-add": "bg-blue-50 text-blue-800",
-  "email-differs": "bg-amber-50 text-amber-900",
-  "mobile-differs": "bg-amber-50 text-amber-900",
-  flagged: "bg-orange-100 text-orange-900",
-  refused: "bg-red-50 text-red-800",
+const CLASS_TONES: Record<AgentImportClass, TagTone> = {
+  create: "ok",
+  present: "line",
+  "email-to-add": "line",
+  "email-differs": "wait",
+  "mobile-differs": "wait",
+  flagged: "wait",
+  refused: "bad",
 }
 
 const VALUE_KEYS: { key: AgentImportKey; label: string; normalized: "code" | "fullName" | "mobile" | "whatsapp" | "email" }[] = [
@@ -80,13 +76,13 @@ function refusedFileName(fileName: string) {
 
 function Message({ message, title }: { message: ImportMessage; title?: string }) {
   return (
-    <Alert variant="destructive">
-      {title && <AlertTitle>{title}</AlertTitle>}
-      <AlertDescription>
-        <p>{message.en}</p>
-        {message.sw && <p lang="sw">{message.sw}</p>}
-      </AlertDescription>
-    </Alert>
+    <Note tone="bad" role="alert">
+      <span className="ag-lines">
+        {title && <b>{title}</b>}
+        <span>{message.en}</span>
+        {message.sw && <span lang="sw">{message.sw}</span>}
+      </span>
+    </Note>
   )
 }
 
@@ -141,7 +137,7 @@ export function AgentImport() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="ag-page">
       {message && (
         <Message message={message} title={step.name === "upload" && message !== CHECK_LOST ? "This file can't be imported" : undefined} />
       )}
@@ -156,52 +152,53 @@ function Upload({ onUpload, pending }: { onUpload: (form: FormData) => void; pen
   const inputId = useId()
   return (
     <>
-      <section aria-labelledby="template-heading" className="flex max-w-2xl flex-col gap-3">
-        <h2 id="template-heading" className="staff-section-heading">
-          1. Fill in the template
-        </h2>
-        <div>
-          <Button type="button" variant="outline" onClick={() => download("agents-template.csv", AGENT_IMPORT_TEMPLATE)}>
-            Download the template
-          </Button>
-        </div>
-        <p className="text-sm text-slate-700">
-          Its columns are {AGENT_IMPORT_COLUMNS.map((column) => column.header).join(", ")}. One agent per row. Keep each agent&rsquo;s
-          code exactly as they use it. Mobile is required; WhatsApp and Email may be left empty.
-        </p>
-        <div className="rounded-md bg-slate-50 px-4 py-3 text-sm text-slate-800">
-          <p className="font-medium">In Google Sheets</p>
-          <ol className="mt-1 list-decimal space-y-1 pl-5">
-            <li>Open the template: File, then Import, then Upload.</li>
-            <li>
-              Select every column, then choose Format, then Number, then <strong>Plain text</strong>, before you paste or type. Otherwise
-              Sheets drops a mobile&rsquo;s leading 0 or turns it into a number like 7.12E+08.
-            </li>
-            <li>Paste or type the agents under the first row, leaving the first row as it is.</li>
-            <li>
-              Choose File, then Download, then <strong>Comma-separated values (.csv)</strong>.
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section aria-labelledby="upload-heading" className="flex max-w-2xl flex-col gap-3">
-        <h2 id="upload-heading" className="staff-section-heading">
-          2. Upload the file
-        </h2>
-        <form action={onUpload} className="flex flex-col gap-2">
-          <Label htmlFor={inputId}>CSV file</Label>
-          <Input id={inputId} name="file" type="file" accept=".csv,text/csv" required aria-describedby={`${inputId}-hint`} />
-          <p id={`${inputId}-hint`} className="text-xs text-muted-foreground">
-            Up to 256 KB and 1,000 rows. Nothing is saved until you confirm.
-          </p>
+      <Card title="1. Fill in the template">
+        <div className="ag-card-body">
           <div>
-            <Button type="submit" disabled={pending}>
+            <Button variant="ghost" onClick={() => download("agents-template.csv", AGENT_IMPORT_TEMPLATE)}>
+              Download the template
+            </Button>
+          </div>
+          <p className="ag-p">
+            Its columns are {AGENT_IMPORT_COLUMNS.map((column) => column.header).join(", ")}. One agent per row. Keep each agent&rsquo;s
+            code exactly as they use it. Mobile is required; WhatsApp and Email may be left empty.
+          </p>
+          <Note>
+            <span className="ag-lines">
+              <b>In Google Sheets</b>
+              <ol className="ag-steps">
+                <li>Open the template: File, then Import, then Upload.</li>
+                <li>
+                  Select every column, then choose Format, then Number, then <strong>Plain text</strong>, before you paste or type.
+                  Otherwise Sheets drops a mobile&rsquo;s leading 0 or turns it into a number like 7.12E+08.
+                </li>
+                <li>Paste or type the agents under the first row, leaving the first row as it is.</li>
+                <li>
+                  Choose File, then Download, then <strong>Comma-separated values (.csv)</strong>.
+                </li>
+              </ol>
+            </span>
+          </Note>
+        </div>
+      </Card>
+
+      <Card title="2. Upload the file">
+        <form action={onUpload} className="ag-card-body">
+          <FilePicker
+            id={inputId}
+            name="file"
+            accept=".csv,text/csv"
+            required
+            label="CSV file"
+            hint="Up to 256 KB and 1,000 rows. Nothing is saved until you confirm."
+          />
+          <div>
+            <Button type="submit" pending={pending}>
               {pending ? "Checking…" : "Check file"}
             </Button>
           </div>
         </form>
-      </section>
+      </Card>
     </>
   )
 }
@@ -231,93 +228,85 @@ function CheckScreen({
   ]
 
   return (
-    <section aria-labelledby="check-heading" className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 id="check-heading" className="staff-section-heading wrap-anywhere">
-          Check {check.fileName}
-        </h2>
-        <p className="text-sm text-slate-700">
-          Nothing is saved yet. Each row shows its row number in the sheet, and what was uploaded beside what will be saved.
-        </p>
-      </div>
-
-      {check.changedCount > 0 && (
-        <Alert className="border-amber-300 bg-amber-50 text-amber-950">
-          <AlertTitle>
-            {check.changedCount === 1 ? "1 row changed" : `${check.changedCount} rows changed`} since you checked, so nothing was saved
-          </AlertTitle>
-          <AlertDescription>The changed rows are marked. Check them, then confirm again.</AlertDescription>
-        </Alert>
-      )}
-
-      <div role="group" aria-label="Show rows" className="flex flex-wrap gap-2">
-        {filters.map((f) => (
-          <Button
-            key={f.value}
-            type="button"
-            size="sm"
-            variant={filter === f.value ? "default" : "outline"}
-            aria-pressed={filter === f.value}
-            onClick={() => setFilter(f.value)}
-          >
-            {f.label} <span className="tabular-nums">{f.count.toLocaleString("en-US")}</span>
-          </Button>
-        ))}
-      </div>
-
-      <ol aria-label="Rows" className="flex flex-col gap-2">
-        {shown.map((row) => (
-          <RowCard key={row.sheetRow} row={row} />
-        ))}
-      </ol>
-
-      <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:flex-wrap sm:items-center">
-        <Button type="button" onClick={onConfirm} disabled={pending || !canConfirm}>
-          {pending ? "Saving…" : canConfirm ? confirmLabel(summary) : "Nothing to import"}
-        </Button>
-        {refusedCount > 0 && (
-          <Button type="button" variant="outline" onClick={() => download(refusedFileName(check.fileName), refusedAgentRowsCsv(check.rows))}>
-            Download refused rows ({refusedCount.toLocaleString("en-US")})
-          </Button>
+    <Card
+      title={<span className="ag-wrap">Check {check.fileName}</span>}
+      caption="Nothing is saved yet. Each row shows its row number in the sheet, and what was uploaded beside what will be saved."
+    >
+      <div className="ag-card-body">
+        {check.changedCount > 0 && (
+          <Note tone="wait" role="alert">
+            <span className="ag-lines">
+              <b>
+                {check.changedCount === 1 ? "1 row changed" : `${check.changedCount} rows changed`} since you checked, so nothing was saved
+              </b>
+              <span>The changed rows are marked. Check them, then confirm again.</span>
+            </span>
+          </Note>
         )}
-        <Button type="button" variant="ghost" onClick={onStartOver} disabled={pending}>
-          Upload a different file
-        </Button>
+
+        <FilterPills
+          label="Show rows"
+          value={filter}
+          onChange={(value) => setFilter(value as typeof filter)}
+          options={filters.map((f) => ({
+            value: f.value,
+            label: (
+              <>
+                {f.label} <span className="ag-num">{f.count.toLocaleString("en-US")}</span>
+              </>
+            ),
+          }))}
+        />
+
+        <ol aria-label="Rows" className="ag-import-rows">
+          {shown.map((row) => (
+            <RowCard key={row.sheetRow} row={row} />
+          ))}
+        </ol>
+
+        <div className="ag-import-foot">
+          <Button onClick={onConfirm} pending={pending} disabled={!pending && !canConfirm}>
+            {pending ? "Saving…" : canConfirm ? confirmLabel(summary) : "Nothing to import"}
+          </Button>
+          {refusedCount > 0 && (
+            <Button variant="ghost" onClick={() => download(refusedFileName(check.fileName), refusedAgentRowsCsv(check.rows))}>
+              Download refused rows ({refusedCount.toLocaleString("en-US")})
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onStartOver} disabled={pending}>
+            Upload a different file
+          </Button>
+        </div>
       </div>
-    </section>
+    </Card>
   )
 }
 
 function RowCard({ row }: { row: AgentImportRow }) {
   return (
-    <li
-      aria-label={`Row ${row.sheetRow}`}
-      className={cn("rounded-lg px-3 py-2 text-sm ring-1 ring-foreground/10", row.changed && "bg-amber-50 ring-2 ring-amber-400")}
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium text-slate-900">Row {row.sheetRow}</span>
-        <Badge variant="secondary" className={CLASS_STYLES[row.class]}>
-          {CLASS_LABELS[row.class]}
-        </Badge>
-        {row.changed && <Badge className="bg-amber-500 text-white">Changed since you checked</Badge>}
+    <li aria-label={`Row ${row.sheetRow}`} className="ag-import-row" data-changed={row.changed ? "" : undefined}>
+      <div className="ag-row">
+        <span className="ag-strong">Row {row.sheetRow}</span>
+        <Tag tone={CLASS_TONES[row.class]}>{CLASS_LABELS[row.class]}</Tag>
+        {row.changed && <Tag tone="wait">Changed since you checked</Tag>}
       </div>
-      {row.reason && <p className="mt-1 wrap-anywhere text-slate-800">{row.reason}</p>}
-      <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+      {row.reason && <p className="ag-p ag-wrap ag-gap-top">{row.reason}</p>}
+      <dl>
         {VALUE_KEYS.map(({ key, label, normalized }) => {
           const original = row.original[key]
           const saved = row.normalized[normalized]
           if (original.trim() === "" && saved === null) return null
           return (
             <div key={key} className="contents">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="break-all">
+              <dt>{label}</dt>
+              <dd>
                 {/* Spaces kept, so extra ones show. */}
-                <span className="font-mono whitespace-pre-wrap">{original}</span>
+                <span className="ag-mono ag-pre">{original}</span>
                 {saved !== null && saved !== original && (
                   <>
                     {" "}
                     <span aria-hidden="true">→</span>
-                    <span className="sr-only">saved as</span> <span className="font-mono font-medium">{saved}</span>
+                    <span className="sr-only">saved as</span> <span className="ag-mono ag-strong">{saved}</span>
                   </>
                 )}
               </dd>
@@ -326,7 +315,7 @@ function RowCard({ row }: { row: AgentImportRow }) {
         })}
       </dl>
       {row.agent && (
-        <p className="mt-1 text-xs wrap-anywhere text-muted-foreground">
+        <p className="ag-small ag-quiet ag-wrap ag-gap-top">
           Stored: {row.agent.fullName}, {row.agent.code}, {row.agent.phone}
           {row.agent.email ? `, ${row.agent.email}` : ", no email"}
         </p>
@@ -339,35 +328,40 @@ function Result({ result, onStartOver }: { result: Extract<Step, { name: "done" 
   const summary = agentImportSummary(result.rows)
   const refusedCount = summary.refused + summary.flagged
   const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`
+  const titleId = useId()
+  const card = useRef<HTMLElement>(null)
+  // The confirm button has gone: the result's title takes focus, so it is read out.
+  useEffect(() => {
+    card.current?.querySelector<HTMLElement>(`[id="${titleId}"]`)?.focus()
+  }, [titleId])
   return (
-    <section aria-labelledby="result-heading" className="flex max-w-2xl flex-col gap-4">
-      <h2 id="result-heading" className="staff-section-heading wrap-anywhere">
-        {result.fileName} is imported
-      </h2>
-      <ul className="list-disc pl-5 text-sm text-slate-800">
-        <li>{plural(result.created, "agent", "agents")} created, Approved.</li>
-        {result.emailsAdded > 0 && <li>{plural(result.emailsAdded, "email", "emails")} added to agents who had none.</li>}
-        <li>{plural(result.skipped, "row", "rows")} skipped.</li>
-      </ul>
-      <p className="text-sm text-slate-700">No email was sent. Imported emails count as confirmed by you.</p>
-      {refusedCount > 0 && (
-        <p className="text-sm text-slate-700">
-          {plural(refusedCount, "row was", "rows were")} refused. Download them, fix each one using its reason, and upload that file.
-        </p>
-      )}
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Link href={`/staff/agents?status=all&import=${result.batchId}`} className={buttonVariants()}>
-          See the agents this import created
-        </Link>
+    <TaskCard ref={card} aria-labelledby={titleId}>
+      <FinishedState titleId={titleId} title={<span className="ag-wrap">{result.fileName} is imported</span>}>
+        <ul className="ag-list ag-left">
+          <li>{plural(result.created, "agent", "agents")} created, Approved.</li>
+          {result.emailsAdded > 0 && <li>{plural(result.emailsAdded, "email", "emails")} added to agents who had none.</li>}
+          <li>{plural(result.skipped, "row", "rows")} skipped.</li>
+        </ul>
+        <p className="ag-p ag-quiet">No email was sent. Imported emails count as confirmed by you.</p>
         {refusedCount > 0 && (
-          <Button type="button" variant="outline" onClick={() => download(refusedFileName(result.fileName), refusedAgentRowsCsv(result.rows))}>
-            Download refused rows ({refusedCount.toLocaleString("en-US")})
-          </Button>
+          <p className="ag-p ag-quiet">
+            {plural(refusedCount, "row was", "rows were")} refused. Download them, fix each one using its reason, and upload that file.
+          </p>
         )}
-        <Button type="button" variant="ghost" onClick={onStartOver}>
-          Import another file
-        </Button>
-      </div>
-    </section>
+        <div className="ag-stack">
+          <ButtonLink href={`/staff/agents?status=all&import=${result.batchId}`} size="wide" chevron>
+            See the agents this import created
+          </ButtonLink>
+          {refusedCount > 0 && (
+            <Button variant="ghost" size="wide" onClick={() => download(refusedFileName(result.fileName), refusedAgentRowsCsv(result.rows))}>
+              Download refused rows ({refusedCount.toLocaleString("en-US")})
+            </Button>
+          )}
+          <Button variant="ghost" size="wide" onClick={onStartOver}>
+            Import another file
+          </Button>
+        </div>
+      </FinishedState>
+    </TaskCard>
   )
 }

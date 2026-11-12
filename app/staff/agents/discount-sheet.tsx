@@ -1,14 +1,10 @@
 "use client"
 
 import { useId, useOptimistic, useState, useTransition } from "react"
-import { toast } from "sonner"
-
-import { PendingButton } from "@/components/staff/pending-button"
-import { SheetForm } from "@/components/staff/sheet-form"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button, Note as KitNote, Section, Sheet } from "@/components/kit"
 
 import { readAgentDiscountImpact, saveAgentDiscount } from "./discount-actions"
-import { ChoiceCard, DiscountChip, DiscountImpact, Facts, LockedNote, MoneyField, Note, ReasonField, useImpact, type ChipTone } from "./discount-fields"
+import { DiscountChip, DiscountImpact, DiscountKindChoice, Facts, LockedNote, MoneyField, Note, ReasonField, useImpact, type ChipTone } from "./discount-fields"
 import {
   AGENT_REASON_MISSING,
   AMOUNT_HINT,
@@ -21,6 +17,7 @@ import {
   tzs,
   type DiscountOutcome,
 } from "./discount-outcome"
+import { toast } from "./form-parts"
 
 export type DiscountAgent = {
   id: string
@@ -69,7 +66,7 @@ export function AgentDiscount({ agent, standard, canManage }: { agent: DiscountA
       }
       if (outcome.status === "refused") return setRefusal(outcome.message)
       setOpen(false)
-      toast.success(outcome.message)
+      toast(outcome.message)
     })
   }
 
@@ -79,10 +76,9 @@ export function AgentDiscount({ agent, standard, canManage }: { agent: DiscountA
         type="button"
         onClick={() => changeOpen(true)}
         aria-label={`Interview discount for ${agent.fullName}: ${tzs(amount)}, ${own === null ? "standard" : "own amount"}`}
-        className="-mx-1.5 rounded-md px-1.5 py-0.5 text-left whitespace-nowrap outline-none hover:bg-slate-100 focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="ag-cellbtn"
       >
-        <span className="font-medium text-slate-900 tabular-nums">{tzs(amount)}</span>{" "}
-        <span className="text-muted-foreground">{own === null ? "standard" : "own amount"}</span>
+        <span className="ag-strong ag-num">{tzs(amount)}</span> <span className="ag-quiet">{own === null ? "standard" : "own amount"}</span>
       </button>
       <AgentDiscountSheet
         key={opening}
@@ -137,21 +133,30 @@ function AgentDiscountSheet({
   const impact = useImpact(askable ? `${kind}:${next}` : null, () => readAgentDiscountImpact(agent.id, next))
 
   const meta = (
-    <>
-      <span className="font-mono">{agent.code}</span>
+    <span className="ag-row ag-quiet">
+      <span className="ag-mono">{agent.code}</span>
       <DiscountChip tone={agent.status.tone}>{agent.status.label}</DiscountChip>
       <span>{plural(agent.studentCount, "student")}</span>
-    </>
+    </span>
   )
 
   if (!editable) {
     const amount = own ?? standard
     return (
-      <SheetForm open={open} onOpenChange={onOpenChange} title={agent.fullName} meta={meta} cancel="Close">
-        <section aria-labelledby={`${ids}-heading`} className="flex flex-col gap-3">
-          <h3 id={`${ids}-heading`} className="text-sm font-semibold text-slate-900">
-            Interview discount
-          </h3>
+      <Sheet
+        open={open}
+        onOpenChange={onOpenChange}
+        placement="side"
+        title={agent.fullName}
+        chips={meta}
+        closeLabel="Close"
+        foot={
+          <Button variant="ghost" size="wide" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        }
+      >
+        <Section title="Interview discount">
           <Facts
             rows={[
               ["Gives", `${tzs(amount)} off ${own === null ? "(standard)" : "(own amount)"}`],
@@ -159,9 +164,9 @@ function AgentDiscountSheet({
               ["Mobile", agent.phone],
             ]}
           />
-        </section>
+        </Section>
         {canManage ? <Note>This agent is retired, so nothing about them can change.</Note> : <LockedNote>{LOCKED_NOTE}</LockedNote>}
-      </SheetForm>
+      </Sheet>
     )
   }
 
@@ -178,72 +183,70 @@ function AgentDiscountSheet({
   }
 
   return (
-    <SheetForm
+    <Sheet
       open={open}
       onOpenChange={onOpenChange}
+      placement="side"
       title={agent.fullName}
-      meta={meta}
-      form={{ onSubmit: submit, noValidate: true }}
-      footer={
-        <PendingButton type="submit" pending={pending} pendingLabel="Saving…" disabled={!changed}>
-          Save
-        </PendingButton>
+      chips={meta}
+      closeLabel="Close"
+      foot={
+        <>
+          <Button type="submit" form={`${ids}-form`} size="wide" pending={pending} disabled={!changed}>
+            {pending ? "Saving…" : "Save"}
+          </Button>
+          <Button variant="ghost" size="wide" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+        </>
       }
     >
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-3 text-sm font-semibold text-slate-900">Interview discount</legend>
-        <div className="flex flex-col gap-2">
-          <ChoiceCard
-            name={`${ids}-kind`}
-            value="standard"
-            checked={kind === "standard"}
-            onChange={() => setKind("standard")}
-            title={`Standard, ${tzs(standard)} off`}
-            line="Follows the standard amount when it changes."
-          />
-          <ChoiceCard
-            name={`${ids}-kind`}
-            value="own"
-            checked={kind === "own"}
-            onChange={() => setKind("own")}
-            title="Own amount"
-            line="Set for this agent only."
-          />
-        </div>
-        {kind === "own" && (
-          <MoneyField
-            id={`${ids}-amount`}
-            label="Amount off the TZS 50,000 fee"
-            value={typed}
-            onChange={(value) => {
-              setTyped(value)
-              setErrors((current) => ({ ...current, amount: undefined }))
-            }}
-            help={changed && typedAmount !== null ? feeBecomes(typedAmount) : null}
-            error={errors.amount}
-          />
+      <form id={`${ids}-form`} onSubmit={submit} noValidate className="ag-stack">
+        <DiscountKindChoice
+          name={`${ids}-kind`}
+          legend={<span className="ag-label">Interview discount</span>}
+          value={kind}
+          onChange={(value) => setKind(value === "own" ? "own" : "standard")}
+          options={[
+            { value: "standard", title: `Standard, ${tzs(standard)} off`, line: "Follows the standard amount when it changes." },
+            { value: "own", title: "Own amount", line: "Set for this agent only." },
+          ]}
+        >
+          {kind === "own" && (
+            <MoneyField
+              id={`${ids}-amount`}
+              label="Amount off the TZS 50,000 fee"
+              value={typed}
+              onChange={(value) => {
+                setTyped(value)
+                setErrors((current) => ({ ...current, amount: undefined }))
+              }}
+              help={changed && typedAmount !== null ? feeBecomes(typedAmount) : null}
+              error={errors.amount}
+            />
+          )}
+        </DiscountKindChoice>
+        {changed && (
+          <div className="ag-stack">
+            <ReasonField
+              id={`${ids}-reason`}
+              value={reason}
+              onChange={(value) => {
+                setReason(value)
+                setErrors((current) => ({ ...current, reason: undefined }))
+              }}
+              placeholder="e.g. Head teacher, agreed with the Director"
+              error={errors.reason}
+            />
+            <DiscountImpact impact={impact} />
+          </div>
         )}
-      </fieldset>
-      {changed && (
-        <div className="flex flex-col gap-3">
-          <ReasonField
-            id={`${ids}-reason`}
-            value={reason}
-            onChange={(value) => {
-              setReason(value)
-              setErrors((current) => ({ ...current, reason: undefined }))
-            }}
-            placeholder="e.g. Head teacher, agreed with the Director"
-            error={errors.reason}
-          />
-          <DiscountImpact impact={impact} />
-        </div>
-      )}
-      {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal}</AlertDescription>
-        </Alert>
-      )}
-    </SheetForm>
+        {refusal && (
+          <KitNote tone="bad" role="alert">
+            {refusal}
+          </KitNote>
+        )}
+      </form>
+    </Sheet>
   )
 }

@@ -1,17 +1,16 @@
 "use client"
 
-import { ChevronRightIcon, TicketPercentIcon } from "lucide-react"
 import { useOptimistic, useState, useTransition } from "react"
-import { toast } from "sonner"
 
-import { EmptyState } from "@/components/staff/empty-state"
-import { Button } from "@/components/ui/button"
+import { Button, Card, EmptyState, PageHeader, Table } from "@/components/kit"
 import type { PromoCode, PromoState } from "@/lib/services/promo-codes"
 
 import { DiscountChip } from "../agents/discount-fields"
 import { changePromoState } from "./actions"
 import { effectiveState, PROMO_LOST, promoAmountLine, promoStateChip, type PromoOutcome } from "./messages"
 import { PromoSheet } from "./promo-sheet"
+import "../agents/agents.css"
+import { toast } from "../agents/form-parts"
 
 // The Promo codes page below its heading line: New Promo code, the list,
 // and the sheet a row opens. Pause, Resume and End show on the row and in
@@ -62,82 +61,67 @@ export function PromoCodes({
       }
       if (outcome.status === "refused") return setStateRefusal(outcome.message)
       setSheet((current) => ({ ...current, open: false }))
-      toast.success(outcome.message)
+      toast(outcome.message)
     })
   }
 
-  const newButton = canManage && (
-    <Button type="button" variant="orange" onClick={() => openSheet("new")}>
-      New Promo code
-    </Button>
-  )
+  const newButton = canManage && <Button onClick={() => openSheet("new")}>New Promo code</Button>
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="staff-heading">Promo codes</h1>
-          <p className="text-sm text-muted-foreground">Codes for campaigns and groups. No agent, no commission, no login.</p>
-        </div>
-        {/* With no codes yet, the empty list holds the one action. */}
-        {shown.length > 0 && newButton}
-      </div>
+    <div className="ag-page">
+      <PageHeader
+        title="Promo codes"
+        subtitle="Codes for campaigns and groups. No agent, no commission, no login."
+        // With no codes yet, the empty list holds the one action.
+        actions={shown.length > 0 && newButton}
+      />
 
       {shown.length === 0 ? (
-        <EmptyState role="status" icon={TicketPercentIcon} title="No Promo codes yet" action={newButton || undefined} />
+        <Card role="status">
+          <EmptyState title="No Promo codes yet" action={newButton || undefined} />
+        </Card>
       ) : (
-        <div className="relative overflow-x-auto rounded-lg ring-1 ring-foreground/10">
-          <table aria-label="Promo codes" className="w-full min-w-[44rem] text-left text-sm">
-            <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-3 py-2 font-medium">Code</th>
-                <th scope="col" className="px-3 py-2 font-medium">Name</th>
-                <th scope="col" className="px-3 py-2 font-medium">Interview discount</th>
-                <th scope="col" className="px-3 py-2 font-medium">Status</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Students</th>
-                <th scope="col" className="w-10 px-3 py-2">
-                  <span className="sr-only">Open</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((code) => {
-                const chip = promoStateChip(code.effectiveState)
-                const amount = promoAmountLine(code.amount)
-                return (
-                  <tr key={code.id} className="relative border-b align-top last:border-b-0 hover:bg-slate-50">
-                    <th scope="row" className="px-3 py-2.5">
-                      {/* The button covers the row, so the whole row opens the sheet. */}
-                      <button
-                        type="button"
-                        onClick={() => openSheet(code.id)}
-                        aria-label={`Open ${code.code}`}
-                        className="font-mono text-sm font-semibold text-slate-900 outline-none after:absolute after:inset-0 after:content-[''] focus-visible:after:ring-3 focus-visible:after:ring-ring/50 focus-visible:after:ring-inset"
-                      >
-                        {code.code}
-                      </button>
-                    </th>
-                    <td className="px-3 py-2.5">
-                      <p className="font-medium text-slate-900">{code.name}</p>
-                      {code.note && <p className="max-w-72 text-xs text-muted-foreground">{code.note}</p>}
-                    </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">
-                      <span className="font-medium text-slate-900 tabular-nums">{amount.off}</span>{" "}
-                      <span className="text-muted-foreground">{amount.fee}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <DiscountChip tone={chip.tone}>{chip.label}</DiscountChip>
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{code.studentCount}</td>
-                    <td className="px-3 py-2.5 text-slate-400">
-                      <ChevronRightIcon aria-hidden className="size-4" />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Card>
+          <Table
+            label="Promo codes"
+            rows={shown}
+            rowKey={(code) => code.id}
+            // The whole row opens the code's sheet (#343: named "Open …", so a screen reader says what it does).
+            onOpen={(code) => openSheet(code.id)}
+            rowLabel={(code) => `Open ${code.code}`}
+            columns={[
+              { header: "Code", rowHeader: true, cell: (code) => <span className="ag-mono ag-nowrap">{code.code}</span> },
+              {
+                header: "Name",
+                cell: (code) => (
+                  <span className="ag-cell">
+                    <span className="ag-strong">{code.name}</span>
+                    {code.note && <small>{code.note}</small>}
+                  </span>
+                ),
+              },
+              {
+                header: "Interview discount",
+                cell: (code) => {
+                  const amount = promoAmountLine(code.amount)
+                  return (
+                    <span className="ag-nowrap">
+                      <span className="ag-strong ag-num">{amount.off}</span> <span className="ag-quiet">{amount.fee}</span>
+                    </span>
+                  )
+                },
+              },
+              {
+                header: "Status",
+                cell: (code) => {
+                  const chip = promoStateChip(code.effectiveState)
+                  return <DiscountChip tone={chip.tone}>{chip.label}</DiscountChip>
+                },
+              },
+              { header: "Students", align: "end", cell: (code) => code.studentCount },
+            ]}
+          />
+        </Card>
       )}
 
       <PromoSheet

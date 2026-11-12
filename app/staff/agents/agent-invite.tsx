@@ -1,19 +1,14 @@
 "use client"
 
 import { useId, useState, useTransition } from "react"
-import { toast } from "sonner"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Field, Note, Sheet, Tag, TextLink } from "@/components/kit"
 import type { AccountState } from "@/lib/services/agent-invites"
-import { cn } from "@/lib/utils"
 
 import { saveMarketingAgentEmail, sendMarketingAgentInvite } from "./invite-actions"
 import { accountBadge } from "./invite-outcome"
+import { toast } from "./form-parts"
+import "./agents.css"
 
 type Agent = { id: string; fullName: string; code: string }
 
@@ -24,17 +19,9 @@ export function AccountStateBadge({ state, line }: { state: AccountState | null;
   if (!state || state === "retired" || state === "switched_off") return null
   const badge = accountBadge(state)
   return (
-    <div className="mt-1 flex flex-col items-start gap-1">
-      <Badge
-        variant="outline"
-        className={cn(
-          badge.attention && "border-amber-300 bg-amber-50 text-amber-900",
-          state === "joined" && "border-emerald-200 bg-emerald-50 text-emerald-800",
-        )}
-      >
-        {badge.label}
-      </Badge>
-      {line && <p className="max-w-64 text-xs text-muted-foreground">{line}</p>}
+    <div className="ag-cell">
+      <Tag tone={badge.attention ? "wait" : state === "joined" ? "ok" : "line"}>{badge.label}</Tag>
+      {line && <small>{line}</small>}
     </div>
   )
 }
@@ -76,23 +63,23 @@ export function AgentInviteActions({
       } catch {
         outcome = { status: "refused" as const, message: "Invite not sent: the request was lost. Reload the page to see whether it went." }
       }
-      if (outcome.status === "sent") toast.success(outcome.message)
+      if (outcome.status === "sent") toast(outcome.message)
       else setRefusal(outcome.message)
     })
   }
 
   return (
-    <div className="flex flex-col items-start gap-1">
-      <div className="flex flex-wrap gap-2">
+    <div className="ag-cell">
+      <div className="ag-row">
         {email && state && INVITABLE.includes(state) && (
-          <Button size="sm" variant="outline" onClick={send} disabled={pending} aria-label={`${label} to ${agent.fullName}`}>
+          <Button size="small" variant="ghost" onClick={send} disabled={pending} aria-label={`${label} to ${agent.fullName}`}>
             {pending ? "Sending…" : label}
           </Button>
         )}
         {joined ? (
-          <Button size="sm" variant="ghost" disabled aria-describedby={joinedNoteId}>
+          <TextLink disabled aria-describedby={joinedNoteId}>
             Edit email
-          </Button>
+          </TextLink>
         ) : (
           <EditEmail agent={agent} email={email} />
         )}
@@ -100,12 +87,12 @@ export function AgentInviteActions({
       {/* A joined agent's email is their sign-in, kept in Supabase Auth, and
           only they change it (owner decision 41). */}
       {joined && (
-        <p id={joinedNoteId} className="max-w-56 text-xs text-muted-foreground">
+        <p id={joinedNoteId} className="ag-hint">
           Only the agent can change this now.
         </p>
       )}
       {refusal && (
-        <p role="alert" className="max-w-56 text-xs text-destructive">
+        <p role="alert" className="ag-error">
           {refusal}
         </p>
       )}
@@ -141,56 +128,58 @@ function EditEmail({ agent, email }: { agent: Agent; email: string | null }) {
       }
       if (outcome.status === "refused") return setRefusal(outcome.message)
       setOpen(false)
-      toast.success(outcome.message)
+      toast(outcome.message)
     })
   }
 
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={() => changeOpen(true)} aria-label={`${verb} for ${agent.fullName}`}>
+      <TextLink onClick={() => changeOpen(true)} aria-label={`${verb} for ${agent.fullName}`}>
         {verb}
-      </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent>
-          <form onSubmit={save} className="flex flex-col gap-4">
-            <DialogHeader>
-              <DialogTitle>
-                {verb} for {agent.fullName}
-              </DialogTitle>
-              <DialogDescription id={hintId}>
-                Phone them to check the address is theirs. Once it is saved, send the invite from their row. A link already
-                sent to an earlier address stops working.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={fieldId}>Email</Label>
-              <Input
-                id={fieldId}
-                type="email"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                required
-                aria-describedby={hintId}
-              />
-            </div>
-            {refusal && (
-              <Alert variant="destructive">
-                <AlertDescription>{refusal}</AlertDescription>
-              </Alert>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? "Saving…" : "Save email"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      </TextLink>
+      <Sheet
+        open={open}
+        onOpenChange={changeOpen}
+        title={`${verb} for ${agent.fullName}`}
+        hint="Phone them to check the address is theirs. Once it is saved, send the invite from their row. A link already sent to an earlier address stops working."
+        hintId={hintId}
+        closeLabel="Close"
+        foot={
+          <>
+            <Button type="submit" form={`${fieldId}-form`} size="wide" disabled={pending}>
+              {pending ? "Saving…" : "Save email"}
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} disabled={pending}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        <form id={`${fieldId}-form`} onSubmit={save} className="ag-stack">
+          <div className="ag-field">
+            <label htmlFor={fieldId} className="ag-label">
+              Email
+            </label>
+            <Field
+              id={fieldId}
+              size="compact"
+              alignStart
+              type="email"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              required
+              aria-describedby={hintId}
+            />
+          </div>
+          {refusal && (
+            <Note tone="bad" role="alert">
+              {refusal}
+            </Note>
+          )}
+        </form>
+      </Sheet>
     </>
   )
 }

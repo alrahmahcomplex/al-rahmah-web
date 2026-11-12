@@ -1,20 +1,16 @@
 "use client"
 
-import { useEffect, useId, useState, useTransition } from "react"
-import { toast } from "sonner"
+import { useCallback, useEffect, useId, useState, useTransition, type ReactNode } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Button, Note, Sheet } from "@/components/kit"
 import type { RecreatePreview } from "@/lib/services/marketing-agents"
 
 import { readRecreatePreview, recreateMarketingAgent, type AgentDraftInput } from "./actions"
 import { AgentFields } from "./agent-fields"
 import { FeeImpact } from "./fee-impact"
+import { Checkbox, TextArea, toast } from "./form-parts"
 import { samePersonLabel, STATUS_REASON_MAX, type DraftRefusal } from "./outcome"
+import "./agents.css"
 
 type Preview = { status: "loading" } | { status: "ready"; preview: RecreatePreview } | { status: "refused"; message: string }
 
@@ -25,25 +21,29 @@ const EMPTY: AgentDraftInput = { fullName: "", phone: "", whatsapp: "", email: "
 export function RecreateAgent({ agent }: { agent: { id: string; fullName: string; code: string } }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const close = useCallback(() => setOpen(false), [])
+  const parts = useRecreateForm({ active: open, agentId: agent.id, code: agent.code, onBusy: setBusy, onDone: close })
   return (
     <>
-      <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)} aria-label={`Recreate ${agent.fullName}`}>
+      <Button size="small" variant="ghost" onClick={() => setOpen(true)} aria-label={`Recreate ${agent.fullName}`}>
         Recreate
       </Button>
-      <Dialog open={open} onOpenChange={(next) => !busy && setOpen(next)}>
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-lg">
-          {open && <RecreateForm agentId={agent.id} code={agent.code} onBusy={setBusy} onDone={() => setOpen(false)} />}
-        </DialogContent>
-      </Dialog>
+      <Sheet open={open} onOpenChange={(next) => !busy && setOpen(next)} title={parts.title} hint={parts.hint} closeLabel="Close" foot={parts.foot}>
+        {parts.body}
+      </Sheet>
     </>
   )
 }
 
-// The Recreate step, inside a dialog: the record's details to correct, how
-// many students carry the code, the families whose fee moves, the
-// same-person tick and the reason. `initial` fills the details, as typed in
-// Add agent; otherwise they start as the record has them.
-export function RecreateForm({
+export type RecreateParts = { title: ReactNode; hint: ReactNode; body: ReactNode; foot: ReactNode }
+
+// The Recreate step, as the parts of the sheet that shows it: the record's
+// details to correct, how many students carry the code, the families whose
+// fee moves, the same-person tick and the reason. `initial` fills the
+// details, as typed in Add agent; otherwise they start as the record has
+// them. Each time `active` turns on, the step starts afresh.
+export function useRecreateForm({
+  active,
   agentId,
   code,
   initial,
@@ -51,25 +51,42 @@ export function RecreateForm({
   onDone,
   onBack,
 }: {
+  active: boolean
   agentId: string
   code: string
   initial?: AgentDraftInput
   onBusy: (busy: boolean) => void
   onDone: () => void
   onBack?: () => void
-}) {
+}): RecreateParts {
   const [preview, setPreview] = useState<Preview>({ status: "loading" })
   const [draft, setDraft] = useState<AgentDraftInput>(initial ?? EMPTY)
   const [same, setSame] = useState(false)
   const [reason, setReason] = useState("")
   const [refusal, setRefusal] = useState<DraftRefusal | null>(null)
   const [pending, startTransition] = useTransition()
+  const formId = useId()
   const reasonId = useId()
   const sameId = useId()
 
+  // A fresh start each time the step opens, for this record.
+  const session = active ? agentId : null
+  const [started, setStarted] = useState<string | null>(null)
+  if (started !== session) {
+    setStarted(session)
+    if (session !== null) {
+      setPreview({ status: "loading" })
+      setDraft(initial ?? EMPTY)
+      setSame(false)
+      setReason("")
+      setRefusal(null)
+    }
+  }
+
   useEffect(() => {
+    if (session === null) return
     let current = true
-    readRecreatePreview(agentId)
+    readRecreatePreview(session)
       .then((answer) => {
         if (!current) return
         setPreview(answer)
@@ -82,7 +99,7 @@ export function RecreateForm({
     return () => {
       current = false
     }
-  }, [agentId, initial])
+  }, [session, initial])
 
   useEffect(() => onBusy(pending), [pending, onBusy])
 
@@ -101,7 +118,7 @@ export function RecreateForm({
         }
       }
       if (answer.status === "refused") return setRefusal(answer)
-      toast.success(answer.message)
+      toast(answer.message)
       onDone()
     })
   }
@@ -109,49 +126,29 @@ export function RecreateForm({
   const ready = preview.status === "ready" ? preview.preview : null
   const studentCount = ready?.studentCount ?? 0
 
-  return (
-    <form className="flex min-h-0 flex-col gap-4" onSubmit={confirm} noValidate>
-      <DialogHeader>
-        <DialogTitle>Recreate {ready?.agent.fullName ?? code}?</DialogTitle>
-        <DialogDescription>
-          {ready?.agent.retired
-            ? `Creates a corrected record holding ${code}, Approved and switched on. The retired record stays for history.`
-            : `Retires this record and creates a corrected one holding ${code}, Approved and switched on, in one step. The retired record stays for history.`}
-        </DialogDescription>
-      </DialogHeader>
-
-      <div className="-mx-4 -my-1 grid min-h-0 gap-4 overflow-y-auto px-4 py-1">
-        {preview.status === "loading" && <p className="text-sm text-muted-foreground">Reading the record…</p>}
+  return {
+    title: `Recreate ${ready?.agent.fullName ?? code}?`,
+    hint: ready?.agent.retired
+      ? `Creates a corrected record holding ${code}, Approved and switched on. The retired record stays for history.`
+      : `Retires this record and creates a corrected one holding ${code}, Approved and switched on, in one step. The retired record stays for history.`,
+    body: (
+      <form id={formId} className="ag-stack" onSubmit={confirm} noValidate>
+        {preview.status === "loading" && <p className="ag-p ag-quiet">Reading the record…</p>}
         {preview.status === "refused" && (
-          <Alert variant="destructive" role="alert">
-            <AlertDescription>{preview.message}</AlertDescription>
-          </Alert>
+          <Note tone="bad" role="alert">
+            {preview.message}
+          </Note>
         )}
         {ready && (
           <>
-            <AgentFields
-              fields={["full_name", "phone", "whatsapp", "email"]}
-              value={draft}
-              onChange={setDraft}
-              refused={refusal}
-              disabled={pending}
-            />
+            <AgentFields fields={["full_name", "phone", "whatsapp", "email"]} value={draft} onChange={setDraft} refused={refusal} disabled={pending} />
             <FeeImpact impact={{ status: "ready", families: ready.families }} />
-            <div className="flex items-start gap-2 text-sm">
-              <Checkbox
-                id={sameId}
-                className="mt-0.5"
-                checked={same}
-                disabled={pending}
-                onCheckedChange={(checked) => setSame(checked === true)}
-              />
-              <Label htmlFor={sameId} className="font-normal text-slate-900">
-                {samePersonLabel(code, studentCount)}
-              </Label>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor={reasonId}>Reason</Label>
-              <Textarea
+            <Checkbox id={sameId} checked={same} disabled={pending} onCheckedChange={setSame} label={samePersonLabel(code, studentCount)} />
+            <div className="ag-field">
+              <label htmlFor={reasonId} className="ag-label">
+                Reason
+              </label>
+              <TextArea
                 id={reasonId}
                 value={reason}
                 maxLength={STATUS_REASON_MAX}
@@ -160,27 +157,28 @@ export function RecreateForm({
                 onChange={(event) => setReason(event.target.value)}
                 aria-describedby={`${reasonId}-hint`}
               />
-              <p id={`${reasonId}-hint`} className="text-xs text-muted-foreground">
+              <p id={`${reasonId}-hint`} className="ag-hint">
                 Required. Kept with the agent&apos;s history.
               </p>
             </div>
           </>
         )}
         {refusal && !refusal.field && (
-          <Alert variant="destructive" role="alert">
-            <AlertDescription>{refusal.message}</AlertDescription>
-          </Alert>
+          <Note tone="bad" role="alert">
+            {refusal.message}
+          </Note>
         )}
-      </div>
-
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onBack ?? onDone} disabled={pending}>
-          {onBack ? "Back" : "Cancel"}
-        </Button>
-        <Button type="submit" variant="destructive" disabled={pending || !ready || !same || reason.trim() === ""}>
+      </form>
+    ),
+    foot: (
+      <>
+        <Button type="submit" form={formId} size="wide" disabled={pending || !ready || !same || reason.trim() === ""}>
           {pending ? "Saving…" : `Recreate ${code}`}
         </Button>
-      </DialogFooter>
-    </form>
-  )
+        <Button variant="ghost" size="wide" onClick={onBack ?? onDone} disabled={pending}>
+          {onBack ? "Back" : "Cancel"}
+        </Button>
+      </>
+    ),
+  }
 }

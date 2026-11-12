@@ -1,20 +1,13 @@
 "use client"
 
-import { ChevronRightIcon } from "lucide-react"
 import { useEffect, useId, useRef, useState, useTransition } from "react"
-import { toast } from "sonner"
 
-import { PendingButton } from "@/components/staff/pending-button"
-import { SheetForm } from "@/components/staff/sheet-form"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Field, FieldError, Note as KitNote, Sheet } from "@/components/kit"
 import type { PromoCode, PromoState } from "@/lib/services/promo-codes"
-import { cn } from "@/lib/utils"
 
 import { DiscountChip, DiscountImpact, Facts, LockedNote, MoneyField, Note, ReasonField, useImpact } from "../agents/discount-fields"
 import { AMOUNT_HINT, feeBecomes, LOCKED_NOTE, parseAmount, plural, REASON_MISSING, tzs } from "../agents/discount-outcome"
+import { DateField, Disclosure, toast } from "../agents/form-parts"
 import { checkPromoCode, createPromo, readPromoImpact, updatePromo } from "./actions"
 import {
   CODE_FIXED,
@@ -37,6 +30,7 @@ import {
   type PromoField,
   type PromoOutcome,
 } from "./messages"
+import "../agents/agents.css"
 
 const NEW_AMOUNT = 25_000
 const CHECK_DELAY_MS = 300
@@ -70,7 +64,19 @@ export function PromoSheet({
   const editable = canManage && (promo === null || promo.state !== "ended" || statePending)
   if (!editable && promo) {
     return (
-      <SheetForm open={open} onOpenChange={onOpenChange} title={promo.code} meta={<PromoMeta promo={promo} />} cancel="Close">
+      <Sheet
+        open={open}
+        onOpenChange={onOpenChange}
+        placement="side"
+        title={promo.code}
+        chips={<PromoMeta promo={promo} />}
+        closeLabel="Close"
+        foot={
+          <Button variant="ghost" size="wide" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+        }
+      >
         <Facts
           rows={[
             ["Name", promo.name],
@@ -80,7 +86,7 @@ export function PromoSheet({
           ]}
         />
         {promo.state === "ended" ? <Note>{ENDED_NOTE}</Note> : <LockedNote>{LOCKED_NOTE}</LockedNote>}
-      </SheetForm>
+      </Sheet>
     )
   }
   return (
@@ -100,11 +106,11 @@ export function PromoSheet({
 function PromoMeta({ promo }: { promo: PromoCode }) {
   const chip = promoStateChip(promo.effectiveState)
   return (
-    <>
+    <span className="ag-row ag-quiet">
       <DiscountChip tone={chip.tone}>{chip.label}</DiscountChip>
       <span>{plural(promo.studentCount, "student")}</span>
       {promo.endsOn && <span>· ends {formatDay(promo.endsOn)}</span>}
-    </>
+    </span>
   )
 }
 
@@ -198,7 +204,7 @@ function EditablePromo({
         return
       }
       onSaved()
-      toast.success(outcome.message)
+      toast(outcome.message)
     })
   }
 
@@ -206,133 +212,139 @@ function EditablePromo({
   const compare = amount !== null && highestAgentAmount !== null ? comparisonNote(amount, highestAgentAmount) : null
 
   return (
-    <SheetForm
+    <Sheet
       open={open}
       onOpenChange={changeOpen}
+      placement="side"
       title={isNew ? "New Promo code" : promo.code}
-      meta={isNew ? <span>{NEW_PROMO_META}</span> : <PromoMeta promo={promo} />}
-      form={{ onSubmit: submit, noValidate: true }}
-      footer={
-        <PendingButton type="submit" pending={pending} pendingLabel={isNew ? "Creating…" : "Saving…"} disabled={!changed || statePending}>
-          {isNew ? "Create code" : "Save"}
-        </PendingButton>
+      hint={isNew ? NEW_PROMO_META : undefined}
+      chips={isNew ? undefined : <PromoMeta promo={promo} />}
+      closeLabel="Close"
+      foot={
+        <>
+          <Button type="submit" form={`${ids}-form`} size="wide" pending={pending} disabled={!changed || statePending}>
+            {pending ? (isNew ? "Creating…" : "Saving…") : isNew ? "Create code" : "Save"}
+          </Button>
+          <Button variant="ghost" size="wide" onClick={() => changeOpen(false)}>
+            Cancel
+          </Button>
+        </>
       }
     >
-      <TextField
-        id={`${ids}-name`}
-        label="Name"
-        value={name}
-        maxLength={PROMO_NAME_MAX}
-        placeholder="e.g. Instagram ad, November 2026"
-        help="Staff see this. Parents never do."
-        error={errors.name}
-        onChange={(value) => {
-          setName(value)
-          clear("name")
-        }}
-      />
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`${ids}-code`}>Code parents type</Label>
-        <Input
-          id={`${ids}-code`}
-          value={isNew ? code : promo.code}
-          readOnly={!isNew}
-          maxLength={20}
-          placeholder="e.g. INSTA26"
-          autoCapitalize="characters"
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(event) => {
-            setCode(event.target.value)
-            clear("code")
-          }}
-          aria-invalid={errors.code || codeLine.problem ? true : undefined}
-          aria-describedby={`${ids}-code-help`}
-          className={cn("font-mono uppercase", !isNew && "bg-slate-50 text-slate-600")}
-        />
-        <p
-          id={`${ids}-code-help`}
-          role={isNew ? "status" : undefined}
-          className={cn("text-xs", errors.code || codeLine.problem ? "text-sm text-destructive" : "text-muted-foreground")}
-        >
-          {errors.code ?? codeLine.text}
-        </p>
-      </div>
-      <div className="flex flex-col gap-3">
-        <MoneyField
-          id={`${ids}-amount`}
-          label="Amount off the TZS 50,000 fee"
-          value={typed}
+      <form id={`${ids}-form`} onSubmit={submit} noValidate className="ag-stack">
+        <TextField
+          id={`${ids}-name`}
+          label="Name"
+          value={name}
+          maxLength={PROMO_NAME_MAX}
+          placeholder="e.g. Instagram ad, November 2026"
+          help="Staff see this. Parents never do."
+          error={errors.name}
           onChange={(value) => {
-            setTyped(value)
-            clear("amount")
+            setName(value)
+            clear("name")
           }}
-          help={amount !== null ? feeBecomes(amount) : null}
-          error={errors.amount}
         />
-        {compare && <Note tone={compare.tone}>{compare.text}</Note>}
-      </div>
-      <details className="group overflow-hidden rounded-xl ring-1 ring-foreground/10" open={Boolean(errors.endsOn || errors.note) || undefined}>
-        <summary className="flex cursor-pointer list-none items-center gap-2.5 px-3.5 py-3 text-sm font-medium text-slate-900 [&::-webkit-details-marker]:hidden">
-          More options
-          <ChevronRightIcon aria-hidden className="ml-auto size-4 text-slate-400 transition-transform group-open:rotate-90 motion-reduce:transition-none" />
-        </summary>
-        <div className="grid gap-4 px-3.5 pt-1 pb-3.5 sm:grid-cols-2">
-          <TextField
-            id={`${ids}-ends`}
-            label="Ends on"
-            type="date"
-            value={endsOn}
-            help="Leave empty for no end date."
-            error={errors.endsOn}
-            onChange={(value) => {
-              setEndsOn(value)
-              clear("endsOn")
+        <div className="ag-field">
+          <label htmlFor={`${ids}-code`} className="ag-label">
+            Code parents type
+          </label>
+          <Field
+            id={`${ids}-code`}
+            size="compact"
+            alignStart
+            value={isNew ? code : promo.code}
+            readOnly={!isNew}
+            maxLength={20}
+            placeholder="e.g. INSTA26"
+            autoCapitalize="characters"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => {
+              setCode(event.target.value)
+              clear("code")
             }}
+            invalid={Boolean(errors.code || codeLine.problem)}
+            aria-describedby={`${ids}-code-help`}
+            className="ag-mono ag-upper"
           />
-          <TextField
-            id={`${ids}-note`}
-            label="Note"
-            value={note}
-            maxLength={PROMO_NOTE_MAX}
-            placeholder="Who it is for"
-            error={errors.note}
-            onChange={(value) => {
-              setNote(value)
-              clear("note")
-            }}
-          />
+          <p
+            id={`${ids}-code-help`}
+            role={isNew ? "status" : undefined}
+            className={errors.code || codeLine.problem ? "ag-error" : "ag-hint"}
+          >
+            {errors.code ?? codeLine.text}
+          </p>
         </div>
-      </details>
-      {(amountMoved || endsMoved) && (
-        <div className="flex flex-col gap-3">
-          <ReasonField
-            id={`${ids}-reason`}
-            value={reason}
-            error={errors.reason}
+        <div className="ag-stack">
+          <MoneyField
+            id={`${ids}-amount`}
+            label="Amount off the TZS 50,000 fee"
+            value={typed}
             onChange={(value) => {
-              setReason(value)
-              clear("reason")
+              setTyped(value)
+              clear("amount")
             }}
+            help={amount !== null ? feeBecomes(amount) : null}
+            error={errors.amount}
           />
-          <DiscountImpact impact={impact} />
+          {compare && <Note tone={compare.tone}>{compare.text}</Note>}
         </div>
-      )}
-      {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal}</AlertDescription>
-        </Alert>
-      )}
-      {!isNew && (
-        <StateChange
-          promo={promo}
-          pending={statePending}
-          disabled={pending}
-          refusal={stateRefusal}
-          onConfirm={onChangeState}
-        />
-      )}
-    </SheetForm>
+        <Disclosure label="More options" open={Boolean(errors.endsOn || errors.note)}>
+          <div className="ag-two">
+            <EndsOnField
+              id={`${ids}-ends`}
+              value={endsOn}
+              error={errors.endsOn}
+              onChange={(value) => {
+                setEndsOn(value)
+                clear("endsOn")
+              }}
+            />
+            <TextField
+              id={`${ids}-note`}
+              label="Note"
+              value={note}
+              maxLength={PROMO_NOTE_MAX}
+              placeholder="Who it is for"
+              error={errors.note}
+              onChange={(value) => {
+                setNote(value)
+                clear("note")
+              }}
+            />
+          </div>
+        </Disclosure>
+        {(amountMoved || endsMoved) && (
+          <div className="ag-stack">
+            <ReasonField
+              id={`${ids}-reason`}
+              value={reason}
+              error={errors.reason}
+              onChange={(value) => {
+                setReason(value)
+                clear("reason")
+              }}
+            />
+            <DiscountImpact impact={impact} />
+          </div>
+        )}
+        {refusal && (
+          <KitNote tone="bad" role="alert">
+            {refusal}
+          </KitNote>
+        )}
+        {!isNew && (
+          <StateChange
+            promo={promo}
+            pending={statePending}
+            disabled={pending}
+            refusal={stateRefusal}
+            onConfirm={onChangeState}
+          />
+        )}
+      </form>
+    </Sheet>
   )
 }
 
@@ -343,7 +355,6 @@ function TextField({
   onChange,
   help,
   error,
-  type,
   placeholder,
   maxLength,
 }: {
@@ -353,35 +364,50 @@ function TextField({
   onChange: (value: string) => void
   help?: string
   error?: string
-  type?: string
   placeholder?: string
   maxLength?: number
 }) {
   const described = [help ? `${id}-help` : null, error ? `${id}-error` : null].filter(Boolean).join(" ") || undefined
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
+    <div className="ag-field">
+      <label htmlFor={id} className="ag-label">
+        {label}
+      </label>
+      <Field
         id={id}
-        type={type}
+        size="compact"
+        alignStart
         value={value}
         maxLength={maxLength}
         placeholder={placeholder}
         autoComplete="off"
         onChange={(event) => onChange(event.target.value)}
-        aria-invalid={error ? true : undefined}
+        invalid={Boolean(error)}
         aria-describedby={described}
       />
       {help && (
-        <p id={`${id}-help`} className="text-xs text-muted-foreground">
+        <p id={`${id}-help`} className="ag-hint">
           {help}
         </p>
       )}
-      {error && (
-        <p id={`${id}-error`} role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
+      <FieldError id={`${id}-error`} message={error} alignStart />
+    </div>
+  )
+}
+
+// The code's last day, or none: "YYYY-MM-DD", or "" for no end date.
+function EndsOnField({ id, value, onChange, error }: { id: string; value: string; onChange: (value: string) => void; error?: string }) {
+  const described = [`${id}-help`, error ? `${id}-error` : null].filter(Boolean).join(" ")
+  return (
+    <div className="ag-field">
+      <label htmlFor={id} className="ag-label">
+        Ends on
+      </label>
+      <DateField id={id} value={value} onChange={onChange} invalid={Boolean(error)} aria-describedby={described} />
+      <p id={`${id}-help`} className="ag-hint">
+        Leave empty for no end date.
+      </p>
+      <FieldError id={`${id}-error`} message={error} alignStart />
     </div>
   )
 }
@@ -420,14 +446,13 @@ function StateChange({
   }
 
   return (
-    <div className="flex flex-col gap-2.5 border-t pt-4.5">
-      <div className="flex flex-wrap gap-2">
+    <div className="ag-inline">
+      <div className="ag-row">
         {[pauseOrResume, "ended" as const].map((state) => (
           <Button
             key={state}
-            type="button"
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="small"
             disabled={pending || disabled}
             aria-expanded={to === state}
             onClick={() => {
@@ -440,12 +465,12 @@ function StateChange({
         ))}
       </div>
       {to && (
-        <div className="flex flex-col gap-3 rounded-xl p-3.5 ring-1 ring-slate-300">
-          <p className="text-sm">
-            <b className="font-semibold text-slate-900">
+        <div className="ag-stack">
+          <p className="ag-p">
+            <b className="ag-strong">
               {stateVerb(to)} {promo.code}?
             </b>{" "}
-            <span className="text-muted-foreground">{stateEffect(to)}</span>
+            <span className="ag-quiet">{stateEffect(to)}</span>
           </p>
           {/* Enter confirms here rather than saving the sheet's fields. */}
           <div
@@ -469,17 +494,17 @@ function StateChange({
           </div>
           <DiscountImpact impact={impact} />
           {refusal && (
-            <Alert variant="destructive" role="alert">
-              <AlertDescription>{refusal}</AlertDescription>
-            </Alert>
+            <KitNote tone="bad" role="alert">
+              {refusal}
+            </KitNote>
           )}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => setTo(null)}>
+          <div className="ag-inline-act">
+            <Button variant="ghost" size="small" disabled={pending} onClick={() => setTo(null)}>
               Keep as is
             </Button>
-            <PendingButton type="button" size="sm" pending={pending} pendingLabel="Saving…" onClick={confirm}>
-              {stateVerb(to)} code
-            </PendingButton>
+            <Button size="small" pending={pending} onClick={confirm}>
+              {pending ? "Saving…" : `${stateVerb(to)} code`}
+            </Button>
           </div>
         </div>
       )}

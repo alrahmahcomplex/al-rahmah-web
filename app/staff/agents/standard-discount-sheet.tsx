@@ -1,11 +1,7 @@
 "use client"
 
 import { useId, useState, useTransition } from "react"
-import { toast } from "sonner"
-
-import { PendingButton } from "@/components/staff/pending-button"
-import { SheetForm } from "@/components/staff/sheet-form"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button, Card, Note, Sheet, TextLink } from "@/components/kit"
 
 import { readStandardDiscountImpact, saveStandardDiscount } from "./discount-actions"
 import { DiscountImpact, MoneyField, ReasonField, useImpact } from "./discount-fields"
@@ -19,6 +15,8 @@ import {
   tzs,
   type DiscountOutcome,
 } from "./discount-outcome"
+import "./agents.css"
+import { toast } from "./form-parts"
 
 // The setting line above the Agents table: what every agent's code gives
 // unless the agent has an own amount, and how many Approved agents are on
@@ -57,27 +55,22 @@ export function StandardDiscount({
       }
       if (outcome.status === "refused") return setRefusal(outcome.message)
       setOpen(false)
-      toast.success(outcome.message)
+      toast(outcome.message)
     })
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-4 py-3 text-sm ring-1 ring-foreground/10">
+    <Card className="ag-standard">
       <p>
-        <span className="text-muted-foreground">Standard discount</span>
-        &nbsp; <span className="font-semibold text-slate-900 tabular-nums">{tzs(amount)} off</span>{" "}
-        <span className="text-xs text-muted-foreground">{standardLine(agentsOnStandard)}</span>
+        <span className="ag-quiet">Standard discount</span>
+        &nbsp; <span className="ag-strong ag-num">{tzs(amount)} off</span>{" "}
+        <span className="ag-small ag-quiet">{standardLine(agentsOnStandard)}</span>
       </p>
       {canManage && (
         <>
-          <button
-            type="button"
-            onClick={() => changeOpen(true)}
-            aria-label="Change the standard discount"
-            className="rounded-sm font-medium text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
-          >
+          <TextLink onClick={() => changeOpen(true)} aria-label="Change the standard discount">
             Change
-          </button>
+          </TextLink>
           <StandardSheet
             key={opening}
             open={open}
@@ -90,7 +83,7 @@ export function StandardDiscount({
           />
         </>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -134,48 +127,56 @@ function StandardSheet({
   }
 
   return (
-    <SheetForm
+    <Sheet
       open={open}
       onOpenChange={onOpenChange}
+      placement="side"
       title="Standard discount"
-      meta={<span>What every agent&apos;s code gives unless the agent has an own amount.</span>}
-      form={{ onSubmit: submit, noValidate: true }}
-      footer={
-        <PendingButton type="submit" pending={pending} pendingLabel="Saving…" disabled={!changed}>
-          Save
-        </PendingButton>
+      hint="What every agent's code gives unless the agent has an own amount."
+      closeLabel="Close"
+      foot={
+        <>
+          <Button type="submit" form={`${ids}-form`} size="wide" pending={pending} disabled={!changed}>
+            {pending ? "Saving…" : "Save"}
+          </Button>
+          <Button variant="ghost" size="wide" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+        </>
       }
     >
-      <MoneyField
-        id={`${ids}-amount`}
-        label="Amount off the TZS 50,000 interview fee"
-        value={typed}
-        onChange={(value) => {
-          setTyped(value)
-          setErrors((current) => ({ ...current, amount: undefined }))
-        }}
-        help={typedAmount !== null ? standardHelp(typedAmount, agentsOnStandard) : null}
-        error={errors.amount}
-      />
-      {changed && (
-        <div className="flex flex-col gap-3">
-          <ReasonField
-            id={`${ids}-reason`}
-            value={reason}
-            onChange={(value) => {
-              setReason(value)
-              setErrors((current) => ({ ...current, reason: undefined }))
-            }}
-            error={errors.reason}
-          />
-          <DiscountImpact impact={impact} />
-        </div>
-      )}
-      {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal}</AlertDescription>
-        </Alert>
-      )}
-    </SheetForm>
+      <form id={`${ids}-form`} onSubmit={submit} noValidate className="ag-stack">
+        <MoneyField
+          id={`${ids}-amount`}
+          label="Amount off the TZS 50,000 interview fee"
+          value={typed}
+          onChange={(value) => {
+            setTyped(value)
+            setErrors((current) => ({ ...current, amount: undefined }))
+          }}
+          help={typedAmount !== null ? standardHelp(typedAmount, agentsOnStandard) : null}
+          error={errors.amount}
+        />
+        {changed && (
+          <div className="ag-stack">
+            <ReasonField
+              id={`${ids}-reason`}
+              value={reason}
+              onChange={(value) => {
+                setReason(value)
+                setErrors((current) => ({ ...current, reason: undefined }))
+              }}
+              error={errors.reason}
+            />
+            <DiscountImpact impact={impact} />
+          </div>
+        )}
+        {refusal && (
+          <Note tone="bad" role="alert">
+            {refusal}
+          </Note>
+        )}
+      </form>
+    </Sheet>
   )
 }

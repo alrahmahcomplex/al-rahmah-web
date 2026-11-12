@@ -10,7 +10,6 @@ import {
   DateField,
   DateTimeField,
   Disclosure,
-  FieldError,
   FilePicker,
   Popover,
   RoundButton,
@@ -98,7 +97,7 @@ function DeclineSheet() {
   const [note, setNote] = useState("")
   const [missing, setMissing] = useState(false)
   const reasonRef = useRef<HTMLButtonElement>(null)
-  const ids = { reason: useId(), note: useId(), hint: useId(), error: useId() }
+  const ids = { reason: useId(), note: useId(), hint: useId() }
 
   const go = () => {
     if (!reason) {
@@ -153,14 +152,13 @@ function DeclineSheet() {
               setReason(next)
               setMissing(false)
             }}
+            // As the prototype: no sentence, the pill turns invalid and takes focus.
             invalid={missing}
-            aria-describedby={missing ? ids.error : undefined}
           />
         </Labelled>
         <Labelled id={ids.note} label="Explanation" hint={reason === "Other" ? "Required for Other." : WHY_HINT} hintId={ids.hint}>
           <TextArea id={ids.note} value={note} onChange={(event) => setNote(event.target.value)} aria-describedby={ids.hint} />
         </Labelled>
-        <FieldError id={ids.error} message={missing ? "Choose a reason." : undefined} alignStart />
       </Sheet>
     </>
   )

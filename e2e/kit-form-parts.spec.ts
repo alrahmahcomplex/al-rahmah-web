@@ -58,7 +58,8 @@ test.describe("the choice list", () => {
     await expect(popup.getByRole("option")).toHaveText(["Full payment", "Initial deposit", "First instalment", "Second instalment", "Third instalment"])
     // The placeholder is the quiet heading, not an item; the list is as wide as the field.
     await expect(page.locator(".kit-sel-head")).toHaveText("Choose a type")
-    expect(Math.round((await page.locator(".kit-sel-pop").boundingBox())!.width)).toBe(Math.round(field.width))
+    // Within a pixel: the two boxes round their fractional widths differently.
+    expect(Math.abs((await page.locator(".kit-sel-pop").boundingBox())!.width - field.width)).toBeLessThanOrEqual(1)
     await popup.getByRole("option", { name: "First instalment" }).click()
     await expect(list).toHaveText("First instalment")
     expect((await posted(card)).payment_type).toBe("First instalment")

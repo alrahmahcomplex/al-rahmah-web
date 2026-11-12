@@ -383,6 +383,18 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_staff" },
   },
+  // The manual Sibling fee edit (#303).
+  "public.edit_sibling_fee(lead_id uuid, value text, reason text, note text, request_id uuid)": {
+    roles: ["authenticated"],
+    args: {
+      lead_id: "'1ead0000-0000-4000-8000-000000000902'",
+      value: "'ten'",
+      reason: "'data_entry_correction'",
+      note: "null",
+      request_id: "gen_random_uuid()",
+    },
+    agent: { refused: "not_permitted" },
+  },
   "public.expected_interview_amount(lead_id uuid, OUT amount integer, OUT discount_applied boolean)": {
     roles: ["authenticated"],
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
@@ -678,6 +690,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.pending_reopening_requests()": {
     roles: ["authenticated"],
     args: {},
+    agent: { refused: "not_permitted" },
+  },
+  "public.preview_sibling_fee_edit(lead_id uuid, value text)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000902'", value: "'ten'" },
     agent: { refused: "not_permitted" },
   },
   "public.preview_school_fee_payment(lead_id uuid, payment_type text, amount numeric, paid_on date)": {
@@ -1303,6 +1320,11 @@ export const RELATIONS: Record<string, RelationEntry> = {
     authenticated: ["select", "references", "trigger", "maintain"],
     anon: ["select", "references", "trigger", "maintain"],
   },
+  // The manual Sibling fee edits (#303).
+  "public.sibling_fee_edits": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
 }
 
 export const POLICIES: Record<string, PolicyEntry> = {
@@ -1506,6 +1528,12 @@ export const POLICIES: Record<string, PolicyEntry> = {
     command: "SELECT",
     roles: ["authenticated"],
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.sibling_fee_edits: Staff who may view payments read Sibling fee edits": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
     check: null,
   },
 }

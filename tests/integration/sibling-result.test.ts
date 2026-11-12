@@ -554,10 +554,12 @@ describe("the migration-day snapshot check", () => {
       // purpose, where the backfill gives today's live answer instead. Also
       // left out: leads other suites linked as "Sibling of" (#301), which
       // follow the new rule rather than the Family rule this rebuilds, and
-      // linked leads that left their group since (#302's tests).
+      // linked leads that left their group since (#302's tests), and leads
+      // with a Manual Sibling fee edit (#303), which no rule rebuilds.
       const linked = `select m.lead_id from public.sibling_group_members m
         where m.group_id in (select c.group_id from public.sibling_group_members c where c.group_id is not null and not c.legacy)
-        or (m.group_id is null and m.cause in ('sibling_link', 'merge', 'father_name', 'sibling_request'))`
+        or (m.group_id is null and m.cause in ('sibling_link', 'merge', 'father_name', 'sibling_request'))
+        union select x.lead_id from public.lead_sibling_results x where x.source = 'manual'`
       const rebuilt = `r.lead_id not in (
         select x.lead_id from public.lead_sibling_results x join public.leads l on l.id = x.lead_id
         where x.locked_result = 'full' and l.status <> 'Enrolled') and r.lead_id not in (${linked})`

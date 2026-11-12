@@ -92,7 +92,7 @@ test.describe("an agent's own interview discount", () => {
     await expect(save).toBeDisabled()
 
     // The kit draws the choice over its radio: the row is what a person taps.
-    await sheet.locator("label").filter({ has: sheet.getByRole("radio", { name: /Own amount/ }) }).click()
+    await sheet.getByText("Own amount", { exact: true }).click()
     await expect(sheet.getByRole("radio", { name: /Own amount/ })).toBeChecked()
     await sheet.getByLabel("Amount off the TZS 50,000 fee").fill(String(own))
     await expect(sheet.getByText(`Fee becomes ${tzs(50_000 - own)}`)).toBeVisible()

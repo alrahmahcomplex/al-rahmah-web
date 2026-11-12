@@ -3,7 +3,6 @@ import { randomInt, randomUUID } from "node:crypto"
 import { type Page } from "@playwright/test"
 
 import { lookFor } from "@/app/staff/route-looks"
-import { createPromoCode } from "@/lib/services/promo-codes"
 
 import { registerPendingAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
@@ -44,9 +43,9 @@ async function checkSheet(page: Page, name: string | RegExp, file: string) {
 
 async function newPromo(): Promise<string> {
   const code = `LOOK${randomInt(1000, 9999)}${randomUUID().slice(0, 2).toUpperCase()}`
-  const created = await createPromoCode(await signedIn(MANAGER), { name: `Look ${code}`, code, amount: 20_000, endsOn: null, note: null })
-  if (!created.ok) throw new Error(`setup failed: ${created.error}`)
-  return created.data.code
+  const { error } = await (await signedIn(MANAGER)).rpc("create_promo_code", { name: `Look ${code}`, code, amount: 20_000, ends_on: null, note: null })
+  if (error) throw new Error(`setup failed: ${error.message}`)
+  return code
 }
 
 /** An Approved agent with no email who then claims one at sign-up, as the queue shows (#193). */

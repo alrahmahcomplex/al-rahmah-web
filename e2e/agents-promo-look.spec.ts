@@ -6,7 +6,7 @@ import { lookFor } from "@/app/staff/route-looks"
 import { createPromoCode } from "@/lib/services/promo-codes"
 
 import { registerPendingAgent } from "../tests/support/agents"
-import { signedIn } from "../tests/support/db"
+import { secretClient, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { axeProblems } from "./axe"
 import { signInOnce } from "./log-in"
@@ -47,6 +47,26 @@ async function newPromo(): Promise<string> {
   const created = await createPromoCode(await signedIn(MANAGER), { name: `Look ${code}`, code, amount: 20_000, endsOn: null, note: null })
   if (!created.ok) throw new Error(`setup failed: ${created.error}`)
   return created.data.code
+}
+
+/** An Approved agent with no email who then claims one at sign-up, as the queue shows (#193). */
+async function waitingClaim(): Promise<string> {
+  const fullName = `Look Claim ${randomUUID().slice(0, 6)}`
+  // A leading 7 keeps it clear of the seeded 700 000 numbers.
+  const phone = `07${String(randomInt(10_000_000, 100_000_000))}`
+  const { data, error } = await (await signedIn(MANAGER)).rpc("create_marketing_agent", { full_name: fullName, phone, whatsapp: "", email: "", code: "" })
+  const made = data as { outcome: string; agent: { code: string } } | null
+  if (error || made?.outcome !== "created") throw new Error(`setup failed: ${JSON.stringify(error ?? made)}`)
+  const claim = await secretClient().rpc("sign_up_marketing_agent", {
+    full_name: fullName,
+    phone,
+    whatsapp: "",
+    email: `look-claim-${randomUUID().slice(0, 8)}@example.test`,
+    has_code: true,
+    code: made.agent.code,
+  })
+  if (claim.error) throw new Error(`setup failed: ${claim.error.message}`)
+  return fullName
 }
 
 for (const width of [1280, 390]) {
@@ -91,19 +111,24 @@ for (const width of [1280, 390]) {
       await checkSheet(page, `Approve ${fullName}?`, `agents-approve-${width}`)
     })
 
-    test("the account-state lists and Send invites", async ({ page }) => {
+    test("Send invites on Approved, no account yet", async ({ page }) => {
+      // playwright.config.ts sets the invite budget, so the button is on.
       await open(page, "/staff/agents?account=no_account")
       expect(await axeProblems(page)).toEqual([])
       await shot(page, `agents-no-account-${width}`)
-      const send = page.getByRole("button", { name: "Send invites" })
-      // Off without an invite budget; the reason shows instead.
-      if (await send.isEnabled()) {
-        await send.click()
-        await checkSheet(page, /^Send invites/, `agents-send-invites-${width}`)
-      }
-      await page.goto("/staff/agents?account=awaiting_confirmation")
+      await page.getByRole("button", { name: "Send invites" }).click()
+      await checkSheet(page, /^Send invites/, `agents-send-invites-${width}`)
+    })
+
+    test("the claim queue and Save and send invite", async ({ page }) => {
+      const fullName = await waitingClaim()
+      await open(page, "/staff/agents?account=awaiting_confirmation")
+      const card = page.getByRole("region", { name: new RegExp(`^${fullName}`) })
+      await expect(card).toBeVisible()
       expect(await axeProblems(page)).toEqual([])
       await shot(page, `agents-claims-${width}`)
+      await card.getByRole("button", { name: `Save and send invite for ${fullName}` }).click()
+      await checkSheet(page, `Save and send invite for ${fullName}`, `agents-claim-send-${width}`)
     })
 
     test("Import agents", async ({ page }) => {

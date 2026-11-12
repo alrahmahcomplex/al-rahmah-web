@@ -45,7 +45,7 @@ export function FeeImpact({ impact }: { impact: ImpactState }) {
                 ))}
               </ul>
               <div className="ag-read">
-                <p className="ag-small ag-quiet">Read this to each family:</p>
+                <p className="ag-small ag-soft">Read this to each family:</p>
                 <p lang="sw">{familyLine(families[0])}</p>
               </div>
             </>

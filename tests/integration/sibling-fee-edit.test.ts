@@ -21,6 +21,7 @@ import {
   type SiblingFeeEditReason,
   type SiblingFeeEditValue,
 } from "@/lib/services/sibling-groups"
+import { decideSiblingRequest, getLeadSiblingRequests, requestSiblingDiscount } from "@/lib/services/sibling-requests"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
@@ -413,6 +414,58 @@ describe("the owner's case and the spec's acceptance criteria", () => {
       .map((c) => [c?.from, c?.to])
     expect(sources).toEqual(expect.arrayContaining([["locked", "manual"], ["manual", "locked"]]))
     expect(sources).toHaveLength(2)
+  })
+})
+
+describe('"Granted: fee edit needed" (#302)', () => {
+  test("a saved 10% closes it as applied with the edit's reason; a preview, a Full fee or a failed save leave it open", async () => {
+    const year = await yearWithSchedule()
+    // Enrolled at Full fee, then linked to a child of another father: it waits on a request.
+    const enrolled = await child(year, father(), "STD 2")
+    await payInFull(enrolled)
+    expect(await resultOf(enrolled)).toEqual({ result: "full", source: "locked", locked_result: "full" })
+    const name = father()
+    const other = await child(year, name, "FORM 1")
+    const linked = await linkSibling(await signedIn(ADMISSIONS), { leadId: enrolled, siblingOfLeadId: other })
+    expect(linked).toMatchObject({ ok: true, data: { kind: "linked", basis: "request_needed" } })
+    const asked = await requestSiblingDiscount(await signedIn(ADMISSIONS), {
+      leadId: enrolled,
+      note: "Birth certificates show the same mother.",
+      requestId: randomUUID(),
+    })
+    if (!asked.ok) throw new Error(`request failed: ${JSON.stringify(asked.error)}`)
+    expect((await decideSiblingRequest(await signedIn(MANAGER), asked.data, { decision: "grant" })).ok).toBe(true)
+
+    const feeEditOf = async () => {
+      const read = await getLeadSiblingRequests(await signedIn(ADMISSIONS), enrolled)
+      if (!read.ok) throw new Error(`read failed: ${read.error}`)
+      return read.data.map((r) => ({ feeEdit: r.feeEdit, reason: r.feeEditReason, by: r.feeEditClosedBy }))
+    }
+    expect(await feeEditOf()).toEqual([{ feeEdit: "needed", reason: null, by: null }])
+
+    // None of these closes it.
+    await preview(enrolled, "ten")
+    const accountant = await signedIn(ACCOUNTANT)
+    const used = randomUUID()
+    expect((await editSiblingFee(accountant, { leadId: other, value: "full", reason: "data_entry_correction" }, used)).ok).toBe(true)
+    const failed = [
+      await editSiblingFee(await signedIn(MANAGER), { leadId: enrolled, value: "ten", reason: "sibling_proof_after_enrolment" }, randomUUID()),
+      await editSiblingFee(accountant, { leadId: enrolled, value: "ten", reason: "sibling_proof_after_enrolment" }, used),
+      await editSiblingFee(accountant, { leadId: enrolled, value: "ten", reason: "sibling_proof_after_enrolment", note: "x".repeat(1001) }, randomUUID()),
+    ]
+    expect(failed.map((f) => (f.ok ? "saved" : f.error.kind))).toEqual(["forbidden", "request-reused", "invalid"])
+    await edit(enrolled, "full", "data_entry_correction")
+    expect(await feeEditOf()).toEqual([{ feeEdit: "needed", reason: null, by: null }])
+
+    // The 10% saved: closed as applied, by the Accountant, with the reason; a retry closes nothing more.
+    const requestId = randomUUID()
+    const input = { leadId: enrolled, value: "ten", reason: "sibling_proof_after_enrolment" } as const
+    const saved = await editSiblingFee(accountant, input, requestId)
+    expect(saved.ok).toBe(true)
+    expect(await feeOf(enrolled)).toMatchObject({ schoolFee: tenOff(STD2), discount: SIBLING })
+    expect(await feeEditOf()).toEqual([{ feeEdit: "applied", reason: "sibling_proof_after_enrolment", by: "Test Accountant" }])
+    expect(await editSiblingFee(accountant, input, requestId)).toEqual(saved)
+    expect(await feeEditOf()).toEqual([{ feeEdit: "applied", reason: "sibling_proof_after_enrolment", by: "Test Accountant" }])
   })
 })
 

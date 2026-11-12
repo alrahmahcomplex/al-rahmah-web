@@ -68,10 +68,10 @@
 --    does not already hold an automatic 10% gets no new one.
 --
 -- 7. "Granted: fee edit needed" (S4) is set by #302's Sibling request
---    grant, which is not merged yet. A saved 10% calls
---    clear_sibling_fee_edit_needed(lead_id), which does nothing here; #302
---    (or whichever of the two merges second) replaces its body to clear the
---    mark.
+--    grant. A saved 10% closes it as applied, through
+--    clear_sibling_fee_edit_needed(lead_id, reason) and #302's
+--    close_sibling_fee_edit, with the edit's reason. A Full fee or Back to
+--    automatic leaves it open, and a save that fails closes nothing.
 --
 -- Lock order is unchanged: Family locks (lock_lead_family takes the lead's
 -- Family lock, every contact its group reaches and the group's lock), then
@@ -316,20 +316,24 @@ begin
     -- The pieces the save and the preview share.
     -- -----------------------------------------------------------------------
 
-    -- The hook for "Granted: fee edit needed" (S4): #302 replaces the body
-    -- to clear the mark when a 10% is saved. Internal.
-    create function public.clear_sibling_fee_edit_needed(lead_id uuid)
+    -- clear_sibling_fee_edit_needed(lead_id, reason): a saved 10% closes the
+    -- lead's "Granted: fee edit needed" (S4, #302) as applied, recording the
+    -- staff member signed in and the edit's reason. Nothing to close is not
+    -- an error. The caller holds the lead's Family lock. Internal.
+    create function public.clear_sibling_fee_edit_needed(lead_id uuid, reason text)
     returns void
     language plpgsql
     security definer
     set search_path = ''
     as $fn$
     begin
-        null;
+        perform public.close_sibling_fee_edit(
+            clear_sibling_fee_edit_needed.lead_id, 'applied', clear_sibling_fee_edit_needed.reason
+        );
     end;
     $fn$;
 
-    revoke execute on function public.clear_sibling_fee_edit_needed(uuid) from public, anon, authenticated, service_role;
+    revoke execute on function public.clear_sibling_fee_edit_needed(uuid, text) from public, anon, authenticated, service_role;
 
     -- sibling_fee_edit_reach(lead_id): the lead and every member of its
     -- group, the leads an edit can move. Internal.
@@ -639,7 +643,7 @@ begin
         end;
 
         if chosen = 'ten' then
-            perform public.clear_sibling_fee_edit_needed(edit_sibling_fee.lead_id);
+            perform public.clear_sibling_fee_edit_needed(edit_sibling_fee.lead_id, chosen_reason::text);
         end if;
 
         return jsonb_build_object('result', 'saved', 'edit_id', new_id) || answer;

@@ -1,5 +1,4 @@
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Note } from "@/components/kit"
 import { formatDate } from "@/lib/school-calendar"
 import { FEE_DISCOUNT_NAMES } from "@/lib/services/discounts"
 import { BAND_NAMES } from "@/lib/services/fees"
@@ -9,12 +8,13 @@ import type { StaffMember } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
 import { formatShillings } from "../../fees/format"
-import { SeatPriorityBadge } from "../seat-priority-badge"
 import { enrolledBy } from "./enrolment-text"
+import { InstalmentTable } from "./instalment-table"
 import { PaymentList } from "./payment-list"
 import { PreFormOneProgramme } from "./pre-form-one-programme"
 import { PreFormOneTickSection } from "./pre-form-one-tick-section"
 import { RecordPayment } from "./record-payment"
+import { SeatPriorityTag } from "./seat-priority-tag"
 
 const INSTALMENTS = ["First", "Second", "Third"] as const
 
@@ -55,75 +55,62 @@ export async function SchoolFeeSection({
   const [fee, payments] = await Promise.all([getLeadFee(supabase, leadId), listPayments(supabase, leadId)])
 
   return (
-    <section aria-labelledby="lead-school-fee" className="flex flex-col gap-2">
-      <h2 id="lead-school-fee" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="lead-school-fee" className="lr-card">
+      <h2 id="lead-school-fee" className="kit-card-title">
         School fee
       </h2>
       {!fee.ok ? (
-        <Alert variant="destructive" className="max-w-xl">
-          <AlertDescription>The School fee could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The School fee could not be loaded. Try again in a moment.</Note>
       ) : fee.data.kind === "no-schedule" ? (
-        <div className="flex max-w-xl flex-col gap-4">
-          <p className="text-sm text-muted-foreground">No fee schedule for {fee.data.year} yet.</p>
+        <div className="lr-form">
+          <p className="lr-quiet">No fee schedule for {fee.data.year} yet.</p>
           <PreFormOneProgramme leadId={leadId} programme={fee.data.preFormOne} dayOrBoarding={null} canEdit={canEditPreFormOne} />
         </div>
       ) : (
-        <div className="flex max-w-xl flex-col gap-4">
-          <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
-            <dt className="text-muted-foreground">
+        <div className="lr-form">
+          <dl className="kit-kv">
+            <dt>
               Annual fee
-              <span className="block text-xs">
+              <small>
                 {BAND_NAMES[fee.data.band]}, {fee.data.dayOrBoarding}
-              </span>
+              </small>
               {fee.data.discount && (
-                <span className="block text-xs">
+                <small>
                   {FEE_DISCOUNT_NAMES[fee.data.discount.kind]} discount, {fee.data.discount.percent}% off TZS{" "}
                   {formatShillings(fee.data.bandFee)}
-                </span>
+                </small>
               )}
             </dt>
-            <dd className="text-right font-medium tabular-nums text-slate-900">TZS {formatShillings(fee.data.schoolFee)}</dd>
-            <dt className="text-muted-foreground">Total paid</dt>
-            <dd className="text-right tabular-nums text-slate-900">TZS {formatShillings(fee.data.totalPaid)}</dd>
-            <dt className="text-muted-foreground">Balance</dt>
-            <dd className="text-right font-medium tabular-nums text-slate-900">TZS {formatShillings(fee.data.balance)}</dd>
-            <dt className="text-muted-foreground">
+            <dd className="kit-num">TZS {formatShillings(fee.data.schoolFee)}</dd>
+            <dt>Total paid</dt>
+            <dd className="kit-num">TZS {formatShillings(fee.data.totalPaid)}</dd>
+            <dt>Balance</dt>
+            <dd className="kit-num">TZS {formatShillings(fee.data.balance)}</dd>
+            <dt>
               Seat priority
-              {fee.data.priorityReachedOn && <span className="block text-xs">Since {formatDate(fee.data.priorityReachedOn)}</span>}
+              {fee.data.priorityReachedOn && <small>Since {formatDate(fee.data.priorityReachedOn)}</small>}
             </dt>
-            <dd className="text-right text-slate-900">
-              {fee.data.priority ? <SeatPriorityBadge priority={fee.data.priority} /> : <span className="text-muted-foreground">None yet</span>}
+            <dd>
+              {fee.data.priority ? <SeatPriorityTag priority={fee.data.priority} /> : <span className="lr-quiet">None yet</span>}
             </dd>
             {fee.data.enrolment && (
               <>
-                <dt className="text-muted-foreground">
+                <dt>
                   Enrolled
-                  <span className="block text-xs">On {formatDate(fee.data.enrolment.on)}</span>
+                  <small>On {formatDate(fee.data.enrolment.on)}</small>
                 </dt>
-                <dd className="text-right text-slate-900">{enrolledBy(fee.data.enrolment)}</dd>
+                <dd>{enrolledBy(fee.data.enrolment)}</dd>
               </>
             )}
           </dl>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Instalment</TableHead>
-                <TableHead className="text-right">Due</TableHead>
-                <TableHead className="text-right">Amount (TZS)</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fee.data.instalments.map((instalment, index) => (
-                <TableRow key={INSTALMENTS[index]}>
-                  <TableCell>{INSTALMENTS[index]}</TableCell>
-                  <TableCell className="text-right">{formatDate(instalment.due)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatShillings(instalment.amount)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <InstalmentTable
+            rows={fee.data.instalments.map((instalment, index) => ({
+              name: INSTALMENTS[index],
+              due: formatDate(instalment.due),
+              amount: formatShillings(instalment.amount),
+            }))}
+          />
 
           <PreFormOneProgramme
             leadId={leadId}
@@ -142,16 +129,14 @@ export async function SchoolFeeSection({
         </div>
       )}
 
-      <section aria-labelledby="lead-payments" className="flex max-w-xl flex-col gap-2 pt-2">
-        <h3 id="lead-payments" className="text-sm font-medium text-slate-900">
+      <section aria-labelledby="lead-payments" className="lr-part">
+        <h3 id="lead-payments" className="lr-sub">
           Payments
         </h3>
         {!payments.ok ? (
-          <Alert variant="destructive">
-            <AlertDescription>The payments could not be loaded. Try again in a moment.</AlertDescription>
-          </Alert>
+          <Note tone="bad">The payments could not be loaded. Try again in a moment.</Note>
         ) : payments.data.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+          <p className="lr-quiet">No payments recorded yet.</p>
         ) : (
           <PaymentList leadId={leadId} payments={payments.data} canAdjust={canAdjust} />
         )}

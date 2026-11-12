@@ -2,8 +2,7 @@
 
 import { useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { Button, Note } from "@/components/kit"
 
 import { registerInterview } from "./interview-actions"
 import type { RegisterOutcome } from "./interview-outcome"
@@ -43,34 +42,32 @@ export function RegisterInterview({
   return (
     <>
       {canRegister && (
-        <div className="flex max-w-xl flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
+        <div className="lr-box">
           {retake ? (
-            <p className="text-sm text-slate-900">
+            <p className="lr-text">
               This application was reopened to retake the interview. Registering the retaken interview gives it the next S/N
               for the enrollment year and its own fee, Not Paid. The earlier interview and its result stay on record.
             </p>
           ) : (
-            <p className="text-sm text-slate-900">
+            <p className="lr-text">
               Not registered for interview yet. Registering puts the child on the interview list for their enrollment
               year and gives them the next S/N.
             </p>
           )}
           <div>
-            <Button type="button" onClick={register} disabled={pending}>
+            <Button variant="ghost" size="small" onClick={register} pending={pending}>
               {pending ? "Registering…" : retake ? "Register retaken interview" : "Register for interview"}
             </Button>
           </div>
         </div>
       )}
       {outcome?.status === "registered" && (
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="lr-saved">
           {outcome.message}
         </p>
       )}
       {outcome?.status === "refused" && (
-        <Alert variant="destructive" role="alert" className="max-w-xl">
-          <AlertDescription>{outcome.message}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{outcome.message}</Note>
       )}
     </>
   )

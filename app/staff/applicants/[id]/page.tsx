@@ -1,29 +1,27 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { forbidden, notFound } from "next/navigation"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { buttonVariants } from "@/components/ui/button"
+import { ButtonLink, Note, pageTitle } from "@/components/kit"
 import { declinedReasonsFor, marksAllowed } from "@/lib/services/lead-closure"
 import { getLead, isClosed } from "@/lib/services/leads"
 import { getLeadImportMark } from "@/lib/services/student-import"
 import { getLeadStatusSince } from "@/lib/services/system-audit"
-import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../session"
 import { ClosedLeadBanner } from "./closed-lead-banner"
 import { LEAD_CARD } from "./lead-card"
 import { LeadHeader } from "./lead-header"
+import { LeadTabs } from "./lead-tabs"
 import { LeadMoreMenu } from "./lead-more-menu"
 import { NextStepCard } from "./next-step-card"
 import { LEAD_PANELS } from "./panels"
 import { canRaiseReopening } from "./reopening-outcome"
 import { nobodyHasAsked } from "./reopening-section"
-import { LEAD_TABS, leadTab, leadTabHref } from "./tabs"
+import { leadTab } from "./tabs"
 
 export const metadata: Metadata = {
-  title: "Application · Al-Rahmah Complex",
+  title: pageTitle("Application"),
 }
 
 export default async function LeadPage({
@@ -47,9 +45,7 @@ export default async function LeadPage({
   if (!lead.ok && lead.error === "not-found") notFound()
   if (!lead.ok) {
     return (
-      <Alert variant="destructive">
-        <AlertDescription>This application could not be loaded. Try again in a moment.</AlertDescription>
-      </Alert>
+      <Note tone="bad">This application could not be loaded. Try again in a moment.</Note>
     )
   }
 
@@ -60,7 +56,7 @@ export default async function LeadPage({
   const marks = staff.permissions.includes("leads.close") ? marksAllowed(lead.data.closure) : []
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="lr-page">
       <LeadHeader
         lead={lead.data}
         statusSince={statusSince.ok ? statusSince.data : undefined}
@@ -87,32 +83,12 @@ export default async function LeadPage({
         <ClosedLeadBanner lead={lead.data} canRequestReopening={canRequestReopening} />
       )}
 
-      <nav aria-label="Application sections" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        <ul className="flex min-w-max gap-1 border-b">
-          {LEAD_TABS.map(({ key, label }) => (
-            <li key={key}>
-              <Link
-                href={leadTabHref(lead.data.id, key)}
-                scroll={false}
-                aria-current={key === tab ? "page" : undefined}
-                className={cn(
-                  "-mb-px flex h-10 items-center border-b-2 px-3 text-sm font-medium whitespace-nowrap transition-colors",
-                  key === tab
-                    ? "border-blue-600 text-blue-700"
-                    : "border-transparent text-muted-foreground hover:border-slate-300 hover:text-slate-900",
-                )}
-              >
-                {label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <LeadTabs leadId={lead.data.id} tab={tab} />
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+      <div className="lr-grid">
         {LEAD_PANELS.filter((panel) => panel.tab === tab && (open || panel.readOnlyWhenClosed)).map(
           ({ key, wide, Panel }) => (
-            <div key={key} className={cn(LEAD_CARD, wide && "lg:col-span-2")}>
+            <div key={key} className={wide ? `${LEAD_CARD} lr-wide` : LEAD_CARD}>
               <Panel lead={lead.data} staff={staff} open={open} />
             </div>
           ),
@@ -120,9 +96,9 @@ export default async function LeadPage({
       </div>
 
       <div>
-        <Link href="/staff/check-in" className={buttonVariants({ variant: "outline" })}>
+        <ButtonLink href="/staff/check-in" variant="ghost">
           Back to Check-in
-        </Link>
+        </ButtonLink>
       </div>
     </div>
   )

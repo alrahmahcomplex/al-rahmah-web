@@ -105,7 +105,8 @@ test("the Accountant adjusts one payment and voids a duplicate, and each shows i
 
   // Adjust the first deposit: it was really TZS 850,000.
   await first.getByRole("button", { name: "Adjust" }).click()
-  const form = page.getByRole("form", { name: "Adjust payment" })
+  // The sheet holds the form and, in its foot, the form's buttons.
+  const form = page.getByRole("dialog", { name: "Adjust payment" })
   await expect(form.getByLabel("Amount (TZS)")).toHaveValue("300,000")
   await form.getByLabel("Reason").selectOption("Wrong amount")
   await form.getByLabel("Amount (TZS)").fill("850,000")
@@ -145,9 +146,11 @@ test("the Accountant adjusts one payment and voids a duplicate, and each shows i
 
   // A voided payment comes back only with Data-entry correction.
   await voided.getByRole("button", { name: "Adjust" }).click()
-  await expect(page.getByRole("heading", { name: "Restore payment" })).toBeVisible()
-  await expect(form.getByLabel("Reason").locator("option:not([disabled])")).toHaveText(["Data-entry correction"])
-  await form.getByRole("button", { name: "Cancel" }).click()
+  // Its sheet is named for what it does now.
+  const restore = page.getByRole("dialog", { name: "Restore payment" })
+  await expect(restore).toBeVisible()
+  await expect(restore.getByLabel("Reason").locator("option:not([disabled])")).toHaveText(["Data-entry correction"])
+  await restore.getByRole("button", { name: "Cancel" }).click()
 
   // The history says what each adjustment did.
   await openLeadHistoryAsSuperAdmin(page, id)

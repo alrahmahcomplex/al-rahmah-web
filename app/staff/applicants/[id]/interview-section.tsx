@@ -1,4 +1,4 @@
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Note } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getInterviewRegistration, getLeadInterviews, type LeadInterview } from "@/lib/services/interviews"
 import type { Lead } from "@/lib/services/leads"
@@ -38,14 +38,12 @@ export async function InterviewSection({
   const canRegister = canRecord && interviews.ok && kind !== null
 
   return (
-    <section aria-labelledby="lead-interview" className="flex flex-col gap-3">
-      <h2 id="lead-interview" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="lead-interview" className="lr-card">
+      <h2 id="lead-interview" className="kit-card-title">
         Interview
       </h2>
       {!interviews.ok ? (
-        <Alert variant="destructive" className="max-w-xl">
-          <AlertDescription>The interview could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The interview could not be loaded. Try again in a moment.</Note>
       ) : current ? (
         <CurrentInterview
           interview={current}
@@ -55,7 +53,7 @@ export async function InterviewSection({
           canMarkFee={canMarkFee}
         />
       ) : (
-        !canRegister && <p className="text-sm text-muted-foreground">Not registered for interview.</p>
+        !canRegister && <p className="lr-quiet">Not registered for interview.</p>
       )}
       {/* Slice 6: whether the current result can go to the family, and sending it. */}
       {interviews.ok && <ResultReleaseSection leadId={lead.id} />}
@@ -81,47 +79,47 @@ function CurrentInterview({
   const registeredOn = tanzaniaToday(new Date(interview.registeredAt))
   const paid = interview.feeStatus === "Paid"
   return (
-    <div role="group" aria-label="Current interview" className="flex max-w-xl flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
+    <div role="group" aria-label="Current interview" className="lr-box">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <p className="text-sm text-muted-foreground">Interview S/N</p>
-        <p className="font-mono text-2xl font-semibold text-slate-900" aria-label="Interview S/N">
+        <p className="lr-quiet">Interview S/N</p>
+        <p className="lr-num lr-strong text-2xl" aria-label="Interview S/N">
           {interview.serialNumber}
         </p>
-        <p className="text-sm text-slate-900">for {interview.enrollmentYear}</p>
+        <p className="lr-text">for {interview.enrollmentYear}</p>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="lr-hint">
         The S/N is the place on the {interview.enrollmentYear} interview list. It is not the Admission Number, which
         stays {admissionNumber}.
       </p>
-      <dl className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
-        <dt className="text-muted-foreground">Registered on</dt>
-        <dd className="text-slate-900">{formatDate(registeredOn)}</dd>
-        <dt className="text-muted-foreground">Interview fee</dt>
-        <dd className="font-medium text-slate-900">{interview.feeStatus}</dd>
+      <dl className="kit-kv">
+        <dt>Registered on</dt>
+        <dd>{formatDate(registeredOn)}</dd>
+        <dt>Interview fee</dt>
+        <dd>{interview.feeStatus}</dd>
         {/* Live until the fee is Paid, then the amount locked at that moment. */}
-        <dt className="text-muted-foreground">{paid ? "Amount paid" : "Amount to pay"}</dt>
-        <dd className="text-slate-900">
+        <dt>{paid ? "Amount paid" : "Amount to pay"}</dt>
+        <dd>
           <span>{tzs(interview.amount)}</span>
           {interview.discountApplied && (
-            <span className="block text-xs text-muted-foreground">Includes the Referral code discount.</span>
+            <small>Includes the Referral code discount.</small>
           )}
-          {paid && <span className="block text-xs text-muted-foreground">Locked when the fee was marked Paid.</span>}
+          {paid && <small>Locked when the fee was marked Paid.</small>}
         </dd>
         {interview.result === null ? (
           <>
-            <dt className="text-muted-foreground">Result</dt>
-            <dd className="text-slate-900">No result yet</dd>
+            <dt>Result</dt>
+            <dd>No result yet</dd>
           </>
         ) : (
           <>
-            <dt className="text-muted-foreground">Interview date</dt>
-            <dd className="text-slate-900">{interview.interviewDate && formatDate(interview.interviewDate)}</dd>
-            <dt className="text-muted-foreground">Result</dt>
-            <dd className="font-medium text-slate-900">{interview.result}</dd>
-            <dt className="text-muted-foreground">Score</dt>
-            <dd className="text-slate-900">{interview.score}%</dd>
-            <dt className="text-muted-foreground">Next action</dt>
-            <dd className="text-slate-900">{interview.nextAction}</dd>
+            <dt>Interview date</dt>
+            <dd>{interview.interviewDate && formatDate(interview.interviewDate)}</dd>
+            <dt>Result</dt>
+            <dd>{interview.result}</dd>
+            <dt>Score</dt>
+            <dd>{interview.score}%</dd>
+            <dt>Next action</dt>
+            <dd>{interview.nextAction}</dd>
           </>
         )}
       </dl>

@@ -2,15 +2,13 @@
 
 import { useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button, ChoiceTiles, Note } from "@/components/kit"
 import type { InterviewResult } from "@/lib/services/interviews"
 
 import { visitDateToday } from "./actions"
 import { recordResult } from "./interview-actions"
 import type { RecordOutcome, ResultField } from "./interview-outcome"
-import { Field } from "./lead-editors"
+import { Field, Input, Saved } from "./lead-editors"
 
 const LOST_REQUEST: RecordOutcome = {
   status: "refused",
@@ -68,22 +66,16 @@ export function InterviewResultEditor({ leadId, interview }: { leadId: string; i
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="lr-card">
       <div>
-        <Button type="button" variant={recorded ? "outline" : "default"} size={recorded ? "sm" : "default"} onClick={open} disabled={opening}>
+        <Button variant="ghost" size="small" onClick={open} pending={opening}>
           {opening ? "Opening…" : recorded ? "Correct result" : "Record result"}
         </Button>
       </div>
       {unopened && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>The result form could not open. Check your connection and try again.</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">The result form could not open. Check your connection and try again.</Note>
       )}
-      {saved && (
-        <p role="status" className="text-sm text-emerald-700">
-          {saved}
-        </p>
-      )}
+      {saved && <Saved message={saved} />}
     </div>
   )
 }
@@ -130,16 +122,14 @@ function ResultForm({
   return (
     <form
       aria-label={correcting ? "Correct result" : "Record result"}
-      className="flex flex-col gap-4"
+      className="lr-form lr-inline"
       onSubmit={(event) => {
         event.preventDefault()
         save()
       }}
     >
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal.message}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{refusal.message}</Note>
       )}
       <Field label="Interview date" hint="The day of the interview: today or earlier.">
         {({ id, describedBy }) => (
@@ -156,24 +146,17 @@ function ResultForm({
           />
         )}
       </Field>
-      <fieldset className="flex flex-col gap-1.5" aria-invalid={invalid("result")}>
-        <legend className="text-sm font-medium">Result</legend>
-        <div className="flex gap-4">
-          {RESULTS.map((choice) => (
-            <label key={choice} className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name={`interview-result-${interview.id}`}
-                value={choice}
-                required
-                checked={result === choice}
-                onChange={() => setResult(choice)}
-              />
-              {choice}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <div aria-invalid={invalid("result")}>
+        <ChoiceTiles
+          name={`interview-result-${interview.id}`}
+          legend={<span className="lr-label">Result</span>}
+          layout="two"
+          required
+          options={RESULTS.map((choice) => ({ value: choice, label: choice }))}
+          value={result}
+          onChange={(choice) => setResult(choice as InterviewResult)}
+        />
+      </div>
       <Field label="Score (%)" hint="From 0 to 100, with one decimal place at most.">
         {({ id, describedBy }) => (
           <Input
@@ -192,11 +175,11 @@ function ResultForm({
           />
         )}
       </Field>
-      <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>
+      <div className="lr-acts">
+        <Button type="submit" size="small" pending={pending}>
           {pending ? "Saving…" : correcting ? "Save correction" : "Save result"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => onDone(null)} disabled={pending}>
+        <Button variant="ghost" size="small" onClick={() => onDone(null)} aria-disabled={pending || undefined}>
           Cancel
         </Button>
       </div>

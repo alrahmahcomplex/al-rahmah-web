@@ -1,12 +1,8 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition, type RefObject } from "react"
+import { useEffect, useId, useRef, useState, useTransition, type RefObject } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { Button, Note, Sheet } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import {
   ADJUSTMENT_REASONS,
@@ -15,12 +11,18 @@ import {
   type AdjustmentInput,
   type AdjustmentReason,
 } from "@/lib/services/payment-adjustments"
-import { PAYMENT_TYPE_NAMES, PAYMENT_TYPES, type PaymentValues, type RecordedPaymentType } from "@/lib/services/school-fee-payments"
+import {
+  PAYMENT_TYPE_NAMES,
+  PAYMENT_TYPES,
+  type PaymentValues,
+  type RecordedPaymentType,
+} from "@/lib/services/school-fee-payments"
 
 import { formatShillings } from "../../fees/format"
 import { adjustSchoolFeePayment } from "./adjustment-actions"
 import type { AdjustmentField, AdjustmentRefusal } from "./adjustment-outcome"
-import { Field, Saved, SELECT_CLASS } from "./lead-editors"
+import { Select, TextArea } from "./form-controls"
+import { Field, Input, Saved } from "./lead-editors"
 import { paymentSummary } from "./payment-text"
 
 const LOST_REQUEST: AdjustmentRefusal = {
@@ -49,7 +51,7 @@ function typeChoices(original: RecordedPaymentType): readonly RecordedPaymentTyp
   return PAYMENT_TYPES
 }
 
-// Adjust on one payment in the Payments list. Opens a dialog holding the
+// Adjust on one payment in the Payments list. Opens a sheet holding the
 // payment as it counts now; Save adds an adjustment and the list shows it
 // under the original entry.
 export function AdjustPayment({
@@ -75,16 +77,18 @@ export function AdjustPayment({
   // can't be closed while a Save is on its way.
   const sentRef = useRef<SentAdjustment | null>(null)
   const [saving, setSaving] = useState(false)
+  // A fresh form each time the sheet opens, as when it mounted on opening.
+  const [opening, setOpening] = useState(0)
 
   return (
     <div className="flex flex-col items-end gap-1">
       <Button
-        type="button"
-        size="sm"
-        variant="outline"
+        variant="ghost"
+        size="small"
         onClick={() => {
           setSaved(null)
           setOpenedOn(laterOf(today, tanzaniaToday()))
+          setOpening((count) => count + 1)
           setOpen(true)
         }}
       >
@@ -92,27 +96,24 @@ export function AdjustPayment({
       </Button>
       {/* Only once there is something to say: every payment has its own. */}
       {saved && <Saved message={saved} />}
-      <Dialog open={open} onOpenChange={(next) => (next || !saving) && setOpen(next)}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
-          {open && (
-            <AdjustForm
-              leadId={leadId}
-              paymentId={paymentId}
-              original={original}
-              effective={effective}
-              today={openedOn}
-              sentRef={sentRef}
-              onSaving={setSaving}
-              onDone={(message) => {
-                sentRef.current = null
-                setOpen(false)
-                setSaved(message)
-              }}
-              onCancel={() => setOpen(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <AdjustForm
+        key={opening}
+        open={open}
+        onOpenChange={(next) => (next || !saving) && setOpen(next)}
+        leadId={leadId}
+        paymentId={paymentId}
+        original={original}
+        effective={effective}
+        today={openedOn}
+        sentRef={sentRef}
+        onSaving={setSaving}
+        onDone={(message) => {
+          sentRef.current = null
+          setOpen(false)
+          setSaved(message)
+        }}
+        onCancel={() => setOpen(false)}
+      />
     </div>
   )
 }
@@ -122,6 +123,8 @@ export function AdjustPayment({
 type SentAdjustment = { key: string; requestId: string }
 
 function AdjustForm({
+  open,
+  onOpenChange,
   leadId,
   paymentId,
   original,
@@ -141,7 +144,10 @@ function AdjustForm({
   onSaving: (saving: boolean) => void
   onDone: (message: string) => void
   onCancel: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }) {
+  const formId = useId()
   const voided = effective === null
   const start = effective ?? original
   // A voided payment comes back only with Data-entry correction.
@@ -187,127 +193,132 @@ function AdjustForm({
   }
 
   return (
-    <form
-      aria-label="Adjust payment"
-      className="flex flex-col gap-4"
-      onSubmit={(event) => {
-        event.preventDefault()
-        save()
-      }}
-    >
-      <DialogHeader>
-        <DialogTitle>{voided ? "Restore payment" : "Adjust payment"}</DialogTitle>
-        <DialogDescription>
-          {voided
-            ? `This payment is void. Recorded as: ${paymentSummary(original)}.`
-            : `Counts now as: ${paymentSummary(start)}. State what the payment should have said. The original entry stays visible.`}
-        </DialogDescription>
-      </DialogHeader>
-      {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal.message}</AlertDescription>
-        </Alert>
-      )}
-      <Field label="Reason">
-        {({ id }) => (
-          <select
-            id={id}
-            className={SELECT_CLASS}
-            required
-            value={reason}
-            onChange={(event) => setReason(event.target.value as AdjustmentReason)}
-            aria-invalid={invalid("reason")}
-          >
-            <option value="" disabled>
-              Choose a reason
-            </option>
-            {reasons.map((choice) => (
-              <option key={choice} value={choice}>
-                {choice}
-              </option>
-            ))}
-          </select>
-        )}
-      </Field>
-      {voiding ? (
-        <p className="text-sm text-slate-900">
-          Duplicate entry voids this payment: it stops counting toward Total paid. Its entry stays in the list, and Data-entry
-          correction can bring it back.
-        </p>
-      ) : (
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={voided ? "Restore payment" : "Adjust payment"}
+      hint={
+        voided
+          ? `This payment is void. Recorded as: ${paymentSummary(original)}.`
+          : `Counts now as: ${paymentSummary(start)}. State what the payment should have said. The original entry stays visible.`
+      }
+      closeLabel="Close"
+      foot={
         <>
-          <Field label="Payment type">
-            {({ id }) => (
-              <select
-                id={id}
-                className={SELECT_CLASS}
-                required
-                value={type}
-                onChange={(event) => setType(event.target.value as RecordedPaymentType)}
-                aria-invalid={invalid("type")}
-              >
-                {typeChoices(original.type).map((choice) => (
-                  <option key={choice} value={choice}>
-                    {PAYMENT_TYPE_NAMES[choice]}
-                  </option>
-                ))}
-              </select>
+          <Button type="submit" form={formId} size="wide" pending={pending}>
+            {pending ? "Saving…" : voiding ? "Void payment" : "Save adjustment"}
+          </Button>
+          <Button variant="ghost" size="wide" onClick={onCancel} aria-disabled={pending || undefined}>
+            Cancel
+          </Button>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        aria-label="Adjust payment"
+        className="lr-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          save()
+        }}
+      >
+        {refusal && (
+          <Note tone="bad" role="alert">
+            {refusal.message}
+          </Note>
+        )}
+        <Field label="Reason">
+          {({ id }) => (
+            <Select
+              id={id}
+              required
+              value={reason}
+              onChange={(event) => setReason(event.target.value as AdjustmentReason)}
+              aria-invalid={invalid("reason")}
+            >
+              <option value="" disabled>
+                Choose a reason
+              </option>
+              {reasons.map((choice) => (
+                <option key={choice} value={choice}>
+                  {choice}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        {voiding ? (
+          <p className="lr-text">
+            Duplicate entry voids this payment: it stops counting toward Total paid. Its entry stays in the list, and Data-entry
+            correction can bring it back.
+          </p>
+        ) : (
+          <>
+            <Field label="Payment type">
+              {({ id }) => (
+                <Select
+                  id={id}
+                  required
+                  value={type}
+                  onChange={(event) => setType(event.target.value as RecordedPaymentType)}
+                  aria-invalid={invalid("type")}
+                >
+                  {typeChoices(original.type).map((choice) => (
+                    <option key={choice} value={choice}>
+                      {PAYMENT_TYPE_NAMES[choice]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            {!waived && (
+              <Field label="Amount (TZS)" hint="Whole shillings, above zero.">
+                {({ id, describedBy }) => (
+                  <Input
+                    id={id}
+                    inputMode="numeric"
+                    required
+                    autoComplete="off"
+                    className="max-w-48"
+                    value={amount}
+                    onChange={(event) => setAmount(event.target.value)}
+                    aria-describedby={describedBy}
+                    aria-invalid={invalid("amount")}
+                  />
+                )}
+              </Field>
             )}
-          </Field>
-          {!waived && (
-            <Field label="Amount (TZS)" hint="Whole shillings, above zero.">
+            <Field label="Payment date" hint="The day the family paid: today or earlier.">
               {({ id, describedBy }) => (
                 <Input
                   id={id}
-                  inputMode="numeric"
+                  type="date"
                   required
-                  autoComplete="off"
+                  max={today}
                   className="max-w-48"
-                  value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
+                  value={paidOn}
+                  onChange={(event) => setPaidOn(event.target.value)}
                   aria-describedby={describedBy}
-                  aria-invalid={invalid("amount")}
+                  aria-invalid={invalid("paid_on")}
                 />
               )}
             </Field>
-          )}
-          <Field label="Payment date" hint="The day the family paid: today or earlier.">
-            {({ id, describedBy }) => (
-              <Input
-                id={id}
-                type="date"
-                required
-                max={today}
-                className="max-w-48"
-                value={paidOn}
-                onChange={(event) => setPaidOn(event.target.value)}
-                aria-describedby={describedBy}
-                aria-invalid={invalid("paid_on")}
-              />
-            )}
-          </Field>
-        </>
-      )}
-      <Field label="Note (optional)" hint="What was wrong, for whoever reads this later.">
-        {({ id, describedBy }) => (
-          <Textarea
-            id={id}
-            maxLength={1000}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-            aria-describedby={describedBy}
-            aria-invalid={invalid("note")}
-          />
+          </>
         )}
-      </Field>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant={voiding ? "destructive" : "default"} disabled={pending}>
-          {pending ? "Saving…" : voiding ? "Void payment" : "Save adjustment"}
-        </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+        <Field label="Note (optional)" hint="What was wrong, for whoever reads this later.">
+          {({ id, describedBy }) => (
+            <TextArea
+              id={id}
+              maxLength={1000}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              aria-describedby={describedBy}
+              aria-invalid={invalid("note")}
+            />
+          )}
+        </Field>
+      </form>
+    </Sheet>
   )
 }

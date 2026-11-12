@@ -2,17 +2,7 @@
 
 import { useState, useTransition } from "react"
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Button } from "@/components/ui/button"
+import { Button, Sheet } from "@/components/kit"
 
 import { withdrawReopeningAction } from "./reopening-actions"
 import type { WithdrawOutcome } from "./reopening-outcome"
@@ -47,29 +37,34 @@ export function WithdrawReopening({ leadId, requestId }: { leadId: string; reque
 
   return (
     <div className="flex flex-col items-start gap-1">
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)} disabled={pending}>
+      <Button variant="ghost" size="small" onClick={() => setOpen(true)} pending={pending}>
         {pending ? "Withdrawing…" : "Withdraw"}
       </Button>
       {refusal && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="lr-error">
           {refusal}
         </p>
       )}
 
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Withdraw your reopening request?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The Manager won&apos;t see it any more, and the application stays closed. You can send a new request later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction onClick={withdraw}>Withdraw request</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Sheet
+        open={open}
+        onOpenChange={setOpen}
+        title="Withdraw your reopening request?"
+        hint="The Manager won't see it any more, and the application stays closed. You can send a new request later."
+        closeLabel="Close"
+        foot={
+          <>
+            <Button size="wide" onClick={withdraw}>
+              Withdraw request
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => setOpen(false)}>
+              Keep it
+            </Button>
+          </>
+        }
+      >
+        {null}
+      </Sheet>
     </div>
   )
 }

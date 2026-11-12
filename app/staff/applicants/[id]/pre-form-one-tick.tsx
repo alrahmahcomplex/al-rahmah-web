@@ -2,10 +2,9 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
+import { Note } from "@/components/kit"
 
+import { Checkbox } from "./form-controls"
 import { setPreFormOneAction } from "./pre-form-one-actions"
 import { PRE_FORM_ONE_HINT, PRE_FORM_ONE_LABEL, type PreFormOneOutcome } from "./pre-form-one-outcome"
 
@@ -56,16 +55,14 @@ export function PreFormOneTick({
           onCheckedChange={toggle}
         />
         <span className="flex flex-col gap-0.5">
-          <Label htmlFor={checkboxId} className="font-normal text-slate-900">
+          <label htmlFor={checkboxId} className="lr-text">
             {PRE_FORM_ONE_LABEL}
-          </Label>
-          {!ticked && <span className="text-xs text-muted-foreground">{PRE_FORM_ONE_HINT}</span>}
+          </label>
+          {!ticked && <span className="lr-hint">{PRE_FORM_ONE_HINT}</span>}
         </span>
       </div>
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{refusal}</Note>
       )}
     </div>
   )

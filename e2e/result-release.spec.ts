@@ -303,7 +303,7 @@ test.describe("sending a result again", () => {
 
     // Cancelling records nothing and opens no tab.
     await release(page).getByRole("button", { name: "Send through WhatsApp" }).click()
-    const dialog = page.getByRole("alertdialog", { name: "Send the result again?" })
+    const dialog = page.getByRole("dialog", { name: "Send the result again?" })
     await expect(dialog).toContainText(`It was already sent by WhatsApp on ${formatDate(today)} at `)
     await expect(dialog).toContainText(
       `by ${ADMISSIONS.name}, as Passed, 81.5%. The result or score has been corrected since, so this sends the corrected result.`,

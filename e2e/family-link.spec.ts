@@ -77,7 +77,7 @@ test.describe("the seeded unconfirmed match", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/applicants/${SEEDED.upendo.id}`)
 
-    const family = page.getByRole("region", { name: "Family" })
+    const family = page.getByRole("region", { name: "Family", exact: true })
     await expect(family.getByText("Unconfirmed Family match")).toBeVisible()
     await expect(family).toContainText("Khadija Kinship")
     await expect(familyRow(page, SEEDED.known.name)).not.toContainText("Unconfirmed")
@@ -115,7 +115,7 @@ test.describe("settling a match of the test's own", () => {
     await page.goto(`/staff/applicants/${match.appliedId}`)
 
     await expect(page.getByText("Returning family", { exact: true })).toBeVisible()
-    const family = page.getByRole("region", { name: "Family" })
+    const family = page.getByRole("region", { name: "Family", exact: true })
     await family.getByRole("button", { name: "Reject match" }).click()
     const reject = family.getByRole("form", { name: "Reject" })
     await expect(reject.getByRole("listitem")).toHaveCount(1)
@@ -164,7 +164,7 @@ test.describe("settling a match of the test's own", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/applicants/${joined.data.leadId}`)
     await expect(page.getByText("Returning family", { exact: true })).toBeVisible()
-    const family = page.getByRole("region", { name: "Family" })
+    const family = page.getByRole("region", { name: "Family", exact: true })
     await family.getByRole("button", { name: "Separate from this Family" }).click()
     const separate = family.getByRole("form", { name: "Separate" })
     await expect(separate.getByRole("listitem")).toHaveText([new RegExp(match.known)])
@@ -183,7 +183,7 @@ test.describe("settling a match of the test's own", () => {
     await signIn(page, ACCOUNTANT)
     await page.goto(`/staff/applicants/${match.appliedId}`)
 
-    const family = page.getByRole("region", { name: "Family" })
+    const family = page.getByRole("region", { name: "Family", exact: true })
     await expect(family.getByText("Unconfirmed Family match")).toBeVisible()
     await expect(familyRow(page, match.known)).toBeVisible()
     for (const name of ["Confirm match", "Reject match", "Separate from this Family"]) {

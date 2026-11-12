@@ -89,7 +89,7 @@ test("Admissions Staff register and record a retaken interview, and the earlier 
   // Recording the retake's result keeps the lead Interviewed.
   await current(page).getByRole("button", { name: "Record result" }).click()
   const form = current(page).getByRole("form", { name: "Record result" })
-  await form.getByLabel("Passed").check()
+  await form.locator("label").filter({ hasText: "Passed" }).click()
   await form.getByLabel("Score (%)").fill("71.5")
   await form.getByRole("button", { name: "Save result" }).click()
   await expect(current(page).getByRole("status")).toHaveText("Result recorded. The applicant is Interviewed.")

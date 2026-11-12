@@ -2,15 +2,12 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Note } from "@/components/kit"
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
 import { PRIOR_SIBLING_NAME_MAX, type PriorSibling } from "@/lib/services/sibling-groups"
 
-import { Field, SELECT_CLASS } from "./lead-editors"
+import { Checkbox, Select } from "./form-controls"
+import { Field, Input } from "./lead-editors"
 import { setPriorSiblingAction } from "./prior-sibling-actions"
 import { PRIOR_SIBLING_HINT, PRIOR_SIBLING_LABEL, type PriorSiblingOutcome } from "./prior-sibling-outcome"
 
@@ -65,7 +62,7 @@ export function PriorSiblingTick({ leadId, sibling, canEdit }: { leadId: string;
   if (!canEdit && sibling === null) return null
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="lr-card">
       <div className="flex items-start gap-2 text-sm">
         <Checkbox
           id={checkboxId}
@@ -76,33 +73,29 @@ export function PriorSiblingTick({ leadId, sibling, canEdit }: { leadId: string;
           onCheckedChange={toggle}
         />
         <span className="flex flex-col gap-0.5">
-          <Label htmlFor={checkboxId} className="font-normal text-slate-900">
+          <label htmlFor={checkboxId} className="lr-text">
             {PRIOR_SIBLING_LABEL}
-          </Label>
+          </label>
           {sibling && !editing && (
-            <span className="text-slate-900">
+            <span className="lr-strong">
               {sibling.name}, {sibling.className}
             </span>
           )}
-          {!sibling && !editing && <span className="text-xs text-muted-foreground">{PRIOR_SIBLING_HINT}</span>}
+          {!sibling && !editing && <span className="lr-hint">{PRIOR_SIBLING_HINT}</span>}
         </span>
         {canEdit && sibling && !editing && (
-          <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={edit} disabled={pending}>
+          <Button variant="ghost" size="small" className="ml-auto" onClick={edit} aria-disabled={pending || undefined}>
             Edit
           </Button>
         )}
       </div>
       {refusal && !editing && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal.message}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{refusal.message}</Note>
       )}
       {editing && (
-        <form aria-label="Sibling already at Al-Rahmah" className="flex flex-col gap-4" onSubmit={submit}>
+        <form aria-label="Sibling already at Al-Rahmah" className="lr-form lr-inline" onSubmit={submit}>
           {refusal && (
-            <Alert variant="destructive" role="alert">
-              <AlertDescription>{refusal.message}</AlertDescription>
-            </Alert>
+            <Note tone="bad" role="alert">{refusal.message}</Note>
           )}
           <Field label="Sibling's name" invalid={refusal?.field === "name"}>
             {({ id, invalid }) => (
@@ -118,9 +111,8 @@ export function PriorSiblingTick({ leadId, sibling, canEdit }: { leadId: string;
           </Field>
           <Field label="Sibling's class" invalid={refusal?.field === "class"}>
             {({ id, invalid }) => (
-              <select
+              <Select
                 id={id}
-                className={SELECT_CLASS}
                 required
                 value={className}
                 aria-invalid={invalid || undefined}
@@ -134,14 +126,14 @@ export function PriorSiblingTick({ leadId, sibling, canEdit }: { leadId: string;
                     {choice}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           </Field>
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={pending}>
+          <div className="lr-acts">
+            <Button type="submit" size="small" pending={pending}>
               {pending ? "Saving…" : "Save"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setEditing(false)} disabled={pending}>
+            <Button variant="ghost" size="small" onClick={() => setEditing(false)} aria-disabled={pending || undefined}>
               Cancel
             </Button>
           </div>

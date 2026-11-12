@@ -114,7 +114,7 @@ test("approving a reopening into a full class shows the seat warning and ranking
   await expect(ranking.getByRole("listitem").last()).toContainText("Past the last seat")
   await expect(ranking.getByText("Past the last seat")).toHaveCount(1)
 
-  await dialog.getByLabel("Enrol without a retaken interview").check()
+  await dialog.locator("label").filter({ hasText: "Enrol without a retaken interview" }).click()
   await dialog.getByRole("button", { name: "Approve and reopen" }).click()
   await expect(dialog).toHaveCount(0)
   await expect(page.getByRole("region", { name: /^This application is/ })).toHaveCount(0)

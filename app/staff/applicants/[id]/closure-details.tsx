@@ -1,3 +1,4 @@
+import { KeyValueList, type KeyValueItem } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadClosure, type LeadClosureMark } from "@/lib/services/lead-closure"
 import { createClient } from "@/utils/supabase/server"
@@ -9,16 +10,16 @@ import { DeclineFacts } from "./decline-details"
 export async function ClosedLeadDetails({ leadId }: { leadId: string }) {
   const closure = await getLeadClosure(await createClient(), leadId)
   if (!closure.ok) {
-    return <p className="text-muted-foreground">Why this application is closed could not be loaded. Reload the page to try again.</p>
+    return <p className="lr-quiet">Why this application is closed could not be loaded. Reload the page to try again.</p>
   }
 
   const { decline, closure: mark } = closure.data
   if (decline && mark) {
     return (
       <>
-        <h3 className="font-medium text-slate-900">Declined</h3>
+        <h3 className="lr-sub">Declined</h3>
         <DeclineFacts decline={decline} />
-        <h3 className="font-medium text-slate-900">{mark.mark}</h3>
+        <h3 className="lr-sub">{mark.mark}</h3>
         <ClosureFacts closure={mark} />
       </>
     )
@@ -30,22 +31,14 @@ export async function ClosedLeadDetails({ leadId }: { leadId: string }) {
 
 // The closure mark: the reason, the note, who set it and when.
 export function ClosureFacts({ closure }: { closure: LeadClosureMark }) {
-  return (
-    <dl className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-x-4 gap-y-2">
-      <dt className="text-muted-foreground">Reason</dt>
-      <dd className="text-slate-900">{closure.reason}</dd>
-      {closure.note && (
-        <>
-          <dt className="text-muted-foreground">Note</dt>
-          <dd className="whitespace-pre-line break-words text-slate-900">{closure.note}</dd>
-        </>
-      )}
-      <dt className="text-muted-foreground">{closure.mark} by</dt>
-      <dd className="text-slate-900">{closure.closedBy ?? "Not recorded"}</dd>
-      <dt className="text-muted-foreground">{closure.mark} on</dt>
-      <dd className="text-slate-900">
-        {closure.closedAt ? formatDate(tanzaniaToday(new Date(closure.closedAt))) : "Not recorded"}
-      </dd>
-    </dl>
+  const items: KeyValueItem[] = [{ key: "Reason", value: closure.reason }]
+  if (closure.note) items.push({ key: "Note", value: <span className="lr-pre">{closure.note}</span> })
+  items.push(
+    { key: `${closure.mark} by`, value: closure.closedBy ?? "Not recorded" },
+    {
+      key: `${closure.mark} on`,
+      value: closure.closedAt ? formatDate(tanzaniaToday(new Date(closure.closedAt))) : "Not recorded",
+    },
   )
+  return <KeyValueList items={items} />
 }

@@ -1,15 +1,12 @@
-import { HistoryIcon } from "lucide-react"
-import Link from "next/link"
 import type { ReactNode } from "react"
 
-import { StatusChip } from "@/components/status-chip"
-import { Badge } from "@/components/ui/badge"
-import { buttonVariants } from "@/components/ui/button"
+import { ButtonLink, StatusChip, Tag } from "@/components/kit"
 import { formatDate } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 import type { LeadImportMark } from "@/lib/services/student-import"
 
 import { initials } from "../../_today/greeting"
+import "./lead.css"
 
 // The top of the lead page: who the student is and where the lead stands,
 // with History for the Super Admin and the More menu on the right.
@@ -32,31 +29,28 @@ export function LeadHeader({
   more: ReactNode
 }) {
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-start">
-      <div className="flex min-w-0 flex-1 items-start gap-4">
-        <span
-          aria-hidden="true"
-          className="flex size-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-base font-semibold text-blue-700"
-        >
+    <header className="lr-head">
+      <div className="lr-head-who">
+        <span aria-hidden="true" className="lr-initials">
           {initials(lead.studentName)}
         </span>
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h1 className="staff-heading break-words">{lead.studentName}</h1>
+        <div className="min-w-0">
+          <div className="lr-head-title">
+            <h1 className="kit-ph-title">{lead.studentName}</h1>
             <StatusChip status={lead.status} />
-            {statusSince && <span className="text-sm text-muted-foreground">since {formatDate(statusSince)}</span>}
+            {statusSince && <span className="lr-since">since {formatDate(statusSince)}</span>}
             {lead.closure && <StatusChip status={lead.closure} />}
-            {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
-            {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
+            {lead.initiallyDeclined && <Tag tone="line">Initially declined</Tag>}
+            {lead.returningFamily && <Tag tone="line">Returning family</Tag>}
             {importMark?.batch &&
               (importMark.enrolledByImport ? (
-                <Badge variant="outline">Enrolled · imported, payments not recorded</Badge>
+                <Tag tone="line">Enrolled · imported, payments not recorded</Tag>
               ) : (
-                <Badge variant="outline">Imported</Badge>
+                <Tag tone="line">Imported</Tag>
               ))}
           </div>
-          <p className="flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
-            <span className="font-mono font-semibold text-slate-900" aria-label="Admission Number">
+          <p className="lr-meta">
+            <span className="lr-number" aria-label="Admission Number">
               {lead.admissionNumber}
             </span>
             <span aria-hidden="true">·</span>
@@ -70,12 +64,11 @@ export function LeadHeader({
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+      <div className="lr-head-act">
         {canViewHistory && (
-          <Link href={`/staff/applicants/${lead.id}/history`} className={buttonVariants({ variant: "outline" })}>
-            <HistoryIcon aria-hidden="true" />
+          <ButtonLink href={`/staff/applicants/${lead.id}/history`} variant="ghost" size="small" icon="audit">
             History
-          </Link>
+          </ButtonLink>
         )}
         {more}
       </div>

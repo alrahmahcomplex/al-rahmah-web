@@ -135,7 +135,7 @@ test.describe("withdrawing a reopening request", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/applicants/${lead.id}`)
     await panel(page).getByRole("button", { name: "Withdraw" }).click()
-    const confirm = page.getByRole("alertdialog", { name: "Withdraw your reopening request?" })
+    const confirm = page.getByRole("dialog", { name: "Withdraw your reopening request?" })
     await confirm.getByRole("button", { name: "Withdraw request" }).click()
 
     await expect(panel(page).getByRole("group", { name: "Pending reopening request" })).toHaveCount(0)

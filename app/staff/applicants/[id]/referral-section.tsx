@@ -1,8 +1,6 @@
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
+import { Note, Tag } from "@/components/kit"
 import { getLeadInterviews, type LeadInterview } from "@/lib/services/interviews"
 import { getLeadReferral, type LeadReferral, type ReferralState } from "@/lib/services/referral"
-import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { ReferralEditor } from "./referral-editor"
@@ -27,16 +25,14 @@ export async function ReferralSection({ leadId, canEdit }: { leadId: string; can
   const current = interviews.ok ? (interviews.data[0] ?? null) : null
 
   return (
-    <section aria-labelledby="lead-referral" className="flex flex-col gap-3">
-      <h2 id="lead-referral" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="lead-referral" className="lr-card">
+      <h2 id="lead-referral" className="kit-card-title">
         Referral code
       </h2>
       {!referral.ok ? (
-        <Alert variant="destructive" className="max-w-xl">
-          <AlertDescription>The referral code could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The referral code could not be loaded. Try again in a moment.</Note>
       ) : (
-        <div className="flex max-w-xl flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
+        <div className="flex flex-col gap-4">
           <Code referral={referral.data} />
           <Fee referral={referral.data} current={current} />
           {canEdit && (
@@ -58,41 +54,36 @@ export async function ReferralSection({ leadId, canEdit }: { leadId: string; can
 }
 
 function Code({ referral }: { referral: LeadReferral }) {
-  if (!referral.code || !referral.state) return <p className="text-sm text-muted-foreground">No referral code.</p>
+  if (!referral.code || !referral.state) return <p className="lr-quiet">No referral code.</p>
   const promo = referral.kind === "promo"
   const label = promo ? promoStateLabel(referral.discountState ?? "unrecognised") : STATE_LABEL[referral.state]
   const good = promo ? referral.discountState === "active" : referral.state === "approved"
   return (
     <div className="flex flex-col gap-1">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <p className="font-mono text-lg font-semibold text-slate-900" aria-label="Code">
+        <p className="lr-num lr-strong text-lg" aria-label="Code">
           {referral.code}
         </p>
-        <Badge
-          variant={good ? "secondary" : referral.state === "unrecognised" && !promo ? "destructive" : "outline"}
-          className={cn(good && "bg-emerald-50 text-emerald-800")}
-        >
-          {label}
-        </Badge>
+        <Tag tone={good ? "ok" : referral.state === "unrecognised" && !promo ? "bad" : "line"}>{label}</Tag>
       </div>
       {promo ? (
         <>
-          <p className="text-sm text-slate-900">
-            <span className="text-muted-foreground">Promo code: </span>
+          <p className="lr-text">
+            <span className="lr-quiet">Promo code: </span>
             {referral.holderName}
-            {referral.amountOff > 0 && <span className="text-muted-foreground"> · {formatTzs(referral.amountOff)} off</span>}
+            {referral.amountOff > 0 && <span className="lr-quiet"> · {formatTzs(referral.amountOff)} off</span>}
           </p>
-          <p className="text-sm text-muted-foreground">{PROMO_NO_AGENT}</p>
+          <p className="lr-quiet">{PROMO_NO_AGENT}</p>
         </>
       ) : (
-        <p className="text-sm text-slate-900">
+        <p className="lr-text">
           {referral.agentName ? (
             <>
-              <span className="text-muted-foreground">Marketing Agent: </span>
+              <span className="lr-quiet">Marketing Agent: </span>
               {referral.agentName}
             </>
           ) : (
-            <span className="text-muted-foreground">
+            <span className="lr-quiet">
               No Marketing Agent or Promo code has this code. Correct it if the family can check it.
             </span>
           )}
@@ -105,15 +96,15 @@ function Code({ referral }: { referral: LeadReferral }) {
 function Fee({ referral, current }: { referral: LeadReferral; current: LeadInterview | null }) {
   const line = referralFeeLine(referral, current)
   return (
-    <div className="flex flex-col gap-0.5 border-t pt-3">
-      <p className="text-xs text-muted-foreground">{line.label}</p>
-      <p className="text-sm text-slate-900">
+    <div className="lr-part gap-0.5">
+      <p className="lr-hint">{line.label}</p>
+      <p className="lr-text">
         <span className="font-semibold" aria-label={line.label}>
           {line.amount}
         </span>
-        {line.note && <span className="text-muted-foreground"> · {line.note}</span>}
+        {line.note && <span className="lr-quiet"> · {line.note}</span>}
       </p>
-      {line.pending && <p className="text-xs text-muted-foreground">The discount applies once the Manager approves the agent.</p>}
+      {line.pending && <p className="lr-hint">The discount applies once the Manager approves the agent.</p>}
     </div>
   )
 }

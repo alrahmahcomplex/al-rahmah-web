@@ -17,9 +17,9 @@ export async function ReopenedNote({ lead }: LeadPanelProps) {
   const { reopenedAt, approvedBy, enrolWithoutRetake } = closure.data.reopenedAfterDecline
   const retake = retakeChoiceText(enrolWithoutRetake)
   return (
-    <section aria-label="Reopened after decline" className="flex max-w-xl flex-col gap-1 rounded-lg border bg-card p-4 text-sm">
-      <h2 className="font-semibold text-slate-900">Reopened after decline</h2>
-      <p className="text-slate-900">
+    <section aria-label="Reopened after decline" className="lr-card">
+      <h2 className="kit-card-title">Reopened after decline</h2>
+      <p className="lr-text">
         Approved by {approvedBy} on {dayOf(reopenedAt)}.{retake && ` ${retake}.`}
       </p>
     </section>

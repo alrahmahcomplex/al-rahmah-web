@@ -1,12 +1,10 @@
-import Link from "next/link"
-
-import { buttonVariants } from "@/components/ui/button"
+import { ButtonLink } from "@/components/kit"
 import { enrolsWithoutRetake, nextStep, nextStepText, releaseInput } from "@/lib/lead-next-step"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
-import { cn } from "@/lib/utils"
 
+import { LEAD_CARD } from "./lead-card"
 import { readFee, readFollowUps, readInterviews, readRegistration, readRelease, readReleaseStatus, readReopenings } from "./lead-reads"
 import { RecordVisit } from "./record-visit"
 import { LEAD_TABS, leadTabHref, type LeadTab } from "./tabs"
@@ -69,29 +67,22 @@ export async function NextStepCard({
       id="lead-next-step"
       // A fixed name, so the step's wording never matches a panel's name.
       aria-label="Next step"
-      className={cn(
-        "flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border border-l-4 bg-card px-4 py-3.5",
-        action ? "border-l-orange-500" : "border-l-blue-600",
-      )}
+      className={`${LEAD_CARD} lr-step`}
     >
-      <div className="flex min-w-0 flex-1 basis-72 flex-col gap-0.5">
-        <h2 className="staff-section-heading">
-          {text ? `Next step: ${text.title}` : "Next step"}
-        </h2>
-        <p className="text-sm text-muted-foreground">
+      <div>
+        <h2 className="kit-card-title">{text ? `Next step: ${text.title}` : "Next step"}</h2>
+        <p className="kit-card-cap">
           {text ? text.detail : "The next step could not be worked out. Try again in a moment."}
         </p>
       </div>
       {link && action && (
-        <Link
+        <ButtonLink
           href={leadTabHref(lead.id, action.tab, action.anchor)}
-          className={cn(
-            buttonVariants({ variant: mayAct ? "orange" : "outline", size: "lg" }),
-            "h-10 px-4",
-          )}
+          variant={mayAct ? "go" : "ghost"}
+          chevron={mayAct}
         >
           {mayAct ? action.label : `Open ${LEAD_TABS.find((each) => each.key === action.tab)?.label}`}
-        </Link>
+        </ButtonLink>
       )}
       {staff.permissions.includes("visits.record") && (
         // Mounted for everyone who may record visits, so its confirmation

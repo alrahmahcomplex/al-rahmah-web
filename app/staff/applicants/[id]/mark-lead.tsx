@@ -2,27 +2,14 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Button, Note, Sheet } from "@/components/kit"
 import { CLOSURE_NOTE_MAX, CLOSURE_REASONS, type ClosureReason, type MarkMove } from "@/lib/services/lead-closure"
 import type { LeadStatus } from "@/lib/services/leads"
 
+import { TextArea, Select } from "./form-controls"
 import { markLeadAction } from "./mark-actions"
 import type { MarkOutcome } from "./mark-outcome"
 import { MARK_LABEL, markConsequence, markTitle } from "./mark-text"
-
-const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
 
 const LOST_REQUEST: MarkOutcome = {
   status: "refused",
@@ -49,6 +36,7 @@ export function MarkLead({ lead, mark, open, onOpenChange: setOpen }: MarkLeadPr
   const noteId = useId()
   const hintId = useId()
   const errorId = useId()
+  const formId = useId()
   const label = MARK_LABEL[mark]
 
   function changeOpen(next: boolean) {
@@ -79,69 +67,76 @@ export function MarkLead({ lead, mark, open, onOpenChange: setOpen }: MarkLeadPr
   }
 
   return (
-    <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="sm:max-w-md">
-        <form className="grid gap-4" onSubmit={send} noValidate>
-          <DialogHeader>
-            <DialogTitle>{markTitle(mark, lead.studentName)}</DialogTitle>
-            <DialogDescription>
-              {lead.admissionNumber}. {markConsequence(mark, lead.status)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-1.5">
-            <Label htmlFor={reasonId}>Reason</Label>
-            <select
-              id={reasonId}
-              className={SELECT_CLASS}
-              value={reason}
-              onChange={(event) => {
-                setReason(event.target.value as ClosureReason | "")
-                setMissing(false)
-              }}
-              aria-invalid={missing || undefined}
-              aria-describedby={missing ? errorId : undefined}
-            >
-              <option value="" disabled>
-                Choose a reason
-              </option>
-              {CLOSURE_REASONS.map((choice) => (
-                <option key={choice}>{choice}</option>
-              ))}
-            </select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor={noteId}>Note</Label>
-            <Textarea
-              id={noteId}
-              value={note}
-              maxLength={CLOSURE_NOTE_MAX}
-              onChange={(event) => setNote(event.target.value)}
-              aria-describedby={hintId}
-            />
-            <p id={hintId} className="text-xs text-muted-foreground">
-              Optional. Anything the reason alone doesn&apos;t say.
-            </p>
-          </div>
-          {missing && (
-            <p id={errorId} role="alert" className="text-sm text-destructive">
-              Choose a reason.
-            </p>
-          )}
-          {refusal && (
-            <Alert variant="destructive" role="alert">
-              <AlertDescription>{refusal}</AlertDescription>
-            </Alert>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="destructive" disabled={pending}>
-              {pending ? "Saving…" : label}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <Sheet
+      open={open}
+      onOpenChange={changeOpen}
+      title={markTitle(mark, lead.studentName)}
+      hint={
+        <>
+          {lead.admissionNumber}. {markConsequence(mark, lead.status)}
+        </>
+      }
+      closeLabel="Close"
+      foot={
+        <>
+          <Button type="submit" form={formId} size="wide" pending={pending}>
+            {pending ? "Saving…" : label}
+          </Button>
+          <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} aria-disabled={pending || undefined}>
+            Cancel
+          </Button>
+        </>
+      }
+    >
+      <form id={formId} className="lr-form" onSubmit={send} noValidate>
+        <div className="lr-field">
+          <label htmlFor={reasonId} className="lr-label">
+            Reason
+          </label>
+          <Select
+            id={reasonId}
+            value={reason}
+            onChange={(event) => {
+              setReason(event.target.value as ClosureReason | "")
+              setMissing(false)
+            }}
+            aria-invalid={missing || undefined}
+            aria-describedby={missing ? errorId : undefined}
+          >
+            <option value="" disabled>
+              Choose a reason
+            </option>
+            {CLOSURE_REASONS.map((choice) => (
+              <option key={choice}>{choice}</option>
+            ))}
+          </Select>
+        </div>
+        <div className="lr-field">
+          <label htmlFor={noteId} className="lr-label">
+            Note
+          </label>
+          <TextArea
+            id={noteId}
+            value={note}
+            maxLength={CLOSURE_NOTE_MAX}
+            onChange={(event) => setNote(event.target.value)}
+            aria-describedby={hintId}
+          />
+          <p id={hintId} className="lr-hint">
+            Optional. Anything the reason alone doesn&apos;t say.
+          </p>
+        </div>
+        {missing && (
+          <p id={errorId} role="alert" className="lr-error">
+            Choose a reason.
+          </p>
+        )}
+        {refusal && (
+          <Note tone="bad" role="alert">
+            {refusal}
+          </Note>
+        )}
+      </form>
+    </Sheet>
   )
 }

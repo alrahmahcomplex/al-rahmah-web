@@ -1,10 +1,8 @@
 "use client"
 
-import { Copy, MessageCircle } from "lucide-react"
 import { useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { Button, Note } from "@/components/kit"
 
 import { sendInvitation } from "./group-invitation-actions"
 import type { InvitationOutcome } from "./group-invitation-outcome"
@@ -54,19 +52,18 @@ export function SendGroupInvitation({ leadId, year, url }: Omit<Props, "message"
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="lr-card">
       <div>
-        <Button type="button" onClick={send} disabled={pending}>
-          <MessageCircle aria-hidden="true" />
+        <Button variant="ghost" size="small" onClick={send} pending={pending}>
           {pending ? "Opening WhatsApp…" : "Send WhatsApp group invitation"}
         </Button>
       </div>
       {outcome?.status === "sent" && (
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="lr-saved">
           {blockedLink ? (
             <>
               Recorded as sent. The browser blocked the WhatsApp tab:{" "}
-              <a href={blockedLink} target="_blank" rel="noopener noreferrer" className="underline">
+              <a href={blockedLink} target="_blank" rel="noopener noreferrer" className="lr-link">
                 open WhatsApp
               </a>{" "}
               and press send there.
@@ -107,15 +104,14 @@ export function CopyGroupInvitation({ leadId, year, url, message }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="lr-card">
       <div>
-        <Button type="button" onClick={copy} disabled={pending}>
-          <Copy aria-hidden="true" />
+        <Button variant="ghost" size="small" onClick={copy} pending={pending}>
           {pending ? "Copying…" : "Copy invitation"}
         </Button>
       </div>
       {outcome?.status === "sent" && (
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="lr-saved">
           Copied and recorded as sent. Paste it into a message to the family.
         </p>
       )}
@@ -127,8 +123,6 @@ export function CopyGroupInvitation({ leadId, year, url, message }: Props) {
 function Refusal({ outcome }: { outcome: InvitationOutcome | null }) {
   if (outcome?.status !== "refused") return null
   return (
-    <Alert variant="destructive" role="alert">
-      <AlertDescription>{outcome.message}</AlertDescription>
-    </Alert>
+    <Note tone="bad" role="alert">{outcome.message}</Note>
   )
 }

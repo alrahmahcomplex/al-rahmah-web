@@ -1,20 +1,8 @@
 "use client"
 
-import { Check, Copy, MessageCircle, MessageSquareText } from "lucide-react"
 import { useState, useTransition, type ReactNode } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Button } from "@/components/ui/button"
+import { Button, Note, Sheet } from "@/components/kit"
 
 import { sendResultBySms, sendResultByWhatsApp } from "./result-release-actions"
 import { spacedPhone, type ReleaseRefusal } from "./result-release-outcome"
@@ -134,27 +122,25 @@ export function SendResult({
   const sentBySms = outcome?.status === "sms"
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="lr-card">
       {whatsapp &&
-        (sentBySms ? <p className="text-sm text-muted-foreground">Sent by SMS instead of WhatsApp.</p> : whatsappPreview)}
-      <div className="flex flex-wrap gap-2">
+        (sentBySms ? <p className="lr-quiet">Sent by SMS instead of WhatsApp.</p> : whatsappPreview)}
+      <div className="lr-acts">
         {whatsapp && (
-          <Button type="button" onClick={() => ask("whatsapp")} disabled={pending}>
-            <MessageCircle aria-hidden="true" />
+          <Button variant="ghost" size="small" onClick={() => ask("whatsapp")} pending={pending}>
             {pending && sending === "whatsapp" ? "Opening WhatsApp…" : "Send through WhatsApp"}
           </Button>
         )}
-        <Button type="button" variant={whatsapp ? "outline" : "default"} onClick={() => ask("sms")} disabled={pending}>
-          <MessageSquareText aria-hidden="true" />
+        <Button variant="ghost" size="small" onClick={() => ask("sms")} pending={pending}>
           {pending && sending === "sms" ? "Recording…" : whatsapp ? "Send SMS instead" : "Send SMS"}
         </Button>
       </div>
       {outcome?.status === "whatsapp" && (
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="lr-saved">
           {outcome.blockedLink ? (
             <>
               Recorded as sent. The browser blocked the WhatsApp tab:{" "}
-              <a href={outcome.blockedLink} target="_blank" rel="noopener noreferrer" className="underline">
+              <a href={outcome.blockedLink} target="_blank" rel="noopener noreferrer" className="lr-link">
                 open WhatsApp
               </a>{" "}
               and press send there.
@@ -164,40 +150,43 @@ export function SendResult({
           )}
         </p>
       )}
-      {smsNote && !sentBySms && <p className="text-sm text-amber-700">{smsNote}</p>}
+      {smsNote && !sentBySms && <p className="lr-warn">{smsNote}</p>}
       {outcome?.status === "sms" && <SmsToSend text={outcome.text} phone={outcome.phone} note={outcome.note} />}
       {outcome?.status === "refused" && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{outcome.message}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{outcome.message}</Note>
       )}
 
-      <AlertDialog open={asking} onOpenChange={setAsking}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Send the result again?</AlertDialogTitle>
-            <AlertDialogDescription>{repeat}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Don&apos;t send</AlertDialogCancel>
-            <AlertDialogAction onClick={sendAgain} disabled={pending}>
+      <Sheet
+        open={asking}
+        onOpenChange={setAsking}
+        title="Send the result again?"
+        hint={repeat}
+        closeLabel="Close"
+        foot={
+          <>
+            <Button size="wide" onClick={sendAgain} aria-disabled={pending || undefined}>
               {confirming === "sms" ? "Send again by SMS" : "Send again through WhatsApp"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => setAsking(false)}>
+              Don&apos;t send
+            </Button>
+          </>
+        }
+      >
+        {null}
+      </Sheet>
     </div>
   )
 }
 
 function SmsToSend({ text, phone, note }: { text: string; phone: string; note: string | null }) {
   return (
-    <div className="flex flex-col gap-3">
-      <p role="status" className="text-sm text-emerald-700">
+    <div className="lr-card">
+      <p role="status" className="lr-saved">
         Recorded as sent. Send this text from the office phone.
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm text-slate-900">
+        <p className="lr-text">
           To <span className="font-medium">{spacedPhone(phone)}</span>
         </p>
         <CopyButton label="Copy number" value={phone} />
@@ -205,11 +194,11 @@ function SmsToSend({ text, phone, note }: { text: string; phone: string; note: s
       <div
         role="group"
         aria-label="SMS text"
-        className="rounded-lg bg-muted p-3 text-sm break-words whitespace-pre-wrap text-slate-900"
+        className="lr-quote"
       >
         {text}
       </div>
-      {note && <p className="text-sm text-amber-700">{note}</p>}
+      {note && <p className="lr-warn">{note}</p>}
       <div>
         <CopyButton label="Copy text" value={text} />
       </div>
@@ -231,11 +220,10 @@ function CopyButton({ label, value }: { label: string; value: string }) {
 
   return (
     <span className="inline-flex items-center gap-2">
-      <Button type="button" size="sm" variant="outline" onClick={copy}>
-        {copied === "yes" ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+      <Button variant="ghost" size="small" icon={copied === "yes" ? "check" : undefined} onClick={copy}>
         {label}
       </Button>
-      <span aria-live="polite" className="text-sm text-muted-foreground">
+      <span aria-live="polite" className="lr-quiet">
         {copied === "yes" ? "Copied" : copied === "failed" ? "Could not copy. Select it and copy by hand." : ""}
       </span>
     </span>

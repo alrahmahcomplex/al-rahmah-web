@@ -824,6 +824,19 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "not_permitted" },
   },
+  // The New Student form's one save (#304).
+  "public.register_students(visited_on date, people jsonb, students jsonb)": {
+    roles: ["authenticated"],
+    args: {
+      visited_on: "current_date",
+      people: `'[{"full_name": "Sample Parent", "phone": "0689999001"}]'::jsonb`,
+      students: `jsonb_build_array(jsonb_build_object(
+        'first_name', 'Sample', 'fathers_name', 'Pupil', 'last_name', 'Surface',
+        'class_name', 'KG 1', 'enrollment_year', extract(year from public.tanzania_today())::int + 1,
+        'day_or_boarding', 'Day', 'custodian', jsonb_build_object('person', 1, 'relationship', 'Mother')))`,
+    },
+    agent: { refused: "not_permitted" },
+  },
   "public.reject_family_match(lead_id uuid, expected_lead_ids uuid[])": {
     roles: ["authenticated"],
     args: {

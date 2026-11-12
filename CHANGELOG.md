@@ -5,6 +5,22 @@ reserved for the complete Al-Rahmah web app, with the School Landing Page, Admis
 Portal and Referral Tracking System all implemented. Releases before that milestone
 stay in the `0.x` range.
 
+## Unreleased
+
+### NEW
+
+- The database can now save a whole New Student form in one go: 1 to 8 students, each with its
+  four name fields, its custodian and that person's relationship to the child, who brought them,
+  the previous school from STD 2 up, and its "Sibling of" choice. Everything is saved, or nothing
+  is, and any problem names the student it is about. One adult is stored once even when they are
+  Mother to one child and Aunt to another, and a later correction of that person no longer
+  changes the other child's relationship. A child on a known family is a sibling only when staff
+  link it, never because it shares the family's phone. When fathers' names are the same, close
+  or different, the save stops with the question staff must answer first. Linking to an Enrolled
+  sibling never changes that sibling's fee. No screen uses this yet: today's New Student form
+  works as before. No fee, discount, status or seat count changed when this shipped; the update
+  checked that before finishing.
+
 ## November 12, 2026 `v0.105.0`
 
 ### IMPROVED

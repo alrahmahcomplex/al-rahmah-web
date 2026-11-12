@@ -22,7 +22,7 @@ import {
 } from "@/lib/services/leads"
 import { adjustPayment } from "@/lib/services/payment-adjustments"
 import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
-import { getPriorSibling, setPriorSibling } from "@/lib/services/sibling-discount"
+import { getPriorSibling, setPriorSibling } from "@/lib/services/sibling-groups"
 
 import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"

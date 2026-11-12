@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { DISCOUNT_KINDS, getLeadDiscounts, type DiscountRequest } from "@/lib/services/discounts"
-import { getPriorSibling } from "@/lib/services/sibling-discount"
+import { getPriorSibling } from "@/lib/services/sibling-groups"
 import { createClient } from "@/utils/supabase/server"
 
 import { DecideDiscount } from "./decide-discount"

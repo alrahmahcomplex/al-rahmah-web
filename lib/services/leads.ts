@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Result } from "./result"
+import type { SiblingBasis } from "./sibling-groups"
 
 // The lead module: every read and write of leads and their parent/guardian
 // contacts goes through here. Writes are database functions that check the
@@ -159,6 +160,298 @@ export async function createLead(
     }
   }
   return { ok: true, data: { leadId: row.lead_id, admissionNumber: row.admission_number } }
+}
+
+// The staff New Student form (#304): 1 to 8 students in one save, all or
+// nothing. Students and people are numbered from 1 in the order given, and
+// every refusal, question and duplicate names the number it is about.
+
+export const MAX_STUDENTS_PER_FORM = 8
+
+// An adult on the form: a person on file that staff confirmed is the same
+// person (the stored details are kept), or a new one. A new person's name may
+// be left out when a student says the father is the custodian: the person
+// then takes that father's full name.
+export type RegistrationPerson =
+  | { contactId: string; alsoCheckPhones?: string[] }
+  | { fullName?: string; phone: string; whatsapp?: string }
+
+export type RegistrationStudent = {
+  // The four name fields. The student's name is all four; the father's full
+  // name is the three after the first.
+  firstName: string
+  fathersName: string
+  lastName: string
+  surname?: string
+  className: LeadClass
+  enrollmentYear: number
+  dayOrBoarding: DayOrBoarding
+  // The custodian, by person number, and who they are to this child. With
+  // `father`, the father is the main custodian: the relationship is Father.
+  custodian:
+    | { person: number; father: true }
+    | { person: number; relationship: Relationship; relationshipDescription?: string }
+  broughtBy?: { name: string; phone?: string; relationship?: string }
+  // Asked from STD 2 up.
+  previousSchool?: { name: string; type: "private" | "public"; region: string } | { notKnown: true }
+  siblingOf?: { student: number } | { leadId: string }
+  // The answer to a `same-father` question: these fathers' names match, but
+  // the children are not siblings.
+  notASibling?: boolean
+  // Answers to the other questions.
+  siblingFatherFullName?: string
+  nameAnswer?: { answer: "typo"; spelling: string } | { answer: "different" }
+  // A Sibling request for the Admissions Manager when the names differ: what
+  // proof the family will bring.
+  requestNote?: string
+  requestId?: string
+}
+
+export type RegisterStudentsInput = {
+  visitDate: string
+  people: RegistrationPerson[]
+  students: RegistrationStudent[]
+}
+
+// What staff must answer before anything is saved.
+export type RegistrationQuestion =
+  // The two fathers' names are the same and this student has no sibling
+  // choice: "Sibling of [X]?". Answer with siblingOf or notASibling.
+  | { kind: "same-father"; student: number; otherStudent: number }
+  | { kind: "same-father"; student: number; otherLeadId: string; otherAdmissionNumber: string }
+  // The names are close: one name with a typing mistake, or two names?
+  | { kind: "name"; student: number; fatherFullName: string; siblingLeadId: string; siblingFatherFullName: string }
+  // The on-file sibling's father's name was never confirmed: ask for it.
+  | { kind: "sibling-father-name"; student: number; siblingLeadId: string }
+  // The names differ: a note for the Sibling request, or Not a sibling.
+  | { kind: "request-note"; student: number; siblingLeadId: string }
+
+export type RegisteredStudent = {
+  student: number
+  leadId: string
+  admissionNumber: string
+  sibling: { basis: SiblingBasis; groupId: string; requestId: string | null } | null
+}
+
+export type RegisterStudentsOutcome =
+  | { kind: "created"; students: RegisteredStudent[] }
+  | { kind: "questions"; questions: RegistrationQuestion[] }
+
+export type RegistrationInvalidField =
+  | InvalidField
+  | "students"
+  | "people"
+  | "person"
+  | "student"
+  | "also_check_phones"
+  | "first_name"
+  | "fathers_name"
+  | "last_name"
+  | "custodian"
+  | "brought_by"
+  | "brought_by_name"
+  | "brought_by_phone"
+  | "brought_by_relationship"
+  | "previous_school"
+  | "previous_school_name"
+  | "previous_school_type"
+  | "previous_school_region"
+  | "sibling_of"
+  | "sibling_father_full_name"
+  | "answer"
+  | "spelling"
+  | "request_note"
+  | "request_id"
+  | "family_match"
+
+export type RegisterStudentsError =
+  | { kind: "duplicate"; duplicates: (ExistingLead & { student: number })[] }
+  | { kind: "forbidden" }
+  // `student` or `person` names who it is about; `reason` says more for some
+  // fields (`too_many`, `repeated_on_form`, `unused`, `not_found`,
+  // `father_names_differ`, `merge_needs_match`, `refused_request`).
+  | { kind: "invalid"; field: RegistrationInvalidField | null; student?: number; person?: number; reason?: string }
+  // An on-file sibling is Declined or has a closure mark.
+  | { kind: "lead-closed"; student?: number }
+  | { kind: "unavailable" }
+
+type RegisterRow =
+  | {
+      result: "created"
+      students: {
+        student: number
+        lead_id: string
+        admission_number: string
+        sibling: { basis: SiblingBasis; group_id: string; request_id: string | null } | null
+      }[]
+    }
+  | {
+      result: "duplicate"
+      duplicates: { student: number; lead_id: string; admission_number: string; status: LeadStatus; closure: LeadClosure | null }[]
+    }
+  | { result: "questions"; questions: Record<string, unknown>[] }
+
+function detailOf(details: string | null | undefined): Record<string, unknown> {
+  try {
+    const parsed: unknown = details ? JSON.parse(details) : {}
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+const numberOrUndefined = (value: unknown) => (typeof value === "number" ? value : undefined)
+
+function questionOf(row: Record<string, unknown>): RegistrationQuestion {
+  const student = row.student as number
+  switch (row.question) {
+    case "same_father":
+      return typeof row.other_student === "number"
+        ? { kind: "same-father", student, otherStudent: row.other_student }
+        : {
+            kind: "same-father",
+            student,
+            otherLeadId: row.other_lead_id as string,
+            otherAdmissionNumber: row.other_admission_number as string,
+          }
+    case "name":
+      return {
+        kind: "name",
+        student,
+        fatherFullName: row.father_full_name as string,
+        siblingLeadId: row.sibling_lead_id as string,
+        siblingFatherFullName: row.sibling_father_full_name as string,
+      }
+    case "sibling_father_name":
+      return { kind: "sibling-father-name", student, siblingLeadId: row.sibling_lead_id as string }
+    default:
+      return { kind: "request-note", student, siblingLeadId: row.sibling_lead_id as string }
+  }
+}
+
+function personPayload(person: RegistrationPerson) {
+  if ("contactId" in person) return { contact_id: person.contactId, also_check_phones: person.alsoCheckPhones ?? null }
+  return { full_name: person.fullName ?? null, phone: person.phone, whatsapp: person.whatsapp ?? null }
+}
+
+function studentPayload(student: RegistrationStudent) {
+  const { custodian, previousSchool, siblingOf, nameAnswer } = student
+  return {
+    first_name: student.firstName,
+    fathers_name: student.fathersName,
+    last_name: student.lastName,
+    surname: student.surname ?? null,
+    class_name: student.className,
+    enrollment_year: student.enrollmentYear,
+    day_or_boarding: student.dayOrBoarding,
+    custodian:
+      "father" in custodian
+        ? { person: custodian.person, father: true }
+        : {
+            person: custodian.person,
+            relationship: custodian.relationship,
+            relationship_description: custodian.relationshipDescription ?? null,
+          },
+    brought_by: student.broughtBy
+      ? { name: student.broughtBy.name, phone: student.broughtBy.phone ?? null, relationship: student.broughtBy.relationship ?? null }
+      : null,
+    previous_school: !previousSchool
+      ? null
+      : "notKnown" in previousSchool
+        ? { not_known: true }
+        : { name: previousSchool.name, type: previousSchool.type, region: previousSchool.region },
+    sibling_of: !siblingOf ? null : "student" in siblingOf ? { student: siblingOf.student } : { lead_id: siblingOf.leadId },
+    not_a_sibling: student.notASibling ?? false,
+    sibling_father_full_name: student.siblingFatherFullName ?? null,
+    name_answer: !nameAnswer
+      ? null
+      : nameAnswer.answer === "typo"
+        ? { answer: "typo", spelling: nameAnswer.spelling }
+        : { answer: "different" },
+    request_note: student.requestNote ?? null,
+    request_id: student.requestId ?? null,
+  }
+}
+
+// Saves a whole New Student form in one transaction: every student, or
+// none. Needs leads.create and visits.record, and leads.edit when a student
+// is "Sibling of" someone. Staff-confirmed people are kept as stored. A
+// student on file already comes back as `duplicate`, and questions come
+// back before anything is saved; send the form again with the answers. The
+// database decides every sibling link, full payer and Sibling 10%.
+export async function registerStudents(
+  supabase: SupabaseClient,
+  input: RegisterStudentsInput,
+): Promise<Result<RegisterStudentsOutcome, RegisterStudentsError>> {
+  const args = {
+    visited_on: input.visitDate,
+    people: input.people.map(personPayload),
+    students: input.students.map(studentPayload),
+  }
+
+  // A sibling's Family that another save changed while this one took its
+  // locks refuses with 40001 and saves nothing: try again.
+  let attempt = 0
+  for (;;) {
+    attempt += 1
+    const { data, error } = await supabase.rpc("register_students", args)
+    if (error) {
+      if (error.code === "40001" && attempt < 3) continue
+      const detail = detailOf(error.details)
+      const student = numberOrUndefined(detail.student)
+      if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: { kind: "forbidden" } }
+      if (error.message === "lead_closed") return { ok: false, error: { kind: "lead-closed", student } }
+      if (error.message === "invalid" || error.message === "not_found" || error.code === "22P02") {
+        return {
+          ok: false,
+          error: {
+            kind: "invalid",
+            field: typeof detail.field === "string" ? (detail.field as RegistrationInvalidField) : error.message === "not_found" ? "sibling_of" : null,
+            student,
+            person: numberOrUndefined(detail.person),
+            reason: typeof detail.reason === "string" ? detail.reason : undefined,
+          },
+        }
+      }
+      console.error("Could not register students", error)
+      return { ok: false, error: { kind: "unavailable" } }
+    }
+
+    const row = data as RegisterRow
+    switch (row.result) {
+      case "duplicate":
+        return {
+          ok: false,
+          error: {
+            kind: "duplicate",
+            duplicates: row.duplicates.map((d) => ({
+              student: d.student,
+              id: d.lead_id,
+              admissionNumber: d.admission_number,
+              status: d.status,
+              closure: d.closure,
+            })),
+          },
+        }
+      case "questions":
+        return { ok: true, data: { kind: "questions", questions: row.questions.map(questionOf) } }
+      case "created":
+        return {
+          ok: true,
+          data: {
+            kind: "created",
+            students: row.students.map((s) => ({
+              student: s.student,
+              leadId: s.lead_id,
+              admissionNumber: s.admission_number,
+              sibling: s.sibling
+                ? { basis: s.sibling.basis, groupId: s.sibling.group_id, requestId: s.sibling.request_id }
+                : null,
+            })),
+          },
+        }
+    }
+  }
 }
 
 export type Lead = {

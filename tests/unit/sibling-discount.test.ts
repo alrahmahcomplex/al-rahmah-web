@@ -4,7 +4,7 @@ import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describ
 import { priorSiblingOutcome } from "@/app/staff/applicants/[id]/prior-sibling-outcome"
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 import { FEE_DISCOUNT_NAMES } from "@/lib/services/discounts"
-import type { SetPriorSiblingError } from "@/lib/services/sibling-discount"
+import type { SetPriorSiblingError } from "@/lib/services/sibling-groups"
 
 // The Sibling discount's words (#113): the fee panel's name for it, the
 // prior-sibling tick's refusals, and its entries in the lead history.

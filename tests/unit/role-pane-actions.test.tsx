@@ -95,6 +95,10 @@ function renderPane(role: RoleView = ROLE) {
 
 const row = (name: string) => screen.getByRole("listitem", { name })
 
+// Every control is disabled while a change is on its way, as before the
+// redesign; wait for the pane to be idle before the next click.
+const idle = () => waitFor(() => expect(screen.getByRole("button", { name: "Rename", hidden: true })).toBeEnabled())
+
 beforeEach(() => {
   for (const action of Object.values(actions)) action.mockReset().mockResolvedValue(OK)
   push.mockReset()
@@ -107,9 +111,11 @@ describe("Staff and roles controls", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "Record payments and maintain fees" }))
     await waitFor(() => expect(actions.setPermission).toHaveBeenCalledWith("r-man", "payments.record", true))
+    await idle()
 
     await user.click(screen.getByRole("checkbox", { name: "View applicants and their history" }))
     await waitFor(() => expect(actions.setPermission).toHaveBeenCalledWith("r-man", "leads.view", false))
+    await idle()
     expect(actions.setPermission).toHaveBeenCalledTimes(2)
   })
 
@@ -119,8 +125,10 @@ describe("Staff and roles controls", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "Accountant" }))
     await waitFor(() => expect(actions.setManagedRole).toHaveBeenCalledWith("r-man", "r-acc", true))
+    await idle()
     await user.click(screen.getByRole("checkbox", { name: "Admissions Staff" }))
     await waitFor(() => expect(actions.setManagedRole).toHaveBeenCalledWith("r-man", "r-staff", false))
+    await idle()
   })
 
   it("moves someone at once, or asks first when they would stop managing staff", async () => {
@@ -130,6 +138,7 @@ describe("Staff and roles controls", () => {
     await user.click(within(row("Asha Fixture")).getByRole("button", { name: "Move to…" }))
     await user.click(within(screen.getByRole("dialog", { name: "Move to…" })).getByRole("button", { name: "Accountant" }))
     await waitFor(() => expect(actions.moveStaffMember).toHaveBeenCalledWith("p-1", "r-acc"))
+    await idle()
 
     await user.click(within(row("Baraka Lead")).getByRole("button", { name: "Move to…" }))
     await user.click(within(screen.getByRole("dialog", { name: "Move to…" })).getByRole("button", { name: "Accountant" }))
@@ -137,6 +146,7 @@ describe("Staff and roles controls", () => {
     expect(actions.moveStaffMember).toHaveBeenCalledTimes(1)
     await user.click(within(confirm).getByRole("button", { name: "Move" }))
     await waitFor(() => expect(actions.moveStaffMember).toHaveBeenCalledWith("p-2", "r-acc"))
+    await idle()
   })
 
   it("deactivates at once, or asks first for someone who manages staff, and Cancel changes nothing", async () => {
@@ -145,6 +155,7 @@ describe("Staff and roles controls", () => {
 
     await user.click(within(row("Asha Fixture")).getByRole("button", { name: "Deactivate" }))
     await waitFor(() => expect(actions.deactivateStaffMember).toHaveBeenCalledWith("p-1"))
+    await idle()
 
     await user.click(within(row("Baraka Lead")).getByRole("button", { name: "Deactivate" }))
     const confirm = await screen.findByRole("dialog", { name: "Deactivate Baraka Lead?" })
@@ -154,6 +165,7 @@ describe("Staff and roles controls", () => {
     await user.click(within(row("Baraka Lead")).getByRole("button", { name: "Deactivate" }))
     await user.click(within(await screen.findByRole("dialog", { name: "Deactivate Baraka Lead?" })).getByRole("button", { name: "Deactivate" }))
     await waitFor(() => expect(actions.deactivateStaffMember).toHaveBeenCalledWith("p-2"))
+    await idle()
   })
 
   it("reactivates, resends an invite and sends a reset link for the right person", async () => {
@@ -162,10 +174,13 @@ describe("Staff and roles controls", () => {
 
     await user.click(within(row("Chausiku Gone")).getByRole("button", { name: "Reactivate" }))
     await waitFor(() => expect(actions.reactivateStaffMember).toHaveBeenCalledWith("p-3"))
+    await idle()
     await user.click(within(row("Dua Invited")).getByRole("button", { name: "Resend invite" }))
     await waitFor(() => expect(actions.resendStaffInvite).toHaveBeenCalledWith("p-4"))
+    await idle()
     await user.click(within(row("Asha Fixture")).getByRole("button", { name: "Send reset link" }))
     await waitFor(() => expect(actions.sendStaffResetLink).toHaveBeenCalledWith("p-1"))
+    await idle()
   })
 
   it("retires a role only after the confirmation, and reactivates a retired one", async () => {
@@ -177,6 +192,7 @@ describe("Staff and roles controls", () => {
     expect(actions.retireRoleNow).not.toHaveBeenCalled()
     await user.click(within(confirm).getByRole("button", { name: "Retire role" }))
     await waitFor(() => expect(actions.retireRoleNow).toHaveBeenCalledWith("r-man"))
+    await idle()
     unmount()
 
     renderPane({ ...ROLE, retired: true })
@@ -196,12 +212,14 @@ describe("Staff and roles controls", () => {
     await user.type(field, "accountant")
     await user.click(within(sheet).getByRole("button", { name: "Save name" }))
     await waitFor(() => expect(actions.renameRoleTo).toHaveBeenCalledWith("r-man", "accountant"))
+    await idle()
     await waitFor(() => expect(within(sheet).getByRole("alert")).toHaveTextContent('A role called "accountant" already exists.'))
 
     await user.clear(field)
     await user.type(field, "Admissions Lead")
     await user.click(within(sheet).getByRole("button", { name: "Save name" }))
     await waitFor(() => expect(actions.renameRoleTo).toHaveBeenLastCalledWith("r-man", "Admissions Lead"))
+    await idle()
 
     await user.click(within(row("Asha Fixture")).getByRole("button", { name: "Correct name" }))
     sheet = await screen.findByRole("dialog", { name: "Correct Asha Fixture's name" })
@@ -210,6 +228,7 @@ describe("Staff and roles controls", () => {
     await user.type(name, "Asha Fixture Corrected")
     await user.click(within(sheet).getByRole("button", { name: "Save name" }))
     await waitFor(() => expect(actions.correctStaffMemberName).toHaveBeenCalledWith("p-1", "Asha Fixture Corrected"))
+    await idle()
   })
 
   it("invites with the role in view and the typed name and email", async () => {
@@ -222,6 +241,7 @@ describe("Staff and roles controls", () => {
     await user.type(within(form).getByLabelText("Email"), "neema@example.test")
     await user.click(within(form).getByRole("button", { name: "Send invite" }))
     await waitFor(() => expect(actions.inviteStaffMember).toHaveBeenCalledWith("r-man", "Neema Invitee", "neema@example.test"))
+    await idle()
   })
 })
 

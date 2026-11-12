@@ -10,6 +10,7 @@ import { expect, test } from "./staff-test"
 // sheets under reduced motion. Nothing here changes data: every sheet is
 // opened and closed again.
 
+// Axe reads colours at rest, so the pointer leaves the button it clicked before each scan.
 async function open(page: Page, path: string, heading: string) {
   await signInOnce(page, SUPER_ADMIN.email, SUPER_ADMIN.password)
   await page.goto(path)
@@ -29,6 +30,7 @@ for (const width of [1280, 390]) {
 
       await page.getByRole("button", { name: "Filter Visited applicants" }).click()
       await expect(page.getByRole("dialog", { name: "Visited applicants" })).toBeVisible()
+      await page.mouse.move(0, 0)
       expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
       await page.keyboard.press("Escape")
       await expect(page.getByRole("dialog")).toHaveCount(0)
@@ -37,7 +39,8 @@ for (const width of [1280, 390]) {
       if ((await seats.count()) > 0) {
         await seats.click()
         await expect(page.getByRole("dialog", { name: "Seats by class" })).toBeVisible()
-        expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
+        await page.mouse.move(0, 0)
+      expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
       }
     })
 
@@ -50,6 +53,7 @@ for (const width of [1280, 390]) {
       await page.getByRole("button", { name: "Rename" }).click()
       const sheet = page.getByRole("dialog", { name: /^Rename / })
       await expect(sheet).toBeVisible()
+      await page.mouse.move(0, 0)
       expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
       await sheet.getByRole("button", { name: "Cancel" }).click()
       await expect(page.getByRole("dialog")).toHaveCount(0)
@@ -57,6 +61,7 @@ for (const width of [1280, 390]) {
       const move = page.getByRole("list", { name: /^People in / }).getByRole("button", { name: "Move to…", disabled: false }).first()
       await move.click()
       await expect(page.getByRole("dialog", { name: "Move to…" })).toBeVisible()
+      await page.mouse.move(0, 0)
       expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
       await page.keyboard.press("Escape")
       await expect(page.getByRole("dialog")).toHaveCount(0)

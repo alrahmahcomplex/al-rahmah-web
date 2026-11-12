@@ -117,7 +117,8 @@ test("an Administrator manages a Manager, changes no role and has no audit scree
   const row = personRow(page, manager.name)
   await row.getByRole("button", { name: "Deactivate" }).click()
   await expect(page.getByRole("dialog", { name: /\?$/ })).toContainText("including managing staff")
-  // The confirmation is a kit sheet (#331).
+  // The confirmation is a kit sheet (#331). The pointer leaves its orange button, so axe reads the resting colours.
+  await page.mouse.move(0, 0)
   expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
   await page.getByRole("dialog", { name: /\?$/ }).getByRole("button", { name: "Deactivate" }).click()
   await expect(callout(page)).toHaveText(`Deactivated ${manager.name}.`)

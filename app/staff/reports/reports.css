@@ -31,3 +31,7 @@
 .rp-filter { display: flex; flex-direction: column; gap: 12px; padding: 8px 0 8px; }
 .rp-filter label { display: block; margin-bottom: 6px; font-size: 12.5px; font-weight: 600; color: var(--gf-ink-soft); }
 .rp-pair { display: flex; gap: 8px; }
+/* A table's hidden "Seats not set" stays inside its scrolling wrapper, not out at the page's edge. */
+.rp-panel .kit-tw { position: relative; }
+/* Counts, not money: as before the redesign, a long Taken split or "Seats not set" wraps, so the table fits a phone. */
+.rp-panel .kit-tbl td[data-align="end"] { white-space: normal; }

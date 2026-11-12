@@ -121,6 +121,8 @@ test("the interview tiles each keep their own filters in the address", async ({ 
   await expect(page).toHaveURL(/[?&]failed=year%3A2025-01-01/)
   await expect(failed.getByTestId("failed-period")).toHaveText("2025 · Enrollment year 2031")
   await expect(failed.getByTestId("failed-count")).toHaveText("2")
+  // The open filter keeps focus inside it, so close it to read the other panels.
+  await page.keyboard.press("Escape")
   await expect(interviewed.getByTestId("interviewed-count")).toHaveText("6")
   await expect(passed.getByTestId("passed-count")).toHaveText("3")
 })
@@ -146,11 +148,12 @@ test("the Enrolled students tile keeps its own filters in the address", async ({
   await expect(page).toHaveURL(/[?&]enrolled=year%3A2025-01-01/)
   await expect(enrolled.getByTestId("enrolled-period")).toHaveText("2025 · Enrollment year 2031")
   await expect(enrolled.getByTestId("enrolled-count")).toHaveText("1")
+  // The open filter keeps focus inside it, so close it to read the other panels.
+  await page.keyboard.press("Escape")
   await expect(page).toHaveURL(/[?&]visited_year=2031/)
   await expect(visitedPanel(page).getByTestId("visited-count")).toHaveText("23")
 
   // A lead enrolled on the Academic-year start counts on the start date.
-  await page.keyboard.press("Escape")
   await page.goto("/staff/reports?enrolled=date:2031-01-08&enrolled_year=2031")
   await expect(enrolled.getByTestId("enrolled-period")).toHaveText(`${formatDate("2031-01-08")} · Enrollment year 2031`)
   await expect(enrolled.getByTestId("enrolled-count")).toHaveText("1")
@@ -187,13 +190,14 @@ test("changing the Applicants by enrollment class filters leaves the Visited app
   await expect(classes.getByTestId("classes-period")).toHaveText("2025 · Enrollment year 2031")
   await expect(classes.getByTestId("classes-total")).toHaveText("12")
   await expect(classes.getByTestId("classes-count-DAY CARE")).toHaveText("1")
+  // The open filter keeps focus inside it, so close it to read the other panels.
+  await page.keyboard.press("Escape")
 
   await expect(page).toHaveURL(/[?&]visited=month%3A2026-09-01/)
   await expect(visited.getByTestId("visited-period")).toHaveText("September 2026 · Enrollment year 2031")
   await expect(visited.getByTestId("visited-count")).toHaveText("6")
 
   // A lead created at 00:30 on Monday 28 September counts on that Monday.
-  await page.keyboard.press("Escape")
   await page.goto("/staff/reports?classes=date:2026-09-28&classes_year=2031")
   await expect(classes.getByTestId("classes-period")).toHaveText("28 Sept 2026 · Enrollment year 2031")
   await expect(classes.getByTestId("classes-total")).toHaveText("1")
@@ -279,9 +283,10 @@ test("Seats by class opens on the latest year with a Fee schedule and keeps a ch
   await expect(page).toHaveURL(/[?&]seats_year=2027/)
   await expect(page).toHaveURL(/[?&]visited_year=2031/)
   await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2027")
+  // The open filter keeps focus inside it, so close it to read the other panels.
+  await page.keyboard.press("Escape")
   await expect(visitedPanel(page).getByTestId("visited-period")).toHaveText("All time · Enrollment year 2031")
 
-  await page.keyboard.press("Escape")
   await page.reload()
   await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2027")
 })

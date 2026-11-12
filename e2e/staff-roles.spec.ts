@@ -136,7 +136,7 @@ test.describe("changing staff members", () => {
     await personRow(page, target.name).getByRole("button", { name: "Deactivate" }).click()
 
     await expect(callout(page)).toHaveText(`${target.name} is already deactivated.`)
-    await expect(callout(page)).toHaveAttribute("role", "alert")
+    await expect(callout(page).getByRole("alert")).toBeVisible()
     // The screen catches up with what the database knew.
     await expect(personRow(page, target.name)).toContainText("Deactivated")
   })
@@ -315,7 +315,7 @@ test.describe("shaping roles, the Super Admin's alone", () => {
     await expect(callout(page)).toHaveText(
       `${role.name} is still held by ${holder.name}. Move them to another role first.`,
     )
-    await expect(callout(page)).toHaveAttribute("role", "alert")
+    await expect(callout(page).getByRole("alert")).toBeVisible()
   })
 
   test("a refused rename keeps the dialog open with the typed name, to fix in place", async ({ page }) => {

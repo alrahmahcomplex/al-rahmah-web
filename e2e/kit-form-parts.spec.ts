@@ -164,6 +164,34 @@ test.describe("the choice list", () => {
   })
 })
 
+test("the empty string is a real choice: Anyone is shown, picked, posted and drawn as chosen", async ({ page }) => {
+  await openKit(page)
+  const card = page.getByRole("region", { name: "Choice list in a popover" })
+  await card.scrollIntoViewIfNeeded()
+  const form = card.locator('form[data-kit-form="who"]')
+  const actor = () => form.evaluate((el: HTMLFormElement) => new FormData(el).get("actor"))
+  const who = card.getByRole("combobox", { name: "Who" })
+  await expect(who).toHaveText("Anyone")
+  await expect(who).not.toHaveAttribute("data-empty")
+  expect(await actor()).toBe("")
+
+  await who.click()
+  await page.getByRole("option", { name: "System" }).click()
+  await expect(who).toHaveText("System")
+  expect(await actor()).toBe("system")
+
+  await who.click()
+  const anyone = page.getByRole("option", { name: "Anyone" })
+  await anyone.click()
+  await expect(who).toHaveText("Anyone")
+  expect(await actor()).toBe("")
+  await who.click()
+  await expect(anyone).toHaveAttribute("aria-selected", "true")
+  await expect(anyone).toHaveCSS("background-color", "rgb(9, 0, 187)")
+  await expect(page.getByRole("option", { name: "System" })).toHaveAttribute("aria-selected", "false")
+  await page.keyboard.press("Escape")
+})
+
 test.describe("the date field", () => {
   test("reads the day first, tidies it, refuses an impossible date and posts YYYY-MM-DD", async ({ page }) => {
     const card = await openKit(page)

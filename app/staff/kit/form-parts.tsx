@@ -57,6 +57,14 @@ const PERIODS = [
   { value: "year", label: "Year" },
 ]
 
+// The Audit filter's "Who" (app/staff/audit/page.tsx): "" is a real choice, "Anyone".
+const WHO = [
+  { value: "", label: "Anyone" },
+  { value: "system", label: "System" },
+  { value: "public_form", label: "Admission form" },
+  { value: "workbook_import", label: "Workbook import" },
+]
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 const short = (day: string) => `${+day.slice(8)} ${MONTHS[+day.slice(5, 7) - 1]}`
 const WHY_HINT = "Optional. Anything the reason alone doesn’t say."
@@ -291,10 +299,15 @@ export function FormPartsCard({ tab }: { tab: string }) {
   )
 }
 
-/** The choice list inside a kit Popover, as the Reports panel filters hold it (#331), with the Reports panel's words. */
+/**
+ * The choice list inside a kit Popover, as the Reports panel filters hold it
+ * (#331), with the Reports panel's words; then the Audit filter's "Who",
+ * whose "Anyone" posts the empty string, in a plain form.
+ */
 export function ListInPopoverCard() {
   const [period, setPeriod] = useState("all")
   const id = useId()
+  const whoId = useId()
   return (
     <Card title="Choice list in a popover">
       <div className="kp-rowx">
@@ -311,6 +324,12 @@ export function ListInPopoverCard() {
           </div>
         </Popover>
       </div>
+      <form className="kp-fld" data-kit-form="who" onSubmit={(event) => event.preventDefault()}>
+        <label className="kp-fl" htmlFor={whoId}>
+          Who
+        </label>
+        <Select id={whoId} name="actor" defaultValue="" options={WHO} />
+      </form>
     </Card>
   )
 }

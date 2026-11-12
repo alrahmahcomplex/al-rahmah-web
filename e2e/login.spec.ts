@@ -2,7 +2,7 @@ import { expect, test } from "./staff-test"
 
 import { asSystem, createThrowawayStaff } from "../tests/support/db"
 import { ACCOUNTANT, DEACTIVATED, MANAGER } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { logIn, signOut } from "./log-in"
 
 // Al-Rahmah palette values from app/globals.css.
 const AL_RAHMAH_BLUE = "rgb(9, 0, 187)" // --color-blue-600: #0900bb
@@ -111,13 +111,12 @@ test.describe("signing in", () => {
     await signIn(page, ACCOUNTANT.email, ACCOUNTANT.password)
 
     await expect(page).toHaveURL(/\/staff$/)
-    const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-    await expect(sidebar.getByText(ACCOUNTANT.name, { exact: true })).toBeVisible()
-    await expect(sidebar.getByText(ACCOUNTANT.roleName, { exact: true })).toBeVisible()
+    // Today is in the new shell (#323): the person pill in the top bar.
+    const me = page.getByRole("banner").getByRole("button", { name: `${ACCOUNTANT.name} ${ACCOUNTANT.roleName}` })
+    await expect(me).toBeVisible()
     await expect(page.getByRole("heading", { name: /^Good (morning|afternoon), Test$/ })).toBeVisible()
 
-    await sidebar.getByRole("button", { name: /^Account menu/ }).click()
-    await page.getByRole("menuitem", { name: "Sign out" }).click()
+    await signOut(page)
     await expect(page).toHaveURL(/\/login$/)
     await page.goto("/staff")
     await expect(page).toHaveURL(/\/login$/)

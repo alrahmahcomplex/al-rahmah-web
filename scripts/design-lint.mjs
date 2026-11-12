@@ -437,7 +437,25 @@ function walk(root, dir, { into = () => true } = {}) {
 export function routeFiles(root, pattern) {
   const dir = join("app", ...pattern.split("/").filter(Boolean))
   if (!existsSync(join(root, dir))) return { missing: dir.split(sep).join("/"), files: [] }
+  const own = OWN_FILES[pattern]
+  if (own) {
+    const files = own.flatMap((name) => {
+      const path = join(dir, name)
+      if (!existsSync(join(root, path))) return []
+      return statSync(join(root, path)).isDirectory() ? walk(root, path) : [path.split(sep).join("/")]
+    })
+    return { files }
+  }
   return { files: walk(root, dir, { into: (path) => !existsSync(join(root, path, "page.tsx")) }) }
+}
+
+/**
+ * Routes whose folder also holds what every staff route shares: app/staff/
+ * keeps the layout, the error and not-found pages and both shells beside
+ * Today. Only the names listed here are the route's own.
+ */
+export const OWN_FILES = {
+  "/staff": ["page.tsx", "loading.tsx", "_today"],
 }
 
 /** Every problem under root, as { file, line, message }. */

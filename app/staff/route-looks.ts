@@ -12,7 +12,7 @@
 export type Look = "new" | "legacy"
 
 export const ROUTE_LOOKS = {
-  "/staff": "legacy",
+  "/staff": "new",
   "/staff/[...rest]": "legacy",
   "/staff/agents": "legacy",
   "/staff/agents/import": "legacy",

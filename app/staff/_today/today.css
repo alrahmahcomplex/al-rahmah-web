@@ -1,0 +1,23 @@
+/* Today (#323): the prototype's narrow centred column (Design A). Colours
+   come from app/tokens.css only (scripts/design-lint.mjs). */
+.td-narrow { max-width: 660px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+.td-narrow > .kit-ph { margin-bottom: 0; text-align: center; justify-content: center; }
+.td-narrow > .kit-ph .kit-ph-title { font-size: 34px; }
+@media (max-width: 860px) { .td-narrow > .kit-ph .kit-ph-title { font-size: 26px; } }
+.td-narrow > .kit-ph .kit-ph-sub { margin-inline: auto; }
+.td-narrow > .kit-ph .kit-ph-act { flex-basis: 100%; justify-content: center; }
+
+.td-rows { list-style: none; margin: 6px 0 0; padding: 0; }
+.td-rows > li + li { border-top: 1px solid var(--gf-mist); }
+.td-initials { font: italic 800 13px var(--font-exo), "Exo", system-ui, sans-serif; }
+.td-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; flex: none; }
+.td-more { margin: 10px 0 0; text-align: right; }
+.td-gap { margin-top: 10px; }
+
+.td-notices { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; color: var(--gf-ink); }
+.td-notices-act { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
+
+.td-loading { align-items: center; gap: 14px; }
+.td-loading > .kit-bone { max-width: 100%; }
+.td-loading > .kit-bone[data-shape="card"] { width: 100%; margin-top: 10px; }
+.td-loading-act { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }

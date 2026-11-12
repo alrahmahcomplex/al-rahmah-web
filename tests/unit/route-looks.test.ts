@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs"
+import { existsSync, readdirSync, statSync } from "node:fs"
 import { join, relative, sep } from "node:path"
 
 import { describe, expect, it } from "vitest"
@@ -31,20 +31,28 @@ describe("the staff route map", () => {
     expect(pages.filter((pattern) => !(pattern in ROUTE_LOOKS))).toEqual([])
   })
 
+  it("gives every route but Today its own loading.tsx, so none falls back to Today's new-look skeleton (#323)", () => {
+    const missing = Object.keys(ROUTE_LOOKS)
+      .filter((pattern) => pattern !== "/staff")
+      .filter((pattern) => !existsSync(join(process.cwd(), "app", ...pattern.split("/").filter(Boolean), "loading.tsx")))
+    expect(missing).toEqual([])
+  })
+
   it("names no route that has no page", () => {
     const pages = new Set(pagePatterns())
     expect(Object.keys(ROUTE_LOOKS).filter((pattern) => !pages.has(pattern))).toEqual([])
   })
 
-  it("puts only the kit page and Reopening requests in the new shell (#322)", () => {
-    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual(["/staff/kit", "/staff/reopenings"])
+  it("puts the kit page, Reopening requests and Today in the new shell (#322, #323)", () => {
+    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual(["/staff", "/staff/kit", "/staff/reopenings"])
   })
 })
 
 describe("routeFor and lookFor", () => {
   it("matches exactly: /staff is only the home", () => {
     expect(routeFor("/staff")).toBe("/staff")
-    expect(lookFor("/staff")).toBe("legacy")
+    expect(lookFor("/staff")).toBe("new")
+    expect(lookFor("/staff/unknown")).toBe("legacy")
     expect(lookFor("/staff/kit")).toBe("new")
     expect(lookFor("/staff/reopenings")).toBe("new")
   })

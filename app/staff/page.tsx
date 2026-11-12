@@ -1,8 +1,6 @@
-import { DoorOpenIcon, UserPlusIcon } from "lucide-react"
 import type { Metadata } from "next"
-import Link from "next/link"
 
-import { buttonVariants } from "@/components/ui/button"
+import { ButtonLink, Note, PageHeader, pageTitle } from "@/components/kit"
 import { formatLongDate, tanzaniaHour, tanzaniaToday } from "@/lib/school-calendar"
 import { countPendingDiscountRequests } from "@/lib/services/discounts"
 import { getFollowUpQueue } from "@/lib/services/follow-ups"
@@ -11,24 +9,26 @@ import { countUnreviewedReApplications } from "@/lib/services/re-applications"
 import { countPendingReopeningRequests } from "@/lib/services/reopening-requests"
 import { getMyNotices } from "@/lib/services/staff-admin"
 import { countResultsReadyToSend, listInterviewsOn, listLatestLeads } from "@/lib/services/today"
-import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
 import { firstName, greeting } from "./_today/greeting"
 import { LatestRegistrations } from "./_today/latest-registrations"
 import { NeedsYou } from "./_today/needs-you"
+import { Notices } from "./_today/notices"
 import { mayActOn, queueRows, summaryLine, type QueueRowKey } from "./_today/queue"
-import { Notices } from "./notices"
 import { requireStaff } from "./session"
 
+import "./_today/today.css"
+
 export const metadata: Metadata = {
-  title: "Today · Al-Rahmah Complex",
+  title: pageTitle("Today"),
 }
 
 // The staff home (#226): a greeting, the two front-desk actions, the work
 // waiting for this staff member, and the newest leads. Each count is read
 // only for someone who may act on it, through the same services as the
-// sidebar's counts. The statistics live on the Reports page.
+// sidebar's counts. The statistics live on the Reports page. Drawn in the
+// new shell (#323), in the prototype's narrow centred column.
 export default async function TodayPage() {
   const staff = await requireStaff()
   const supabase = await createClient()
@@ -66,47 +66,41 @@ export default async function TodayPage() {
   const summary = summaryLine(rows)
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="flex flex-col gap-1">
-          <h1 className="staff-heading">
-            {greeting(tanzaniaHour())}, {firstName(staff.name)}
-          </h1>
-          <p className="text-sm text-slate-600" data-testid="today-summary">
+    <div className="td-narrow" data-rise="group">
+      <PageHeader
+        title={`${greeting(tanzaniaHour())}, ${firstName(staff.name)}`}
+        subtitle={
+          <span data-testid="today-summary">
             {formatLongDate(today)}
             {summary && ` · ${summary}`}
-          </p>
-        </div>
-        {(canView || canRegister) && (
-          <div className="flex flex-wrap gap-2.5">
-            {canView && (
-              <Link href="/staff/check-in" className={cn(buttonVariants({ variant: "orange", size: "lg" }), "rounded-full px-4")}>
-                <DoorOpenIcon aria-hidden />
-                Check in a family
-              </Link>
-            )}
-            {canRegister && (
-              <Link href="/staff/check-in/new" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "rounded-full px-4")}>
-                <UserPlusIcon aria-hidden />
-                Register a student
-              </Link>
-            )}
-          </div>
-        )}
-      </div>
+          </span>
+        }
+        actions={
+          (canView || canRegister) && (
+            <>
+              {canView && (
+                <ButtonLink href="/staff/check-in" icon="checkin">
+                  Check in a family
+                </ButtonLink>
+              )}
+              {canRegister && (
+                <ButtonLink href="/staff/check-in/new" variant="ghost" icon="register">
+                  Register a student
+                </ButtonLink>
+              )}
+            </>
+          )
+        }
+      />
 
       {notices.ok ? (
         <Notices notices={notices.data} />
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Recent changes to your account could not be loaded. Try again in a moment.
-        </p>
+        <Note tone="bad">Recent changes to your account could not be loaded. Try again in a moment.</Note>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.25fr_0.9fr]">
-        <NeedsYou rows={rows} unavailable={unavailable} />
-        {latest && <LatestRegistrations leads={latest} />}
-      </div>
+      <NeedsYou rows={rows} unavailable={unavailable} />
+      {latest && <LatestRegistrations leads={latest} />}
     </div>
   )
 }

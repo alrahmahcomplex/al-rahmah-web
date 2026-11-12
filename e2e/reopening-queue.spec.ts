@@ -8,7 +8,7 @@ import { signInOnce } from "./log-in"
 // new shell (#322). It only reads the seeded Pending request on ADMSN-90080
 // Asha Kibwana, raised by Test Admissions; other tests raise and decide
 // requests meanwhile, so the count is checked to be there, not to be a given
-// number. The old shell on the staff home still shows the count beside the
+// number. The old shell on Check-in still shows the count beside the
 // entry; the new shell shows none.
 
 const SEEDED_PENDING_LEAD = "1ead0000-0000-4000-8000-000000000080"
@@ -16,6 +16,9 @@ const SEEDED_PENDING_LEAD = "1ead0000-0000-4000-8000-000000000080"
 async function signIn(page: Page, person: FixtureStaff) {
   await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
+  // Today is in the new shell, which shows no counts (#323); Check-in keeps the old one.
+  await page.goto("/staff/check-in")
+  await expect(page.getByRole("heading", { level: 1, name: "Who has arrived?" })).toBeVisible()
 }
 
 const navEntry = (page: Page) => page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /Reopening requests/ })

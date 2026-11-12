@@ -1,12 +1,11 @@
 "use client"
 
-import { BellIcon } from "lucide-react"
 import { useState, useTransition } from "react"
 
-import { Button } from "@/components/ui/button"
+import { Button, Card, Note } from "@/components/kit"
 import type { Notice } from "@/lib/services/staff-admin"
 
-import { dismissMyNotices } from "./actions"
+import { dismissMyNotices } from "../actions"
 
 // Changes someone else made to the signed-in person's role or account since
 // they last dismissed them, oldest first. Dismiss clears them through the
@@ -26,26 +25,22 @@ export function Notices({ notices }: { notices: Notice[] }) {
   }
 
   return (
-    <section aria-labelledby="notices-heading" className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
-      <h2 id="notices-heading" className="flex items-center gap-2 staff-section-heading">
-        <BellIcon aria-hidden className="size-4 text-muted-foreground" />
-        Changes to your account
-      </h2>
-      <ul className="flex flex-col gap-1.5">
+    <Card title="Changes to your account" titleId="notices-heading">
+      <ul className="td-notices">
         {notices.map((notice) => (
           <li key={notice.id}>{notice.message}</li>
         ))}
       </ul>
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" variant="outline" size="sm" onClick={dismiss} disabled={pending}>
+      <div className="td-notices-act">
+        <Button variant="ghost" size="small" onClick={dismiss} pending={pending}>
           Dismiss
         </Button>
         {failed && (
-          <p role="alert" className="text-destructive">
+          <Note tone="bad" role="alert">
             These couldn&apos;t be dismissed. Try again in a moment.
-          </p>
+          </Note>
         )}
       </div>
-    </section>
+    </Card>
   )
 }

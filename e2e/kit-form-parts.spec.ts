@@ -325,6 +325,9 @@ test("the week calendar chooses a whole week, Monday to Sunday, with the keyboar
   await expect(said).toHaveText(/^Chosen: \d+ \w{3} to \d+ \w{3} \d{4}$/)
   const band = week.locator(".kit-cal-band .kit-cal-day")
   await expect(band.first()).toHaveCSS("background-color", "rgb(9, 0, 187)")
+  // The chosen week is said, not only drawn: its seven days are pressed.
+  await expect(week.locator("button[aria-pressed=true]")).toHaveCount(await band.count())
+  expect(await band.count()).toBeGreaterThan(0)
 
   // The week under the pointer is a Lavender Mist band.
   const other = week.locator(".kit-cal-cell:not(.kit-cal-band):not(.kit-cal-hidden) .kit-cal-day").first()

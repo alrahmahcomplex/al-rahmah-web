@@ -190,7 +190,9 @@ function useDayText(value: string | undefined, defaultValue: string, emit: (day:
     const nextUnreadable = next.trim() !== "" && !nextDay
     if (nextDay !== day || nextUnreadable !== unreadable) emit(nextDay, nextUnreadable)
   }
-  return { text, day, unreadable, onText, reset: () => setText(showDayFirst(defaultValue)) }
+  /** Shows `to` ("YYYY-MM-DD" or ""), as a reset or a new value from outside does. */
+  const replace = (to: string) => setText(showDayFirst(to))
+  return { text, day, unreadable, onText, replace }
 }
 
 /** Leaving a part of the field (focus moving outside it, not into its own calendar). */
@@ -213,8 +215,9 @@ export function DateField({ value, onChange, name, defaultValue = "", words: wor
   const wrong = shown && date.unreadable
 
   useUnreadableGuard(inputRef, date.unreadable ? words.wrongDate : null, () => setShown(true))
+  // A reset shows the first value; a controlled field shows its parent's value, so what posts is what the parent holds.
   useFormReset(inputRef, () => {
-    date.reset()
+    date.replace(value !== undefined ? value : defaultValue)
     setShown(false)
   })
 
@@ -267,19 +270,23 @@ export function DateTimeField({ id, value, onChange, name, defaultValue = "", mi
     onChange?.(joinDateTime(day, tidy), { unreadable: dateBad || timeBad })
   }
 
-  const dateValue = controlled ? splitDateTime(value).date : undefined
-  const date = useDayText(dateValue, first.date, () => {})
+  // Both halves are kept here, so the parent echoing "" for a half-typed value never wipes the other half.
+  const date = useDayText(undefined, first.date, () => {})
   const hasDate = date.text.trim() !== ""
   const dateBad = date.unreadable || (!hasDate && hasTime)
   const timeBad = (hasTime && !tidyTime) || (!hasTime && hasDate)
   const joined = joinDateTime(date.day, tidyTime)
 
-  // A new controlled value replaces the time too, unless the typed time already means it.
+  // A new controlled value replaces each half the typed text does not already mean. The "" the
+  // parent sends back while a half cannot be read is our own echo, and changes neither half.
   const [seen, setSeen] = useState(value)
   if (controlled && value !== seen) {
     setSeen(value)
-    const next = splitDateTime(value).time
-    if (next !== tidyTime && !(value === "" && (dateBad || timeBad))) setTime(next)
+    if (!(value === "" && (dateBad || timeBad))) {
+      const next = splitDateTime(value)
+      if (next.date !== date.day) date.replace(next.date)
+      if (next.time !== tidyTime) setTime(next.time)
+    }
   }
 
   const [dateShown, setDateShown] = useState(false)
@@ -293,9 +300,18 @@ export function DateTimeField({ id, value, onChange, name, defaultValue = "", mi
   const timeError = useId()
   useUnreadableGuard(dateRef, dateBad ? words.wrongDate : null, () => setDateShown(true))
   useUnreadableGuard(timeRef, timeBad ? words.wrongTime : null, () => setTimeShown(true))
+  // The date is "Date" unless a caller's own <label htmlFor={id}> names it ("When"); read once it is in the page.
+  const dateName = words.date
+  useEffect(() => {
+    const el = dateRef.current
+    if (!el) return
+    if (el.labels?.length) el.removeAttribute("aria-label")
+    else el.setAttribute("aria-label", dateName)
+  }, [dateName, id])
   useFormReset(dateRef, () => {
-    date.reset()
-    setTime(splitDateTime(defaultValue).time)
+    const to = splitDateTime(controlled ? value : defaultValue)
+    date.replace(to.date)
+    setTime(to.time)
     setDateShown(false)
     setTimeShown(false)
   })
@@ -318,7 +334,7 @@ export function DateTimeField({ id, value, onChange, name, defaultValue = "", mi
             invalid={dateWrong || !!invalid}
             inputRef={dateRef}
             words={words}
-            aria-label={words.date}
+
             aria-describedby={joinIds(props["aria-describedby"], dateWrong && dateError)}
           />
         </div>

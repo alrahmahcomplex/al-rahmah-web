@@ -230,6 +230,64 @@ describe("DateTimeField", () => {
     expect(posted(form)).toEqual({ at: "" })
   })
 
+  it("keeps both halves when a parent holding the value sends back the empty value of a half-typed edit", () => {
+    const seen: [string, boolean][] = []
+    function Host() {
+      const [at, setAt] = useState("2026-11-12T14:30")
+      return (
+        <form data-testid="form">
+          <label htmlFor="when">When</label>
+          <DateTimeField
+            id="when"
+            name="at"
+            value={at}
+            onChange={(next, { unreadable }) => {
+              seen.push([next, unreadable])
+              setAt(next)
+            }}
+          />
+        </form>
+      )
+    }
+    render(<Host />)
+    const form = screen.getByTestId("form") as HTMLFormElement
+    // A caller's own label names the date.
+    const date = screen.getByLabelText("When")
+    const time = screen.getByLabelText("Time, 24-hour clock")
+    fireEvent.change(date, { target: { value: "12/11/20" } })
+    expect(time).toHaveValue("14:30")
+    expect(form.checkValidity()).toBe(false)
+    fireEvent.change(date, { target: { value: "13/11/2026" } })
+    expect(posted(form)).toEqual({ at: "2026-11-13T14:30" })
+    fireEvent.change(time, { target: { value: "9" } })
+    expect(date).toHaveValue("13/11/2026")
+    expect(posted(form).at).toBe("unreadable:13/11/2026T9")
+    fireEvent.change(time, { target: { value: "0915" } })
+    expect(posted(form)).toEqual({ at: "2026-11-13T09:15" })
+    expect(seen).toEqual([
+      ["", true],
+      ["2026-11-13T14:30", false],
+      ["", true],
+      ["2026-11-13T09:15", false],
+    ])
+  })
+
+  it("on a form reset, a controlled field shows its parent's value, so what posts is what the parent holds", () => {
+    render(
+      <form data-testid="form">
+        <DateTimeField name="at" value="2026-11-12T14:30" onChange={() => {}} />
+        <DateField aria-label="Due" name="due" value="2026-11-20" onChange={() => {}} />
+      </form>,
+    )
+    const form = screen.getByTestId("form") as HTMLFormElement
+    fireEvent.change(screen.getByLabelText("Due"), { target: { value: "01/01/2026" } })
+    fireEvent.change(screen.getByLabelText("Time, 24-hour clock"), { target: { value: "08:00" } })
+    act(() => form.reset())
+    expect(screen.getByLabelText("Due")).toHaveValue("20/11/2026")
+    expect(screen.getByLabelText("Time, 24-hour clock")).toHaveValue("14:30")
+    expect(posted(form)).toEqual({ at: "2026-11-12T14:30", due: "2026-11-20" })
+  })
+
   it("calls onChange with the joined value and says when a half cannot be read", () => {
     const onChange = vi.fn()
     render(<DateTimeField id="at" value="2026-11-12T14:30" onChange={onChange} />)

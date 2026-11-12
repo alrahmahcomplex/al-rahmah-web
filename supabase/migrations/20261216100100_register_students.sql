@@ -197,6 +197,21 @@ begin
     -- The relationship copy keeps a lead's own relationship.
     -- -----------------------------------------------------------------------
 
+    -- Until now every writer of a lead's relationship copied its contact's
+    -- (20261211200100: the backfill, the insert and contact-move trigger,
+    -- and the copy below), so every lead on file holds its contact's and
+    -- the narrower copy changes nothing for them. Checked, not assumed: a
+    -- lead that differs stops the migration.
+    if exists (
+        select 1
+        from public.leads l
+        join public.guardian_contacts g on g.id = l.guardian_contact_id
+        where (l.custodian_relationship, l.custodian_relationship_description)
+              is distinct from (g.relationship, g.relationship_description)
+    ) then
+        raise exception 'custodian_relationship_differs';
+    end if;
+
     -- sync_lead_custodian_relationship, as 20261211200100 made it, now
     -- copying only to leads that still hold the contact's previous
     -- relationship. Same trigger.

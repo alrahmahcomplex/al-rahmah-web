@@ -65,7 +65,9 @@ describe("Select", () => {
 })
 
 describe("DateField", () => {
-  it("posts YYYY-MM-DD uncontrolled, and the empty string for text that is not a date", () => {
+  const WRONG_DATE = "Type the date as day/month/year, for example 25/09/2026."
+
+  it("posts YYYY-MM-DD uncontrolled, and reads a pasted year-first date", () => {
     const form = inForm(
       <>
         <label htmlFor="from">From</label>
@@ -77,28 +79,68 @@ describe("DateField", () => {
     expect(posted(form)).toEqual({ from: "2026-09-05" })
     fireEvent.change(input, { target: { value: "1/10/2026" } })
     expect(posted(form)).toEqual({ from: "2026-10-01" })
-    fireEvent.change(input, { target: { value: "31/02/2026" } })
+    fireEvent.change(input, { target: { value: "2027-01-11" } })
+    expect(posted(form)).toEqual({ from: "2027-01-11" })
+    fireEvent.blur(input)
+    expect(input).toHaveValue("11/01/2027")
+    // Cleared, it is a true empty again.
+    fireEvent.change(input, { target: { value: "" } })
     expect(posted(form)).toEqual({ from: "" })
+    expect(form.checkValidity()).toBe(true)
   })
 
-  it("shows the message when a wrong date is left, and links it", () => {
-    render(
+  it("never posts unreadable text as no date: the form is invalid and the post is not a date", () => {
+    const form = inForm(<DateField aria-label="Ends on" name="ends_on" />)
+    const input = screen.getByLabelText("Ends on") as HTMLInputElement
+    for (const text of ["31/02/2026", "2027-13-01", "tomorrow", "12/11/20"]) {
+      fireEvent.change(input, { target: { value: text } })
+      expect(form.checkValidity(), text).toBe(false)
+      expect(input.validationMessage, text).toBe(WRONG_DATE)
+      expect(posted(form).ends_on, text).toBe(`unreadable:${text}`)
+    }
+    fireEvent.change(input, { target: { value: " " } })
+    expect(form.checkValidity()).toBe(true)
+  })
+
+  it("answers the browser's invalid event with its own line and focus, never the bubble", () => {
+    const form = inForm(
       <>
         <label htmlFor="d">Payment date</label>
-        <DateField id="d" value="" onChange={() => {}} aria-describedby="d-hint" />
+        <DateField id="d" name="paid_on" aria-describedby="d-hint" />
         <p id="d-hint">Today or earlier.</p>
       </>,
     )
     const input = screen.getByLabelText("Payment date")
     fireEvent.change(input, { target: { value: "31/02/2026" } })
-    fireEvent.blur(input)
-    expect(screen.getByText("Type the date as day/month/year, for example 25/09/2026.").closest("[role=alert]")).not.toBeNull()
+    // Only once the person leaves the field, or the form is checked, does the line show.
+    expect(screen.queryByText(WRONG_DATE)).toBeNull()
+    let bubble = true
+    input.addEventListener("invalid", (event) => {
+      bubble = !event.defaultPrevented
+    })
+    act(() => {
+      form.reportValidity()
+    })
+    expect(bubble).toBe(false)
+    expect(input).toHaveFocus()
+    expect(screen.getByText(WRONG_DATE).closest("[role=alert]")).not.toBeNull()
     expect(input).toHaveAttribute("aria-invalid", "true")
-    expect(input).toHaveAccessibleDescription(/Today or earlier\. Type the date/)
+    expect(input).toHaveAccessibleDescription(`Today or earlier. ${WRONG_DATE}`)
   })
 
-  it("calls onChange with YYYY-MM-DD or the empty string, and keeps half-typed text", () => {
-    const seen: string[] = []
+  it("renders no alert while there is no message", () => {
+    inForm(
+      <>
+        <DateField aria-label="From" name="from" />
+        <DateField aria-label="To" name="to" />
+        <DateTimeField name="at" />
+      </>,
+    )
+    expect(screen.queryAllByRole("alert")).toEqual([])
+  })
+
+  it("tells a controlled caller empty from unreadable, and keeps half-typed text", () => {
+    const seen: [string, boolean][] = []
     function Host() {
       const [value, setValue] = useState("2026-11-12")
       return (
@@ -107,8 +149,8 @@ describe("DateField", () => {
           <DateField
             id="d"
             value={value}
-            onChange={(next) => {
-              seen.push(next)
+            onChange={(next, { unreadable }) => {
+              seen.push([next, unreadable])
               setValue(next)
             }}
           />
@@ -126,7 +168,13 @@ describe("DateField", () => {
     fireEvent.change(input, { target: { value: "5/1/2027" } })
     fireEvent.blur(input)
     expect(input).toHaveValue("05/01/2027")
-    expect(seen).toEqual(["", "2027-01-05"])
+    fireEvent.change(input, { target: { value: "" } })
+    expect(seen).toEqual([
+      ["", true],
+      ["2027-01-05", false],
+      ["", false],
+    ])
+    fireEvent.change(input, { target: { value: "05/01/2027" } })
     fireEvent.click(screen.getByRole("button", { name: "Clear" }))
     expect(input).toHaveValue("")
   })
@@ -141,28 +189,57 @@ describe("DateField", () => {
 })
 
 describe("DateTimeField", () => {
-  it("posts the datetime-local format once both parts are complete", () => {
+  const WRONG_DATE = "Type the date as day/month/year, for example 25/09/2026."
+  const WRONG_TIME = "Type the time as hours:minutes, for example 14:30."
+
+  it("posts the datetime-local format, and blocks a wrong or missing half with that half's sentence", () => {
     const form = inForm(<DateTimeField name="at" defaultValue="2026-11-12T14:30" />)
     expect(posted(form)).toEqual({ at: "2026-11-12T14:30" })
-    const time = screen.getByLabelText("Time, 24-hour clock")
+    const date = screen.getByLabelText("Date")
+    const time = screen.getByLabelText("Time, 24-hour clock") as HTMLInputElement
     fireEvent.change(time, { target: { value: "930" } })
     expect(posted(form)).toEqual({ at: "2026-11-12T09:30" })
     fireEvent.blur(time)
     expect(time).toHaveValue("09:30")
+
     fireEvent.change(time, { target: { value: "25:00" } })
     fireEvent.blur(time)
+    expect(form.checkValidity()).toBe(false)
+    expect(posted(form).at).toBe("unreadable:12/11/2026T25:00")
+    expect(screen.getByText(WRONG_TIME)).toBeInTheDocument()
+    expect(screen.queryByText(WRONG_DATE)).toBeNull()
+
+    // A date without a time: the time's sentence.
+    fireEvent.change(time, { target: { value: "" } })
+    fireEvent.blur(time)
+    expect(form.checkValidity()).toBe(false)
+    expect(time.validationMessage).toBe(WRONG_TIME)
+    expect(screen.getByText(WRONG_TIME)).toBeInTheDocument()
+
+    // A time without a date: the date's sentence.
+    fireEvent.change(time, { target: { value: "08:00" } })
+    fireEvent.change(date, { target: { value: "" } })
+    fireEvent.blur(date)
+    expect(form.checkValidity()).toBe(false)
+    expect(screen.getByText(WRONG_DATE)).toBeInTheDocument()
+    expect(screen.queryByText(WRONG_TIME)).toBeNull()
+
+    // Both empty is a true empty.
+    fireEvent.change(time, { target: { value: "" } })
+    expect(form.checkValidity()).toBe(true)
     expect(posted(form)).toEqual({ at: "" })
-    expect(screen.getByText("Type the time as hours:minutes, for example 14:30.")).toBeInTheDocument()
   })
 
-  it("calls onChange with the joined value", () => {
+  it("calls onChange with the joined value and says when a half cannot be read", () => {
     const onChange = vi.fn()
     render(<DateTimeField id="at" value="2026-11-12T14:30" onChange={onChange} />)
     fireEvent.change(screen.getByLabelText("Date"), { target: { value: "13/11/2026" } })
-    expect(onChange).toHaveBeenLastCalledWith("2026-11-13T14:30")
+    expect(onChange).toHaveBeenLastCalledWith("2026-11-13T14:30", { unreadable: false })
     fireEvent.change(screen.getByLabelText("Time, 24-hour clock"), { target: { value: "0805" } })
     // The typed date stands though the parent kept its value, as a native input would.
-    expect(onChange).toHaveBeenLastCalledWith("2026-11-13T08:05")
+    expect(onChange).toHaveBeenLastCalledWith("2026-11-13T08:05", { unreadable: false })
+    fireEvent.change(screen.getByLabelText("Time, 24-hour clock"), { target: { value: "99" } })
+    expect(onChange).toHaveBeenLastCalledWith("", { unreadable: true })
   })
 })
 

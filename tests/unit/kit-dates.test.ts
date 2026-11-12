@@ -24,6 +24,12 @@ describe("parseDayFirst", () => {
     expect(parseDayFirst("03/04/2026")).toBe("2026-04-03")
   })
 
+  it("reads a pasted year-first date too", () => {
+    expect(parseDayFirst("2027-01-11")).toBe("2027-01-11")
+    expect(parseDayFirst("2027-1-5")).toBe("2027-01-05")
+    expect(showDayFirst(parseDayFirst("2027-01-11")!)).toBe("11/01/2027")
+  })
+
   it("tidies a short day and month", () => {
     expect(parseDayFirst("5/9/2026")).toBe("2026-09-05")
     expect(showDayFirst(parseDayFirst("5/9/2026")!)).toBe("05/09/2026")
@@ -50,7 +56,7 @@ describe("parseDayFirst", () => {
   })
 
   it("refuses text that is not a day-first date", () => {
-    for (const text of ["", "2026-09-25", "25/09/26", "25/09", "tomorrow", "25/09/2026x", "1/1/202"]) expect(parseDayFirst(text)).toBeNull()
+    for (const text of ["", "2026-13-01", "2026-02-30", "25/09/26", "25/09", "tomorrow", "25/09/2026x", "1/1/202"]) expect(parseDayFirst(text)).toBeNull()
   })
 })
 

@@ -7,6 +7,7 @@ const pad = (n: number) => String(n).padStart(2, "0")
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})$/
 const DAY_FIRST = /^\s*(\d{1,2})\s*[/.\- ]\s*(\d{1,2})\s*[/.\- ]\s*(\d{4})\s*$/
+const YEAR_FIRST = /^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$/
 const TIME = /^\s*(\d{1,2})[:.]?(\d{2})\s*$/
 
 /** Days in a month, `month` 1 to 12. */
@@ -29,14 +30,31 @@ export function isIsoDate(value: string) {
 }
 
 /**
- * What a person typed, day first ("25/09/2026", "5.9.2026", "5 9 2026"), as
- * "YYYY-MM-DD"; null for anything else, an impossible date ("31/02/2026") too.
+ * What a person typed, day first ("25/09/2026", "5.9.2026", "5 9 2026"), or
+ * year first as pasted ("2027-01-11"), as "YYYY-MM-DD"; null for anything
+ * else, an impossible date ("31/02/2026") too.
  */
 export function parseDayFirst(text: string): string | null {
+  const ymd = YEAR_FIRST.exec(text)
+  if (ymd) {
+    const [year, month, day] = [+ymd[1], +ymd[2], +ymd[3]]
+    return realDay(year, month, day) ? iso(year, month, day) : null
+  }
   const m = DAY_FIRST.exec(text)
   if (!m) return null
   const [day, month, year] = [+m[1], +m[2], +m[3]]
   return realDay(year, month, day) ? iso(year, month, day) : null
+}
+
+/**
+ * What a form posts while a date or time field holds text it cannot read:
+ * the text behind a prefix no date parser accepts, so a form that skips
+ * validation reaches the server's refusal instead of saving no date.
+ */
+export const UNREADABLE_PREFIX = "unreadable:"
+
+export function unreadableValue(text: string) {
+  return `${UNREADABLE_PREFIX}${text.trim()}`
 }
 
 /** "YYYY-MM-DD" as "DD/MM/YYYY"; "" when it is not a real date. */

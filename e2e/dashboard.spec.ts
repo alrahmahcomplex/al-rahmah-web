@@ -216,7 +216,9 @@ test("a role that reads leads and payments but lacks reports.view sees no statis
 })
 
 const seatsPanel = (page: Page) => page.getByRole("region", { name: "Seats by class" })
-const seatsRow = (page: Page, row: string) => seatsPanel(page).getByTestId(`seats-row-${row}`)
+// The table row whose Class cell carries the row's test id.
+const seatsRow = (page: Page, row: string) =>
+  seatsPanel(page).getByRole("row").filter({ has: page.getByTestId(`seats-row-${row}`) })
 
 test("the Manager sees Seats by class for 2031, counts only, with the link to the Seats screen", async ({ page }) => {
   await signIn(page, MANAGER)

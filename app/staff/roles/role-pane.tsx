@@ -1,37 +1,12 @@
 "use client"
 
-import { ChevronDownIcon, CircleAlertIcon, CircleCheckIcon } from "lucide-react"
 import { useId, useRef, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Card, Field, FieldError, Note, Popover, PopoverClose, Section, Sheet, Tag } from "@/components/kit"
 import { impliedChanges, PERMISSION_NEEDS } from "@/lib/permissions"
 import { refusal, type PermissionOption } from "@/lib/services/staff-admin"
-import { cn } from "@/lib/utils"
 
+import { TickBox } from "../_form-parts/tick-box"
 import {
   correctStaffMemberName,
   deactivateStaffMember,
@@ -56,10 +31,6 @@ type Track = (change: () => Promise<ChangeOutcome>) => Promise<ChangeOutcome>
 // until the person confirms it.
 type PendingConfirmation = { title: string; description: string; action: string; change: () => Promise<ChangeOutcome> }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h3 className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">{children}</h3>
-}
-
 export function RolePane({
   role,
   permissions,
@@ -71,6 +42,9 @@ export function RolePane({
 }) {
   const [outcome, setOutcome] = useState<ChangeOutcome | null>(null)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
+  // The last confirmation asked, so the sheet keeps its words while it slides out.
+  const [asked, setAsked] = useState<PendingConfirmation | null>(null)
+  if (confirmation && confirmation !== asked) setAsked(confirmation)
   const [renaming, setRenaming] = useState(false)
   const [pending, startTransition] = useTransition()
   const subtitleId = useId()
@@ -86,9 +60,9 @@ export function RolePane({
     })
   }
 
-  // A name dialog's save: part of `pending` like every other change, so the
-  // buttons that open the dialogs stay disabled until it lands and two name
-  // saves never overlap. The dialog decides where the answer shows.
+  // A name sheet's save: part of `pending` like every other change, so the
+  // buttons that open the sheets stay disabled until it lands and two name
+  // saves never overlap. The sheet decides where the answer shows.
   const track: Track = (change) =>
     new Promise((resolve) => {
       startTransition(async () => {
@@ -102,31 +76,29 @@ export function RolePane({
     })
 
   return (
-    <section
-      aria-labelledby="role-heading"
-      className="flex min-w-0 flex-col gap-6 rounded-xl bg-card p-4 ring-1 ring-foreground/10"
-    >
+    <Card aria-labelledby="role-heading" className="ro-pane">
       {outcome && (
-        <Alert variant={outcome.ok ? "default" : "destructive"} role={outcome.ok ? "status" : "alert"}>
-          {outcome.ok ? <CircleCheckIcon /> : <CircleAlertIcon />}
-          <AlertDescription className={cn(outcome.ok && "text-foreground")}>{outcome.message}</AlertDescription>
-        </Alert>
+        <div data-testid="role-outcome">
+          <Note tone={outcome.ok ? "good" : "bad"} role={outcome.ok ? "status" : "alert"}>
+            {outcome.message}
+          </Note>
+        </div>
       )}
 
-      <header className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
-          <h2 id="role-heading" className={cn("staff-section-heading break-words", role.retired && "text-muted-foreground!")}>
+      <header className="ro-head">
+        <div>
+          <h2 id="role-heading" className="kit-card-title" data-retired={role.retired || undefined}>
             {role.name}
           </h2>
-          <p id={subtitleId} className="text-sm text-muted-foreground">
+          <p id={subtitleId} className="ro-sub">
             {role.subtitle}
           </p>
         </div>
         {role.canEditRoles && (
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="ro-acts">
             <Button
-              variant="outline"
-              size="sm"
+              variant="ghost"
+              size="small"
               disabled={pending || !role.editable}
               aria-describedby={role.editable ? undefined : subtitleId}
               onClick={() => setRenaming(true)}
@@ -134,13 +106,13 @@ export function RolePane({
               Rename
             </Button>
             {role.retired ? (
-              <Button variant="outline" size="sm" disabled={pending} onClick={() => run(() => reactivateRoleNow(role.id))}>
+              <Button variant="ghost" size="small" disabled={pending} onClick={() => run(() => reactivateRoleNow(role.id))}>
                 Reactivate role
               </Button>
             ) : (
               <Button
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="small"
                 disabled={pending || role.retireBlocked !== null}
                 aria-describedby={role.retireBlocked ? retireReasonId : undefined}
                 onClick={() =>
@@ -158,18 +130,16 @@ export function RolePane({
           </div>
         )}
         {role.retireBlocked && (
-          <p id={retireReasonId} className="basis-full text-xs text-muted-foreground">
+          <p id={retireReasonId} className="ro-reason">
             {role.retireBlocked}
           </p>
         )}
       </header>
 
       {role.canEditRoles ? (
-        <fieldset aria-describedby={role.editable ? undefined : subtitleId}>
-          <legend className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            What this role can do
-          </legend>
-          <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+        <fieldset className="kit-sec" aria-describedby={role.editable ? undefined : subtitleId}>
+          <legend className="kit-sec-title">What this role can do</legend>
+          <ul className="ro-ticks">
             {permissions.map((permission) => {
               const held = role.permissions.includes(permission.name)
               const checkboxId = `${permissionIdPrefix}-${permission.name}`
@@ -177,11 +147,9 @@ export function RolePane({
               const neededLabel = needed && labelOf(needed)
               const noteId = `${checkboxId}-note`
               return (
-                <li key={permission.name} className="flex items-start gap-2 py-1 text-sm">
-                  <Checkbox
+                <li key={permission.name}>
+                  <TickBox
                     id={checkboxId}
-                    // Base UI marks a disabled checkbox with data-disabled, not :disabled.
-                    className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
                     checked={held}
                     disabled={pending || !role.editable}
                     aria-describedby={neededLabel ? noteId : undefined}
@@ -202,12 +170,12 @@ export function RolePane({
                       })
                     }
                   />
-                  <div className="flex flex-col gap-0.5">
-                    <Label htmlFor={checkboxId} className={cn("font-normal", !held && "text-muted-foreground")}>
+                  <div className="ro-tick-text">
+                    <label htmlFor={checkboxId} data-off={!held || undefined}>
                       {permission.label}
-                    </Label>
+                    </label>
                     {neededLabel && (
-                      <p id={noteId} className="text-xs text-muted-foreground">
+                      <p id={noteId} className="ro-cap">
                         Reports need “{neededLabel}”. Ticking this ticks it too, and unticking it unticks this.
                       </p>
                     )}
@@ -218,53 +186,47 @@ export function RolePane({
           </ul>
         </fieldset>
       ) : (
-        <div>
-          <SectionHeading>What this role can do</SectionHeading>
+        <Section title="What this role can do">
           {role.permissions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing yet.</p>
+            <p className="ro-plain ro-quiet">Nothing yet.</p>
           ) : (
-            <ul aria-label={`What ${role.name} can do`} className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+            <ul aria-label={`What ${role.name} can do`} className="ro-ticks">
               {permissions
                 .filter((permission) => role.permissions.includes(permission.name))
                 .map((permission) => (
-                  <li key={permission.name} className="py-1">
-                    {permission.label}
-                  </li>
+                  <li key={permission.name}>{permission.label}</li>
                 ))}
             </ul>
           )}
-        </div>
+        </Section>
       )}
 
       {role.canEditRoles ? (
-        <fieldset aria-describedby={`${managedIdPrefix}-note`}>
-          <legend className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Manages the staff in
-          </legend>
-          <p id={`${managedIdPrefix}-note`} className="mb-2 text-xs text-muted-foreground">
+        <fieldset className="kit-sec" aria-describedby={`${managedIdPrefix}-note`}>
+          <legend className="kit-sec-title">Manages the staff in</legend>
+          <p id={`${managedIdPrefix}-note`} className="ro-note">
             People in {role.name} can invite, deactivate, reactivate and move the staff in the roles ticked here, between
             those roles only. They never change roles themselves.
           </p>
           {role.managedOptions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">There is no other role yet.</p>
+            <p className="ro-plain ro-quiet">There is no other role yet.</p>
           ) : (
-            <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+            <ul className="ro-ticks">
               {role.managedOptions.map((option) => {
                 const checkboxId = `${managedIdPrefix}-${option.id}`
                 return (
-                  <li key={option.id} className="flex items-start gap-2 py-1 text-sm">
-                    <Checkbox
+                  <li key={option.id}>
+                    <TickBox
                       id={checkboxId}
-                      className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
                       checked={option.checked}
                       // A retired role can only be taken out of the set.
                       disabled={pending || role.retired || (option.retired && !option.checked)}
                       onCheckedChange={(manages) => run(() => setManagedRole(role.id, option.id, manages))}
                     />
-                    <Label htmlFor={checkboxId} className={cn("font-normal", !option.checked && "text-muted-foreground")}>
+                    <label htmlFor={checkboxId} data-off={!option.checked || undefined}>
                       {option.name}
                       {option.retired && " (retired)"}
-                    </Label>
+                    </label>
                   </li>
                 )
               })}
@@ -273,20 +235,18 @@ export function RolePane({
         </fieldset>
       ) : (
         role.managesNames.length > 0 && (
-          <div>
-            <SectionHeading>Manages the staff in</SectionHeading>
-            <p className="text-sm">{role.managesNames.join(", ")}</p>
-          </div>
+          <Section title="Manages the staff in">
+            <p className="ro-plain">{role.managesNames.join(", ")}</p>
+          </Section>
         )
       )}
 
       {role.managed && (
-        <div>
-          <SectionHeading>People in this role</SectionHeading>
+        <Section title="People in this role">
           {role.people.length === 0 ? (
-            <p className="rounded-lg border px-3 py-3 text-sm text-muted-foreground">Nobody holds this role.</p>
+            <p className="ro-plain ro-quiet">Nobody holds this role.</p>
           ) : (
-            <ul aria-label={`People in ${role.name}`} className="divide-y rounded-lg border">
+            <ul aria-label={`People in ${role.name}`} className="ro-people">
               {role.people.map((person) => (
                 <PersonRow
                   key={person.id}
@@ -301,14 +261,14 @@ export function RolePane({
               ))}
             </ul>
           )}
-        </div>
+        </Section>
       )}
 
       {role.managed && <InviteForm role={role} pending={pending} run={run} />}
 
       {children}
 
-      <NameDialog
+      <NameSheet
         open={renaming}
         onOpenChange={setRenaming}
         title={`Rename ${role.name}`}
@@ -321,26 +281,33 @@ export function RolePane({
         onSaved={setOutcome}
       />
 
-      <AlertDialog open={confirmation !== null} onOpenChange={(open) => !open && setConfirmation(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{confirmation?.title}</AlertDialogTitle>
-            <AlertDialogDescription>{confirmation?.description}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+      <Sheet
+        open={confirmation !== null}
+        onOpenChange={(open) => !open && setConfirmation(null)}
+        placement="centre"
+        title={asked?.title}
+        hint={asked?.description}
+        closeLabel="Close"
+        foot={
+          <>
+            <Button
+              size="wide"
               onClick={() => {
                 if (confirmation) run(confirmation.change)
                 setConfirmation(null)
               }}
             >
-              {confirmation?.action}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </section>
+              {asked?.action}
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => setConfirmation(null)}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        {null}
+      </Sheet>
+    </Card>
   )
 }
 
@@ -399,38 +366,48 @@ function PersonRow({
   const describedBy = reasons.length > 0 ? reasonsId : undefined
 
   return (
-    <li aria-label={person.name} className="flex flex-col gap-2 px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="min-w-0 flex-1 basis-48">
-          <p className={cn("truncate text-sm font-medium", !person.active && "text-muted-foreground")}>
+    <li aria-label={person.name} className="ro-person">
+      <div className="ro-person-top">
+        <div className="ro-person-who">
+          <p className="ro-person-name" data-off={!person.active || undefined}>
             {person.name}
-            {person.isYou && <span className="font-normal text-muted-foreground"> (you)</span>}
+            {person.isYou && <span> (you)</span>}
           </p>
-          <p className="truncate text-xs text-muted-foreground">{person.email}</p>
+          <p className="ro-person-mail">{person.email}</p>
         </div>
-        <Badge variant={person.status === "Active" ? "secondary" : "outline"}>{person.status}</Badge>
-        <div className="flex flex-wrap items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="outline" size="sm" />}
-              disabled={pending || person.moveBlocked !== null}
-              aria-describedby={person.moveBlocked ? describedBy : undefined}
-            >
-              Move to…
-              <ChevronDownIcon data-icon="inline-end" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-auto min-w-44">
-              {person.moveTargets.map((target) => (
-                <DropdownMenuItem key={target.id} onClick={() => move(target)}>
-                  {target.name}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <Tag tone={person.status === "Active" ? "ok" : "line"}>{person.status}</Tag>
+        <div className="ro-acts">
+          <Popover
+            size="narrow"
+            className="ro-move"
+            trigger={
+              <Button
+                variant="ghost"
+                size="small"
+                disabled={pending || person.moveBlocked !== null}
+                aria-describedby={person.moveBlocked ? describedBy : undefined}
+              >
+                Move to…
+              </Button>
+            }
+            title="Move to…"
+            closeLabel="Close"
+          >
+            {person.moveTargets.map((target) => (
+              <PopoverClose
+                key={target.id}
+                render={
+                  <Button variant="ghost" size="small" onClick={() => move(target)}>
+                    {target.name}
+                  </Button>
+                }
+              />
+            ))}
+          </Popover>
           {person.active ? (
             <Button
               variant="ghost"
-              size="sm"
+              size="small"
               disabled={pending || person.deactivateBlocked !== null}
               aria-describedby={person.deactivateBlocked ? describedBy : undefined}
               onClick={deactivate}
@@ -440,7 +417,7 @@ function PersonRow({
           ) : (
             <Button
               variant="ghost"
-              size="sm"
+              size="small"
               disabled={pending || person.reactivateBlocked !== null}
               aria-describedby={person.reactivateBlocked ? describedBy : undefined}
               onClick={() => run(() => reactivateStaffMember(person.id))}
@@ -449,30 +426,30 @@ function PersonRow({
             </Button>
           )}
           {person.canResendInvite && (
-            <Button variant="ghost" size="sm" disabled={pending} onClick={() => run(() => resendStaffInvite(person.id))}>
+            <Button variant="ghost" size="small" disabled={pending} onClick={() => run(() => resendStaffInvite(person.id))}>
               Resend invite
             </Button>
           )}
           {person.canSendReset && (
-            <Button variant="ghost" size="sm" disabled={pending} onClick={() => run(() => sendStaffResetLink(person.id))}>
+            <Button variant="ghost" size="small" disabled={pending} onClick={() => run(() => sendStaffResetLink(person.id))}>
               Send reset link
             </Button>
           )}
-          <Button variant="ghost" size="sm" disabled={pending} onClick={() => setRenaming(true)}>
+          <Button variant="ghost" size="small" disabled={pending} onClick={() => setRenaming(true)}>
             Correct name
           </Button>
         </div>
       </div>
 
       {reasons.length > 0 && (
-        <ul id={reasonsId} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+        <ul id={reasonsId} className="ro-reasons">
           {reasons.map((reason) => (
             <li key={reason}>{reason}</li>
           ))}
         </ul>
       )}
 
-      <NameDialog
+      <NameSheet
         open={renaming}
         onOpenChange={setRenaming}
         title={`Correct ${person.name}'s name`}
@@ -502,6 +479,7 @@ function InviteForm({ role, pending, run }: { role: RoleView; pending: boolean; 
     <form
       ref={form}
       aria-labelledby={`${nameId}-heading`}
+      className="kit-sec ro-form"
       onSubmit={(event) => {
         event.preventDefault()
         const data = new FormData(event.currentTarget)
@@ -512,44 +490,38 @@ function InviteForm({ role, pending, run }: { role: RoleView; pending: boolean; 
         })
       }}
     >
-      <h3 id={`${nameId}-heading`} className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <h3 id={`${nameId}-heading`} className="kit-sec-title">
         Invite someone to {role.name}
       </h3>
-      <fieldset
-        disabled={pending || blocked}
-        aria-describedby={blocked ? blockedId : undefined}
-        className="flex flex-col gap-3 rounded-lg border p-3"
-      >
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor={nameId}>Full name</Label>
-            <Input id={nameId} name="fullName" required autoComplete="off" />
+      <fieldset disabled={pending || blocked} aria-describedby={blocked ? blockedId : undefined}>
+        <div className="ro-form-fields">
+          <div>
+            <label htmlFor={nameId}>Full name</label>
+            <Field id={nameId} name="fullName" size="compact" alignStart required autoComplete="off" />
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor={emailId}>Email</Label>
-            <Input id={emailId} name="email" type="email" required autoComplete="off" />
+          <div>
+            <label htmlFor={emailId}>Email</label>
+            <Field id={emailId} name="email" type="email" size="compact" alignStart required autoComplete="off" />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <Button type="submit" size="sm">
+        <div className="ro-form-foot">
+          <Button type="submit" size="small">
             Send invite
           </Button>
-          <p id={blockedId} className="text-xs text-muted-foreground">
-            {role.inviteBlocked ?? "They get an email with a link to set their password."}
-          </p>
+          <p id={blockedId}>{role.inviteBlocked ?? "They get an email with a link to set their password."}</p>
         </div>
       </fieldset>
     </form>
   )
 }
 
-// One text field in a dialog: correcting a person's name, renaming a role.
+// One text field in a sheet: correcting a person's name, renaming a role.
 // It stays open until the save lands. A refusal (a name another role has)
 // shows inside it, so the typed name can be fixed in place; a success
 // closes it and goes to the pane's callout. It can be closed mid-save; that
 // save's answer then goes to the callout. The pane keeps the buttons that
 // open it disabled until the save lands, so it can't be reopened meanwhile.
-function NameDialog({
+function NameSheet({
   open,
   onOpenChange,
   title,
@@ -572,10 +544,11 @@ function NameDialog({
   saving: boolean
   onSaved: (outcome: ChangeOutcome) => void
 }) {
+  const formId = useId()
   const inputId = useId()
   const errorId = useId()
   const [error, setError] = useState<string | null>(null)
-  // Counts closings, so a save can tell whether its dialog was closed
+  // Counts closings, so a save can tell whether its sheet was closed
   // before its answer arrived.
   const closings = useRef(0)
 
@@ -588,60 +561,60 @@ function NameDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent>
-        <form
-          className="grid gap-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const name = String(new FormData(event.currentTarget).get("name") ?? "")
-            const mine = closings.current
-            void save(name).then((outcome) => {
-              if (mine !== closings.current) {
-                // Closed while saving: report it in the pane, nowhere else.
-                onSaved(outcome)
-                return
-              }
-              if (!outcome.ok) {
-                setError(outcome.message)
-                return
-              }
-              changeOpen(false)
+    <Sheet
+      open={open}
+      onOpenChange={changeOpen}
+      placement="centre"
+      title={title}
+      hint={description}
+      closeLabel="Close"
+      foot={
+        <>
+          <Button type="submit" form={formId} size="wide" disabled={saving}>
+            {submit}
+          </Button>
+          <Button variant="ghost" size="wide" onClick={() => changeOpen(false)}>
+            Cancel
+          </Button>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        className="ro-sheet-form"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const name = String(new FormData(event.currentTarget).get("name") ?? "")
+          const mine = closings.current
+          void save(name).then((outcome) => {
+            if (mine !== closings.current) {
+              // Closed while saving: report it in the pane, nowhere else.
               onSaved(outcome)
-            })
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            <Label htmlFor={inputId}>{label}</Label>
-            <Input
-              id={inputId}
-              name="name"
-              defaultValue={defaultValue}
-              required
-              autoComplete="off"
-              aria-invalid={error ? true : undefined}
-              aria-describedby={error ? errorId : undefined}
-            />
-            {error && (
-              <p id={errorId} role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => changeOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {submit}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+              return
+            }
+            if (!outcome.ok) {
+              setError(outcome.message)
+              return
+            }
+            changeOpen(false)
+            onSaved(outcome)
+          })
+        }}
+      >
+        <label htmlFor={inputId}>{label}</label>
+        <Field
+          id={inputId}
+          name="name"
+          size="compact"
+          alignStart
+          defaultValue={defaultValue}
+          required
+          autoComplete="off"
+          invalid={!!error}
+          aria-describedby={error ? errorId : undefined}
+        />
+        <FieldError id={errorId} message={error ?? undefined} alignStart />
+      </form>
+    </Sheet>
   )
 }

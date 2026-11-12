@@ -1,0 +1,78 @@
+/* Staff and roles: the role rail beside the chosen role (DESIGN.md, Cards, Lists and Inputs). */
+.ro-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; }
+@media (min-width: 768px) {
+  .ro-grid { grid-template-columns: 240px minmax(0, 1fr); }
+}
+
+/* The rail. */
+.ro-rail { padding: 12px; }
+.ro-rail .kit-sec-title { padding: 4px 8px 6px; }
+.ro-role { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.ro-role > span:first-child { overflow-wrap: anywhere; }
+.ro-cap { color: var(--gf-quiet); font-size: 12.5px; font-weight: 400; }
+.ro-new { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 12px 8px 4px; border-top: 1px solid var(--gf-mist); }
+.ro-new label, .ro-form label { display: block; font-size: 12.5px; font-weight: 600; color: var(--gf-ink-soft); }
+.ro-new-row { display: flex; gap: 6px; align-items: center; }
+.ro-new-row .kit-field { min-width: 0; }
+
+/* The pane. */
+.ro-pane { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.ro-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 16px; padding-bottom: 10px; }
+.ro-head > div:first-child { display: flex; min-width: 0; flex: 1 1 224px; flex-direction: column; gap: 4px; }
+.ro-head .kit-card-title { overflow-wrap: anywhere; }
+.ro-head .kit-card-title[data-retired] { color: var(--gf-quiet); }
+.ro-sub { margin: 0; color: var(--gf-ink-soft); font-size: 14px; }
+.ro-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ro-reason { flex-basis: 100%; margin: 0; color: var(--gf-quiet); font-size: 12.5px; }
+
+fieldset.kit-sec { margin: 0; min-width: 0; border-inline: 0; border-bottom: 0; padding-inline: 0; }
+fieldset.kit-sec > legend { float: left; width: 100%; padding: 0; }
+fieldset.kit-sec > legend + * { clear: both; }
+.ro-note { margin: 0 0 8px; color: var(--gf-quiet); font-size: 12.5px; }
+.ro-ticks { display: grid; gap: 4px 16px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+@media (min-width: 640px) { .ro-ticks { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ro-ticks > li { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; }
+.ro-ticks label { cursor: pointer; }
+.ro-ticks label[data-off] { color: var(--gf-quiet); }
+.ro-tick-text { display: flex; flex-direction: column; gap: 2px; }
+.ro-plain { margin: 0; font-size: 14px; }
+.ro-quiet { color: var(--gf-quiet); }
+
+/* People in the role. */
+.ro-people { margin: 0; padding: 0; list-style: none; }
+.ro-person { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; }
+.ro-person + .ro-person { border-top: 1px solid var(--gf-mist); }
+.ro-person-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ro-person-who { min-width: 0; flex: 1 1 192px; }
+.ro-person-name { margin: 0; font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
+.ro-person-name[data-off] { color: var(--gf-quiet); }
+.ro-person-name > span { font-weight: 400; color: var(--gf-quiet); }
+.ro-person-mail { margin: 0; color: var(--gf-quiet); font-size: 12.5px; overflow-wrap: anywhere; }
+.ro-reasons { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; color: var(--gf-quiet); font-size: 12.5px; }
+.ro-move .kit-btn { justify-content: flex-start; }
+
+/* Invite someone. */
+.ro-form fieldset { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.ro-form-fields { display: grid; gap: 12px; }
+@media (min-width: 640px) { .ro-form-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ro-form-fields label { margin-bottom: 6px; }
+.ro-form-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.ro-form-foot p { margin: 0; color: var(--gf-quiet); font-size: 12.5px; }
+.ro-form fieldset:disabled { opacity: 0.7; }
+
+/* History. */
+.ro-history { padding-top: 14px; border-top: 1px solid var(--gf-mist); }
+.ro-history-list { margin: 8px 0 0; padding: 0; list-style: none; font-size: 14px; }
+.ro-history-list > li { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.ro-history-list > li + li { border-top: 1px solid var(--gf-mist); }
+.ro-history-list p { margin: 0; }
+.ro-history-list time { display: block; color: var(--gf-quiet); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+@media (min-width: 640px) { .ro-history-list time { display: inline; margin-left: 8px; } }
+.ro-history-err { margin: 8px 0 0; color: var(--gf-red); font-size: 14px; }
+
+/* A name sheet's field. */
+.ro-sheet-form { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.ro-sheet-form label { font-size: 12.5px; font-weight: 600; color: var(--gf-ink-soft); }
+.ro-changes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; color: var(--gf-quiet); font-size: 12.5px; }
+.ro-changes li { overflow-wrap: anywhere; }
+.ro-to { color: var(--gf-ink); }

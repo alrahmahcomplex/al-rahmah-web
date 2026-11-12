@@ -10,7 +10,7 @@ import { signInAsSuperAdmin } from "./super-admin"
 // reports, and the reason shows beside View reports.
 
 const unique = (name: string) => `${name} ${randomUUID().slice(0, 8)}`
-const callout = (page: Page) => page.locator("[data-slot=alert]")
+const callout = (page: Page) => page.getByTestId("role-outcome")
 const LEADS = "View applicants and their history"
 const REPORTS = "View reports"
 

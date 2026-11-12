@@ -3,15 +3,11 @@
 import { useRouter } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Field, FieldError } from "@/components/kit"
 import { ROLE_TEMPLATES } from "@/lib/role-templates"
 
+import { ChoiceList } from "../_form-parts/choice-list"
 import { addRole } from "./actions"
-
-const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30"
 
 // The Super Admin's "New role" at the bottom of the rail (#241). "Start
 // from" picks a template, which fills in the name and brings the template's
@@ -32,7 +28,7 @@ export function NewRoleForm() {
   return (
     <form
       aria-label="New role"
-      className="mt-2 flex flex-col gap-1.5 border-t px-2 pt-3 pb-1"
+      className="ro-new"
       onSubmit={(event) => {
         event.preventDefault()
         startTransition(async () => {
@@ -48,58 +44,44 @@ export function NewRoleForm() {
         })
       }}
     >
-      <Label htmlFor={templateId} className="text-xs text-muted-foreground">
-        Start from
-      </Label>
-      <select
+      <label htmlFor={templateId}>Start from</label>
+      <ChoiceList
         id={templateId}
-        className={SELECT_CLASS}
+        size="small"
         value={template}
         aria-describedby={chosen ? summaryId : undefined}
-        onChange={(event) => {
-          const next = event.target.value
+        options={[{ value: "", label: "Blank role" }, ...ROLE_TEMPLATES.map((t) => ({ value: t.name, label: t.name }))]}
+        onValueChange={(next) => {
           // The name follows the template until the Super Admin types their own.
           if (name === "" || ROLE_TEMPLATES.some((t) => t.name === name)) setName(next)
           setTemplate(next)
         }}
-      >
-        <option value="">Blank role</option>
-        {ROLE_TEMPLATES.map((t) => (
-          <option key={t.name} value={t.name}>
-            {t.name}
-          </option>
-        ))}
-      </select>
+      />
       {chosen && (
-        <p id={summaryId} className="text-xs text-muted-foreground">
+        <p id={summaryId} className="ro-cap">
           {chosen.summary}
         </p>
       )}
-      <Label htmlFor={inputId} className="mt-1 text-xs text-muted-foreground">
-        Role name
-      </Label>
-      <div className="flex gap-1.5">
-        <Input
+      <label htmlFor={inputId}>Role name</label>
+      <div className="ro-new-row">
+        <Field
           id={inputId}
           name="name"
+          size="compact"
+          alignStart
           required
           autoComplete="off"
           placeholder="Role name"
-          className="h-8 min-w-0 staff-touch:h-8"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          aria-invalid={error ? true : undefined}
+          invalid={!!error}
           aria-describedby={error ? errorId : undefined}
         />
-        <Button type="submit" size="sm" disabled={pending}>
+        <Button type="submit" variant="ghost" size="small" disabled={pending}>
           {chosen ? "Create" : "Add"}
         </Button>
       </div>
-      {error && (
-        <p id={errorId} role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
+      <FieldError id={errorId} message={error ?? undefined} alignStart />
     </form>
   )
 }

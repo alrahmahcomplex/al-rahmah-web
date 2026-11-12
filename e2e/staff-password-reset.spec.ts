@@ -103,7 +103,7 @@ test("a Manager's Send reset link emails a joined staff member a link that works
 
   const row = page.getByRole("list", { name: /^People in / }).getByRole("listitem", { name: member.name, exact: true })
   await row.getByRole("button", { name: "Send reset link" }).click()
-  await expect(page.locator("[data-slot=alert]")).toHaveText(`Sent ${member.name} a reset link at ${member.email}. It works once, for 24 hours.`)
+  await expect(page.getByTestId("role-outcome")).toHaveText(`Sent ${member.name} a reset link at ${member.email}. It works once, for 24 hours.`)
 
   const [email] = await waitForEmails(member.email, 1)
   expect(email.link).toMatch(/^http:\/\/localhost:3100\/login\/reset-password\?token_hash=[^&]+&type=recovery$/)

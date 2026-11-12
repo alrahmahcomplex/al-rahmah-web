@@ -1,41 +1,32 @@
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+"use client"
+
+import { Table } from "@/components/kit"
 import type { LeadsByClass } from "@/lib/services/dashboard"
 
 // The Leads by enrollment class table: every class in school order, zeros
 // included, and the panel total.
 export function LeadsByClassTable({ counts }: { counts: LeadsByClass }) {
   return (
-    <div className="flex flex-col gap-1">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Class</TableHead>
-            <TableHead className="text-right">Applicants</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {counts.classes.map(({ className, count }) => (
-            <TableRow key={className}>
-              <TableCell className="py-1.5">{className}</TableCell>
-              <TableCell
-                className={`py-1.5 text-right tabular-nums ${count === 0 ? "text-muted-foreground" : "text-slate-900"}`}
-                data-testid={`classes-count-${className}`}
-              >
-                {count.toLocaleString("en-GB")}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-        <TableFooter>
-          <TableRow>
-            <TableCell className="py-1.5 font-medium">Total</TableCell>
-            <TableCell className="py-1.5 text-right font-semibold tabular-nums" data-testid="classes-total">
-              {counts.total.toLocaleString("en-GB")}
-            </TableCell>
-          </TableRow>
-        </TableFooter>
-      </Table>
-      <p className="text-xs text-muted-foreground">Counted by the date the application was created</p>
-    </div>
+    <>
+      <Table
+        label="Applicants in each class"
+        rows={counts.classes}
+        rowKey={(row) => row.className}
+        columns={[
+          { header: "Class", cell: (row) => row.className },
+          {
+            header: "Applicants",
+            align: "end",
+            cell: (row) => (
+              <span className={row.count === 0 ? "rp-quiet" : undefined} data-testid={`classes-count-${row.className}`}>
+                {row.count.toLocaleString("en-GB")}
+              </span>
+            ),
+          },
+        ]}
+        total={["Total", <span key="total" data-testid="classes-total">{counts.total.toLocaleString("en-GB")}</span>]}
+      />
+      <p className="rp-cap">Counted by the date the application was created</p>
+    </>
   )
 }

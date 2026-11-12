@@ -29,7 +29,7 @@ function personRow(page: Page, name: string) {
   return page.getByRole("list", { name: /^People in / }).getByRole("listitem", { name, exact: true })
 }
 
-const callout = (page: Page) => page.locator("[data-slot=alert]")
+const callout = (page: Page) => page.getByTestId("role-outcome")
 
 test.describe("who can open Staff and roles", () => {
   test("a Manager, whose role manages Admissions Staff, finds it in the navigation", async ({ page }) => {
@@ -148,14 +148,14 @@ test.describe("changing staff members", () => {
     const row = personRow(page, target.name)
 
     await row.getByRole("button", { name: "Deactivate" }).click()
-    const dialog = page.getByRole("alertdialog")
+    const dialog = page.getByRole("dialog", { name: /\?$/ })
     await expect(dialog.getByRole("heading")).toHaveText(`Deactivate ${target.name}?`)
     await expect(dialog).toContainText("including managing staff")
     await dialog.getByRole("button", { name: "Cancel" }).click()
     await expect(row).toContainText("Active")
 
     await row.getByRole("button", { name: "Deactivate" }).click()
-    await page.getByRole("alertdialog").getByRole("button", { name: "Deactivate" }).click()
+    await page.getByRole("dialog", { name: /\?$/ }).getByRole("button", { name: "Deactivate" }).click()
 
     await expect(callout(page)).toHaveText(`Deactivated ${target.name}.`)
     await expect(row).toContainText("Deactivated")
@@ -176,8 +176,8 @@ test.describe("changing staff members", () => {
     await page.goto(`/staff/roles?role=${target.roleId}`)
 
     await personRow(page, target.name).getByRole("button", { name: "Move to…" }).click()
-    await page.getByRole("menuitem", { name: "Accountant", exact: true }).click()
-    const dialog = page.getByRole("alertdialog")
+    await page.getByRole("dialog", { name: "Move to…" }).getByRole("button", { name: "Accountant", exact: true }).click()
+    const dialog = page.getByRole("dialog", { name: /\?$/ })
     await expect(dialog.getByRole("heading")).toHaveText(`Move ${target.name} to Accountant?`)
     await expect(dialog).toContainText("will no longer manage")
     await dialog.getByRole("button", { name: "Move" }).click()
@@ -196,7 +196,7 @@ test.describe("changing staff members", () => {
     await page.goto(`/staff/roles?role=${target.roleId}`)
 
     await personRow(page, target.name).getByRole("button", { name: "Move to…" }).click()
-    await page.getByRole("menuitem", { name: "Admissions Staff", exact: true }).click()
+    await page.getByRole("dialog", { name: "Move to…" }).getByRole("button", { name: "Admissions Staff", exact: true }).click()
     await expect(callout(page)).toHaveText(`Moved ${target.name} to Admissions Staff.`)
 
     await page.goto(`/staff/roles?role=${await roleId("Admissions Staff")}`)
@@ -310,7 +310,7 @@ test.describe("shaping roles, the Super Admin's alone", () => {
       sql.query("update public.staff_members set role_id = $1 where id = $2", [role.id, holder.id]),
     )
     await page.getByRole("button", { name: "Retire role" }).click()
-    await page.getByRole("alertdialog").getByRole("button", { name: "Retire role" }).click()
+    await page.getByRole("dialog", { name: /\?$/ }).getByRole("button", { name: "Retire role" }).click()
 
     await expect(callout(page)).toHaveText(
       `${role.name} is still held by ${holder.name}. Move them to another role first.`,
@@ -353,8 +353,8 @@ test.describe("shaping roles, the Super Admin's alone", () => {
     await expect(page.getByRole("heading", { name: renamed, level: 2, exact: true })).toBeVisible()
 
     await page.getByRole("button", { name: "Retire role" }).click()
-    await expect(page.getByRole("alertdialog").getByRole("heading")).toHaveText(`Retire ${renamed}?`)
-    await page.getByRole("alertdialog").getByRole("button", { name: "Retire role" }).click()
+    await expect(page.getByRole("dialog", { name: /\?$/ }).getByRole("heading")).toHaveText(`Retire ${renamed}?`)
+    await page.getByRole("dialog", { name: /\?$/ }).getByRole("button", { name: "Retire role" }).click()
 
     await expect(callout(page)).toHaveText(`Retired ${renamed}. It stays in history.`)
     await expect(page.getByText("Retired. Kept for history. Reactivate it to give it to anyone again.")).toBeVisible()

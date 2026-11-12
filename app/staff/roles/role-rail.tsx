@@ -1,16 +1,12 @@
-import Link from "next/link"
-
-import { Badge } from "@/components/ui/badge"
+import { Card, ListRow, Tag } from "@/components/kit"
 import type { RoleSummary } from "@/lib/services/staff-admin"
-import { cn } from "@/lib/utils"
 
 import { NewRoleForm } from "./new-role-form"
 import { managesRole, type Viewer } from "./view"
 
 // Every role, with how many active staff hold it where the viewer manages
 // that role's staff. Selecting one opens it in the pane beside the rail.
-// Only the Super Admin gets New role (#241). On a phone the rail is a strip that scrolls
-// sideways, so the selected role's pane stays in view below it.
+// Only the Super Admin gets New role (#241).
 export function RoleRail({
   roles,
   selectedId,
@@ -23,40 +19,35 @@ export function RoleRail({
   viewer: Viewer
 }) {
   return (
-    <nav aria-label="Roles" className="min-w-0 rounded-xl bg-card p-2 ring-1 ring-foreground/10">
-      <h2 className="px-2 pt-1 pb-2 text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">Roles</h2>
-      <ul className="flex gap-1 overflow-x-auto md:flex-col md:gap-0.5">
+    <Card className="ro-rail">
+      <nav aria-label="Roles">
+        <h2 className="kit-sec-title">Roles</h2>
         {roles.map((role) => {
-          const selected = role.id === selectedId
+          const manages = managesRole(viewer, role.id)
           return (
-            <li key={role.id} className="shrink-0">
-              <Link
-                href={`/staff/roles?role=${role.id}`}
-                aria-current={selected ? "page" : undefined}
-                className={cn(
-                  "flex min-h-9 items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium whitespace-nowrap text-foreground hover:bg-muted md:whitespace-normal",
-                  selected && "bg-muted text-blue-600",
-                  role.retired && "text-muted-foreground",
-                )}
-              >
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="break-words">{role.name}</span>
-                  {role.id === yourRoleId && (
-                    <span className="text-xs font-normal text-muted-foreground">Your role</span>
-                  )}
-                </span>
-                {role.retired && <Badge variant="ghost">Retired</Badge>}
-                {managesRole(viewer, role.id) && (
-                  <Badge variant="secondary" aria-label={`${role.activeHolders} active`}>
-                    {role.activeHolders}
-                  </Badge>
-                )}
-              </Link>
-            </li>
+            <ListRow
+              key={role.id}
+              href={`/staff/roles?role=${role.id}`}
+              current={role.id === selectedId}
+              title={role.name}
+              caption={role.id === yourRoleId ? "Your role" : undefined}
+              trailing={
+                role.retired || manages ? (
+                  <>
+                    {role.retired && <Tag tone="line">Retired</Tag>}
+                    {manages && (
+                      <span role="img" aria-label={`${role.activeHolders} active`}>
+                        <Tag tone="line">{role.activeHolders}</Tag>
+                      </span>
+                    )}
+                  </>
+                ) : undefined
+              }
+            />
           )
         })}
-      </ul>
-      {viewer.superAdmin && <NewRoleForm />}
-    </nav>
+        {viewer.superAdmin && <NewRoleForm />}
+      </nav>
+    </Card>
   )
 }

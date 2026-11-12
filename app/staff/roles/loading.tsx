@@ -1,18 +1,17 @@
-import { Bone, CardSkeleton, HeadingSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// Staff and roles: the role rail beside the chosen role.
+import "./roles.css"
+
+// Staff and roles while it opens: the title, then the role rail beside the chosen role.
 export default function Loading() {
   return (
-    <PageSkeleton label="staff and roles" className="gap-4">
-      <HeadingSkeleton width="w-44" />
-      <div className="grid items-start gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
-        <div className="flex flex-col gap-1.5">
-          {Array.from({ length: 4 }, (_, index) => (
-            <Bone key={index} className="h-10 w-full" />
-          ))}
-        </div>
-        <CardSkeleton lines={8} />
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+      <span className="sr-only">Loading staff and roles…</span>
+      <SkeletonBlock width={240} height={32} />
+      <div className="ro-grid">
+        <SkeletonBlock height={260} shape="card" />
+        <SkeletonBlock height={560} shape="card" />
       </div>
-    </PageSkeleton>
+    </div>
   )
 }

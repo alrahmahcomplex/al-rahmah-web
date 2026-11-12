@@ -11,8 +11,8 @@ import { DECLINE_CONSEQUENCE } from "./decline-lead"
 import { changeLeadFollowUpDate, recordLeadFollowUp, scheduleLeadFollowUp } from "./follow-up-actions"
 import { addDays, type FollowUpOutcome } from "./follow-up-outcome"
 import { tanzaniaNowLocal } from "./follow-up-record-format"
-import { Select, TextArea } from "./form-controls"
-import { Field, Input, Saved } from "./lead-editors"
+import { DateField, DateTimeField, Select, TextArea } from "./form-controls"
+import { Field, Saved } from "./lead-editors"
 
 const LOST_REQUEST: FollowUpOutcome = {
   status: "refused",
@@ -202,9 +202,8 @@ function ScheduleForm({
       <Refused refusal={refusal} />
       <Field label="Follow-up date" hint={DATE_HINT}>
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             id={id}
-            type="date"
             required
             min={today}
             max={addDays(today, 365)}
@@ -282,9 +281,8 @@ function ChangeDateForm({
       <Refused refusal={refusal} />
       <Field label="New date" hint={DATE_HINT}>
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             id={id}
-            type="date"
             required
             min={today}
             max={addDays(today, 365)}
@@ -486,9 +484,8 @@ function RecordForm({
       </div>
       <Field label="When" hint="Tanzania time. Not later than now.">
         {({ id, describedBy }) => (
-          <Input
+          <DateTimeField
             id={id}
-            type="datetime-local"
             required
             max={now}
             value={contactedAt}
@@ -558,9 +555,8 @@ function RecordForm({
             }
           >
             {({ id, describedBy }) => (
-              <Input
+              <DateField
                 id={id}
-                type="date"
                 required={!enrolled}
                 min={addDays(today, 1)}
                 max={addDays(today, 365)}

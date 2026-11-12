@@ -13,6 +13,7 @@ import { declineLead } from "@/lib/services/lead-closure"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import { createLead, getLead, type LeadClass, type NewContact } from "@/lib/services/leads"
 import { recordPayment } from "@/lib/services/school-fee-payments"
+import { setPriorSibling } from "@/lib/services/sibling-discount"
 import {
   editSiblingFee,
   linkSibling,
@@ -310,6 +311,32 @@ describe("the owner's case and the spec's acceptance criteria", () => {
     expect(undone.new).toEqual({ result: "ten", source: "locked" })
     expect(await feeOf(cheap)).toMatchObject({ schoolFee: tenOff(KG1), discount: SIBLING })
     expect(await statusOf(cheap)).toBe("Enrolled")
+  })
+
+  test("Back to automatic keeps the tick's 10% over a Full fee fixed at enrolment, as before the edit", async () => {
+    const year = await yearWithSchedule()
+    const { dear } = await together(year)
+    await payInFull(dear)
+    expect(await statusOf(dear)).toBe("Enrolled")
+    expect(await resultOf(dear)).toEqual({ result: "full", source: "locked", locked_result: "full" })
+
+    // The tick gives the 10% over the full lock (#353); a manual Full fee overrides that.
+    const admissions = await signedIn(ADMISSIONS)
+    expect((await setPriorSibling(admissions, dear, { name: "Older Sister", className: "STD 7" })).ok).toBe(true)
+    expect(await resultOf(dear)).toEqual({ result: "ten", source: "prior_sibling", locked_result: "full" })
+    await edit(dear, "full")
+    expect(await resultOf(dear)).toEqual({ result: "full", source: "manual", locked_result: "full" })
+
+    // Back to automatic is the answer the lead had before the edit. Restoring
+    // the full lock while the tick stands would flip to 10% on the next refresh.
+    const undone = await edit(dear, "automatic")
+    expect(undone.new).toEqual({ result: "ten", source: "prior_sibling" })
+    expect(await feeOf(dear)).toMatchObject({ schoolFee: tenOff(STD2), discount: SIBLING })
+
+    // Clearing the tick goes back to the Full fee fixed at enrolment.
+    expect((await setPriorSibling(admissions, dear, null)).ok).toBe(true)
+    expect(await resultOf(dear)).toEqual({ result: "full", source: "locked", locked_result: "full" })
+    expect(await feeOf(dear)).toMatchObject({ schoolFee: STD2, discount: null })
   })
 
   test("a manual 10% does not beat Staff child 25%", async () => {

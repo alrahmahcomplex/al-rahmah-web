@@ -126,3 +126,5 @@
 /* The table's screen-reader-only words are absolutely placed: the scroll box
    holds them, so they never widen a phone's page. */
 .ag-table .kit-tw { position: relative; }
+/* Quiet keys are too light on Lavender Whisper; an attempt's keys use Ink Soft. */
+.ag-claim-attempt .kit-kv dt { color: var(--gf-ink-soft); }

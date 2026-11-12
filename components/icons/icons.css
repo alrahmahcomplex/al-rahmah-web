@@ -16,7 +16,8 @@
 :is([data-shell="new"], [data-kit]) :is(
   [data-icon-host]:hover,
   [data-icon-host][aria-current]:not([aria-current="false"]),
-  [data-icon-host][aria-pressed="true"]
+  [data-icon-host][aria-pressed="true"],
+  [data-icon-host][data-on]
 ) .gf-ic,
 :is([data-shell="new"], [data-kit]) .gf-ic[data-featured] {
   --icon-line: var(--gf-indigo);

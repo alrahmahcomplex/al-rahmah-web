@@ -164,11 +164,12 @@ a.kit-row { border-radius: 14px; }
 /* ---------- tables ---------- */
 .kit-tw { overflow-x: auto; margin: 0 -8px; }
 .kit-tbl { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
-.kit-tbl th { font-size: 12px; font-weight: 600; color: var(--gf-quiet); padding: 6px 12px 10px; white-space: nowrap; }
-.kit-tbl td { padding: 12px; border-top: 1px solid var(--gf-mist); vertical-align: middle; font-variant-numeric: tabular-nums; }
+.kit-tbl thead th { font-size: 12px; font-weight: 600; color: var(--gf-quiet); padding: 6px 12px 10px; white-space: nowrap; }
+.kit-tbl :is(td, tbody th) { padding: 12px; border-top: 1px solid var(--gf-mist); vertical-align: middle; font-variant-numeric: tabular-nums; }
 .kit-tbl tbody tr { transition: background var(--gf-t-med) var(--gf-ease-out); }
 .kit-tbl .kit-tr-open { cursor: pointer; }
 .kit-tbl .kit-tr-open:hover { background: var(--gf-chrome); }
+.kit-tbl tbody th { text-align: left; font-weight: 600; }
 .kit-tbl td b { font-weight: 600; display: block; }
 .kit-tbl td small { color: var(--gf-quiet); font-size: 12.5px; }
 .kit-tbl [data-align="end"] { text-align: right; white-space: nowrap; }
@@ -370,3 +371,213 @@ html.rm .kit-cf { display: none; }
 .kit-rv > div { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 12px; padding: 0 6px; }
 .kit-rv[data-open] { grid-template-rows: 1fr; opacity: 1; margin: 0 -6px; }
 .kit-rv[data-open] > div { padding: 6px; }
+
+/* ---------- form parts (prototype version 18, "round 17"; #358) ---------- */
+/* Tabs: the filter pill as links; the current one is the indigo pill. */
+.kit-tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+a.kit-fpill { display: inline-flex; align-items: center; text-decoration: none; }
+.kit-fpill[aria-current="page"] {
+  background: var(--gf-indigo); border-color: var(--gf-indigo); color: var(--gf-paper);
+  font: italic 700 13.5px var(--font-exo), "Exo", system-ui, sans-serif;
+}
+
+/* The choice list: the 44px pill field as a button, with a chevron that turns while the list is open.
+   Its text sits in the middle of the pill, the placeholder too. */
+.kit-sel {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 44px; padding: 0 16px 0 20px;
+  font-size: 16px; text-align: left; cursor: pointer; user-select: none;
+}
+.kit-sel-v { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kit-sel[data-empty] .kit-sel-v { color: var(--gf-placeholder); }
+.kit-sel-chev { flex: none; color: var(--gf-indigo); stroke-width: 2.4; transition: transform var(--gf-t-med) var(--gf-ease-out); }
+.kit-sel[aria-expanded="true"] { border-color: var(--gf-indigo); box-shadow: 0 0 0 4px rgb(9 0 187 / 0.12); }
+.kit-sel[aria-expanded="true"] .kit-sel-chev { transform: rotate(180deg); }
+.kit-sel:disabled, .kit-sel[data-disabled] { opacity: 0.6; cursor: default; }
+
+/* The popups (the list and the calendar): Paper, the thin indigo line, 22px corners, the lifted
+   shadow. Above a sheet (61); they scroll inside. */
+.kit-up-pos { z-index: 65; }
+.kit-up {
+  background: var(--gf-paper); color: var(--gf-ink); border: 1.5px solid var(--gf-line); border-radius: 22px; box-shadow: var(--gf-lift);
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--gf-mist) transparent; outline: none;
+  font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif; transform-origin: var(--transform-origin);
+  transition: opacity 180ms var(--gf-ease-out), transform 180ms var(--gf-ease-out);
+}
+.kit-up[data-starting-style] { opacity: 0; transform: translateY(-6px) scale(0.96); }
+.kit-up[data-side="top"][data-starting-style] { transform: translateY(6px) scale(0.96); }
+/* As in the prototype, a popup goes at once; only its opening moves. */
+.kit-up[data-ending-style] { transition: none; }
+
+.kit-sel-pop {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px;
+  width: min(max(var(--anchor-width), 200px), calc(100vw - 24px)); max-height: max(160px, var(--available-height));
+}
+.kit-sel-head { flex: none; margin: 0; padding: 6px 14px 4px; font-size: 12.5px; font-weight: 600; color: var(--gf-quiet); }
+.kit-sel-list { display: flex; flex-direction: column; gap: 2px; outline: none; }
+.kit-sel-o {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 0 12px 0 16px;
+  border-radius: 999px; font-size: 15px; color: var(--gf-ink); cursor: pointer; user-select: none; outline: none;
+  transition: background var(--gf-t-fast), color var(--gf-t-fast);
+}
+.kit-sel-o .gf-ic { flex: none; opacity: 0; }
+.kit-sel-o[data-highlighted] { background: var(--gf-mist); }
+.kit-sel-o[data-selected] { background: var(--gf-indigo); color: var(--gf-paper); font-weight: 600; }
+.kit-sel-o[data-selected] .gf-ic { opacity: 1; }
+.kit-sel-o[data-selected][data-highlighted] { box-shadow: 0 0 0 3px rgb(9 0 187 / 0.25); }
+.kit-sel-o[data-disabled] { opacity: 0.5; cursor: default; }
+
+/* The date: a typed pill with a calendar button; the calendar is ours. */
+.kit-datef { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.kit-date { position: relative; min-width: 0; }
+.kit-field.kit-date-in { padding-right: 52px; font-variant-numeric: tabular-nums; }
+.kit-date-btn {
+  position: absolute; right: 5px; top: 50%; width: 34px; height: 34px; margin-top: -17px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; background: transparent; color: var(--gf-indigo); cursor: pointer;
+  transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-date-btn:hover, .kit-date-btn[data-popup-open] { background: var(--gf-whisper); }
+.kit-date-btn:disabled { opacity: 0.6; cursor: default; }
+.kit-date-btn:focus-visible, .kit-cal-day:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 1px; }
+/* A day and a time under one label. */
+.kit-dt { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 8px; align-items: start; }
+.kit-field.kit-time { padding: 0 10px; font-variant-numeric: tabular-nums; }
+
+/* The month grid: Monday first, the month in Exo between round arrows. */
+.kit-cal-pop { width: 304px; max-width: calc(100vw - 24px); padding: 14px; }
+.kit-cal-month { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; row-gap: 8px; }
+.kit-cal-cap { display: flex; justify-content: center; }
+.kit-cal-title { font: italic 800 16px/1.2 var(--font-exo), "Exo", system-ui, sans-serif; color: var(--gf-indigo); }
+.kit-round.kit-cal-arrow { width: 34px; height: 34px; }
+.kit-cal-arrow:is(:disabled, [aria-disabled="true"]) { opacity: 0.35; cursor: not-allowed; }
+.kit-cal-arrow:is(:disabled, [aria-disabled="true"]):hover { background: var(--gf-paper); }
+.kit-cal-arrow:is(:disabled, [aria-disabled="true"]):active { transform: none; }
+.kit-cal-grid { grid-column: 1 / -1; width: 100%; border-collapse: collapse; table-layout: fixed; }
+.kit-cal-wd { padding: 4px 0; font-size: 11.5px; font-weight: 600; color: var(--gf-quiet); text-align: center; }
+.kit-cal-cell { padding: 1px 0; text-align: center; }
+.kit-cal-hidden { visibility: hidden; }
+.kit-cal-day {
+  width: 36px; height: 36px; margin: 0 auto; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center;
+  background: none; color: var(--gf-ink); font: 400 14px var(--font-sans), system-ui, sans-serif; font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: background var(--gf-t-fast), color var(--gf-t-fast);
+}
+.kit-cal-day:hover { background: var(--gf-mist); }
+.kit-cal-day[aria-current="date"] { box-shadow: inset 0 0 0 1.5px var(--gf-line-strong); color: var(--gf-indigo); font-weight: 700; }
+.kit-cal-on .kit-cal-day { background: var(--gf-indigo); color: var(--gf-paper); font-weight: 700; box-shadow: none; }
+.kit-cal-off .kit-cal-day { color: var(--gf-day-off); cursor: not-allowed; }
+.kit-cal-off .kit-cal-day:hover { background: none; }
+.kit-cal-foot { display: flex; justify-content: center; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--gf-mist); }
+/* Week mode: the chosen week is one indigo band, the week under the pointer a Lavender Mist band. */
+.kit-cal-wk .kit-cal-cell { padding: 2px 0; }
+.kit-cal-wk .kit-cal-day { width: 100%; border-radius: 0; }
+.kit-cal-wk .kit-cal-a .kit-cal-day { border-radius: 999px 0 0 999px; }
+.kit-cal-wk .kit-cal-z .kit-cal-day { border-radius: 0 999px 999px 0; }
+.kit-cal-wk .kit-cal-a.kit-cal-z .kit-cal-day { border-radius: 999px; }
+.kit-cal-wk .kit-cal-day:hover { background: none; }
+.kit-cal-wk .kit-cal-lit .kit-cal-day { background: var(--gf-mist); }
+.kit-cal-wk .kit-cal-day[aria-current="date"] { box-shadow: none; }
+.kit-cal-wk .kit-cal-band .kit-cal-day { background: var(--gf-indigo); color: var(--gf-paper); font-weight: 700; }
+/* The calendar sitting open inside a filter. */
+.kit-cal-open { max-width: 320px; padding: 14px; border: 1.5px solid var(--gf-line); border-radius: 22px; background: var(--gf-paper); }
+
+/* Long text: the field's outline and focus ring, with the summary box's 20px corners. */
+.kit-field.kit-ta {
+  display: block; height: auto; min-height: 96px; border-radius: 20px; padding: 12px 18px; text-align: left;
+  font: 400 16px/1.5 var(--font-sans), system-ui, sans-serif; resize: vertical;
+}
+
+/* Tick box and switch: the whole row is the target. */
+.kit-tick { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 5px 0; cursor: pointer; text-align: left; }
+.kit-sw-row { gap: 14px; align-items: center; }
+.kit-tick[data-disabled] { cursor: not-allowed; opacity: 0.6; }
+.kit-tick-t { display: flex; flex-direction: column; gap: 2px; font-size: 14.5px; line-height: 1.45; color: var(--gf-ink); }
+.kit-tick-t small { font-size: 13px; color: var(--gf-ink-soft); }
+.kit-ck {
+  flex: none; width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--gf-line-strong); background: var(--gf-paper);
+  display: grid; place-items: center; color: var(--gf-paper); cursor: pointer; outline: none;
+  transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med);
+}
+.kit-ck-tick { display: grid; place-items: center; }
+.kit-ck .gf-ic { width: 14px; height: 14px; opacity: 0; transform: scale(0.6); transition: opacity var(--gf-t-med), transform var(--gf-t-med) var(--gf-ease-out); }
+.kit-tick:hover .kit-ck, .kit-ck:hover { border-color: var(--gf-indigo); }
+.kit-ck[data-checked] { background: var(--gf-indigo); border-color: var(--gf-indigo); }
+.kit-ck[data-checked] .gf-ic { opacity: 1; transform: scale(1); }
+.kit-ck[data-disabled] { cursor: not-allowed; opacity: 0.6; }
+:is(.kit-ck, .kit-sw):focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.kit-sw {
+  flex: none; position: relative; width: 52px; height: 32px; padding: 0; border: 0; border-radius: 999px; cursor: pointer;
+  background: var(--gf-whisper); box-shadow: inset 0 0 0 2px var(--gf-line-strong);
+  transition: background var(--gf-t-med) var(--gf-ease-out), box-shadow var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-sw-knob {
+  position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--gf-quiet); color: var(--gf-indigo);
+  display: grid; place-items: center; transform: scale(0.667);
+  transition: transform var(--gf-t-med) var(--gf-ease-out), background var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-sw-knob .gf-ic { width: 15px; height: 15px; opacity: 0; transition: opacity var(--gf-t-med); }
+.kit-sw:active .kit-sw-knob { transform: scale(0.85); }
+.kit-sw[data-checked] { background: var(--gf-indigo); box-shadow: inset 0 0 0 2px var(--gf-indigo); }
+.kit-sw[data-checked] .kit-sw-knob { transform: translateX(20px); background: var(--gf-paper); }
+.kit-sw[data-checked] .kit-sw-knob .gf-ic { opacity: 1; }
+.kit-sw[data-checked]:active .kit-sw-knob { transform: translateX(20px) scale(1.08); }
+.kit-sw[data-disabled] { cursor: not-allowed; opacity: 0.6; }
+
+/* A fold-open section: a quiet row whose chevron turns; the content folds open under it. */
+.kit-dsc { display: flex; flex-direction: column; min-width: 0; }
+.kit-dsc-btn {
+  display: inline-flex; align-items: center; align-self: flex-start; gap: 8px; min-height: 36px; margin-left: -8px; padding: 0 12px 0 8px;
+  border: 0; border-radius: 999px; background: none; color: var(--gf-indigo); cursor: pointer; text-align: left;
+  font: 600 14px var(--font-sans), system-ui, sans-serif; transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-dsc-btn:hover { background: var(--gf-whisper); }
+.kit-dsc-btn:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.kit-dsc-chev { flex: none; stroke-width: 2.4; transform: rotate(-90deg); transition: transform var(--gf-fold) var(--gf-ease-out); }
+.kit-dsc[data-open] > .kit-dsc-btn .kit-dsc-chev { transform: none; }
+.kit-dsc-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--gf-fold) var(--gf-ease-out); }
+.kit-dsc[data-open] > .kit-dsc-panel { grid-template-rows: 1fr; }
+.kit-dsc-in { min-height: 0; overflow: hidden; visibility: hidden; transition: visibility 0s linear var(--gf-fold); }
+.kit-dsc[data-open] > .kit-dsc-panel > .kit-dsc-in { visibility: visible; transition-delay: 0s; }
+.kit-dsc-body { padding: 8px 0 4px; }
+.kit-dsc[data-variant="boxed"] { border: 1.5px solid var(--gf-line); border-radius: 20px; background: var(--gf-paper); }
+.kit-dsc[data-variant="boxed"] > .kit-dsc-btn {
+  align-self: stretch; justify-content: space-between; min-height: 48px; margin: 0; padding: 0 16px 0 18px; border-radius: 20px;
+  font-size: 15px; font-weight: 400; color: var(--gf-ink);
+}
+.kit-dsc[data-variant="boxed"] > .kit-dsc-btn .kit-dsc-chev { color: var(--gf-indigo); transform: none; }
+.kit-dsc[data-variant="boxed"][data-open] > .kit-dsc-btn .kit-dsc-chev { transform: rotate(180deg); }
+.kit-dsc[data-variant="boxed"] .kit-dsc-body { padding: 14px 18px 16px; border-top: 1px solid var(--gf-mist); }
+
+/* The file area: a dashed area to drop a file on, with a button to choose one. */
+.kit-file {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 18px; text-align: center;
+  border: 1.5px dashed var(--gf-line-strong); border-radius: 20px; background: var(--gf-paper);
+  transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med);
+}
+.kit-file[data-drag] { background: var(--gf-whisper); border-color: var(--gf-indigo); border-style: solid; }
+.kit-file-ic { width: 28px; height: 28px; color: var(--gf-indigo); stroke-width: 1.8; }
+.kit-file-t { margin: 0; font-size: 15px; font-weight: 600; color: var(--gf-ink); overflow-wrap: anywhere; }
+.kit-file[data-has] .kit-file-t { color: var(--gf-indigo); }
+.kit-file-hint { margin: 0; font-size: 13px; color: var(--gf-ink-soft); }
+.kit-file-in { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* The filter button while a filter is on: its icon keeps two colours (icons.css) on a Lavender Whisper circle. */
+.kit-round[data-on] { background: var(--gf-whisper); border-color: var(--gf-line-strong); }
+
+/* What people type is 16px on a phone (The Readable Field Rule); 15px from 861px. */
+@media (min-width: 861px) {
+  .kit-sel { font-size: 15px; }
+  .kit-field.kit-ta { font-size: 15px; }
+}
+@media (pointer: coarse) {
+  .kit-tick { min-height: 44px; align-items: center; }
+  .kit-sel-o { min-height: 44px; }
+  .kit-cal-day { width: 40px; height: 40px; }
+  .kit-cal-pop { width: 332px; }
+  .kit-date-btn { right: 0; width: 44px; height: 44px; margin-top: -22px; }
+}
+/* Reduced motion: the popups appear at once; the tick and the chevrons do not move. */
+@media (prefers-reduced-motion: reduce) {
+  .kit-up { transition: none; }
+  .kit-ck .gf-ic, .kit-sel-chev, .kit-dsc-chev, .kit-sw-knob { transition: none; }
+}
+html.rm .kit-up { transition: none; }
+html.rm :is(.kit-ck .gf-ic, .kit-sel-chev, .kit-dsc-chev, .kit-sw-knob) { transition: none; }

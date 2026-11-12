@@ -318,6 +318,15 @@ describe("Table", () => {
     fireEvent.keyDown(row, { key: " " })
     expect(onOpen.mock.calls.map(([r]) => r.name)).toEqual(["Baraka", "Salma"])
   })
+
+  it("draws the cell that names its row as a row header", () => {
+    render(<Table label="Agents" rows={rows} rowKey={(r) => r.name} columns={[{ ...columns[0], rowHeader: true }, columns[1]]} />)
+    const header = screen.getByRole("rowheader", { name: "Salma" })
+    expect(header.tagName).toBe("TH")
+    expect(header).toHaveAttribute("scope", "row")
+    expect(screen.getByRole("cell", { name: "TZS 1,800,000" }).tagName).toBe("TD")
+    expect(screen.queryByRole("cell", { name: "Salma" })).toBeNull()
+  })
 })
 
 describe("details", () => {

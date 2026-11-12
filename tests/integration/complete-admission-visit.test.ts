@@ -281,6 +281,34 @@ describe("check-in of an Admission form family", () => {
     expect(await feeOf(leadIds[3])).toMatchObject({ discount: SIBLING })
   })
 
+  test("two siblings moved together to another custodian form their group on that person", async () => {
+    const year = await registrationYear()
+    const family = fatherParts()
+    const kids = [child(family, "KG 2"), child(family)]
+    const { leadIds, contactId } = await applied(kids, year)
+    // The father is the custodian of both, a new person: the form's own
+    // contact is not on the check-in.
+    const students = await completed({
+      people: [{ phone: phone() }],
+      students: [
+        checkIn(leadIds[0], kids[0], { custodian: { person: 1, father: true } }),
+        checkIn(leadIds[1], kids[1], { custodian: { person: 1, father: true }, siblingOf: { student: 1 } }),
+      ],
+    })
+    const group = students[1].sibling!.groupId
+    const [r0, r1] = await Promise.all(leadIds.map(rowOf))
+    expect(r0.guardian_contact_id).not.toBe(contactId)
+    expect(r1.guardian_contact_id).toBe(r0.guardian_contact_id)
+    expect(r0).toMatchObject({ custodian_relationship: "Father", custodian_relationship_own: false })
+    expect(await membershipOf(leadIds[0])).toMatchObject({ group_id: group, basis: "matched" })
+    const contacts = await inRolledBackTransaction(
+      async (sql) => (await sql.query<{ contact_ids: string[] }>("select contact_ids from public.sibling_groups where id = $1", [group])).rows[0].contact_ids,
+    )
+    expect(contacts).toEqual([r0.guardian_contact_id])
+    const fees = await Promise.all(leadIds.map(feeOf))
+    expect(fees.filter((f) => f.discount?.kind === "sibling")).toHaveLength(1)
+  })
+
   test("a dearer child left out of the check-in stays legacy and does not take the full-fee place", async () => {
     const year = await registrationYear()
     const family = fatherParts()

@@ -71,9 +71,10 @@
 -- transaction knows its key.
 --
 -- Write order: the children's details and visits; the children leave
--- their legacy groups; the links (deferred); the custodian moves,
--- whose trigger recomputes the lead's group with its final members; then
--- each touched group once and each child's own result. The cascade ends for
+-- their legacy groups; the custodian moves, which then recompute no group
+-- (a child linked before check-in keeps its group, and the move's trigger
+-- recomputes it as it is); the links (deferred); then each touched group
+-- once and each child's own result. The cascade ends for
 -- the reason in 20261106901100.
 --
 -- One `do` block: the Supabase CLI runs a file's statements one by one,
@@ -720,6 +721,33 @@ begin
                 end if;
             end loop;
 
+            -- The custodians, before any link. A child moving to another
+            -- person has left its legacy group already, so the move's
+            -- trigger recomputes no group (only a child linked before
+            -- check-in still has one, unchanged by the move); the groups
+            -- are recomputed once, below.
+            for i in 1..n loop
+                k := s_person[i];
+                select * into lead from public.leads l where l.id = s_lead[i];
+                if lead.guardian_contact_id is distinct from p_contact[k] then
+                    old_group := public.lead_sibling_group(lead.id);
+                    touched := touched || old_group;
+                    update public.leads l
+                    set guardian_contact_id = p_contact[k],
+                        -- Joining a known Family at the front desk.
+                        returning_family_joined = p_known[k]
+                    where l.id = lead.id;
+                end if;
+                -- Its own relationship when it differs from the person's.
+                update public.leads l
+                set custodian_relationship = s_rel[i],
+                    custodian_relationship_description = s_desc[i],
+                    custodian_relationship_own = (s_rel[i], s_desc[i]) is distinct from (p_stored_rel[k], p_stored_desc[k])
+                where l.id = lead.id
+                  and (l.custodian_relationship, l.custodian_relationship_description, l.custodian_relationship_own)
+                      is distinct from (s_rel[i], s_desc[i], (s_rel[i], s_desc[i]) is distinct from (p_stored_rel[k], p_stored_desc[k]));
+            end loop;
+
             -- The links, as register_students makes them: a student after
             -- the student it links to.
             pending := array(select x from generate_series(1, n) x where s_sib_student[x] is not null or s_sib_lead[x] is not null);
@@ -768,30 +796,6 @@ begin
             if jsonb_array_length(questions) > 0 then
                 raise exception using errcode = 'P0114', message = 'registration_questions';
             end if;
-
-            -- The custodians. A child moving to another person takes it;
-            -- the move's trigger recomputes the child's group as it now is.
-            for i in 1..n loop
-                k := s_person[i];
-                select * into lead from public.leads l where l.id = s_lead[i];
-                if lead.guardian_contact_id is distinct from p_contact[k] then
-                    old_group := public.lead_sibling_group(lead.id);
-                    touched := touched || old_group;
-                    update public.leads l
-                    set guardian_contact_id = p_contact[k],
-                        -- Joining a known Family at the front desk.
-                        returning_family_joined = p_known[k]
-                    where l.id = lead.id;
-                end if;
-                -- Its own relationship when it differs from the person's.
-                update public.leads l
-                set custodian_relationship = s_rel[i],
-                    custodian_relationship_description = s_desc[i],
-                    custodian_relationship_own = (s_rel[i], s_desc[i]) is distinct from (p_stored_rel[k], p_stored_desc[k])
-                where l.id = lead.id
-                  and (l.custodian_relationship, l.custodian_relationship_description, l.custodian_relationship_own)
-                      is distinct from (s_rel[i], s_desc[i], (s_rel[i], s_desc[i]) is distinct from (p_stored_rel[k], p_stored_desc[k]));
-            end loop;
 
             -- Each touched group once, then each child's own result, then
             -- requests that no longer ask anything.

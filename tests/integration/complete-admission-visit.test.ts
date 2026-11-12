@@ -163,6 +163,14 @@ async function membershipOf(leadId: string) {
   )
 }
 
+async function fullPayerOf(groupId: string): Promise<string | null> {
+  return inRolledBackTransaction(
+    async (sql) =>
+      (await sql.query<{ full_payer_lead_id: string | null }>("select full_payer_lead_id from public.sibling_groups where id = $1", [groupId]))
+        .rows[0].full_payer_lead_id,
+  )
+}
+
 async function storedResultOf(leadId: string) {
   return inRolledBackTransaction(
     async (sql) =>
@@ -307,6 +315,54 @@ describe("check-in of an Admission form family", () => {
     expect(contacts).toEqual([r0.guardian_contact_id])
     const fees = await Promise.all(leadIds.map(feeOf))
     expect(fees.filter((f) => f.discount?.kind === "sibling")).toHaveLength(1)
+  })
+
+  test("a custodian move before a merge does not hand the merged group a new full payer", async () => {
+    const year = await claimedYear()
+    const family = fatherParts()
+    // On file: a group of two nursery children on another form, the older
+    // one paying full.
+    const [e, e2] = [child(family, "KG 2"), child(family)]
+    const other = await applied([e, e2], year)
+    const [, inOther] = await completed({
+      people: [{ contactId: other.contactId }],
+      students: [checkIn(other.leadIds[0], e), checkIn(other.leadIds[1], e2, { siblingOf: { student: 1 } })],
+    })
+    const h = inOther.sibling!.groupId
+    expect(await fullPayerOf(h)).toBe(other.leadIds[0])
+
+    // This form: A (STD 3) and D linked before check-in, B (FORM 1) still
+    // legacy and the stored full payer of their mixed group.
+    const [a, b, d] = [child(family, "STD 3"), child(family, "FORM 1"), child(family)]
+    const form = await applied([a, b, d], year)
+    const linked = await linkSibling(await signedIn(ADMISSIONS), {
+      leadId: form.leadIds[2],
+      siblingOfLeadId: form.leadIds[0],
+      siblingFatherFullName: nameOf(family),
+    })
+    expect(linked).toMatchObject({ ok: true, data: { basis: "matched" } })
+    const g = (await membershipOf(form.leadIds[0]))!.group_id!
+    expect(await fullPayerOf(g)).toBe(form.leadIds[1])
+
+    // Check-in: B is not a sibling; A moves to its father and joins the
+    // group on file, bringing D.
+    await completed({
+      people: [{ contactId: form.contactId }, { phone: phone() }],
+      students: [
+        checkIn(form.leadIds[0], a, {
+          custodian: { person: 2, father: true },
+          siblingOf: { leadId: other.leadIds[0] },
+          previousSchool: { notKnown: true },
+        }),
+        checkIn(form.leadIds[1], b, { notASibling: true, previousSchool: { notKnown: true } }),
+      ],
+    })
+    expect(await membershipOf(form.leadIds[0])).toMatchObject({ group_id: h })
+    expect(await membershipOf(form.leadIds[2])).toMatchObject({ group_id: h })
+    // The family already holds E's invoice at full: E stays the full payer (R48).
+    expect(await fullPayerOf(h)).toBe(other.leadIds[0])
+    expect((await feeOf(other.leadIds[0])).discount?.kind).not.toBe("sibling")
+    expect(await feeOf(form.leadIds[0])).toMatchObject({ discount: SIBLING })
   })
 
   test("a dearer child left out of the check-in stays legacy and does not take the full-fee place", async () => {

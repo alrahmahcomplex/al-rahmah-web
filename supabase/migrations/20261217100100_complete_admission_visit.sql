@@ -71,10 +71,10 @@
 -- transaction knows its key.
 --
 -- Write order: the children's details and visits; the children leave
--- their legacy groups; the custodian moves, which then recompute no group
--- (a child linked before check-in keeps its group, and the move's trigger
--- recomputes it as it is); the links (deferred); then each touched group
--- once and each child's own result. The cascade ends for
+-- their legacy groups; the custodian moves, whose trigger leaves its
+-- recomputes to the end (recompute_lead_fee_on_lead_change is redefined to
+-- skip them while app.sibling_defer_contact_recompute is on); the links
+-- (deferred); then each touched group once and each child's own result. The cascade ends for
 -- the reason in 20261106901100.
 --
 -- One `do` block: the Supabase CLI runs a file's statements one by one,
@@ -82,8 +82,9 @@
 -- end; any difference raises and nothing is applied. Every function is
 -- `create or replace`, so the tests run the block again.
 --
--- Rollback: a new migration dropping complete_admission_visit and putting
--- back the cause constraint. Nothing else is redefined.
+-- Rollback: a new migration dropping complete_admission_visit, putting
+-- back the cause constraint and recompute_lead_fee_on_lead_change from
+-- 20261213100100. Nothing else is redefined.
 
 do $migration$
 begin
@@ -103,6 +104,56 @@ begin
                 'migration', 'lead_created', 'family', 'sibling_link', 'merge', 'father_name', 'sibling_request',
                 'registration', 'visit_completion'
             ));
+
+    -- The contact-move trigger, as 20261213100100 made it, now leaving the
+    -- fee and group recomputes to the caller while
+    -- app.sibling_defer_contact_recompute is on (complete_admission_visit
+    -- sets it around its custodian moves and recomputes every touched
+    -- group once, after its links). The membership, the legacy exit and
+    -- the group's contacts are written as before. Same trigger.
+    create or replace function public.recompute_lead_fee_on_lead_change()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    declare
+        old_group uuid;
+        new_group uuid;
+        deferred boolean := coalesce(current_setting('app.sibling_defer_contact_recompute', true), '') = 'on';
+    begin
+        if old.guardian_contact_id is distinct from new.guardian_contact_id then
+            perform public.lock_families(array[old.guardian_contact_id, new.guardian_contact_id]);
+            old_group := public.lead_sibling_group(new.id);
+            if (select g.legacy_contact_id from public.sibling_groups g where g.id = old_group)
+               is distinct from new.guardian_contact_id then
+                perform public.leave_legacy_sibling_group(new.id, 'family');
+            end if;
+            perform public.sync_family_sibling_group(new.guardian_contact_id, 'family', new.id);
+            new_group := public.lead_sibling_group(new.id);
+            perform public.refresh_sibling_group_contacts(old_group);
+            if new_group is distinct from old_group then
+                perform public.refresh_sibling_group_contacts(new_group);
+            end if;
+            if deferred then
+                return null;
+            end if;
+            perform public.recompute_lead_fee(new.id, 'family');
+            perform public.recompute_sibling_group(old_group, 'family');
+            if new_group is distinct from old_group then
+                perform public.recompute_sibling_group(new_group, 'family');
+            end if;
+            return null;
+        end if;
+        perform public.recompute_lead_fee(
+            new.id,
+            case when old.status = 'Declined' and new.status <> 'Declined' then 'reopening' else 'lead_details' end
+        );
+        return null;
+    end;
+    $fn$;
+
+    revoke execute on function public.recompute_lead_fee_on_lead_change() from public, anon, authenticated, service_role;
 
     create or replace function public.complete_admission_visit(visited_on date, people jsonb, students jsonb)
     returns jsonb
@@ -721,11 +772,11 @@ begin
                 end if;
             end loop;
 
-            -- The custodians, before any link. A child moving to another
-            -- person has left its legacy group already, so the move's
-            -- trigger recomputes no group (only a child linked before
-            -- check-in still has one, unchanged by the move); the groups
-            -- are recomputed once, below.
+            -- The custodians, before any link. The move's trigger leaves
+            -- its recomputes to the final pass below (a child linked before
+            -- check-in keeps its group through the move), so no group is
+            -- recomputed before every link is made.
+            perform set_config('app.sibling_defer_contact_recompute', 'on', true);
             for i in 1..n loop
                 k := s_person[i];
                 select * into lead from public.leads l where l.id = s_lead[i];
@@ -747,6 +798,7 @@ begin
                   and (l.custodian_relationship, l.custodian_relationship_description, l.custodian_relationship_own)
                       is distinct from (s_rel[i], s_desc[i], (s_rel[i], s_desc[i]) is distinct from (p_stored_rel[k], p_stored_desc[k]));
             end loop;
+            perform set_config('app.sibling_defer_contact_recompute', '', true);
 
             -- The links, as register_students makes them: a student after
             -- the student it links to.

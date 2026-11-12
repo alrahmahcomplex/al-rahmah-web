@@ -1,3 +1,10 @@
 {
-  "regions": ["dub1"]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["dub1"],
+  "git": {
+    "deploymentEnabled": {
+      "claude/**": false,
+      "codex/**": false
+    }
+  }
 }

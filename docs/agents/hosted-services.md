@@ -58,6 +58,24 @@ Vercel is on Hobby. Supabase is on Free, in eu-west-1. On 2026-11-03 the owner c
 - **Supabase Free pauses an inactive project.** A paused project takes the staff portal, sign-in and every form that writes down until someone restores it from the Supabase dashboard. Check that the project isn't paused before a launch step or after a quiet period.
 - **No point-in-time recovery.** A bad migration or deletion can't be rolled back to a moment in time.
 
+### Deployment limit and Previews
+
+Hobby allows 100 deployments every 86,400 seconds ([limits](https://vercel.com/docs/limits)), Production and Preview together. Past that Vercel refuses every deployment, Production included, until the day's window passes. The commit then gets a failed `Vercel` status reading "Deployment rate limited — retry in 24 hours." On 2026-11-12 agent build threads used the whole day by midday, one Preview per push (#370).
+
+- **Agent branches don't deploy.** `git.deploymentEnabled` in `vercel.json` sets `claude/**` and `codex/**` to `false` ([git configuration](https://vercel.com/docs/project-configuration/git-configuration)). Any branch with no rule deploys, `main` included. Vercel matches branch names with minimatch: `claude/**` matches `claude/redesign-r7-fees-seats-329` and `claude/a/b`, but not `main`, `claude`, `claudex/x` or `research/turnstile`. A branch matching a `false` rule and a `true` rule deploys. Never add a rule that could match `main`.
+- **A skipped push leaves nothing behind.** It creates no deployment, no `Vercel` commit status and no PR check (checked on #370's own branch). `main` has no branch protection and the Vercel check isn't required, so the PR still merges on `CI complete`.
+- **The branch needs the rule in its own tree.** Vercel reads `vercel.json` from the pushed commit. A branch cut before #370 merged keeps deploying on every push until it is rebased onto `main`.
+- **A Preview on purpose.** Ask the lead first and say why local checks aren't enough, for example a Lighthouse run or behaviour only the hosted setup has. With a yes, push the commit once to a branch outside the patterns, take the evidence, then delete it:
+
+  ```bash
+  git push origin HEAD:preview/<task>
+  git push origin --delete preview/<task>
+  ```
+
+  Each push to that branch spends one deployment from the shared 100. Open no PR from it. The Preview sits behind Vercel's SSO login.
+- **After a merge,** check the production status on the merge commit, as [Releasing](releasing.md#merge-and-tag) says.
+- **The alternative** is Vercel Pro, which allows 6,000 a day. The owner chose to stay on Hobby (above), so an agent doesn't propose the upgrade as a fix.
+
 ### SMTP
 
 Supabase sends auth email through custom SMTP on Resend, at `smtp.resend.com` port 465.

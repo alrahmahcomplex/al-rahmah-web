@@ -453,6 +453,26 @@ test("confetti rains 46 pieces and removes itself", async ({ page }) => {
   await expect(page.locator(".kit-cf")).toHaveCount(0, { timeout: 5_000 })
 })
 
+// A sheet's transform as it enters: read with data-starting-style set, so a slide or scale on entry
+// fails the test even though the sheet settles in place.
+const entryTransform = (sheet: Locator) =>
+  sheet.evaluate((el) => {
+    const had = el.hasAttribute("data-starting-style")
+    el.setAttribute("data-starting-style", "")
+    const t = getComputedStyle(el).transform
+    if (!had) el.removeAttribute("data-starting-style")
+    return t
+  })
+// Centred by translateY(-50%) alone: no scale and no slide.
+const centredInPlace = (sheet: Locator) =>
+  sheet.evaluate((el) => {
+    const had = el.hasAttribute("data-starting-style")
+    el.setAttribute("data-starting-style", "")
+    const m = new DOMMatrixReadOnly(getComputedStyle(el).transform)
+    if (!had) el.removeAttribute("data-starting-style")
+    return { scale: m.a, x: m.e, offBy: Math.round(Math.abs(m.f + (el as HTMLElement).offsetHeight / 2)) }
+  })
+
 test.describe("under reduced motion", () => {
   test.use({ reducedMotion: "reduce" })
 
@@ -468,6 +488,7 @@ test.describe("under reduced motion", () => {
     const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
     await expect(sheet).toHaveCSS("transition-property", "opacity")
     await expect(sheet).toHaveCSS("transform", "none")
+    expect(await entryTransform(sheet)).toBe("none")
   })
 
   test("the centre sheet fades in place, and so does the bottom sheet on a phone", async ({ page }) => {
@@ -476,15 +497,7 @@ test.describe("under reduced motion", () => {
     await page.locator('[data-part="more"]').getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
     const review = page.getByRole("dialog", { name: "Sibling · 10%" })
     await expect(review).toHaveCSS("transition-property", "opacity")
-    // Centred by translateY(-50%) alone: no scale and no slide.
-    await expect
-      .poll(() =>
-        review.evaluate((el) => {
-          const m = new DOMMatrixReadOnly(getComputedStyle(el).transform)
-          return { scale: m.a, x: m.e, offBy: Math.round(Math.abs(m.f + (el as HTMLElement).offsetHeight / 2)) }
-        }),
-      )
-      .toEqual({ scale: 1, x: 0, offBy: 0 })
+    expect(await centredInPlace(review)).toEqual({ scale: 1, x: 0, offBy: 0 })
     await page.keyboard.press("Escape")
     await expect(review).toHaveCount(0)
 
@@ -493,6 +506,7 @@ test.describe("under reduced motion", () => {
     const record = page.getByRole("dialog", { name: "Rehema Said Abdallah" })
     await expect(record).toHaveCSS("transition-property", "opacity")
     await expect(record).toHaveCSS("transform", "none")
+    expect(await entryTransform(record)).toBe("none")
   })
 })
 
@@ -510,6 +524,13 @@ test("with html.rm, sheets fade in place, the toast does not rise and confetti i
   const side = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
   await expect(side).toHaveCSS("transition-property", "opacity")
   await expect(side).toHaveCSS("transform", "none")
+  expect(await entryTransform(side)).toBe("none")
+  await page.keyboard.press("Escape")
+  await expect(side).toHaveCount(0)
+  await more.getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
+  const review = page.getByRole("dialog", { name: "Sibling · 10%" })
+  await expect(review).toHaveCSS("transition-property", "opacity")
+  expect(await centredInPlace(review)).toEqual({ scale: 1, x: 0, offBy: 0 })
   await page.keyboard.press("Escape")
   await expect(side).toHaveCount(0)
 

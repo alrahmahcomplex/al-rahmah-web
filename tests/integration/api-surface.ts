@@ -837,6 +837,23 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
+  // Check-in of an Admission form family (#305).
+  "public.complete_admission_visit(visited_on date, people jsonb, students jsonb)": {
+    roles: ["authenticated"],
+    setup:
+      "insert into public.guardian_contacts (id, full_name, relationship, phone, origin) values ('c0a70000-0000-4000-8000-000000000305', 'Sample Form Parent', 'Mother', public.normalize_phone('0689999002'), 'admission_form'); " +
+      "insert into public.leads (id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id) values ('1ead0000-0000-4000-8000-000000000305', 'ADMSN-30599', 'Sample Pupil Surface', 'KG 1', extract(year from public.tanzania_today())::int + 1, 'Day', 'Applied', 'c0a70000-0000-4000-8000-000000000305'); " +
+      "insert into public.admission_submissions (submission_key, payload_hash, child_count, contact_id, outcomes) values ('5b305000-0000-4000-8000-000000000305', repeat('a', 64), 1, 'c0a70000-0000-4000-8000-000000000305', '{\"0\": {\"result\": \"created\", \"lead_id\": \"1ead0000-0000-4000-8000-000000000305\", \"admission_number\": \"ADMSN-30599\"}}')",
+    args: {
+      visited_on: "current_date",
+      people: `'[{"contact_id": "c0a70000-0000-4000-8000-000000000305"}]'::jsonb`,
+      students: `jsonb_build_array(jsonb_build_object(
+        'lead_id', '1ead0000-0000-4000-8000-000000000305',
+        'first_name', 'Sample', 'fathers_name', 'Pupil', 'last_name', 'Surface',
+        'custodian', jsonb_build_object('person', 1, 'relationship', 'Mother')))`,
+    },
+    agent: { refused: "not_permitted" },
+  },
   "public.reject_family_match(lead_id uuid, expected_lead_ids uuid[])": {
     roles: ["authenticated"],
     args: {

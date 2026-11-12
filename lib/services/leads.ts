@@ -460,6 +460,143 @@ export async function registerStudents(
   }
 }
 
+// Check-in of an Admission form family (#305): records the visit for the
+// children of one Admission form submission and completes what the form did
+// not ask or the family did not give, all or nothing. The class, year and
+// Day or Boarding the family gave stay as they are, so a child carries only
+// its lead and the answers staff confirm or complete. A brought-by or
+// previous school left out keeps what the lead holds. People, questions and
+// duplicates work as on the New Student form.
+export type CheckInStudent = Pick<
+  RegistrationStudent,
+  | "firstName"
+  | "fathersName"
+  | "lastName"
+  | "surname"
+  | "custodian"
+  | "broughtBy"
+  | "previousSchool"
+  | "siblingOf"
+  | "notASibling"
+  | "siblingFatherFullName"
+  | "nameAnswer"
+  | "requestNote"
+  | "requestId"
+> & { leadId: string }
+
+export type CompleteAdmissionVisitInput = {
+  visitDate: string
+  people: RegistrationPerson[]
+  students: CheckInStudent[]
+}
+
+export type CompleteAdmissionVisitOutcome =
+  | { kind: "completed"; students: RegisteredStudent[] }
+  | { kind: "questions"; questions: RegistrationQuestion[] }
+
+export type CompleteAdmissionVisitError =
+  | Exclude<RegisterStudentsError, { kind: "invalid" }>
+  // `lead_id` reasons: `not_admission_form`, `other_submission`,
+  // `not_found`, `repeated_on_form`. `sibling_of` adds `already_linked`;
+  // `fathers_name` adds `linked_member`.
+  | { kind: "invalid"; field: RegistrationInvalidField | "lead_id" | null; student?: number; person?: number; reason?: string }
+  // The child's visit is recorded already.
+  | { kind: "not-applied"; student?: number }
+
+// The New Student form's payload without the class, year and Day or
+// Boarding, which the family gave already.
+function checkInPayload(student: CheckInStudent) {
+  const payload: Record<string, unknown> = {
+    lead_id: student.leadId,
+    ...studentPayload({ ...student, className: "KG 1", enrollmentYear: 0, dayOrBoarding: "Day" }),
+  }
+  delete payload.class_name
+  delete payload.enrollment_year
+  delete payload.day_or_boarding
+  return payload
+}
+
+export async function completeAdmissionVisit(
+  supabase: SupabaseClient,
+  input: CompleteAdmissionVisitInput,
+): Promise<Result<CompleteAdmissionVisitOutcome, CompleteAdmissionVisitError>> {
+  const args = {
+    visited_on: input.visitDate,
+    people: input.people.map(personPayload),
+    students: input.students.map(checkInPayload),
+  }
+
+  let attempt = 0
+  for (;;) {
+    attempt += 1
+    const { data, error } = await supabase.rpc("complete_admission_visit", args)
+    if (error) {
+      if (error.code === "40001" && attempt < 3) continue
+      const detail = detailOf(error.details)
+      const student = numberOrUndefined(detail.student)
+      if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: { kind: "forbidden" } }
+      if (error.message === "lead_closed") return { ok: false, error: { kind: "lead-closed", student } }
+      if (error.message === "not_applied") return { ok: false, error: { kind: "not-applied", student } }
+      if (error.message === "invalid" || error.message === "not_found" || error.code === "22P02") {
+        return {
+          ok: false,
+          error: {
+            kind: "invalid",
+            field:
+              typeof detail.field === "string"
+                ? (detail.field as RegistrationInvalidField | "lead_id")
+                : error.message === "not_found"
+                  ? "sibling_of"
+                  : null,
+            student,
+            person: numberOrUndefined(detail.person),
+            reason: typeof detail.reason === "string" ? detail.reason : undefined,
+          },
+        }
+      }
+      console.error("Could not complete the visit", error)
+      return { ok: false, error: { kind: "unavailable" } }
+    }
+
+    const row = data as
+      | Exclude<RegisterRow, { result: "created" }>
+      | { result: "completed"; students: Extract<RegisterRow, { result: "created" }>["students"] }
+    switch (row.result) {
+      case "duplicate":
+        return {
+          ok: false,
+          error: {
+            kind: "duplicate",
+            duplicates: row.duplicates.map((d) => ({
+              student: d.student,
+              id: d.lead_id,
+              admissionNumber: d.admission_number,
+              status: d.status,
+              closure: d.closure,
+            })),
+          },
+        }
+      case "questions":
+        return { ok: true, data: { kind: "questions", questions: row.questions.map(questionOf) } }
+      case "completed":
+        return {
+          ok: true,
+          data: {
+            kind: "completed",
+            students: row.students.map((s) => ({
+              student: s.student,
+              leadId: s.lead_id,
+              admissionNumber: s.admission_number,
+              sibling: s.sibling
+                ? { basis: s.sibling.basis, groupId: s.sibling.group_id, requestId: s.sibling.request_id }
+                : null,
+            })),
+          },
+        }
+    }
+  }
+}
+
 export type Lead = {
   id: string
   admissionNumber: string

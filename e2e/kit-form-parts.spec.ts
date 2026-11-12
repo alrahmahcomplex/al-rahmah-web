@@ -207,7 +207,7 @@ test.describe("the date field", () => {
     expect(await axeProblems(page, ".kit-cal-pop")).toEqual([])
 
     // Today has focus and the outline; the next month cannot be reached; tomorrow is greyed out.
-    const todayButton = cal.locator(`[data-day="${today.iso}"]`)
+    const todayButton = cal.locator(`button[data-day="${today.iso}"]`)
     await expect(todayButton).toBeFocused()
     await expect(todayButton).toHaveAttribute("aria-current", "date")
     await expect(cal.getByRole("button", { name: "Next month" })).toBeDisabled()
@@ -227,7 +227,7 @@ test.describe("the date field", () => {
     expect((await posted(card)).paid_on).toBe(weekAgo)
 
     await open.click()
-    await expect(cal.locator(`[data-day="${weekAgo}"]`)).toBeFocused()
+    await expect(cal.locator(`button[data-day="${weekAgo}"]`)).toBeFocused()
     // PageUp moves a month back.
     const shownMonth = (await cal.locator(".kit-cal-title").textContent())!
     await page.keyboard.press("PageUp")
@@ -298,7 +298,7 @@ test.describe("in a time zone behind UTC", () => {
 
     await card.locator(".kit-dsc").getByRole("button", { name: "Open the calendar" }).click()
     const cal = page.getByRole("dialog", { name: "Choose a date" })
-    await expect(cal.locator('[data-day="2026-10-31"]')).toBeFocused()
+    await expect(cal.locator('button[data-day="2026-10-31"]')).toBeFocused()
     // The next day is in the next month.
     await page.keyboard.press("ArrowRight")
     await expect(cal.locator(".kit-cal-title")).toHaveText("November 2026")

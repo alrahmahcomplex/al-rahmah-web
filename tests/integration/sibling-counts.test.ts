@@ -9,6 +9,7 @@ import { recordInterviewResult, registerForInterview } from "@/lib/services/inte
 import { declineLead } from "@/lib/services/lead-closure"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import { createLead, type LeadClass, type NewContact } from "@/lib/services/leads"
+import { adjustPayment } from "@/lib/services/payment-adjustments"
 import { recordPayment } from "@/lib/services/school-fee-payments"
 import {
   explainSiblingGroup,
@@ -137,7 +138,7 @@ async function waitingChild(year: number, to: string, name = father()) {
   return id
 }
 
-async function payInFull(leadId: string) {
+async function payInFull(leadId: string): Promise<string> {
   const fee = await getLeadFee(await signedIn(ADMISSIONS), leadId)
   if (!fee.ok || fee.data.kind !== "fee") throw new Error(`no fee: ${JSON.stringify(fee)}`)
   const paid = await recordPayment(
@@ -147,6 +148,7 @@ async function payInFull(leadId: string) {
     randomUUID(),
   )
   if (!paid.ok) throw new Error(`payment failed: ${paid.error}`)
+  return paid.data.paymentId
 }
 
 async function ask(leadId: string) {
@@ -400,6 +402,23 @@ describe("the fee counts (payments.view)", () => {
     ).toBe(true)
     expect(await explain(alone.cheap)).toMatchObject({ reason: "enrolled_ten_no_full", becauseOf: [] })
     expect((await feeCounts(year)).enrolledTenNoFull).toEqual({ count: 1, leadIds: [alone.cheap] })
+
+    // A payment correction takes the full payer out of Enrolled: it keeps its
+    // fixed full result, but nobody is Enrolled at full and it is not a full
+    // payer still to enrol.
+    const corrected = await together(year)
+    await payInFull(corrected.cheap)
+    const dearPayment = await payInFull(corrected.dear)
+    const voided = await adjustPayment(
+      await signedIn(ACCOUNTANT),
+      dearPayment,
+      { reason: "Duplicate entry", void: true, note: null },
+      randomUUID(),
+    )
+    expect(voided.ok).toBe(true)
+    expect(await explain(corrected.dear)).toMatchObject({ reason: "locked_not_enrolled", lockedResult: "full", status: "Interviewed" })
+    expect(await explain(corrected.cheap)).toMatchObject({ reason: "enrolled_ten_no_full", becauseOf: [] })
+    expect((await feeCounts(year)).enrolledTenNoFull).toEqual({ count: 2, leadIds: sorted([alone.cheap, corrected.cheap]) })
     expect(await breaks(year)).toEqual([])
   })
 
@@ -607,5 +626,28 @@ describe("the invariant check", () => {
     ])
     expect(manual.filter((b) => b.lead_id === enrolled)).toEqual([])
     expect(await breaks(year)).toEqual([])
+  })
+
+  test("a group that spans two years is checked whole from either year", async () => {
+    const year = await yearWithSchedule()
+    const otherYear = await yearWithSchedule()
+    const { dear, cheap, group } = await together(year)
+    await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [cheap, otherYear]))
+    expect(await breaks(year)).toEqual([])
+    expect(await breaks(otherYear)).toEqual([])
+
+    for (const checked of [year, otherYear]) {
+      const found = await inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        await sql.query("update public.lead_sibling_results set result = 'full' where lead_id = $1", [cheap])
+        return (await sql.query<Break>("select kind, group_id, lead_id, detail from public.sibling_invariant_breaks($1)", [checked])).rows
+      })
+      expect(found).toEqual(
+        expect.arrayContaining([
+          { kind: "two_auto_full_payers", group_id: group, lead_id: null, detail: { lead_ids: sorted([dear, cheap]) } },
+          expect.objectContaining({ kind: "auto_full_not_full_payer", lead_id: cheap }),
+        ]),
+      )
+    }
   })
 })

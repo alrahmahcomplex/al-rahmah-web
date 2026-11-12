@@ -50,7 +50,8 @@
 --    payments.view, and are null otherwise.
 --
 -- 3. sibling_invariant_breaks(year): every broken invariant among the leads
---    of a year, for the integration suite. Internal. It looks for two
+--    of a year and the other members of their groups (a group may span
+--    years), for the integration suite. Internal. It looks for two
 --    automatic full payers in a group, an automatic full result on a member
 --    that isn't the stored full payer, an automatic 10% with no counting
 --    sibling, a result fixed at enrolment changed without a manual source,
@@ -518,6 +519,10 @@ begin
                   and s.status = 'Enrolled' and (o.legacy or public.sibling_basis_counts(o.basis))
                 order by rs.locked_at nulls last, s.id
             );
+            -- The full payer as sibling_rule_result counts it for its
+            -- siblings: not legacy, counting, open, not yet Enrolled, and
+            -- never Enrolled (one out of Enrolled since a payment correction
+            -- keeps its fixed result and pays nobody's place).
             payer_waiting := grp.full_payer_lead_id is not null
                 and grp.full_payer_lead_id <> mem.lead_id
                 and exists (
@@ -525,8 +530,13 @@ begin
                     from public.sibling_group_members o
                     join public.leads s on s.id = o.lead_id
                     where o.lead_id = grp.full_payer_lead_id and o.group_id = own_group
-                      and (o.legacy or public.sibling_basis_counts(o.basis))
+                      and not o.legacy
+                      and public.sibling_basis_counts(o.basis)
                       and s.status not in ('Enrolled', 'Declined') and s.closure is null
+                      and not exists (
+                          select 1 from public.lead_sibling_results rp
+                          where rp.lead_id = s.id and rp.locked_result is not null
+                      )
                 );
 
             code := case
@@ -684,10 +694,21 @@ begin
     stable
     set search_path = ''
     as $fn$
+        -- The year's leads, and every member of a group one of them is in:
+        -- a group may span years, and its invariants hold group-wide.
         with in_year as (
             select l.*
             from public.leads l
-            where sibling_invariant_breaks.year is null or l.enrollment_year = sibling_invariant_breaks.year
+            where sibling_invariant_breaks.year is null
+               or l.enrollment_year = sibling_invariant_breaks.year
+               or exists (
+                   select 1
+                   from public.sibling_group_members m
+                   join public.sibling_group_members o on o.group_id = m.group_id
+                   join public.leads y on y.id = o.lead_id
+                   where m.lead_id = l.id and m.group_id is not null
+                     and y.enrollment_year = sibling_invariant_breaks.year
+               )
         ),
         results as (
             select l.id as lead_id, l.status, l.closure, r.result, r.source, r.locked_result,

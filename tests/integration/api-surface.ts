@@ -1530,10 +1530,10 @@ export const POLICIES: Record<string, PolicyEntry> = {
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
     check: null,
   },
-  "public.sibling_fee_edits: Staff who may view leads read Sibling fee edits": {
+  "public.sibling_fee_edits: Staff who may view payments read Sibling fee edits": {
     command: "SELECT",
     roles: ["authenticated"],
-    using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
     check: null,
   },
 }

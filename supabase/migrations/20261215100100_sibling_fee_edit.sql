@@ -131,18 +131,20 @@ begin
     create index sibling_fee_edits_lead_id_idx on public.sibling_fee_edits (lead_id);
     create index sibling_fee_edits_staff_id_idx on public.sibling_fee_edits (staff_id);
 
-    -- Reads only, for staff who may view leads, as lead_sibling_results.
+    -- Reads only, for staff who may view payments: 'changes' holds fees,
+    -- instalments and Seat priority, which lead_school_fee and seat_check show
+    -- only with payments.view.
     alter table public.sibling_fee_edits enable row level security;
 
-    create policy "Staff who may view leads read Sibling fee edits"
+    create policy "Staff who may view payments read Sibling fee edits"
         on public.sibling_fee_edits for select
         to authenticated
-        using ((select public.has_permission('leads.view')));
+        using ((select public.has_permission('payments.view')));
 
     revoke insert, update, delete, truncate on public.sibling_fee_edits from anon, authenticated, service_role;
 
     insert into public.audit_scopes (table_name, scope, lead_id_column) values
-        ('public.sibling_fee_edits', 'lead', 'lead_id');
+        ('public.sibling_fee_edits', 'payment', 'lead_id');
 
     create trigger audit_row_change
         after insert or update on public.sibling_fee_edits

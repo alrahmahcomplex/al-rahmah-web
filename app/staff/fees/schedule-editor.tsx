@@ -2,13 +2,12 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Field, Note } from "@/components/kit"
 import { BAND_NAMES, FEE_BANDS, type FeeAmounts, type FeeBand, type FeeField } from "@/lib/services/fees"
 
 import { saveSchedule } from "./actions"
+import { DateInput } from "./date-input"
+import { FieldLabel } from "./field-label"
 import type { SaveScheduleOutcome } from "./outcome"
 import { bandClasses, INSTALMENTS } from "./format"
 
@@ -90,8 +89,8 @@ export function ScheduleEditor({
   // tables never show empty in between.
   if (amounts === null) {
     return (
-      <div className="flex flex-col gap-4">
-        <p className="text-sm text-slate-700">No fee schedule for {year} yet. Enter every amount below to create it.</p>
+      <div className="fs-stack">
+        <p className="fs-text">No fee schedule for {year} yet. Enter every amount below to create it.</p>
         <ScheduleForm
           year={year}
           amounts={null}
@@ -116,11 +115,12 @@ export function ScheduleEditor({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="fs-stack">
+      <div className="fs-bar">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
+          size="small"
           onClick={() => {
             setSaved(null)
             setEditing(true)
@@ -128,7 +128,7 @@ export function ScheduleEditor({
         >
           Edit amounts
         </Button>
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="fs-saved">
           {saved}
         </p>
       </div>
@@ -172,21 +172,21 @@ function ScheduleForm({
   return (
     <form
       aria-label={`Fee schedule ${year}`}
-      className="flex max-w-2xl flex-col gap-6"
+      className="fs-form"
       noValidate
       onSubmit={(event) => {
         event.preventDefault()
         save()
       }}
     >
-      <fieldset className="flex flex-col gap-4">
-        <legend className="mb-1 text-sm font-semibold text-slate-900">Annual school fees, in TZS</legend>
+      <fieldset>
+        <legend className="fs-legend">Annual school fees, in TZS</legend>
         {FEE_BANDS.map((band) => (
-          <fieldset key={band} className="flex flex-col gap-2">
-            <legend className="text-sm font-medium">
-              {BAND_NAMES[band]} <span className="font-normal text-muted-foreground">({bandClasses(band)})</span>
+          <fieldset key={band}>
+            <legend className="fs-sublegend">
+              {BAND_NAMES[band]} <small>({bandClasses(band)})</small>
             </legend>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="fs-two">
               <AmountField
                 label={`${BAND_NAMES[band]} Day fee`}
                 shortLabel="Day"
@@ -208,42 +208,40 @@ function ScheduleForm({
         ))}
       </fieldset>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-sm font-semibold text-slate-900">Instalments</legend>
+      <fieldset>
+        <legend className="fs-legend">Instalments</legend>
         {INSTALMENTS.map(([label, key]) => (
-          <div key={key} className="grid grid-cols-[6rem_minmax(0,1fr)] gap-3">
-            <TextField
+          <div key={key} className="fs-instalment">
+            <AmountField
               label={`${label} instalment share (%)`}
               shortLabel={`${label} (%)`}
-              inputMode="numeric"
               value={draft.split[key]}
               invalid={invalid(`${key}_share`, "split")}
               onChange={(share) => setDraft({ ...draft, split: { ...draft.split, [key]: share } })}
             />
-            <TextField
+            <DateField
               label={`${label} instalment due date`}
               shortLabel="Due date"
-              type="date"
               value={draft.dueDates[key]}
               invalid={invalid(`${key}_due`)}
               onChange={(due) => setDraft({ ...draft, dueDates: { ...draft.dueDates, [key]: due } })}
             />
           </div>
         ))}
-        <p className="text-xs text-muted-foreground" aria-live="polite">
+        <p className="fs-hint" aria-live="polite">
           The three shares must add up to 100%.{shareTotal !== null && ` Now: ${shareTotal}%.`}
         </p>
       </fieldset>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-1 text-sm font-semibold text-slate-900">Deposit and programmes, in TZS</legend>
+      <fieldset>
+        <legend className="fs-legend">Deposit and programmes, in TZS</legend>
         <AmountField
           label="Minimum Initial deposit"
           value={draft.minimumDeposit}
           invalid={invalid("minimum_deposit")}
           onChange={(minimumDeposit) => setDraft({ ...draft, minimumDeposit })}
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="fs-two">
           <AmountField
             label="Pre-Form One programme Day fee"
             shortLabel="Pre-Form One, Day"
@@ -262,16 +260,16 @@ function ScheduleForm({
       </fieldset>
 
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal.message} Nothing was saved.</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">
+          {refusal.message} Nothing was saved.
+        </Note>
       )}
-      <div className="flex gap-2">
+      <div className="fs-actions">
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : amounts === null ? "Create schedule" : "Save"}
         </Button>
         {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
             Cancel
           </Button>
         )}
@@ -280,52 +278,42 @@ function ScheduleForm({
   )
 }
 
-// A labelled input. The visible label can be shorter than the accessible one
-// where the group's heading already says the rest.
-function TextField({
-  label,
-  shortLabel,
-  value,
-  invalid,
-  onChange,
-  type = "text",
-  inputMode,
-}: {
+type FieldProps = {
   label: string
   shortLabel?: string
   value: string
   invalid: true | undefined
   onChange: (value: string) => void
-  type?: "text" | "date"
-  inputMode?: "numeric"
-}) {
+}
+
+// An amount, share or count: whole numbers, right-aligned with tabular
+// figures, as the tables show them.
+function AmountField({ label, shortLabel, value, invalid, onChange }: FieldProps) {
   const id = useId()
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <Label htmlFor={id}>
-        {shortLabel ? (
-          <>
-            <span aria-hidden>{shortLabel}</span>
-            <span className="sr-only">{label}</span>
-          </>
-        ) : (
-          label
-        )}
-      </Label>
-      <Input
+    <div className="fs-field">
+      <FieldLabel htmlFor={id} label={label} shortLabel={shortLabel} />
+      <Field
         id={id}
-        type={type}
-        inputMode={inputMode}
+        size="compact"
+        inputMode="numeric"
         autoComplete="off"
-        className="tabular-nums"
+        className="fs-money"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        aria-invalid={invalid}
+        invalid={invalid}
       />
     </div>
   )
 }
 
-function AmountField(props: Omit<React.ComponentProps<typeof TextField>, "type" | "inputMode">) {
-  return <TextField {...props} inputMode="numeric" />
+// A due date, through the one date-field boundary (./date-input).
+function DateField({ label, shortLabel, value, invalid, onChange }: FieldProps) {
+  const id = useId()
+  return (
+    <div className="fs-field">
+      <FieldLabel htmlFor={id} label={label} shortLabel={shortLabel} />
+      <DateInput id={id} value={value} invalid={invalid} onChange={onChange} />
+    </div>
+  )
 }

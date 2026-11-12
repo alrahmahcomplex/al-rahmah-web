@@ -3,14 +3,12 @@
 import { useRouter } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Field, Note } from "@/components/kit"
 import type { AcademicYearField, AcademicYearSettings, SeatSetting } from "@/lib/services/fees"
 import { DAY_OR_BOARDING, LEAD_CLASSES, type DayOrBoarding, type LeadClass } from "@/lib/services/leads"
 
 import { saveAcademicYear } from "./actions"
+import { DateInput } from "./date-input"
 import type { AcademicYearOutcome } from "./outcome"
 
 type Refused = Extract<AcademicYearOutcome, { status: "refused" }>
@@ -86,11 +84,12 @@ export function AcademicYearEditor({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="fs-stack">
+      <div className="fs-bar">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
+          size="small"
           onClick={() => {
             setSaved(null)
             setEditing(true)
@@ -98,7 +97,7 @@ export function AcademicYearEditor({
         >
           Edit start and seats
         </Button>
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="fs-saved">
           {saved}
         </p>
       </div>
@@ -148,40 +147,41 @@ function AcademicYearForm({
   return (
     <form
       aria-label={`Academic year ${year}`}
-      className="flex max-w-md flex-col gap-6"
+      className="fs-form"
+      data-width="narrow"
       noValidate
       onSubmit={(event) => {
         event.preventDefault()
         save()
       }}
     >
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={startId}>Academic-year start</Label>
-        <Input
+      <div className="fs-field">
+        <label htmlFor={startId} className="fs-label">
+          Academic-year start
+        </label>
+        <DateInput
           id={startId}
-          type="date"
           min={`${year}-01-01`}
           max={`${year}-01-31`}
-          className="w-44"
           value={draft.start}
-          onChange={(event) => setDraft({ ...draft, start: event.target.value })}
-          aria-invalid={invalid("academic_year_start")}
+          onChange={(start) => setDraft({ ...draft, start })}
+          invalid={invalid("academic_year_start")}
           aria-describedby={`${startId}-hint`}
         />
-        <p id={`${startId}-hint`} className="text-xs text-muted-foreground">
+        <p id={`${startId}-hint`} className="fs-hint">
           A date in January {year}.
         </p>
       </div>
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-sm font-semibold text-slate-900">Seats in each class</legend>
-        <p className="text-xs text-muted-foreground">Leave a class blank while its seats are not set. 0 means no seats.</p>
-        <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] items-center gap-x-3 gap-y-2">
-          <span aria-hidden className="text-xs font-medium text-muted-foreground">
+      <fieldset>
+        <legend className="fs-legend">Seats in each class</legend>
+        <p className="fs-hint">Leave a class blank while its seats are not set. 0 means no seats.</p>
+        <div className="fs-seats">
+          <span aria-hidden className="fs-seats-head">
             Class
           </span>
           {DAY_OR_BOARDING.map((choice) => (
-            <span key={choice} aria-hidden className="text-xs font-medium text-muted-foreground">
+            <span key={choice} aria-hidden className="fs-seats-head">
               {choice}
             </span>
           ))}
@@ -198,15 +198,15 @@ function AcademicYearForm({
       </fieldset>
 
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal.message} Nothing was saved.</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">
+          {refusal.message} Nothing was saved.
+        </Note>
       )}
-      <div className="flex gap-2">
+      <div className="fs-actions">
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Save"}
         </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
           Cancel
         </Button>
       </div>
@@ -228,23 +228,24 @@ function SeatRow({
   const id = useId()
   return (
     <>
-      <span className="text-sm font-medium">{leadClass}</span>
+      <span className="fs-seats-class">{leadClass}</span>
       {DAY_OR_BOARDING.map((choice) => {
         const key = cellKey(leadClass, choice)
         return (
           <div key={choice}>
-            <Label htmlFor={`${id}-${choice}`} className="sr-only">
+            <label htmlFor={`${id}-${choice}`} className="sr-only">
               {leadClass} {choice} seats
-            </Label>
-            <Input
+            </label>
+            <Field
               id={`${id}-${choice}`}
+              size="compact"
               inputMode="numeric"
               autoComplete="off"
               placeholder="Not set"
-              className="tabular-nums"
+              className="fs-money"
               value={draft.seats[key] ?? ""}
               onChange={(event) => onChange(key, event.target.value)}
-              aria-invalid={invalid(`seats.${key}`)}
+              invalid={invalid(`seats.${key}`)}
             />
           </div>
         )

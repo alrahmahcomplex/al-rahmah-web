@@ -36,15 +36,18 @@ describe("the staff route map", () => {
     expect(Object.keys(ROUTE_LOOKS).filter((pattern) => !pages.has(pattern))).toEqual([])
   })
 
-  it("puts only the converted routes in the new shell (#322, #325, #330)", () => {
+  it("puts only the converted routes in the new shell (#322, #325, #329, #330)", () => {
     expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual([
       "/staff/agents",
       "/staff/agents/import",
       "/staff/applicants/[id]",
+      "/staff/fees",
+      "/staff/fees/[year]",
       "/staff/group-links",
       "/staff/kit",
       "/staff/promo-codes",
       "/staff/reopenings",
+      "/staff/seats",
     ])
   })
 })
@@ -57,6 +60,9 @@ describe("routeFor and lookFor", () => {
     expect(lookFor("/staff/reopenings")).toBe("new")
     expect(lookFor("/staff/applicants/1ead0000-0000-4000-8000-000000000080")).toBe("new")
     expect(lookFor("/staff/applicants/abc/history")).toBe("legacy")
+    expect(lookFor("/staff/fees")).toBe("new")
+    expect(lookFor("/staff/fees/2027")).toBe("new")
+    expect(lookFor("/staff/seats")).toBe("new")
   })
 
   it("keeps a page and the page beneath it apart", () => {

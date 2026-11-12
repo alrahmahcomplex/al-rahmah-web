@@ -121,3 +121,8 @@
 .ag-narrow { max-width: 36rem; }
 .ag-years { gap: 16px; }
 .ag-link-form { max-width: 36rem; gap: 10px; }
+
+.ag-soft { color: var(--gf-ink-soft); }
+/* The table's screen-reader-only words are absolutely placed: the scroll box
+   holds them, so they never widen a phone's page. */
+.ag-table .kit-tw { position: relative; }

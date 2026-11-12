@@ -429,7 +429,7 @@ function Results({
       )}
 
       {agents.length > 0 && (
-        <Card>
+        <Card className="ag-table">
           <AgentsTable
             rows={rows}
             canApprove={canApprove}

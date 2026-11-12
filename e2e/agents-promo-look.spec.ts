@@ -35,6 +35,8 @@ async function shot(page: Page, name: string) {
 async function checkSheet(page: Page, name: string | RegExp, file: string) {
   const sheet = page.getByRole("dialog", { name })
   await expect(sheet).toBeVisible()
+  // The pointer rests where the opener was; a row's hover tint under it is not what the sheet looks like.
+  await page.mouse.move(0, 0)
   expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
   await shot(page, file)
   await page.keyboard.press("Escape")
@@ -112,7 +114,7 @@ for (const width of [1280, 390]) {
 
     test("Send invites on Approved, no account yet", async ({ page }) => {
       // playwright.config.ts sets the invite budget, so the button is on.
-      await open(page, "/staff/agents?account=no_account")
+      await open(page, "/staff/agents?account=no-account")
       expect(await axeProblems(page)).toEqual([])
       await shot(page, `agents-no-account-${width}`)
       await page.getByRole("button", { name: "Send invites" }).click()
@@ -121,7 +123,7 @@ for (const width of [1280, 390]) {
 
     test("the claim queue and Save and send invite", async ({ page }) => {
       const fullName = await waitingClaim()
-      await open(page, "/staff/agents?account=awaiting_confirmation")
+      await open(page, "/staff/agents?account=awaiting-confirmation")
       const card = page.getByRole("region", { name: new RegExp(`^${fullName}`) })
       await expect(card).toBeVisible()
       expect(await axeProblems(page)).toEqual([])

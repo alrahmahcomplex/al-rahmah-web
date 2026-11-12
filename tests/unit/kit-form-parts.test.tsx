@@ -481,6 +481,8 @@ describe("FilePicker", () => {
       </>,
     )
     const input = screen.getByLabelText("CSV file") as HTMLInputElement
+    // Only the input carries the label, so a spec's getByLabel("CSV file") finds one control.
+    expect(screen.getAllByLabelText(/CSV file/)).toHaveLength(1)
     expect(input).toHaveAttribute("type", "file")
     expect(input).toHaveAttribute("name", "file")
     expect(input).toHaveAttribute("accept", ".csv,text/csv")

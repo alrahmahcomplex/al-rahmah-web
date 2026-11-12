@@ -391,12 +391,87 @@ test("the popovers: the bell's new requests and the account menu", async ({ page
   await expect(me).toBeFocused()
 })
 
+// #349: three pieces measured against the prototype (version 13) at the same widths.
+test("on a phone the toast is at most half the window wide and wraps, as the prototype's does", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openKit(page)
+  await page.locator('[data-part="more"]').getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
+  await page.getByRole("dialog", { name: "Sibling · 10%" }).getByRole("button", { name: "Grant the discount" }).click()
+  const toast = page.getByRole("status").filter({ hasText: "Granted for Latifa Omari Juma Hassan. The desk can see it now." })
+  // The prototype: 195px wide, three lines (81px), centred, 24px up.
+  await expect
+    .poll(async () => {
+      const box = (await toast.boundingBox())!
+      return { width: Math.round(box.width), lines: Math.round((box.height - 20) / 20.25), centre: Math.round(box.x + box.width / 2), bottom: Math.round(box.y + box.height) }
+    })
+    .toEqual({ width: 195, lines: 3, centre: 195, bottom: 844 - 24 })
+})
+
+test("a sheet's sections keep the prototype's space around their facts", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 844 })
+  await openKit(page)
+  await page.locator('[data-part="more"]').getByRole("row", { name: "Zuhura Ali Mussa Khamis" }).click()
+  const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
+  await expect(sheet).toHaveCSS("opacity", "1")
+  // The prototype's dl kept the browser's 14px: 14px from the title, then 14px and the 14px padding before the line.
+  const sections = await sheet.locator(".kit-sec").evaluateAll((secs) =>
+    secs.map((sec) => {
+      const title = sec.querySelector(".kit-sec-title")!.getBoundingClientRect()
+      const kv = sec.querySelector(".kit-kv")?.getBoundingClientRect()
+      const box = sec.getBoundingClientRect()
+      return { title: sec.querySelector(".kit-sec-title")!.textContent, toFacts: kv && Math.round(kv.top - title.bottom), after: kv && Math.round(box.bottom - kv.bottom) }
+    }),
+  )
+  expect(sections.slice(0, 2)).toEqual([
+    { title: "Student", toFacts: 14, after: 29 },
+    { title: "Custodian", toFacts: 14, after: 29 },
+  ])
+  // The School fee facts sit 14px above Record payment, as the prototype's do.
+  expect(sections[3]).toMatchObject({ title: "School fee", toFacts: 14 })
+  const gap = await sheet.locator(".kit-sec").nth(3).evaluate((sec) => Math.round(sec.querySelector(".kp-fee-act")!.getBoundingClientRect().top - sec.querySelector(".kit-kv")!.getBoundingClientRect().bottom))
+  expect(gap).toBe(14)
+})
+
+test("the bell's rows sit straight under its title and round to 14px on hover", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await openKit(page)
+  await page.locator('[data-part="more"]').getByRole("region", { name: "Popover" }).getByRole("button", { name: "New requests" }).click()
+  const requests = page.getByRole("dialog", { name: "New requests" })
+  await expect(requests).toHaveCSS("opacity", "1")
+  const row = requests.getByRole("button", { name: /New discount request/ })
+  const [title, first] = await Promise.all([requests.getByRole("heading", { name: "New requests" }).boundingBox(), row.boundingBox()])
+  expect(Math.round(first!.y - (title!.y + title!.height))).toBe(0)
+  await row.hover()
+  await expect(row).toHaveCSS("border-radius", "14px")
+  await expect(row).toHaveCSS("background-color", "rgb(248, 247, 253)")
+})
+
 test("confetti rains 46 pieces and removes itself", async ({ page }) => {
   await openKit(page)
   await page.locator('[data-part="more"]').getByRole("region", { name: "Confetti" }).getByRole("button", { name: "Play it" }).click()
   await expect(page.locator(".kit-cf i")).toHaveCount(46)
   await expect(page.locator(".kit-cf")).toHaveCount(0, { timeout: 5_000 })
 })
+
+// A sheet's transform as it enters: read with data-starting-style set, so a slide or scale on entry
+// fails the test even though the sheet settles in place.
+const entryTransform = (sheet: Locator) =>
+  sheet.evaluate((el) => {
+    const had = el.hasAttribute("data-starting-style")
+    el.setAttribute("data-starting-style", "")
+    const t = getComputedStyle(el).transform
+    if (!had) el.removeAttribute("data-starting-style")
+    return t
+  })
+// Centred by translateY(-50%) alone: no scale and no slide.
+const centredInPlace = (sheet: Locator) =>
+  sheet.evaluate((el) => {
+    const had = el.hasAttribute("data-starting-style")
+    el.setAttribute("data-starting-style", "")
+    const m = new DOMMatrixReadOnly(getComputedStyle(el).transform)
+    if (!had) el.removeAttribute("data-starting-style")
+    return { scale: m.a, x: m.e, offBy: Math.round(Math.abs(m.f + (el as HTMLElement).offsetHeight / 2)) }
+  })
 
 test.describe("under reduced motion", () => {
   test.use({ reducedMotion: "reduce" })
@@ -406,13 +481,71 @@ test.describe("under reduced motion", () => {
     await openKit(page)
     const more = page.locator('[data-part="more"]')
     await more.getByRole("region", { name: "Confetti" }).getByRole("button", { name: "Play it" }).click()
-    await expect(page.locator(".kit-cf")).toHaveCount(0)
+    // Checked at once: the rain would remove itself after 2.4s, so a retrying check could pass anyway.
+    expect(await page.locator(".kit-cf").count()).toBe(0)
 
     await more.getByRole("row", { name: "Zuhura Ali Mussa Khamis" }).click()
     const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
     await expect(sheet).toHaveCSS("transition-property", "opacity")
     await expect(sheet).toHaveCSS("transform", "none")
+    expect(await entryTransform(sheet)).toBe("none")
   })
+
+  test("the centre sheet fades in place, and so does the bottom sheet on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openKit(page)
+    await page.locator('[data-part="more"]').getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
+    const review = page.getByRole("dialog", { name: "Sibling · 10%" })
+    await expect(review).toHaveCSS("transition-property", "opacity")
+    expect(await centredInPlace(review)).toEqual({ scale: 1, x: 0, offBy: 0 })
+    await page.keyboard.press("Escape")
+    await expect(review).toHaveCount(0)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.locator('[data-part="more"]').getByRole("row", { name: "Rehema Said Abdallah" }).click()
+    const record = page.getByRole("dialog", { name: "Rehema Said Abdallah" })
+    await expect(record).toHaveCSS("transition-property", "opacity")
+    await expect(record).toHaveCSS("transform", "none")
+    expect(await entryTransform(record)).toBe("none")
+  })
+})
+
+// The page's own reduced-motion switch, html.rm, works without the OS setting.
+test("with html.rm, sheets fade in place, the toast does not rise and confetti is skipped", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await openKit(page)
+  await page.evaluate(() => document.documentElement.classList.add("rm"))
+  const more = page.locator('[data-part="more"]')
+  await more.getByRole("region", { name: "Confetti" }).getByRole("button", { name: "Play it" }).click()
+  // Checked at once: the rain would remove itself after 2.4s, so a retrying check could pass anyway.
+  expect(await page.locator(".kit-cf").count()).toBe(0)
+
+  await more.getByRole("row", { name: "Zuhura Ali Mussa Khamis" }).click()
+  const side = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
+  await expect(side).toHaveCSS("transition-property", "opacity")
+  await expect(side).toHaveCSS("transform", "none")
+  expect(await entryTransform(side)).toBe("none")
+  await page.keyboard.press("Escape")
+  await expect(side).toHaveCount(0)
+  await more.getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
+  const review = page.getByRole("dialog", { name: "Sibling · 10%" })
+  await expect(review).toHaveCSS("transition-property", "opacity")
+  expect(await centredInPlace(review)).toEqual({ scale: 1, x: 0, offBy: 0 })
+  await page.keyboard.press("Escape")
+  await expect(side).toHaveCount(0)
+
+  await more.getByRole("region", { name: "Toast" }).getByRole("button", { name: "Play it" }).click()
+  const toast = page.locator(".kit-toaster [data-sonner-toast]")
+  await expect(toast).toBeVisible()
+  // The offset a toast enters from: none under html.rm, where it would be 20px below.
+  const entry = await toast.evaluate((el) => {
+    const mounted = el.getAttribute("data-mounted")
+    el.setAttribute("data-mounted", "false")
+    const y = getComputedStyle(el).getPropertyValue("--y").trim()
+    el.setAttribute("data-mounted", mounted ?? "true")
+    return y
+  })
+  expect(entry).toBe("none")
 })
 
 // #321: the guided form on a staff page, played with the prototype's registration questions.

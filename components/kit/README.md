@@ -137,7 +137,7 @@ The kit page's "Guided form" card plays a registration with the prototype's ques
 </Sheet>
 ```
 
-`placement`: `centre` for a review or a confirmation, `side` for a row's record, `bottom` to rise from the bottom everywhere. Under 720px every sheet rises from the bottom. The head (title, `hint`, `chips`, Close) and the foot stay put; only the children scroll. Focus moves to the title, Tab stays inside, Escape and the backdrop close it, and focus returns to whatever opened it. On a phone the foot follows `visualViewport`, so it stays above the keyboard. Keep the sheet mounted and drive `open`, so it can slide out; remount it with a `key` to start a form afresh.
+`placement`: `centre` for a review or a confirmation, `side` for a row's record, `bottom` to rise from the bottom everywhere. Under 720px every sheet rises from the bottom. The head (title, `hint`, `chips`, Close) and the foot stay put; only the children scroll. Focus moves to the title, Tab stays inside, Escape and the backdrop close it, and focus returns to whatever opened it. On a phone the foot follows `visualViewport`, so it stays above the keyboard. Keep the sheet mounted and drive `open`, so it can slide out; remount it with a `key` to start a form afresh. A `KeyValueList` in a sheet keeps 14px above and below it, as the prototype's does.
 
 A small edit on the record opens inline in the sheet's body, not as a second sheet:
 
@@ -163,7 +163,7 @@ It draws the dashed line and the small Save and Cancel; when it closes, focus go
 </Popover>
 ```
 
-`size`: `wide` 340px (the bell), `narrow` 230px (the account menu). It opens below its button, aligned to its end. Tab stays inside; Escape or a click outside closes it and focus returns to the button. `closeLabel` names a Close that only screen readers see.
+`size`: `wide` 340px (the bell), `narrow` 230px (the account menu). It opens below its button, aligned to its end. Rows sit straight under the title, round to 14px on hover and drop the link chevron. Tab stays inside; Escape or a click outside closes it and focus returns to the button. `closeLabel` names a Close that only screen readers see.
 
 ## Toasts and confetti
 
@@ -172,4 +172,4 @@ toast("Fee saved. The change and its reason are in the audit log.")
 rainConfetti()
 ```
 
-`toast` shows one sentence in the Indigo Night pill at the bottom centre for 2.6s; a new one replaces it. It goes to the kit's `Toaster`, which the new shell mounts once; the old shell's toasts keep their look. `rainConfetti` is the finished registration's rain. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, and there is no confetti.
+`toast` shows one sentence in the Indigo Night pill at the bottom centre for 2.6s, at most half the window wide, so on a phone it wraps; a new one replaces it. It goes to the kit's `Toaster`, which the new shell mounts once; the old shell's toasts keep their look. `rainConfetti` is the finished registration's rain. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, and there is no confetti.

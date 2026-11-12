@@ -4,7 +4,7 @@ import Link from "next/link"
 import { forbidden } from "next/navigation"
 import type { ReactNode } from "react"
 
-import { Button, ButtonLink, Card, EmptyState, Field, Note, PageHeader, pageTitle, Table, Tag, type TableColumn } from "@/components/kit"
+import { Button, ButtonLink, Card, EmptyState, Field, Note, PageHeader, pageTitle } from "@/components/kit"
 import { getAgentAccess } from "@/lib/services/agent-access"
 import { accountFilterStates, listAgentsInAccountState, listAgentsInBatchOutcome } from "@/lib/services/agent-account-list"
 import { getAgentImport } from "@/lib/services/agent-import"
@@ -23,19 +23,15 @@ import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
 import { AgentAccessBanner } from "./access-banner"
-import { AccountStateBadge, AgentInviteActions } from "./agent-invite"
-import { AgentStatusActions } from "./agent-status-actions"
-import { ApproveAgent } from "./approve-agent"
 import { ClaimQueue } from "./claim-queue"
 import { CreateAgent } from "./create-agent"
-import { AgentDiscount, type DiscountAgent } from "./discount-sheet"
-import { tzs } from "./discount-outcome"
+import { AgentsTable, type AgentRow } from "./agents-table"
+import type { DiscountAgent } from "./discount-sheet"
 import { Tabs } from "./form-parts"
 import { SendInvites } from "./invite-batch"
 import { budgetLine } from "./invite-batch-outcome"
 import { InviteBatchReportPanel } from "./invite-batch-report"
 import { inviteLine, needsAttention } from "./invite-outcome"
-import { RecreateAgent } from "./recreate-agent"
 import { statusChangeLine } from "./outcome"
 import { StandardDiscount } from "./standard-discount-sheet"
 import { accountParam, agentsHref, outcomeParam, parseAgentSearch, statusParam, type AgentScreenSearch } from "./search-params"
@@ -388,109 +384,37 @@ function Results({
       ? ACCOUNT_EMPTY[search.account]
       : EMPTY[search.status]
 
-  const columns: TableColumn<Agent>[] = [
-    { header: "Name", rowHeader: true, cell: (agent) => agent.fullName },
-    {
-      header: "Phone",
-      cell: (agent) => (
-        <span className="ag-cell">
-          <a href={`tel:${agent.phone}`} className="ag-tel ag-nowrap">
-            {displayPhone(agent.phone)}
-          </a>
-          {agent.whatsapp && <small className="ag-nowrap">WhatsApp {displayPhone(agent.whatsapp)}</small>}
-          {invites?.get(agent.id)?.email && <small>{invites.get(agent.id)?.email}</small>}
-        </span>
-      ),
-    },
-    {
-      header: "Code",
-      cell: (agent) => (
-        <>
-          <span className="ag-mono ag-nowrap">{agent.code}</span>
-          <TypedCodeNote note={signUpNotes?.get(agent.id)} />
-        </>
-      ),
-    },
-    {
-      header: "Status",
-      cell: (agent) => (
-        <span className="ag-cell">
-          <span className="ag-row">
-            <Tag tone={agent.status === "Approved" && !agent.retiredAt ? "ok" : "line"}>{agent.status}</Tag>
-            {agent.retiredAt ? <Tag tone="bad">Retired</Tag> : agent.switchedOffAt && <Tag tone="bad">Switched off</Tag>}
-          </span>
-          {statusChangeLine(agent) && <small>{statusChangeLine(agent)}</small>}
-          <InviteState note={invites?.get(agent.id)} />
-        </span>
-      ),
-    },
-    {
-      header: "Interview discount",
-      // A retired record has no actions left, so its amount is text.
-      cell: (agent) =>
-        standard && !agent.retiredAt ? (
-          <AgentDiscount agent={discountAgent(agent)} standard={standard.amount} canManage={canManageDiscounts} />
-        ) : (
-          <span className="ag-nowrap">
-            <span className="ag-strong ag-num">{tzs(agent.discountAmount)}</span>{" "}
-            <span className="ag-quiet">{agent.interviewDiscount === null ? "standard" : "own amount"}</span>
-          </span>
-        ),
-    },
-    {
-      header: "Registered",
-      cell: (agent) => (
-        <time dateTime={agent.registeredAt} className="ag-nowrap">
-          {WHEN.format(new Date(agent.registeredAt))}
-        </time>
-      ),
-    },
-    {
-      header: "Approved",
-      cell: (agent) =>
-        agent.approvedAt ? (
-          <span className="ag-cell">
-            <span>{agent.approvedBy ?? "Unknown"}</span>
-            <time dateTime={agent.approvedAt} className="ag-small ag-quiet ag-nowrap">
-              {WHEN.format(new Date(agent.approvedAt))}
-            </time>
-          </span>
-        ) : (
-          <span className="ag-quiet">Not yet</span>
-        ),
-    },
-    // How many leads carry the code, so families waiting on the discount can
-    // be put first.
-    { header: "Applicants", align: "end", cell: (agent) => agent.leadCount },
-  ]
-  if (canApprove) {
-    columns.push({
-      header: <span className="sr-only">Actions</span>,
-      // A retired record never changes again.
-      cell: (agent) =>
-        !agent.retiredAt && (
-          <div className="ag-actions">
-            {agent.status === "Pending" && (
-              <ApproveAgent
-                agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
-                email={invites?.get(agent.id)?.email ?? null}
-                emailUnknown={invites === null}
-              />
-            )}
-            <AgentInviteActions
-              agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }}
-              email={invites?.get(agent.id)?.email ?? null}
-              state={invites?.get(agent.id)?.state ?? null}
-              everSent={Boolean(invites?.get(agent.id)?.sentAt)}
-              joined={invites?.get(agent.id)?.joined ?? false}
-              emailUnknown={invites === null}
-            />
-            <AgentStatusActions agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }} switchedOff={agent.switchedOffAt !== null} />
-            <RecreateAgent agent={{ id: agent.id, fullName: agent.fullName, code: agent.code }} />
-          </div>
-        ),
-    })
-  }
+  const rows: AgentRow[] = agents.map((agent) => {
+    const invite = invites?.get(agent.id)
+    return {
+      id: agent.id,
+      fullName: agent.fullName,
+      code: agent.code,
+      phone: agent.phone,
+      phoneShown: displayPhone(agent.phone),
+      whatsappShown: agent.whatsapp ? displayPhone(agent.whatsapp) : null,
+      email: invite?.email ?? null,
+      typedCode: typedCodeNote(signUpNotes?.get(agent.id)),
+      status: agent.status,
+      approved: agent.status === "Approved",
+      retired: agent.retiredAt !== null,
+      switchedOff: agent.switchedOffAt !== null,
+      statusLine: statusChangeLine(agent) || null,
+      invite: invite ? { state: invite.state, line: inviteLine(invite) } : null,
+      discount: discountAgent(agent),
+      discountAmount: agent.discountAmount,
+      onStandard: agent.interviewDiscount === null,
+      registeredAt: agent.registeredAt,
+      registeredShown: WHEN.format(new Date(agent.registeredAt)),
+      approvedBy: agent.approvedBy,
+      approvedAt: agent.approvedAt,
+      approvedShown: agent.approvedAt ? WHEN.format(new Date(agent.approvedAt)) : null,
+      leadCount: agent.leadCount,
+      inviteState: invite?.state ?? null,
+      everSent: Boolean(invite?.sentAt),
+      joined: invite?.joined ?? false,
+    }
+  })
 
   return (
     <section aria-label="Results" className="ag-stack">
@@ -506,7 +430,13 @@ function Results({
 
       {agents.length > 0 && (
         <Card>
-          <Table label="Marketing Agents" columns={columns} rows={agents} rowKey={(agent) => agent.id} />
+          <AgentsTable
+            rows={rows}
+            canApprove={canApprove}
+            standard={standard?.amount ?? null}
+            canManageDiscounts={canManageDiscounts}
+            emailUnknown={invites === null}
+          />
         </Card>
       )}
 
@@ -552,24 +482,14 @@ function discountAgent(agent: Agent): DiscountAgent {
   }
 }
 
-function InviteState({ note }: { note: AgentInviteNote | undefined }) {
-  if (!note) return null
-  return <AccountStateBadge state={note.state} line={inviteLine(note)} />
-}
-
 // A code typed at sign-up that the record didn't get (#193): flagged, never
 // adopted, because someone holds or held it, or students carry it.
-function TypedCodeNote({ note }: { note: SignUpNote | undefined }) {
+function typedCodeNote(note: SignUpNote | undefined): AgentRow["typedCode"] {
   if (!note) return null
   const reasons = [
     note.holder ? `it belongs to ${note.holder.fullName} (${note.holder.code})` : null,
     note.retiredHolder ? "a retired record held it" : null,
     note.leadCount > 0 ? `${note.leadCount} ${note.leadCount === 1 ? "student carries" : "students carry"} it` : null,
   ].filter(Boolean)
-  return (
-    <p className="ag-typed">
-      Typed <span className="ag-mono">{note.typedCode}</span> at sign-up, not used
-      {reasons.length > 0 ? `: ${reasons.join("; ")}` : ""}.
-    </p>
-  )
+  return { code: note.typedCode, reasons: reasons.length > 0 ? `: ${reasons.join("; ")}` : "" }
 }

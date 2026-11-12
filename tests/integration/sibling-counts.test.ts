@@ -228,12 +228,22 @@ function byStaffOf(rows: { staffId: string | null }[], names: StaffCount[]): Sta
 
 const total = (rows: { count: number }[]) => rows.reduce((sum, row) => sum + row.count, 0)
 
+// How many times each key occurs, and a by-staff list as the same shape.
+function tally(keys: (string | null)[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const key of keys) counts[String(key)] = (counts[String(key)] ?? 0) + 1
+  return counts
+}
+const bucketsOf = (rows: StaffCount[]) => Object.fromEntries(rows.map((row) => [String(row.staffId), row.count]))
+
 async function leadCounts(year: number, as: SupabaseClient | null = null): Promise<SiblingLeadCounts> {
   const read = await getSiblingLeadCounts(as ?? (await signedIn(ADMISSIONS)), year)
   if (!read.ok) throw new Error(`lead counts failed: ${read.error}`)
   const { typoConfirmed: typo, previousSchool: school } = read.data
   expect(typo.count).toBe(typo.members.length)
   expect(total(typo.byStaff)).toBe(typo.count)
+  // Each bucket, not only the total, matches the rows it comes with.
+  expect(bucketsOf(typo.byStaff)).toEqual(tally(typo.members.map((m) => m.staffId)))
   expect([school.notKnown, school.missing]).toEqual([school.notKnownLeadIds.length, school.missingLeadIds.length])
   expect(school.count).toBe(school.notKnown + school.missing)
 
@@ -263,6 +273,13 @@ async function feeCounts(year: number, as: SupabaseClient | null = null): Promis
   expect(feeEdits.count).toBe(feeEdits.edits.length)
   expect(total(feeEdits.byStaff)).toBe(feeEdits.count)
   expect(Object.values(feeEdits.byReason).reduce((a, b) => a + b, 0)).toBe(feeEdits.count)
+  expect(bucketsOf(feeEdits.byStaff)).toEqual(tally(feeEdits.edits.map((e) => e.staffId)))
+  expect(feeEdits.byReason).toEqual({
+    full_fee_sibling_not_enrolled: 0,
+    sibling_proof_after_enrolment: 0,
+    data_entry_correction: 0,
+    ...tally(feeEdits.edits.map((e) => e.reason)),
+  })
   expect(keptTen.count).toBe(keptTen.leadIds.length)
   expect(enrolledTenNoFull.count).toBe(enrolledTenNoFull.leadIds.length)
   expect(feeEditNeeded.count).toBe(feeEditNeeded.requests.length)

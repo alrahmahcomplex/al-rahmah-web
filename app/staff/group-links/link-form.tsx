@@ -1,11 +1,10 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Field } from "@/components/kit"
 import type { SetGroupLinkError } from "@/lib/services/group-links"
 import { saveGroupLink } from "./actions"
+import "../agents/agents.css"
 
 const errors: Record<SetGroupLinkError, string> = {
   forbidden: "You do not have permission to save group links.",
@@ -19,7 +18,7 @@ export function LinkForm({ year, saved }: { year: number; saved: string | null }
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   return (
-    <form aria-label={`Group link ${year}`} className="flex max-w-xl flex-col gap-3" action={(form) => {
+    <form aria-label={`Group link ${year}`} className="ag-field ag-link-form" action={(form) => {
       startTransition(async () => {
         setMessage(null)
         try {
@@ -30,12 +29,12 @@ export function LinkForm({ year, saved }: { year: number; saved: string | null }
         }
       })
     }}>
-      <Label htmlFor="group-link">WhatsApp group link</Label>
-      <Input id="group-link" name="link" type="url" required maxLength={200} defaultValue={saved ?? ""}
+      <label htmlFor="group-link" className="ag-label">WhatsApp group link</label>
+      <Field id="group-link" name="link" type="url" size="compact" alignStart required maxLength={200} defaultValue={saved ?? ""}
         placeholder="https://chat.whatsapp.com/…" aria-describedby="replace-note" disabled={pending} />
-      <p id="replace-note" className="text-sm text-muted-foreground">Replacing the link only affects new invitations. Families already invited still hold the earlier link.</p>
-      {message && <p role={message.ok ? "status" : "alert"} className={`text-sm ${message.ok ? "text-foreground" : "text-destructive"}`}>{message.text}</p>}
-      <Button type="submit" disabled={pending} className="self-start">{pending ? "Saving…" : "Save link"}</Button>
+      <p id="replace-note" className="ag-hint">Replacing the link only affects new invitations. Families already invited still hold the earlier link.</p>
+      {message && <p role={message.ok ? "status" : "alert"} className={message.ok ? "ag-p" : "ag-error"}>{message.text}</p>}
+      <div><Button type="submit" pending={pending}>{pending ? "Saving…" : "Save link"}</Button></div>
     </form>
   )
 }

@@ -23,6 +23,8 @@ export type SheetProps = {
   title: ReactNode
   /** A Slate Quiet line under the title; it also describes the dialog. */
   hint?: ReactNode
+  /** The hint's id, so a field inside can name it with aria-describedby. */
+  hintId?: string
   /** Chips under the title, such as the record's status. */
   chips?: ReactNode
   /** The 36px Close button's name. */
@@ -59,7 +61,7 @@ function useKeyboardInset(active: boolean) {
  * Escape and the backdrop close it; focus moves to the title, stays inside,
  * and returns to the opener. On a phone the foot stays above the keyboard.
  */
-export function Sheet({ open, onOpenChange, placement = "centre", title, hint, chips, closeLabel, foot, children, className }: SheetProps) {
+export function Sheet({ open, onOpenChange, placement = "centre", title, hint, hintId, chips, closeLabel, foot, children, className }: SheetProps) {
   const titleRef = useRef<HTMLHeadingElement>(null)
   const inset = useKeyboardInset(open)
   const style = inset ? ({ "--kit-kb": `${inset.cover}px`, "--kit-vvh": `${inset.height}px` } as CSSProperties) : undefined
@@ -73,7 +75,11 @@ export function Sheet({ open, onOpenChange, placement = "centre", title, hint, c
             <Dialog.Title ref={titleRef} tabIndex={-1} className="kit-sheet-title">
               {title}
             </Dialog.Title>
-            {hint && <Dialog.Description className="kit-sheet-hint">{hint}</Dialog.Description>}
+            {hint && (
+              <Dialog.Description id={hintId} className="kit-sheet-hint">
+                {hint}
+              </Dialog.Description>
+            )}
             {chips && <div>{chips}</div>}
             <Dialog.Close render={<RoundButton icon="x" label={closeLabel} size={36} className="kit-sheet-x" />} />
           </div>

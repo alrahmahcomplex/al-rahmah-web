@@ -307,8 +307,13 @@ begin
     -- stand, oldest lead on a tie; the other becomes a later sibling, which
     -- can only lower its fee. Pending Sibling requests about from_group now
     -- ask about into_group. The caller holds both groups' locks and
-    -- recomputes both. Taken out of link_sibling (20261213100100) unchanged.
-    -- Internal.
+    -- recomputes both. Taken out of link_sibling (20261213100100) unchanged,
+    -- except that it first locks, in id order, every Pending Sibling request
+    -- this merge or the caller's later withdrawal may write: those about
+    -- either group and those of, or naming, a lead in either group or the
+    -- moving lead. Two merges of unrelated groups can share such a request
+    -- (one asks to bring A into C, another C into A), and updating them in
+    -- statement order would deadlock. Internal.
     create function public.merge_sibling_groups(from_group uuid, into_group uuid, moving_lead uuid)
     returns void
     language plpgsql
@@ -321,6 +326,21 @@ begin
         px_ok boolean;
         pt_ok boolean;
     begin
+        perform 1
+        from public.discount_requests r
+        where r.kind = 'sibling' and r.state = 'pending'
+          and (r.group_id in (merge_sibling_groups.from_group, merge_sibling_groups.into_group)
+               or r.merge_from_group_id in (merge_sibling_groups.from_group, merge_sibling_groups.into_group)
+               or r.lead_id = merge_sibling_groups.moving_lead
+               or r.sibling_of_lead_id = merge_sibling_groups.moving_lead
+               or exists (
+                   select 1 from public.sibling_group_members m
+                   where m.group_id in (merge_sibling_groups.from_group, merge_sibling_groups.into_group)
+                     and m.lead_id in (r.lead_id, r.sibling_of_lead_id)
+               ))
+        order by r.id
+        for update of r;
+
         select g.full_payer_lead_id into pt from public.sibling_groups g where g.id = merge_sibling_groups.into_group;
         select g.full_payer_lead_id into px from public.sibling_groups g where g.id = merge_sibling_groups.from_group;
         select exists (

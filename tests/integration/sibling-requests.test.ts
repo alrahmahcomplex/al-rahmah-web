@@ -521,6 +521,52 @@ describe("merges", () => {
     expect(await membershipOf(waiting)).toEqual({ group_id: second.group, basis: "granted" })
     expect(await feeOf(waiting)).toMatchObject({ schoolFee: tenOff(KG1), discount: SIBLING })
   })
+
+  test("a merge locks the Pending requests it moves in id order, so two merges sharing them can't deadlock", async () => {
+    const year = await yearWithSchedule()
+    const nameA = father()
+    const nameC = father()
+    const a = await pair(year, nameA)
+    const c = await pair(year, nameC)
+    // Two requests between the same two groups, one each way.
+    const aIntoC = await ask(a.b, c.a)
+    const cIntoA = await ask(c.b, a.a)
+
+    // Merging A moves cIntoA first (it asks about A), then aIntoC; merging C
+    // the other way round. Merge the side whose first move is the higher id,
+    // while the lower id is held elsewhere.
+    const [low, high] = [aIntoC, cIntoA].sort()
+    const fromA = cIntoA === high
+    const from = fromA ? a : c
+    const into = await pair(year, fromA ? nameA : nameC)
+
+    await inRolledBackTransaction(async (holder) => {
+      await holder.query("select id from public.discount_requests where id = $1 for update", [low])
+      const xid = (await holder.query<{ xid: string }>("select pg_current_xact_id()::text as xid")).rows[0].xid
+      const merging = link({ leadId: from.b, siblingOfLeadId: into.a })
+      for (let tries = 0; ; tries++) {
+        const { rows } = await holder.query<{ n: number }>(
+          "select count(*)::int as n from pg_locks where locktype = 'transactionid' and transactionid::text = $1 and not granted",
+          [xid],
+        )
+        if (rows[0].n > 0) break
+        if (tries > 100) throw new Error("the merge never waited")
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      // It holds the higher request free while it waits for the lower one.
+      const free = await inRolledBackTransaction(async (other) => {
+        await other.query("set local lock_timeout = '200ms'")
+        return (await other.query("select id from public.discount_requests where id = $1 for update", [high])).rowCount
+      })
+      expect(free).toBe(1)
+      await holder.query("rollback")
+      await holder.query("begin")
+      expect(await merging).toMatchObject({ kind: "linked", groupId: into.group })
+    })
+    for (const id of [aIntoC, cIntoA]) {
+      expect((await requestsOf(id === aIntoC ? a.b : c.b)).find((r) => r.id === id)).toMatchObject({ state: "pending" })
+    }
+  })
 })
 
 describe("across groups", () => {

@@ -83,13 +83,30 @@ The parts from prototype version 18 (the card "Form parts on the student’s rec
 - **Select:** a 44px pill that opens our own list, as wide as the field, below it or above when there is no room. `placeholder` is the empty field's words and the quiet heading in the list, never a choice. `""` can be a real option ("Anyone"): the field shows the placeholder only when no option has its value. Escape closes the list only, so it works inside a `Sheet` or a `Popover`. It is a combobox with options, not a menu.
 - **The date parts' contract:** `onChange(value, { unreadable })` gives "YYYY-MM-DD" (or the datetime-local value), and "" with `unreadable: true` while the field holds text that is not a date. Never save while `unreadable` is true. In a `<form>` the part blocks the submit itself, `noValidate` forms and form actions included (its own submit listener runs before React’s `onSubmit`); a save that is not a form submit, such as a button’s `onClick`, must check `unreadable` itself.
 - **DateField:** typed day first (DD/MM/YYYY), with our calendar behind the button; a pasted "2026-09-05" is read too. Half-typed text stays. While the text cannot be read, the field is invalid (its own line, never the browser's bubble, and focus moves to it on submit), and a form that skips validation posts `unreadable:` and the text, which every date action refuses. `min` and `max` grey out days and month arrows and hide "Today" when today is outside them; a typed date outside them is posted as typed, for the server to refuse. Text that is not a date shows "Type the date as day/month/year…" once the person leaves the field.
-- **DateTimeField:** the date, then a 104px 24-hour time; "930" becomes "09:30". It posts the datetime-local value, and "" when both halves are empty; a half that is wrong, or missing while the other is filled, shows its own sentence and blocks the submit. `id` names the date; pass the visible label's id as `aria-labelledby` for the group.
+- **DateTimeField:** the date, then a 104px 24-hour time; "930" becomes "09:30". It posts the datetime-local value, and "" when both halves are empty; a half that is wrong, or missing while the other is filled, shows its own sentence and blocks the submit. `id` goes on the date input, so a `<label htmlFor>` names only that input; name the date and time together by passing the label's id as `aria-labelledby`:
+
+  ```tsx
+  <span id="at-label">Contacted at</span>
+  <DateTimeField id="at" name="contacted_at" aria-labelledby="at-label" />
+  {/* the group is "Contacted at"; its inputs are "Date" and "Time, 24-hour clock" */}
+  ```
 - **Calendar:** the month grid open in a box, `mode="day"` or `"week"`. `onPick` gets the clicked day; a caller that keeps weeks turns it into its Monday (`mondayOf` in `dates.ts`).
 - **Checkbox and Switch:** with `label`, the whole row is the target; without it, name the box with a `<label htmlFor={id}>`. A tick box is saved with its form; a switch takes effect at once, with no Save button.
 - **Disclosure:** `plain` (chevron first) or `boxed`. `open` opens or closes it from outside; the person can still fold it after. Closed content is inert; a field inside that stops its form from being sent opens it.
 - **FilePicker:** a real file input inside the area, so `required` and the form's post work. Drop a file on it or press Choose file.
 - They are built on the primitives themselves (base-ui Select, Checkbox, Switch and Popover; react-day-picker), not on `components/ui/*`, on purpose: those files carry lucide icons and shadcn styles the kit cannot use. Do not swap them back.
 - These parts carry their own fixed words (the two messages, the calendar's names) in `DATE_WORDS`; pass `words` to change one.
+
+What the browser no longer checks for you, so the server's own refusal (already there) is what holds:
+
+| Part | Attribute | In the browser |
+|---|---|---|
+| `DateField`, `DateTimeField` | `min`, `max` | Grey out days in the calendar only. A typed date outside them is posted as typed. |
+| `DateField`, `DateTimeField` | `required` | Holds the form with the browser's own message while the field is empty, as a kit `Field` does. |
+| `DateField`, `DateTimeField` | text that is not a date | Holds the form with the part's sentence, `noValidate` forms included (see the contract above). |
+| `Select` | `required` | Holds the form and moves focus to the pill. Whether the browser's own message stays on screen after focus moves there is the browser's choice. |
+| `Select` | `size` | None: one 44px size (version 18). |
+| `FilePicker` | `accept` | Filters the file dialog; a dropped file of another type is still taken. |
 
 Under reduced motion the popups appear at once and the tick and chevrons do not move.
 

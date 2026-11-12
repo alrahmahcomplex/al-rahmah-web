@@ -205,14 +205,14 @@ export function FormPartsCard({ tab }: { tab: string }) {
         <div className="kp-fpc">
           <h3>Choice list</h3>
           <Labelled id={ids.pay} label="Payment type">
-            <Select id={ids.pay} name="payment_type" placeholder="Choose a type" options={PAYMENT_TYPES} />
+            <Select id={ids.pay} name="payment_type" required placeholder="Choose a type" options={PAYMENT_TYPES} />
           </Labelled>
           <p className="kp-spec">Hover is lavender. The chosen item is indigo with a tick.</p>
         </div>
         <div className="kp-fpc">
           <h3>Date</h3>
           <Labelled id={ids.paid} label="Payment date" hint="The day the family paid: today or earlier." hintId={ids.paidHint}>
-            <DateField id={ids.paid} name="paid_on" max={today} aria-describedby={ids.paidHint} />
+            <DateField id={ids.paid} name="paid_on" required max={today} aria-describedby={ids.paidHint} />
           </Labelled>
           <div className="kp-fld">
             <span className="kp-fl" id={ids.atLabel}>
@@ -308,6 +308,7 @@ export function ListInPopoverCard() {
   const [period, setPeriod] = useState("all")
   const id = useId()
   const whoId = useId()
+  const fromId = useId()
   return (
     <Card title="Choice list in a popover">
       <div className="kp-rowx">
@@ -324,11 +325,23 @@ export function ListInPopoverCard() {
           </div>
         </Popover>
       </div>
-      <form className="kp-fld" data-kit-form="who" onSubmit={(event) => event.preventDefault()}>
-        <label className="kp-fl" htmlFor={whoId}>
-          Who
-        </label>
-        <Select id={whoId} name="actor" defaultValue="" options={WHO} />
+      {/* As the Audit filter: a plain GET form, sent by the browser with no handler of ours. */}
+      <form method="get" action="/staff/kit" className="kp-fpc" data-kit-form="who" aria-label="Filter the audit">
+        <div className="kp-fld">
+          <label className="kp-fl" htmlFor={fromId}>
+            From
+          </label>
+          <DateField id={fromId} name="from" />
+        </div>
+        <div className="kp-fld">
+          <label className="kp-fl" htmlFor={whoId}>
+            Who
+          </label>
+          <Select id={whoId} name="actor" defaultValue="" options={WHO} />
+        </div>
+        <Button type="submit" size="small" style={{ alignSelf: "flex-start" }}>
+          Apply
+        </Button>
       </form>
     </Card>
   )

@@ -298,6 +298,32 @@ describe("granting and refusing", () => {
     expect(await feeOf(enrolled)).toMatchObject({ schoolFee: STD2 })
   })
 
+  test("a granted member's name corrections ask no typing-mistake question and keep the grant", async () => {
+    const year = await yearWithSchedule()
+    const stem = father()
+    const { a } = await pair(year, `Juma ${stem}`)
+    const granted = await waitingChild(year, a)
+    await grant(await ask(granted))
+    const admissions = await signedIn(ADMISSIONS)
+
+    // Close to the group's name: saved as typed, still granted.
+    const close = await admissions.rpc("update_lead_details", { lead_id: granted, changes: { father_full_name: `Jumaa ${stem}` } })
+    expect(close.error).toBeNull()
+    expect(await membershipOf(granted)).toMatchObject({ basis: "granted" })
+    // A typing-mistake answer has no question to answer.
+    const typo = await admissions.rpc("update_lead_details", {
+      lead_id: granted,
+      changes: { father_full_name: `Jumaa ${stem}`, father_name_answer: "typo", father_name_spelling: `Juma ${stem}` },
+    })
+    expect(typo.error?.message).toBe("invalid")
+    expect(await membershipOf(granted)).toMatchObject({ basis: "granted" })
+
+    // Then a completely different name: the Manager's grant still holds.
+    expect((await admissions.rpc("update_lead_details", { lead_id: granted, changes: { father_full_name: father() } })).error).toBeNull()
+    expect(await membershipOf(granted)).toMatchObject({ basis: "granted" })
+    expect(await feeOf(granted)).toMatchObject({ schoolFee: tenOff(KG1), discount: SIBLING })
+  })
+
   test("the applied path closes the fee edit once, and a decided request changes no other way", async () => {
     const year = await yearWithSchedule()
     const { a } = await pair(year, father())
@@ -550,6 +576,38 @@ describe("across groups", () => {
     }
     expect((await membershipOf(one.a))?.group_id).toBe(one.group)
     expect((await membershipOf(two.a))?.group_id).toBe(two.group)
+
+    // The names now match, so only the refused lead may ask again; that
+    // request's grant lifts its refusal and merges the groups.
+    expect(await requestSiblingDiscount(admissions, { leadId: one.a, note: PROOF, requestId: randomUUID(), siblingOfLeadId: two.a })).toMatchObject({
+      ok: false,
+      error: { kind: "invalid", reason: "names_match" },
+    })
+    await grant(await ask(one.b, two.a))
+    for (const id of [one.a, one.b, two.a, two.b]) {
+      expect((await membershipOf(id))?.group_id).toBe(two.group)
+    }
+    expect(await membershipOf(one.b)).toMatchObject({ basis: "granted" })
+  })
+
+  test("a grant for an Enrolled student across groups leaves its fee alone and marks a fee edit needed", async () => {
+    const year = await yearWithSchedule()
+    const name = father()
+    const enrolled = await child(year, name, "STD 2")
+    await payInFull(enrolled)
+    expect(await lockedOf(enrolled)).toBe("full")
+    const brother = await child(year, name, "KG 1")
+    expect(await link({ leadId: brother, siblingOfLeadId: enrolled })).toMatchObject({ kind: "linked", basis: "matched" })
+    const right = await pair(year, father(), "FORM 1", "KG 1")
+
+    await grant(await ask(enrolled, right.a))
+    expect((await membershipOf(enrolled))?.group_id).toBe(right.group)
+    expect(await feeOf(enrolled)).toMatchObject({ schoolFee: STD2, discount: null })
+    expect(await lockedOf(enrolled)).toBe("full")
+    expect(await requestsOf(enrolled)).toEqual([expect.objectContaining({ state: "granted", acrossGroups: true, feeEdit: "needed" })])
+    // Enrolled at full and counting, it anchors the merged group.
+    expect(await feeOf(right.a)).toMatchObject({ schoolFee: tenOff(FORM1), discount: SIBLING })
+    expect(await feeOf(brother)).toMatchObject({ schoolFee: tenOff(KG1), discount: SIBLING })
   })
 })
 

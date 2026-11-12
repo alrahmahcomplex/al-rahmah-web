@@ -756,8 +756,12 @@ begin
                 -- Alone, it is simply linked (and needs a request in that group).
                 raise exception 'invalid' using detail = jsonb_build_object('field', 'sibling_of', 'reason', 'no_merge')::text;
             end if;
+            -- With matching names it is simply linked, unless its own
+            -- refusal about that group still stands: then only a new
+            -- request's grant brings it in.
             select * into checked from public.sibling_name_check(x.id, x.father_full_name, mt.group_id);
-            if checked.verdict = 'same' then
+            if checked.verdict = 'same'
+               and not public.sibling_refusal_stands(x.id, mt.group_id, public.sibling_group_leads(mt.group_id)) then
                 raise exception 'invalid' using detail = jsonb_build_object('field', 'sibling_of', 'reason', 'names_match')::text;
             end if;
             target_group := mt.group_id;
@@ -814,7 +818,7 @@ begin
     --   across groups  the lead's group is merged into the other lead's,
     --                  the lead counting as `granted`; refused as invalid
     --                  `refused_request` while another refusal stands
-    --                  between the two groups.
+    --                  between the two groups. `fee_edit` as above.
     -- A request whose lead has since moved is refused as invalid `stale`;
     -- it can still be refused. Internal.
     create function public.decide_sibling_request(request_id uuid, granting boolean, reason text)
@@ -875,21 +879,21 @@ begin
 
         perform public.assert_lead_open(request.lead_id);
 
+        -- Fixed at enrolment without the 10%: the fee stays, and the
+        -- Accountant is asked to edit it (S4), on either kind of grant. A
+        -- larger discount replaces the 10% anyway.
+        needs_edit := exists (
+            select 1 from public.lead_sibling_results r
+            where r.lead_id = request.lead_id and r.locked_result is not null and r.result <> 'ten'
+        ) and not exists (
+            select 1 from public.discount_requests d
+            where d.lead_id = request.lead_id and d.state = 'granted' and d.kind in ('staff_child', 'qualified_orphan')
+        );
+
         if request.merge_from_group_id is null then
             if mx.group_id is distinct from request.group_id or mx.legacy or mx.basis not in ('request_needed', 'refused') then
                 raise exception 'invalid' using detail = jsonb_build_object('field', 'request', 'reason', 'stale')::text;
             end if;
-
-            -- Fixed at enrolment without the 10%: the fee stays, and the
-            -- Accountant is asked to edit it (S4). A larger discount
-            -- replaces the 10% anyway.
-            needs_edit := exists (
-                select 1 from public.lead_sibling_results r
-                where r.lead_id = request.lead_id and r.locked_result is not null and r.result <> 'ten'
-            ) and not exists (
-                select 1 from public.discount_requests d
-                where d.lead_id = request.lead_id and d.state = 'granted' and d.kind in ('staff_child', 'qualified_orphan')
-            );
 
             update public.discount_requests r
             set state = 'granted',
@@ -917,7 +921,8 @@ begin
         update public.discount_requests r
         set state = 'granted',
             decided_by = staff_id,
-            decided_at = now()
+            decided_at = now(),
+            fee_edit = case when needs_edit then 'needed' end
         where r.id = request.id;
 
         -- This grant lifts the lead's own refusals about the other group;
@@ -1237,6 +1242,297 @@ begin
     $fn$;
 
     revoke execute on function public.sibling_check_on_father_name_change() from public, anon, authenticated, service_role;
+
+    -- -----------------------------------------------------------------------
+    -- update_lead_details, as 20261213100100 made it. The typing-mistake
+    -- question is now asked only of a member that counts by its name
+    -- (`matched` or `typo_confirmed`), as the check trigger above re-checks
+    -- only those. A `granted` member counts by the Manager's decision, so a
+    -- name edit never turns it into `typo_confirmed` and then
+    -- `request_needed`. Nothing else changes.
+    -- -----------------------------------------------------------------------
+
+    create or replace function public.update_lead_details(lead_id uuid, changes jsonb)
+    returns jsonb
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    declare
+        lead public.leads;
+        contact public.guardian_contacts;
+        pupil_name text;
+        student_class public.lead_class;
+        student_year integer;
+        student_boarding public.day_or_boarding;
+        this_year integer := extract(year from public.tanzania_today());
+        phones text[];
+        match public.leads;
+        brought_name text;
+        brought_phone text;
+        brought_relationship text;
+        school_name text;
+        school_type public.previous_school_type;
+        school_region text;
+        school_not_known boolean;
+        father_name text;
+        father_source public.father_name_source;
+        effective_father text;
+        father_answer text;
+        father_spelling text;
+        member public.sibling_group_members;
+        check_verdict text;
+        check_other_lead uuid;
+        check_other_name text;
+        typo_replaced text;
+        typo_mode boolean := false;
+    begin
+        if auth.role() is distinct from 'authenticated' or not public.has_permission('leads.edit') then
+            raise exception 'not_permitted';
+        end if;
+
+        perform public.lock_lead_family(update_lead_details.lead_id);
+        select * into lead from public.leads l where l.id = update_lead_details.lead_id for update;
+        if not found then
+            raise exception 'not_found';
+        end if;
+        perform public.assert_lead_open(lead.id);
+
+        pupil_name := lead.student_name;
+        if changes ? 'full_name' then
+            pupil_name := btrim(coalesce(changes ->> 'full_name', ''));
+            if pupil_name = '' then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'student_name')::text;
+            end if;
+        end if;
+
+        student_class := lead.class_name;
+        if changes ? 'class_name' then
+            begin
+                student_class := (changes ->> 'class_name')::public.lead_class;
+            exception when invalid_text_representation then
+                student_class := null;
+            end;
+            if student_class is null then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'class_name')::text;
+            end if;
+        end if;
+
+        student_year := lead.enrollment_year;
+        if changes ? 'enrollment_year' then
+            begin
+                student_year := (changes ->> 'enrollment_year')::integer;
+            exception when invalid_text_representation or numeric_value_out_of_range then
+                student_year := null;
+            end;
+            if student_year is null
+               or (student_year <> lead.enrollment_year and student_year not between this_year and this_year + 2) then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'enrollment_year')::text;
+            end if;
+        end if;
+
+        student_boarding := lead.day_or_boarding;
+        if changes ? 'day_or_boarding' then
+            begin
+                student_boarding := (changes ->> 'day_or_boarding')::public.day_or_boarding;
+            exception when invalid_text_representation then
+                student_boarding := null;
+            end;
+            if student_boarding is null then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'day_or_boarding')::text;
+            end if;
+        end if;
+
+        brought_name := lead.brought_by_name;
+        if changes ? 'brought_by_name' then
+            brought_name := nullif(btrim(coalesce(changes ->> 'brought_by_name', '')), '');
+            if char_length(brought_name) > 120 then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'brought_by_name')::text;
+            end if;
+        end if;
+
+        brought_phone := lead.brought_by_phone;
+        if changes ? 'brought_by_phone' then
+            brought_phone := nullif(btrim(coalesce(changes ->> 'brought_by_phone', '')), '');
+            if brought_phone is not null then
+                brought_phone := public.normalize_phone(brought_phone);
+                if brought_phone is null then
+                    raise exception 'invalid' using detail = jsonb_build_object('field', 'brought_by_phone')::text;
+                end if;
+            end if;
+        end if;
+
+        brought_relationship := lead.brought_by_relationship;
+        if changes ? 'brought_by_relationship' then
+            brought_relationship := nullif(btrim(coalesce(changes ->> 'brought_by_relationship', '')), '');
+            if char_length(brought_relationship) > 60 then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'brought_by_relationship')::text;
+            end if;
+        end if;
+
+        if brought_name is null and (brought_phone is not null or brought_relationship is not null) then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'brought_by_name')::text;
+        end if;
+
+        school_name := lead.previous_school_name;
+        if changes ? 'previous_school_name' then
+            school_name := nullif(btrim(coalesce(changes ->> 'previous_school_name', '')), '');
+            if char_length(school_name) not between 2 and 120 then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_name')::text;
+            end if;
+        end if;
+
+        school_type := lead.previous_school_type;
+        if changes ? 'previous_school_type' then
+            if nullif(btrim(coalesce(changes ->> 'previous_school_type', '')), '') is null then
+                school_type := null;
+            else
+                begin
+                    school_type := (changes ->> 'previous_school_type')::public.previous_school_type;
+                exception when invalid_text_representation then
+                    raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_type')::text;
+                end;
+            end if;
+        end if;
+
+        school_region := lead.previous_school_region;
+        if changes ? 'previous_school_region' then
+            if nullif(btrim(coalesce(changes ->> 'previous_school_region', '')), '') is null then
+                school_region := null;
+            else
+                school_region := public.previous_school_region(changes ->> 'previous_school_region');
+                if school_region is null then
+                    raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_region')::text;
+                end if;
+            end if;
+        end if;
+
+        school_not_known := lead.previous_school_not_known;
+        if changes ? 'previous_school_not_known' then
+            if jsonb_typeof(changes -> 'previous_school_not_known') is distinct from 'boolean' then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_not_known')::text;
+            end if;
+            school_not_known := (changes ->> 'previous_school_not_known')::boolean;
+        end if;
+
+        if school_not_known and (school_name is not null or school_type is not null or school_region is not null) then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_not_known')::text;
+        end if;
+        if school_name is not null or school_type is not null or school_region is not null then
+            if school_name is null then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_name')::text;
+            elsif school_type is null then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_type')::text;
+            elsif school_region is null then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'previous_school_region')::text;
+            end if;
+        end if;
+
+        -- The father's full name (#301). Left out, it stays, or follows a
+        -- corrected student name while it was derived or backfilled (the
+        -- derive trigger does that on the update below).
+        father_name := lead.father_full_name;
+        father_source := lead.father_full_name_source;
+        if changes ? 'father_full_name' then
+            father_name := public.clean_father_name(changes ->> 'father_full_name');
+            if father_name is null or char_length(father_name) > 200 then
+                raise exception 'invalid' using detail = jsonb_build_object('field', 'father_full_name')::text;
+            end if;
+            father_source := case
+                when father_name is not distinct from lead.father_full_name
+                     and lead.father_full_name_source in ('edited', 'typo_confirmed')
+                    then lead.father_full_name_source
+                else 'edited'
+            end;
+            effective_father := father_name;
+        elsif pupil_name is distinct from lead.student_name and lead.father_full_name_source in ('derived', 'backfilled') then
+            effective_father := public.derive_father_full_name(pupil_name);
+        else
+            effective_father := lead.father_full_name;
+        end if;
+
+        father_answer := nullif(btrim(coalesce(changes ->> 'father_name_answer', '')), '');
+        if father_answer is not null and father_answer not in ('typo', 'different') then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'father_name_answer')::text;
+        end if;
+
+        -- A new name must not make this child a duplicate of another lead, a
+        -- brother or sister on the same contact included.
+        if public.normalize_student_name(pupil_name) <> lead.student_name_key then
+            select * into contact from public.guardian_contacts g where g.id = lead.guardian_contact_id for share;
+            phones := array[contact.phone, contact.whatsapp];
+            perform public.lock_lead_phones(phones);
+            match := public.find_duplicate_lead(public.normalize_student_name(pupil_name), phones, lead.id);
+            if match.id is not null then
+                return public.duplicate_result(match);
+            end if;
+        end if;
+
+        -- A member that counts by its name, about to get a name close to its
+        -- group's: the typing-mistake question first (S5, R36).
+        select * into member from public.sibling_group_members m where m.lead_id = lead.id;
+        if member.group_id is not null and not member.legacy and member.basis in ('matched', 'typo_confirmed')
+           and public.father_name_match(lead.father_full_name, effective_father) is distinct from 'same' then
+            select c.verdict, c.other_lead_id, c.other_name into check_verdict, check_other_lead, check_other_name
+            from public.sibling_name_check(lead.id, effective_father, member.group_id) c;
+        end if;
+        if check_verdict = 'close' then
+            if father_answer is null then
+                raise exception 'father_name_question' using detail = jsonb_build_object(
+                    'father_full_name', effective_father,
+                    'sibling_lead_id', check_other_lead,
+                    'sibling_father_full_name', check_other_name
+                )::text;
+            elsif father_answer = 'typo' then
+                father_spelling := public.clean_father_name(changes ->> 'father_name_spelling');
+                if father_spelling is null
+                   or not (public.father_name_match(father_spelling, effective_father) = 'same'
+                           or public.father_name_match(father_spelling, check_other_name) = 'same') then
+                    raise exception 'invalid' using detail = jsonb_build_object('field', 'father_name_spelling')::text;
+                end if;
+                typo_replaced := case when public.father_name_match(father_spelling, effective_father) = 'same'
+                                      then check_other_name else effective_father end;
+                father_name := father_spelling;
+                father_source := 'typo_confirmed';
+                typo_mode := true;
+            end if;
+        elsif father_answer is not null then
+            raise exception 'invalid' using detail = jsonb_build_object('field', 'father_name_answer')::text;
+        end if;
+
+        if typo_mode then
+            perform set_config('app.sibling_typo_group', member.group_id::text, true);
+        end if;
+
+        update public.leads l
+        set student_name = pupil_name,
+            class_name = student_class,
+            enrollment_year = student_year,
+            day_or_boarding = student_boarding,
+            brought_by_name = brought_name,
+            brought_by_phone = brought_phone,
+            brought_by_relationship = brought_relationship,
+            previous_school_name = school_name,
+            previous_school_type = school_type,
+            previous_school_region = school_region,
+            previous_school_not_known = school_not_known,
+            father_full_name = father_name,
+            father_full_name_source = father_source
+        where l.id = lead.id;
+
+        if typo_mode then
+            perform public.write_typo_spelling(member.group_id, father_spelling, typo_replaced);
+            update public.sibling_group_members m
+            set basis = 'typo_confirmed', cause = 'father_name', updated_at = now()
+            where m.id = member.id and m.basis is distinct from 'typo_confirmed';
+        end if;
+
+        return jsonb_build_object('result', 'updated');
+    end;
+    $fn$;
+
+    revoke execute on function public.update_lead_details(uuid, jsonb) from public, anon;
+    grant execute on function public.update_lead_details(uuid, jsonb) to authenticated;
 
     -- -----------------------------------------------------------------------
     -- link_sibling, as 20261213100100 made it, now:

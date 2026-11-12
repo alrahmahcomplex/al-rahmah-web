@@ -101,9 +101,9 @@ export function FilePicker({
         type="button"
         className="kit-btn kit-ghost kit-sm"
         disabled={disabled}
-        // The button is what a keyboard reaches; it carries the field's hint, and its name says which file.
+        // The button is what a keyboard reaches, so it carries the field's hint. Its name stays its own words,
+        // so getByLabel finds only the file input (specs call setInputFiles on it).
         aria-describedby={describedBy}
-        aria-label={inputLabel ? `${chooseLabel}: ${inputLabel}` : undefined}
         onClick={() => input.current?.click()}
       >
         <span>{chooseLabel}</span>

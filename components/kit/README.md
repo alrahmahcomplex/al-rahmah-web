@@ -15,6 +15,13 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 | `TextLink` | an underlined `ui/button` `variant="link"` |
 | `Field`, `FieldError` | `ui/input`, `auth-fields` |
 | `ChoiceTiles`, `DefaultTile`, `ChipButtons` | `ui/radio-group`, `ui/select` for a few short options |
+| `Select` | a native `<select>`, `ui/select` |
+| `DateField`, `DateTimeField`, `Calendar` | `<input type="date">`, `datetime-local`, `ui/calendar` |
+| `TextArea` | `ui/textarea` |
+| `Checkbox`, `Switch` | `ui/checkbox` |
+| `Tabs` | hand-made tab links |
+| `Disclosure` | `ui/collapsible`, `<details>` |
+| `FilePicker` | a bare `<input type="file">` |
 | `FilterPills` | `ui/button` toggles, tabs |
 | `StatusChip`, `Tag` | `components/status-chip`, `ui/badge` |
 | `Card`, `TaskCard` | `ui/card` |
@@ -55,6 +62,34 @@ One `go` button per screen (The One Invitation Rule). `pending` keeps the button
 ```
 
 `size`: `full` (52px, 17px), `compact` (44px) or `search` (40px on Lavender Chrome, left-aligned). Compact and search text is 16px under 861px, so iOS does not zoom. `alignStart` for long free text. `FieldError` folds open when it has a message and is a `role="alert"`.
+
+## Form parts
+
+The parts from prototype version 18 (the card "Form parts on the student’s record"). Each works controlled (`value` and its change handler) and uncontrolled inside a plain form (`name` and `defaultValue`), and posts what the native control posts, so no server action changes. Each takes its name from a `<label htmlFor={id}>` the caller places.
+
+```tsx
+<label htmlFor="type">Payment type</label>
+<Select id="type" name="type" placeholder="Choose a type" options={[{ value: "full", label: "Full payment" }]} />
+<DateField id="paid" name="paid_on" max={today} aria-describedby="paid-hint" />   {/* posts "YYYY-MM-DD" */}
+<DateTimeField id="at" name="contacted_at" max={now} aria-labelledby="at-label" />  {/* posts "YYYY-MM-DDTHH:MM" */}
+<TextArea id="why" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+<Checkbox label="Pre-Form One programme" hint="Its fee is charged on its own." checked={on} onCheckedChange={setOn} />
+<Tabs label="Application sections" tabs={tabs} current={href} scroll={false}><TextLink>Clear search</TextLink></Tabs>
+<Disclosure variant="boxed" label="More options" open={hasError}>…</Disclosure>
+<FilePicker id="csv" name="file" accept=".csv,text/csv" required title="Drop the CSV here or choose a file" chooseLabel="Choose file" />
+<RoundButton icon="filter" label="Filter Visited applicants" on={filtered} />
+```
+
+- **Select:** a 44px pill that opens our own list, as wide as the field, below it or above when there is no room. `placeholder` is the empty field's words and the quiet heading in the list, never a choice. `""` can be a real option ("Anyone"): the field shows the placeholder only when no option has its value. Escape closes the list only, so it works inside a `Sheet` or a `Popover`. It is a combobox with options, not a menu.
+- **DateField:** typed day first (DD/MM/YYYY), with our calendar behind the button. `onChange` gets "YYYY-MM-DD" while the text is a real date and "" otherwise; half-typed text stays. `min` and `max` grey out days and month arrows and hide "Today" when today is outside them; a typed date outside them is posted as typed, for the server to refuse. Text that is not a date shows "Type the date as day/month/year…" once the person leaves the field.
+- **DateTimeField:** the date, then a 104px 24-hour time; "930" becomes "09:30". It posts the datetime-local value once both parts are complete, "" otherwise. `id` names the date; pass the visible label's id as `aria-labelledby` for the group.
+- **Calendar:** the month grid open in a box, `mode="day"` or `"week"`. `onPick` gets the clicked day; a caller that keeps weeks turns it into its Monday (`mondayOf` in `dates.ts`).
+- **Checkbox and Switch:** with `label`, the whole row is the target; without it, name the box with a `<label htmlFor={id}>`. A tick box is saved with its form; a switch takes effect at once, with no Save button.
+- **Disclosure:** `plain` (chevron first) or `boxed`. `open` opens or closes it from outside; the person can still fold it after. Closed content is inert.
+- **FilePicker:** a real file input inside the area, so `required` and the form's post work. Drop a file on it or press Choose file.
+- These parts carry their own fixed words (the two messages, the calendar's names) in `DATE_WORDS`; pass `words` to change one.
+
+Under reduced motion the popups appear at once and the tick and chevrons do not move.
 
 ## Choices and filters
 

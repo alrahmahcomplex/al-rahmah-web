@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import type { Client } from "pg"
+import { Client } from "pg"
 import { describe, expect, onTestFinished, test } from "vitest"
 
 import { PERMISSIONS } from "@/lib/permissions"
@@ -626,6 +626,52 @@ describe("who may edit", () => {
       error: { kind: "lead-closed" },
     })
     expect(await previewSiblingFeeEdit(accountant, cheap, "full")).toEqual({ ok: false, error: { kind: "lead-closed" } })
+  })
+
+  test("one request_id used at the same moment on two families is a reused request, and the second edit saves nothing", async () => {
+    const year = await yearWithSchedule()
+    const first = await together(year)
+    const second = await together(year)
+    const requestId = randomUUID()
+    const feeBefore = (await feeOf(second.cheap)).schoolFee
+
+    const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await sql.connect()
+    try {
+      await sql.query("begin")
+      await asStaff(sql, ACCOUNTANT.id, "select public.edit_sibling_fee($1, 'full', 'data_entry_correction', null, $2)", [
+        first.cheap,
+        requestId,
+      ])
+      const pid = (await sql.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0].pid
+
+      // The second edit finds no row for the request yet, and then waits on the first's uncommitted one.
+      const racing = editSiblingFee(
+        await signedIn(ACCOUNTANT),
+        { leadId: second.cheap, value: "full", reason: "data_entry_correction" },
+        requestId,
+      )
+      await inRolledBackTransaction(async (watch) => {
+        for (;;) {
+          const { rows } = await watch.query<{ waiting: boolean }>(
+            "select exists (select 1 from pg_stat_activity where $1 = any(pg_blocking_pids(pid))) as waiting",
+            [pid],
+          )
+          if (rows[0].waiting) return
+          await new Promise((resolve) => setTimeout(resolve, 50))
+        }
+      })
+      await sql.query("commit")
+
+      expect(await racing).toEqual({ ok: false, error: { kind: "request-reused" } })
+    } finally {
+      await sql.query("rollback").catch(() => {})
+      await sql.end()
+    }
+    expect(await editsOf(first.cheap)).toHaveLength(1)
+    expect(await editsOf(second.cheap)).toHaveLength(0)
+    expect(await resultOf(second.cheap)).toMatchObject({ source: "auto", result: "ten" })
+    expect((await feeOf(second.cheap)).schoolFee).toBe(feeBefore)
   })
 })
 

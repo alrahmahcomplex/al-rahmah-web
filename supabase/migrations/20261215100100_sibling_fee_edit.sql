@@ -617,18 +617,26 @@ begin
 
         answer := public.sibling_fee_edit_run(edit_sibling_fee.lead_id, chosen);
 
-        insert into public.sibling_fee_edits (
-            request_id, lead_id, staff_id, value, reason, note,
-            old_result, old_source, new_result, new_source, changes
-        ) values (
-            edit_sibling_fee.request_id, edit_sibling_fee.lead_id, staff_id, chosen, chosen_reason, clean_note,
-            (answer #>> '{old,result}')::public.sibling_result,
-            (answer #>> '{old,source}')::public.sibling_result_source,
-            (answer #>> '{new,result}')::public.sibling_result,
-            (answer #>> '{new,source}')::public.sibling_result_source,
-            answer -> 'changes'
-        )
-        returning id into new_id;
+        -- The locks above serialize retries on one lead. The same request_id
+        -- used at the same moment on another family's lead passes the check
+        -- above and stops here on the unique key: that is a reused request,
+        -- and the whole edit rolls back.
+        begin
+            insert into public.sibling_fee_edits (
+                request_id, lead_id, staff_id, value, reason, note,
+                old_result, old_source, new_result, new_source, changes
+            ) values (
+                edit_sibling_fee.request_id, edit_sibling_fee.lead_id, staff_id, chosen, chosen_reason, clean_note,
+                (answer #>> '{old,result}')::public.sibling_result,
+                (answer #>> '{old,source}')::public.sibling_result_source,
+                (answer #>> '{new,result}')::public.sibling_result,
+                (answer #>> '{new,source}')::public.sibling_result_source,
+                answer -> 'changes'
+            )
+            returning id into new_id;
+        exception when unique_violation then
+            raise exception 'request_reused';
+        end;
 
         if chosen = 'ten' then
             perform public.clear_sibling_fee_edit_needed(edit_sibling_fee.lead_id);

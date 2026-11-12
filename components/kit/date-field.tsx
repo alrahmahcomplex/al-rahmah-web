@@ -39,7 +39,7 @@ const UNREADABLE = "data-kit-unreadable"
  * around it opens (it listens for "kit:reveal"), then the field takes focus.
  */
 function revealFirst(form: HTMLFormElement | null, fallback: HTMLElement) {
-  const first = form?.querySelector<HTMLElement>(`[${UNREADABLE}]`) ?? fallback
+  const first = form?.querySelector<HTMLElement>(`[${UNREADABLE}]:not(:disabled)`) ?? fallback
   first.dispatchEvent(new Event("kit:reveal", { bubbles: true }))
   first.focus()
   // Inside a section that has only just opened, the field can take focus a frame later.
@@ -78,7 +78,8 @@ function useUnreadableGuard(input: RefObject<HTMLInputElement | null>, message: 
       if (!first || first === el) revealFirst(form, el)
     }
     const onSubmit = (event: Event) => {
-      if (!el.hasAttribute(UNREADABLE)) return
+      // A disabled field is not sent, so it never holds its form back (a disabled fieldset included).
+      if (!el.hasAttribute(UNREADABLE) || el.matches(":disabled")) return
       event.preventDefault()
       event.stopImmediatePropagation()
       latest.current()
@@ -368,7 +369,6 @@ export function DateTimeField({ id, value, onChange, name, defaultValue = "", mi
             invalid={dateWrong || !!invalid}
             inputRef={dateRef}
             words={words}
-
             aria-describedby={joinIds(props["aria-describedby"], dateWrong && dateError)}
           />
         </div>

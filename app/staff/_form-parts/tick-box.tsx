@@ -1,9 +1,9 @@
 "use client"
 
-import { Checkbox } from "@/components/ui/checkbox"
+import { Checkbox } from "@/components/kit"
 
-// The tick box, until #358 brings the kit's (see README.md): today's
-// Checkbox. A <label htmlFor={id}> names it.
+// The tick box: the kit's Checkbox (#358), without its own label. A
+// <label htmlFor={id}> beside it names it.
 export function TickBox({
   id,
   checked,
@@ -17,15 +17,5 @@ export function TickBox({
   onCheckedChange: (checked: boolean) => void
   "aria-describedby"?: string
 }) {
-  return (
-    <Checkbox
-      id={id}
-      // Base UI marks a disabled checkbox with data-disabled, not :disabled.
-      className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
-      checked={checked}
-      disabled={disabled}
-      aria-describedby={describedBy}
-      onCheckedChange={(next) => onCheckedChange(next)}
-    />
-  )
+  return <Checkbox id={id} checked={checked} disabled={disabled} aria-describedby={describedBy} onCheckedChange={onCheckedChange} />
 }

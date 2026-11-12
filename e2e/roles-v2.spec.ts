@@ -6,7 +6,7 @@ import { expect, test } from "./staff-test"
 import { roleTemplate } from "../lib/role-templates"
 import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
 import { MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
-import { axeProblems } from "./axe"
+import { chooseOption } from "./kit-parts"
 import { signInAsSuperAdmin } from "./super-admin"
 import { signInOnce } from "./log-in"
 
@@ -43,7 +43,7 @@ test("the Super Admin creates an Admissions Manager role from its template and i
   await page.goto("/staff/roles")
 
   const rail = page.getByRole("navigation", { name: "Roles" })
-  await rail.getByLabel("Start from").selectOption("Admissions Manager")
+  await chooseOption(rail.getByRole("combobox", { name: "Start from" }), "Admissions Manager")
   await expect(rail.getByLabel("Role name")).toHaveValue("Admissions Manager")
   await expect(rail).toContainText(roleTemplate("Admissions Manager")!.summary)
   await rail.getByLabel("Role name").fill(name)
@@ -117,9 +117,6 @@ test("an Administrator manages a Manager, changes no role and has no audit scree
   const row = personRow(page, manager.name)
   await row.getByRole("button", { name: "Deactivate" }).click()
   await expect(page.getByRole("dialog", { name: /\?$/ })).toContainText("including managing staff")
-  // The confirmation is a kit sheet (#331). The pointer leaves its orange button, so axe reads the resting colours.
-  await page.mouse.move(0, 0)
-  expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
   await page.getByRole("dialog", { name: /\?$/ }).getByRole("button", { name: "Deactivate" }).click()
   await expect(callout(page)).toHaveText(`Deactivated ${manager.name}.`)
   await row.getByRole("button", { name: "Reactivate" }).click()

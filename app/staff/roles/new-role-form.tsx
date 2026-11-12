@@ -47,7 +47,6 @@ export function NewRoleForm() {
       <label htmlFor={templateId}>Start from</label>
       <ChoiceList
         id={templateId}
-        size="small"
         value={template}
         aria-describedby={chosen ? summaryId : undefined}
         options={[{ value: "", label: "Blank role" }, ...ROLE_TEMPLATES.map((t) => ({ value: t.name, label: t.name }))]}

@@ -5,6 +5,7 @@ import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 
 import { createThrowawayStaff } from "../tests/support/db"
 import { MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { chooseOption } from "./kit-parts"
 import { signInAsSuperAdmin } from "./super-admin"
 import { signInOnce } from "./log-in"
 
@@ -23,8 +24,7 @@ async function signIn(page: Page, person: FixtureStaff) {
 const visitedPanel = (page: Page) => page.getByRole("region", { name: "Visited applicants" })
 
 async function choose(page: Page, select: string, option: string) {
-  await page.getByRole("combobox", { name: select, exact: true }).click()
-  await page.getByRole("option", { name: option, exact: true }).click()
+  await chooseOption(page.getByRole("combobox", { name: select, exact: true }), option)
 }
 
 test("the Visited applicants tile shows all time by default", async ({ page }) => {

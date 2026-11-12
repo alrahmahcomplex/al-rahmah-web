@@ -1,58 +1,31 @@
 "use client"
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { cn } from "@/lib/utils"
+import { Select } from "@/components/kit"
 
-// The choice list, until #358 brings the kit's (see README.md). Both draw
-// today's control; #358 replaces their insides and no caller changes.
+// The choice list: the kit's Select (#358), one 44px size. Both names stay so
+// the callers keep theirs.
 
 export type ChoiceListOption = { value: string; label: string }
 
-const NATIVE_CLASS = {
-  default:
-    "h-10 w-full min-w-0 staff-touch:h-11 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30",
-  small:
-    "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30",
-}
-
 type Value = { name: string; defaultValue: string; value?: never; onValueChange?: never } | { value: string; onValueChange: (value: string) => void; name?: never; defaultValue?: never }
 
-/** A choice list in a form: today's native select. */
+/** A choice list in a form. */
 export function ChoiceList({
   id,
   options,
-  size = "default",
   disabled,
   "aria-describedby": describedBy,
   ...value
 }: {
   id?: string
   options: ChoiceListOption[]
-  size?: "default" | "small"
   disabled?: boolean
   "aria-describedby"?: string
 } & Value) {
-  return (
-    <select
-      id={id}
-      className={NATIVE_CLASS[size]}
-      disabled={disabled}
-      aria-describedby={describedBy}
-      name={value.name}
-      defaultValue={value.defaultValue}
-      value={value.value}
-      onChange={value.onValueChange ? (event) => value.onValueChange(event.target.value) : undefined}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  )
+  return <Select id={id} options={options} disabled={disabled} aria-describedby={describedBy} {...value} />
 }
 
-/** A choice list that changes something at once, such as a report's period: today's popup select. */
+/** A choice list that changes something at once, such as a report's period. */
 export function MenuChoiceList({
   id,
   options,
@@ -71,20 +44,12 @@ export function MenuChoiceList({
 }) {
   return (
     <Select
-      items={Object.fromEntries(options.map((option) => [option.value, option.label]))}
+      id={id}
+      options={options}
       value={value}
-      onValueChange={(next) => next && onValueChange(next)}
-    >
-      <SelectTrigger id={id} aria-label={label} className={cn(className === "grow" ? "flex-1" : "w-full")}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      onValueChange={onValueChange}
+      aria-label={label}
+      className={className === "grow" ? "rp-grow" : undefined}
+    />
   )
 }

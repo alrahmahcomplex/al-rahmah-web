@@ -20,7 +20,7 @@ export const ROUTE_LOOKS = {
   "/staff/applicants/[id]": "new",
   "/staff/applicants/[id]/history": "new",
   "/staff/applicants/[id]/reopen": "new",
-  "/staff/audit": "legacy",
+  "/staff/audit": "new",
   "/staff/check-in": "legacy",
   "/staff/check-in/new": "legacy",
   "/staff/discounts": "new",
@@ -34,8 +34,8 @@ export const ROUTE_LOOKS = {
   "/staff/re-applications": "new",
   "/staff/re-applications/[id]": "new",
   "/staff/reopenings": "new",
-  "/staff/reports": "legacy",
-  "/staff/roles": "legacy",
+  "/staff/reports": "new",
+  "/staff/roles": "new",
   "/staff/seats": "new",
 } as const satisfies Record<string, Look>
 

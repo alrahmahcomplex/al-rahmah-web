@@ -3,6 +3,7 @@ import { expect, test } from "./staff-test"
 
 import { MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { signInAsSuperAdmin } from "./super-admin"
+import { chooseOption } from "./kit-parts"
 import { logIn } from "./log-in"
 
 // The Super Admin (#237): signs in, reads the system audit, and administers
@@ -23,8 +24,8 @@ test("the Super Admin signs in, reads the audit and filters it", async ({ page }
   await expect(page.getByRole("list", { name: "Audit entries" }).locator(":scope > li").first()).toBeVisible()
 
   // The migration created the role as the system, in staff administration.
-  await page.getByLabel("Who").selectOption("system")
-  await page.getByLabel("Area").selectOption("staff_admin")
+  await chooseOption(page.getByRole("combobox", { name: "Who" }), "System")
+  await chooseOption(page.getByRole("combobox", { name: "Area" }), "Staff administration")
   await page.getByLabel("Record").fill(SUPER_ADMIN.roleId)
   await page.getByRole("button", { name: "Apply" }).click()
   await expect(page).toHaveURL(/area=staff_admin/)

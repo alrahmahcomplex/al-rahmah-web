@@ -35,3 +35,4 @@
 .rp-panel .kit-tw { position: relative; }
 /* Counts, not money: as before the redesign, a long Taken split or "Seats not set" wraps, so the table fits a phone. */
 .rp-panel .kit-tbl td[data-align="end"] { white-space: normal; }
+.rp-grow { flex: 1; min-width: 0; }

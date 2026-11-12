@@ -43,7 +43,7 @@ describe("the staff route map", () => {
     expect(Object.keys(ROUTE_LOOKS).filter((pattern) => !pages.has(pattern))).toEqual([])
   })
 
-  it("puts only the converted routes in the new shell (#322, #323, #324, #325, #326, #327, #328, #329, #330)", () => {
+  it("puts only the converted routes in the new shell (#322, #323, #324, #325, #326, #327, #328, #329, #330, #331)", () => {
     expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual([
       "/staff",
       "/staff/agents",
@@ -52,6 +52,7 @@ describe("the staff route map", () => {
       "/staff/applicants/[id]",
       "/staff/applicants/[id]/history",
       "/staff/applicants/[id]/reopen",
+      "/staff/audit",
       "/staff/discounts",
       "/staff/fees",
       "/staff/fees/[year]",
@@ -63,6 +64,8 @@ describe("the staff route map", () => {
       "/staff/re-applications",
       "/staff/re-applications/[id]",
       "/staff/reopenings",
+      "/staff/reports",
+      "/staff/roles",
       "/staff/seats",
     ])
   })

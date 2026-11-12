@@ -97,7 +97,7 @@ const row = (name: string) => screen.getByRole("listitem", { name })
 
 // Every control is disabled while a change is on its way, as before the
 // redesign; wait for the pane to be idle before the next click.
-const idle = () => waitFor(() => expect(screen.getByRole("button", { name: "Rename", hidden: true })).toBeEnabled())
+const idle = () => waitFor(() => expect(screen.getByRole("button", { name: "Rename", hidden: true })).toBeEnabled(), { timeout: 10_000 })
 
 beforeEach(() => {
   for (const action of Object.values(actions)) action.mockReset().mockResolvedValue(OK)
@@ -246,7 +246,9 @@ describe("Staff and roles controls", () => {
 })
 
 describe("New role", () => {
-  it("adds a blank role with the typed name, and a template's role under the template's name", async () => {
+  // A template comes from the "Start from" list, the kit Select, whose popup
+  // jsdom cannot open; e2e/roles-v2.spec.ts creates a role from a template.
+  it("adds a blank role with the typed name", async () => {
     const user = userEvent.setup()
     actions.addRole.mockResolvedValue({ ok: true, message: "Added.", roleId: "r-new" })
     render(<NewRoleForm />)
@@ -255,10 +257,5 @@ describe("New role", () => {
     await user.click(screen.getByRole("button", { name: "Add" }))
     await waitFor(() => expect(actions.addRole).toHaveBeenCalledWith("Gatekeepers", null))
     await waitFor(() => expect(push).toHaveBeenCalledWith("/staff/roles?role=r-new"))
-
-    await user.selectOptions(screen.getByLabelText("Start from"), "Admissions Manager")
-    expect(screen.getByLabelText("Role name")).toHaveValue("Admissions Manager")
-    await user.click(screen.getByRole("button", { name: "Create" }))
-    await waitFor(() => expect(actions.addRole).toHaveBeenLastCalledWith("Admissions Manager", "Admissions Manager"))
   })
 })

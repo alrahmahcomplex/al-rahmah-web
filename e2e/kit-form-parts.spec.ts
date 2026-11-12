@@ -174,8 +174,15 @@ test.describe("the date field", () => {
     await expect(date).toHaveValue("05/09/2026")
     expect((await posted(card)).paid_on).toBe("2026-09-05")
 
+    // A pasted year-first date is read and tidied too.
+    await date.fill("2027-01-11")
+    await date.blur()
+    await expect(date).toHaveValue("11/01/2027")
+    expect((await posted(card)).paid_on).toBe("2027-01-11")
+
     await date.fill("31/02/2026")
-    expect((await posted(card)).paid_on).toBe("")
+    // Never posted as "no date".
+    expect((await posted(card)).paid_on).toBe("unreadable:31/02/2026")
     await date.blur()
     await expect(card.getByRole("alert").filter({ hasText: WRONG_DATE })).toBeVisible()
     await expect(date).toHaveAttribute("aria-invalid", "true")
@@ -248,7 +255,32 @@ test.describe("the date field", () => {
     await time.blur()
     await expect(card.getByRole("alert").filter({ hasText: WRONG_TIME })).toBeVisible()
     await expect(time).toHaveAttribute("aria-invalid", "true")
-    expect((await posted(card)).contacted_at).toBe("")
+    expect((await posted(card)).contacted_at).toBe(`unreadable:${today.shown}T25:00`)
+  })
+
+  test("a form with an unreadable date does not submit, shows the part's own line and no browser bubble", async ({ page }) => {
+    const card = await openKit(page)
+    const form = card.locator("form[data-kit-form]")
+    await form.evaluate((el: HTMLFormElement) => {
+      el.dataset.submits = "0"
+      el.addEventListener("submit", () => (el.dataset.submits = String(Number(el.dataset.submits) + 1)))
+    })
+    const date = card.getByLabel("Payment date")
+    await date.fill("31/02/2026")
+    let bubble = false
+    page.on("dialog", () => (bubble = true))
+    await form.evaluate((el: HTMLFormElement) => el.requestSubmit())
+    await expect(form).toHaveAttribute("data-submits", "0")
+    await expect(date).toBeFocused()
+    await expect(card.getByRole("alert").filter({ hasText: WRONG_DATE })).toBeVisible()
+    expect(await date.evaluate((el: HTMLInputElement) => el.validationMessage)).toBe(WRONG_DATE)
+    expect(bubble).toBe(false)
+
+    // Cleared, it is a true empty again and the form submits.
+    await date.fill("")
+    await form.evaluate((el: HTMLFormElement) => el.requestSubmit())
+    await expect(form).toHaveAttribute("data-submits", "1")
+    expect((await posted(card)).paid_on).toBe("")
   })
 })
 

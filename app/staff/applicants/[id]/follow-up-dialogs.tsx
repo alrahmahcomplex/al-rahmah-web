@@ -2,22 +2,8 @@
 
 import { useId, useState, useTransition } from "react"
 
+import { Button, ChoiceTiles, Note, Sheet } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
-
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-
 import { CONTACT_METHODS, type ContactStaff } from "@/lib/services/follow-ups"
 import { DECLINE_EXPLANATION_MAX, type DeclinedReason } from "@/lib/services/lead-closure"
 
@@ -25,7 +11,8 @@ import { DECLINE_CONSEQUENCE } from "./decline-lead"
 import { changeLeadFollowUpDate, recordLeadFollowUp, scheduleLeadFollowUp } from "./follow-up-actions"
 import { addDays, type FollowUpOutcome } from "./follow-up-outcome"
 import { tanzaniaNowLocal } from "./follow-up-record-format"
-import { Field, Saved } from "./lead-editors"
+import { Select, TextArea } from "./form-controls"
+import { Field, Input, Saved } from "./lead-editors"
 
 const LOST_REQUEST: FollowUpOutcome = {
   status: "refused",
@@ -66,12 +53,17 @@ export function FollowUpActions({
   // Today as of the dialog opening, so a page left open past midnight in
   // Tanzania offers the same dates the database accepts.
   const [openedOn, setOpenedOn] = useState(today)
+  // A fresh form each time a sheet opens, as when it mounted on opening.
+  const [opening, setOpening] = useState(0)
 
   function openDialog(which: "schedule" | "change" | "record") {
     setSaved(null)
     setOpenedOn(laterOf(today, tanzaniaToday()))
+    setOpening((count) => count + 1)
     setDialog(which)
   }
+
+  const close = () => setDialog(null)
 
   function done(message: string) {
     setDialog(null)
@@ -80,55 +72,54 @@ export function FollowUpActions({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-2">
+      <div className="lr-acts">
         {current ? (
           <>
-            <Button type="button" onClick={() => openDialog("record")}>
+            <Button variant="ghost" size="small" onClick={() => openDialog("record")}>
               Record follow-up
             </Button>
-            <Button type="button" variant="outline" onClick={() => openDialog("change")}>
+            <Button variant="ghost" size="small" onClick={() => openDialog("change")}>
               Change date
             </Button>
           </>
         ) : (
           <>
-            <Button type="button" onClick={() => openDialog("schedule")}>
+            <Button variant="ghost" size="small" onClick={() => openDialog("schedule")}>
               Schedule follow-up
             </Button>
             {/* A contact nobody planned, such as the family phoning in. */}
-            <Button type="button" variant="outline" onClick={() => openDialog("record")}>
+            <Button variant="ghost" size="small" onClick={() => openDialog("record")}>
               Record follow-up
             </Button>
           </>
         )}
       </div>
       <Saved message={saved} />
-      <Dialog open={dialog === "schedule"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent>
-          {dialog === "schedule" && <ScheduleForm leadId={leadId} today={openedOn} onDone={done} />}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={dialog === "change"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent>
-          {dialog === "change" && current && <ChangeDateForm leadId={leadId} today={openedOn} current={current} onDone={done} />}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={dialog === "record"} onOpenChange={(open) => !open && setDialog(null)}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
-          {dialog === "record" && (
-            <RecordForm
-              leadId={leadId}
-              today={openedOn}
-              followUpId={current?.id ?? null}
-              enrolled={enrolled}
-              declineReasons={declineReasons}
-              signedIn={signedIn}
-              contactStaff={contactStaff}
-              onDone={done}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <ScheduleForm key={`schedule-${opening}`} open={dialog === "schedule"} onClose={close} leadId={leadId} today={openedOn} onDone={done} />
+      {current && (
+        <ChangeDateForm
+          key={`change-${opening}`}
+          open={dialog === "change"}
+          onClose={close}
+          leadId={leadId}
+          today={openedOn}
+          current={current}
+          onDone={done}
+        />
+      )}
+      <RecordForm
+        key={`record-${opening}`}
+        open={dialog === "record"}
+        onClose={close}
+        leadId={leadId}
+        today={openedOn}
+        followUpId={current?.id ?? null}
+        enrolled={enrolled}
+        declineReasons={declineReasons}
+        signedIn={signedIn}
+        contactStaff={contactStaff}
+        onDone={done}
+      />
     </div>
   )
 }
@@ -163,32 +154,51 @@ function useSave(onDone: (message: string) => void) {
 function Refused({ refusal }: { refusal: { message: string } | null }) {
   if (!refusal) return null
   return (
-    <Alert variant="destructive" role="alert">
-      <AlertDescription>{refusal.message}</AlertDescription>
-    </Alert>
+    <Note tone="bad" role="alert">
+      {refusal.message}
+    </Note>
   )
 }
 
+// What each follow-up sheet takes besides its form's own props.
+type SheetProps = { open: boolean; onClose: () => void }
+
 const DATE_HINT = "Today or any day up to one year ahead."
 
-function ScheduleForm({ leadId, today, onDone }: { leadId: string; today: string; onDone: (message: string) => void }) {
+function ScheduleForm({
+  open,
+  onClose,
+  leadId,
+  today,
+  onDone,
+}: SheetProps & { leadId: string; today: string; onDone: (message: string) => void }) {
   const [dueOn, setDueOn] = useState(addDays(today, 1))
   const [note, setNote] = useState("")
   const { refusal, pending, save } = useSave(onDone)
+  const formId = useId()
 
   return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title="Schedule follow-up"
+      hint="Plan when the school will next contact this family."
+      closeLabel="Close"
+      foot={
+        <Button type="submit" form={formId} size="wide" pending={pending}>
+          {pending ? "Scheduling…" : "Schedule follow-up"}
+        </Button>
+      }
+    >
     <form
+      id={formId}
       aria-label="Schedule follow-up"
-      className="flex flex-col gap-4"
+      className="lr-form"
       onSubmit={(event) => {
         event.preventDefault()
         save(() => scheduleLeadFollowUp(leadId, dueOn, note))
       }}
     >
-      <DialogHeader>
-        <DialogTitle>Schedule follow-up</DialogTitle>
-        <DialogDescription>Plan when the school will next contact this family.</DialogDescription>
-      </DialogHeader>
       <Refused refusal={refusal} />
       <Field label="Follow-up date" hint={DATE_HINT}>
         {({ id, describedBy }) => (
@@ -207,7 +217,7 @@ function ScheduleForm({ leadId, today, onDone }: { leadId: string; today: string
       </Field>
       <Field label="Note (optional)" hint="What the contact is for. Up to 500 characters.">
         {({ id, describedBy }) => (
-          <Textarea
+          <TextArea
             id={id}
             maxLength={500}
             value={note}
@@ -217,26 +227,25 @@ function ScheduleForm({ leadId, today, onDone }: { leadId: string; today: string
           />
         )}
       </Field>
-      <DialogFooter>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Scheduling…" : "Schedule follow-up"}
-        </Button>
-      </DialogFooter>
     </form>
+    </Sheet>
   )
 }
 
 function ChangeDateForm({
+  open,
+  onClose,
   leadId,
   today,
   current,
   onDone,
-}: {
+}: SheetProps & {
   leadId: string
   today: string
   current: { id: string; dueOn: string }
   onDone: (message: string) => void
 }) {
+  const formId = useId()
   // The form starts from tomorrow: a change has to move the date, and an
   // overdue date can't be kept anyway.
   const [dueOn, setDueOn] = useState(addDays(today, 1) === current.dueOn ? addDays(today, 2) : addDays(today, 1))
@@ -245,9 +254,22 @@ function ChangeDateForm({
   const { refusal, pending, save, refuse } = useSave(onDone)
 
   return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title="Change date"
+      hint="The earlier date and your reason stay in the application's history."
+      closeLabel="Close"
+      foot={
+        <Button type="submit" form={formId} size="wide" pending={pending}>
+          {pending ? "Saving…" : "Change date"}
+        </Button>
+      }
+    >
     <form
+      id={formId}
       aria-label="Change date"
-      className="flex flex-col gap-4"
+      className="lr-form"
       onSubmit={(event) => {
         event.preventDefault()
         if (dueOn === current.dueOn) {
@@ -257,10 +279,6 @@ function ChangeDateForm({
         save(() => changeLeadFollowUpDate(leadId, current.id, dueOn, reason, note))
       }}
     >
-      <DialogHeader>
-        <DialogTitle>Change date</DialogTitle>
-        <DialogDescription>The earlier date and your reason stay in the application&apos;s history.</DialogDescription>
-      </DialogHeader>
       <Refused refusal={refusal} />
       <Field label="New date" hint={DATE_HINT}>
         {({ id, describedBy }) => (
@@ -279,7 +297,7 @@ function ChangeDateForm({
       </Field>
       <Field label="Reason" hint="Why the date is moving, such as the parent is travelling. 3 to 500 characters.">
         {({ id, describedBy }) => (
-          <Textarea
+          <TextArea
             id={id}
             required
             minLength={3}
@@ -293,7 +311,7 @@ function ChangeDateForm({
       </Field>
       <Field label="New note (optional)" hint="Leave empty to keep the current note.">
         {({ id, describedBy }) => (
-          <Textarea
+          <TextArea
             id={id}
             maxLength={500}
             value={note}
@@ -303,17 +321,10 @@ function ChangeDateForm({
           />
         )}
       </Field>
-      <DialogFooter>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : "Change date"}
-        </Button>
-      </DialogFooter>
     </form>
+    </Sheet>
   )
 }
-
-const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
 
 const DECLINE_OUTCOME = "The family will not proceed: decline the application"
 
@@ -323,6 +334,8 @@ const DECLINE_OUTCOME = "The family will not proceed: decline the application"
 // showed, or null for a contact nobody planned; if that has changed by the
 // time this is saved, the database refuses and the form offers a reload.
 function RecordForm({
+  open,
+  onClose,
   leadId,
   today,
   followUpId,
@@ -331,7 +344,7 @@ function RecordForm({
   signedIn,
   contactStaff,
   onDone,
-}: {
+}: SheetProps & {
   leadId: string
   today: string
   followUpId: string | null
@@ -356,14 +369,32 @@ function RecordForm({
   const [declineNote, setDeclineNote] = useState("")
   const { refusal, pending, save, refuse } = useSave(onDone)
   const outcomeName = useId()
+  const formId = useId()
 
   const people = contactStaff ?? [signedIn]
   const choices = people.some((person) => person.id === signedIn.id) ? people : [signedIn, ...people]
 
   return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => !next && onClose()}
+      title="Record follow-up"
+      hint={
+        followUpId
+          ? "What happened when the family was contacted. Recording it completes the current follow-up."
+          : "A contact nobody planned, such as the family phoning in."
+      }
+      closeLabel="Close"
+      foot={
+        <Button type="submit" form={formId} size="wide" pending={pending}>
+          {pending ? "Recording…" : declining ? "Record and decline" : "Record follow-up"}
+        </Button>
+      }
+    >
     <form
+      id={formId}
       aria-label="Record follow-up"
-      className="flex flex-col gap-4"
+      className="lr-form"
       onSubmit={(event) => {
         event.preventDefault()
         if (declining) {
@@ -392,30 +423,22 @@ function RecordForm({
         )
       }}
     >
-      <DialogHeader>
-        <DialogTitle>Record follow-up</DialogTitle>
-        <DialogDescription>
-          {followUpId
-            ? "What happened when the family was contacted. Recording it completes the current follow-up."
-            : "A contact nobody planned, such as the family phoning in."}
-        </DialogDescription>
-      </DialogHeader>
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription className="flex flex-col items-start gap-2">
+        <Note tone="bad" role="alert">
+          <span className="flex flex-col items-start gap-2">
             {refusal.message}
             {/* Someone else recorded or changed the follow-up first. */}
             {refusal.conflict && (
-              <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()}>
+              <Button variant="ghost" size="small" onClick={() => window.location.reload()}>
                 Reload
               </Button>
             )}
-          </AlertDescription>
-        </Alert>
+          </span>
+        </Note>
       )}
       <Field label="Comment" hint="What was discussed. Keep it to what admissions needs.">
         {({ id, describedBy }) => (
-          <Textarea
+          <TextArea
             id={id}
             required
             minLength={3}
@@ -430,9 +453,8 @@ function RecordForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Contact method">
           {({ id }) => (
-            <select
+            <Select
               id={id}
-              className={SELECT_CLASS}
               value={method}
               onChange={(event) => setMethod(event.target.value)}
               aria-invalid={refusal?.field === "method" ? true : undefined}
@@ -442,14 +464,13 @@ function RecordForm({
                   {choice}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </Field>
         <Field label="Made the contact">
           {({ id }) => (
-            <select
+            <Select
               id={id}
-              className={SELECT_CLASS}
               value={contactedBy}
               onChange={(event) => setContactedBy(event.target.value)}
               aria-invalid={refusal?.field === "contacted_by" ? true : undefined}
@@ -459,7 +480,7 @@ function RecordForm({
                   {person.name}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </Field>
       </div>
@@ -478,29 +499,24 @@ function RecordForm({
         )}
       </Field>
       {declineReasons && (
-        <fieldset className="grid gap-2">
-          <legend className="mb-1 text-sm font-medium text-slate-900">Outcome</legend>
-          {([false, true] as const).map((value) => (
-            <Label key={String(value)} className="flex items-center gap-2 font-normal">
-              <input
-                type="radio"
-                name={outcomeName}
-                checked={declining === value}
-                onChange={() => setDeclining(value)}
-                className="size-4 shrink-0 accent-primary"
-              />
-              {value ? DECLINE_OUTCOME : "Plan the next follow-up"}
-            </Label>
-          ))}
-        </fieldset>
+        <ChoiceTiles
+          name={outcomeName}
+          legend={<span className="lr-label">Outcome</span>}
+          layout="rows"
+          options={[
+            { value: "plan", label: "Plan the next follow-up" },
+            { value: "decline", label: DECLINE_OUTCOME },
+          ]}
+          value={declining ? "decline" : "plan"}
+          onChange={(value) => setDeclining(value === "decline")}
+        />
       )}
       {declining && declineReasons ? (
         <>
           <Field label="Declined reason">
             {({ id }) => (
-              <select
+              <Select
                 id={id}
-                className={SELECT_CLASS}
                 value={declineReason}
                 onChange={(event) => setDeclineReason(event.target.value as DeclinedReason | "")}
                 aria-invalid={refusal?.field === "decline_reason" ? true : undefined}
@@ -511,7 +527,7 @@ function RecordForm({
                 {declineReasons.map((choice) => (
                   <option key={choice}>{choice}</option>
                 ))}
-              </select>
+              </Select>
             )}
           </Field>
           <Field
@@ -519,7 +535,7 @@ function RecordForm({
             hint={declineReason === "Other" ? "Required for Other." : "Optional. Anything the reason alone doesn't say."}
           >
             {({ id, describedBy }) => (
-              <Textarea
+              <TextArea
                 id={id}
                 maxLength={DECLINE_EXPLANATION_MAX}
                 value={declineNote}
@@ -529,7 +545,7 @@ function RecordForm({
               />
             )}
           </Field>
-          <p className="text-sm text-muted-foreground">{DECLINE_CONSEQUENCE}</p>
+          <p className="lr-quiet">{DECLINE_CONSEQUENCE}</p>
         </>
       ) : (
         <>
@@ -557,7 +573,7 @@ function RecordForm({
           </Field>
           <Field label="Next follow-up note (optional)" hint="What the next contact is for. Up to 500 characters.">
             {({ id, describedBy }) => (
-              <Textarea
+              <TextArea
                 id={id}
                 maxLength={500}
                 value={nextNote}
@@ -570,11 +586,7 @@ function RecordForm({
           </Field>
         </>
       )}
-      <DialogFooter>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Recording…" : declining ? "Record and decline" : "Record follow-up"}
-        </Button>
-      </DialogFooter>
     </form>
+    </Sheet>
   )
 }

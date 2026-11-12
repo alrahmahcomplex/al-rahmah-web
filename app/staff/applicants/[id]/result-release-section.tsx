@@ -1,6 +1,4 @@
-import { TriangleAlert } from "lucide-react"
-
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Note } from "@/components/kit"
 import { OFFICE_PHONE } from "@/lib/office"
 import { getResultRelease } from "@/lib/services/result-release"
 import { createClient } from "@/utils/supabase/server"
@@ -26,29 +24,26 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
   const repeat = last ? repeatSendText(last, changed) : null
 
   return (
-    <section aria-labelledby="result-release" className="flex max-w-xl flex-col gap-3 border-t pt-3">
-      <h3 id="result-release" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="result-release" className="lr-part">
+      <h3 id="result-release" className="lr-sub">
         Result release
       </h3>
       {!view.ok ? (
-        <Alert variant="destructive">
-          <AlertDescription>The result release could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The result release could not be loaded. Try again in a moment.</Note>
       ) : (
         <>
           {view.data.interviewId !== null && (
-            <p className="text-sm text-slate-900">
+            <p className="lr-text">
               {view.data.latestRelease ? releaseLine(view.data.latestRelease) : "Not sent yet."}
             </p>
           )}
           {changed && last && (
-            <Alert role="note" aria-label="Changed since sent" className="border-amber-300 bg-amber-50 text-amber-900">
-              <TriangleAlert aria-hidden="true" />
-              <AlertDescription className="text-amber-900">{changedSinceSentText(last)}</AlertDescription>
-            </Alert>
+            <div role="note" aria-label="Changed since sent">
+              <Note tone="wait">{changedSinceSentText(last)}</Note>
+            </div>
           )}
           {view.data.blocked !== null ? (
-            <p className="text-sm text-muted-foreground">{blockedText(view.data.blocked, view.data.amountOwed)}</p>
+            <p className="lr-quiet">{blockedText(view.data.blocked, view.data.amountOwed)}</p>
           ) : !view.data.offer || !view.data.interviewId ? null : view.data.offer.channel === "whatsapp" &&
             view.data.offer.whatsappMessage ? (
             <SendResult
@@ -60,14 +55,14 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
               repeat={repeat}
               whatsappPreview={
                 <>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="lr-quiet">
                     By WhatsApp to {spacedPhone(view.data.offer.whatsappPhone ?? "")}. Check the name and score; the
                     wording is fixed.
                   </p>
                   <div
                     role="group"
                     aria-label="Message preview"
-                    className="max-h-96 overflow-y-auto rounded-lg bg-muted p-3 text-sm break-words whitespace-pre-wrap text-slate-900"
+                    className="lr-quote max-h-96 overflow-y-auto"
                   >
                     {view.data.offer.whatsappMessage}
                   </div>
@@ -76,7 +71,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
             />
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
+              <p className="lr-quiet">
                 {view.data.offer.channel === "whatsapp"
                   ? "The names on this application make the message too long for WhatsApp, so it goes by SMS. Check the student's and the parent's names."
                   : "None of the parent's numbers can take a WhatsApp link, so the result goes by SMS."}{" "}

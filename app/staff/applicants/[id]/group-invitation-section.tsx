@@ -1,7 +1,6 @@
 import Link from "next/link"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { buttonVariants } from "@/components/ui/button"
+import { ButtonLink, Note } from "@/components/kit"
 import { getGroupInvitation, type GroupInvitationView } from "@/lib/services/group-invitations"
 import { createClient } from "@/utils/supabase/server"
 
@@ -20,23 +19,21 @@ export async function GroupInvitationSection({ lead, open }: LeadPanelProps) {
   const view = await getGroupInvitation(await createClient(), lead.id)
 
   return (
-    <section aria-labelledby="group-invitation" className="flex max-w-xl flex-col gap-3">
-      <h2 id="group-invitation" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="group-invitation" className="lr-card">
+      <h2 id="group-invitation" className="kit-card-title">
         WhatsApp group invitation
       </h2>
       {!view.ok ? (
-        <Alert variant="destructive">
-          <AlertDescription>The group invitation could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The group invitation could not be loaded. Try again in a moment.</Note>
       ) : (
         <>
           {view.data.latest ? (
             <div className="flex flex-col gap-1">
-              <p className="text-sm text-slate-900">{sentLine(view.data.latest)}</p>
-              {view.data.latest.earlierLink && <p className="text-sm font-medium text-amber-700">{EARLIER_LINK_TEXT}</p>}
+              <p className="lr-text">{sentLine(view.data.latest)}</p>
+              {view.data.latest.earlierLink && <p className="lr-warn font-medium">{EARLIER_LINK_TEXT}</p>}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No invitation sent yet.</p>
+            <p className="lr-quiet">No invitation sent yet.</p>
           )}
           {open && view.data.canSend && <Offer leadId={lead.id} view={view.data} />}
         </>
@@ -47,14 +44,14 @@ export async function GroupInvitationSection({ lead, open }: LeadPanelProps) {
 
 function Offer({ leadId, view }: { leadId: string; view: GroupInvitationView }) {
   if (view.blocked === "not_visited") {
-    return <p className="text-sm text-muted-foreground">The invitation can be sent once the family has visited.</p>
+    return <p className="lr-quiet">The invitation can be sent once the family has visited.</p>
   }
   if (view.blocked === "no_link") {
     return (
       <div>
-        <Link href={`/staff/group-links?year=${view.year}`} className={buttonVariants({ variant: "outline" })}>
+        <ButtonLink href={`/staff/group-links?year=${view.year}`} variant="ghost" size="small">
           No group link saved for {view.year}: save one
-        </Link>
+        </ButtonLink>
       </div>
     )
   }
@@ -62,9 +59,9 @@ function Offer({ leadId, view }: { leadId: string; view: GroupInvitationView }) 
   if (view.blocked !== null || !offer) return null
   if (offer.message === null) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="lr-quiet">
         The {view.year} group link makes the message too long for WhatsApp. Check it under{" "}
-        <Link href={`/staff/group-links?year=${view.year}`} className="underline underline-offset-4">
+        <Link href={`/staff/group-links?year=${view.year}`} className="lr-link">
           WhatsApp groups
         </Link>
         .
@@ -74,7 +71,7 @@ function Offer({ leadId, view }: { leadId: string; view: GroupInvitationView }) 
 
   return (
     <>
-      <p className="text-sm text-muted-foreground">
+      <p className="lr-quiet">
         {offer.channel === "whatsapp"
           ? `To the WhatsApp number ${spacedPhone(offer.phone ?? "")}. The wording is fixed.`
           : offer.channel === "phone"
@@ -84,7 +81,7 @@ function Offer({ leadId, view }: { leadId: string; view: GroupInvitationView }) 
       <div
         role="group"
         aria-label="Invitation preview"
-        className="max-h-96 overflow-y-auto rounded-lg bg-muted p-3 text-sm break-words whitespace-pre-wrap text-slate-900"
+        className="lr-quote max-h-96 overflow-y-auto"
       >
         {offer.message}
       </div>

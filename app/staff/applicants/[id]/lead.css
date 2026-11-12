@@ -1,0 +1,84 @@
+/* The lead record (DESIGN.md, Components): its header, the card grid, and the
+   forms and lists inside its cards and sheets. Tokens only. */
+
+/* ---------- header ---------- */
+.lr-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px 18px; }
+.lr-head-who { display: flex; flex: 1 1 320px; min-width: 0; align-items: flex-start; gap: 14px; }
+.lr-initials {
+  display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 50%;
+  background: var(--gf-indigo); color: var(--gf-paper); font: italic 800 16px var(--font-exo), "Exo", system-ui, sans-serif;
+}
+.lr-head-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.lr-head-title .kit-ph-title { overflow-wrap: anywhere; }
+.lr-since { color: var(--gf-quiet); font-size: 13px; }
+.lr-meta { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; color: var(--gf-ink-soft); font-size: 14px; }
+.lr-number { font-weight: 600; color: var(--gf-ink); font-variant-numeric: tabular-nums; }
+.lr-head-act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ---------- page and cards ---------- */
+.lr-page { display: flex; flex-direction: column; gap: 24px; }
+.lr-grid { display: grid; gap: 24px; align-items: start; }
+@media (min-width: 1000px) {
+  .lr-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .lr-grid > .lr-wide { grid-column: 1 / -1; }
+}
+.lr-card { display: flex; flex-direction: column; gap: 14px; }
+.lr-card:empty { display: none; }
+.lr-card-head { display: flex; min-height: 28px; align-items: center; justify-content: space-between; gap: 12px; }
+.lr-step { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.lr-step > div:first-child { flex: 1 1 18rem; min-width: 0; }
+.lr-step .kit-card-cap { font-size: 14px; color: var(--gf-ink-soft); }
+.lr-closed { display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
+
+/* ---------- text ---------- */
+.lr-text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--gf-ink); }
+.lr-quiet { margin: 0; font-size: 14px; line-height: 1.5; color: var(--gf-quiet); }
+.lr-small { font-size: 12.5px; color: var(--gf-quiet); }
+.lr-strong { font-weight: 600; color: var(--gf-ink); }
+.lr-pre { white-space: pre-line; overflow-wrap: anywhere; }
+.lr-num { font-variant-numeric: tabular-nums; }
+.lr-sub { margin: 0; font: italic 800 15px/1.3 var(--font-exo), "Exo", system-ui, sans-serif; color: var(--gf-indigo); }
+.lr-saved { margin: 0; font-size: 14px; font-weight: 600; color: var(--gf-green); }
+.lr-saved:empty { display: none; }
+.lr-error { margin: 0; font-size: 14px; font-weight: 500; color: var(--gf-red); }
+a.lr-link {
+  color: var(--gf-indigo); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px;
+}
+a.lr-link:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offset: 2px; border-radius: 4px; }
+
+/* A part of a card that stands on its own, such as the current interview: the
+   summary box's 20px corners and the Indigo Line. */
+.lr-box { display: flex; flex-direction: column; gap: 12px; border: 1.5px solid var(--gf-line); border-radius: 20px; padding: 14px 16px; min-width: 0; }
+/* A box that waits on staff, such as an unconfirmed Family match: the wait note's tint. */
+.lr-box.lr-wait { border-color: transparent; background: var(--gf-orange-tint); color: var(--gf-note-wait-ink); }
+
+/* A later part of a card, below a Lavender Mist line (DESIGN.md, Section). */
+.lr-part { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--gf-mist); }
+/* A prepared message, shown as it will be sent. */
+.lr-quote {
+  border-radius: 16px; background: var(--gf-whisper); color: var(--gf-indigo-night); padding: 12px 14px;
+  font-size: 14px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.lr-warn { margin: 0; font-size: 14px; color: var(--gf-orange-deep); }
+
+/* A key's own reason line, such as the band under Annual fee. */
+.kit-kv dt small { display: block; font-size: 12.5px; line-height: 1.35; }
+
+/* ---------- lists ---------- */
+.lr-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; font-size: 14px; }
+.lr-list > li { padding: 11px 0; min-width: 0; }
+.lr-list > li + li { border-top: 1px solid var(--gf-mist); }
+.lr-list > li:first-child { padding-top: 0; }
+.lr-list > li:last-child { padding-bottom: 0; }
+.lr-trail { margin: 8px 0 0; padding: 0 0 0 12px; list-style: none; display: flex; flex-direction: column; gap: 4px; border-left: 1.5px solid var(--gf-mist); font-size: 12.5px; color: var(--gf-quiet); }
+.lr-bullets { margin: 4px 0 0; padding-left: 20px; list-style: disc; }
+
+/* ---------- forms ---------- */
+.lr-form { display: flex; flex-direction: column; gap: 16px; max-width: 36rem; }
+.kit-sheet-body .lr-form { max-width: none; }
+/* A form that opens in place under a card's content, below the kit's dashed line. */
+.lr-inline { padding-top: 14px; border-top: 1px dashed var(--gf-line); }
+.lr-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lr-label { font-size: 13px; font-weight: 600; color: var(--gf-ink); }
+.lr-hint { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--gf-quiet); }
+.lr-acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }

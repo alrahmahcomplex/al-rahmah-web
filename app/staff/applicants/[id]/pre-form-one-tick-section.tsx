@@ -1,4 +1,4 @@
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Note } from "@/components/kit"
 import { getPreFormOneTick } from "@/lib/services/pre-form-one"
 import { createClient } from "@/utils/supabase/server"
 
@@ -15,21 +15,19 @@ export async function PreFormOneTickSection({ leadId, formOne, canEdit }: { lead
   if (ticked.ok && !ticked.data && !(canEdit && formOne)) return null
 
   return (
-    <section aria-labelledby="lead-pre-form-one" className="flex max-w-xl flex-col gap-3">
-      <h2 id="lead-pre-form-one" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="lead-pre-form-one" className="lr-card">
+      <h2 id="lead-pre-form-one" className="kit-card-title">
         Pre-Form One programme
       </h2>
       {!ticked.ok ? (
         // Unread, the tick could show unticked over a saved one, so nothing
         // about it shows until it loads.
-        <Alert variant="destructive">
-          <AlertDescription>The Pre-Form One programme could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The Pre-Form One programme could not be loaded. Try again in a moment.</Note>
       ) : (
-        <div className="flex flex-col gap-3 rounded-lg p-3 ring-1 ring-foreground/10">
+        <div className="lr-box">
           <PreFormOneTick leadId={leadId} ticked={ticked.data} canTick={canEdit && formOne} canClear={canEdit} />
           {ticked.data && !formOne && (
-            <p role="note" className="text-sm text-amber-800">
+            <p role="note" className="lr-warn">
               {PRE_FORM_ONE_NOT_APPLYING}
             </p>
           )}

@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { listPendingDiscountRequests } from "@/lib/services/discounts"
 import { createClient } from "@/utils/supabase/server"
 
-import { DecideDiscount } from "../applicants/[id]/decide-discount"
+import { DecideDiscount } from "./decide-discount"
 import { canDecideDiscount, discountLabel } from "../applicants/[id]/discount-outcome"
 import { dayOf } from "../applicants/[id]/reopening-outcome"
 import { leadTabHref } from "../applicants/[id]/tabs"

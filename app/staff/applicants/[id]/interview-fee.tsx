@@ -2,8 +2,7 @@
 
 import { useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { Button, Note } from "@/components/kit"
 import type { InterviewFeeStatus } from "@/lib/services/interviews"
 
 import { setFeeStatus } from "./interview-actions"
@@ -42,21 +41,19 @@ export function InterviewFeeControl({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="lr-card">
       <div>
-        <Button type="button" variant={paid ? "outline" : "default"} size={paid ? "sm" : "default"} onClick={mark} disabled={pending}>
+        <Button variant="ghost" size="small" onClick={mark} pending={pending}>
           {pending ? "Saving…" : paid ? "Mark not paid" : "Mark paid"}
         </Button>
       </div>
       {outcome?.status === "saved" && (
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="lr-saved">
           {outcome.message}
         </p>
       )}
       {outcome?.status === "refused" && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{outcome.message}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{outcome.message}</Note>
       )}
     </div>
   )

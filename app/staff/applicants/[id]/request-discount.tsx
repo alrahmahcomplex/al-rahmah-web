@@ -2,14 +2,13 @@
 
 import { useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { Button, Note } from "@/components/kit"
 import { DISCOUNT_TEXT_MAX, type DiscountKind } from "@/lib/services/discounts"
 
 import { requestDiscountAction } from "./discount-actions"
 import { discountLabel, NOTE_HINT } from "./discount-outcome"
-import { Field, SELECT_CLASS } from "./lead-editors"
+import { Select, TextArea } from "./form-controls"
+import { Field } from "./lead-editors"
 
 const LOST_REQUEST = "The request could not be confirmed. Check your connection and press Request discount again; it won't be sent twice."
 
@@ -49,7 +48,7 @@ export function RequestDiscount({ leadId, kinds }: { leadId: string; kinds: read
   if (!open) {
     return (
       <div>
-        <Button type="button" size="sm" variant="outline" onClick={start}>
+        <Button variant="ghost" size="small" onClick={start}>
           Request discount
         </Button>
       </div>
@@ -57,15 +56,13 @@ export function RequestDiscount({ leadId, kinds }: { leadId: string; kinds: read
   }
 
   return (
-    <form aria-label="Request discount" className="flex flex-col gap-4" onSubmit={send}>
+    <form aria-label="Request discount" className="lr-form lr-inline" onSubmit={send}>
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{refusal}</Note>
       )}
       <Field label="Discount">
         {({ id }) => (
-          <select id={id} className={SELECT_CLASS} required value={kind} onChange={(event) => setKind(event.target.value as DiscountKind)}>
+          <Select id={id} required value={kind} onChange={(event) => setKind(event.target.value as DiscountKind)}>
             <option value="" disabled>
               Choose a discount
             </option>
@@ -74,12 +71,12 @@ export function RequestDiscount({ leadId, kinds }: { leadId: string; kinds: read
                 {discountLabel(choice)}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </Field>
       <Field label="Note for the Manager" hint={NOTE_HINT}>
         {({ id, describedBy }) => (
-          <Textarea
+          <TextArea
             id={id}
             required
             value={note}
@@ -89,11 +86,11 @@ export function RequestDiscount({ leadId, kinds }: { leadId: string; kinds: read
           />
         )}
       </Field>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={pending}>
+      <div className="lr-acts">
+        <Button type="submit" size="small" pending={pending}>
           {pending ? "Sending…" : "Request discount"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+        <Button variant="ghost" size="small" onClick={() => setOpen(false)} aria-disabled={pending || undefined}>
           Cancel
         </Button>
       </div>

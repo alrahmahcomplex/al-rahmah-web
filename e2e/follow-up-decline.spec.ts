@@ -60,7 +60,7 @@ test.describe("declining the lead from Record follow-up", () => {
 
     const record = await openRecord(page)
     await record.getByLabel("Comment").fill("The father says they have chosen a school nearer home.")
-    await record.getByLabel(DECLINE_OUTCOME).check()
+    await record.locator("label").filter({ hasText: DECLINE_OUTCOME }).click()
     // A decline takes a reason instead of a next date.
     await expect(record.getByLabel("Next follow-up date")).toHaveCount(0)
     await expect(record).toContainText("This application becomes read-only. Bringing it back needs a Manager's approval.")
@@ -101,7 +101,7 @@ test.describe("declining the lead from Record follow-up", () => {
 
     const record = await openRecord(page)
     await record.getByLabel("Comment").fill("The class is full for this year.")
-    await record.getByLabel(DECLINE_OUTCOME).check()
+    await record.locator("label").filter({ hasText: DECLINE_OUTCOME }).click()
     await record.getByLabel("Declined reason").selectOption("No seat available")
     await record.getByRole("button", { name: "Record and decline" }).click()
 

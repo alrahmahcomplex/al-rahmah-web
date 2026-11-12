@@ -1,19 +1,20 @@
 import Link from "next/link"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { KeyValueList, Note } from "@/components/kit"
 import { enrollmentYears, formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadHistory } from "@/lib/services/audit"
 import { listContactChildren } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
 import { formatShillings } from "../../fees/format"
-import { SeatPriorityBadge } from "../seat-priority-badge"
 import { describeLeadHistory } from "./history/describe"
 import { CardHeading } from "./lead-card"
 import { ContactEditor, StudentEditor } from "./lead-editors"
 import { readFee, readFollowUps } from "./lead-reads"
-import { Details, parentRows, studentRows } from "./lead-summary"
+import { parentRows, studentRows } from "./lead-rows"
+import { Details } from "./lead-summary"
 import type { LeadPanelProps } from "./panels"
+import { SeatPriorityTag } from "./seat-priority-tag"
 import { leadTabHref } from "./tabs"
 
 // The Overview tab's own cards: the student and the parent or guardian with
@@ -60,50 +61,34 @@ export async function FeeSummaryPanel({ lead, staff }: LeadPanelProps) {
   const fee = await readFee(lead.id)
 
   return (
-    <section aria-labelledby="lead-fee-summary" className="flex flex-col gap-3">
+    <section aria-labelledby="lead-fee-summary" className="lr-card">
       <CardHeading
         id="lead-fee-summary"
         title="School fee summary"
         action={
-          <Link href={leadTabHref(lead.id, "school-fee")} className="text-sm font-medium text-blue-700 hover:underline">
+          <Link href={leadTabHref(lead.id, "school-fee")} className="lr-link">
             Open School fee
           </Link>
         }
       />
       {!fee.ok ? (
-        <Alert variant="destructive">
-          <AlertDescription>The School fee could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The School fee could not be loaded. Try again in a moment.</Note>
       ) : fee.data.kind === "no-schedule" ? (
-        <p className="text-sm text-muted-foreground">No fee schedule for {fee.data.year} yet.</p>
+        <p className="lr-quiet">No fee schedule for {fee.data.year} yet.</p>
       ) : (
-        <>
-          <dl className="grid grid-cols-3 gap-2 sm:gap-3">
-            {(
-              [
-                ["Annual fee", fee.data.schoolFee],
-                ["Paid", fee.data.totalPaid],
-                ["Balance", fee.data.balance],
-              ] as const
-            ).map(([term, amount]) => (
-              <div key={term} className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-slate-50 px-3 py-2.5">
-                <dt className="text-xs text-muted-foreground">{term}</dt>
-                <dd className="truncate font-semibold tabular-nums text-slate-900">{formatShillings(amount)}</dd>
-              </div>
-            ))}
-          </dl>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            Seat priority
-            {fee.data.priority ? (
-              <>
-                <SeatPriorityBadge priority={fee.data.priority} />
-                {fee.data.priorityReachedOn && <span>since {formatDate(fee.data.priorityReachedOn)}</span>}
-              </>
-            ) : (
-              <span className="text-slate-900">none yet</span>
-            )}
-          </p>
-        </>
+        <KeyValueList
+          items={[
+            { key: "Annual fee", value: formatShillings(fee.data.schoolFee), numeric: true },
+            { key: "Paid", value: formatShillings(fee.data.totalPaid), numeric: true },
+            { key: "Balance", value: formatShillings(fee.data.balance), numeric: true },
+            {
+              key: "Seat priority",
+              value: fee.data.priority ? <SeatPriorityTag priority={fee.data.priority} /> : "none yet",
+              reason:
+                fee.data.priority && fee.data.priorityReachedOn ? `since ${formatDate(fee.data.priorityReachedOn)}` : undefined,
+            },
+          ]}
+        />
       )}
     </section>
   )
@@ -125,31 +110,29 @@ export async function RecentActivityPanel({ lead, staff }: LeadPanelProps) {
     : []
 
   return (
-    <section aria-labelledby="lead-recent-activity" className="flex flex-col gap-3">
+    <section aria-labelledby="lead-recent-activity" className="lr-card">
       <CardHeading
         id="lead-recent-activity"
         title="Recent activity"
         action={
-          <Link href={`/staff/applicants/${lead.id}/history`} className="text-sm font-medium text-blue-700 hover:underline">
+          <Link href={`/staff/applicants/${lead.id}/history`} className="lr-link">
             Full history
           </Link>
         }
       />
       {!history.ok ? (
-        <Alert variant="destructive">
-          <AlertDescription>The history could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The history could not be loaded. Try again in a moment.</Note>
       ) : entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No changes yet.</p>
+        <p className="lr-quiet">No changes yet.</p>
       ) : (
-        <ol aria-label="Recent activity" className="flex flex-col divide-y text-sm">
+        <ol aria-label="Recent activity" className="lr-list">
           {entries.map((entry) => (
-            <li key={entry.id} className="flex gap-3 py-2.5 first:pt-0 last:pb-0">
-              <time dateTime={entry.at} className="w-24 shrink-0 text-muted-foreground">
+            <li key={entry.id} className="flex gap-3">
+              <time dateTime={entry.at} className="lr-small w-24 shrink-0 pt-px">
                 {formatDate(tanzaniaToday(new Date(entry.at)))}
               </time>
-              <p className="min-w-0 break-words text-slate-900">
-                <span className="font-medium">{entry.actor}</span> {entry.summary}
+              <p className="lr-text min-w-0 break-words">
+                <span className="font-semibold">{entry.actor}</span> {entry.summary}
               </p>
             </li>
           ))}

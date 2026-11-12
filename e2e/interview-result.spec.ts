@@ -56,7 +56,7 @@ test.describe("recording an interview result", () => {
     await panel(page).getByRole("button", { name: "Record result" }).click()
     const form = panel(page).getByRole("form", { name: "Record result" })
     await expect(form.getByLabel("Interview date")).toHaveValue(today)
-    await form.getByLabel("Passed").check()
+    await form.locator("label").filter({ hasText: "Passed" }).click()
     await form.getByLabel("Score (%)").fill("64.5")
     await form.getByRole("button", { name: "Save result" }).click()
 
@@ -70,7 +70,7 @@ test.describe("recording an interview result", () => {
     const correction = panel(page).getByRole("form", { name: "Correct result" })
     await expect(correction.getByLabel("Passed")).toBeChecked()
     await expect(correction.getByLabel("Score (%)")).toHaveValue("64.5")
-    await correction.getByLabel("Failed").check()
+    await correction.locator("label").filter({ hasText: "Failed" }).click()
     await correction.getByLabel("Score (%)").fill("38")
     await correction.getByRole("button", { name: "Save correction" }).click()
 
@@ -92,7 +92,7 @@ test.describe("recording an interview result", () => {
     await page.goto(leadUrl(lead, "Interview"))
     await panel(page).getByRole("button", { name: "Record result" }).click()
     const form = panel(page).getByRole("form", { name: "Record result" })
-    await form.getByLabel("Failed").check()
+    await form.locator("label").filter({ hasText: "Failed" }).click()
     await form.getByLabel("Score (%)").fill("20")
 
     // The lead is closed while the form is open.

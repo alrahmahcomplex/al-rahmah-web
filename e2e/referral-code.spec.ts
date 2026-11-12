@@ -99,7 +99,7 @@ test.describe("the Referral code panel", () => {
 
     // Cleared, after confirming.
     await panel(page).getByRole("button", { name: "Clear" }).click()
-    const dialog = page.getByRole("alertdialog")
+    const dialog = page.getByRole("dialog", { name: "Clear the referral code?" })
     await expect(dialog).toContainText("ZNM-401")
     await dialog.getByRole("button", { name: "Clear code" }).click()
     await expect(panel(page).getByText("Referral code cleared.")).toBeVisible()

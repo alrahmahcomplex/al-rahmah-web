@@ -10,7 +10,7 @@ import type { StaffMember } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../../session"
-import { LeadSummary } from "../lead-summary"
+import { LeadSummary } from "./lead-summary"
 import { alreadyRequested, canRaiseReopening, reopeningSourceOf } from "../reopening-outcome"
 import { RequestReopeningForm } from "./request-form"
 

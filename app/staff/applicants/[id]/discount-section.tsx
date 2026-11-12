@@ -1,5 +1,4 @@
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
+import { Note, Tag } from "@/components/kit"
 import { DISCOUNT_KINDS, getLeadDiscounts, type DiscountRequest } from "@/lib/services/discounts"
 import { getPriorSibling } from "@/lib/services/sibling-discount"
 import { createClient } from "@/utils/supabase/server"
@@ -34,25 +33,21 @@ export async function DiscountSection({ lead, staff, open }: LeadPanelProps) {
   const requestable = DISCOUNT_KINDS.filter((kind) => !granted.includes(kind))
 
   return (
-    <section aria-labelledby="lead-discounts" className="flex flex-col gap-3">
-      <h2 id="lead-discounts" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="lead-discounts" className="lr-card">
+      <h2 id="lead-discounts" className="kit-card-title">
         Discounts
       </h2>
       {!discounts.ok ? (
-        <Alert variant="destructive" className="max-w-xl">
-          <AlertDescription>The discounts could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The discounts could not be loaded. Try again in a moment.</Note>
       ) : (
-        <div className="flex max-w-xl flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
+        <div className="flex flex-col gap-4">
           {!priorSibling.ok ? (
             // Unread, the tick could show unticked over a saved sibling, so
             // nothing about it shows until it loads.
-            <Alert variant="destructive">
-              <AlertDescription>Has a sibling already at Al-Rahmah could not be loaded. Try again in a moment.</AlertDescription>
-            </Alert>
+            <Note tone="bad">Has a sibling already at Al-Rahmah could not be loaded. Try again in a moment.</Note>
           ) : (
             (sibling || mayRequest) && (
-              <div className="border-b pb-4">
+              <div className="border-b border-gf-mist pb-4">
                 <PriorSiblingTick leadId={lead.id} sibling={sibling} canEdit={mayRequest} />
               </div>
             )
@@ -75,15 +70,15 @@ export async function DiscountSection({ lead, staff, open }: LeadPanelProps) {
               }
             />
           ) : discounts.data.decided.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No Staff child or Qualified orphan discount requested.</p>
+            <p className="lr-quiet">No Staff child or Qualified orphan discount requested.</p>
           ) : null}
           {!discounts.data.pending && mayRequest && requestable.length > 0 && (
             <RequestDiscount leadId={lead.id} kinds={requestable} />
           )}
           {discounts.data.decided.length > 0 && (
-            <div className={discounts.data.pending ? "flex flex-col gap-2 border-t pt-3" : "flex flex-col gap-2"}>
-              <h3 className="text-xs font-medium text-muted-foreground">Decided requests</h3>
-              <ul className="flex flex-col gap-3 text-sm">
+            <div className={discounts.data.pending ? "lr-part" : "flex flex-col gap-3"}>
+              <h3 className="lr-sub">Decided requests</h3>
+              <ul className="lr-list">
                 {discounts.data.decided.map((request) => (
                   <DecidedRequest key={request.id} request={request} />
                 ))}
@@ -100,14 +95,14 @@ function PendingRequest({ request, mine, decide }: { request: DiscountRequest; m
   return (
     <div role="group" className="flex flex-col gap-2" aria-label="Pending discount request">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <Badge variant="secondary">{DISCOUNT_STATE_LABELS.pending}</Badge>
-        <p className="text-sm font-medium text-slate-900">{discountLabel(request.kind)}</p>
+        <Tag tone="wait">{DISCOUNT_STATE_LABELS.pending}</Tag>
+        <p className="lr-text lr-strong">{discountLabel(request.kind)}</p>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="lr-hint">
         Requested by {mine ? "you" : (request.requestedBy ?? "a staff member")} on {dayOf(request.requestedAt)}. Waiting for the
         Admissions Manager.
       </p>
-      <p className="text-sm break-words whitespace-pre-line text-slate-900">{request.note}</p>
+      <p className="lr-text lr-pre">{request.note}</p>
       {decide}
     </div>
   )
@@ -119,15 +114,15 @@ function DecidedRequest({ request }: { request: DiscountRequest }) {
   }`
   return (
     <li className="flex flex-col gap-0.5">
-      <span className="font-medium text-slate-900">{discountLabel(request.kind)}</span>
-      <span className="text-slate-900">{decided}</span>
+      <span className="lr-strong">{discountLabel(request.kind)}</span>
+      <span>{decided}</span>
       {request.refusalReason && (
-        <span className="break-words whitespace-pre-line text-slate-900">Reason for refusing: {request.refusalReason}</span>
+        <span className="lr-pre">Reason for refusing: {request.refusalReason}</span>
       )}
-      <span className="text-xs text-muted-foreground">
+      <span className="lr-hint">
         Requested by {request.requestedBy ?? "a staff member"} on {dayOf(request.requestedAt)}
       </span>
-      <span className="break-words whitespace-pre-line text-xs text-muted-foreground">{request.note}</span>
+      <span className="lr-small lr-pre">{request.note}</span>
     </li>
   )
 }

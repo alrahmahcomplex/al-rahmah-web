@@ -303,6 +303,22 @@ describe("one save for the whole form", () => {
     expect(await leadsOnPhone((parent as { phone: string }).phone)).toBe(1)
   })
 
+  test("the same child twice on one form, once under a known person and once under a new person with that phone, is refused", async () => {
+    const year = await registrationYear()
+    const known = await onFile(`${word()} ${word()}`, "KG 1")
+    const contactId = await contactOf(known)
+    const knownPhone = await inRolledBackTransaction(
+      async (sql) => (await sql.query<{ phone: string }>("select phone from public.guardian_contacts where id = $1", [contactId])).rows[0].phone,
+    )
+    const twice = student(fatherParts(), year)
+    expect(
+      await register({
+        people: [{ contactId }, { fullName: "Same Phone", phone: knownPhone }],
+        students: [twice, { ...twice, custodian: { person: 2, relationship: "Mother" }, notASibling: true }],
+      }),
+    ).toMatchObject({ ok: false, error: { kind: "invalid", field: "student_name", student: 2, reason: "repeated_on_form" } })
+  })
+
   test("a 9th student is refused, and so is an empty form", async () => {
     const year = await registrationYear()
     const nine = Array.from({ length: 9 }, () => student(fatherParts(), year))
@@ -477,7 +493,9 @@ describe("questions before saving", () => {
       ok: true,
       data: {
         kind: "questions",
-        questions: [{ kind: "name", student: 2, fatherFullName: `Mohammed Ali ${surname}`, siblingFatherFullName: `Mohamed Ali ${surname}` }],
+        questions: [
+          { kind: "name", student: 2, fatherFullName: `Mohammed Ali ${surname}`, siblingFatherFullName: `Mohamed Ali ${surname}`, siblingStudent: 1 },
+        ],
       },
     })
     expect(await leadsOnPhone((parent as { phone: string }).phone)).toBe(0)
@@ -500,7 +518,7 @@ describe("questions before saving", () => {
 
     expect(await register({ people: [parent], students })).toMatchObject({
       ok: true,
-      data: { kind: "questions", questions: [{ kind: "request-note", student: 2 }] },
+      data: { kind: "questions", questions: [{ kind: "request-note", student: 2, siblingStudent: 1 }] },
     })
     expect(await leadsOnPhone((parent as { phone: string }).phone)).toBe(0)
 
@@ -556,6 +574,21 @@ describe("questions before saving", () => {
 })
 
 describe("siblings on file", () => {
+  test("two students linked to one unconfirmed on-file sibling both answer its father's name, and the form saves", async () => {
+    const year = await registrationYear()
+    const family = fatherParts()
+    const older = await onFile(nameOf(family), "STD 2")
+    const contactId = await contactOf(older)
+    await onFile(`${word()} ${word()}`, "KG 1", contactId)
+    const answered = { siblingOf: { leadId: older }, siblingFatherFullName: nameOf(family) }
+    const saved = await created({
+      people: [{ contactId }],
+      students: [student(family, year, answered), student(family, year, { ...answered, className: "KG 2" })],
+    })
+    expect(saved.map((s) => s.sibling?.basis)).toEqual(["matched", "matched"])
+    expect(await membershipOf(older)).toMatchObject({ legacy: false, basis: "matched" })
+  })
+
   test("a child linked to an Enrolled sibling gets the 10%, and the Enrolled sibling's fee does not move", async () => {
     const family = fatherParts()
     const anchor = await enrolled(nameOf(family), await claimedYear())

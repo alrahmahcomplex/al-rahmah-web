@@ -213,6 +213,10 @@ export type RegisterStudentsInput = {
   students: RegistrationStudent[]
 }
 
+// The sibling a question is about: another student on this form, by number,
+// or a lead on file.
+export type QuestionSibling = { siblingStudent: number } | { siblingLeadId: string }
+
 // What staff must answer before anything is saved.
 export type RegistrationQuestion =
   // The two fathers' names are the same and this student has no sibling
@@ -220,11 +224,11 @@ export type RegistrationQuestion =
   | { kind: "same-father"; student: number; otherStudent: number }
   | { kind: "same-father"; student: number; otherLeadId: string; otherAdmissionNumber: string }
   // The names are close: one name with a typing mistake, or two names?
-  | { kind: "name"; student: number; fatherFullName: string; siblingLeadId: string; siblingFatherFullName: string }
+  | ({ kind: "name"; student: number; fatherFullName: string; siblingFatherFullName: string } & QuestionSibling)
   // The on-file sibling's father's name was never confirmed: ask for it.
   | { kind: "sibling-father-name"; student: number; siblingLeadId: string }
   // The names differ: a note for the Sibling request, or Not a sibling.
-  | { kind: "request-note"; student: number; siblingLeadId: string }
+  | ({ kind: "request-note"; student: number } & QuestionSibling)
 
 export type RegisteredStudent = {
   student: number
@@ -304,6 +308,8 @@ const numberOrUndefined = (value: unknown) => (typeof value === "number" ? value
 
 function questionOf(row: Record<string, unknown>): RegistrationQuestion {
   const student = row.student as number
+  const sibling: QuestionSibling =
+    typeof row.sibling_student === "number" ? { siblingStudent: row.sibling_student } : { siblingLeadId: row.sibling_lead_id as string }
   switch (row.question) {
     case "same_father":
       return typeof row.other_student === "number"
@@ -319,13 +325,13 @@ function questionOf(row: Record<string, unknown>): RegistrationQuestion {
         kind: "name",
         student,
         fatherFullName: row.father_full_name as string,
-        siblingLeadId: row.sibling_lead_id as string,
         siblingFatherFullName: row.sibling_father_full_name as string,
+        ...sibling,
       }
     case "sibling_father_name":
       return { kind: "sibling-father-name", student, siblingLeadId: row.sibling_lead_id as string }
     default:
-      return { kind: "request-note", student, siblingLeadId: row.sibling_lead_id as string }
+      return { kind: "request-note", student, ...sibling }
   }
 }
 

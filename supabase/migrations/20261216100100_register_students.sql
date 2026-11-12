@@ -939,13 +939,30 @@ begin
         failed_detail text;
         failed_hint text;
         detail_json jsonb;
+        sibling_name text := save_sibling_choice.choice ->> 'sibling_father_full_name';
+        target public.leads;
+        target_member public.sibling_group_members;
     begin
         begin
+            -- Two students linked to one on-file sibling both answer its
+            -- father's name. The first link confirms it; the same name again
+            -- is no new answer, and is dropped rather than refused.
+            if sibling_name is not null then
+                select * into target from public.leads l where l.id = save_sibling_choice.sibling_of_lead_id;
+                select * into target_member from public.sibling_group_members m where m.lead_id = save_sibling_choice.sibling_of_lead_id;
+                if not ((target_member.group_id is not null and target_member.legacy)
+                        or (target_member.group_id is null
+                            and (target.father_full_name is null or target.father_full_name_source = 'backfilled')))
+                   and public.father_name_match(sibling_name, target.father_full_name) = 'same' then
+                    sibling_name := null;
+                end if;
+            end if;
+
             linked := public.link_sibling_locked(
                 save_sibling_choice.lead_id,
                 save_sibling_choice.sibling_of_lead_id,
                 save_sibling_choice.choice ->> 'father_full_name',
-                save_sibling_choice.choice ->> 'sibling_father_full_name',
+                sibling_name,
                 save_sibling_choice.choice -> 'name_answer' ->> 'answer',
                 save_sibling_choice.choice -> 'name_answer' ->> 'spelling',
                 true
@@ -1369,21 +1386,6 @@ begin
             end if;
         end if;
 
-        -- The same student twice on the form: the same name with a custodian
-        -- sharing a phone.
-        for i in 2..n loop
-            for j in 1..i - 1 loop
-                if public.normalize_student_name(s_name[i]) = public.normalize_student_name(s_name[j])
-                   and (s_person[i] = s_person[j]
-                        or (p_contact[s_person[i]] is null and p_contact[s_person[j]] is null
-                            and array[p_phone[s_person[i]], p_whatsapp[s_person[i]]]
-                                && array_remove(array[p_phone[s_person[j]], p_whatsapp[s_person[j]]], null))) then
-                    raise exception 'invalid'
-                        using detail = jsonb_build_object('student', i, 'field', 'student_name', 'reason', 'repeated_on_form', 'same_as_student', j)::text;
-                end if;
-            end loop;
-        end loop;
-
         -- ------------------------------------------------------------------
         -- Every lock, before the first write.
         -- ------------------------------------------------------------------
@@ -1406,6 +1408,24 @@ begin
                 p_stored_rel[k] := p_rel[k];
                 p_stored_desc[k] := p_desc[k];
             end if;
+        end loop;
+
+        -- The same student twice on the form: the same name with custodians
+        -- sharing any phone, known people included (their stored numbers and
+        -- the ones staff typed).
+        for i in 2..n loop
+            for j in 1..i - 1 loop
+                if public.normalize_student_name(s_name[i]) = public.normalize_student_name(s_name[j])
+                   and array_remove(
+                           array[p_phone[s_person[i]], p_whatsapp[s_person[i]]]
+                               || array(select jsonb_array_elements_text(p_extra[s_person[i]])), null)
+                       && array_remove(
+                           array[p_phone[s_person[j]], p_whatsapp[s_person[j]]]
+                               || array(select jsonb_array_elements_text(p_extra[s_person[j]])), null) then
+                    raise exception 'invalid'
+                        using detail = jsonb_build_object('student', i, 'field', 'student_name', 'reason', 'repeated_on_form', 'same_as_student', j)::text;
+                end if;
+            end loop;
         end loop;
 
         -- Creations that share a phone number one after the other, in one
@@ -1657,11 +1677,22 @@ begin
             ));
             perform set_config('app.sibling_keep_ten', '', true);
         exception when sqlstate 'P0114' then
+            -- A student on this form is named by its number: its lead was
+            -- rolled back with everything else.
             return jsonb_build_object(
                 'result', 'questions',
                 'questions', (
-                    select jsonb_agg(q order by (q ->> 'student')::integer, q ->> 'question')
+                    select jsonb_agg(
+                        case
+                            when x.n is not null then (q - 'sibling_lead_id') || jsonb_build_object('sibling_student', x.n)
+                            else q
+                        end
+                        order by (q ->> 'student')::integer, q ->> 'question')
                     from jsonb_array_elements(questions) q
+                    left join lateral (
+                        select y as n from generate_subscripts(s_lead, 1) y
+                        where s_lead[y]::text = q ->> 'sibling_lead_id'
+                    ) x on true
                 )
             );
         end;

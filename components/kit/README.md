@@ -104,7 +104,7 @@ What the browser no longer checks for you, so the server's own refusal (already 
 | `DateField`, `DateTimeField` | `min`, `max` | Grey out days in the calendar only. A typed date outside them is posted as typed. |
 | `DateField`, `DateTimeField` | `required` | Holds the form with the browser's own message while the field is empty, as a kit `Field` does. |
 | `DateField`, `DateTimeField` | text that is not a date | Holds the form with the part's sentence, `noValidate` forms included (see the contract above). |
-| `Select` | `required` | Holds the form and moves focus to the pill. Whether the browser's own message stays on screen after focus moves there is the browser's choice. |
+| `Select` | `required` | Holds the form, moves focus to the pill and gives it the invalid look (`aria-invalid`) until a choice, as the prototype does; no sentence. A caller's own `invalid` wins. |
 | `Select` | `size` | None: one 44px size (version 18). |
 | `FilePicker` | `accept` | Filters the file dialog; a dropped file of another type is still taken. |
 

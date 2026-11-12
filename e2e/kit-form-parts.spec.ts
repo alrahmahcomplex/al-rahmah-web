@@ -345,7 +345,7 @@ test.describe("the date field", () => {
 })
 
 // A device behind UTC: no date may move by a day, across a month end either.
-test("a required list with nothing chosen holds the form and puts focus on the pill, at 1280px and 390px", async ({ page }) => {
+test("a required list with nothing chosen holds the form, takes the invalid look and focus, and clears on a choice, at 1280px and 390px", async ({ page }) => {
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 800 })
     const card = await openKit(page)
@@ -360,12 +360,20 @@ test("a required list with nothing chosen holds the form and puts focus on the p
     const hidden = form.locator('input[name="payment_type"]')
     expect(await hidden.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true)
     expect(await hidden.evaluate((el: HTMLInputElement) => el.validationMessage)).not.toBe("")
+    await expect(list).not.toHaveAttribute("aria-invalid")
     await form.evaluate((el: HTMLFormElement) => el.requestSubmit())
     await expect(form).toHaveAttribute("data-submits", "0")
     await expect(list).toBeFocused()
+    // As the prototype: the Alert Red line and soft red ring, announced as invalid and required. No sentence.
+    await expect(list).toHaveAttribute("aria-invalid", "true")
+    await expect(list).toHaveAttribute("aria-required", "true")
+    await expect(list).toHaveCSS("border-top-color", "rgb(200, 30, 30)")
+    await expect(list).toHaveCSS("box-shadow", /rgba(200, 30, 30, 0.1)/)
+    await expect(card.getByRole("alert")).toHaveCount(0)
 
     await chooseOption(list, "Initial deposit")
     expect(await hidden.evaluate((el: HTMLInputElement) => el.validity.valid)).toBe(true)
+    await expect(list).not.toHaveAttribute("aria-invalid")
   }
 })
 

@@ -49,6 +49,24 @@ describe("Select", () => {
     expect(button).toHaveAttribute("data-empty", "")
   })
 
+  it("required with nothing chosen: the form is held, the pill turns invalid and takes focus; the caller's invalid wins", () => {
+    const form = inForm(
+      <>
+        <Select aria-label="Payment type" name="type" required placeholder="Choose a type" options={options.slice(1)} />
+        <Select aria-label="Reason" name="reason" required options={options.slice(1)} invalid={false} />
+      </>,
+    )
+    const pill = screen.getByRole("combobox", { name: "Payment type" })
+    expect(pill).toHaveAttribute("aria-required", "true")
+    expect(pill).not.toHaveAttribute("aria-invalid")
+    act(() => {
+      form.reportValidity()
+    })
+    expect(pill).toHaveAttribute("aria-invalid", "true")
+    expect(pill).toHaveFocus()
+    expect(screen.getByRole("combobox", { name: "Reason" })).not.toHaveAttribute("aria-invalid")
+  })
+
   it("is named by a label for its id and marks itself invalid", () => {
     render(
       <>

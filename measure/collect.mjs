@@ -61,9 +61,12 @@ function playwright(path, cell) {
         const results = run.results ?? [];
         const last = results.at(-1);
         const title = [...trail, spec.title].join(" › ");
+        // Playwright's own verdict, which knows a test.fail() that failed
+        // did what it should: expected, unexpected, flaky or skipped.
         let result = "s";
-        if (last?.status === "passed") result = results.length > 1 ? "r" : "p";
-        else if (last && last.status !== "skipped") result = "f";
+        if (run.status === "expected" && last && last.status !== "skipped") result = "p";
+        else if (run.status === "flaky") result = "r";
+        else if (run.status === "unexpected") result = "f";
         note("browser", `e2e/${spec.file}`, title, cell, result, results.reduce((sum, entry) => sum + (entry.duration ?? 0), 0));
       }
     }

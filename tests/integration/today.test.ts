@@ -140,12 +140,14 @@ describe("countResultsReadyToSend", () => {
     // The rule's answer as Admissions, read before and after the service's,
     // until no test registered, recorded, paid, sent or closed meanwhile.
     // Every interview's and lead's version is in it, so a change made and
-    // undone meanwhile still shows.
+    // undone meanwhile still shows. The versions and the rule's answer come
+    // from one snapshot: read apart, a send could land before the versions
+    // and a correction undo it before the answer, and both reads would match.
     const { state, result: read } = await whileUnchanged(
       async (sql) => {
-        const versions = { interviews: await rowVersions(sql, "interviews"), leads: await rowVersions(sql, "leads") }
-        await sql.query("begin")
+        await sql.query("begin isolation level repeatable read read only")
         try {
+          const versions = { interviews: await rowVersions(sql, "interviews"), leads: await rowVersions(sql, "leads") }
           await asStaff(sql, ADMISSIONS.id)
           const { rows } = await sql.query<{ count: string; year: number | null; ids: string | null }>(
             `select count(*) as count, min(i.serial_year) as year, md5(string_agg(i.id::text, ',' order by i.id)) as ids

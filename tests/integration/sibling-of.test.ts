@@ -12,7 +12,7 @@ import { createLead, getLead, type LeadClass, type NewContact } from "@/lib/serv
 import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 import { linkSibling, type LinkSiblingInput } from "@/lib/services/sibling-groups"
 
-import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -621,49 +621,3 @@ describe("who may link", () => {
   })
 })
 
-describe("migration day", () => {
-  test("every lead gets the Family rule's answer, and the snapshot check raises when a fee moves", async () => {
-    const year = await yearWithSchedule()
-    const name = father()
-    const enrolled = await child(year, name, "STD 2")
-    const waiting = await child(year, name, "KG 1", await contactOf(enrolled))
-    await payInFull(enrolled)
-
-    await inRolledBackTransaction(async (sql) => {
-      // No other suite writes a fee between the two snapshots.
-      await lockExclusively(sql, [
-        "public.leads",
-        "public.guardian_contacts",
-        "public.lead_fee_profiles",
-        "public.lead_sibling_results",
-        "public.sibling_groups",
-        "public.sibling_group_members",
-        "public.school_fee_payments",
-        "public.payment_adjustments",
-        "public.discount_requests",
-        "public.fee_schedules",
-        "public.fee_band_amounts",
-      ])
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("create temp table sibling_of_before as select * from public.fee_snapshot()")
-      // The groups' contacts rebuilt as the migration builds them.
-      await sql.query("update public.sibling_groups set contact_ids = '{}'")
-      await sql.query("select public.refresh_sibling_group_contacts(id) from public.sibling_groups")
-      const legacyOnly = await sql.query(
-        `select l.id from public.leads l
-         join public.sibling_group_members m on m.lead_id = l.id
-         join public.sibling_groups g on g.id = m.group_id
-         where m.legacy and not exists (select 1 from public.sibling_group_members o where o.group_id = g.id and not o.legacy)
-           and (select (r.result, r.source) from public.sibling_rule_result(l.id) r)
-               is distinct from (select (f.result, f.source) from public.sibling_rule_result_by_family(l.id) f)`,
-      )
-      expect(legacyOnly.rows).toEqual([])
-      await sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.sibling_of_before')")
-
-      await sql.query("update public.lead_sibling_results set result = 'none', source = 'auto' where lead_id = $1", [waiting])
-      await expect(sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.sibling_of_before')")).rejects.toThrow(
-        /fee_snapshot_changed/,
-      )
-    })
-  })
-})

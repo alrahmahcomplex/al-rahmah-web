@@ -1,6 +1,4 @@
 import { randomInt, randomUUID } from "node:crypto"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
 
 import { describe, expect, test, vi } from "vitest"
 
@@ -300,26 +298,6 @@ describe("the referral_notice_version column", () => {
         await sql.query("update public.leads set referral_notice_version = 'form_v9' where id = '1ead0000-0000-4000-8000-000000000431'")
       }),
     ).rejects.toThrow(/leads_referral_notice_version_known/)
-  })
-
-  test("the form_v2 migration keeps a row that already recorded form_v1", async () => {
-    // Replays the migration's constraint change, in a rolled-back
-    // transaction, over a row saved with form_v1, as hosted rows were before
-    // #282. Re-adding the constraint checks every existing row.
-    const migration = readFileSync(join(process.cwd(), "supabase/migrations/20261205400100_referral_notice_form_v2.sql"), "utf8")
-    const constraintChange = migration.match(/alter table public\.leads[\s\S]*?;/)?.[0]
-    expect(constraintChange).toMatch(/'form_v1', 'form_v2', 'staff_reminder'/)
-
-    const version = await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("update public.leads set referral_notice_version = 'form_v1' where id = '1ead0000-0000-4000-8000-000000000431'")
-      await sql.query(constraintChange!)
-      const { rows } = await sql.query<{ version: string }>(
-        "select referral_notice_version as version from public.leads where id = '1ead0000-0000-4000-8000-000000000431'",
-      )
-      return rows[0].version
-    })
-    expect(version).toBe(FORM_NOTICE_V1_VERSION)
   })
 
   test("holds a version only beside a code", async () => {

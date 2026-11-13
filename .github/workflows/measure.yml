@@ -29,6 +29,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       cells: ${{ steps.plan.outputs.cells }}
+      layers: ${{ steps.plan.outputs.layers }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - id: plan
@@ -37,6 +38,7 @@ jobs:
   unit:
     name: Unit (${{ matrix.cell }})
     needs: plan
+    if: ${{ contains(fromJSON(needs.plan.outputs.layers), 'unit') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -80,6 +82,7 @@ jobs:
   integration:
     name: Integration (${{ matrix.cell }}, ${{ matrix.shard }}/2)
     needs: plan
+    if: ${{ contains(fromJSON(needs.plan.outputs.layers), 'integration') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -133,6 +136,7 @@ jobs:
   browser:
     name: Browser (${{ matrix.cell }}, ${{ matrix.shard }}/8)
     needs: plan
+    if: ${{ contains(fromJSON(needs.plan.outputs.layers), 'browser') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:

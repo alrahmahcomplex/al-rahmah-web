@@ -31,7 +31,10 @@ function edits(mutant) {
 
 const [arg] = process.argv.slice(2);
 if (arg === "--cells") {
-  console.log(`cells=${JSON.stringify(read("./run.json").cells)}`);
+  const run = read("./run.json");
+  console.log(`cells=${JSON.stringify(run.cells)}`);
+  // Which layers this push runs: all three unless run.json names fewer.
+  console.log(`layers=${JSON.stringify(run.layers ?? ["unit", "integration", "browser"])}`);
 } else if (arg === "--check") {
   const all = mutants();
   const ids = new Set();

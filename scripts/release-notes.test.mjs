@@ -183,6 +183,36 @@ test("only a commit on origin/main is released: not another branch, not a merged
   assert.throws(() => release(dir, git("rev-parse", "HEAD"), "2026-11-13"), /origin\/main is not fetched/)
 })
 
+test("a version tag on a branch that is not merged is no release of main", (t) => {
+  const { dir, git, merge, commit } = repo(t)
+  const pending = merge("pending.md", note("patch", "### FIXED\n\n- A pending fix.\n"), 1)
+  // A branch that starts at that merge and never reaches main gets a tag.
+  git("checkout", "--quiet", "-b", "side")
+  writeFileSync(join(dir, "app.txt"), "side")
+  const side = commit("Side work", 2)
+  git("tag", "-a", "v0.11.0", "-m", "v0.11.0")
+  git("checkout", "--quiet", "main")
+  assert.deepEqual(release(dir, pending, "2026-11-13"), { version: "v0.10.1", notes: "Released 2026-11-13.\n\n### FIXED\n\n- A pending fix.\n" })
+  assert.equal(git("rev-parse", "v0.10.1^{commit}"), pending)
+  assert.equal(git("rev-parse", "v0.11.0^{commit}"), side, "the other branch's tag stays where it is")
+})
+
+test("a version tag a merged branch brought along is not the release before this one", (t) => {
+  const { dir, git, merge, commit } = repo(t)
+  merge(null, "", 1)
+  git("checkout", "--quiet", "-b", "side")
+  writeFileSync(join(dir, "changes", "side.md"), note("minor", "### NEW\n\n- A side feature.\n"))
+  commit("Side feature", 2)
+  // Tagged on the branch, lightweight this time: no release of main made it.
+  git("tag", "v0.20.0")
+  writeFileSync(join(dir, "app.txt"), "more side work")
+  commit("More side work", 3)
+  git("checkout", "--quiet", "main")
+  git("merge", "--quiet", "--no-ff", "-m", "Merge side", "side")
+  git("update-ref", "refs/remotes/origin/main", "HEAD")
+  assert.deepEqual(release(dir, git("rev-parse", "HEAD"), "2026-11-13"), { version: "v0.11.0", notes: "Released 2026-11-13.\n\n### NEW\n\n- A side feature.\n" })
+})
+
 test("the Release workflow runs its job for main alone", () => {
   const workflow = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n")
   assert.match(workflow, /^ {4}if: github\.ref == 'refs\/heads\/main'$/m)
@@ -236,6 +266,52 @@ test("check --base with no commit to compare with checks the files alone, and an
   const unknown = run("check", "--base", "a".repeat(40))
   assert.equal(unknown.status, 1)
   assert.match(unknown.stderr, /Cannot compare changes\//)
+})
+
+test("check --before refuses a push that replaces main with a history without a merged file", (t) => {
+  const { dir, git, merge, commit, run } = repo(t)
+  const start = git("rev-parse", "HEAD")
+  const before = merge("pending.md", note("patch", "### FIXED\n\n- A pending fix.\n"), 1)
+  // A force-push: main now starts before the file was added, and never had it.
+  git("checkout", "--quiet", "-B", "main", start)
+  writeFileSync(join(dir, "app.txt"), "replacement")
+  commit("Replacement main", 2)
+  // The merge-base is the commit before the file, so --base sees nothing lost.
+  assert.equal(run("check", "--base", before).status, 0)
+  const result = run("check", "--before", before)
+  assert.equal(result.status, 1, result.stdout)
+  assert.match(result.stderr, /does not descend from/)
+  // A commit the push left behind may not be fetched at all.
+  const unknown = run("check", "--before", "a".repeat(40))
+  assert.equal(unknown.status, 1)
+  assert.match(unknown.stderr, /does not descend from/)
+})
+
+test("check --before accepts a fast-forward push, and refuses one that edits or deletes a merged file", (t) => {
+  const { dir, merge, commit, run } = repo(t)
+  const before = merge("old.md", note("patch", "### FIXED\n\n- Old fix.\n"), 1)
+  merge(null, "", 2)
+  const pushed = merge("new.md", note("minor", "### NEW\n\n- A new feature.\n"), 3)
+  const result = run("check", "--before", before)
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /^2 changelog files/)
+  rmSync(join(dir, "changes", "old.md"))
+  commit("Delete old.md", 4)
+  const deleted = run("check", "--before", pushed)
+  assert.equal(deleted.status, 1, deleted.stdout)
+  assert.match(deleted.stderr, /^changes\/old\.md is already merged and this change deletes it\./m)
+  // A first push has all zeros, and a run that is no push has nothing.
+  assert.equal(run("check", "--before", "0".repeat(40)).status, 0)
+  assert.equal(run("check", "--base", "", "--before", "").status, 0)
+})
+
+test("CI compares a pull request with its base, and a push with main before the push", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n")
+  assert.match(workflow, /^ {10}BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}$/m)
+  // A pull request's event has a `before` too, the branch's last head: only a
+  // push may pass it.
+  assert.match(workflow, /^ {10}BEFORE: \$\{\{ github\.event_name == 'push' && github\.event\.before \|\| '' \}\}$/m)
+  assert.match(workflow, /^ {8}run: node scripts\/release-notes\.mjs check --base "\$BASE" --before "\$BEFORE"$/m)
 })
 
 test("a pending file a later merge deleted is still released, with its bump", (t) => {

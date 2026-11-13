@@ -153,7 +153,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2]
     steps:
       # Local Supabase binds host ports 55420 to 55429 (supabase/config.toml).
       # Linux hands out ports from 32768 to 60999 to outgoing connections, and

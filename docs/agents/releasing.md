@@ -10,35 +10,22 @@ Internal maintenance limited to documentation, tests, agent workflows, CI or dev
 
 ## Prepare an app release
 
-Before opening an app PR, add its user-facing entry under `## Unreleased` at the top of CHANGELOG.md. On rebase conflicts, preserve every entry. Use only sections with content: `NEW` for a new capability, `IMPROVED` for an existing capability made better, and `FIXED` for broken behavior. Write for someone using the app and apply `unslop`.
+An app PR carries its user-facing entry as a file of its own, `changes/<branch name without claude/ or codex/>.md`, never as an edit to CHANGELOG.md. The file holds `bump: patch` (a correction to shipped behavior or appearance) or `bump: minor` (a new capability) and the entry, in sections with content only: `NEW` for a new capability, `IMPROVED` for an existing capability made better, and `FIXED` for broken behavior. [changes/README.md](../../changes/README.md) has the format, and CI's `node scripts/release-notes.mjs check` refuses a wrong one, or an Unreleased entry in CHANGELOG.md. Write for someone using the app and apply `unslop`.
 
-When the human authorizes merge:
+Before merge:
 
-1. Fetch `origin` and tags, then rebase the task branch onto `origin/main`. Inspect incoming changes and apply the relevant rebase checks from Workflow. For migrations, follow the timestamp ordering rule in [Parallel work](parallel-work.md) and rerun affected migration/integration tests if any version changes.
-2. Choose the version bump and the release date in the human's timezone. Run the helper, replacing the example date with the actual release date:
+1. If the PR is behind `origin/main`, decide whether incoming changes interact with it: shared services, migrations, seeds, configuration, or files the PR also changes. If they do, fetch, rebase, apply the relevant rebase checks from Workflow and wait for CI on the rebased revision. For migrations, follow the timestamp ordering rule in [Parallel work](parallel-work.md) and rerun affected migration/integration tests if any version changes. A PR that is behind only on unrelated files needs no rebase; the push to main tests every merge.
+2. Wait for CI on the exact final revision and resolve any outstanding review findings.
 
-   ```bash
-   node scripts/release.mjs prepare --bump patch --date 2026-11-03
-   ```
-
-   It derives the version from stable tags reachable from `origin/main` and turns the top Unreleased entry into the existing dated heading format. It preserves old releases and refuses inherited Unreleased notes instead of assigning someone else's entry to this release. Resolve that ownership explicitly before proceeding. For an approved complete-app milestone only, use `--bump major --complete-app` to reach 1.0.0. The helper edits the changelog; the agent remains responsible for reviewing its wording and scope.
-3. Commit the prepared entry and push the branch. Wait for CI on that exact final revision and resolve any outstanding review findings. A release-only follow-up commit does not require repeating unchanged local app tests. If a rebase or code fix changes behavior, verify the affected paths again. If another app release merges after preparation, restore only this PR's prepared heading to Unreleased, rebase while preserving the newer release, and rerun preparation to choose the next version.
-
-For internal maintenance, skip the app entry and version preparation. Fetch, rebase, verify affected changes, push and wait for final CI in the same way.
+Internal maintenance adds no changelog file. Otherwise it follows the same steps.
 
 ## Merge and tag
 
 1. Verify the PR's head SHA, applicable green CI and completed review. Merge the authorized PR with a message describing the change, matching the inspected head so a concurrent push cannot slip into the merge. Obtain the actual merge commit SHA from GitHub; do not assume a local branch tip is the merge commit.
-2. Fetch `origin/main`. For an app release, create the annotated local tag on that merge commit:
-
-   ```bash
-   node scripts/release.mjs tag --commit <full-merge-commit-sha>
-   git push origin <version>
-   ```
-
-   The helper reads the committed release entry, verifies that the commit is on fetched `origin/main`, and rejects conflicting tags. Repeating the same completed tagging operation is safe. It does not merge, fetch or push. An app merge without its published tag is unfinished; complete or report the failure before starting another app release.
-3. For internal maintenance, skip tagging. A successful maintenance merge is complete once applicable migration checks and housekeeping are done.
-4. Check the production deployment with `gh api repos/alrahmahcomplex/al-rahmah-web/commits/<merge-sha>/status`. A `Vercel` status of `success` means the merge is live. While it is `pending`, or before it appears, check again every few minutes; if it hasn't finished after 30 minutes, report production as unconfirmed. A `failure` reading "Deployment rate limited" means the day's 100 deployments are spent ([Hosted services](hosted-services.md#deployment-limit-and-previews)): say so in the release report, and don't retry it or push to `main` to force it. The next production deployment that succeeds carries the merge. Any other failure is a broken production build; report it to the human.
+2. For an app release, the `Release` workflow runs on the merge: it moves every file in `changes/` into a top CHANGELOG.md entry dated in Tanzania's timezone (`release-notes.mjs collect`), picks the version from the larger bump and the newest tag (`release.mjs prepare`), commits `Release vX.Y.Z` to main, tags that commit (`release.mjs tag`) and pushes the tag. Releases run one at a time. Two merges close together may share one release. Check that the run succeeded and the tag exists: `gh run list --workflow release.yml --limit 3`, then `git fetch --tags` and `git tag --contains <merge-sha>`. A merge with no tag after a failed run is unfinished: run the workflow again from the Actions tab, or report it.
+3. For internal maintenance there is no release run or tag. A successful maintenance merge is complete once applicable migration checks and housekeeping are done.
+4. The v1.0.0 complete-app milestone is prepared by hand on its PR, with no file in `changes/`: write an Unreleased entry at the top of CHANGELOG.md, run `node scripts/release.mjs prepare --bump major --complete-app --date <date>` to turn it into the dated heading before pushing, then after merge `node scripts/release.mjs tag --commit <merge-sha>` and `git push origin v1.0.0`.
+5. Check the production deployment with `gh api repos/alrahmahcomplex/al-rahmah-web/commits/<merge-sha>/status`. A `Vercel` status of `success` means the merge is live. While it is `pending`, or before it appears, check again every few minutes; if it hasn't finished after 30 minutes, report production as unconfirmed. A `failure` reading "Deployment rate limited" means the day's 100 deployments are spent ([Hosted services](hosted-services.md#deployment-limit-and-previews)): say so in the release report, and don't retry it or push to `main` to force it. The next production deployment that succeeds carries the merge. Any other failure is a broken production build; report it to the human.
 
 ## Confirm hosted migrations
 

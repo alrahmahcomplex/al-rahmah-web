@@ -109,7 +109,7 @@ Review scores are advisory. There is no mandatory Greptile 5/5 loop or second hu
 
 ## Complete the task
 
-1. Confirm scope and acceptance criteria, finish applicable local checks, and assemble only relevant evidence. Classify whether this is an app release under [Releasing](releasing.md); add an Unreleased entry only for an app release.
+1. Confirm scope and acceptance criteria, finish applicable local checks, and assemble only relevant evidence. Classify whether this is an app release under [Releasing](releasing.md); add a changelog file in `changes/` only for an app release.
 2. Inspect the diff, apply `unslop` to changed prose, commit, fetch and rebase onto `origin/main`. Resolve only conflicts you understand and verify affected interactions.
 3. Push your branch, using `--force-with-lease` only when rebasing your own pushed branch. Open the PR with its tier/reason, behavior changed, actual verification results, relevant evidence, release classification and risks.
 4. Complete the independent review where required and resolve findings. Wait for the final revision's applicable CI to pass. When fixes change the revision, update evidence and review only the affected scope.

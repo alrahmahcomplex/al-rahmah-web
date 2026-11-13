@@ -82,6 +82,10 @@ jobs:
         run: node --test "scripts/!(design-lint).test.mjs"
       - name: Check tracked documents
         run: node scripts/check-docs.mjs
+      # An app PR's changelog entry is a file in changes/, never an edit to
+      # CHANGELOG.md (changes/README.md).
+      - name: Check the changelog files
+        run: node scripts/release-notes.mjs check
 
   static:
     name: Lint, typecheck and unit tests

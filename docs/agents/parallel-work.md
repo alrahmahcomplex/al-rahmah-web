@@ -114,4 +114,4 @@ On `AuthRetryableFetchError` under load, rerun the failed files before treating 
 
 - Name scratch files with your ticket number first (`67-pr-body.md`), since agents share a scratchpad.
 - Follow the ticket-claim rule in [AGENTS.md](../../AGENTS.md).
-- Complete the PR using [Workflow](workflow.md), including only the reviews, checks and evidence its tier needs. Add an Unreleased entry only for an app release under [Releasing](releasing.md). Report the PR URL, worktree and any outstanding human decision. The human authorizes merge.
+- Complete the PR using [Workflow](workflow.md), including only the reviews, checks and evidence its tier needs. Add a changelog file in `changes/` only for an app release under [Releasing](releasing.md). Report the PR URL, worktree and any outstanding human decision. The human authorizes merge.

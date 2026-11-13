@@ -276,6 +276,49 @@ test("a side sheet keeps its head and foot while only the details scroll; the in
   await expect(row).toBeFocused()
 })
 
+test("on a phone, the record sheet adds a Previous school inline and Record payment records the payment", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 })
+  await openKit(page)
+  const row = page.locator('[data-part="more"]').getByRole("row", { name: "Rehema Said Abdallah" })
+  await row.click()
+  const record = page.getByRole("dialog", { name: "Rehema Said Abdallah" })
+  // The keyboard works the same on a bottom sheet: title first, Tab stays inside, Escape returns focus.
+  await expect(record.getByRole("heading", { name: "Rehema Said Abdallah" })).toBeFocused()
+  await tabStaysInside(page, record, 10)
+  await page.keyboard.press("Escape")
+  await expect(record).toHaveCount(0)
+  await expect(row).toBeFocused()
+  await row.press("Enter")
+  await expect(record).toBeVisible()
+
+  // Previous school: Not known yet, added inline.
+  await record.getByRole("button", { name: "Add", exact: true }).click()
+  await record.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(record.getByRole("alert")).toHaveText("Type the school’s name.")
+  await record.getByRole("textbox", { name: "School name" }).fill("Example Secondary School")
+  await record.locator("label", { hasText: "Private" }).click()
+  await record.getByRole("textbox", { name: "Find a region" }).fill("pw")
+  await record.getByRole("button", { name: "Pwani" }).click()
+  await record.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(record.getByText("Example Secondary School · Private · Pwani")).toBeVisible()
+
+  // Record payment closes the record and opens the payment sheet.
+  await record.getByRole("button", { name: "Record payment" }).click()
+  const payment = page.getByRole("dialog", { name: "Record a payment" })
+  await expect(payment).toBeVisible()
+  await expect(record).toHaveCount(0)
+  const review = payment.getByRole("button", { name: "Review payment" })
+  await review.click()
+  await expect(payment.getByRole("alert")).toHaveText("Choose the kind of payment.")
+  await payment.getByRole("button", { name: "Initial deposit" }).click()
+  await payment.getByRole("textbox", { name: "Amount in shillings" }).fill("600,000")
+  await review.click()
+  await expect(payment.getByText("TZS 2,000,000")).toBeVisible()
+  await payment.getByRole("button", { name: "Confirm payment" }).click()
+  await expect(payment).toHaveCount(0)
+  await expect(page.getByRole("status").filter({ hasText: "Initial deposit recorded. Rehema is now Enrolled." })).toBeVisible()
+})
+
 test("the popovers: the bell's new requests and the account menu", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   await openKit(page)
@@ -430,6 +473,25 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
 
   await card.getByRole("button", { name: "Register another family" }).click()
   await expect(open.getByRole("textbox", { name: "First name", exact: true })).toBeFocused()
+})
+
+test("under reduced motion the staff guided form can be answered to the end", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openKit(page)
+  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
+  const open = card.locator(".gf-step.gf-open")
+  await answerNames(open, ["Neema", "Juma", "Salim"])
+  await expect(open.getByRole("heading", { name: "Which class is Neema joining?" })).toBeVisible()
+  await pick(open, "STD 5")
+  await pick(open, "Day")
+  await open.getByRole("button", { name: "No, go to custodians" }).click()
+  await pick(open, "Yes, the father")
+  await open.getByRole("textbox", { name: "Custodian’s mobile number" }).fill("0712 345 678")
+  await open.getByRole("button", { name: "Continue" }).click()
+  await open.getByRole("button", { name: /NO CODE/ }).click()
+  await open.getByRole("button", { name: "Register 1 student" }).click()
+  await expect(card.getByRole("heading", { level: 2, name: "1 student registered" })).toBeFocused()
 })
 
 test("removing a student keeps the names being typed for another", async ({ page }) => {

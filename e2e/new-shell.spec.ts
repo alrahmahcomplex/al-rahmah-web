@@ -190,6 +190,16 @@ test.describe("on a desktop", () => {
     await page.goto("/staff/reopenings")
     await expect(page).toHaveURL(/\/login$/)
   })
+
+  test("pressing the bottom of the stage's scrollbar jumps to the end of the page", async ({ page }) => {
+    await open(page, ADMISSIONS, "/staff/kit")
+    const scroll = page.locator(".ns-scroll")
+    await expect(page.locator(".ns-vbar[data-on]")).toBeVisible()
+    const bar = (await page.locator(".ns-vbar").boundingBox())!
+    await page.mouse.click(bar.x + bar.width / 2, bar.y + bar.height - 2)
+    // It lands at (or, while the page still grows, very near) the end.
+    await expect.poll(() => scroll.evaluate((el) => el.scrollTop / (el.scrollHeight - el.clientHeight))).toBeGreaterThan(0.95)
+  })
 })
 
 test.describe("Back on the stage", () => {

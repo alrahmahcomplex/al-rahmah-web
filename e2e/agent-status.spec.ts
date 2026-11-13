@@ -98,6 +98,26 @@ test.describe("switching an agent off and retiring them", () => {
     await expect(panel).toContainText("No discount: code switched off on")
   })
 
+  test("the Manager retires an agent from the row: the dialog lists the families and asks for a reason", async ({ page }) => {
+    const agent = await approvedAgent()
+    for (let i = 0; i < 2; i++) await leadWithCode(agent.code)
+    await signIn(page, MANAGER)
+
+    await page.goto(`/staff/agents?status=all&q=${encodeURIComponent(agent.code)}`)
+    const row = page.getByRole("row", { name: new RegExp(agent.fullName) })
+    await row.getByRole("button", { name: `Retire ${agent.fullName}` }).click()
+
+    const dialog = page.getByRole("dialog")
+    await expect(dialog.getByRole("list", { name: "Families not yet Paid" }).getByRole("listitem")).toHaveCount(2)
+    const confirm = dialog.getByRole("button", { name: `Retire ${agent.code}` })
+    await expect(confirm).toBeDisabled()
+    await dialog.getByLabel("Reason").fill("Has left the school")
+    await expect(confirm).toBeEnabled()
+    await confirm.click()
+
+    await expect(page.getByText(`${agent.fullName} (${agent.code}) is retired.`, { exact: false })).toBeVisible()
+  })
+
   test("a retired record is hidden from the list until the Retired filter shows it, with who retired it", async ({ page }) => {
     const agent = await approvedAgent()
     await changeStatus(agent.id, "retired")

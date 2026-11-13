@@ -55,13 +55,18 @@ function repo(t) {
     return result.stdout.trim()
   }
   const run = (...args) => spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: "utf8" })
+  // Commits the working tree. A commit on main is one origin/main has too.
+  const commit = (message, seconds = 0) => {
+    git("add", "-A")
+    const result = spawnSync("git", ["commit", "-m", message], { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_COMMITTER_DATE: `${1_800_000_000 + seconds} +0000` } })
+    assert.equal(result.status, 0, result.stderr)
+    if (git("branch", "--show-current") === "main") git("update-ref", "refs/remotes/origin/main", "HEAD")
+    return git("rev-parse", "HEAD")
+  }
   const merge = (name, text, seconds) => {
     if (name) writeFileSync(join(dir, "changes", name), text)
     else writeFileSync(join(dir, "app.txt"), String(seconds))
-    git("add", "-A")
-    const result = spawnSync("git", ["commit", "-m", `Merge ${name ?? "code"}`], { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_COMMITTER_DATE: `${1_800_000_000 + seconds} +0000` } })
-    assert.equal(result.status, 0, result.stderr)
-    return git("rev-parse", "HEAD")
+    return commit(`Merge ${name ?? "code"}`, seconds)
   }
   git("init", "--initial-branch=main")
   git("config", "user.name", "Notes test")
@@ -71,10 +76,9 @@ function repo(t) {
   writeFileSync(join(dir, "CHANGELOG.md"), history)
   mkdirSync(join(dir, "changes"))
   writeFileSync(join(dir, "changes", "README.md"), "# How\n")
-  git("add", "-A")
-  git("commit", "-m", "Start")
+  commit("Start")
   git("tag", "-a", "v0.10.0", "-m", "v0.10.0")
-  return { dir, git, run, merge }
+  return { dir, git, run, merge, commit }
 }
 
 test("check refuses an Unreleased entry, a bad note, a folder and a non-.md file; README.md is not a note", (t) => {
@@ -129,27 +133,120 @@ test("run again on a commit it already tagged, it gives the same release, so a f
   assert.equal(git("tag", "--list", "v0.10.*"), "v0.10.0\nv0.10.1")
 })
 
-test("a version already used on another commit is refused, not moved", (t) => {
-  const { dir, git, merge } = repo(t)
+test("a version already used on a commit off main is refused, not moved", (t) => {
+  const { dir, git, merge, commit } = repo(t)
+  const sha = merge("first.md", note("patch", "### FIXED\n\n- First fix.\n"), 1)
+  // Someone tagged a commit of another branch with the version this merge would get.
+  git("checkout", "--quiet", "-b", "elsewhere", "v0.10.0")
+  writeFileSync(join(dir, "app.txt"), "elsewhere")
+  const elsewhere = commit("Elsewhere")
+  git("tag", "-a", "v0.10.1", "-m", "v0.10.1")
+  git("checkout", "--quiet", "main")
+  assert.throws(() => release(dir, sha, "2026-11-13"), /already exists/)
+  assert.equal(git("rev-parse", "v0.10.1^{commit}"), elsewhere)
+})
+
+test("a merge that a later merge's release already covers releases nothing, and says where it went", (t) => {
+  const { dir, git, merge, run } = repo(t)
   const earlier = merge("first.md", note("patch", "### FIXED\n\n- First fix.\n"), 1)
-  git("branch", "elsewhere", earlier)
   const later = merge("second.md", note("patch", "### FIXED\n\n- Second fix.\n"), 2)
-  release(dir, later, "2026-11-13")
-  assert.throws(() => release(dir, earlier, "2026-11-13"), /already exists/)
+  // The later merge's run went first and took both files.
+  assert.equal(release(dir, later, "2026-11-13").notes, "Released 2026-11-13.\n\n### FIXED\n\n- First fix.\n- Second fix.\n")
+  const said = []
+  assert.equal(release(dir, earlier, "2026-11-13", (line) => said.push(line)), null)
+  assert.match(said.join("\n"), /already released in v0\.10\.1/)
+  const again = run("release", "--commit", earlier, "--notes", join(dir, "notes.md"), "--date", "2026-11-13")
+  assert.equal(again.status, 0, again.stderr)
+  assert.equal(again.stdout, "")
+  assert.match(again.stderr, /already released in v0\.10\.1/)
+  assert.equal(git("tag", "--list", "v0.10.*"), "v0.10.0\nv0.10.1")
   assert.equal(git("rev-parse", "v0.10.1^{commit}"), later)
 })
 
+test("only a commit on origin/main is released: not another branch, not a merged branch's own commit", (t) => {
+  const { dir, git, merge, commit } = repo(t)
+  merge(null, "", 1)
+  git("checkout", "--quiet", "-b", "feature")
+  writeFileSync(join(dir, "changes", "feature.md"), note("minor", "### NEW\n\n- A feature.\n"))
+  const unmerged = commit("Feature", 2)
+  assert.throws(() => release(dir, unmerged, "2026-11-13"), /not a commit on origin\/main/)
+  assert.equal(git("tag", "--list", "v0.11.0"), "")
+  // Merged with a merge commit, the branch's commit is reachable from main
+  // and still is not the commit main went through.
+  git("checkout", "--quiet", "main")
+  git("merge", "--quiet", "--no-ff", "-m", "Merge feature", "feature")
+  git("update-ref", "refs/remotes/origin/main", "HEAD")
+  assert.throws(() => release(dir, unmerged, "2026-11-13"), /not a commit on origin\/main/)
+  assert.equal(release(dir, git("rev-parse", "HEAD"), "2026-11-13").version, "v0.11.0")
+  // With no origin/main at all there is nothing to compare with.
+  git("update-ref", "-d", "refs/remotes/origin/main")
+  assert.throws(() => release(dir, git("rev-parse", "HEAD"), "2026-11-13"), /origin\/main is not fetched/)
+})
+
+test("the Release workflow runs its job for main alone", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n")
+  assert.match(workflow, /^ {4}if: github\.ref == 'refs\/heads\/main'$/m)
+  assert.match(workflow, /^ {2}push:\n {4}branches: \[main\]$/m)
+})
+
+test("check --base refuses a change that edits, deletes or renames a merged changelog file", (t) => {
+  const { dir, git, merge, commit, run } = repo(t)
+  const base = merge("old.md", note("patch", "### FIXED\n\n- Old fix.\n"), 1)
+  const attempt = (verb, change) => {
+    git("checkout", "--quiet", "-B", "work", base)
+    change()
+    commit(`A change that ${verb} old.md`)
+    const result = run("check", "--base", base)
+    assert.equal(result.status, 1, `${verb}: ${result.stdout}`)
+    assert.match(result.stderr, new RegExp(`^changes/old\\.md is already merged and this change ${verb} it\\.`, "m"))
+  }
+  // A later PR on a branch of the same name, writing its entry over the old one.
+  attempt("edits", () => writeFileSync(join(dir, "changes", "old.md"), note("minor", "### NEW\n\n- A new feature.\n")))
+  attempt("deletes", () => rmSync(join(dir, "changes", "old.md")))
+  attempt("renames", () => git("mv", "changes/old.md", "changes/moved.md"))
+  // Deleted and replaced by another entry under the same name: still an edit.
+  attempt("edits", () => { git("rm", "--quiet", "changes/old.md"); writeFileSync(join(dir, "changes", "old.md"), note("patch", "### FIXED\n\n- Another fix.\n")) })
+})
+
+test("check --base accepts a new file and a README.md edit, on a branch behind its base too", (t) => {
+  const { dir, git, merge, commit, run } = repo(t)
+  const base = merge("old.md", note("patch", "### FIXED\n\n- Old fix.\n"), 1)
+  git("checkout", "--quiet", "-b", "work")
+  writeFileSync(join(dir, "changes", "new.md"), note("minor", "### NEW\n\n- A new feature.\n"))
+  writeFileSync(join(dir, "changes", "README.md"), "# How, said better\n")
+  commit("A new changelog file")
+  const result = run("check", "--base", base)
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, /^2 changelog files/)
+  // Main gains a file the branch never saw: the branch did not delete it.
+  git("checkout", "--quiet", "main")
+  const ahead = merge("later.md", note("patch", "### FIXED\n\n- Later fix.\n"), 2)
+  git("checkout", "--quiet", "work")
+  assert.equal(run("check", "--base", ahead).status, 0)
+})
+
+test("check --base with no commit to compare with checks the files alone, and an unknown commit fails", (t) => {
+  const { dir, merge, commit, run } = repo(t)
+  merge("old.md", note("patch", "### FIXED\n\n- Old fix.\n"), 1)
+  writeFileSync(join(dir, "changes", "old.md"), note("patch", "### FIXED\n\n- Old fix, reworded.\n"))
+  commit("Edit old.md")
+  // A nightly or manual run has no base; a first push has all zeros.
+  assert.equal(run("check", "--base", "").status, 0)
+  assert.equal(run("check", "--base", "0".repeat(40)).status, 0)
+  const unknown = run("check", "--base", "a".repeat(40))
+  assert.equal(unknown.status, 1)
+  assert.match(unknown.stderr, /Cannot compare changes\//)
+})
+
 test("a pending file a later merge deleted is still released, with its bump", (t) => {
-  const { dir, git, merge } = repo(t)
+  const { dir, merge, commit } = repo(t)
   merge("feature.md", note("minor", "### NEW\n\n- A feature.\n"), 1)
   // The release run for that merge failed or was dropped; the next merge
-  // deletes the file and adds its own.
+  // deletes the file and adds its own. check --base refuses such a pull
+  // request; this is a push that went round it.
   rmSync(join(dir, "changes", "feature.md"))
   writeFileSync(join(dir, "changes", "fix.md"), note("patch", "### FIXED\n\n- A fix.\n"))
-  git("add", "-A")
-  const result = spawnSync("git", ["commit", "-m", "Merge fix"], { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_COMMITTER_DATE: `${1_800_000_002} +0000` } })
-  assert.equal(result.status, 0, result.stderr)
-  assert.deepEqual(release(dir, git("rev-parse", "HEAD"), "2026-11-13"), { version: "v0.11.0", notes: "Released 2026-11-13.\n\n### NEW\n\n- A feature.\n\n### FIXED\n\n- A fix.\n" })
+  assert.deepEqual(release(dir, commit("Merge fix", 2), "2026-11-13"), { version: "v0.11.0", notes: "Released 2026-11-13.\n\n### NEW\n\n- A feature.\n\n### FIXED\n\n- A fix.\n" })
 })
 
 test("a file name git would quote is still found, and check asks for plain names", (t) => {

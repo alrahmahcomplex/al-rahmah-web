@@ -8,7 +8,12 @@ name: Release
 #
 # Running it again on a commit it already tagged pushes the same tag and
 # publishes the same release, so a failed run is finished by running it
-# again (Actions tab, "Run workflow" on main, or re-run the failed job).
+# again (Actions tab, "Run workflow" on main, or re-run the failed job). A
+# run for a merge that a later merge's release already covers passes and
+# releases nothing.
+#
+# Only main is released. Started by hand on another branch, the job is
+# skipped, and the script refuses a commit that is not on origin/main.
 
 on:
   push:
@@ -26,6 +31,7 @@ concurrency:
 jobs:
   release:
     name: Tag and publish the release
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -43,9 +49,12 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The script releases only a commit on origin/main, as it is now.
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
           # The release date is the owner's: Tanzania, UTC+3.
           version="$(node scripts/release-notes.mjs release --commit "$GITHUB_SHA" --notes "$RUNNER_TEMP/notes.md" --date "$(TZ=Africa/Dar_es_Salaam date +%F)")"
-          if [ -z "$version" ]; then echo "No changelog file arrived since the last release."; exit 0; fi
+          # The script has said why: no new file, or a later release has them.
+          if [ -z "$version" ]; then echo "Nothing to release on $GITHUB_SHA."; exit 0; fi
           git push origin "refs/tags/$version"
           if gh release view "$version" > /dev/null 2>&1; then
             echo "$version is already published."

@@ -72,7 +72,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # The full history is there for the changelog files' merge-base.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
@@ -83,9 +86,14 @@ jobs:
       - name: Check tracked documents
         run: node scripts/check-docs.mjs
       # An app PR's changelog entry is a file in changes/, never an edit to
-      # CHANGELOG.md (changes/README.md).
+      # CHANGELOG.md (changes/README.md). A file that is already merged is
+      # never edited, renamed or deleted: the change is compared with the
+      # pull request's base, or with main before the push. A nightly or
+      # manual run has neither, so it checks the files alone.
       - name: Check the changelog files
-        run: node scripts/release-notes.mjs check
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/release-notes.mjs check --base "$BASE"
 
   static:
     name: Lint, typecheck and unit tests

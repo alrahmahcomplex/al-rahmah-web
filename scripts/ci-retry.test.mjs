@@ -77,6 +77,53 @@ test("an assertion that only mentions a collision word is a real failure", () =>
   }
 });
 
+test("a collision line followed by more message text is a different error", () => {
+  // Vitest prints every line of an error's message before its stack.
+  const multiline = log([
+    "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯",
+    "",
+    ` FAIL   integration  ${victim}`,
+    "error: deadlock detected",
+    " ❯ node_modules/pg/lib/client.js:694:17",
+    "",
+    "⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯",
+    "",
+    " FAIL   integration  tests/integration/x.test.ts > y",
+    "error: deadlock detected",
+    "This operation failed for another reason",
+    "",
+    "⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯",
+    "",
+    " Test Files  2 failed | 48 passed (50)",
+    "      Tests  2 failed | 917 passed (919)",
+    "##[error]error: deadlock detected",
+    "##[error]Process completed with exit code 1.",
+  ]);
+  const report = vitestReport(multiline);
+  assert.deepEqual(report.blocks.map((block) => block.error), ["error: deadlock detected", "error: deadlock detected\nThis operation failed for another reason"]);
+  assert.equal(pull([{ name: "Integration tests (1/2)", log: multiline }]).rerun, false);
+  // The real shape: one message line, then the stack, a code frame and a
+  // Serialized Error after it.
+  const real = log([
+    "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯",
+    "",
+    ` FAIL   integration  ${victim}`,
+    "error: deadlock detected",
+    " ❯ node_modules/pg/lib/client.js:694:17",
+    " ❯ tests/integration/sibling-result.test.ts:219:7",
+    "    219|       await sql.query(\"update public.leads set status = 'Enrolled'…",
+    "       |       ^",
+    "",
+    "⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯",
+    "",
+    " Test Files  1 failed | 48 passed (49)",
+    "      Tests  1 failed | 806 passed (807)",
+    "##[error]error: deadlock detected",
+    "##[error]Process completed with exit code 1.",
+  ]);
+  assert.equal(pull([{ name: "Integration tests (2/2)", log: real }]).rerun, true);
+});
+
 test("a real failure stays red beside a deadlock, annotated or not", () => {
   assert.equal(pull([{ name: "Integration tests (1/2)", log: deadlock }, { name: "Integration tests (2/2)", log: assertion }]).rerun, false);
   const mixed = shard([[[victim], "error: deadlock detected"], [["tests/integration/x.test.ts > y"], "TypeError: cannot read properties of undefined"]]);

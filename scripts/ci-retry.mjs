@@ -33,7 +33,8 @@ export function errors(log) {
     .filter((message) => message && !/^Process completed with exit code \d+\.?$/.test(message));
 }
 
-const collision = (message) => COLLISIONS.find(({ pattern }) => pattern.test(message.trim()))?.name;
+// A multi-line message never matches: each pattern is one whole line.
+const collision = (message) => (/\n/.test(message) ? undefined : COLLISIONS.find(({ pattern }) => pattern.test(message.trim()))?.name);
 
 // Vitest's own account of a failed shard, from its default reporter: the
 // "Failed Tests n" section, one block per error, each block naming its tests
@@ -47,19 +48,28 @@ export function vitestReport(log) {
   const start = all.findIndex((line) => /⎯ Failed Tests \d+ ⎯/.test(line));
   const blocks = [];
   if (start !== -1) {
+    // A block's message is every line from its last FAIL line to the first
+    // stack frame, blank line or separator. All of it must be the one
+    // collision line: "error: deadlock detected" with more text after it is
+    // a different error.
     let block = null;
     for (const line of all.slice(start + 1)) {
       if (/^\s+Test Files\s/.test(line)) break;
       const test = line.match(/^\s*FAIL\s+(?:\|?integration\|?\s+)?(tests\/\S+\.test\.tsx?\s+>\s+.+?)\s*$/);
       if (test) {
-        if (!block || block.error !== null) { block = { tests: [], error: null }; blocks.push(block); }
+        if (!block || block.message.length) { block = { tests: [], message: [], done: false }; blocks.push(block); }
         block.tests.push(test[1]);
-      } else if (block && block.error === null && line.trim()) {
-        block.error = line.trim();
+      } else if (block && !block.done) {
+        if (/^\s*❯ |⎯|^\s*Serialized Error:/.test(line) || (!line.trim() && block.message.length)) block.done = true;
+        else if (line.trim()) block.message.push(line.trim());
       }
     }
   }
-  return { failed, other, blocks };
+  return {
+    failed,
+    other,
+    blocks: blocks.map(({ tests, message }) => ({ tests, error: message.length === 1 ? message[0] : message.length ? message.join("\n") : null })),
+  };
 }
 
 // failedJobs: [{ name, log }]. Returns what to do with the run.

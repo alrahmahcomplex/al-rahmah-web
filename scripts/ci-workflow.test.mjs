@@ -108,6 +108,46 @@ test("the documents-only path skips every runtime job, and the gate always runs"
   assert.doesNotMatch(workflow, /^\s+paths(-ignore)?:/m, "the workflow must stay unfiltered by file paths");
 });
 
+// scripts/ci-db-start.sh turns Storage and Realtime off in CI, so their
+// schemas are never set up there. While a service is off, no migration, seed,
+// app file or test may use it. A change that starts using one removes its
+// export from that script, and this test then stops checking it.
+const ciStart = readFileSync(new URL("ci-db-start.sh", import.meta.url), "utf8");
+const offInCi = (name) => new RegExp(`^export SUPABASE_${name}_ENABLED=false$`, "m").test(ciStart);
+const serviceUses = {
+  // storage.objects, "storage"."buckets", supabase.storage.from(...),
+  // .storage.listBuckets(), the /storage/v1 endpoint.
+  STORAGE: /\b"?storage"?\s*\.\s*"?(?:objects|buckets|prefixes|s3_multipart_uploads)\b|\.storage\s*\.\s*(?:from|listBuckets|getBucket|createBucket)\s*\(|\/storage\/v1\b/i,
+  // realtime.messages, the supabase_realtime publication, supabase.channel(...),
+  // the /realtime/v1 endpoint.
+  REALTIME: /\b"?realtime"?\s*\.\s*"?(?:messages|subscription|send|broadcast_changes)\b|publication\s+"?supabase_realtime|\.channel\s*\(|\.removeChannel\s*\(|\/realtime\/v1\b/i,
+};
+
+test("services CI turns off are used by nothing", () => {
+  const cwd = fileURLToPath(new URL("..", import.meta.url));
+  const files = ["supabase/migrations/*.sql", "supabase/seeds/*.sql", "{app,components,lib,utils,tests,e2e}/**/*.{ts,tsx}"]
+    .flatMap((pattern) => globSync(pattern, { cwd }).map((file) => file.split(sep).join("/")));
+  assert.ok(files.length > 100, `only ${files.length} files found`);
+  const texts = files.map((file) => [file, readFileSync(new URL(`../${file}`, import.meta.url), "utf8")]);
+  for (const [service, uses] of Object.entries(serviceUses)) {
+    if (!offInCi(service)) continue;
+    const users = texts.filter(([, text]) => uses.test(text)).map(([file]) => file);
+    assert.deepEqual(users, [], `these files use ${service.toLowerCase()}, which CI turns off. Remove "export SUPABASE_${service}_ENABLED=false" from scripts/ci-db-start.sh in the same change.`);
+  }
+});
+
+test("the service check finds the usual ways of using each service", () => {
+  const found = {
+    STORAGE: ["insert into storage.buckets (id) values ('a')", 'select * from "storage"."objects"', "supabase.storage\n  .from('a')", "client.storage.listBuckets()", "fetch(`${url}/storage/v1/object`)"],
+    REALTIME: ["alter publication supabase_realtime add table leads", "select realtime.send('x')", "supabase\n  .channel('leads')", "fetch(`${url}/realtime/v1/api`)"],
+  };
+  const missed = ["window.sessionStorage.clear()", "localStorage.getItem('a')", "-- its own live in auth, storage, realtime,", "const realtimeCount = 3"];
+  for (const [service, samples] of Object.entries(found)) {
+    for (const sample of samples) assert.match(sample, serviceUses[service], `${service} missed: ${sample}`);
+    for (const sample of missed) assert.doesNotMatch(sample, serviceUses[service], `${service} flagged: ${sample}`);
+  }
+});
+
 test("every helper test file runs in some job", () => {
   const cwd = fileURLToPath(new URL("..", import.meta.url));
   const files = (pattern) => globSync(pattern, { cwd }).map((file) => file.split(sep).join("/"));

@@ -10,6 +10,7 @@ import { setLeadReferralCode } from "@/lib/services/referral"
 import { registerApprovedAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { settled } from "./axe"
 import { signInOnce } from "./log-in"
 
 // Adding an agent and Recreate (#189): the check before saving, the
@@ -183,6 +184,7 @@ test.describe("Recreate", () => {
       await expect(dialog.getByLabel("Full name")).toHaveValue(old.fullName)
       // Approved before and after: no fee moves.
       await expect(dialog.getByText("This changes the interview fee for 0 families not yet Paid.")).toBeVisible()
+      await settled(dialog)
       const box = await dialog.boundingBox()
       expect(box).not.toBeNull()
       expect(box!.y).toBeGreaterThanOrEqual(0)

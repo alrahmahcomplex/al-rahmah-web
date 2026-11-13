@@ -1,0 +1,130 @@
+/* Marketing Agents, its import, Promo codes and WhatsApp groups (#330): the
+   layout between the kit's parts. Colours are tokens only (scripts/design-lint.mjs). */
+
+.ag-page { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.ag-stack { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ag-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ag-row-start { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+
+/* A field: its label, the field, then the hint or the error. */
+.ag-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ag-label { font-size: 13px; font-weight: 600; color: var(--gf-ink); }
+.ag-hint { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--gf-quiet); }
+.ag-quiet { color: var(--gf-quiet); }
+.ag-strong { font-weight: 600; color: var(--gf-ink); }
+.ag-mono { font-family: var(--font-mono), ui-monospace, monospace; }
+.ag-num { font-variant-numeric: tabular-nums; }
+.ag-wrap { overflow-wrap: anywhere; }
+.ag-small { font-size: 12.5px; line-height: 1.4; }
+.ag-p { margin: 0; font-size: 14px; line-height: 1.5; }
+
+/* The TZS amount: the currency inside the field, at its start. */
+.ag-money { position: relative; }
+.ag-money > span {
+  position: absolute; left: 18px; top: 50%; transform: translateY(-50%); pointer-events: none;
+  font-size: 12px; font-weight: 600; color: var(--gf-quiet);
+}
+.ag-money > .kit-field { padding-left: 56px; font-variant-numeric: tabular-nums; }
+
+/* The search: the field and its button on one line. */
+.ag-search { display: flex; flex-direction: column; gap: 6px; max-width: 36rem; }
+.ag-search > div { display: flex; gap: 8px; }
+.ag-search .kit-field { flex: 1; min-width: 0; }
+
+/* The table's cells. */
+.ag-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.ag-cell small { color: var(--gf-quiet); font-size: 12.5px; line-height: 1.35; max-width: 16rem; overflow-wrap: anywhere; }
+.ag-nowrap { white-space: nowrap; }
+.ag-tel { color: inherit; text-decoration: none; text-underline-offset: 3px; }
+.ag-tel:hover { text-decoration: underline; }
+.ag-tel:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; border-radius: 4px; }
+.ag-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.ag-typed { margin: 4px 0 0; max-width: 14rem; font-size: 12.5px; line-height: 1.35; color: var(--gf-orange-deep); }
+.ag-error { margin: 0; max-width: 16rem; font-size: 12.5px; line-height: 1.35; font-weight: 500; color: var(--gf-red); }
+
+/* A quiet cell button: the agent's discount, opening its sheet. */
+.ag-cellbtn {
+  margin: -2px -6px; padding: 2px 6px; border: 0; border-radius: 8px; background: none; cursor: pointer; text-align: left; white-space: nowrap;
+  font: inherit; color: inherit; transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.ag-cellbtn:hover { background: var(--gf-chrome); }
+.ag-cellbtn:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+
+/* The standard discount line above the table. */
+.ag-standard { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.ag-standard p { margin: 0; font-size: 14px; }
+
+/* A link in the page's text, and the current one in a sentence of links. */
+.ag-link { color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.ag-link[aria-current="page"] { color: var(--gf-ink); text-decoration: none; }
+.ag-link:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; border-radius: 4px; }
+
+/* The families a change moves. */
+.ag-families { margin: 0; padding: 0; list-style: none; max-height: 12rem; overflow-y: auto; display: flex; flex-direction: column; }
+.ag-families li { padding: 8px 0; font-size: 13.5px; line-height: 1.45; }
+.ag-families li + li { border-top: 1px solid var(--gf-mist); }
+.ag-families small { display: block; color: var(--gf-quiet); font-size: 12.5px; }
+.ag-fold { display: flex; flex-direction: column; gap: 10px; padding: 0 14px 14px; font-size: 13.5px; line-height: 1.45; color: var(--gf-ink-soft); }
+.ag-read { border-radius: 16px; background: var(--gf-whisper); padding: 10px 14px; font-size: 14px; }
+.ag-read p { margin: 0; }
+
+/* A choice group's question. */
+.ag-legend { padding: 0; margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--gf-ink); }
+.ag-fieldset { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+/* A confirm that opens in place, under a dashed line. */
+.ag-inline { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px dashed var(--gf-line); }
+.ag-inline-act { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+/* Two fields side by side from 640px. */
+.ag-two { display: grid; gap: 14px; padding: 4px 14px 14px; }
+@media (min-width: 640px) { .ag-two { grid-template-columns: 1fr 1fr; } }
+
+/* The claim queue's cards. */
+.ag-claims { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.ag-claim-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.ag-claim-attempt { display: flex; flex-direction: column; gap: 10px; border-radius: 20px; background: var(--gf-whisper); padding: 12px 14px; }
+@media (min-width: 640px) { .ag-claim-attempt { flex-direction: row; align-items: flex-start; justify-content: space-between; } }
+.ag-claim-attempt .kit-kv { flex: 1; }
+
+/* The import's rows. */
+.ag-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.5; }
+.ag-import-rows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.ag-import-row { border-radius: 20px; border: 1.5px solid var(--gf-line); padding: 12px 16px; font-size: 14px; }
+.ag-import-row[data-changed] { border-color: var(--gf-orange); background: var(--gf-orange-tint); }
+.ag-import-row dl { margin: 6px 0 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 12px; }
+.ag-import-row dt { color: var(--gf-quiet); }
+.ag-import-row dd { margin: 0; overflow-wrap: anywhere; }
+.ag-pre { white-space: pre-wrap; }
+.ag-import-foot {
+  position: sticky; bottom: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin: 0 -24px -22px; padding: 14px 24px; border-top: 1px solid var(--gf-mist); background: var(--gf-paper); border-radius: 0 0 24px 24px;
+}
+@media (max-width: 860px) { .ag-import-foot { margin: 0 -18px -18px; padding: 12px 18px; } }
+.ag-list { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6; }
+.ag-earlier { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+
+/* Pages under the list. */
+.ag-pages { display: flex; align-items: center; gap: 12px; }
+.ag-pages p { margin: 0; font-size: 14px; color: var(--gf-quiet); }
+.ag-upper { text-transform: uppercase; }
+.ag-lines { display: flex; flex-direction: column; gap: 4px; }
+/* A titled card's content, under its title and caption. */
+.ag-card-body { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; min-width: 0; }
+.ag-gap-top { margin-top: 6px; }
+.ag-left { text-align: left; }
+.ag-back { align-self: flex-start; }
+
+/* WhatsApp groups. */
+.ag-year { max-width: 24rem; }
+.ag-year .kit-field { width: 7rem; }
+.ag-narrow { max-width: 36rem; }
+.ag-years { gap: 16px; }
+.ag-link-form { max-width: 36rem; gap: 10px; }
+
+.ag-soft { color: var(--gf-ink-soft); }
+/* The table's screen-reader-only words are absolutely placed: the scroll box
+   holds them, so they never widen a phone's page. */
+.ag-table .kit-tw { position: relative; }
+/* Quiet keys are too light on Lavender Whisper; an attempt's keys use Ink Soft. */
+.ag-claim-attempt .kit-kv dt { color: var(--gf-ink-soft); }

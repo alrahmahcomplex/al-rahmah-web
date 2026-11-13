@@ -73,7 +73,7 @@ test.describe("Marketing Agents", () => {
     await expect(row.getByRole("link", { name: agent.displayPhone })).toHaveAttribute("href", `tel:${agent.phone}`)
 
     await row.getByRole("button", { name: `Approve ${agent.fullName}` }).click()
-    const dialog = page.getByRole("alertdialog")
+    const dialog = page.getByRole("dialog", { name: `Approve ${agent.fullName}?` })
     await expect(dialog).toContainText(`Approve ${agent.fullName}?`)
     await expect(dialog).toContainText(agent.code)
     await dialog.getByRole("button", { name: `Approve ${agent.code}` }).click()
@@ -120,6 +120,10 @@ test.describe("Marketing Agents", () => {
     const pending = page.getByRole("row", { name: new RegExp(agent.fullName) })
     await expect(pending).toContainText("Pending")
     await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0)
+    // No other action either: those are the Manager's.
+    await expect(pending.getByRole("button", { name: /invite|email|Switch|Retire|Recreate/ })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Add agent" })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Import from CSV" })).toHaveCount(0)
   })
 
   test("the screen says whether agent access is on and who last changed it", async ({ page }) => {

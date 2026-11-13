@@ -83,7 +83,7 @@ export const metadata = { title: pageTitle("Applicants") }
 
 `PageHeader` is the page's one `h1`. A client part deeper down adds an action to its slot with `<PageActions>`. A `Card` with a title is a region named by it. `TaskCard` is the one lifted card on a page.
 
-`ListRow` is a link with `href`, a button with `onClick`, a plain row otherwise; `icon` draws the featured disc, `leading` takes a Line tag instead. `Table` takes `columns` (`header`, `cell`, `align: "end"` for money) and `rows`; `onOpen` makes rows focusable, opened by click or Enter, named by `rowLabel`. `total` adds the bold total row. `KeyValueList` items take a `reason` line and `numeric`. `Section` heads a part of a card or sheet. `Note tone="info" | "good" | "wait" | "bad"` takes a `role`: `status` for news, `alert` for a failure.
+`ListRow` is a link with `href`, a button with `onClick`, a plain row otherwise; `icon` draws the featured disc, `leading` takes a Line tag instead. `Table` takes `columns` (`header`, `cell`, `align: "end"` for money, `rowHeader` for the cell that names its row, such as a name) and `rows`; `onOpen` makes rows focusable, opened by click or Enter, named by `rowLabel`. `total` adds the bold total row. `KeyValueList` items take a `reason` line and `numeric`. `Section` heads a part of a card or sheet. `Note tone="info" | "good" | "wait" | "bad"` takes a `role`: `status` for news, `alert` for a failure.
 
 ## States
 
@@ -137,7 +137,7 @@ The kit page's "Guided form" card plays a registration with the prototype's ques
 </Sheet>
 ```
 
-`placement`: `centre` for a review or a confirmation, `side` for a row's record, `bottom` to rise from the bottom everywhere. Under 720px every sheet rises from the bottom. The head (title, `hint`, `chips`, Close) and the foot stay put; only the children scroll. Focus moves to the title, Tab stays inside, Escape and the backdrop close it, and focus returns to whatever opened it. On a phone the foot follows `visualViewport`, so it stays above the keyboard. Keep the sheet mounted and drive `open`, so it can slide out; remount it with a `key` to start a form afresh. A `KeyValueList` in a sheet keeps 14px above and below it, as the prototype's does.
+`placement`: `centre` for a review or a confirmation, `side` for a row's record, `bottom` to rise from the bottom everywhere. Under 720px every sheet rises from the bottom. The head (title, `hint`, `chips`, Close) and the foot stay put; only the children scroll. Focus moves to the title, Tab stays inside, Escape and the backdrop close it, and focus returns to whatever opened it. On a phone the foot follows `visualViewport`, so it stays above the keyboard. `hintId` gives the hint an id, so a field in the sheet can point at it with `aria-describedby`. Keep the sheet mounted and drive `open`, so it can slide out; remount it with a `key` to start a form afresh. A `KeyValueList` in a sheet keeps 14px above and below it, as the prototype's does.
 
 A small edit on the record opens inline in the sheet's body, not as a second sheet:
 

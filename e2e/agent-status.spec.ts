@@ -12,6 +12,7 @@ import { registerApprovedAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { family, openQuestion, PHONE_WIDTH, toCode, toSend, setLanguageCookie, WORDS, type Lang } from "./admission-form"
+import { settled } from "./axe"
 import { signInOnce } from "./log-in"
 
 // Switching an agent off and retiring them (#187): the Manager's dialog with
@@ -112,6 +113,7 @@ test.describe("switching an agent off and retiring them", () => {
 
       const dialog = page.getByRole("dialog")
       await expect(dialog.getByRole("list", { name: "Families not yet Paid" }).getByRole("listitem")).toHaveCount(6)
+      await settled(dialog)
       const box = await dialog.boundingBox()
       expect(box).not.toBeNull()
       expect(box!.y).toBeGreaterThanOrEqual(0)

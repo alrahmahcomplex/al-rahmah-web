@@ -1,24 +1,19 @@
-import { Bone, HeadingSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// WhatsApp groups: the year picker, then the year's saved link and the form.
+// WhatsApp groups while it opens: the heading, the year picker, then the
+// year's card with its saved link and the form.
 export default function Loading() {
   return (
-    <PageSkeleton label="WhatsApp groups">
-      <HeadingSkeleton width="w-48" />
-      <Bone className="h-4 w-full max-w-xl" />
-      <div className="flex max-w-sm flex-col gap-2">
-        <Bone className="h-4 w-28" />
-        <div className="flex gap-2">
-          <Bone className="h-10 w-28" />
-          <Bone className="h-10 w-24" />
-        </div>
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <span className="sr-only">Loading WhatsApp groups…</span>
+      <SkeletonBlock width={240} height={32} />
+      <SkeletonBlock width="min(36rem, 100%)" height={16} />
+      <SkeletonBlock width={110} height={16} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <SkeletonBlock width={112} height={44} shape="pill" />
+        <SkeletonBlock width={120} height={44} shape="pill" />
       </div>
-      <div className="flex max-w-xl flex-col gap-3">
-        <Bone className="h-5 w-36" />
-        <Bone className="h-3.5 w-full" />
-        <Bone className="h-3.5 w-64" />
-        <Bone className="h-10 w-full" />
-      </div>
-    </PageSkeleton>
+      <SkeletonBlock height={300} shape="card" />
+    </div>
   )
 }

@@ -2,12 +2,12 @@
 
 import { useId } from "react"
 
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Field } from "@/components/kit"
 import type { AgentDraftField } from "@/lib/services/marketing-agents"
 
 import type { AgentDraftInput } from "./actions"
 import { FIELD_LABELS } from "./outcome"
+import "./agents.css"
 
 const KEYS: Record<AgentDraftField, keyof AgentDraftInput> = {
   full_name: "fullName",
@@ -41,18 +41,20 @@ export function AgentFields({
 }) {
   const id = useId()
   return (
-    <div className="grid gap-3">
+    <div className="ag-stack">
       {fields.map((field) => {
         const key = KEYS[field]
         const invalid = refused?.field === field
         const hint = HINTS[field]
         return (
-          <div key={field} className="grid gap-1.5">
-            <Label htmlFor={`${id}-${field}`}>
+          <div key={field} className="ag-field">
+            <label htmlFor={`${id}-${field}`} className="ag-label">
               {FIELD_LABELS[field]}
               {(field === "full_name" || field === "phone") && <span className="sr-only"> (required)</span>}
-            </Label>
-            <Input
+            </label>
+            <Field
+              size="compact"
+              alignStart
               id={`${id}-${field}`}
               value={value[key]}
               type={field === "email" ? "email" : field === "phone" || field === "whatsapp" ? "tel" : "text"}
@@ -61,20 +63,20 @@ export function AgentFields({
               spellCheck={false}
               required={field === "full_name" || field === "phone"}
               disabled={disabled}
-              className={field === "code" ? "font-mono uppercase" : undefined}
+              className={field === "code" ? "ag-mono ag-upper" : undefined}
               // On a short phone the keyboard can cover the field; keep it in view.
               onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
               onChange={(event) => onChange({ ...value, [key]: event.target.value })}
-              aria-invalid={invalid || undefined}
+              invalid={invalid}
               aria-describedby={invalid ? `${id}-${field}-error` : hint ? `${id}-${field}-hint` : undefined}
             />
             {invalid ? (
-              <p id={`${id}-${field}-error`} className="text-xs text-destructive">
+              <p id={`${id}-${field}-error`} className="ag-error">
                 {refused?.message}
               </p>
             ) : (
               hint && (
-                <p id={`${id}-${field}-hint`} className="text-xs text-muted-foreground">
+                <p id={`${id}-${field}-hint`} className="ag-hint">
                   {hint}
                 </p>
               )

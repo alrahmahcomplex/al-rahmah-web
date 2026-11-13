@@ -164,11 +164,12 @@ a.kit-row { border-radius: 14px; }
 /* ---------- tables ---------- */
 .kit-tw { overflow-x: auto; margin: 0 -8px; }
 .kit-tbl { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
-.kit-tbl th { font-size: 12px; font-weight: 600; color: var(--gf-quiet); padding: 6px 12px 10px; white-space: nowrap; }
-.kit-tbl td { padding: 12px; border-top: 1px solid var(--gf-mist); vertical-align: middle; font-variant-numeric: tabular-nums; }
+.kit-tbl thead th { font-size: 12px; font-weight: 600; color: var(--gf-quiet); padding: 6px 12px 10px; white-space: nowrap; }
+.kit-tbl :is(td, tbody th) { padding: 12px; border-top: 1px solid var(--gf-mist); vertical-align: middle; font-variant-numeric: tabular-nums; }
 .kit-tbl tbody tr { transition: background var(--gf-t-med) var(--gf-ease-out); }
 .kit-tbl .kit-tr-open { cursor: pointer; }
 .kit-tbl .kit-tr-open:hover { background: var(--gf-chrome); }
+.kit-tbl tbody th { text-align: left; font-weight: 600; }
 .kit-tbl td b { font-weight: 600; display: block; }
 .kit-tbl td small { color: var(--gf-quiet); font-size: 12.5px; }
 .kit-tbl [data-align="end"] { text-align: right; white-space: nowrap; }

@@ -101,7 +101,7 @@ test.describe("Promo codes", () => {
 
     // Pausing asks for a reason and lists the unpaid fee it moves.
     await page.goto("/staff/promo-codes")
-    await page.getByRole("button", { name: `Open ${code}` }).click()
+    await page.getByRole("row", { name: `Open ${code}` }).click()
     const open = page.getByRole("dialog", { name: code })
     await expect(open).toContainText("1 student")
     await open.getByRole("button", { name: "Pause code" }).click()
@@ -131,7 +131,7 @@ test.describe("Promo codes", () => {
 
     await expect(page.getByRole("heading", { name: "Promo codes", level: 1 })).toBeVisible()
     await expect(page.getByRole("button", { name: "New Promo code" })).toHaveCount(0)
-    await page.getByRole("button", { name: `Open ${code}` }).click()
+    await page.getByRole("row", { name: `Open ${code}` }).click()
 
     const sheet = page.getByRole("dialog", { name: code })
     await expect(sheet).toContainText(name)

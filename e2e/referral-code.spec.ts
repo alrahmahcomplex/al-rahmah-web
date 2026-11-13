@@ -128,7 +128,7 @@ test.describe("the Referral code panel", () => {
     // The Leads column: one lead carries the code.
     await expect(row.getByRole("cell").nth(6)).toHaveText("1")
     await row.getByRole("button", { name: `Approve ${agent.fullName}` }).click()
-    await page.getByRole("alertdialog").getByRole("button", { name: `Approve ${agent.code}` }).click()
+    await page.getByRole("dialog", { name: /^Approve / }).getByRole("button", { name: `Approve ${agent.code}` }).click()
     await expect(page.getByText(`${agent.fullName} (${agent.code}) is Approved.`)).toBeVisible()
 
     await page.goto(`/staff/applicants/${lead}`)

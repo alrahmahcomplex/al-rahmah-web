@@ -567,28 +567,8 @@ describe("groups", () => {
     expect(await statusOf(second)).toBe("Enrolled")
   })
 
-  test("the kill switch holds back the 10% at once, and resuming gives it", async () => {
-    const year = await yearWithSchedule()
-    const name = father()
-    const dear = await child(year, name, "STD 2")
-    const cheap = await child(year, name, "KG 1")
-    const group = await together(dear, cheap)
-
-    // The switch is global, so the run stays in one transaction that is
-    // rolled back. The 10% is taken back first, as if the link came while
-    // new grants were paused.
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("select public.set_sibling_grants_paused(true)")
-      await sql.query("update public.lead_sibling_results set result = 'none' where lead_id = $1", [cheap])
-      await sql.query("select public.recompute_sibling_group($1, 'sibling')", [group])
-      expect(await resultOf(cheap, sql)).toMatchObject({ result: "none" })
-      expect(await resultOf(dear, sql)).toMatchObject({ result: "full" })
-
-      await sql.query("select public.set_sibling_grants_paused(false)")
-      expect(await resultOf(cheap, sql)).toMatchObject({ result: "ten", source: "auto" })
-    })
-  })
+  // The kill switch test lives in serial/sibling-kill-switch.test.ts: the
+  // switch is global, and tests running beside it deadlocked (#384).
 })
 
 describe("who may link", () => {

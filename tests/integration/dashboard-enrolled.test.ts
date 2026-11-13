@@ -4,9 +4,10 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Client } from "pg"
 import { describe, expect, test } from "vitest"
 
-import { getMetricCount, listEnrollmentYears, type Period } from "@/lib/services/dashboard"
+import { getMetricCount, type Period } from "@/lib/services/dashboard"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn, withoutLockWaits } from "../support/db"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, inRolledBackTransaction, rowVersions, signedIn, whileUnchanged, withoutLockWaits } from "../support/db"
+import { countIn, enrollmentYearsIn, readAs } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Enrolled students against local Supabase. Counts are filtered to Enrollment
@@ -208,18 +209,31 @@ describe("Enrolled students", () => {
     const manager = await signedIn(MANAGER)
     const periods: Period[] = [ALL, date("2026-09-25"), week("2026-09-21"), month("2026-08-01"), year("2026-01-01")]
 
-    // No lead or lead fee profile may be written meanwhile, so counts taken
-    // one after another agree.
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, ["public.leads", "public.lead_fee_profiles"])
-      const years = await listEnrollmentYears(manager)
-      if (!years.ok) throw new Error(years.error)
+    // Every count in one snapshot, as the Manager, so leads and fee
+    // profiles other tests write meanwhile can't land between two of them.
+    await inOneSnapshot(async (sql) => {
+      await actAsStaff(sql, MANAGER.id)
+      const years = await enrollmentYearsIn(sql)
+      expect(years.length).toBeGreaterThan(1)
       for (const period of periods) {
         let sum = 0
-        for (const each of years.data) sum += await enrolled(manager, period, each)
-        expect(await enrolled(manager, period, null), JSON.stringify(period)).toBe(sum)
+        for (const each of years) sum += await countIn(sql, "enrolled_students", period, each)
+        expect(await countIn(sql, "enrolled_students", period, null), JSON.stringify(period)).toBe(sum)
       }
     })
+
+    // The service's answer for every year, against the database's read just
+    // before and after it, with the version of every lead and fee profile, so
+    // a change made and undone meanwhile still counts as a change.
+    const { state, result } = await whileUnchanged(
+      async (sql) => ({
+        count: await readAs(sql, MANAGER.id, (signed) => countIn(signed, "enrolled_students", ALL, null)),
+        leads: await rowVersions(sql, "leads"),
+        profiles: await rowVersions(sql, "lead_fee_profiles"),
+      }),
+      () => enrolled(manager, ALL, null),
+    )
+    expect(result).toBe(state.count)
 
     // The base fixtures' 2027 students enrolled in late September 2026; the
     // 2031 ones on other days.

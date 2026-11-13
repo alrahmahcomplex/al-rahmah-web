@@ -10,7 +10,7 @@ import { ROLE_TEMPLATES, roleTemplate } from "@/lib/role-templates"
 import { getStaffAndRoles } from "@/lib/services/staff-admin"
 import { getAuditPage } from "@/lib/services/system-audit"
 
-import { asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
+import { asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn, withoutLockWaits } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN, type FixtureStaff } from "../support/fixtures"
 
 // Roles v2 (#241): the Super Admin makes every role from a template and
@@ -528,14 +528,15 @@ describe("a role with no managed set", () => {
 // writes run as that role, which may not execute super_admin_role_id() or
 // is_super_admin(), and a shared connection once hid such a bug (#237).
 describe("the refusals under the secret key, each on a fresh connection", () => {
-  async function asServiceRole(statement: string, params: unknown[] = []): Promise<string> {
+  async function asServiceRole(statement: string, params: unknown[] = [], { withoutLockWaits: lockFree = false } = {}): Promise<string> {
     const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
     await sql.connect()
     try {
       await sql.query("begin")
       await sql.query("set local role service_role")
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query(statement, params)
+      if (lockFree) await withoutLockWaits(sql, statement, params)
+      else await sql.query(statement, params)
       return "accepted"
     } catch (error) {
       return (error as Error).message
@@ -555,7 +556,6 @@ describe("the refusals under the secret key, each on a fresh connection", () => 
     ["a pair naming the Super Admin role", "insert into public.role_managed_roles (role_id, managed_role_id) values ($1, $2)", [ROLE.accountant, SUPER_ADMIN.roleId], "super_admin_frozen"],
     ["a pair under the Super Admin role", "insert into public.role_managed_roles (role_id, managed_role_id) values ($2, $1)", [ROLE.accountant, SUPER_ADMIN.roleId], "super_admin_frozen"],
     ["deleting a pair", "delete from public.role_managed_roles", [], "delete_refused"],
-    ["truncating the pairs", "truncate public.role_managed_roles", [], "delete_refused"],
     [
       "an invite naming an Accountant's email",
       "select public.invite_staff_member('Same Email', $1, $2)",
@@ -568,6 +568,12 @@ describe("the refusals under the secret key, each on a fresh connection", () => 
       expect(await asServiceRole(statement, params)).toBe(expected)
     })
   }
+
+  // Truncating takes the whole table before the trigger refuses it, so it
+  // must not queue behind tests running alongside.
+  test("truncating the pairs is refused with delete_refused", async () => {
+    expect(await asServiceRole("truncate public.role_managed_roles", [], { withoutLockWaits: true })).toBe("delete_refused")
+  })
 
   test("an ordinary pair written directly still goes through, audited", async () => {
     const roles = await asSystem(async (sql) => {

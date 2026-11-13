@@ -3,11 +3,12 @@ import { randomInt, randomUUID } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, test } from "vitest"
 
-import { getLeadsByClass, listEnrollmentYears, type LeadsByClass, type Period } from "@/lib/services/dashboard"
+import { getLeadsByClass, type LeadsByClass, type Period } from "@/lib/services/dashboard"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, LEAD_CLASSES, updateLeadDetails } from "@/lib/services/leads"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, rowVersions, secretClient, signedIn, whileUnchanged } from "../support/db"
+import { byClassIn, enrollmentYearsIn, readAs } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Leads by enrollment class against local Supabase. Counts are filtered to
@@ -174,24 +175,36 @@ describe("Leads by enrollment class", () => {
   })
 
   test("the Enrollment year combines with each period: the unfiltered count is the sum over every year", async () => {
-    const manager = await signedIn(MANAGER)
     const periods: Period[] = [{ kind: "all" }, date("2026-09-01"), week("2026-08-31"), month("2026-09-01"), year("2026-01-01")]
 
-    // No lead may be written meanwhile, so counts taken one after another agree.
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, ["public.leads"])
-      const years = await listEnrollmentYears(manager)
-      if (!years.ok) throw new Error(years.error)
+    // Every count in one snapshot, as the Manager, so leads other tests
+    // write meanwhile can't land between two of them.
+    await inOneSnapshot(async (sql) => {
+      await actAsStaff(sql, MANAGER.id)
+      const years = await enrollmentYearsIn(sql)
+      expect(years.length).toBeGreaterThan(1)
       for (const period of periods) {
-        const unfiltered = await byClass(manager, period, null)
+        const unfiltered = await byClassIn(sql, period, null)
         const sums = LEAD_CLASSES.map(() => 0)
-        for (const each of years.data) {
-          ;(await byClass(manager, period, each)).classes.forEach((row, i) => (sums[i] += row.count))
+        for (const each of years) {
+          ;(await byClassIn(sql, period, each)).forEach((count, i) => (sums[i] += count))
         }
-        expect(unfiltered.classes.map((row) => row.count), JSON.stringify(period)).toEqual(sums)
-        expect(unfiltered.total).toBe(sums.reduce((a, b) => a + b, 0))
+        expect(unfiltered, JSON.stringify(period)).toEqual(sums)
       }
     })
+
+    // The service's answer for every year, against the database's read just
+    // before and after it, with the version of every lead, so a lead moved
+    // and moved back meanwhile still counts as a change.
+    const { state, result } = await whileUnchanged(
+      async (sql) => ({
+        counts: await readAs(sql, MANAGER.id, (signed) => byClassIn(signed, { kind: "all" }, null)),
+        leads: await rowVersions(sql, "leads"),
+      }),
+      async () => byClass(await signedIn(MANAGER), { kind: "all" }, null),
+    )
+    expect(result.classes.map((row) => row.count)).toEqual(state.counts)
+    expect(result.total).toBe(state.counts.reduce((a, b) => a + b, 0))
   })
 
   test("an unknown period or a malformed anchor is refused as invalid", async () => {

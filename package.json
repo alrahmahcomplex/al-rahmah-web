@@ -9,7 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --project unit",
-    "test:integration": "vitest run --project integration --max-workers 4",
+    "test:integration": "vitest run --project integration --project integration-serial --max-workers 4",
     "test:e2e": "playwright test",
     "e2e:serve": "next build && next start -p 3100",
     "db:start": "supabase start -x realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",

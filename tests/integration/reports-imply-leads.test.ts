@@ -181,9 +181,11 @@ describe("direct SQL", () => {
   })
 
   test("with the trigger switched off, the check constraint still refuses reports.view alone", async () => {
+    // Replica mode skips the table's triggers for this transaction only,
+    // without the table lock that disabling the trigger would take.
     const result = await directly(
       "postgres",
-      `alter table public.roles disable trigger imply_role_permissions;
+      `set local session_replication_role = replica;
        insert into public.roles (name, permissions) values ('${unique("Unchecked")}', '{reports.view}') returning permissions`,
     )
     expect(result.outcome).toMatch(/roles_reports_view_needs_leads_view/)

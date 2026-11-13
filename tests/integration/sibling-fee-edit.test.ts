@@ -39,8 +39,8 @@ import {
   anonClient,
   asSystem,
   createThrowawayStaff,
+  inOneSnapshot,
   inRolledBackTransaction,
-  lockExclusively,
   signedIn,
 } from "../support/db";
 import { claimFeeYear } from "../support/fee-years";
@@ -378,21 +378,11 @@ describe("the owner's case and the spec's acceptance criteria", () => {
     const { dear, cheap } = await together(year);
     await payInFull(dear);
 
-    await inRolledBackTransaction(async (sql) => {
-      // No other suite writes a fee between the snapshots.
-      await lockExclusively(sql, [
-        "public.leads",
-        "public.guardian_contacts",
-        "public.lead_fee_profiles",
-        "public.lead_sibling_results",
-        "public.sibling_groups",
-        "public.sibling_group_members",
-        "public.school_fee_payments",
-        "public.payment_adjustments",
-        "public.discount_requests",
-        "public.fee_schedules",
-        "public.fee_band_amounts",
-      ]);
+    // One repeatable-read snapshot: fees other tests write meanwhile are
+    // invisible to it, so the only rows that can move between the two reads
+    // of the whole database are the ones this transaction writes. No table
+    // is locked, so tests running alongside never wait on this one (#384).
+    await inOneSnapshot(async (sql) => {
       const snapshot = async () =>
         new Map(
           (
@@ -931,62 +921,8 @@ describe("the full payer and the group", () => {
   });
 });
 
-describe("the kill switch", () => {
-  test("never changes a manual value; a manual 10% saves while paused; Back to automatic gives no new 10%", async () => {
-    const year = await yearWithSchedule();
-    const { cheap } = await together(year);
-    expect(await resultOf(cheap)).toMatchObject({
-      result: "ten",
-      source: "auto",
-    });
-
-    // The switch is global, so the run stays in one transaction that is
-    // rolled back.
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')");
-      await sql.query("select public.set_sibling_grants_paused(true)");
-
-      await asStaff(
-        sql,
-        ACCOUNTANT.id,
-        "select public.edit_sibling_fee($1, 'full', 'data_entry_correction', null, $2)",
-        [cheap, randomUUID()],
-      );
-      expect(await resultOf(cheap, sql)).toMatchObject({
-        result: "full",
-        source: "manual",
-      });
-
-      await asStaff(
-        sql,
-        ACCOUNTANT.id,
-        "select public.edit_sibling_fee($1, 'automatic', 'data_entry_correction', null, $2)",
-        [cheap, randomUUID()],
-      );
-      expect(await resultOf(cheap, sql)).toMatchObject({
-        result: "none",
-        source: "auto",
-      });
-
-      await asStaff(
-        sql,
-        ACCOUNTANT.id,
-        "select public.edit_sibling_fee($1, 'ten', 'data_entry_correction', null, $2)",
-        [cheap, randomUUID()],
-      );
-      expect(await resultOf(cheap, sql)).toMatchObject({
-        result: "ten",
-        source: "manual",
-      });
-
-      await sql.query("select public.set_sibling_grants_paused(false)");
-      expect(await resultOf(cheap, sql)).toMatchObject({
-        result: "ten",
-        source: "manual",
-      });
-    });
-  });
-});
+// The kill switch test lives in serial/sibling-kill-switch.test.ts: the switch is
+// global, and tests running beside it deadlocked (#384).
 
 describe("who may edit", () => {
   test("only payments.record: every other role, an agent and a signed-out caller are refused", async () => {

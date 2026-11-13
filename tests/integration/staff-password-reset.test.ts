@@ -13,8 +13,8 @@ import {
   anonClient,
   asSystem,
   createThrowawayStaff,
+  inOneSnapshot,
   inRolledBackTransaction,
-  lockExclusively,
   secretClient,
   signedIn,
 } from "../support/db"
@@ -159,8 +159,9 @@ describe("the public request, for staff", () => {
 
   test("staff and agents share the hourly budget", async () => {
     const member = await joinedStaff()
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, ["public.agent_link_requests"])
+    // One snapshot, so requests from tests running alongside can't move the
+    // count between the reads and the calls.
+    await inOneSnapshot(async (sql) => {
       await sql.query("delete from public.agent_link_requests where requested_at < now() - interval '1 hour'")
       const { rows } = await sql.query<{ n: number }>("select count(*)::int as n from public.agent_link_requests")
       const used = rows[0].n
@@ -231,8 +232,7 @@ describe("Send reset link", () => {
 
   test("a budget passed straight to the database is capped at Supabase's hourly email limit (50)", async () => {
     const member = await joinedStaff()
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, ["public.agent_link_requests"])
+    await inOneSnapshot(async (sql) => {
       await sql.query("delete from public.agent_link_requests where requested_at < now() - interval '1 hour'")
       const { rows } = await sql.query<{ n: number }>("select count(*)::int as n from public.agent_link_requests")
       await sql.query(

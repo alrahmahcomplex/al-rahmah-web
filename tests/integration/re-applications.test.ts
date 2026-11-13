@@ -17,10 +17,11 @@ import {
   asSystem,
   createThrowawayStaff,
   inRolledBackTransaction,
-  lockExclusively,
   secretClient,
+  rowVersions,
   signedIn,
   unusedAdmissionNumber,
+  whileUnchanged,
 } from "../support/db"
 import { ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
@@ -447,14 +448,19 @@ describe("Leads by enrollment class", () => {
 
   test("the seeded 2031 re-application is not counted", async () => {
     const manager = await signedIn(MANAGER)
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, ["public.leads"])
-      const seeded = await sql.query("select 1 from public.re_applications where enrollment_year = 2031")
-      expect(seeded.rowCount).toBeGreaterThan(0)
-      const leads = await sql.query<{ count: string }>("select count(*) from public.leads where enrollment_year = 2031")
-      const counted = await getLeadsByClass(manager, { period: { kind: "all" }, enrollmentYear: 2031 })
-      expect(counted.ok && counted.data.total).toBe(Number(leads.rows[0].count))
-    })
+    const seeded = await inRolledBackTransaction((sql) => sql.query("select 1 from public.re_applications where enrollment_year = 2031"))
+    expect(seeded.rowCount).toBeGreaterThan(0)
+    // The 2031 leads, read before and after the service's count, until no
+    // test moved a lead into or out of 2031 meanwhile. Every lead's version is
+    // in it, so a lead moved out and back meanwhile still shows.
+    const { state, result: counted } = await whileUnchanged(
+      async (sql) => ({
+        ...(await sql.query<{ count: number }>("select count(*)::int as count from public.leads where enrollment_year = 2031")).rows[0],
+        leads: await rowVersions(sql, "leads"),
+      }),
+      () => getLeadsByClass(manager, { period: { kind: "all" }, enrollmentYear: 2031 }),
+    )
+    expect(counted.ok && counted.data.total).toBe(state.count)
   })
 })
 

@@ -9,14 +9,14 @@ import { createLead } from "@/lib/services/leads"
 import { releaseResult } from "@/lib/services/result-release"
 import { countResultsReadyToSend, INTERVIEWS_NAMED, LATEST_LEADS, listInterviewsOn, listLatestLeads } from "@/lib/services/today"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, rowVersions, signedIn, whileUnchanged } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 import { claimInterviewYear, type InterviewYearClaim } from "../support/interview-years"
 
 // The Today page's reads (#226) against local Supabase. The file claims an
 // enrollment year of its own for the interviews it registers; the year keeps
 // earlier runs' rows, so tests look only for what they planted or compare a
-// read with the database's own answer while nothing can change.
+// read with the database's own answer, read just before and just after it.
 
 const OFFICE = { officePhone: "+255 673 526 644" }
 const today = tanzaniaToday()
@@ -136,19 +136,35 @@ describe("countResultsReadyToSend", () => {
   })
 
   test("agrees with the database's Ready to send rule, which takes the paid unsent result and leaves out the unpaid and the sent", async () => {
+    const admissions = await signedIn(ADMISSIONS)
+    // The rule's answer as Admissions, read before and after the service's,
+    // until no test registered, recorded, paid, sent or closed meanwhile.
+    // Every interview's and lead's version is in it, so a change made and
+    // undone meanwhile still shows. The versions and the rule's answer come
+    // from one snapshot: read apart, a send could land before the versions
+    // and a correction undo it before the answer, and both reads would match.
+    const { state, result: read } = await whileUnchanged(
+      async (sql) => {
+        await sql.query("begin isolation level repeatable read read only")
+        try {
+          const versions = { interviews: await rowVersions(sql, "interviews"), leads: await rowVersions(sql, "leads") }
+          await asStaff(sql, ADMISSIONS.id)
+          const { rows } = await sql.query<{ count: string; year: number | null; ids: string | null }>(
+            `select count(*) as count, min(i.serial_year) as year, md5(string_agg(i.id::text, ',' order by i.id)) as ids
+             from public.interviews i where public.result_ready_to_send(i)`,
+          )
+          return { ...rows[0], ...versions }
+        } finally {
+          await sql.query("rollback")
+        }
+      },
+      () => countResultsReadyToSend(admissions),
+    )
+    if (!read.ok) throw new Error(`count refused: ${read.error}`)
+    expect(read.data).toEqual({ count: Number(state.count), year: state.year })
+
     await inRolledBackTransaction(async (sql) => {
-      // Nothing can register, record, pay, send or close a lead meanwhile,
-      // so the two reads see the same interviews.
-      await lockExclusively(sql, ["public.leads", "public.interviews", "public.audit_log"])
-      const read = await countResultsReadyToSend(await signedIn(ADMISSIONS))
-      if (!read.ok) throw new Error(`count refused: ${read.error}`)
-
       await asStaff(sql, ADMISSIONS.id)
-      const { rows } = await sql.query<{ count: string; year: number | null }>(
-        "select count(*) as count, min(i.serial_year) as year from public.interviews i where public.result_ready_to_send(i)",
-      )
-      expect(read.data).toEqual({ count: Number(rows[0].count), year: rows[0].year })
-
       const each = await sql.query<{ id: string; ready: boolean }>(
         "select i.id, public.result_ready_to_send(i) as ready from public.interviews i where i.id = any($1)",
         [Object.values(planted)],
@@ -166,27 +182,37 @@ describe("countResultsReadyToSend", () => {
 describe("listLatestLeads", () => {
   test("lists the newest leads first, five of them, as the database orders them", async () => {
     await registeredLead(`Today newest ${randomUUID().slice(0, 8)}`)
-    await inRolledBackTransaction(async (sql) => {
-      // No lead can be created meanwhile, so the two reads agree.
-      await lockExclusively(sql, ["public.leads"])
-      const read = await listLatestLeads(await signedIn(MANAGER))
-      if (!read.ok) throw new Error(`list refused: ${read.error}`)
-      const { rows } = await sql.query<{ id: string }>("select id from public.leads order by created_at desc, id desc limit $1", [LATEST_LEADS])
+    const manager = await signedIn(MANAGER)
+    const accountant = await signedIn(ACCOUNTANT)
+    // The database's newest leads, read before and after the service's,
+    // until no test created or changed one of them meanwhile.
+    const {
+      state: rows,
+      result: [read, two],
+    } = await whileUnchanged(
+      async (sql) =>
+        (
+          await sql.query<{ id: string; version: string }>(
+            "select id, xmin::text as version from public.leads order by created_at desc, id desc limit $1",
+            [LATEST_LEADS],
+          )
+        ).rows,
+      () => Promise.all([listLatestLeads(manager), listLatestLeads(accountant, 2)]),
+    )
+    if (!read.ok) throw new Error(`list refused: ${read.error}`)
+    if (!two.ok) throw new Error(`list refused: ${two.error}`)
 
-      expect(read.data).toHaveLength(LATEST_LEADS)
-      expect(read.data.map((lead) => lead.id)).toEqual(rows.map((row) => row.id))
-      for (const lead of read.data) {
-        expect(lead.admissionNumber).toMatch(/^ADMSN-\d{5}$/)
-        expect(lead.studentName).not.toBe("")
-        expect(["Applied", "Visited", "Interviewed", "Enrolled", "Declined"]).toContain(lead.status)
-      }
-      const createdAt = read.data.map((lead) => Date.parse(lead.createdAt))
-      expect(createdAt).toEqual([...createdAt].sort((a, b) => b - a))
+    expect(read.data).toHaveLength(LATEST_LEADS)
+    expect(read.data.map((lead) => lead.id)).toEqual(rows.map((row) => row.id))
+    for (const lead of read.data) {
+      expect(lead.admissionNumber).toMatch(/^ADMSN-\d{5}$/)
+      expect(lead.studentName).not.toBe("")
+      expect(["Applied", "Visited", "Interviewed", "Enrolled", "Declined"]).toContain(lead.status)
+    }
+    const createdAt = read.data.map((lead) => Date.parse(lead.createdAt))
+    expect(createdAt).toEqual([...createdAt].sort((a, b) => b - a))
 
-      const two = await listLatestLeads(await signedIn(ACCOUNTANT), 2)
-      if (!two.ok) throw new Error(`list refused: ${two.error}`)
-      expect(two.data.map((lead) => lead.id)).toEqual(rows.slice(0, 2).map((row) => row.id))
-    })
+    expect(two.data.map((lead) => lead.id)).toEqual(rows.slice(0, 2).map((row) => row.id))
   })
 
   test("reads nothing for someone signed out", async () => {

@@ -5,6 +5,10 @@ import { axeProblems, settled } from "./axe"
 import { signInOnce } from "./log-in"
 import { expect, test } from "./staff-test"
 
+// The kit page (#319): the prototype's Design system page rebuilt with
+// components/kit, then the kit's other pieces. Any signed-in staff member may
+// open it; it is drawn in the new shell (#322).
+
 async function openKit(page: Page) {
   await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
   await page.goto("/staff/kit")

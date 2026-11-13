@@ -1,1 +1,183 @@
-[]
+[
+  {
+    "id": "m01", "area": "database rule", "what": "A Declined lead no longer counts as closed",
+    "edits": [{ "file": "supabase/migrations/20261003000000_wave_0_foundations.sql",
+      "find": "          and (l.status = 'Declined' or l.closure is not null)\n    );\nend;",
+      "replace": "          and l.closure is not null\n    );\nend;" }]
+  },
+  {
+    "id": "m02", "area": "database rule", "what": "A phone typed as 255712345678 is no longer understood",
+    "edits": [{ "file": "supabase/migrations/20260929400000_leads_and_walk_in_check_in.sql",
+      "find": "        when s ~ '^255[0-9]{9}$' then '+' || s",
+      "replace": "        when s ~ '^255[0-9]{9}$' then null" }]
+  },
+  {
+    "id": "m03", "area": "permission", "what": "The export gives parents' phone numbers to staff without leads.export",
+    "edits": [{ "file": "supabase/migrations/20261204130600_student_export.sql",
+      "find": "then 'contact'",
+      "replace": "then 'view'" }]
+  },
+  {
+    "id": "m04", "area": "permission", "what": "Anyone who may view leads can change discount codes",
+    "edits": [{ "file": "supabase/migrations/20261204130300_discount_code_writes.sql",
+      "find": "    if auth.role() is distinct from 'authenticated'\n       or not public.has_permission('discount_codes.manage')\n       or not public.has_permission('leads.view') then\n        raise exception 'not_permitted';\n    end if;\n    select s.id into staff_id from public.staff_members s where s.user_id = auth.uid();\n    return staff_id;",
+      "replace": "    if auth.role() is distinct from 'authenticated'\n       or not public.has_permission('leads.view') then\n        raise exception 'not_permitted';\n    end if;\n    select s.id into staff_id from public.staff_members s where s.user_id = auth.uid();\n    return staff_id;" }]
+  },
+  {
+    "id": "m05", "area": "permission", "what": "A deactivated staff member still counts as active staff",
+    "edits": [{ "file": "supabase/migrations/20261122120500_agent_identity.sql",
+      "find": "        where id = public.current_staff_id() and active\n",
+      "replace": "        where id = public.current_staff_id()\n" }]
+  },
+  {
+    "id": "m07", "area": "permission", "what": "An agent who was switched off can still set up a login",
+    "edits": [{ "file": "supabase/migrations/20261122120500_agent_identity.sql",
+      "find": "              and m.status = 'Approved'\n              and m.switched_off_at is null\n              and m.retired_at is null\n              and m.user_id is null",
+      "replace": "              and m.status = 'Approved'\n              and m.retired_at is null\n              and m.user_id is null" }]
+  },
+  {
+    "id": "m08", "area": "money", "what": "A Promo code gives nothing on its last day",
+    "edits": [{ "file": "supabase/migrations/20261204130300_discount_code_writes.sql",
+      "find": "promo_amount_off.ends_on >= public.tanzania_today()",
+      "replace": "promo_amount_off.ends_on > public.tanzania_today()" }]
+  },
+  {
+    "id": "m09", "area": "money", "what": "STD 5 is charged the lower primary fee",
+    "edits": [{ "file": "supabase/migrations/20261010900000_fee_schedule.sql",
+      "find": "        when 'STD 5' then 'primary_upper'",
+      "replace": "        when 'STD 5' then 'primary_lower'" }]
+  },
+  {
+    "id": "m10", "area": "database rule", "what": "A full class does not warn until it is one over",
+    "edits": [{ "file": "supabase/migrations/20261026900600_seats.sql",
+      "find": "        and occupancy.taken >= occupancy.seats;",
+      "replace": "        and occupancy.taken > occupancy.seats;" }]
+  },
+  {
+    "id": "m11", "area": "money", "what": "A School fee can be waived twice",
+    "edits": [{ "file": "supabase/migrations/20261103900900_discount_requests.sql",
+      "find": "e.payment_id <> new.payment_id\n       ) then\n        raise exception 'already_waived';",
+      "replace": "e.payment_id <> new.payment_id\n       ) then\n        null;" }]
+  },
+  {
+    "id": "m13", "area": "money", "what": "A result can be sent before the interview fee is paid",
+    "edits": [{ "file": "supabase/migrations/20261114600100_result_release.sql",
+      "find": "    if target.fee_status <> 'Paid' then\n        raise exception 'not_paid';",
+      "replace": "    if target.fee_status is null then\n        raise exception 'not_paid';" }]
+  },
+  {
+    "id": "m14", "area": "permission", "what": "An agent sees every referred student, not only their own",
+    "edits": [{ "file": "supabase/migrations/20261127120900_agent_students.sql",
+      "find": "        join public.leads l on l.referral_code = ac.code\n        where ac.id = agent.id",
+      "replace": "        join public.leads l on l.referral_code is not null\n        where ac.id = agent.id" }]
+  },
+  {
+    "id": "m15", "area": "money", "what": "The interview fee says a discount applies but takes nothing off",
+    "edits": [{ "file": "supabase/migrations/20261204130200_discount_amounts_and_promo_codes.sql",
+      "find": "    amount := public.interview_fee(false) - off;",
+      "replace": "    amount := public.interview_fee(false);" }]
+  },
+  {
+    "id": "m16", "area": "database rule", "what": "A follow-up due today is listed as overdue",
+    "edits": [{ "file": "supabase/migrations/20261111700600_reopened_needs_follow_up_date.sql",
+      "find": "          when 'overdue' then f.due_on < public.tanzania_today()",
+      "replace": "          when 'overdue' then f.due_on <= public.tanzania_today()" }]
+  },
+  {
+    "id": "m17", "area": "permission", "what": "Staff holding a retired role keep its permissions",
+    "edits": [{ "file": "supabase/migrations/20261130990300_super_admin_role.sql",
+      "find": "          and s.active\n          and not r.retired\n          and (r.id = public.super_admin_role_id() or has_permission.permission = any (r.permissions))",
+      "replace": "          and s.active\n          and (r.id = public.super_admin_role_id() or has_permission.permission = any (r.permissions))" }]
+  },
+  {
+    "id": "m18", "area": "permission", "what": "Staff who may view leads but not payments can read School fee payments",
+    "edits": [{ "file": "supabase/migrations/20261020900400_school_fee_payments.sql",
+      "find": "create policy \"Staff who may view payments read school-fee payments\"\n    on public.school_fee_payments for select\n    to authenticated\n    using ((select public.has_permission('payments.view')));",
+      "replace": "create policy \"Staff who may view payments read school-fee payments\"\n    on public.school_fee_payments for select\n    to authenticated\n    using ((select public.has_permission('leads.view')));" }]
+  },
+  {
+    "id": "t01", "area": "security", "what": "The sign-in page's next address can leave the site (open redirect)",
+    "edits": [
+      { "file": "lib/safe-next-path.ts", "find": "  if (url.origin !== PROBE_ORIGIN) return FALLBACK\n", "replace": "  if (url.origin !== PROBE_ORIGIN && next.includes(\"\\\\\")) return FALLBACK\n" },
+      { "file": "lib/safe-next-path.ts", "find": "  return url.pathname + url.search + url.hash", "replace": "  return next" }
+    ]
+  },
+  {
+    "id": "t02", "area": "security", "what": "When Cloudflare cannot be reached, public forms are let through",
+    "edits": [{ "file": "lib/turnstile.ts",
+      "find": "refusing the form`)\n    return { ok: false, error: \"unavailable\" }",
+      "replace": "refusing the form`)\n    return { ok: true, data: null }" }]
+  },
+  {
+    "id": "t04", "area": "app logic", "what": "A WhatsApp message goes to the phone number when a separate WhatsApp number is on file",
+    "edits": [{ "file": "lib/whatsapp.ts",
+      "find": "    return { channel: \"whatsapp\", digits: contact.whatsapp.slice(1) }",
+      "replace": "    return { channel: \"whatsapp\", digits: (contact.phone ?? contact.whatsapp).slice(1) }" }]
+  },
+  {
+    "id": "t07", "area": "permission", "what": "The app's own permission check passes anyone who holds any permission",
+    "edits": [{ "file": "lib/services/staff-auth.ts",
+      "find": "  if (!staff.data.permissions.includes(permission)) return { ok: false, error: \"forbidden\" }",
+      "replace": "  if (staff.data.permissions.length === 0) return { ok: false, error: \"forbidden\" }" }]
+  },
+  {
+    "id": "t08", "area": "app logic", "what": "The Admission form accepts nine students",
+    "edits": [{ "file": "lib/admission-form.ts",
+      "find": "export const MAX_CHILDREN = 8",
+      "replace": "export const MAX_CHILDREN = 9" }]
+  },
+  {
+    "id": "t09", "area": "app logic", "what": "The student import refuses a visit dated today as a future date",
+    "edits": [{ "file": "lib/student-import.ts",
+      "find": "n.visitDate !== null && n.visitDate > today",
+      "replace": "n.visitDate !== null && n.visitDate >= today" }]
+  },
+  {
+    "id": "t10", "area": "security", "what": "Exported CSV cells are no longer guarded against spreadsheet formulas",
+    "edits": [{ "file": "lib/import/csv.ts",
+      "find": "  const safe = FORMULA_START.test(value) ? `'${value}` : value",
+      "replace": "  const safe = value" }]
+  },
+  {
+    "id": "t11", "area": "app logic", "what": "A follow-up due today is not offered as the next step",
+    "edits": [{ "file": "lib/lead-next-step.ts",
+      "find": "  if (dueOn !== null && dueOn <= today) return",
+      "replace": "  if (dueOn !== null && dueOn < today) return" }]
+  },
+  {
+    "id": "t12", "area": "permission", "what": "The export screen offers contact columns to staff without leads.export",
+    "edits": [{ "file": "lib/services/student-export.ts",
+      "find": "  if (tier === \"contact\") return access.permissions.includes(\"leads.export\")",
+      "replace": "  if (tier === \"contact\") return access.permissions.includes(\"leads.view\")" }]
+  },
+  {
+    "id": "u01", "area": "screen wiring", "what": "The Decline form drops the typed explanation",
+    "edits": [{ "file": "app/staff/applicants/[id]/decline-lead.tsx",
+      "find": "outcome = await declineLeadAction(lead.id, reason, explanation)",
+      "replace": "outcome = await declineLeadAction(lead.id, reason, \"\")" }]
+  },
+  {
+    "id": "u02", "area": "screen wiring", "what": "Record payment refuses an amount typed with commas (1,100,000)",
+    "edits": [{ "file": "app/staff/applicants/[id]/record-payment.tsx",
+      "find": "  const plain = typed.replace(/[,\\s]/g, \"\")",
+      "replace": "  const plain = typed.replace(/[\\s]/g, \"\")" }]
+  },
+  {
+    "id": "a01", "area": "look", "what": "The Decline form's Reason list loses its label",
+    "edits": [{ "file": "app/staff/applicants/[id]/decline-lead.tsx",
+      "find": "<Label htmlFor={reasonId}>Reason</Label>",
+      "replace": "<Label>Reason</Label>" }]
+  },
+  {
+    "id": "a02", "area": "look", "what": "Round buttons shrink from 44px to 36px",
+    "edits": [{ "file": "components/kit/kit.css",
+      "find": "  position: relative; width: 44px; height: 44px; flex: none; border-radius: 50%; padding: 0; cursor: pointer;",
+      "replace": "  position: relative; width: 36px; height: 36px; flex: none; border-radius: 50%; padding: 0; cursor: pointer;" }]
+  },
+  {
+    "id": "a03", "area": "look", "what": "The page header is too wide for a phone, so the page scrolls sideways",
+    "edits": [{ "file": "components/kit/kit.css",
+      "find": ".kit-ph > div:first-child { flex: 1 1 320px; min-width: 0; }",
+      "replace": ".kit-ph > div:first-child { flex: 1 1 320px; min-width: 480px; }" }]
+  }
+]

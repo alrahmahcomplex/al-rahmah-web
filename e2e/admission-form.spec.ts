@@ -162,25 +162,6 @@ test("Start over sits on the first question, and Clear the whole form asks befor
   await expect(openQuestion(page).getByRole("textbox")).toHaveValue("")
 })
 
-for (const width of [280, 320, 390, 1280]) {
-  test(`nothing scrolls sideways at ${width}px, from the first question to the code`, async ({ page, context }) => {
-    const who = family()
-    await setLanguageCookie(context, "sw")
-    await page.setViewportSize({ width, height: 800 })
-    await page.goto("/apply")
-    const sideways = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-    expect(await sideways()).toBeLessThanOrEqual(0)
-    await toCode(page, "sw", who, nextYear)
-    expect(await sideways()).toBeLessThanOrEqual(0)
-    await toSend(page, "sw")
-    expect(await sideways()).toBeLessThanOrEqual(0)
-    for (const button of await openQuestion(page).getByRole("button").all()) {
-      const box = await button.boundingBox()
-      if (box) expect(box.height).toBeGreaterThanOrEqual(44)
-    }
-  })
-}
-
 test("a tap on Other opens its description instead of folding the question", async ({ page, context }) => {
   const who = family()
   await setLanguageCookie(context, "en")

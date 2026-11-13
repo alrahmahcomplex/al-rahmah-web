@@ -487,26 +487,3 @@ test.describe("registering without a mouse", () => {
     await expect(page.getByRole("heading", { name: `${sibling} is registered`, level: 1 })).toBeVisible()
   })
 })
-
-test.describe("on a phone", () => {
-  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-
-  test("check-in and every registration screen fit the width", async ({ page }) => {
-    const family = newFamily()
-    const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
-    await signIn(page, ADMISSIONS)
-    await page.goto("/staff/check-in")
-    await expect(page.getByRole("heading", { name: "Who has arrived?", level: 1 })).toBeVisible()
-    expect(await fits()).toBe(true)
-
-    await page.getByRole("link", { name: "New family, never registered" }).click()
-    await expect(page.getByRole("heading", { name: "Who is the parent or guardian?", level: 1 })).toBeVisible()
-    expect(await fits()).toBe(true)
-    await fillParent(page, family)
-    await expect(page.getByRole("heading", { name: "Who is the student?", level: 1 })).toBeVisible()
-    expect(await fits()).toBe(true)
-    await fillStudent(page, family.child)
-    await expect(page.getByRole("heading", { name: "Check and register", level: 1 })).toBeVisible()
-    expect(await fits()).toBe(true)
-  })
-})

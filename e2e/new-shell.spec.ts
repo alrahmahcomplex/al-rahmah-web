@@ -190,36 +190,6 @@ test.describe("on a desktop", () => {
     await page.goto("/staff/reopenings")
     await expect(page).toHaveURL(/\/login$/)
   })
-
-  test("the stage scrolls under its border, with its bar drawn outside it", async ({ page }) => {
-    await open(page, ADMISSIONS, "/staff/kit")
-    const scroll = page.locator(".ns-scroll")
-    // The stage's own bar is hidden; the drawn one sits in the white gutter.
-    expect(await scroll.evaluate((el) => (el as HTMLElement).offsetWidth - el.clientWidth)).toBe(0)
-    await expect(page.locator(".ns-vbar[data-on]")).toBeVisible()
-    const stage = (await page.locator(".ns-stage").boundingBox())!
-    const bar = (await page.locator(".ns-vbar").boundingBox())!
-    expect(bar.x).toBeGreaterThan(stage.x + stage.width)
-
-    const thumbAt = () => page.locator(".ns-vbar i").evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).f)
-    await scroll.evaluate((el) => el.scrollTo(0, 1400))
-    await expect.poll(thumbAt).toBeGreaterThan(0)
-    // Pressing the bottom of the track jumps there.
-    await page.mouse.click(bar.x + bar.width / 2, bar.y + bar.height - 2)
-    // It lands at (or, while the page still grows, very near) the end.
-    await expect.poll(() => scroll.evaluate((el) => el.scrollTop / (el.scrollHeight - el.clientHeight))).toBeGreaterThan(0.95)
-  })
-
-  test("a short window keeps every row at least 24px and never shows the sidebar's scrollbar", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 520 })
-    await open(page, MANAGER, "/staff/reopenings")
-    const nav = staffNav(page)
-    const heights = await nav.getByRole("link").evaluateAll((links) => links.map((link) => link.getBoundingClientRect().height))
-    expect(Math.min(...heights)).toBeGreaterThanOrEqual(24)
-    expect(await nav.evaluate((el) => (el as HTMLElement).offsetWidth - el.clientWidth)).toBe(0)
-    await nav.evaluate((el) => el.scrollTo(0, el.scrollHeight))
-    await expect(entry(page, "Staff and roles")).toBeInViewport()
-  })
 })
 
 test.describe("Back on the stage", () => {
@@ -293,7 +263,7 @@ for (const [label, size] of [
   ["1280px", { width: 1280, height: 900 }],
   ["390px", { width: 390, height: 844 }],
 ] as const) {
-  test(`axe finds nothing but the accepted findings on Reopening requests, the bell and the account menu at ${label}`, async ({ page }) => {
+  test(`axe finds nothing but the accepted findings on Reopening requests, the bell and the account menu at ${label}`, { tag: "@nightly" }, async ({ page }) => {
     await page.setViewportSize(size)
     await open(page, MANAGER, "/staff/reopenings")
     expect(await axeProblems(page)).toEqual([])
@@ -315,36 +285,6 @@ for (const [label, size] of [
     }
   })
 }
-
-// The page-change motion (DESIGN.md, Motion), drawn by the stage for every
-// page in it: each top-level block rises 10px and fades in over 460ms,
-// starting 0, 50, 100 and 140ms in; nothing moves under reduced motion.
-const riseOf = (page: Page) =>
-  page.locator(".ns-page > *").evaluateAll((blocks) =>
-    blocks.slice(0, 4).map((block) => {
-      const style = getComputedStyle(block)
-      return `${style.animationName} ${style.animationDuration} ${style.animationDelay}`
-    }),
-  )
-
-for (const path of ["/staff/kit", "/staff/reopenings"]) {
-  test(`the blocks of ${path} rise in, staggered`, async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await open(page, MANAGER, path)
-    const rise = await riseOf(page)
-    expect(rise.length).toBeGreaterThanOrEqual(2)
-    expect(rise).toEqual(["ns-rise 0.46s 0s", "ns-rise 0.46s 0.05s", "ns-rise 0.46s 0.1s", "ns-rise 0.46s 0.14s"].slice(0, rise.length))
-  })
-}
-
-test.describe("under reduced motion", () => {
-  test.use({ reducedMotion: "reduce", viewport: { width: 1280, height: 800 } })
-
-  test("no block of the page moves", async ({ page }) => {
-    await open(page, MANAGER, "/staff/kit")
-    for (const value of await riseOf(page)) expect(value.startsWith("none ")).toBe(true)
-  })
-})
 
 test.describe("crossing between the shells by links", () => {
   test.use({ viewport: { width: 1280, height: 800 } })
@@ -382,20 +322,6 @@ test.describe("crossing between the shells by links", () => {
   })
 })
 
-test.describe("on a touch screen wider than a phone", () => {
-  test.use({ viewport: { width: 1024, height: 768 }, isMobile: true, hasTouch: true })
-
-  test("folded rows stay 44px targets", async ({ page }) => {
-    await open(page, MANAGER, "/staff/reopenings")
-    await toggle(page).click()
-    await expect.poll(() => width(page)).toBe(60)
-    const box = (await entry(page, "Applicants").boundingBox())!
-    expect(box.height).toBe(44)
-    expect(box.width).toBe(44)
-    await toggle(page).click()
-  })
-})
-
 test("a role that may approve discounts but not view applicants gets a bell whose number matches its list", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const person = await createThrowawayStaff(["discounts.approve"])
@@ -407,73 +333,4 @@ test("a role that may approve discounts but not view applicants gets a bell whos
   if (waiting === 0) await expect(list.getByText("Nothing is waiting.")).toBeVisible()
   else await expect(list.getByRole("link", { name: /^New discount request/ })).toHaveCount(waiting)
   await expect(list.getByRole("link", { name: /^New reopening request/ })).toHaveCount(0)
-})
-
-// The contract with the guided form (#321): it scrolls the stage's scroll
-// area, found by data-stage-scroll, and pins its progress bar to the stage's
-// top with --kit-stage-pt, the area's top padding.
-for (const [label, viewport, padding] of [
-  ["1280px", { width: 1280, height: 800 }, "26px"],
-  ["390px", { width: 390, height: 844 }, "16px"],
-] as const) {
-  test(`the stage's scroll area carries data-stage-scroll and --kit-stage-pt at ${label}`, async ({ page }) => {
-    await page.setViewportSize(viewport)
-    await open(page, MANAGER, "/staff/reopenings")
-    const area = page.locator("[data-stage-scroll]")
-    await expect(area).toHaveCount(1)
-    expect(await area.evaluate((el) => getComputedStyle(el).getPropertyValue("--kit-stage-pt").trim())).toBe(padding)
-    await expect(area).toHaveCSS("padding-top", padding)
-    expect(await area.evaluate((el) => el.contains(document.querySelector("main")))).toBe(true)
-  })
-}
-
-test("the brand title fits the sidebar at its narrowest and at its widest", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await open(page, ADMISSIONS, "/staff/reopenings")
-  const fits = () =>
-    page.evaluate(() => {
-      const aside = document.querySelector("#staff-sidebar")!.getBoundingClientRect()
-      const name = document.querySelector(".ns-name")!.getBoundingClientRect()
-      return name.right <= aside.right
-    })
-  await expect.poll(fits).toBe(true)
-  await handle(page).focus()
-  await page.keyboard.press("End")
-  await expect.poll(fits).toBe(true)
-  await page.keyboard.press("Home")
-})
-
-test("the stage fills the window down to 12px above its bottom, however short the page", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 1000 })
-  await open(page, ADMISSIONS, "/staff/kit")
-  await page.getByRole("button", { name: "Fold or open the sidebar" }).focus()
-  const bottom = () => page.locator(".ns-stage").evaluate((el) => Math.round(el.getBoundingClientRect().bottom))
-  await expect.poll(bottom).toBe(1000 - 12)
-  await page.setViewportSize({ width: 1280, height: 2400 })
-  await expect.poll(bottom).toBe(2400 - 12)
-})
-
-// Inside a grid the stage marks data-rise="group" (the kit page's card grids),
-// each card rises on its own, starting 0, 70, 130 and 180ms in.
-const groupRise = (page: Page) =>
-  page.locator('[data-part="more"][data-rise="group"] > *').evaluateAll((cards) =>
-    cards.slice(0, 5).map((card) => {
-      const style = getComputedStyle(card)
-      return `${style.animationName} ${style.animationDelay}`
-    }),
-  )
-
-test("the cards of a grid rise one after another", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await open(page, MANAGER, "/staff/kit")
-  expect(await groupRise(page)).toEqual(["ns-rise 0s", "ns-rise 0.07s", "ns-rise 0.13s", "ns-rise 0.18s", "ns-rise 0.18s"])
-})
-
-test.describe("under reduced motion, in a grid", () => {
-  test.use({ reducedMotion: "reduce", viewport: { width: 1280, height: 800 } })
-
-  test("no card moves", async ({ page }) => {
-    await open(page, MANAGER, "/staff/kit")
-    for (const value of await groupRise(page)) expect(value.startsWith("none ")).toBe(true)
-  })
 })

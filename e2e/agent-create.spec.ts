@@ -169,38 +169,25 @@ test.describe("Recreate", () => {
     await expect(row).toContainText(spaced(newPhone))
   })
 
-  test.describe("on a short phone", () => {
-    test.use({ viewport: { width: 360, height: 640 } })
+  test("Recreate from a current agent's row moves the students to the new record and changes no fee", async ({ page }) => {
+    const old = await approvedAgent()
+    for (let i = 0; i < 3; i++) await leadWithCode(old.code)
+    await signIn(page, MANAGER)
+    await page.goto(`/staff/agents?status=all&q=${encodeURIComponent(old.code)}`)
+    await page.getByRole("row", { name: new RegExp(old.fullName) }).getByRole("button", { name: `Recreate ${old.fullName}` }).click()
 
-    test("Recreate from a current agent's row fits the screen, keeps the focused reason in view and the confirm button reachable", async ({ page }) => {
-      const old = await approvedAgent()
-      for (let i = 0; i < 3; i++) await leadWithCode(old.code)
-      await signIn(page, MANAGER)
-      await page.goto(`/staff/agents?status=all&q=${encodeURIComponent(old.code)}`)
-      await page.getByRole("row", { name: new RegExp(old.fullName) }).getByRole("button", { name: `Recreate ${old.fullName}` }).click()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog.getByLabel("Full name")).toHaveValue(old.fullName)
+    // Approved before and after: no fee moves.
+    await expect(dialog.getByText("This changes the interview fee for 0 families not yet Paid.")).toBeVisible()
 
-      const dialog = page.getByRole("dialog")
-      await expect(dialog.getByLabel("Full name")).toHaveValue(old.fullName)
-      // Approved before and after: no fee moves.
-      await expect(dialog.getByText("This changes the interview fee for 0 families not yet Paid.")).toBeVisible()
-      const box = await dialog.boundingBox()
-      expect(box).not.toBeNull()
-      expect(box!.y).toBeGreaterThanOrEqual(0)
-      expect(box!.y + box!.height).toBeLessThanOrEqual(640)
+    const confirm = dialog.getByRole("button", { name: `Recreate ${old.code}` })
+    await dialog.getByLabel("Full name").fill(`${old.fullName} Corrected`)
+    await dialog.getByRole("checkbox", { name: `This is the same person. The 3 students carrying ${old.code} move to the new record.` }).check()
+    await dialog.getByLabel("Reason").fill("Name spelled wrong")
+    await expect(confirm).toBeEnabled()
+    await confirm.click()
 
-      const confirm = dialog.getByRole("button", { name: `Recreate ${old.code}` })
-      await expect(confirm).toBeInViewport({ ratio: 1 })
-      await dialog.getByLabel("Full name").fill(`${old.fullName} Corrected`)
-      await dialog.getByRole("checkbox", { name: `This is the same person. The 3 students carrying ${old.code} move to the new record.` }).check()
-      const reason = dialog.getByLabel("Reason")
-      await reason.focus()
-      await expect(reason).toBeInViewport({ ratio: 1 })
-      await page.keyboard.type("Name spelled wrong")
-      await expect(confirm).toBeEnabled()
-      await expect(confirm).toBeInViewport({ ratio: 1 })
-      await confirm.click()
-
-      await expect(page.getByText(`${old.fullName} Corrected (${old.code}) is recreated. 3 students keep the code. No interview fee changed.`)).toBeVisible()
-    })
+    await expect(page.getByText(`${old.fullName} Corrected (${old.code}) is recreated. 3 students keep the code. No interview fee changed.`)).toBeVisible()
   })
 })

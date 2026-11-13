@@ -174,6 +174,10 @@ jobs:
     if: ${{ needs.scope.outputs.full_suite == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # The axe scans (tagged @nightly) run in the nightly run and in a run
+      # started by hand, never for a pull request or a push.
+      E2E_NIGHTLY: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '1' || '' }}
     strategy:
       # Every shard finishes and reports, also when another one fails.
       fail-fast: false

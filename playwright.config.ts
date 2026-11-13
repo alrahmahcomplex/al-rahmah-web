@@ -26,6 +26,9 @@ export default defineConfig({
   globalSetup: "./e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
+  // A test tagged @nightly (the axe scans) runs only when E2E_NIGHTLY is set:
+  // CI sets it for the nightly run and a run started by hand.
+  grepInvert: process.env.E2E_NIGHTLY ? undefined : /@nightly/,
   retries: process.env.CI ? 1 : 0,
   // The JSON report is what scripts/e2e-shards.mjs checks after a shard ran,
   // and where the shards' measured seconds come from.

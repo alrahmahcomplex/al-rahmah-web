@@ -8,7 +8,7 @@ Merge without waiting for the owner once all of these hold on the PR's final hea
 - Greptile is at 5/5 where Workflow requires it. A PR of allowlisted Markdown only does not wait for it.
 - The applicable CI is green.
 
-The owner's "merge" also authorizes it. Wait for the owner instead when they said to hold the PR, when a risk needs their acceptance, or when the PR adds a migration while an earlier one is missing on hosted ([Confirm hosted migrations](#confirm-hosted-migrations)). A UI or UX change merges only after its build was approved ([Workflow → UI and UX changes](workflow.md#ui-and-ux-changes)). Then follow this page through housekeeping.
+The owner's "merge" also authorizes it. CI must still be green; the review or Greptile is skipped only if the owner says so. Wait for the owner instead when they said to hold the PR, when a risk needs their acceptance, or when the PR adds a migration while an earlier one is missing on hosted ([Confirm hosted migrations](#confirm-hosted-migrations)). A UI or UX change merges only after its build was approved ([Workflow → UI and UX changes](workflow.md#ui-and-ux-changes)). Then follow this page through housekeeping.
 
 ## Decide whether this changes the app
 

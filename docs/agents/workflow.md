@@ -103,11 +103,11 @@ Editorial work needs the author's diff/accuracy check. Every other tier needs on
 
 Sensitive work focuses that review on the affected trust boundary, data rule, workflow authority or release behavior. Add another specialist only for an uncovered concern. Architectural work also includes the approved design review; it does not automatically multiply implementation reviews.
 
-**Rounds.** Fix the verified findings and send the new head for review again until the reviewer says READY. Move to a stronger reviewer when NOT READY keeps coming back round after round, or when the implementer was moved to a stronger model. Stop and report to the lead, or the owner if there is no lead, instead of widening the PR when a round brings a finding outside the PR's scope or the same kind of finding comes back. File the outside finding as a ticket. Recheck only the changed areas when the fixes leave the rest of the reviewed scope alone.
+**Rounds.** Fix the verified findings and send the new head for review again until the reviewer says READY. Ask the lead, or the owner if there is no lead, for a stronger reviewer when NOT READY keeps coming back round after round, or when the implementer was moved to a stronger model. Stop and report to the lead, or the owner if there is no lead, instead of widening the PR when a round brings a finding outside the PR's scope or the same kind of finding comes back. File the outside finding as a ticket; the lead or the owner then decides whether the PR merges with that ticket open. Recheck only the changed areas when the fixes leave the rest of the reviewed scope alone.
 
 Resolve verified blocking defects and unmet acceptance criteria. Record accepted non-blocking tradeoffs with reasons. A known correctness or security defect cannot be dismissed solely to finish quickly. Ask the human to accept material unresolved risk; do not invent acceptance on their behalf. Style preferences remain non-blocking.
 
-**Greptile.** A Routine, Sensitive or Architectural PR that changes anything besides allowlisted Markdown needs Greptile at 5/5 with no unresolved comment on its final head. A PR of allowlisted Markdown only (the CI document path) does not wait for Greptile. Judge its findings by the same criteria: fix them, or answer one you judge wrong with the reason. If it stays below 5/5 on findings you judged wrong, or cannot run, report to the lead or the owner instead of merging. A failing CI check is always a blocker.
+**Greptile.** A Routine, Sensitive or Architectural PR that changes anything besides allowlisted Markdown needs Greptile at 5/5 with no unresolved comment on its final head. A PR of allowlisted Markdown only (the CI document path) does not wait for Greptile. Judge its findings by the same criteria: fix them, or answer one you judge wrong with the reason. If it stays below 5/5 on findings you judged wrong, or cannot run, report to the lead or the owner, who decides whether it merges. A failing CI check is always a blocker.
 
 ## Complete the task
 
@@ -138,6 +138,6 @@ Use these cases when changing this workflow; they are checks of the rules, not r
 | Change CI filtering or a release script | Sensitive; routing/release regression tests and focused review; full CI; internal maintenance unless deployed app behavior changes |
 | Finish a docs-only change to agent rules | Sensitive; independent review READY and green CI, then merge without the owner; no Greptile wait; no app version |
 | Finish an app PR whose migration is older than one main got since | Rebase, renumber the migration, rerun its tests; then review READY, Greptile 5/5 and green CI on the new head, and merge |
-| Review finds a new kind of issue each round, all inside the PR | Fix and re-review until READY; when NOT READY keeps coming back, move to a stronger reviewer |
-| A review round finds a defect outside the PR, or the same kind of finding again | Stop; file the outside finding and report to the lead instead of widening the PR |
+| Review finds a new kind of issue each round, all inside the PR | Fix and re-review until READY; when NOT READY keeps coming back, ask the lead for a stronger reviewer |
+| A review round finds a defect outside the PR, or the same kind of finding again | Stop; file the outside finding and report to the lead, who decides whether the PR merges with the ticket open |
 | Add an unresolved cross-system admissions workflow | Architectural; approved design sequence, system verification and app release |

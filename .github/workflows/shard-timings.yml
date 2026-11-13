@@ -1,0 +1,50 @@
+name: Browser shard seconds
+
+# After each green CI run for a push to main: the seconds each browser spec
+# file took, saved to the Actions cache. The next CI runs plan their browser
+# shards from them (the scope job finds the newest entry, every shard restores
+# that one), so a new or slower spec file can't leave one shard far behind the
+# others. e2e/shards.json keeps the committed seconds for runs without them.
+#
+# workflow_run always runs this file as it is on main, and checks out main:
+# no code from a pull request runs here. Only this run's own main-push
+# artifacts are read.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  save:
+    name: Save main's browser seconds
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # workflow_run gets read-only cache access by default, and a refused save
+    # passes silently. This job reads only main's own push run, so it may
+    # write; it restores nothing.
+    cache-mode: write-only
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Download the run's browser reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: e2e-results-*
+          path: ${{ runner.temp }}/e2e-results
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - name: Sum the seconds of each spec file
+        run: node scripts/e2e-shards.mjs timings --out .artifacts/e2e-seconds.json "$RUNNER_TEMP"/e2e-results/*/e2e-results.json
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .artifacts/e2e-seconds.json
+          key: e2e-seconds-${{ github.event.workflow_run.id }}

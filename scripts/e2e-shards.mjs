@@ -4,12 +4,14 @@
 //   node scripts/e2e-shards.mjs run <shard>             run one shard, then check what ran
 //   node scripts/e2e-shards.mjs check <list.json>       compare the shards with `playwright test --list --reporter=json`
 //   node scripts/e2e-shards.mjs timings <report.json>.. rewrite the measured seconds from Playwright JSON reports
+//   node scripts/e2e-shards.mjs timings --out <file> <report.json>..  write them to <file> instead (CI)
 //   node scripts/e2e-shards.mjs plan                    print the shards and their seconds
 //
 // e2e/shards.json holds the number of shards and each spec file's measured
 // seconds. A spec file without a measurement counts as the median file.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const TEST_DIR = "e2e";
@@ -29,10 +31,15 @@ export function specFiles(dir = TEST_DIR) {
     .sort();
 }
 
-export function readConfig(path = CONFIG) {
+// In CI, E2E_SECONDS names a file of seconds measured on main's latest run
+// (.github/workflows/shard-timings.yml writes it, the browser jobs restore it).
+// Its seconds replace the committed ones; the number of shards never comes
+// from it.
+export function readConfig(path = CONFIG, measuredPath = process.env.E2E_SECONDS) {
   const config = JSON.parse(readFileSync(path, "utf8"));
   if (!Number.isInteger(config.shards) || config.shards < 1) throw new Error(`${path}: "shards" must be a whole number of 1 or more`);
-  return { shards: config.shards, seconds: config.seconds ?? {} };
+  const measured = measuredPath && existsSync(measuredPath) ? JSON.parse(readFileSync(measuredPath, "utf8")).seconds ?? {} : {};
+  return { shards: config.shards, seconds: { ...(config.seconds ?? {}), ...measured } };
 }
 
 // Longest file first, each onto the shard with the least time so far. Every
@@ -144,6 +151,13 @@ function main() {
     if (errors.length) fail(errors);
     console.log(`Shard ${rest[0]}/${shards.length}: all ${shard.files.length} spec files ran.`);
     process.exitCode = run.status ?? 1;
+  } else if (command === "timings" && rest[0] === "--out" && rest.length > 2) {
+    // Seconds only, for the Actions cache. A file that did not run is left out
+    // and keeps its committed seconds.
+    const seconds = fileSeconds(rest.slice(2).map(readJson));
+    mkdirSync(dirname(rest[1]), { recursive: true });
+    writeFileSync(rest[1], `${JSON.stringify({ seconds }, null, 2)}\n`);
+    console.log(`Wrote the seconds of ${Object.keys(seconds).length} spec files to ${rest[1]}.`);
   } else if (command === "timings" && rest.length) {
     const seconds = fileSeconds(rest.map(readJson));
     const missing = files.filter((file) => !(file in seconds));
@@ -152,7 +166,7 @@ function main() {
     writeFileSync(CONFIG, `{\n  "shards": ${config.shards},\n  "seconds": {\n${lines.join(",\n")}\n  }\n}\n`);
     console.log(`Wrote the seconds of ${lines.length} spec files to ${CONFIG}.`);
   } else {
-    throw new Error("Usage: e2e-shards.mjs run <shard> | check <list.json> | timings <report.json>... | plan");
+    throw new Error("Usage: e2e-shards.mjs run <shard> | check <list.json> | timings [--out <file>] <report.json>... | plan");
   }
 }
 

@@ -325,6 +325,58 @@ test("a pending file a later merge deleted is still released, with its bump", (t
   assert.deepEqual(release(dir, commit("Merge fix", 2), "2026-11-13"), { version: "v0.11.0", notes: "Released 2026-11-13.\n\n### NEW\n\n- A feature.\n\n### FIXED\n\n- A fix.\n" })
 })
 
+// The v1.0.0 milestone as releasing.md has it: an entry in CHANGELOG.md,
+// prepared with release.mjs and merged with no file in changes/.
+function milestone(dir, commit) {
+  const byHand = (...args) => spawnSync(process.execPath, [fileURLToPath(new URL("./release.mjs", import.meta.url)), ...args], { cwd: dir, encoding: "utf8" })
+  writeFileSync(join(dir, "CHANGELOG.md"), history.replace("## October", "## Unreleased\n\n### NEW\n\n- The complete app.\n\n## October"))
+  const prepared = byHand("prepare", "--bump", "major", "--complete-app", "--date", "2026-11-13")
+  assert.equal(prepared.status, 0, prepared.stderr)
+  const sha = commit("Merge the milestone", 2)
+  return { sha, tag: () => byHand("tag", "--commit", sha) }
+}
+
+test("a milestone is not tagged by hand while a merged changelog file is not released yet", (t) => {
+  const { dir, git, merge, commit, run } = repo(t)
+  // Its release run was queued or dropped.
+  const earlier = merge("pending.md", note("patch", "### FIXED\n\n- A pending fix.\n"), 1)
+  const { sha, tag } = milestone(dir, commit)
+  const listed = run("pending", "--commit", sha)
+  assert.equal(listed.status, 1, listed.stderr)
+  assert.equal(listed.stdout.trim(), "changes/pending.md")
+  const refused = tag()
+  assert.equal(refused.status, 1, refused.stdout)
+  assert.match(refused.stderr, /^changes\/pending\.md$/m)
+  assert.match(refused.stderr, /not released yet/)
+  assert.equal(git("tag", "--list", "v1.0.0"), "", "nothing is tagged")
+  // The outstanding run, run again, releases the file. Then the milestone goes.
+  assert.equal(release(dir, earlier, "2026-11-13").notes, "Released 2026-11-13.\n\n### FIXED\n\n- A pending fix.\n")
+  const clear = run("pending", "--commit", sha)
+  assert.equal(clear.status, 0, clear.stderr)
+  assert.equal(clear.stdout, "")
+  const tagged = tag()
+  assert.equal(tagged.status, 0, tagged.stderr)
+  assert.equal(git("rev-parse", "v1.0.0^{commit}"), sha)
+  assert.equal(git("tag", "--list", "v*"), "v0.10.0\nv0.10.1\nv1.0.0")
+  // The next release starts from the milestone, with nothing left behind it.
+  const next = merge("next.md", note("patch", "### FIXED\n\n- Next fix.\n"), 3)
+  assert.deepEqual(release(dir, next, "2026-11-14"), { version: "v1.0.1", notes: "Released 2026-11-14.\n\n### FIXED\n\n- Next fix.\n" })
+})
+
+test("a pending file released on the milestone's own commit leaves the milestone free to be tagged there", (t) => {
+  const { dir, git, merge, commit } = repo(t)
+  merge("pending.md", note("patch", "### FIXED\n\n- A pending fix.\n"), 1)
+  const { sha, tag } = milestone(dir, commit)
+  assert.equal(tag().status, 1)
+  // The Release workflow, started by hand on main, tags the newest commit.
+  assert.equal(release(dir, sha, "2026-11-13").version, "v0.10.1")
+  assert.equal(tag().status, 0)
+  assert.equal(git("rev-parse", "v1.0.0^{commit}"), sha)
+  assert.equal(git("rev-parse", "v0.10.1^{commit}"), sha)
+  // Run again on that commit, the workflow has nothing more to release.
+  assert.equal(release(dir, sha, "2026-11-13"), null)
+})
+
 test("a file name git would quote is still found, and check asks for plain names", (t) => {
   const { dir, merge, run } = repo(t)
   const sha = merge("café.md", note("patch", "### FIXED\n\n- Accents work.\n"), 1)

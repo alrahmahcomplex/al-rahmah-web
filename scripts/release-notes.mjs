@@ -16,6 +16,10 @@
 //       tag <sha>, a commit on origin/main, locally with the next version,
 //       write the release notes to <file> and print the version; print
 //       nothing if there is nothing to release
+//   node scripts/release-notes.mjs pending --commit <sha>
+//       print the changelog files merged up to <sha> that no release holds
+//       yet, and fail if there are any; it tags nothing. `release.mjs tag`
+//       refuses a tag by hand while there are
 //
 // A file in changes/ (a flat name ending .md; README.md is not one):
 //
@@ -160,17 +164,10 @@ function check(root, { base, before } = {}) {
   return { names, errors }
 }
 
-// Tags `commit` with the next version and returns { version, notes }, or null
-// when there is nothing to release: no changelog file arrived since the last
-// release, or a later merge's release already took this commit's files. `log`
-// is told which. Run again on a commit it already tagged, it returns that
-// release again, so a failed push or publish can be finished by running it
-// again. Only a commit main itself went through is released: not a commit of
-// the branch behind a merge, and not another branch. A release is likewise a
-// version tag on a commit main itself went through: a tag on another branch,
-// merged since or not, is neither the release before this one nor a release
-// that took this commit's files.
-export function release(root, commit, date, log = () => {}) {
+// Where `commit` sits on main, and main's releases: `released` is every one,
+// lowest version first, `tags` those at or before `commit`, `latest` the
+// highest of them.
+function releasesOfMain(root, commit) {
   const sha = git(root, "rev-parse", "--verify", `${commit}^{commit}`)
   const main = spawnText(root, "rev-list", "--first-parent", MAIN)
   if (main === null) throw new Error("origin/main is not fetched, so there is no telling whether this commit is on main.")
@@ -190,6 +187,38 @@ export function release(root, commit, date, log = () => {}) {
   const tags = released.filter(({ index }) => index >= at).map(({ tag }) => tag)
   const latest = tags.at(-1)
   if (!latest) throw new Error(`No vX.Y.Z tag on origin/main at or before ${commit}.`)
+  return { sha, at, released, tags, latest }
+}
+
+// Every changelog file a merge added after `base`, up to `sha`.
+// NUL-separated, so no file name comes back quoted.
+function addedSince(root, base, sha) {
+  return [...new Set(git(root, "log", "--first-parent", "--diff-filter=A", "--name-only", "-z", "--format=", `${base}..${sha}`, "--", "changes").split("\0").map((path) => path.trim()).filter(isNote))].sort()
+}
+
+// The changelog files merged up to `commit` that no release holds yet: those
+// added since the last release at or before it. None if `commit` or a later
+// merge is already released, since that release took them. It tags nothing.
+// A version tagged by hand on `commit` while this lists files would become
+// the next release's starting point, and the files would never be published.
+export function pending(root, commit) {
+  const { sha, at, released, latest } = releasesOfMain(root, commit)
+  if (released.some(({ index }) => index <= at)) return []
+  return addedSince(root, latest, sha)
+}
+
+// Tags `commit` with the next version and returns { version, notes }, or null
+// when there is nothing to release: no changelog file arrived since the last
+// release, or a later merge's release already took this commit's files. `log`
+// is told which. Run again on a commit it already tagged, it returns that
+// release again, so a failed push or publish can be finished by running it
+// again. Only a commit main itself went through is released: not a commit of
+// the branch behind a merge, and not another branch. A release is likewise a
+// version tag on a commit main itself went through: a tag on another branch,
+// merged since or not, is neither the release before this one nor a release
+// that took this commit's files.
+export function release(root, commit, date, log = () => {}) {
+  const { sha, at, released, tags, latest } = releasesOfMain(root, commit)
   const own = released.filter(({ index }) => index === at).at(-1)?.tag
   if (!own) {
     // A release tagged on a later merge took every file up to that merge,
@@ -199,11 +228,10 @@ export function release(root, commit, date, log = () => {}) {
   }
   const base = own ? tags.filter((tag) => compare(tag, own) < 0).at(-1) : latest
   if (!base) throw new Error(`No release before ${own}.`)
-  // Every file added by a merge since the last release. `check --base` keeps a
-  // merged file from being edited, renamed or deleted, so each path is added
-  // once and is still there. Should one be gone all the same, its last text is
-  // released. NUL-separated, so no file name comes back quoted.
-  const added = [...new Set(git(root, "log", "--first-parent", "--diff-filter=A", "--name-only", "-z", "--format=", `${base}..${sha}`, "--", "changes").split("\0").map((path) => path.trim()).filter(isNote))].sort()
+  // `check --base` keeps a merged file from being edited, renamed or deleted,
+  // so each path is added once and is still there. Should one be gone all the
+  // same, its last text is released.
+  const added = addedSince(root, base, sha)
   if (!added.length) { log(`No changelog file arrived since ${base}.`); return null }
   const notes = added
     .map((path) => {
@@ -244,8 +272,14 @@ function main() {
     if (!result) return
     writeFileSync(option("notes"), result.notes)
     console.log(result.version)
+  } else if (command === "pending" && option("commit")) {
+    const files = pending(root, option("commit"))
+    if (!files.length) return
+    console.log(files.join("\n"))
+    console.error("Merged and not released yet. Wait for the Release run, or run it again, before tagging a release by hand.")
+    process.exitCode = 1
   } else {
-    throw new Error("Usage: release-notes.mjs check [--base <commit>] [--before <commit>] | release --commit <sha> --notes <file> [--date YYYY-MM-DD]")
+    throw new Error("Usage: release-notes.mjs check [--base <commit>] [--before <commit>] | release --commit <sha> --notes <file> [--date YYYY-MM-DD] | pending --commit <sha>")
   }
 }
 

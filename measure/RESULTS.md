@@ -24,6 +24,19 @@ Throwaway branch. Nothing here merges. Main at e104a93.
 - The two tests deadlock each other. The backfill test runs `alter table ... disable trigger` on `sibling_group_members`, `sibling_groups` and `discount_requests`, which locks each whole table. The fee-edit test holds a lock on `discount_requests` and waits for `sibling_groups`.
 - 2 browser tests passed only on a retry, once each in the 10 baseline runs: `turnstile-placement.spec.ts` ("sits above Send on the Admission review step, in sw") and `referral-notice.spec.ts` ("a Referral link's code shows the notice in English").
 
+### What caused it, and the check after the cut
+
+In all 7 `sibling-fee-edit` deadlocks the test running beside it was `complete-admission-visit.test.ts`, "the migration › raises when a fee moved between the snapshots" (added with #305). It locks four tables exclusively and then runs the migration block again, whose `alter table sibling_group_members` waits behind any reader. `sibling-groups.test.ts` runs in the other shard and was not part of those 7.
+
+PR #383 deletes the 14 integration tests that replay a migration and lock or alter whole tables. With that cut applied, the integration tests ran 20 more times, [run 43391249100](https://github.com/alrahmahcomplex/al-rahmah-web/actions/runs/43391249100):
+
+| | Runs | Red | Tests per run | Test time per run |
+|---|---|---|---|---|
+| Before the cut | 40 | 8 | 1,753 | 867 s |
+| After the cut | 20 | 0 | 1,739 | 826 s |
+
+At the old rate of 1 in 5, twenty clean runs in a row would happen by chance about 1 time in 100.
+
 ## Planted bugs
 
 29 valid. `t01` planted nothing because of a bug in `apply.mjs`, fixed since; its result is void.

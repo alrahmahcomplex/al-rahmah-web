@@ -84,6 +84,7 @@ export function pathErrors(root) {
   for (const entry of readdirSync(join(root, "changes"), { withFileTypes: true })) {
     if (entry.isDirectory()) errors.push(`changes/${entry.name}/: no folders in changes/. Name the file after the branch with "/" turned into "-": changes/feature-x.md`)
     else if (!entry.name.endsWith(".md")) errors.push(`changes/${entry.name}: a changelog file ends in .md`)
+    else if (!/^[a-z0-9][a-z0-9._-]*\.md$/.test(entry.name) && entry.name !== "README.md") errors.push(`changes/${entry.name}: use lower-case letters, digits, ".", "_" and "-" only`)
   }
   return errors
 }
@@ -92,6 +93,11 @@ const isNote = (path) => /^changes\/[^/]+\.md$/.test(path) && path !== "changes/
 
 function git(root, ...args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trimEnd()
+}
+
+// git's output, or null when it exits non-zero.
+function spawnText(root, ...args) {
+  try { return git(root, ...args) } catch { return null }
 }
 
 function check(root) {
@@ -117,13 +123,19 @@ export function release(root, commit, date) {
   const own = git(root, "tag", "--points-at", commit).split("\n").filter((tag) => VERSION.test(tag)).sort(compare).at(-1)
   const base = own ? tags.filter((tag) => compare(tag, own) < 0).at(-1) : latest
   if (!base) throw new Error(`No release before ${own}.`)
-  const added = git(root, "diff", "--name-only", "--diff-filter=A", base, commit, "--", "changes").split("\n").filter(isNote)
+  // Every file added by a merge since the last release, also one a later merge
+  // deleted or renamed before its release ran: history, not the end state.
+  // NUL-separated, so no file name comes back quoted.
+  const added = [...new Set(git(root, "log", "--first-parent", "--diff-filter=A", "--name-only", "-z", "--format=", `${base}..${commit}`, "--", "changes").split("\0").map((path) => path.trim()).filter(isNote))].sort()
   if (!added.length) return null
   const notes = added
     .map((path) => {
-      const parsed = parseNote(path, git(root, "show", `${commit}:${path}`))
+      // Its text at the release commit, or the last text it had before it went.
+      const present = spawnText(root, "cat-file", "-e", `${commit}:${path}`) !== null
+      const source = present ? commit : `${git(root, "rev-list", "-1", "--first-parent", commit, "--", path)}^`
+      const parsed = parseNote(path, git(root, "show", `${source}:${path}`))
       if (parsed.errors.length) throw new Error(parsed.errors.join("\n"))
-      const at = Number(git(root, "log", "--diff-filter=A", "--format=%ct", "-1", commit, "--", path)) || 0
+      const at = Number(git(root, "log", "--first-parent", "--diff-filter=A", "--format=%ct", "-1", commit, "--", path)) || 0
       return { ...parsed, path, at }
     })
     .sort((a, b) => a.at - b.at || a.path.localeCompare(b.path))

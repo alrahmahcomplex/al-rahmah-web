@@ -139,6 +139,26 @@ test("a version already used on another commit is refused, not moved", (t) => {
   assert.equal(git("rev-parse", "v0.10.1^{commit}"), later)
 })
 
+test("a pending file a later merge deleted is still released, with its bump", (t) => {
+  const { dir, git, merge } = repo(t)
+  merge("feature.md", note("minor", "### NEW\n\n- A feature.\n"), 1)
+  // The release run for that merge failed or was dropped; the next merge
+  // deletes the file and adds its own.
+  rmSync(join(dir, "changes", "feature.md"))
+  writeFileSync(join(dir, "changes", "fix.md"), note("patch", "### FIXED\n\n- A fix.\n"))
+  git("add", "-A")
+  const result = spawnSync("git", ["commit", "-m", "Merge fix"], { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_COMMITTER_DATE: `${1_800_000_002} +0000` } })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(release(dir, git("rev-parse", "HEAD"), "2026-11-13"), { version: "v0.11.0", notes: "Released 2026-11-13.\n\n### NEW\n\n- A feature.\n\n### FIXED\n\n- A fix.\n" })
+})
+
+test("a file name git would quote is still found, and check asks for plain names", (t) => {
+  const { dir, merge, run } = repo(t)
+  const sha = merge("café.md", note("patch", "### FIXED\n\n- Accents work.\n"), 1)
+  assert.equal(release(dir, sha, "2026-11-13").version, "v0.10.1")
+  assert.match(run("check").stderr, /lower-case letters/)
+})
+
 test("the CLI writes the notes file and prints the version, or prints nothing", (t) => {
   const { dir, merge, run } = repo(t)
   const code = merge(null, "", 1)

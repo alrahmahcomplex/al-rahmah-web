@@ -2,7 +2,7 @@
 
 An app PR's changelog entry goes in a file of its own here, never in `CHANGELOG.md`. Two PRs then never edit the same file, and a green PR can merge without a rebase for the changelog.
 
-Name the file after your branch, without the `claude/` or `codex/` part and with any other `/` turned into `-`: `changes/sibling-discount-screen.md`. No folders. It holds the bump and the entry:
+Name the file after your branch, without the `claude/` or `codex/` part and with any other `/` turned into `-`: `changes/sibling-discount-screen.md`. No folders; lower-case letters, digits, `.`, `_` and `-` only. It holds the bump and the entry:
 
 ```markdown
 ---

@@ -3,10 +3,24 @@ import type { Client } from "pg"
 import type { DashboardMetric, Period } from "@/lib/services/dashboard"
 import { LEAD_CLASSES } from "@/lib/services/leads"
 
+import { actAsStaff } from "./db"
+
 // The dashboard's database functions, called the way lib/services/dashboard.ts
 // calls them, on a direct connection. A test that reads many counts and
 // compares them runs these inside inOneSnapshot, signed in with actAsStaff,
 // so every count sees the same leads whatever other tests write meanwhile.
+
+// Runs `read` signed in as `staffId` in a transaction of its own on `sql`, a
+// plain connection such as whileUnchanged's, and rolls it back.
+export async function readAs<T>(sql: Client, staffId: string, read: (sql: Client) => Promise<T>): Promise<T> {
+  await sql.query("begin")
+  try {
+    await actAsStaff(sql, staffId)
+    return await read(sql)
+  } finally {
+    await sql.query("rollback")
+  }
+}
 
 const anchorOf = (period: Period) => (period.kind === "all" ? null : period.anchor)
 

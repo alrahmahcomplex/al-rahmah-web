@@ -6,8 +6,8 @@ import { describe, expect, test } from "vitest"
 
 import { getMetricCount, type Period } from "@/lib/services/dashboard"
 
-import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, inRolledBackTransaction, signedIn, withoutLockWaits } from "../support/db"
-import { countIn, enrollmentYearsIn } from "../support/dashboard-sql"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, inRolledBackTransaction, signedIn, whileUnchanged, withoutLockWaits } from "../support/db"
+import { countIn, enrollmentYearsIn, readAs } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Enrolled students against local Supabase. Counts are filtered to Enrollment
@@ -221,6 +221,14 @@ describe("Enrolled students", () => {
         expect(await countIn(sql, "enrolled_students", period, null), JSON.stringify(period)).toBe(sum)
       }
     })
+
+    // The service's answer for every year, against the database's read just
+    // before and after it.
+    const { state, result } = await whileUnchanged(
+      (sql) => readAs(sql, MANAGER.id, (signed) => countIn(signed, "enrolled_students", ALL, null)),
+      () => enrolled(manager, ALL, null),
+    )
+    expect(result).toBe(state)
 
     // The base fixtures' 2027 students enrolled in late September 2026; the
     // 2031 ones on other days.

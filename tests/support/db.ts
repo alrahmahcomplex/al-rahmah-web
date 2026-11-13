@@ -74,7 +74,7 @@ export async function inOneSnapshot<T>(work: (sql: Client) => Promise<T>): Promi
         return work(sql)
       })
     } catch (error) {
-      if ((error as { code?: string }).code !== "40001" || attempt >= 5) throw error
+      if ((error as { code?: string }).code !== "40001" || attempt >= 10) throw error
     }
   }
 }

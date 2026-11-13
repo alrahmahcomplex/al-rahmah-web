@@ -28,6 +28,10 @@ export default defineConfig({
         test: {
           name: "unit",
           environment: "jsdom",
+          // Explicit orders: a project left at the default 0 with one worker
+          // (--no-file-parallelism) would be put in a group of its own, after
+          // integration-serial.
+          sequence: { groupOrder: 1 },
           include: ["tests/unit/**/*.test.{ts,tsx}"],
           setupFiles: ["tests/unit/setup.ts"],
         },
@@ -42,6 +46,7 @@ export default defineConfig({
           name: "integration",
           include: ["tests/integration/**/*.test.ts"],
           exclude: ["tests/integration/serial/**"],
+          sequence: { groupOrder: 1 },
         },
       },
       {
@@ -56,7 +61,7 @@ export default defineConfig({
           name: "integration-serial",
           include: ["tests/integration/serial/**/*.test.ts"],
           fileParallelism: false,
-          sequence: { groupOrder: 1 },
+          sequence: { groupOrder: 2 },
         },
       },
     ],

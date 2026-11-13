@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn, withoutLockWaits } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inOneSnapshot, inRolledBackTransaction, signedIn, withoutLockWaits } from "../support/db"
 import { ACCOUNTANT, MANAGER, RETIRED_ROLE, SUPER_ADMIN } from "../support/fixtures"
 
 // The guardrailed write functions behind the Staff and roles screen, called
@@ -296,7 +296,9 @@ describe("no last-administrator guard (#241)", () => {
   // refuse_no_administrator_left is gone: the Super Admin always remains, so
   // every other staff member may be deactivated, through SQL as well.
   test("deactivating every staff member but the Super Admin goes through", async () => {
-    await inRolledBackTransaction(async (sql) => {
+    // One snapshot, so a staff member another test adds after the update
+    // can't show up in the count.
+    await inOneSnapshot(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       // It writes every staff row, so it never waits on one another test
       // holds while it holds the rest.

@@ -7,8 +7,8 @@ import { getLeadsByClass, type LeadsByClass, type Period } from "@/lib/services/
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, LEAD_CLASSES, updateLeadDetails } from "@/lib/services/leads"
 
-import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, secretClient, signedIn } from "../support/db"
-import { byClassIn, enrollmentYearsIn } from "../support/dashboard-sql"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, secretClient, signedIn, whileUnchanged } from "../support/db"
+import { byClassIn, enrollmentYearsIn, readAs } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Leads by enrollment class against local Supabase. Counts are filtered to
@@ -192,6 +192,15 @@ describe("Leads by enrollment class", () => {
         expect(unfiltered, JSON.stringify(period)).toEqual(sums)
       }
     })
+
+    // The service's answer for every year, against the database's read just
+    // before and after it.
+    const { state, result } = await whileUnchanged(
+      (sql) => readAs(sql, MANAGER.id, (signed) => byClassIn(signed, { kind: "all" }, null)),
+      async () => byClass(await signedIn(MANAGER), { kind: "all" }, null),
+    )
+    expect(result.classes.map((row) => row.count)).toEqual(state)
+    expect(result.total).toBe(state.reduce((a, b) => a + b, 0))
   })
 
   test("an unknown period or a malformed anchor is refused as invalid", async () => {

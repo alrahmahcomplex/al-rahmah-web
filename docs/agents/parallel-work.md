@@ -20,7 +20,6 @@ rm -rf "$LOCK"
 If `mkdir` fails, someone holds it: read `owner`, wait, and try again. Never build without the lock; two `next build` runs at once run out of memory here.
 
 - Run `db:reset` from your own worktree, so the database holds your migrations and not another branch's.
-- Run `npm run db:stop` only when no other session uses the shared database; it stops the database for everyone.
 - Create `.env.local` with `npm run env:local` while local Supabase runs.
 
 ## Ports
@@ -51,11 +50,15 @@ Each slice owns two migration digits and a seed file. Use only your slice's.
 | 12, Marketing Agent accounts and portal | #178 | `12` | `supabase/seeds/40_agents.sql`, shared with slice 4 |
 | Launch readiness | #179 | `99` | none |
 
+### Migration order
+
 Name a migration `<date><digits><nnnn>_<name>.sql`. The date is the day after the newest migration on `origin/main` when you create it, then come your slice's two digits, then four digits of your own. With `20261111700600_reopened_needs_follow_up_date.sql` the newest, slice 12's first migration is `20261112120100_<name>.sql`. A migration dated before the newest on `main` runs before the tables it may need, and `db:reset` fails. Within a slice, tickets that run one after another number upwards, so a later ticket's migration sorts after an earlier one's. When two lanes build the same slice at once, they split the four digits so they can never pick the same version: in slice 12, Lane B (agent records) uses `0100`-`0499` and Lane C (sign-in and portal) uses `0500`-`0999`.
 
-Seeds load in file-name order, after `00_base.sql`, so a later slice's seed may refer to an earlier slice's rows. Slice 12 puts its seeded agent in `40_agents.sql`, as #178 says, in its own section at the end of the file; slice 4's tickets change only slice 4's lines there.
+**Renumber before merge.** Slices merge in any order, but the hosted database applies migrations in timestamp order, and one older than its newest may never be applied. Before merge, compare each migration the PR adds with the newest on `origin/main`. If it sorts before, or has the same version as one already on `main`, rebase ([Workflow → Behind main](workflow.md#behind-main)) and rename it with `git mv`: change the eight-digit date to the day after the newest migration's date and keep the last six digits. `20261112120100` after `20261113110100` becomes `20261114120100`. Then rerun the affected migration and integration tests before pushing.
 
-**Renumber at release.** Slices merge in any order, but the hosted database applies migrations in timestamp order, and one older than its newest may never be applied. During [release preparation](releasing.md), after the rebase, compare each migration the PR adds with the newest on `origin/main`. If it sorts before, or has the same version as one already on `main`, rename it with `git mv`: change the eight-digit date to the day after the newest migration's date and keep the last six digits. `20261112120100` after `20261113110100` becomes `20261114120100`. Then rerun the integration tests before pushing.
+### Seeds and shared files
+
+Seeds load in file-name order, after `00_base.sql`, so a later slice's seed may refer to an earlier slice's rows. Slice 12 puts its seeded agent in `40_agents.sql`, as #178 says, in its own section at the end of the file; slice 4's tickets change only slice 4's lines there.
 
 - **Lead screen.** A new panel is a file in `app/staff/applicants/[id]/` plus one line in `LEAD_PANELS` (`panels.tsx`). Nothing else in `page.tsx`. A closed lead shows no panel unless it sets `readOnlyWhenClosed: true`, and such a panel offers no work action while its `open` prop is false. The exceptions are slice 8's own workflow on closed leads: the closure panel's Mark inactive and Archive follow the lead's mark, since a closure mark is a change a closed lead still takes, and the Reopening requests panel offers Withdraw to the requester of a Pending request and Approve and Reject to approvers, since a request exists only for a closed lead. Slice 9's School fee panel also keeps Adjust on each payment for staff with `payments.record`, since a payment adjustment corrects history rather than continuing work (`CONTEXT.md`); Record payment still waits for a reopening.
 - **Staff navigation.** One line in `STAFF_NAV` (`app/staff/navigation.ts`), with its sidebar group and lucide icon. An entry may take a list of permissions, any one of which shows it.
@@ -106,12 +109,8 @@ When a ticket you build on has not merged, code against the signature its body g
 
 ## Checks while you work
 
-Follow the risk tiers and affected-check rules in [Workflow](workflow.md). The shared lock applies whenever those checks require database, browser or build work; selecting a lighter tier does not waive resource isolation.
-
-On `AuthRetryableFetchError` under load, rerun the failed files before treating the failure as real.
+A lighter tier does not waive the shared lock: any check that needs the database, a browser or a build takes it. On `AuthRetryableFetchError` under load, rerun the failed files before treating the failure as real.
 
 ## Housekeeping
 
-- Name scratch files with your ticket number first (`67-pr-body.md`), since agents share a scratchpad.
-- Follow the ticket-claim rule in [AGENTS.md](../../AGENTS.md).
-- Complete the PR using [Workflow](workflow.md), including only the reviews, checks and evidence its tier needs. Add a changelog file in `changes/` only for an app release under [Releasing](releasing.md). Report the PR URL, worktree and any outstanding human decision. The human authorizes merge.
+Name scratch files with your ticket number first (`67-pr-body.md`), since agents share a scratchpad.

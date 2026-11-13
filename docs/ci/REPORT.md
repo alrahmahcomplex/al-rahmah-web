@@ -81,7 +81,7 @@ node scripts/ci-measure.mjs summary docs/ci/data/monthly-push-main.json docs/ci/
 node scripts/ci-flaky.mjs --limit 100 --out docs/ci/data/flaky-monthly.json
 ```
 
-To measure the shards' seconds again, download the reports of a run on main and let the script rewrite `e2e/shards.json`:
+The shards' seconds stay fresh without anyone doing it (#388). After each green run on main, the `Browser shard seconds` workflow saves that run's seconds to the Actions cache, and the next pull request and main runs plan from them. The seconds committed in `e2e/shards.json` are the fallback and what the nightly run uses. To refresh the committed seconds by hand, download the reports of a run on main and let the script rewrite the file:
 
 ```bash
 gh run download <run id of a push to main> -p "e2e-results-*" -D /tmp/e2e-results
@@ -245,6 +245,15 @@ Run time moved with how late GitHub started some jobs, which these runs did not 
 15. **Supabase without Storage and Realtime.** `npm run db:start` already left both containers out with `-x`. The CLI still pulled both images and ran their schema migrations while it set up the database, because `supabase/config.toml` has them enabled: "Initialising schema" took 29 s in run `43488526078`. No migration, seed or test uses either, so `scripts/ci-db-start.sh` sets `SUPABASE_REALTIME_ENABLED=false` and `SUPABASE_STORAGE_ENABLED=false`. The CLI reads them over `config.toml`, so local starts in the worktrees stay as they were. "Initialising schema" now takes 0.5 s. Start local Supabase went from 79 (70 to 90 over 6 integration jobs) to 42.5 (41 to 45). The browser shards' setup step, where the start runs beside the build, went from 94 (72 to 102 over 24 jobs) to 60.5 (52 to 70). Runner time went from 2214 to 1820. Mailpit stays, because the invite, password-reset, CAPTCHA and agent-import tests read it. `scripts/ci-workflow.test.mjs` fails when a migration, seed or test starts using Storage or Realtime, and the start script warns if the CLI pulls either image again. Runs: 204, 295 and 233, run `43497018079`. Before: 257, 425 and 348. Data: `change-15-before-main-8dc42e5.json` and `change-15-supabase-without-storage-realtime.json`.
 16. **Three integration shards.** After change 15 the slower integration shard was the slowest job in two of three runs, by 3 and 8 s over the slowest browser shard. The other integration shard finished 20 to 31 s sooner in each run. With three shards the slowest integration job went from 180 to 149, but a browser shard was then the slowest job in every run, and the slowest job went from 189 to 187, inside the noise. The fastest run went from 204 to 212, and runner time from 1820 to 1927. The run median fell from 233 to 221 only because one two-shard run had late job starts (295). A third shard would also put a pull request run at 13 jobs against GitHub's 20 for this account. The commit is reverted. Runs: 225, 212 and 221, run `43499343938`. Data: `change-16-integration-three-shards.json`.
 
+Four more changes of 13 November changed what CI runs or how it splits it. Their pull requests measured them as below. None was measured by the method of this table.
+
+| # | Pull request | Change | Measured |
+|---|---|---|---|
+| 17 | #382 | Browser tests stop checking looks; the 6 axe scans run only nightly (`@nightly`) | 462 browser tests on a pull request before, 414 after, 420 in the nightly run. The eight browser jobs took 1,589 s together in its own run against 1,683 s on main. |
+| 18 | #383 | 14 migration-day integration tests that lock or alter whole tables are deleted | Red runs on `deadlock detected`: 8 of 40 before, 0 of 20 after. Test time per run 867 s before, 826 s after, inside the run-to-run spread of about 90 s. |
+| 19 | #387 | No whole-table locks in integration tests; the Sibling kill switch tests run alone in a serial project | 0 red in 20 runs, test time per run 820 s. Run time not measured. |
+| 20 | #388 | Browser shards plan from main's newest measured seconds, saved to the Actions cache | The plan for run `43479796993` went from 151 to 247 s of test time per shard to 180 to 182 s. Run time after the merge not measured. |
+
 A cache of the Docker images was not tried. After change 15 the CLI pulls five images, all at once, in 13 s (run `43497018079`, integration shard 1). Restoring them from the Actions cache and loading them into Docker would have to beat that, and only the `caches` job could save them. Not measured.
 
 ## Status of each method
@@ -263,7 +272,7 @@ A cache of the Docker images was not tried. After change 15 the CLI pulls five i
 | 8 | Find flaky tests, retry only the failed tests | DONE | See "Flaky tests". Three tests and the Supabase start are fixed, and the unit tests wait out a stray timer. Playwright already retried a failed test once and still does. Vitest now retries an integration test up to two times for the two load errors only. |
 | 9 | Remote build cache | APPROVAL NECESSARY | It needs a build tool that has one, such as Turborepo or Nx, which changes the build system. The gain would be small here for the reason given in 4b: one package, a 26.5 s build that runs beside a longer step. Not measured. |
 | 10 | On pull requests, test only what depends on the changed files | NOT APPLICABLE | The documents-only path already exists and stays. Beyond it there is one app and one database, and every browser and integration test depends on both. Of the last 60 merged pull requests, 53 changed app or database code, 3 only documents, 3 only tests and 1 only CI tools (`data/merged-pr-files.json`). A path rule for the 3 would not move the median. |
-| 11 | Merge queue | APPROVAL NECESSARY | It is a repository setting. GitHub's announcement of the feature also limits it to repositories owned by an organization, and this one is owned by a personal account. The workflow would need `merge_group` as a trigger, which `scripts/ci-scope.mjs` already treats as a full-suite run. |
+| 11 | Merge queue | NOT APPLICABLE | GitHub gives merge queues only to repositories owned by an organization, and this one is owned by a personal account. The manual's stage 8 names what stands in for it. The workflow would need `merge_group` as a trigger, which `scripts/ci-scope.mjs` already treats as a full-suite run. |
 | 12 | Faster runners | APPROVAL NECESSARY | The repository is public, so it already gets GitHub's 4-CPU standard runner for free. Larger GitHub runners need an organization on a paid plan, and other runner services are new paid or third-party services. Not measured. |
 | Added | Install Chromium without `apt-get`'s font packages | DONE | Change 6. Source: Playwright's command line reference, where `--with-deps` is an option of `playwright install`. |
 | Added | Start Supabase again when a port is taken | DONE | See "The Supabase port failure". It lowers the re-run rate, not the run time. |
@@ -330,8 +339,8 @@ Greptile then reviewed commit `126624b` and scored it 4 of 5 with four findings.
 - **Skipped browser tests fail CI.** This follows the rule that no test is skipped without approval. To allow a skip, change `verifyErrors` in `scripts/e2e-shards.mjs`.
 - **Documents-only merges now run the full suite on main.** That run takes about four minutes where it took 20 s. Nothing waits for it.
 - **`revealStep`'s timer.** Cancelling it on unmount in `components/guided-form/stack.tsx` is the real fix for the unit-test error. The 400 ms wait in `tests/unit/setup.ts` can go after that.
-- **Two integration test files collide.** `leads-search` and `interview-release-status` create and lock leads in the same seconds. The retry gets past it, once on its last try. Shorter or fewer table locks in those tests would remove the cause.
+- **Two integration test files collide.** `leads-search` and `interview-release-status` create and lock leads in the same seconds. The retry gets past it, once on its last try. Since #387 no integration test locks a whole table, `leads-search` included.
 - **The Pending count test.** `e2e/marketing-agents.spec.ts` passed only on its retry in 16 of 77 runs. Fixing it changes what it asserts.
 - **The Admission form's next question.** On main, two browser tests each waited 5 s once for the next question to open and passed on the retry. The cause is not known.
 - **The nightly run.** GitHub had started none by 03:21 UTC on 2026-11-11. If there is still none after a week, the schedule needs a look.
-- **Approval needed:** a remote build cache, a merge queue, faster runners. The status table has the reason for each.
+- **Approval needed:** a remote build cache, faster runners. The status table has the reason for each.

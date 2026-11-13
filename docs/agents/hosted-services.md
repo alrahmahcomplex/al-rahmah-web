@@ -6,7 +6,7 @@ Checking production, a Vercel Preview or a dashboard (GitHub, Supabase, Vercel) 
 2. If it shows a sign-in page, ask the human to sign in to that service or site (`AskUserQuestion` in Claude Code), wait for their answer that they are done, then open it again.
 3. Report what the page shows.
 
-A missing session is a sign-in to ask for, never a reason to hand the check to the human. Their calls are merges and destructive changes.
+A missing session is a sign-in to ask for, never a reason to hand the check to the human. Their calls are destructive changes, and the merges [Releasing → When to merge](releasing.md#when-to-merge) leaves to them.
 
 ## Hosted setup
 

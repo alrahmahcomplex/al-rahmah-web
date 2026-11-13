@@ -113,6 +113,8 @@ Use the last 30 successful runs of pull requests and of merges.
 
 **Check:** The failures on the main branch decrease.
 
+**In this repository:** not possible. Its owner is a GitHub user account, and GitHub gives merge queues only to repositories that an organization owns. What stands in for it: each app PR adds its own changelog file in `changes/`, so two green PRs do not conflict; a PR behind main is rebased only when main's new commits touch what it touches ([Workflow → Behind main](../agents/workflow.md#behind-main)); and every merge runs the full suite on main.
+
 ## Stage 9: faster runners
 
 **Trigger:** Stages 1 to 7 are complete. The median pull-request time is more than 10 minutes.

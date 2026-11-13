@@ -52,15 +52,15 @@ npx vitest run --project integration --project integration-serial --changed orig
 npx playwright test --only-changed=origin/main
 ```
 
-Take the shared lock for integration/browser checks, database resets and builds. Changed-file selection is a starting point: SQL, permissions, configuration and indirect dependencies may require explicitly named tests even when automatic selection finds none. Local browser tests build the app when needed; avoid a duplicate standalone build for the same unchanged inputs.
+Changed-file selection is a starting point: SQL, permissions, configuration and indirect dependencies may require explicitly named tests even when automatic selection finds none. Local browser tests build the app when needed; avoid a duplicate standalone build for the same unchanged inputs.
 
-CI is not a test loop. Before every push, run the test files you added or changed and see them pass locally: `npx vitest run <file>` for a unit or integration file, `npx playwright test <spec>` for a browser spec, one file at a time under the shared lock, never the whole suite. A push that fails its own new tests costs a full CI run for nothing. In 100 finished PR runs from 11 and 12 November, cancelled ones left out, 26 were red, and roughly 10 of those were a PR's own new or changed tests failing: the largest single cause, by a rough sort of the logs. If a file cannot run on this machine, say so in the PR instead of pushing to find out.
+CI is not a test loop. Before every push, run the test files you added or changed and see them pass locally: `npx vitest run <file>` for a unit or integration file, `npx playwright test <spec>` for a browser spec, one file at a time under the shared lock, never the whole suite. A PR's own new or changed tests failing was the largest cause of red PR runs on 11 and 12 November (about 10 of 26). If a file cannot run on this machine, say so in the PR instead of pushing to find out.
 
-Before opening a PR, complete the local checks relevant to the changed behavior. A full local suite is not a universal prerequisite. After rebasing, inspect incoming changes and rerun checks for affected interactions. Incoming migrations, seeds, shared services or configuration warrant broader relevant checks. CI must pass for the final PR revision before merge. Documentation-only release preparation still requires fresh CI, which selects the cheap document path if no runtime inputs changed.
+Before opening a PR, complete the local checks relevant to the changed behavior. A full local suite is not a universal prerequisite. CI must pass on the PR's final head before merge.
 
-The CI workflow always runs its scope job, its helper and document checks, and the final `CI complete` gate. Its cheap link checks cover all tracked, allowlisted documents so deleting or renaming a guide also checks incoming links. On a pull request, only allowlisted Markdown files can skip runtime jobs; unknown paths, mixed changes, dependencies, configuration and workflows receive the full suite. A push to main always runs the full suite, documents-only merges included, so every merge is tested. Policy and domain documents can take the document path because runtime tests do not validate their meaning. Their review tier still applies. Missing or invalid comparison data must require the full suite. The gate checks upstream outcomes, including failures, cancellations and unexpected skips. If configuring required checks, require `CI complete`; the workflow itself must remain unfiltered by file paths.
+The CI workflow always runs its scope job, its helper and document checks, and the final `CI complete` gate. Its link checks cover all tracked, allowlisted documents, so deleting or renaming a guide also checks incoming links. On a pull request, only allowlisted Markdown files can skip runtime jobs; unknown paths, mixed changes, dependencies, configuration and workflows receive the full suite. A push to main always runs the full suite, documents-only merges included. Policy documents take the document path because runtime tests do not check their meaning; their review tier still applies. Missing or invalid comparison data must require the full suite. The gate checks upstream outcomes, including failures, cancellations and unexpected skips. If configuring required checks, require `CI complete`; the workflow itself must remain unfiltered by file paths.
 
-The full suite runs as parallel jobs. Every test runs on every push to main, and on every pull request except one that changes only allowlisted Markdown:
+The full suite runs as parallel jobs:
 
 - **Browser shards.** `e2e/shards.json` holds the number of shards and each spec file's measured seconds, and `scripts/e2e-shards.mjs` gives every spec file on disk to exactly one shard. A new spec file needs no entry. After each green run on main, the `Browser shard seconds` workflow saves that run's seconds to the Actions cache; pull requests and main plan their shards from the newest entry, and the nightly run from the committed file. CI fails if Playwright lists a test no shard holds, if a shard ran anything but its own files, or if a browser test was skipped: `test.skip` and `test.fixme` fail the shard. To change the number of shards, change `shards` in that file and the `browser` matrix in the workflow together; a test keeps them equal.
 - **Sign-in in browser tests.** A test that signs in only to reach a screen uses `signInOnce` from `e2e/log-in.ts`, which signs in on the page once per worker and reuses the session. A test about signing in itself uses `logIn`.
@@ -99,21 +99,27 @@ If the in-app browser is not signed in to GitHub, or no in-app browser is availa
 
 ## Review and acceptance
 
-Editorial work needs the author's diff/accuracy check. Every other tier needs one independent review of the final substantive change, using `code-review` or an equivalent repository-aware automated reviewer. A fresh subagent, another coding agent or a human can provide it; the implementing agent's own reread is not independent. The task agent arranges the review without making the human relay routine requests.
+Editorial work needs the author's diff/accuracy check. Every other tier needs one independent review of the final substantive change, using `code-review` or an equivalent repository-aware reviewer. The reviewer is a fresh agent, different from the one that built or fixed the change, at high reasoning effort; the implementing agent's own reread is not independent. The lead or the owner picks the reviewer's model when they brief the thread. The task agent arranges the review without making the human relay routine requests.
 
 Sensitive work focuses that review on the affected trust boundary, data rule, workflow authority or release behavior. Add another specialist only for an uncovered concern. Architectural work also includes the approved design review; it does not automatically multiply implementation reviews.
 
+**Rounds.** Fix the verified findings and send the new head for review again until the reviewer says READY. Move to a stronger reviewer when NOT READY keeps coming back round after round, or when the implementer was moved to a stronger model. Stop and report to the lead, or the owner if there is no lead, instead of widening the PR when a round brings a finding outside the PR's scope or the same kind of finding comes back. File the outside finding as a ticket. Recheck only the changed areas when the fixes leave the rest of the reviewed scope alone.
+
 Resolve verified blocking defects and unmet acceptance criteria. Record accepted non-blocking tradeoffs with reasons. A known correctness or security defect cannot be dismissed solely to finish quickly. Ask the human to accept material unresolved risk; do not invent acceptance on their behalf. Style preferences remain non-blocking.
 
-Review scores are advisory. There is no mandatory Greptile 5/5 loop or second human-started cross-review. If Greptile is installed or explicitly requested, assess its concrete findings using the same criteria. Recheck changed areas after fixes; repeat a full review only when the fixes materially alter the reviewed scope. A failing CI check remains a blocker.
+**Greptile.** A Routine, Sensitive or Architectural PR that changes anything besides allowlisted Markdown needs Greptile at 5/5 with no unresolved comment on its final head. A PR of allowlisted Markdown only (the CI document path) does not wait for Greptile. Judge its findings by the same criteria: fix them, or answer one you judge wrong with the reason. If it stays below 5/5 on findings you judged wrong, or cannot run, report to the lead or the owner instead of merging. A failing CI check is always a blocker.
 
 ## Complete the task
 
 1. Confirm scope and acceptance criteria, finish applicable local checks, and assemble only relevant evidence. Classify whether this is an app release under [Releasing](releasing.md); add a changelog file in `changes/` only for an app release.
-2. Inspect the diff, apply `unslop` to changed prose, commit, fetch and rebase onto `origin/main`. Resolve only conflicts you understand and verify affected interactions.
+2. Inspect the diff, apply `unslop` to changed prose and commit. Fetch, and rebase onto `origin/main` only under [Behind main](#behind-main).
 3. Push your branch, using `--force-with-lease` only when rebasing your own pushed branch. Open the PR with its tier/reason, behavior changed, actual verification results, relevant evidence, release classification and risks.
-4. Complete the independent review where required and resolve findings. Wait for the final revision's applicable CI to pass. When fixes change the revision, update evidence and review only the affected scope.
-5. Present the PR URL, any material limitations and the worktree path. Keep the worktree until the PR merges or closes. Only the human authorizes merge.
+4. Complete the independent review where required and resolve findings. Wait for the final head's applicable CI to pass. When fixes change the head, update evidence and review only the affected scope.
+5. Present the PR URL, any material limitations and the worktree path. Keep the worktree until the PR merges or closes. Then merge under [Releasing → When to merge](releasing.md#when-to-merge), or wait for the owner when it does not hold.
+
+### Behind main
+
+A PR behind `origin/main` is rebased only when main's new commits interact with it: shared services, migrations, seeds, configuration, or files the PR also changes. Otherwise leave it; the push to main tests every merge, and changelog files never conflict. After a rebase, read the incoming changes and rerun the checks they affect, broader ones for incoming migrations, seeds, shared services or configuration, and wait for CI on the new head. A PR adding a migration is behind on a migration whenever main has one newer than the PR's: rebase and renumber it under [Parallel work → Migration order](parallel-work.md#migration-order) before merge. Resolve only conflicts you understand.
 
 ## Policy examples
 
@@ -130,4 +136,8 @@ Use these cases when changing this workflow; they are checks of the rules, not r
 | Speed up a query behind an unchanged screen | Not a UI change; no prototype |
 | Fix a one-line RLS predicate | Sensitive; migration, allow/deny tests and focused review; full CI; app release |
 | Change CI filtering or a release script | Sensitive; routing/release regression tests and focused review; full CI; internal maintenance unless deployed app behavior changes |
+| Finish a docs-only change to agent rules | Sensitive; independent review READY and green CI, then merge without the owner; no Greptile wait; no app version |
+| Finish an app PR whose migration is older than one main got since | Rebase, renumber the migration, rerun its tests; then review READY, Greptile 5/5 and green CI on the new head, and merge |
+| Review finds a new kind of issue each round, all inside the PR | Fix and re-review until READY; when NOT READY keeps coming back, move to a stronger reviewer |
+| A review round finds a defect outside the PR, or the same kind of finding again | Stop; file the outside finding and report to the lead instead of widening the PR |
 | Add an unresolved cross-system admissions workflow | Architectural; approved design sequence, system verification and app release |

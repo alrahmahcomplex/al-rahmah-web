@@ -117,6 +117,8 @@ test("every browser shard plans from the one entry of seconds the scope job foun
   const save = read(".github/workflows/shard-timings.yml").replace(/\r\n/g, "\n");
   assert.match(save, /^ {4}branches: \[main\]$/m);
   assert.match(save, /github\.event\.workflow_run\.event == 'push'/);
+  // Without it the save is refused without an error: workflow_run is read-only.
+  assert.match(save, /^ {4}cache-mode: write-only$/m);
   assert.match(save, /key: e2e-seconds-\$\{\{ github\.event\.workflow_run\.id \}\}/);
 });
 

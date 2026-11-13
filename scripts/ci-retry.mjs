@@ -107,6 +107,14 @@ export function decide({ event, attempt, failedJobs }) {
   return { ...result, rerun: true, reason: "only database collisions" };
 }
 
+// A pull request run is re-run only while it is still for the pull request's
+// head. A newer push has its own run in the same concurrency group, which
+// re-running the old one would cancel.
+export function stillCurrent({ event, runSha, heads }) {
+  if (event !== "pull_request") return true;
+  return heads.length > 0 && heads.every((sha) => sha === runSha);
+}
+
 // One issue per test file, so the same collision gathers its runs in one place.
 export function collisionTitle(tests) {
   const files = [...new Set(tests.map((test) => test.split(" > ")[0].replace(/^tests\/integration\//, "")))].sort();
@@ -121,7 +129,9 @@ function gh(args, raw = false) {
 // Open issues with this exact title, oldest first. Read from the issues API,
 // not search, which lags behind a new issue.
 function openIssues(title) {
-  const issues = gh(["api", "--paginate", "--slurp", "-X", "GET", "repos/{owner}/{repo}/issues", "-f", "state=open", "-f", "labels=bug", "-f", "per_page=100"]).flat();
+  // Every open issue, not only those still labelled bug: a relabelled one
+  // keeps its reports.
+  const issues = gh(["api", "--paginate", "--slurp", "-X", "GET", "repos/{owner}/{repo}/issues", "-f", "state=open", "-f", "per_page=100"]).flat();
   return issues.filter((issue) => !issue.pull_request && issue.title === title).map((issue) => issue.number).sort((a, b) => a - b);
 }
 
@@ -163,6 +173,12 @@ function main() {
     return { name: job.name, log };
   });
   const decision = decide({ event: run.event, attempt: run.run_attempt, failedJobs });
+  if (decision.rerun) {
+    const heads = (run.pull_requests ?? []).map((pr) => gh(["api", `repos/{owner}/{repo}/pulls/${pr.number}`]).head.sha);
+    if (!stillCurrent({ event: run.event, runSha: run.head_sha, heads })) {
+      Object.assign(decision, { rerun: false, stale: true, reason: "a newer commit of the pull request has its own run" });
+    }
+  }
   console.log(`Run ${id} attempt ${run.run_attempt} (${run.event}, ${run.head_branch}): ${decision.rerun ? "re-run" : "leave"}, ${decision.reason}.`);
   for (const test of decision.tests) console.log(`  ${test}`);
 
@@ -172,7 +188,7 @@ function main() {
     fileOrComment(`Nightly CI failed on ${run.created_at.slice(0, 10)}`, `The nightly run failed: ${link}.\n\n${what}\n\nThe nightly run is main's full suite with no cache, plus the tests tagged \`@nightly\` (the axe scans). Find the failing job, fix it or file what broke, then close this issue.`, dryRun);
   } else if (decision.issue === "collision") {
     const tests = decision.tests.map((test) => `- \`${test}\``).join("\n") || "- (no test name in the log)";
-    const next = decision.rerun ? "The failed jobs were re-run once." : "It had already been re-run once, so it stays red.";
+    const next = decision.rerun ? "The failed jobs were re-run once." : decision.stale ? "It was not re-run: a newer commit of the pull request has its own run." : "It had already been re-run once, so it stays red.";
     fileOrComment(collisionTitle(decision.tests), `${link} on \`${run.head_branch}\` failed only on a database collision between tests (${decision.collisions.join(", ")}):\n\n${tests}\n\n${next} Two tests hold locks on the same rows or tables at the same time. Fix the tests so they stop sharing locks; see \`docs/agents/workflow.md\` → Checks.`, dryRun);
   }
   if (decision.rerun) {

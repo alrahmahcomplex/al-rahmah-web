@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collisionTitle, decide, duplicateOf, errors, vitestReport } from "./ci-retry.mjs";
+import { collisionTitle, decide, duplicateOf, errors, stillCurrent, vitestReport } from "./ci-retry.mjs";
 
 const stamp = "2026-11-12T11:10:24.8736182Z ";
 const log = (lines) => lines.map((line) => stamp + line).join("\n");
@@ -165,6 +165,13 @@ test("a failed nightly run opens an issue and is not re-run", () => {
 test("the issue title names the test files, so one collision keeps one issue", () => {
   assert.equal(collisionTitle(["tests/integration/b.test.ts > x", "tests/integration/a.test.ts > y", "tests/integration/b.test.ts > z"]), "Tests collide in the database: a.test.ts, b.test.ts");
   assert.equal(collisionTitle([]), "Tests collide in the database: unknown test");
+});
+
+test("a pull request run is re-run only while it is for the pull request's head", () => {
+  assert.equal(stillCurrent({ event: "pull_request", runSha: "a1", heads: ["a1"] }), true);
+  assert.equal(stillCurrent({ event: "pull_request", runSha: "a1", heads: ["b2"] }), false, "a newer push has its own run");
+  assert.equal(stillCurrent({ event: "pull_request", runSha: "a1", heads: [] }), false, "no pull request found: leave it");
+  assert.equal(stillCurrent({ event: "push", runSha: "a1", heads: [] }), true, "main's runs never cancel each other");
 });
 
 test("of two issues opened at once, each run closes only its own newer one", () => {

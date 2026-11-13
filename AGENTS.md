@@ -19,8 +19,8 @@ The tier governs planning, skill use, local checks, evidence, review and complet
 
 1. **Isolate before editing:** use `new-feature`. Scope-check open PRs with `gh pr list` and `gh pr diff <n> --name-only`; ask on overlapping files. Use your own worktree: Codex `.worktrees/<task>` on `codex/<task>`, Claude's harness worktree on `claude/<task>`. If a ticket exists, claim it with `Claimed by <claude|codex> on <branch>`; skip claimed tickets. A direct human request does not need a new ticket.
 2. **Build and verify:** read [Workflow](docs/agents/workflow.md) for the chosen tier. Continue routine implementation and repair without repeated approval, except UI and UX changes (Invariants). Ask when a product decision or material scope change needs the human.
-3. **Complete:** follow Workflow's completion checklist through a reviewed PR with the applicable CI green. Present the PR URL and retain the worktree. Merge remains the human's decision.
-4. **On "merge":** follow [Releasing](docs/agents/releasing.md) through merge and housekeeping. App releases also get a changelog entry and tag. Internal maintenance can merge without an app version.
+3. **Complete:** follow Workflow's completion checklist through a reviewed PR with the applicable CI green.
+4. **Merge:** merge without waiting for the owner once [Releasing → When to merge](docs/agents/releasing.md#when-to-merge) holds, then follow Releasing through housekeeping.
 
 Use `handoff` for an unfinished session, with the tier, current commit, evidence and remaining work.
 
@@ -35,20 +35,20 @@ Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, V
 - Add shadcn components through its CLI into `components/ui/`.
 - `proxy.ts` matches only routes reading the staff session: `/staff`, `/login`, `/auth`. Add a route only if it needs that session, so public pages stay up when Supabase is down or misconfigured.
 - Real family/student data stays out of Git and evidence. Use seeded fixture data and the seeded test account.
-- PR evidence is uploaded through the PR's comment box in the signed-in in-app browser, never pushed to a branch, a gist or another file host ([Workflow → Attaching evidence](docs/agents/workflow.md#attaching-evidence-to-a-pr)). If that browser isn't signed in to GitHub or isn't available, ask the human to sign in and wait.
-- Worktrees share one local Supabase and limited memory. Before database resets, integration/e2e tests, builds or evidence servers, take the shared lock described in [Parallel work](docs/agents/parallel-work.md). Confirm a reused port serves your process. Stop the database only when no other session uses it.
+- PR evidence goes in only through the PR's comment box in the signed-in in-app browser ([Workflow → Attaching evidence](docs/agents/workflow.md#attaching-evidence-to-a-pr)).
+- Worktrees share one local Supabase and limited memory. Before database resets, integration/e2e tests, builds or evidence servers, take the shared lock described in [Parallel work](docs/agents/parallel-work.md). Stop the database only when no other session uses it.
 - Leave other agents' branches, worktrees and uncommitted changes untouched. Release housekeeping may remove merged work only after its safety checks. Force-push only your own branch with `--force-with-lease`; regenerate conflicting lockfiles with `npm install`. Stop on a conflict you cannot resolve confidently.
 
 ## Read only what the task needs
 
 - **Planning, verification or PR preparation:** [Workflow](docs/agents/workflow.md).
-- **Release or merge:** [Releasing](docs/agents/releasing.md).
+- **Merge or release:** [Releasing](docs/agents/releasing.md).
 - **Local database, shared resources or parallel feature slices:** [Parallel work](docs/agents/parallel-work.md).
 - **Production, Preview, hosted dashboards or service setup:** [Hosted services](docs/agents/hosted-services.md). Check the signed-in in-app browser yourself; request sign-in if needed.
 - **Business behavior or terminology:** relevant sections of [CONTEXT.md](CONTEXT.md), relevant [ADRs](docs/adr/), and [domain guidance](docs/agents/domain.md).
 - **Tickets or triage:** [Issue tracker](docs/agents/issue-tracker.md) and [triage labels](docs/agents/triage-labels.md).
 
-Keep only permanent project material on `main`. Research findings and `prototype` logic demos stay on their own throwaway branches; UI prototypes follow [Workflow → UI and UX changes](docs/agents/workflow.md#ui-and-ux-changes) and are never committed; handoffs use the skill's OS-temp location. EGM briefs and reports go under `.artifacts/egm/<feature>/`; pass that path as `EGM artifact directory` to EGM. Apply `unslop` to human-facing text you write or change.
+Keep only permanent project material on `main`. Research findings and `prototype` logic demos stay on their own throwaway branches; UI prototypes follow [Workflow → UI and UX changes](docs/agents/workflow.md#ui-and-ux-changes) and are never committed; handoffs use the skill's OS-temp location. Apply `unslop` to human-facing text you write or change.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

@@ -6,12 +6,13 @@ language lives in [CONTEXT.md](CONTEXT.md).
 
 ## Releases
 
-App releases are tagged with [Semantic Versioning](https://semver.org) and written
-up in [CHANGELOG.md](CHANGELOG.md), which holds the current release. `v1.0.0` is
-reserved for the complete app, with all three products implemented. Internal
-documentation, tests and development workflow maintenance can merge without an
-app version. See [Releasing](docs/agents/releasing.md) for classification and the
-release helper commands. The human authorizes every merge.
+App releases are tagged with [Semantic Versioning](https://semver.org). From
+v0.108.0 each release is a GitHub Release, written from the files app PRs add to
+[changes/](changes/README.md); [CHANGELOG.md](CHANGELOG.md) holds the releases up to
+v0.107.0. `v1.0.0` is reserved for the complete app, with all three products
+implemented. Internal documentation, tests and development workflow maintenance
+merge without an app version. [Releasing](docs/agents/releasing.md) has when a PR
+may merge and how a release is made.
 
 ## Requirements
 

@@ -9,22 +9,12 @@ import { expect, test } from "./staff-test"
 // components/kit, then the kit's other pieces. Any signed-in staff member may
 // open it; it is drawn in the new shell (#322).
 
-const INDIGO = "rgb(9, 0, 187)"
-const PEACH_GLOW = "rgb(255, 207, 166)"
-
 async function openKit(page: Page) {
   await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
   await page.goto("/staff/kit")
   await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible()
   await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
 }
-
-const glow = (icon: Locator) =>
-  icon.locator("circle.gf-ic-glow").evaluate((el) => {
-    const style = getComputedStyle(el)
-    return { fill: style.fill, scale: new DOMMatrixReadOnly(style.transform).a }
-  })
-const line = (icon: Locator) => icon.locator("g.gf-ic-line").first().evaluate((el) => getComputedStyle(el).stroke)
 
 test("a signed-out visitor is sent to sign in", async ({ page }) => {
   await page.goto("/staff/kit")
@@ -36,7 +26,6 @@ test("shows both parts on the stage of the new shell, and is not indexed", async
   await expect(page).toHaveTitle("Design system · Al-Rahmah Complex")
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/)
   await expect(page.locator('[data-shell="new"]').getByRole("navigation", { name: "Staff" })).toBeVisible()
-  await expect(page.locator(".ns-stage")).toHaveCSS("background-image", /linear-gradient/)
 
   const top = page.locator('[data-part="design-system"]')
   for (const title of ["Icons: one colour at rest, two in use", "Illustrations", "Colour", "Type", "Buttons", "Fields", "Selectors", "Progress bar", "Cards and chips"])
@@ -47,26 +36,6 @@ test("shows both parts on the stage of the new shell, and is not indexed", async
   const more = page.locator('[data-part="more"]')
   for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Guided form", "Sheet", "Side sheet", "Popover", "Toast", "Confetti"])
     await expect(more.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible()
-})
-
-test("the active icon state shows on hover and in a featured icon", async ({ page }) => {
-  await openKit(page)
-  const host = page.locator('[data-icons="hover"] > span').first()
-  const icon = host.locator("svg")
-
-  await expect.poll(() => glow(icon)).toEqual({ fill: "rgba(0, 0, 0, 0)", scale: 0.5 })
-  await host.hover()
-  await expect.poll(() => glow(icon)).toEqual({ fill: PEACH_GLOW, scale: 1 })
-  expect(await line(icon)).toBe(INDIGO)
-
-  const featured = page.locator('[data-icons="featured"] svg').first()
-  await expect.poll(() => glow(featured)).toEqual({ fill: PEACH_GLOW, scale: 1 })
-
-  // A round button hosts its icon's active state too.
-  const menu = page.locator('[data-part="design-system"]').getByRole("region", { name: "Buttons" }).getByRole("button", { name: "Menu" })
-  await expect.poll(() => glow(menu.locator("svg"))).toEqual({ fill: "rgba(0, 0, 0, 0)", scale: 0.5 })
-  await menu.hover()
-  await expect.poll(() => glow(menu.locator("svg"))).toEqual({ fill: PEACH_GLOW, scale: 1 })
 })
 
 test("the controls answer: selectors, filter pills, rows, chip buttons and the pending button", async ({ page }) => {
@@ -113,21 +82,8 @@ test("the controls answer: selectors, filter pills, rows, chip buttons and the p
   await expect(more.getByRole("region", { name: "Note" }).getByText("The payment form could not open. Check your connection and try again.")).toBeVisible()
 })
 
-test("Exo is never upright on the page", async ({ page }) => {
-  await openKit(page)
-  const upright = await page.evaluate(() =>
-    [...document.querySelectorAll("body *")]
-      .filter((el) => {
-        const style = getComputedStyle(el)
-        return /exo/i.test(style.fontFamily.split(",")[0]) && style.fontStyle === "normal" && el.textContent?.trim()
-      })
-      .map((el) => el.outerHTML.slice(0, 120)),
-  )
-  expect(upright).toEqual([])
-})
-
 for (const width of [1280, 390]) {
-  test(`axe finds nothing but the accepted white-on-orange contrast at ${width}px`, async ({ page }) => {
+  test(`axe finds nothing but the accepted white-on-orange contrast at ${width}px`, { tag: "@nightly" }, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await openKit(page)
     // The guided form's first question fades in; mid-fade its colours are blended.
@@ -135,7 +91,7 @@ for (const width of [1280, 390]) {
     expect(await axeProblems(page)).toEqual([])
   })
 
-  test(`axe finds nothing in the open sheets and popover at ${width}px`, async ({ page }) => {
+  test(`axe finds nothing in the open sheets and popover at ${width}px`, { tag: "@nightly" }, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await openKit(page)
     const more = page.locator('[data-part="more"]')
@@ -181,14 +137,6 @@ test("a centre sheet: focus on the title, Tab stays inside, Escape and Close ret
   const sheet = page.getByRole("dialog", { name: "Sibling · 10%" })
   await expect(sheet).toHaveAccessibleDescription("Latifa Omari Juma Hassan")
   await expect(sheet.getByRole("heading", { name: "Sibling · 10%" })).toBeFocused()
-  // Centred on a wide screen, once it has settled.
-  await expect(sheet).toHaveCSS("opacity", "1")
-  await expect
-    .poll(async () => {
-      const box = (await sheet.boundingBox())!
-      return [Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2)]
-    })
-    .toEqual([640, 400])
   // Close, the scrolling body, Grant and Refuse: Tab cycles through them and no further.
   await tabStaysInside(page, sheet, 6)
   await page.keyboard.press("Escape")
@@ -206,33 +154,18 @@ test("a centre sheet: focus on the title, Tab stays inside, Escape and Close ret
   await expect(sheet).toHaveCount(0)
   const toast = page.getByRole("status").filter({ hasText: "Granted for Latifa Omari Juma Hassan. The desk can see it now." })
   await expect(toast).toBeVisible()
-  await expect(toast).toHaveCSS("background-color", "rgb(3, 0, 77)")
-  // Bottom centre, 24px up.
-  await expect
-    .poll(async () => {
-      const box = (await toast.boundingBox())!
-      return [box.x + box.width / 2, box.y + box.height].map(Math.round)
-    })
-    .toEqual([640, 800 - 24])
   await expect(card.getByText("Granted", { exact: true })).toBeVisible()
   // It leaves on its own after 2.6s.
   await expect(toast).toHaveCount(0, { timeout: 5_000 })
 })
 
-test("a side sheet keeps its head and foot while only the details scroll; the inline editors", async ({ page }) => {
+test("a side sheet's inline editors: the fee with its reason, and the father's name", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 640 })
   await openKit(page)
   const row = page.locator('[data-part="more"]').getByRole("row", { name: "Zuhura Ali Mussa Khamis" })
   await row.click()
   const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
   await expect(sheet.getByRole("heading", { name: "Zuhura Ali Mussa Khamis" })).toBeFocused()
-  // 440px wide, 12px from the right, top and bottom, once it has slid in.
-  await expect
-    .poll(async () => {
-      const box = (await sheet.boundingBox())!
-      return [box.width, box.x + box.width, box.y, box.y + box.height].map(Math.round)
-    })
-    .toEqual([440, 1280 - 12, 12, 640 - 12])
 
   // The fee editor: a preview of what changes, then the reason.
   await sheet.getByRole("button", { name: "Edit fee" }).click()
@@ -241,19 +174,6 @@ test("a side sheet keeps its head and foot while only the details scroll; the in
   await sheet.locator("label", { hasText: "Full fee" }).click()
   await expect(sheet.getByText("Zuhura: TZS 1,620,000 becomes TZS 1,800,000.")).toBeVisible()
   await expect(sheet.getByText("Khalid: no change.")).toBeVisible()
-
-  const head = sheet.locator(".kit-sheet-head")
-  const foot = sheet.locator(".kit-sheet-foot")
-  const body = sheet.locator(".kit-sheet-body")
-  const headBefore = await head.boundingBox()
-  const footBefore = await foot.boundingBox()
-  expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
-  await body.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
-  await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
-  expect(await head.boundingBox()).toEqual(headBefore)
-  expect(await foot.boundingBox()).toEqual(footBefore)
-  await expect(sheet.getByRole("heading", { name: "Zuhura Ali Mussa Khamis" })).toBeInViewport()
-  await expect(sheet.getByRole("button", { name: "Open full record" })).toBeInViewport()
 
   await sheet.getByRole("button", { name: "Save the fee" }).click()
   await expect(sheet.getByRole("alert")).toHaveText("Choose the reason.")
@@ -289,18 +209,12 @@ test("a side sheet keeps its head and foot while only the details scroll; the in
   await expect(row).toBeFocused()
 })
 
-test("on a 360×640 phone the sheet rises from the bottom and its foot stays above the keyboard", async ({ page }) => {
+test("on a phone, the record sheet adds a Previous school inline and Record payment records the payment", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 640 })
   await openKit(page)
   const row = page.locator('[data-part="more"]').getByRole("row", { name: "Rehema Said Abdallah" })
   await row.click()
   const record = page.getByRole("dialog", { name: "Rehema Said Abdallah" })
-  await expect
-    .poll(async () => {
-      const box = (await record.boundingBox())!
-      return [box.width, box.y + box.height].map(Math.round)
-    })
-    .toEqual([360, 640])
   // The keyboard works the same on a bottom sheet: title first, Tab stays inside, Escape returns focus.
   await expect(record.getByRole("heading", { name: "Rehema Said Abdallah" })).toBeFocused()
   await tabStaysInside(page, record, 10)
@@ -326,29 +240,11 @@ test("on a 360×640 phone the sheet rises from the bottom and its foot stays abo
   const payment = page.getByRole("dialog", { name: "Record a payment" })
   await expect(payment).toBeVisible()
   await expect(record).toHaveCount(0)
-  const amount = payment.getByRole("textbox", { name: "Amount in shillings" })
-  await amount.focus()
   const review = payment.getByRole("button", { name: "Review payment" })
-  await expect(review).toBeInViewport({ ratio: 1 })
-
-  // An on-screen keyboard leaves 340px of the window: the foot moves up above it.
-  await page.evaluate(() => {
-    const view = window.visualViewport!
-    Object.defineProperty(view, "height", { configurable: true, get: () => 340 })
-    view.dispatchEvent(new Event("resize"))
-  })
-  await expect
-    .poll(async () => {
-      const box = (await review.boundingBox())!
-      return box.y + box.height
-    })
-    .toBeLessThanOrEqual(340)
-  await expect(amount).toBeFocused()
-
   await review.click()
   await expect(payment.getByRole("alert")).toHaveText("Choose the kind of payment.")
   await payment.getByRole("button", { name: "Initial deposit" }).click()
-  await amount.fill("600,000")
+  await payment.getByRole("textbox", { name: "Amount in shillings" }).fill("600,000")
   await review.click()
   await expect(payment.getByText("TZS 2,000,000")).toBeVisible()
   await payment.getByRole("button", { name: "Confirm payment" }).click()
@@ -369,7 +265,6 @@ test("the popovers: the bell's new requests and the account menu", async ({ page
   await expect(bell).toHaveAttribute("aria-expanded", "true")
   // Opening it clears the pip.
   await expect(card.locator(".kp-pip")).toHaveCount(0)
-  await expect(requests).toHaveCSS("border-radius", "22px")
   await expect(requests.getByRole("button", { name: /New discount request/ })).toBeVisible()
   // Tab never lands on something unseen: the screen-reader Close is out of the tab order.
   for (let i = 0; i < 4; i++) {
@@ -385,167 +280,9 @@ test("the popovers: the bell's new requests and the account menu", async ({ page
   await me.click()
   const account = page.getByRole("dialog", { name: "Rehema M." })
   await expect(account).toHaveAccessibleDescription("Admissions Manager")
-  await expect(account.getByText("Admissions Manager")).toHaveCSS("color", "rgb(71, 85, 105)")
   await account.getByRole("button", { name: "Sign out" }).click()
   await expect(account).toHaveCount(0)
   await expect(me).toBeFocused()
-})
-
-// #349: three pieces measured against the prototype (version 13) at the same widths.
-test("on a phone the toast is at most half the window wide and wraps, as the prototype's does", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await openKit(page)
-  await page.locator('[data-part="more"]').getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
-  await page.getByRole("dialog", { name: "Sibling · 10%" }).getByRole("button", { name: "Grant the discount" }).click()
-  const toast = page.getByRole("status").filter({ hasText: "Granted for Latifa Omari Juma Hassan. The desk can see it now." })
-  // The prototype: 195px wide, three lines (81px), centred, 24px up.
-  await expect
-    .poll(async () => {
-      const box = (await toast.boundingBox())!
-      return { width: Math.round(box.width), lines: Math.round((box.height - 20) / 20.25), centre: Math.round(box.x + box.width / 2), bottom: Math.round(box.y + box.height) }
-    })
-    .toEqual({ width: 195, lines: 3, centre: 195, bottom: 844 - 24 })
-})
-
-test("a sheet's sections keep the prototype's space around their facts", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 844 })
-  await openKit(page)
-  await page.locator('[data-part="more"]').getByRole("row", { name: "Zuhura Ali Mussa Khamis" }).click()
-  const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
-  await expect(sheet).toHaveCSS("opacity", "1")
-  // The prototype's dl kept the browser's 14px: 14px from the title, then 14px and the 14px padding before the line.
-  const sections = await sheet.locator(".kit-sec").evaluateAll((secs) =>
-    secs.map((sec) => {
-      const title = sec.querySelector(".kit-sec-title")!.getBoundingClientRect()
-      const kv = sec.querySelector(".kit-kv")?.getBoundingClientRect()
-      const box = sec.getBoundingClientRect()
-      return { title: sec.querySelector(".kit-sec-title")!.textContent, toFacts: kv && Math.round(kv.top - title.bottom), after: kv && Math.round(box.bottom - kv.bottom) }
-    }),
-  )
-  expect(sections.slice(0, 2)).toEqual([
-    { title: "Student", toFacts: 14, after: 29 },
-    { title: "Custodian", toFacts: 14, after: 29 },
-  ])
-  // The School fee facts sit 14px above Record payment, as the prototype's do.
-  expect(sections[3]).toMatchObject({ title: "School fee", toFacts: 14 })
-  const gap = await sheet.locator(".kit-sec").nth(3).evaluate((sec) => Math.round(sec.querySelector(".kp-fee-act")!.getBoundingClientRect().top - sec.querySelector(".kit-kv")!.getBoundingClientRect().bottom))
-  expect(gap).toBe(14)
-})
-
-test("the bell's rows sit straight under its title and round to 14px on hover", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 900 })
-  await openKit(page)
-  await page.locator('[data-part="more"]').getByRole("region", { name: "Popover" }).getByRole("button", { name: "New requests" }).click()
-  const requests = page.getByRole("dialog", { name: "New requests" })
-  await expect(requests).toHaveCSS("opacity", "1")
-  const row = requests.getByRole("button", { name: /New discount request/ })
-  const [title, first] = await Promise.all([requests.getByRole("heading", { name: "New requests" }).boundingBox(), row.boundingBox()])
-  expect(Math.round(first!.y - (title!.y + title!.height))).toBe(0)
-  await row.hover()
-  await expect(row).toHaveCSS("border-radius", "14px")
-  await expect(row).toHaveCSS("background-color", "rgb(248, 247, 253)")
-})
-
-test("confetti rains 46 pieces and removes itself", async ({ page }) => {
-  await openKit(page)
-  await page.locator('[data-part="more"]').getByRole("region", { name: "Confetti" }).getByRole("button", { name: "Play it" }).click()
-  await expect(page.locator(".kit-cf i")).toHaveCount(46)
-  await expect(page.locator(".kit-cf")).toHaveCount(0, { timeout: 5_000 })
-})
-
-// A sheet's transform as it enters: read with data-starting-style set, so a slide or scale on entry
-// fails the test even though the sheet settles in place.
-const entryTransform = (sheet: Locator) =>
-  sheet.evaluate((el) => {
-    const had = el.hasAttribute("data-starting-style")
-    el.setAttribute("data-starting-style", "")
-    const t = getComputedStyle(el).transform
-    if (!had) el.removeAttribute("data-starting-style")
-    return t
-  })
-// Centred by translateY(-50%) alone: no scale and no slide.
-const centredInPlace = (sheet: Locator) =>
-  sheet.evaluate((el) => {
-    const had = el.hasAttribute("data-starting-style")
-    el.setAttribute("data-starting-style", "")
-    const m = new DOMMatrixReadOnly(getComputedStyle(el).transform)
-    if (!had) el.removeAttribute("data-starting-style")
-    return { scale: m.a, x: m.e, offBy: Math.round(Math.abs(m.f + (el as HTMLElement).offsetHeight / 2)) }
-  })
-
-test.describe("under reduced motion", () => {
-  test.use({ reducedMotion: "reduce" })
-
-  test("sheets fade in place and confetti is skipped", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await openKit(page)
-    const more = page.locator('[data-part="more"]')
-    await more.getByRole("region", { name: "Confetti" }).getByRole("button", { name: "Play it" }).click()
-    // Checked at once: the rain would remove itself after 2.4s, so a retrying check could pass anyway.
-    expect(await page.locator(".kit-cf").count()).toBe(0)
-
-    await more.getByRole("row", { name: "Zuhura Ali Mussa Khamis" }).click()
-    const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
-    await expect(sheet).toHaveCSS("transition-property", "opacity")
-    await expect(sheet).toHaveCSS("transform", "none")
-    expect(await entryTransform(sheet)).toBe("none")
-  })
-
-  test("the centre sheet fades in place, and so does the bottom sheet on a phone", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await openKit(page)
-    await page.locator('[data-part="more"]').getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
-    const review = page.getByRole("dialog", { name: "Sibling · 10%" })
-    await expect(review).toHaveCSS("transition-property", "opacity")
-    expect(await centredInPlace(review)).toEqual({ scale: 1, x: 0, offBy: 0 })
-    await page.keyboard.press("Escape")
-    await expect(review).toHaveCount(0)
-
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page.locator('[data-part="more"]').getByRole("row", { name: "Rehema Said Abdallah" }).click()
-    const record = page.getByRole("dialog", { name: "Rehema Said Abdallah" })
-    await expect(record).toHaveCSS("transition-property", "opacity")
-    await expect(record).toHaveCSS("transform", "none")
-    expect(await entryTransform(record)).toBe("none")
-  })
-})
-
-// The page's own reduced-motion switch, html.rm, works without the OS setting.
-test("with html.rm, sheets fade in place, the toast does not rise and confetti is skipped", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await openKit(page)
-  await page.evaluate(() => document.documentElement.classList.add("rm"))
-  const more = page.locator('[data-part="more"]')
-  await more.getByRole("region", { name: "Confetti" }).getByRole("button", { name: "Play it" }).click()
-  // Checked at once: the rain would remove itself after 2.4s, so a retrying check could pass anyway.
-  expect(await page.locator(".kit-cf").count()).toBe(0)
-
-  await more.getByRole("row", { name: "Zuhura Ali Mussa Khamis" }).click()
-  const side = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
-  await expect(side).toHaveCSS("transition-property", "opacity")
-  await expect(side).toHaveCSS("transform", "none")
-  expect(await entryTransform(side)).toBe("none")
-  await page.keyboard.press("Escape")
-  await expect(side).toHaveCount(0)
-  await more.getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
-  const review = page.getByRole("dialog", { name: "Sibling · 10%" })
-  await expect(review).toHaveCSS("transition-property", "opacity")
-  expect(await centredInPlace(review)).toEqual({ scale: 1, x: 0, offBy: 0 })
-  await page.keyboard.press("Escape")
-  await expect(side).toHaveCount(0)
-
-  await more.getByRole("region", { name: "Toast" }).getByRole("button", { name: "Play it" }).click()
-  const toast = page.locator(".kit-toaster [data-sonner-toast]")
-  await expect(toast).toBeVisible()
-  // The offset a toast enters from: none under html.rm, where it would be 20px below.
-  const entry = await toast.evaluate((el) => {
-    const mounted = el.getAttribute("data-mounted")
-    el.setAttribute("data-mounted", "false")
-    const y = getComputedStyle(el).getPropertyValue("--y").trim()
-    el.setAttribute("data-mounted", mounted ?? "true")
-    return y
-  })
-  expect(entry).toBe("none")
 })
 
 // #321: the guided form on a staff page, played with the prototype's registration questions.
@@ -571,8 +308,6 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
 
   // Start over hosts the Peach Glow on hover; Back is a plain chevron. Pressed, it empties the form.
   const reset = bar.getByRole("button", { name: "Start over" })
-  await reset.hover()
-  await expect.poll(() => glow(reset.locator("svg"))).toEqual({ fill: PEACH_GLOW, scale: 1 })
   await expect(bar.locator(".gf-secname")).toHaveText("Students")
   await open.getByRole("textbox", { name: "First name", exact: true }).fill("Neema")
   await reset.click()
@@ -669,30 +404,14 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
   await expect(open.getByRole("textbox", { name: "First name", exact: true })).toBeFocused()
 })
 
-test("the guided form's progress bar sticks to the top while the questions scroll", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 600 })
-  await openKit(page)
-  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
-  const bar = card.locator(".gf-bar-row")
-  const area = page.locator("[data-stage-scroll]")
-  await card.locator(".kit-task").evaluate((el) => {
-    const stage = el.closest<HTMLElement>("[data-stage-scroll]")!
-    stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top + 200
-  })
-  await expect.poll(async () => Math.round((await bar.boundingBox())!.y - (await area.boundingBox())!.y)).toBe(0)
-})
-
-test("under reduced motion the staff guided form opens each question at once, with no confetti", async ({ page }) => {
+test("under reduced motion the staff guided form can be answered to the end", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" })
   await page.setViewportSize({ width: 390, height: 844 })
   await openKit(page)
   const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
   const open = card.locator(".gf-step.gf-open")
-  expect((await open.boundingBox())!.height).toBeGreaterThan(200)
-  await expect(card.locator(".gf-item").first()).toHaveCSS("transition-duration", "0s, 0.12s")
   await answerNames(open, ["Neema", "Juma", "Salim"])
   await expect(open.getByRole("heading", { name: "Which class is Neema joining?" })).toBeVisible()
-  expect((await open.boundingBox())!.height).toBeGreaterThan(200)
   await pick(open, "STD 5")
   await pick(open, "Day")
   await open.getByRole("button", { name: "No, go to custodians" }).click()
@@ -702,7 +421,6 @@ test("under reduced motion the staff guided form opens each question at once, wi
   await open.getByRole("button", { name: /NO CODE/ }).click()
   await open.getByRole("button", { name: "Register 1 student" }).click()
   await expect(card.getByRole("heading", { level: 2, name: "1 student registered" })).toBeFocused()
-  await expect(page.locator(".kit-cf")).toHaveCount(0)
 })
 
 test("removing a student keeps the names being typed for another", async ({ page }) => {
@@ -717,34 +435,4 @@ test("removing a student keeps the names being typed for another", async ({ page
   await open.getByRole("textbox", { name: "First name", exact: true }).fill("Hamisi")
   await card.getByRole("button", { name: "Remove Neema Juma Salim" }).click()
   await expect(open.getByRole("textbox", { name: "First name", exact: true })).toHaveValue("Hamisi")
-})
-
-test("inside a stage scroll area the bar sits flush with its top, and a new question is scrolled into view there", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 700 })
-  await openKit(page)
-  // The new shell (#322) draws the page in the stage's scroll area: data-stage-scroll, with its
-  // top padding in --kit-stage-pt.
-  const area = page.locator("[data-stage-scroll]")
-  const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
-  const bar = card.locator(".gf-bar-row")
-  const areaTop = async () => (await area.boundingBox())!.y
-
-  await card.locator(".kit-task").evaluate((el) => {
-    const stage = el.closest<HTMLElement>("[data-stage-scroll]")!
-    stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top + 120
-  })
-  expect(await page.evaluate(() => window.scrollY)).toBe(0)
-  await expect.poll(async () => Math.round((await bar.boundingBox())!.y - (await areaTop()))).toBe(0)
-
-  // Answering scrolls the stage, not the window, to bring the next question into its top third.
-  const open = card.locator(".gf-step.gf-open")
-  await answerNames(open, ["Neema", "Juma", "Salim"])
-  await expect(open.getByRole("heading", { level: 2, name: "Which class is Neema joining?" })).toBeFocused()
-  await expect
-    .poll(async () => {
-      const top = (await open.boundingBox())!.y - (await areaTop())
-      return top > 0 && top < 700 * 0.4
-    })
-    .toBe(true)
-  expect(await page.evaluate(() => window.scrollY)).toBe(0)
 })

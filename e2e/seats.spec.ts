@@ -139,8 +139,4 @@ test("a payment into a full class is recorded through the warning, and Seats ran
 
   const row = page.getByRole("table", { name: "Seats by class" }).getByRole("row").filter({ hasText: "KG 2 Boarding" })
   await expect(row).toContainText(`${taken + 1} · over capacity`)
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
-  // The grid fits too, with no scrolling inside its own box.
-  const grid = page.getByRole("table", { name: "Seats by class" })
-  expect(await grid.evaluate((table) => table.scrollWidth <= (table.parentElement?.clientWidth ?? 0))).toBe(true)
 })

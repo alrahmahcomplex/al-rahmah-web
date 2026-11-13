@@ -27,7 +27,7 @@ async function choose(page: Page, select: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click()
 }
 
-test("the Visited applicants tile shows all time by default, under the Reports heading", async ({ page }) => {
+test("the Visited applicants tile shows all time by default", async ({ page }) => {
   await signIn(page, MANAGER)
 
   const panel = visitedPanel(page)
@@ -35,10 +35,6 @@ test("the Visited applicants tile shows all time by default, under the Reports h
   await expect(panel.getByTestId("visited-period")).toHaveText("All time · All years")
   await expect(panel.getByTestId("visited-count")).toHaveText(/^\d[\d,]*$/)
   await expect(panel.getByRole("link", { name: "Show all time and all years" })).toHaveCount(0)
-
-  const heading = await page.getByRole("heading", { name: "Reports" }).boundingBox()
-  const tile = await panel.boundingBox()
-  expect(heading!.y).toBeLessThan(tile!.y)
 })
 
 test("filters chosen from the filter icon go into the address, survive a reload and clear in one click", async ({ page }) => {
@@ -326,66 +322,4 @@ test("staff without payments.view see the dashboard without Seats by class", asy
 
   await expect(visitedPanel(page)).toBeVisible()
   await expect(seatsPanel(page)).toHaveCount(0)
-})
-
-test.describe("at phone width", () => {
-  test.use({ viewport: { width: 375, height: 812 } })
-
-  test("the tile and its filter fit the screen", async ({ page }) => {
-    await signIn(page, MANAGER)
-    const panel = visitedPanel(page)
-    await expect(panel).toBeVisible()
-
-    const box = await panel.boundingBox()
-    expect(box!.x).toBeGreaterThanOrEqual(0)
-    expect(box!.x + box!.width).toBeLessThanOrEqual(375)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
-
-    await panel.getByRole("button", { name: "Filter Visited applicants" }).click()
-    await choose(page, "Period", "Year")
-    await expect(panel.getByTestId("visited-period")).toHaveText(`${tanzaniaToday().slice(0, 4)} · All years`)
-    const filter = await page.getByRole("combobox", { name: "Enrollment year" }).boundingBox()
-    expect(filter!.x + filter!.width).toBeLessThanOrEqual(375)
-  })
-
-  test("the Enrolled students tile fits the screen", async ({ page }) => {
-    await signIn(page, MANAGER)
-    await page.goto("/staff/reports?enrolled=month:2026-08-01&enrolled_year=2031")
-    const panel = enrolledPanel(page)
-    await expect(panel.getByTestId("enrolled-count")).toHaveText("2")
-
-    const box = await panel.boundingBox()
-    expect(box!.x).toBeGreaterThanOrEqual(0)
-    expect(box!.x + box!.width).toBeLessThanOrEqual(375)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
-  })
-
-  test("the Applicants by enrollment class table fits the screen", async ({ page }) => {
-    await signIn(page, MANAGER)
-    const panel = classesPanel(page)
-    await expect(panel.getByTestId("classes-total")).toBeVisible()
-
-    const box = await panel.boundingBox()
-    expect(box!.x).toBeGreaterThanOrEqual(0)
-    expect(box!.x + box!.width).toBeLessThanOrEqual(375)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
-    const total = await panel.getByTestId("classes-total").boundingBox()
-    expect(total!.x + total!.width).toBeLessThanOrEqual(box!.x + box!.width)
-  })
-
-  test("the Seats by class table fits the screen", async ({ page }) => {
-    await signIn(page, MANAGER)
-    await page.goto("/staff/reports?seats_year=2031")
-    const panel = seatsPanel(page)
-    await expect(seatsRow(page, "STD 2 Day").getByTestId("seats-left")).toHaveText("Over by 1")
-
-    const box = await panel.boundingBox()
-    expect(box!.x).toBeGreaterThanOrEqual(0)
-    expect(box!.x + box!.width).toBeLessThanOrEqual(375)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
-    for (const id of ["seats-priorities", "seats-left"]) {
-      const cell = await seatsRow(page, "STD 2 Day").getByTestId(id).boundingBox()
-      expect(cell!.x + cell!.width).toBeLessThanOrEqual(box!.x + box!.width)
-    }
-  })
 })

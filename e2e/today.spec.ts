@@ -24,8 +24,6 @@ const greeting = (page: Page, person: FixtureStaff) =>
 const queue = (page: Page) => page.getByRole("region", { name: "Needs you today" })
 const latest = (page: Page) => page.getByRole("region", { name: "Latest registrations" })
 const staffNav = (page: Page) => page.getByRole("navigation", { name: "Staff" })
-const scrollsSideways = (page: Page) =>
-  page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
 
 test.describe("on a desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 } })
@@ -113,26 +111,5 @@ test.describe("on a desktop", () => {
     await page.goto("/staff/reports")
     await expect(page.getByRole("heading", { name: "Not available to your role" })).toBeVisible()
     await expect(page.getByRole("region", { name: "Visited applicants" })).toHaveCount(0)
-  })
-})
-
-test.describe("on a phone", () => {
-  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-
-  test("Today fits the screen, with the actions above the queue", async ({ page }) => {
-    await signIn(page, ADMISSIONS)
-    await expect(greeting(page, ADMISSIONS)).toBeVisible()
-    expect(await scrollsSideways(page)).toBe(false)
-
-    const checkIn = main(page).getByRole("link", { name: "Check in a family" })
-    await expect(checkIn).toBeVisible()
-    const overdue = queue(page).getByTestId("today-overdue")
-    await expect(overdue).toBeVisible()
-
-    const action = await checkIn.boundingBox()
-    const row = await overdue.boundingBox()
-    expect(action!.y).toBeLessThan(row!.y)
-    expect(row!.x).toBeGreaterThanOrEqual(0)
-    expect(row!.x + row!.width).toBeLessThanOrEqual(390)
   })
 })

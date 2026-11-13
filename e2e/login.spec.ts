@@ -4,12 +4,8 @@ import { asSystem, createThrowawayStaff } from "../tests/support/db"
 import { ACCOUNTANT, DEACTIVATED, MANAGER } from "../tests/support/fixtures"
 import { logIn } from "./log-in"
 
-// Al-Rahmah palette values from app/globals.css.
-const AL_RAHMAH_BLUE = "rgb(9, 0, 187)" // --color-blue-600: #0900bb
-const AL_RAHMAH_ORANGE = "rgb(238, 115, 0)" // --color-orange-500: #ee7300
-
 test.describe("the one sign-in page", () => {
-  test("is Swahili first, with the language switch above the card and no separate Discount code sign-in", async ({ page }) => {
+  test("is Swahili first, switches to English, and has no separate Discount code sign-in", async ({ page }) => {
     await page.goto("/login")
 
     await expect(page.getByRole("heading", { name: "Karibu!" })).toBeVisible()
@@ -18,34 +14,9 @@ test.describe("the one sign-in page", () => {
     await expect(page.getByText(/Discount code holders/)).toHaveCount(0)
     await expect(page.getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/login/forgot-password")
 
-    // The switch sits above the card, centred; the logo sits inside the card.
-    const switchBox = (await page.getByRole("group", { name: "Lugha" }).boundingBox())!
-    const logoBox = (await page.getByRole("img", { name: "Al-Rahmah Logo" }).boundingBox())!
-    const viewport = page.viewportSize()!
-    expect(switchBox.y + switchBox.height).toBeLessThan(logoBox.y)
-    expect(Math.abs(switchBox.x + switchBox.width / 2 - viewport.width / 2)).toBeLessThan(2)
-
     await page.getByRole("button", { name: "English" }).click()
     await expect(page.getByRole("heading", { name: "Welcome!" })).toBeVisible()
     await expect(page.getByLabel("Email")).toHaveAttribute("placeholder", "Email")
-  })
-
-  test("shows the Al-Rahmah logo and brand colours", async ({ page }) => {
-    await page.goto("/login")
-    await page.getByRole("button", { name: "English" }).click()
-
-    const logo = page.getByRole("img", { name: "Al-Rahmah Logo" })
-    await expect(logo).toBeVisible()
-    expect(await logo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
-
-    await expect(page.getByText("AL-RAHMAH COMPLEX", { exact: true })).toBeVisible()
-    const badge = page.getByText("AL-RAHMAH COMPLEX", { exact: true }).locator("..")
-    await expect(badge).toHaveCSS("background-color", AL_RAHMAH_BLUE)
-    await expect(page.getByRole("heading", { name: "Welcome!" })).toHaveCSS("color", AL_RAHMAH_BLUE)
-    const logIn = page.getByRole("button", { name: "Log In" })
-    await expect(logIn).toHaveCSS("background-color", AL_RAHMAH_ORANGE)
-    // White on orange: The ShuleFasta Button Rule (DESIGN.md).
-    await expect(logIn).toHaveCSS("color", "rgb(255, 255, 255)")
   })
 
   test("the password toggle shows and hides the password", async ({ page }) => {

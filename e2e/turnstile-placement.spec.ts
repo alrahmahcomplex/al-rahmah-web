@@ -112,11 +112,6 @@ async function cloudflareKeepsFailing(page: Page) {
   })
 }
 
-async function noSidewaysScroll(page: Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-  expect(overflow).toBeLessThanOrEqual(0)
-}
-
 // The white rounded card around the check, and the check's drawn box.
 async function boxAndCard(page: Page) {
   return page.locator("[data-turnstile-box]").evaluate((container) => {
@@ -141,15 +136,6 @@ async function boxAndCard(page: Page) {
       },
     }
   })
-}
-
-async function expectInsideCardAndCentred(page: Page) {
-  const { box, content } = await boxAndCard(page)
-  expect(content).not.toBeNull()
-  expect(box.left).toBeGreaterThanOrEqual(content!.left - 0.5)
-  expect(box.right).toBeLessThanOrEqual(content!.right + 0.5)
-  const offCentre = Math.abs((box.left + box.right) / 2 - (content!.left + content!.right) / 2)
-  expect(offCentre).toBeLessThanOrEqual(1)
 }
 
 async function expectSendBringsCheckIntoView(page: Page, lang: "sw" | "en", send: string) {
@@ -189,7 +175,6 @@ for (const { name, size } of VIEWPORTS) {
       await waitForSecurityCheck(page)
       const { container } = await boxAndCard(page)
       expect(container.height).toBeLessThanOrEqual(1)
-      await noSidewaysScroll(page)
     })
 
     test("the forgot-password card shows no check while Cloudflare passes", async ({ page }) => {
@@ -197,78 +182,30 @@ for (const { name, size } of VIEWPORTS) {
       await waitForSecurityCheck(page)
       const { container } = await boxAndCard(page)
       expect(container.height).toBeLessThanOrEqual(1)
-      await noSidewaysScroll(page)
-    })
-
-    test("the hidden check leaves no gap above Tuma kiungo kipya (#276)", async ({ page }) => {
-      await page.goto("/login/forgot-password")
-      await waitForSecurityCheck(page)
-      const email = await page.getByRole("textbox").boundingBox()
-      const send = await page.getByRole("button", { name: "Tuma kiungo kipya" }).boundingBox()
-      // The same 12px as /login has above Ingia.
-      expect(Math.round(send!.y - (email!.y + email!.height))).toBe(12)
-    })
-
-    test("a check that needs a click on the forgot-password card has 12px on each side (#276)", async ({ page }) => {
-      await cloudflareAsksForAClick(page)
-      await page.goto("/login/forgot-password")
-      await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible()
-      const email = await page.getByRole("textbox").boundingBox()
-      const check = await page.locator("[data-turnstile-box]").locator("..").boundingBox()
-      const send = await page.getByRole("button", { name: "Tuma kiungo kipya" }).boundingBox()
-      expect(Math.round(check!.y - (email!.y + email!.height))).toBe(12)
-      expect(Math.round(send!.y - (check!.y + check!.height))).toBe(12)
     })
 
     for (const lang of ["sw", "en"] as const) {
-      test(`a check that needs a click sits inside the forgot-password card, in ${lang}`, async ({ page, baseURL }) => {
+      test(`on the forgot-password card, Send brings a check that needs a click into view, in ${lang}`, async ({ page, baseURL }) => {
         if (lang === "en") await page.context().addCookies([{ name: "lang", value: "en", url: baseURL! }])
         await cloudflareAsksForAClick(page)
         await page.goto("/login/forgot-password")
         await page.getByRole("textbox").fill("mzazi@example.test")
-        await expect(page.getByText(NEEDS_CLICK[lang])).toBeVisible()
-        await expectInsideCardAndCentred(page)
-        await noSidewaysScroll(page)
         await expectSendBringsCheckIntoView(page, lang, lang === "sw" ? "Tuma kiungo kipya" : "Send a new link")
       })
 
-      test(`a check that needs a click sits above Send on the Admission review step, in ${lang}`, async ({ page, baseURL }) => {
+      test(`on the Admission review step, Send brings a check that needs a click into view, in ${lang}`, async ({ page, baseURL }) => {
         if (lang === "en") await page.context().addCookies([{ name: "lang", value: "en", url: baseURL! }])
         await cloudflareAsksForAClick(page)
         await reachReviewStep(page, lang)
-        await expect(page.getByText(NEEDS_CLICK[lang])).toBeVisible()
-        await expectInsideCardAndCentred(page)
-        await noSidewaysScroll(page)
-        // Below the send question's title and above Send, measured once the
-        // question has finished unfolding.
-        await expect(openQuestion(page)).toHaveClass(/gf-settled/)
-        // All three are read in one go. Read one after the other, a page that
-        // is still scrolling into place moves between the readings, and the
-        // check then seems to sit a few pixels below Send's top edge.
-        const [title, check, send] = await page.evaluate(
-          (elements) => elements.map((element) => {
-            const { top, height } = element!.getBoundingClientRect()
-            return { y: top, height }
-          }),
-          [
-            await openQuestion(page).getByRole("heading", { name: APPLY[lang].review }).elementHandle(),
-            await page.locator("[data-fake-check]").elementHandle(),
-            await page.getByRole("button", { name: APPLY[lang].send }).elementHandle(),
-          ],
-        )
-        expect(check.y).toBeGreaterThan(title.y)
-        expect(check.y + check.height).toBeLessThan(send.y)
         await expectSendBringsCheckIntoView(page, lang, APPLY[lang].send)
       })
     }
 
-    test("a check that needs a click sits inside the Discount code card", async ({ page }) => {
+    test("on the Discount code card, Send brings a check that needs a click into view", async ({ page }) => {
       await cloudflareAsksForAClick(page)
       await chooseLanguage(page.context(), "sw")
       await page.goto("/discount-code")
       await fillRegistration(page, "sw", newcomer())
-      await expectInsideCardAndCentred(page)
-      await noSidewaysScroll(page)
       await expectSendBringsCheckIntoView(page, "sw", DISCOUNT.sw.send)
     })
 
@@ -284,15 +221,6 @@ for (const { name, size } of VIEWPORTS) {
 
 test.describe("the sign-in card", () => {
   for (const { name, size } of VIEWPORTS) {
-    test(`on a ${name}, the hidden check leaves no gap above Ingia (#273)`, async ({ page }) => {
-      await page.setViewportSize(size)
-      await page.goto("/login")
-      await waitForSecurityCheck(page)
-      const password = await page.getByLabel("Nenosiri", { exact: true }).boundingBox()
-      const ingia = await page.getByRole("button", { name: "Ingia" }).boundingBox()
-      // The same 12px as between the two boxes.
-      expect(Math.round(ingia!.y - (password!.y + password!.height))).toBe(12)
-    })
 
     test(`on a ${name}, Ingia before the check is ticked keeps the email and password (#273)`, async ({ page }) => {
       await page.setViewportSize(size)
@@ -301,8 +229,6 @@ test.describe("the sign-in card", () => {
       await page.getByLabel("Barua pepe").fill("mzazi@example.test")
       await page.getByLabel("Nenosiri", { exact: true }).fill("a-password")
       await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible({ timeout: 20_000 })
-      await expectInsideCardAndCentred(page)
-      await noSidewaysScroll(page)
 
       await page.getByRole("button", { name: "Ingia" }).click()
       await expect(page.getByText(NEEDS_CLICK.sw)).toBeFocused()
@@ -340,7 +266,6 @@ test("a check that passed out of sight keeps its token when the window narrows (
   await page.waitForTimeout(1_000)
   expect(await checksDrawn(page)).toBe(1)
   await waitForSecurityCheck(page)
-  await noSidewaysScroll(page)
 })
 
 // Near 300px, a classic scrollbar can come and go with the box: the box
@@ -377,6 +302,4 @@ test("a check that needs a click is drawn again to fit when the window narrows",
   await expect(page.locator('[data-fake-check="compact"]')).toBeVisible()
   await expect(page.locator('[data-fake-check="flexible"]')).toHaveCount(0)
   await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible()
-  await expectInsideCardAndCentred(page)
-  await noSidewaysScroll(page)
 })

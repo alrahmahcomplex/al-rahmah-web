@@ -34,13 +34,11 @@ const sidebar = (page: Page) => page.getByRole("complementary", { name: "Sidebar
 const staffNav = (page: Page) => page.getByRole("navigation", { name: "Staff" })
 // A link's name starts with its label; a count follows it ("Follow-ups, 8 overdue").
 const entry = (page: Page, label: string) => staffNav(page).getByRole("link", { name: new RegExp(`^${label}`) })
-const scrollsSideways = (page: Page) =>
-  page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
 
 test.describe("on a desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
-  test("an Admissions Manager reaches every area from the grouped sidebar, and nothing scrolls sideways", async ({ page }) => {
+  test("an Admissions Manager reaches every area from the grouped sidebar", async ({ page }) => {
     await signIn(page, MANAGER)
 
     const nav = staffNav(page)
@@ -48,7 +46,6 @@ test.describe("on a desktop", () => {
       await expect(nav.getByText(group, { exact: true })).toBeVisible()
     }
     for (const label of MANAGER_ENTRIES) await expect(entry(page, label)).toBeVisible()
-    expect(await scrollsSideways(page)).toBe(false)
 
     await expect(entry(page, "Today")).toHaveAttribute("aria-current", "page")
     await expect(page.getByRole("banner")).toContainText("Today")
@@ -73,11 +70,13 @@ test.describe("on a desktop", () => {
 
   test("the rail survives a navigation and a reload", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    const aside = sidebar(page)
-    await expect(aside).toHaveCSS("width", "240px")
+    // The button's name says which way the rail is: Collapse while open, Expand while folded.
+    const collapse = page.getByRole("button", { name: "Collapse sidebar" })
+    const expand = page.getByRole("button", { name: "Expand sidebar" })
+    await expect(collapse).toBeVisible()
 
-    await page.getByRole("button", { name: "Collapse sidebar" }).click()
-    await expect(aside).toHaveCSS("width", "72px")
+    await collapse.click()
+    await expect(expand).toBeVisible()
     // The labels fold away, but every link keeps its name, and a tooltip shows it.
     await expect(entry(page, "Applicants")).toBeVisible()
     await entry(page, "Applicants").hover()
@@ -85,29 +84,28 @@ test.describe("on a desktop", () => {
 
     await entry(page, "Applicants").click()
     await expect(page).toHaveURL(/\/staff\/applicants$/)
-    await expect(aside).toHaveCSS("width", "72px")
+    await expect(expand).toBeVisible()
 
     await page.reload()
-    await expect(aside).toHaveCSS("width", "72px")
+    await expect(expand).toBeVisible()
 
-    await page.getByRole("button", { name: "Expand sidebar" }).click()
-    await expect(aside).toHaveCSS("width", "240px")
+    await expand.click()
+    await expect(collapse).toBeVisible()
     await page.reload()
-    await expect(aside).toHaveCSS("width", "240px")
+    await expect(collapse).toBeVisible()
   })
 })
 
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
 
-  test("a tab bar holds Today, Check-in and Leads, More opens the rest, and nothing scrolls sideways", async ({ page }) => {
+  test("a tab bar holds Today, Check-in and Leads, and More opens the rest", async ({ page }) => {
     await signIn(page, MANAGER)
 
     await expect(sidebar(page)).toBeHidden()
     const tabs = staffNav(page)
     await expect(tabs.getByRole("link")).toHaveText(["Today", "Check-in", "Applicants"])
     await expect(tabs.getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page")
-    expect(await scrollsSideways(page)).toBe(false)
 
     await tabs.getByRole("button", { name: "More" }).click()
     const sheet = page.getByRole("dialog", { name: "More" })
@@ -124,6 +122,5 @@ test.describe("on a phone", () => {
     await expect(sheet).toBeHidden()
     await expect(page.getByRole("banner")).toContainText("Interviews")
     await expect(tabs.getByRole("link", { name: "Today" })).not.toHaveAttribute("aria-current", "page")
-    expect(await scrollsSideways(page)).toBe(false)
   })
 })

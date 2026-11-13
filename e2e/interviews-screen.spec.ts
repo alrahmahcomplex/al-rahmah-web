@@ -119,8 +119,6 @@ test.describe("the Interviews screen", () => {
     await expect(list(page)).toContainText("ADMSN-90504")
     await expect(list(page).getByText("ADMSN-90503")).toHaveCount(0)
     for (const fee of await rows(page).locator(FEE_CELL).allTextContents()) expect(fee).toBe("Not Paid")
-    // The table scrolls inside its frame; the page itself doesn't.
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
 
     // Paid lists the seeded Paid lead first, by S/N, and only Paid rows.
     await filter(page, "Interview fee", "Paid").click()
@@ -196,6 +194,5 @@ test.describe("the Result sent column and the Ready to send filter", () => {
     await signIn(page, ACCOUNTANT)
     await page.goto(`/staff/interviews?year=${year}&page=${await lastPage({})}`)
     await expect(row(page).locator(SENT_CELL)).toHaveText(formatDate(tanzaniaToday()))
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   })
 })

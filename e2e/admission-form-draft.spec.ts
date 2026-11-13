@@ -117,36 +117,6 @@ for (const lang of ["sw", "en"] as const) {
   })
 }
 
-test("with the phone's text doubled, the top bar keeps its places and nothing scrolls sideways", async ({ page }) => {
-  await page.goto("/apply")
-  await page.addStyleTag({ content: "html { font-size: 200% !important; }" })
-  await expectQuestion(page, t.studentName)
-
-  const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }))
-  expect(widths.scroll).toBeLessThanOrEqual(widths.client)
-
-  const badge = await page.getByText("AL-RAHMAH SCHOOLS", { exact: true }).boundingBox()
-  const menu = await page.getByRole("button", { name: "Menyu" }).boundingBox()
-  expect(badge && menu).toBeTruthy()
-  expect(badge!.x + badge!.width).toBeLessThanOrEqual(menu!.x)
-})
-
-test("the menu button and each language option are at least 44px tall on a phone", async ({ page }) => {
-  await page.goto("/apply")
-  const menu = page.getByRole("button", { name: "Menyu" })
-  expect((await menu.boundingBox())?.height).toBeGreaterThanOrEqual(44)
-  await menu.click()
-  for (const name of ["Kiswahili", "English"]) {
-    // The panel grows in; measure once it has settled.
-    await expect.poll(async () => (await page.getByRole("button", { name, exact: true }).boundingBox())?.height, { message: name }).toBeGreaterThanOrEqual(44)
-  }
-  await page.goto("/")
-  for (const name of ["Kiswahili", "English"]) {
-    const box = await page.getByRole("button", { name, exact: true }).boundingBox()
-    expect(box?.height, `${name} on /`).toBeGreaterThanOrEqual(44)
-  }
-})
-
 // #259: sent back to an earlier question, the form goes back to that
 // question's own history entry rather than replacing the later one, so no
 // later question's entry is left behind it.

@@ -72,7 +72,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # The full history is there to compare the changelog files with an
+      # earlier commit.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
@@ -82,6 +86,19 @@ jobs:
         run: node --test "scripts/!(design-lint).test.mjs"
       - name: Check tracked documents
         run: node scripts/check-docs.mjs
+      # An app PR's changelog entry is a file in changes/, never an edit to
+      # CHANGELOG.md (changes/README.md). A file that is already merged is
+      # never edited, renamed or deleted. A pull request is compared with the
+      # merge-base of its base. A push is compared with main as it was before
+      # the push, and fails if main no longer descends from that commit: a
+      # force-push can drop merged files. A pull request's event has a
+      # `before` of its own, so only a push passes it. A nightly or manual run
+      # has neither commit, so it checks the files alone.
+      - name: Check the changelog files
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event_name == 'push' && github.event.before || '' }}
+        run: node scripts/release-notes.mjs check --base "$BASE" --before "$BEFORE"
 
   static:
     name: Lint, typecheck and unit tests

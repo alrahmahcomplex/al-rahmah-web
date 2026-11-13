@@ -1,0 +1,66 @@
+name: Release
+
+# After a merge that brings a changelog file in changes/: the merge commit gets
+# the next version's tag, and the files added since the last release become
+# that version's GitHub Release. Nothing is committed to main, so this starts
+# no CI run and no Vercel deployment: the merge itself was tested and
+# deployed.
+#
+# Running it again on a commit it already tagged pushes the same tag and
+# publishes the same release, so a failed run is finished by re-running that
+# failed run (Actions tab, "Re-run failed jobs"): it keeps its own commit.
+# "Run workflow" on main does the same only while main is still at that
+# commit; once main has moved, it starts from the newer commit and the missing
+# GitHub Release stays missing. A run for a merge that a later merge's release
+# already covers passes and releases nothing.
+#
+# Only main is released. Started by hand on another branch, the job is
+# skipped, and the script refuses a commit that is not on origin/main.
+
+on:
+  push:
+    branches: [main]
+    paths: ["changes/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and publish the release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Tag the merge and publish its notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The script releases only a commit on origin/main, as it is now.
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          # The release date is the owner's: Tanzania, UTC+3.
+          version="$(node scripts/release-notes.mjs release --commit "$GITHUB_SHA" --notes "$RUNNER_TEMP/notes.md" --date "$(TZ=Africa/Dar_es_Salaam date +%F)")"
+          # The script has said why: no new file, or a later release has them.
+          if [ -z "$version" ]; then echo "Nothing to release on $GITHUB_SHA."; exit 0; fi
+          git push origin "refs/tags/$version"
+          if gh release view "$version" > /dev/null 2>&1; then
+            echo "$version is already published."
+          else
+            gh release create "$version" --verify-tag --title "$version" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
+          echo "Released $version on $GITHUB_SHA."

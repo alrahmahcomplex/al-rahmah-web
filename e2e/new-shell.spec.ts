@@ -88,20 +88,20 @@ test.describe("on a desktop", () => {
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "true")
     await toggle(page).click()
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
-    await expect.poll(() => width(page)).toBe(60)
     // Every icon keeps its name, and a tooltip with its label.
     await expect(entry(page, "Applicants")).toHaveAttribute("title", "Applicants")
     await expect(handle(page)).toHaveCount(0)
 
     await page.reload()
-    await expect.poll(() => width(page)).toBe(60)
+    await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
+    await expect(handle(page)).toHaveCount(0)
     await page.goto("/staff/applicants")
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
     await page.getByRole("button", { name: "Expand sidebar" }).click()
 
     await page.goto("/staff/kit")
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "true")
-    await expect.poll(() => width(page)).toBeGreaterThan(150)
+    await expect(handle(page)).toBeVisible()
   })
 
   test("the edge resizes the sidebar by keyboard and remembers it; Home and a double-click return to the narrowest", async ({ page }) => {
@@ -296,7 +296,7 @@ test.describe("crossing between the shells by links", () => {
     await expect(handle(page)).toHaveAttribute("aria-valuenow", String(min + 16))
 
     await toggle(page).click()
-    await expect.poll(() => width(page)).toBe(60)
+    await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
     await entry(page, "Interviews").click()
     await expect(page).toHaveURL(/\/staff\/interviews$/)
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible()

@@ -42,7 +42,20 @@ jobs:
     timeout-minutes: 5
     outputs:
       full_suite: ${{ steps.scope.outputs.full_suite }}
+      # The cache entry of browser seconds every browser shard plans from, or
+      # e2e-seconds-none. One key for all shards, so they split the files the
+      # same way.
+      e2e_seconds: ${{ steps.seconds.outputs.cache-matched-key || 'e2e-seconds-none' }}
     steps:
+      # The newest seconds main measured (.github/workflows/shard-timings.yml).
+      - name: Find main's latest browser seconds
+        id: seconds
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .artifacts/e2e-seconds.json
+          key: e2e-seconds-${{ github.run_id }}
+          restore-keys: e2e-seconds-
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
@@ -227,10 +240,28 @@ jobs:
           cat "$RUNNER_TEMP/build.log"
           wait "$chromium" || { cat "$RUNNER_TEMP/chromium.log"; exit 1; }
           tail -n 3 "$RUNNER_TEMP/chromium.log"
+      # The seconds the scope job found, by their exact key. Without them the
+      # shard plans from the committed seconds in e2e/shards.json, as the
+      # nightly run does.
+      - name: Restore main's browser seconds
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .artifacts/e2e-seconds.json
+          key: ${{ needs.scope.outputs.e2e_seconds }}
       # Runs the shard's spec files, then fails unless exactly those files ran
-      # and every test in them ran.
+      # and every test in them ran. A shard that lost the seconds the others
+      # use would split the files differently, so it stops.
       - name: Run this shard's browser tests
-        run: node scripts/e2e-shards.mjs run ${{ matrix.shard }}
+        env:
+          E2E_SECONDS: .artifacts/e2e-seconds.json
+          E2E_SECONDS_KEY: ${{ needs.scope.outputs.e2e_seconds }}
+        run: |
+          if [ "$E2E_SECONDS_KEY" != "e2e-seconds-none" ] && [ ! -f "$E2E_SECONDS" ]; then
+            echo "::error::The browser seconds $E2E_SECONDS_KEY did not restore, so this shard could split the files differently from the others."
+            exit 1
+          fi
+          node scripts/e2e-shards.mjs run ${{ matrix.shard }}
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

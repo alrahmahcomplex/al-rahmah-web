@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { RESULTS, checkErrors, fileSeconds, plan, readConfig, reportTests, specFiles, verifyErrors } from "./e2e-shards.mjs";
@@ -93,6 +95,29 @@ test("the workflow runs one job for each shard of e2e/shards.json", () => {
   const matrix = browser.match(/^ {8}shard: \[([\d, ]+)\]$/m);
   assert.ok(matrix, "the browser job's matrix was not found");
   assert.deepEqual(matrix[1].split(",").map((value) => Number(value.trim())), Array.from({ length: shards }, (_, index) => index + 1));
+});
+
+test("main's measured seconds replace the committed ones, but never the number of shards", () => {
+  const dir = mkdtempSync(join(tmpdir(), "e2e-seconds-"));
+  const config = join(dir, "shards.json");
+  const measured = join(dir, "measured.json");
+  writeFileSync(config, JSON.stringify({ shards: 3, seconds: { "a.spec.ts": 10, "b.spec.ts": 20 } }));
+  writeFileSync(measured, JSON.stringify({ shards: 9, seconds: { "b.spec.ts": 50, "c.spec.ts": 5 } }));
+  assert.deepEqual(readConfig(config, measured), { shards: 3, seconds: { "a.spec.ts": 10, "b.spec.ts": 50, "c.spec.ts": 5 } });
+  assert.deepEqual(readConfig(config, join(dir, "missing.json")), { shards: 3, seconds: { "a.spec.ts": 10, "b.spec.ts": 20 } });
+  assert.deepEqual(readConfig(config, ""), { shards: 3, seconds: { "a.spec.ts": 10, "b.spec.ts": 20 } });
+});
+
+test("every browser shard plans from the one entry of seconds the scope job found", () => {
+  const workflow = read(".github/workflows/ci.yml").replace(/\r\n/g, "\n");
+  assert.match(workflow, /^ {6}e2e_seconds: \$\{\{ steps\.seconds\.outputs\.cache-matched-key \|\| 'e2e-seconds-none' \}\}$/m);
+  assert.match(workflow, /^ {10}key: \$\{\{ needs\.scope\.outputs\.e2e_seconds \}\}$/m, "a shard must restore the scope job's key exactly");
+  assert.equal(workflow.split("restore-keys: e2e-seconds-").length, 2, "only the scope job may look up seconds by prefix");
+  assert.match(workflow, /E2E_SECONDS: \.artifacts\/e2e-seconds\.json/);
+  const save = read(".github/workflows/shard-timings.yml").replace(/\r\n/g, "\n");
+  assert.match(save, /^ {4}branches: \[main\]$/m);
+  assert.match(save, /github\.event\.workflow_run\.event == 'push'/);
+  assert.match(save, /key: e2e-seconds-\$\{\{ github\.event\.workflow_run\.id \}\}/);
 });
 
 test("Playwright writes its CI report where the shard check reads it", () => {

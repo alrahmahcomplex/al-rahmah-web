@@ -108,6 +108,22 @@ test("the documents-only path skips every runtime job, and the gate always runs"
   assert.doesNotMatch(workflow, /^\s+paths(-ignore)?:/m, "the workflow must stay unfiltered by file paths");
 });
 
+// scripts/ci-db-start.sh turns Storage and Realtime off in CI, so their
+// schemas are never set up there. A migration, seed or test that starts using
+// either has to remove that line in the same change.
+test("CI turns Storage and Realtime off, and nothing uses them", () => {
+  const start = readFileSync(new URL("ci-db-start.sh", import.meta.url), "utf8");
+  assert.match(start, /^export SUPABASE_REALTIME_ENABLED=false$/m);
+  assert.match(start, /^export SUPABASE_STORAGE_ENABLED=false$/m);
+  const cwd = fileURLToPath(new URL("..", import.meta.url));
+  const files = ["supabase/migrations/*.sql", "supabase/seeds/*.sql", "{app,components,lib,tests,e2e}/**/*.{ts,tsx}"]
+    .flatMap((pattern) => globSync(pattern, { cwd }));
+  assert.ok(files.length > 100, `only ${files.length} files found`);
+  const uses = /\b(?:storage|realtime)\.(?:objects|buckets|prefixes|messages|subscription|send|broadcast)\b|publication supabase_realtime|\.storage\.from\(|\.channel\(|\/(?:storage|realtime)\/v1/i;
+  const users = files.filter((file) => uses.test(readFileSync(new URL(`../${file.split(sep).join("/")}`, import.meta.url), "utf8")));
+  assert.deepEqual(users, [], "these files use Storage or Realtime; remove its line from scripts/ci-db-start.sh");
+});
+
 test("every helper test file runs in some job", () => {
   const cwd = fileURLToPath(new URL("..", import.meta.url));
   const files = (pattern) => globSync(pattern, { cwd }).map((file) => file.split(sep).join("/"));

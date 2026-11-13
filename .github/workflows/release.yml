@@ -7,10 +7,12 @@ name: Release
 # deployed.
 #
 # Running it again on a commit it already tagged pushes the same tag and
-# publishes the same release, so a failed run is finished by running it
-# again (Actions tab, "Run workflow" on main, or re-run the failed job). A
-# run for a merge that a later merge's release already covers passes and
-# releases nothing.
+# publishes the same release, so a failed run is finished by re-running that
+# failed run (Actions tab, "Re-run failed jobs"): it keeps its own commit.
+# "Run workflow" on main does the same only while main is still at that
+# commit; once main has moved, it starts from the newer commit and the missing
+# GitHub Release stays missing. A run for a merge that a later merge's release
+# already covers passes and releases nothing.
 #
 # Only main is released. Started by hand on another branch, the job is
 # skipped, and the script refuses a commit that is not on origin/main.

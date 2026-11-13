@@ -95,7 +95,10 @@ const compare = (a, b) => {
 export function pathErrors(root) {
   const errors = []
   for (const entry of readdirSync(join(root, "changes"), { withFileTypes: true })) {
-    if (entry.isDirectory()) errors.push(`changes/${entry.name}/: no folders in changes/. Name the file after the branch with "/" turned into "-": changes/feature-x.md`)
+    // git stores a link's target, not the note it points to, so the release
+    // would read the target path where check read the note.
+    if (entry.isSymbolicLink()) errors.push(`changes/${entry.name}: a changelog file must be a plain file, not a link`)
+    else if (entry.isDirectory()) errors.push(`changes/${entry.name}/: no folders in changes/. Name the file after the branch with "/" turned into "-": changes/feature-x.md`)
     else if (!entry.name.endsWith(".md")) errors.push(`changes/${entry.name}: a changelog file ends in .md`)
     else if (!/^[a-z0-9][a-z0-9._-]*\.md$/.test(entry.name) && entry.name !== "README.md") errors.push(`changes/${entry.name}: use lower-case letters, digits, ".", "_" and "-" only`)
   }

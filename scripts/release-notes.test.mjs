@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -96,6 +96,19 @@ test("check refuses an Unreleased entry, a bad note, a folder and a non-.md file
   rmSync(join(dir, "changes", "feature"), { recursive: true })
   writeFileSync(join(dir, "changes", "x.txt"), note("patch", "### FIXED\n\n- X.\n"))
   assert.match(run("check").stderr, /ends in \.md/)
+})
+
+test("check refuses a link in changes/, even one to a valid note", (t) => {
+  const { dir, run } = repo(t)
+  writeFileSync(join(dir, "real.txt"), note("patch", "### FIXED\n\n- X.\n"))
+  try {
+    symlinkSync(join(dir, "real.txt"), join(dir, "changes", "linked.md"))
+  } catch (error) {
+    // Windows without the right to make links: CI on Linux runs this.
+    if (error.code === "EPERM") { t.diagnostic("no permission to make a link here"); return }
+    throw error
+  }
+  assert.match(run("check").stderr, /plain file, not a link/)
 })
 
 test("a merge with a changelog file is tagged with the next version, and its notes name the date", (t) => {

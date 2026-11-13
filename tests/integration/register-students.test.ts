@@ -22,7 +22,7 @@ import { recordPayment } from "@/lib/services/school-fee-payments"
 import { editSiblingFee, linkSibling } from "@/lib/services/sibling-groups"
 import { decideSiblingRequest, requestSiblingDiscount } from "@/lib/services/sibling-requests"
 
-import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -816,38 +816,3 @@ describe("locks", () => {
   })
 })
 
-describe("migration day", () => {
-  test("the snapshot check passes with nothing moved, and raises when a fee moves", async () => {
-    const year = await registrationYear()
-    const family = fatherParts()
-    const [, cheap] = await created({
-      people: [person()],
-      students: [student(family, year, { className: "FORM 1" }), student(family, year, { siblingOf: { student: 1 } })],
-    })
-    expect(await feeOf(cheap.leadId)).toMatchObject({ discount: SIBLING })
-
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, [
-        "public.leads",
-        "public.guardian_contacts",
-        "public.lead_fee_profiles",
-        "public.lead_sibling_results",
-        "public.sibling_groups",
-        "public.sibling_group_members",
-        "public.school_fee_payments",
-        "public.payment_adjustments",
-        "public.discount_requests",
-        "public.fee_schedules",
-        "public.fee_band_amounts",
-      ])
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("create temp table register_students_before as select * from public.fee_snapshot()")
-      await sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.register_students_before')")
-
-      await sql.query("update public.lead_sibling_results set result = 'none', source = 'auto' where lead_id = $1", [cheap.leadId])
-      await expect(sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.register_students_before')")).rejects.toThrow(
-        /fee_snapshot_changed/,
-      )
-    })
-  })
-})

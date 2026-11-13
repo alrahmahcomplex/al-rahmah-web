@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest"
 
 import { getMetricCount, type Period } from "@/lib/services/dashboard"
 
-import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, inRolledBackTransaction, signedIn, whileUnchanged, withoutLockWaits } from "../support/db"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, inRolledBackTransaction, rowVersions, signedIn, whileUnchanged, withoutLockWaits } from "../support/db"
 import { countIn, enrollmentYearsIn, readAs } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -223,12 +223,17 @@ describe("Enrolled students", () => {
     })
 
     // The service's answer for every year, against the database's read just
-    // before and after it.
+    // before and after it, with the version of every lead and fee profile, so
+    // a change made and undone meanwhile still counts as a change.
     const { state, result } = await whileUnchanged(
-      (sql) => readAs(sql, MANAGER.id, (signed) => countIn(signed, "enrolled_students", ALL, null)),
+      async (sql) => ({
+        count: await readAs(sql, MANAGER.id, (signed) => countIn(signed, "enrolled_students", ALL, null)),
+        leads: await rowVersions(sql, "leads"),
+        profiles: await rowVersions(sql, "lead_fee_profiles"),
+      }),
       () => enrolled(manager, ALL, null),
     )
-    expect(result).toBe(state)
+    expect(result).toBe(state.count)
 
     // The base fixtures' 2027 students enrolled in late September 2026; the
     // 2031 ones on other days.

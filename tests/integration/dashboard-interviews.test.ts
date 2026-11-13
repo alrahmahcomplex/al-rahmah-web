@@ -8,7 +8,7 @@ import { recordInterviewResult } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
 import { tanzaniaToday } from "@/lib/school-calendar"
 
-import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, signedIn, whileUnchanged } from "../support/db"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, rowVersions, signedIn, whileUnchanged } from "../support/db"
 import { countIn, enrollmentYearsIn, readAs } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 import { claimInterviewYear, type InterviewYearClaim } from "../support/interview-years"
@@ -247,17 +247,21 @@ describe("the interview counts", () => {
     })
 
     // The service's answer for every year, against the database's read just
-    // before and after it.
+    // before and after it, with the version of every lead and interview, so a
+    // result changed and changed back meanwhile still counts as a change.
     const { state, result } = await whileUnchanged(
-      (sql) =>
-        readAs(sql, MANAGER.id, async (signed) => ({
+      async (sql) => ({
+        counts: await readAs(sql, MANAGER.id, async (signed) => ({
           interviewed: await countIn(signed, "interviewed_leads", ALL, null),
           passed: await countIn(signed, "passed_interviews", ALL, null),
           failed: await countIn(signed, "failed_interviews", ALL, null),
         })),
+        leads: await rowVersions(sql, "leads"),
+        interviews: await rowVersions(sql, "interviews"),
+      }),
       async () => counts(await signedIn(MANAGER), ALL, null),
     )
-    expect(result).toEqual(state)
+    expect(result).toEqual(state.counts)
   })
 })
 

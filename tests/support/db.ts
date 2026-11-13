@@ -116,6 +116,17 @@ export async function whileUnchanged<S, T>(
   }
 }
 
+// A fingerprint of every row of `table` and its version, for whileUnchanged:
+// a row's ctid and xmin change with every committed write to it, so a change
+// another test makes and then undoes still shows. `table` is a fixed name in
+// the test, never input.
+export async function rowVersions(sql: Client, table: string): Promise<string> {
+  const { rows } = await sql.query<{ versions: string }>(
+    `select md5(coalesce(string_agg(t.ctid::text || ':' || t.xmin::text, ',' order by t.ctid), '')) as versions from public.${table} t`,
+  )
+  return rows[0].versions
+}
+
 // Runs one statement inside `sql`'s transaction without ever waiting on a
 // lock while holding another. A statement that takes several heavy locks in
 // turn, like `truncate ... cascade`, or that updates rows other tests use,

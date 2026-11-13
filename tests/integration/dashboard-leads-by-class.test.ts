@@ -7,7 +7,7 @@ import { getLeadsByClass, type LeadsByClass, type Period } from "@/lib/services/
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, LEAD_CLASSES, updateLeadDetails } from "@/lib/services/leads"
 
-import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, secretClient, signedIn, whileUnchanged } from "../support/db"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, rowVersions, secretClient, signedIn, whileUnchanged } from "../support/db"
 import { byClassIn, enrollmentYearsIn, readAs } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -194,13 +194,17 @@ describe("Leads by enrollment class", () => {
     })
 
     // The service's answer for every year, against the database's read just
-    // before and after it.
+    // before and after it, with the version of every lead, so a lead moved
+    // and moved back meanwhile still counts as a change.
     const { state, result } = await whileUnchanged(
-      (sql) => readAs(sql, MANAGER.id, (signed) => byClassIn(signed, { kind: "all" }, null)),
+      async (sql) => ({
+        counts: await readAs(sql, MANAGER.id, (signed) => byClassIn(signed, { kind: "all" }, null)),
+        leads: await rowVersions(sql, "leads"),
+      }),
       async () => byClass(await signedIn(MANAGER), { kind: "all" }, null),
     )
-    expect(result.classes.map((row) => row.count)).toEqual(state)
-    expect(result.total).toBe(state.reduce((a, b) => a + b, 0))
+    expect(result.classes.map((row) => row.count)).toEqual(state.counts)
+    expect(result.total).toBe(state.counts.reduce((a, b) => a + b, 0))
   })
 
   test("an unknown period or a malformed anchor is refused as invalid", async () => {

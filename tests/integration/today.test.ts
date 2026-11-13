@@ -9,7 +9,7 @@ import { createLead } from "@/lib/services/leads"
 import { releaseResult } from "@/lib/services/result-release"
 import { countResultsReadyToSend, INTERVIEWS_NAMED, LATEST_LEADS, listInterviewsOn, listLatestLeads } from "@/lib/services/today"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn, whileUnchanged } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, rowVersions, signedIn, whileUnchanged } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 import { claimInterviewYear, type InterviewYearClaim } from "../support/interview-years"
 
@@ -139,8 +139,11 @@ describe("countResultsReadyToSend", () => {
     const admissions = await signedIn(ADMISSIONS)
     // The rule's answer as Admissions, read before and after the service's,
     // until no test registered, recorded, paid, sent or closed meanwhile.
+    // Every interview's and lead's version is in it, so a change made and
+    // undone meanwhile still shows.
     const { state, result: read } = await whileUnchanged(
       async (sql) => {
+        const versions = { interviews: await rowVersions(sql, "interviews"), leads: await rowVersions(sql, "leads") }
         await sql.query("begin")
         try {
           await asStaff(sql, ADMISSIONS.id)
@@ -148,7 +151,7 @@ describe("countResultsReadyToSend", () => {
             `select count(*) as count, min(i.serial_year) as year, md5(string_agg(i.id::text, ',' order by i.id)) as ids
              from public.interviews i where public.result_ready_to_send(i)`,
           )
-          return rows[0]
+          return { ...rows[0], ...versions }
         } finally {
           await sql.query("rollback")
         }

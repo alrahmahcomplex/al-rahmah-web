@@ -18,6 +18,7 @@ import {
   createThrowawayStaff,
   inRolledBackTransaction,
   secretClient,
+  rowVersions,
   signedIn,
   unusedAdmissionNumber,
   whileUnchanged,
@@ -450,14 +451,13 @@ describe("Leads by enrollment class", () => {
     const seeded = await inRolledBackTransaction((sql) => sql.query("select 1 from public.re_applications where enrollment_year = 2031"))
     expect(seeded.rowCount).toBeGreaterThan(0)
     // The 2031 leads, read before and after the service's count, until no
-    // test moved a lead into or out of 2031 meanwhile.
+    // test moved a lead into or out of 2031 meanwhile. Every lead's version is
+    // in it, so a lead moved out and back meanwhile still shows.
     const { state, result: counted } = await whileUnchanged(
-      async (sql) =>
-        (
-          await sql.query<{ count: number; ids: string | null }>(
-            "select count(*)::int as count, md5(string_agg(id::text, ',' order by id)) as ids from public.leads where enrollment_year = 2031",
-          )
-        ).rows[0],
+      async (sql) => ({
+        ...(await sql.query<{ count: number }>("select count(*)::int as count from public.leads where enrollment_year = 2031")).rows[0],
+        leads: await rowVersions(sql, "leads"),
+      }),
       () => getLeadsByClass(manager, { period: { kind: "all" }, enrollmentYear: 2031 }),
     )
     expect(counted.ok && counted.data.total).toBe(state.count)

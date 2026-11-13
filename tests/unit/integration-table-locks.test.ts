@@ -26,7 +26,7 @@ function sourceFiles(dir: string): string[] {
 // Each pattern runs over the whole file with its comment lines blanked, so a
 // statement split over two lines is still found. `\s` spans line breaks.
 const RULES: { what: string; pattern: RegExp; allowed?: (file: string, line: string) => boolean }[] = [
-  { what: "lock table", pattern: /\block\s+(table\s+)?(only\s+)?(public\.|\$\{|"?[a-z_]+"?\s+in\s)/gi },
+  { what: "lock table", pattern: /\block\s+(table\b|(only\s+)?(public\.|\$\{|"?[a-z_]+"?\s+in\s))/gi },
   { what: "alter table", pattern: /\balter\s+table\b/gi },
   // Truncating takes the whole table before a refusal trigger can fire, so it
   // goes through withoutLockWaits, which never queues for long. A table name
@@ -68,6 +68,7 @@ describe("integration tests running side by side", () => {
     const probe = [
       `await sql.query("lock table public.leads in exclusive mode")`,
       `await sql.query("lock leads in share mode")`,
+      `await sql.query("LOCK TABLE roles")`,
       "await sql.query(`lock",
       "  table public.roles`)",
       `await sql.query("alter table public.roles disable trigger x")`,
@@ -80,10 +81,11 @@ describe("integration tests running side by side", () => {
         `${file}:1 lock table`,
         `${file}:2 lock table`,
         `${file}:3 lock table`,
-        `${file}:5 alter table`,
-        `${file}:6 truncate`,
+        `${file}:4 lock table`,
+        `${file}:6 alter table`,
         `${file}:7 truncate`,
-        `${file}:8 the Sibling kill switch`,
+        `${file}:8 truncate`,
+        `${file}:9 the Sibling kill switch`,
       ].sort(),
     )
   })

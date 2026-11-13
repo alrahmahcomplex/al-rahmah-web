@@ -9,7 +9,8 @@ import {
   type Period,
 } from "@/lib/services/dashboard"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, signedIn } from "../support/db"
+import { countIn, enrollmentYearsIn } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // The dashboard module against local Supabase. Counts are filtered to
@@ -28,15 +29,6 @@ const date = (anchor: string): Period => ({ kind: "date", anchor })
 const week = (anchor: string): Period => ({ kind: "week", anchor })
 const month = (anchor: string): Period => ({ kind: "month", anchor })
 const year = (anchor: string): Period => ({ kind: "year", anchor })
-
-// Runs `work` while no lead can be written, so counts taken one after another
-// agree with each other.
-function withLeadsHeld<T>(work: () => Promise<T>): Promise<T> {
-  return inRolledBackTransaction(async (sql) => {
-    await lockExclusively(sql, ["public.leads"])
-    return work()
-  })
-}
 
 describe("Visited leads", () => {
   test("counts every visited 2031 lead for All time, and leaves the Applied lead with no visit out", async () => {
@@ -118,13 +110,16 @@ describe("Visited leads", () => {
     const manager = await signedIn(MANAGER)
     const periods: Period[] = [{ kind: "all" }, date("2026-09-01"), week("2026-08-31"), month("2026-09-01"), year("2026-01-01")]
 
-    await withLeadsHeld(async () => {
-      const years = await listEnrollmentYears(manager)
-      if (!years.ok) throw new Error(years.error)
+    // Every count in one snapshot, as the Manager, so leads other tests
+    // write meanwhile can't land between two of them.
+    await inOneSnapshot(async (sql) => {
+      await actAsStaff(sql, MANAGER.id)
+      const years = await enrollmentYearsIn(sql)
+      expect(years.length).toBeGreaterThan(1)
       for (const period of periods) {
         let sum = 0
-        for (const each of years.data) sum += await visited(manager, period, each)
-        expect(await visited(manager, period, null), JSON.stringify(period)).toBe(sum)
+        for (const each of years) sum += await countIn(sql, "visited_leads", period, each)
+        expect(await countIn(sql, "visited_leads", period, null), JSON.stringify(period)).toBe(sum)
       }
     })
 

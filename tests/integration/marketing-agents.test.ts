@@ -10,7 +10,7 @@ import { signUpAgent } from "@/lib/services/agent-sign-up"
 import { approveAgent, getPendingAgentCount, listAgents, type MarketingAgent } from "@/lib/services/marketing-agents"
 
 import { pendingAround } from "../support/agents"
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn, whileUnchanged } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER } from "../support/fixtures"
 
 // The marketing-agent module against local Supabase: what public registration
@@ -291,18 +291,21 @@ describe("the agent list", () => {
         ).rows[0].id,
     )
     const manager = await signedIn(MANAGER)
-    // Writes to the agents wait while the table is held, so the service's
-    // count and the counts read here see the same agents.
-    const { service, counts } = await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, ["public.marketing_agents"])
-      const { rows } = await sql.query<{ current: number; ours_retired: boolean }>(
-        `select count(*) filter (where retired_at is null)::int as current,
-                bool_or(id = $1 and retired_at is not null) as ours_retired
-         from public.marketing_agents where status = 'Pending'`,
-        [agentId],
-      )
-      return { service: await getPendingAgentCount(manager), counts: rows[0] }
-    })
+    // The Pending agents, read before and after the service's count, until
+    // no test registered, approved or retired one meanwhile.
+    const { state: counts, result: service } = await whileUnchanged(
+      async (sql) =>
+        (
+          await sql.query<{ current: number; ours_retired: boolean; versions: string | null }>(
+            `select count(*) filter (where retired_at is null)::int as current,
+                    bool_or(id = $1 and retired_at is not null) as ours_retired,
+                    md5(string_agg(id::text || ':' || xmin::text, ',' order by id)) as versions
+             from public.marketing_agents where status = 'Pending'`,
+            [agentId],
+          )
+        ).rows[0],
+      () => getPendingAgentCount(manager),
+    )
     expect(counts.ours_retired).toBe(true)
     expect(service).toEqual({ ok: true, data: counts.current })
   })

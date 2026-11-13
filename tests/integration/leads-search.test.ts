@@ -12,7 +12,7 @@ import {
   type LeadStatus,
 } from "@/lib/services/leads"
 
-import { anonClient, asSystem, inRolledBackTransaction, signedIn, unusedAdmissionNumber } from "../support/db"
+import { anonClient, asSystem, signedIn, unusedAdmissionNumber, whileUnchanged } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Lead search and the lead list, through the lead module against local
@@ -292,11 +292,22 @@ describe("the lead list, with no search term", () => {
     }
 
     // Leads other tests add between the two reads would push page one's tail
-    // onto page two, so new leads wait until both pages are read.
-    const [first, second] = await inRolledBackTransaction(async (sql) => {
-      await sql.query("lock table public.leads in share mode")
-      return [await search({ status: "Visited", page: 1 }), await search({ status: "Visited", page: 2 })]
-    })
+    // onto page two, so the two pages count only when the first 100 Visited
+    // leads without a mark were the same before and after them.
+    const {
+      result: [first, second],
+    } = await whileUnchanged(
+      async (sql) =>
+        (
+          await sql.query<{ total: number; top: string | null }>(
+            `select (select count(*)::int from public.leads where status = 'Visited' and closure is null) as total,
+                    (select md5(string_agg(id::text, ',' order by created_at desc, id desc))
+                     from (select id, created_at from public.leads where status = 'Visited' and closure is null
+                           order by created_at desc, id desc limit 100) top) as top`,
+          )
+        ).rows[0],
+      () => Promise.all([search({ status: "Visited", page: 1 }), search({ status: "Visited", page: 2 })]),
+    )
     expect(first.leads).toHaveLength(50)
     expect(second.page).toBe(2)
     expect(second.leads.length).toBeGreaterThan(0)

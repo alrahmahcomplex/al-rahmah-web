@@ -16,7 +16,7 @@ import {
 } from "@/lib/services/password-link-requests"
 import { changeAgentStatus, createAgent } from "@/lib/services/marketing-agents"
 
-import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, inOneSnapshot, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { MANAGER, SEEDED_AGENT } from "../support/fixtures"
 
 // Public password-link requests (#194, #265) against local Supabase: which
@@ -305,9 +305,9 @@ describe("the limits", () => {
 
   test("the hourly budget counts every address's requests, and a refused request isn't counted", async () => {
     const agent = await joinedAgent("budget")
-    await inRolledBackTransaction(async (sql) => {
-      // Holds off requests from tests running alongside, so the count stays put.
-      await lockExclusively(sql, ["public.agent_link_requests"])
+    // One snapshot, so requests from tests running alongside can't move the
+    // count between the reads and the calls.
+    await inOneSnapshot(async (sql) => {
       await sql.query("delete from public.agent_link_requests where requested_at < now() - interval '1 hour'")
       const { rows } = await sql.query<{ n: number }>("select count(*)::int as n from public.agent_link_requests")
       const used = rows[0].n

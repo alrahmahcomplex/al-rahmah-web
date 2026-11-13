@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto"
 import { describe, expect, test } from "vitest"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, createThrowawayStaff, inRolledBackTransaction, signedIn, withoutLockWaits } from "../support/db"
 import { ACCOUNTANT, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The guardrailed role functions behind the Staff and roles screen, called
@@ -384,9 +384,9 @@ describe("no last-administrator guard on roles (#241)", () => {
   test("retiring every role but the Super Admin's goes through in SQL", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await lockExclusively(sql, ["public.staff_members", "public.roles"])
-
-      await sql.query("update public.roles set retired = true where id <> $1", [SUPER_ADMIN.roleId])
+      // It writes every role row, so it never waits on one another test
+      // holds while it holds the rest.
+      await withoutLockWaits(sql, "update public.roles set retired = true where id <> $1", [SUPER_ADMIN.roleId])
     })
   })
 })

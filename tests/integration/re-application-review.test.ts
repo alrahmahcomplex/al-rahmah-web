@@ -20,10 +20,10 @@ import {
   asSystem,
   createThrowawayStaff,
   inRolledBackTransaction,
-  lockExclusively,
   secretClient,
   signedIn,
   unusedAdmissionNumber,
+  whileUnchanged,
 } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
@@ -168,27 +168,30 @@ describe("the Re-applications queue", () => {
     const staff = await signedIn(MANAGER)
     const id = await reApply(await onFile())
 
-    // The service's count and the database's, read while the table is held
-    // against writes, so re-applications other tests record or review
-    // meanwhile can't land between the two reads.
-    const countedWhileHeld = () =>
-      inRolledBackTransaction(async (sql) => {
-        await lockExclusively(sql, ["public.re_applications"])
-        const service = await countUnreviewedReApplications(staff)
-        if (!service.ok) throw new Error(service.error)
-        const { rows } = await sql.query<{ total: number; mine: number }>(
-          `select count(*)::int as total, count(*) filter (where id = $1)::int as mine
-           from public.re_applications where reviewed_at is null`,
-          [id],
-        )
-        return { service: service.data, ...rows[0] }
-      })
+    // The service's count and the database's, read before and after it,
+    // until no test recorded or reviewed a re-application meanwhile.
+    const countedWhileUnchanged = async () => {
+      const { state, result: service } = await whileUnchanged(
+        async (sql) =>
+          (
+            await sql.query<{ total: number; mine: number; versions: string | null }>(
+              `select count(*)::int as total, count(*) filter (where id = $1)::int as mine,
+                      md5(string_agg(id::text || ':' || xmin::text, ',' order by id)) as versions
+               from public.re_applications where reviewed_at is null`,
+              [id],
+            )
+          ).rows[0],
+        () => countUnreviewedReApplications(staff),
+      )
+      if (!service.ok) throw new Error(service.error)
+      return { service: service.data, total: state.total, mine: state.mine }
+    }
 
-    const before = await countedWhileHeld()
+    const before = await countedWhileUnchanged()
     expect(before).toEqual({ service: before.total, total: before.total, mine: 1 })
 
     expect((await markReApplicationReviewed(staff, id)).ok).toBe(true)
-    const after = await countedWhileHeld()
+    const after = await countedWhileUnchanged()
     expect(after).toEqual({ service: after.total, total: after.total, mine: 0 })
   })
 

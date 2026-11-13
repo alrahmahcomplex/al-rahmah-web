@@ -14,7 +14,7 @@ import {
 import { createLead } from "@/lib/services/leads"
 import { raiseReopeningRequest, withdrawReopeningRequest, type PendingReopeningRequest } from "@/lib/services/reopening-requests"
 
-import { anonClient, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, createThrowawayStaff, signedIn, whileUnchanged } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // The Reopening requests queue and its count (#100), against local Supabase.
@@ -111,20 +111,24 @@ describe("the Reopening requests queue", () => {
 
   test("the count is how many requests are Pending, and follows a new request and a decision", async () => {
     const manager = await signedIn(MANAGER)
-    const pendingNow = () =>
-      inRolledBackTransaction(async (sql) => {
-        // No request may be raised or decided meanwhile, so the three
-        // readings agree.
-        await lockExclusively(sql, ["public.reopening_requests"])
-        const counted = await countPendingReopeningRequests(manager)
-        const listed = await listPendingReopeningRequests(manager)
-        const { rows } = await sql.query<{ n: number }>(
-          "select count(*)::int as n from public.reopening_requests where state = 'pending'",
-        )
-        expect(counted).toEqual({ ok: true, data: rows[0].n })
-        expect(listed.ok && listed.data.length).toBe(rows[0].n)
-        return rows[0].n
-      })
+    // The database's Pending requests, read before and after the service's
+    // count and list, until no test raised or decided one meanwhile.
+    const pendingNow = async () => {
+      const { state, result } = await whileUnchanged(
+        async (sql) =>
+          (
+            await sql.query<{ n: number; versions: string | null }>(
+              `select count(*)::int as n, md5(string_agg(id::text || ':' || xmin::text, ',' order by id)) as versions
+               from public.reopening_requests where state = 'pending'`,
+            )
+          ).rows[0],
+        () => Promise.all([countPendingReopeningRequests(manager), listPendingReopeningRequests(manager)]),
+      )
+      const [counted, listed] = result
+      expect(counted).toEqual({ ok: true, data: state.n })
+      expect(listed.ok && listed.data.length).toBe(state.n)
+      return state.n
+    }
 
     expect(await pendingNow()).toBeGreaterThanOrEqual(1)
     const request = await raise(await declinedLead())

@@ -376,8 +376,10 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     setup:
       // The sample caller is the Super Admin, whose record is frozen (#237),
-      // so the notice is made with the freeze lifted by name.
-      "select public.set_audit_actor('staff', 'a1a1a1a1-0000-4000-8000-000000000002'); alter table public.staff_members disable trigger refuse_super_admin_holder_change; update public.staff_members set active = false where id = '5a000000-0000-4000-8000-000000000002'; update public.staff_members set active = true where id = '5a000000-0000-4000-8000-000000000002'; alter table public.staff_members enable trigger refuse_super_admin_holder_change",
+      // so the notice is the audit row such a change would leave, written
+      // directly: lifting the freeze would take a lock on all of
+      // staff_members.
+      "insert into public.audit_log (table_name, row_id, action, old_values, new_values, scope, actor_kind, actor_staff_id) values ('staff_members', '5a000000-0000-4000-8000-000000000002', 'update', '{\"active\": false}', '{\"active\": true}', 'staff_admin', 'staff', 'a1a1a1a1-0000-4000-8000-000000000002')",
     args: {
       through: "(select max(a.id) from public.audit_log a where public.is_notice_for(a, '5a000000-0000-4000-8000-000000000002'))",
     },

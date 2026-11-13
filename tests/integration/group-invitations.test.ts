@@ -8,7 +8,7 @@ import { countInvitedFamilies, getGroupInvitation, sendGroupInvitation } from "@
 import { setGroupLink } from "@/lib/services/group-links"
 import { createLead, searchLeads } from "@/lib/services/leads"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn, withoutLockWaits } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 import { claimGroupInvitationYear, currentGroupLink, type GroupInvitationYearClaim } from "../support/group-invitation-years"
 
@@ -548,7 +548,9 @@ describe("the invitations table", () => {
     await expect(
       asSystem((sql) => sql.query("delete from public.whatsapp_group_invitations where lead_id = $1", [lead.leadId])),
     ).rejects.toThrow("delete_refused")
-    await expect(asSystem((sql) => sql.query("truncate public.whatsapp_group_invitations"))).rejects.toThrow("delete_refused")
+    // Truncating takes the whole table before the trigger refuses it, so it
+    // must not queue behind tests running alongside.
+    await expect(asSystem((sql) => withoutLockWaits(sql, "truncate public.whatsapp_group_invitations"))).rejects.toThrow("delete_refused")
     expect((await rowsFor(lead.leadId))[0]).toMatchObject({ channel: "phone" })
   })
 })

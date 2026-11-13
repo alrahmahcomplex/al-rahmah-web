@@ -3,12 +3,13 @@ import { randomInt, randomUUID } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, test } from "vitest"
 
-import { getMetricCount, listEnrollmentYears, type DashboardMetric, type Period } from "@/lib/services/dashboard"
+import { getMetricCount, type DashboardMetric, type Period } from "@/lib/services/dashboard"
 import { recordInterviewResult } from "@/lib/services/interviews"
 import { createLead } from "@/lib/services/leads"
 import { tanzaniaToday } from "@/lib/school-calendar"
 
-import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { actAsStaff, anonClient, asSystem, createThrowawayStaff, inOneSnapshot, signedIn } from "../support/db"
+import { countIn, enrollmentYearsIn } from "../support/dashboard-sql"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 import { claimInterviewYear, type InterviewYearClaim } from "../support/interview-years"
 
@@ -220,24 +221,28 @@ describe("the interview counts", () => {
   })
 
   test("the Enrollment year combines with each period: the unfiltered count is the sum over every year", async () => {
-    const manager = await signedIn(MANAGER)
     const periods: Period[] = [ALL, date("2026-09-28"), week("2026-09-28"), month("2026-09-01"), year("2026-01-01")]
 
-    // No lead or interview may be written meanwhile, so counts taken one after
-    // another agree.
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, ["public.leads", "public.interviews"])
-      const years = await listEnrollmentYears(manager)
-      if (!years.ok) throw new Error(years.error)
+    // Every count in one snapshot, as the Manager, so leads and interviews
+    // other tests write meanwhile can't land between two of them.
+    await inOneSnapshot(async (sql) => {
+      await actAsStaff(sql, MANAGER.id)
+      const countsIn = async (period: Period, enrollmentYear: number | null): Promise<Counts> => ({
+        interviewed: await countIn(sql, "interviewed_leads", period, enrollmentYear),
+        passed: await countIn(sql, "passed_interviews", period, enrollmentYear),
+        failed: await countIn(sql, "failed_interviews", period, enrollmentYear),
+      })
+      const years = await enrollmentYearsIn(sql)
+      expect(years.length).toBeGreaterThan(1)
       for (const period of periods) {
         const sums: Counts = { interviewed: 0, passed: 0, failed: 0 }
-        for (const each of years.data) {
-          const one = await counts(manager, period, each)
+        for (const each of years) {
+          const one = await countsIn(period, each)
           sums.interviewed += one.interviewed
           sums.passed += one.passed
           sums.failed += one.failed
         }
-        expect(await counts(manager, period, null), JSON.stringify(period)).toEqual(sums)
+        expect(await countsIn(period, null), JSON.stringify(period)).toEqual(sums)
       }
     })
   })

@@ -16,7 +16,7 @@ import {
 } from "@/lib/services/agent-import"
 import { changeAgentStatus, createAgent, listAgents } from "@/lib/services/marketing-agents"
 
-import { anonClient, inRolledBackTransaction, signedIn } from "../support/db"
+import { anonClient, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Importing agents from a CSV (#190), through the Manager's services against
@@ -444,11 +444,15 @@ describe("an import and a Recreate at once", () => {
     const checked = await check([[stored.code, stored.fullName, stored.local, "", shared]], file)
     expect(checked.rows.map((row) => row.class)).toEqual(["email-to-add"])
 
-    // Hold the batch table, so confirm takes its phone and email locks and
-    // then waits, before it updates the agent. Confirm runs under the API's
-    // statement timeout, so everything that needs a new connection or a
-    // sign-in happens before the hold, and the hold has its own short limit.
-    const manager = await signedIn(MANAGER)
+    // Hold the importer's own staff row, so confirm takes its phone and
+    // email locks and then waits at the batch it records (whose imported_by
+    // checks that row), before it updates the agent. The importer is a staff
+    // member of the test's own, so no other test waits on the row. Confirm
+    // runs under the API's statement timeout, so everything that needs a new
+    // connection or a sign-in happens before the hold, and the hold has its
+    // own short limit.
+    const importer = await createThrowawayStaff(["agents.approve"])
+    const manager = await signedIn(importer)
     const holder = new Client({ connectionString: process.env.SUPABASE_DB_URL })
     await holder.connect()
     try {
@@ -459,7 +463,7 @@ describe("an import and a Recreate at once", () => {
       try {
         const recreatingPid = (recreating as unknown as { processID: number }).processID
         await holder.query("begin")
-        await holder.query("lock table public.import_batches in exclusive mode")
+        await holder.query("select 1 from public.staff_members where id = $1 for update", [importer.id])
         const holdUntil = performance.now() + HOLD_LIMIT_MS
         const confirmRequest = confirmAgentImport(manager, confirmationOf(checked))
         confirming = confirmRequest
@@ -486,7 +490,7 @@ describe("an import and a Recreate at once", () => {
         if (!recreated.ok) throw recreated.error
         await recreating.query("commit")
       } finally {
-        // On every path: release the table first so confirm and Recreate can
+        // On every path: release the row first so confirm and Recreate can
         // finish, let Recreate settle and roll its transaction back, then let
         // the confirm request settle, so nothing commits after the test ends.
         await holder.query("rollback").catch(() => {})
@@ -617,17 +621,17 @@ async function pollFor<T extends object>(watcher: Client, query: string, values:
   }
 }
 
-// Waits until confirm holds `address`'s email lock and waits on the batch
-// table the watcher holds. Returns confirm's backend pid.
+// Waits until confirm holds `address`'s email lock and waits on the staff
+// row the watcher holds. Returns confirm's backend pid.
 async function confirmWaitingWithEmailLock(watcher: Client, address: string, until: number) {
   const row = await pollFor<{ pid: number }>(
     watcher,
     `select w.pid from pg_locks w
-     where w.locktype = 'relation' and w.relation = 'public.import_batches'::regclass and not w.granted
+     where not w.granted and pg_backend_pid() = any(pg_blocking_pids(w.pid))
        and exists (select 1 from pg_locks l where l.pid = w.pid and l.granted and exists (${EMAIL_LOCK}))`,
     [address],
     until,
-    "confirm did not take the email lock and wait on the batch table",
+    "confirm did not take the email lock and wait on the importer's row",
   )
   return row.pid
 }

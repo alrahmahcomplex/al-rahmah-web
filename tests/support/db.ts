@@ -1,4 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto"
+import { isDeepStrictEqual } from "node:util"
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 import { Client } from "pg"
@@ -59,38 +60,77 @@ export async function inRolledBackTransaction<T>(work: (sql: Client) => Promise<
   }
 }
 
-// Takes `tables` in exclusive mode inside `sql`'s transaction, to hold off
-// tests running alongside. Writes lock staff_members and roles in either
-// order, so waiting on one table while holding another can deadlock. This
-// never waits while holding a lock: it tries every table at once with NOWAIT,
-// and on a refusal releases what it took and tries again.
-export async function lockExclusively(sql: Client, tables: string[]): Promise<void> {
-  for (;;) {
-    await sql.query("savepoint lock_exclusively")
+// Runs `work` in one repeatable-read transaction that is rolled back. Every
+// statement in it sees the database as it was at the first one, whatever
+// tests running alongside commit meanwhile, so reads taken one after another
+// agree without locking a table. A write that meets a row another test
+// changed since fails with 40001 (serialization_failure); `work` then runs
+// again from the start, so it must have no effect outside the transaction.
+export async function inOneSnapshot<T>(work: (sql: Client) => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
     try {
-      await sql.query(`lock table ${tables.join(", ")} in exclusive mode nowait`)
-      await sql.query("release savepoint lock_exclusively")
-      return
+      return await inRolledBackTransaction(async (sql) => {
+        await sql.query("set transaction isolation level repeatable read")
+        return work(sql)
+      })
     } catch (error) {
-      // 55P03: lock_not_available.
-      if ((error as { code?: string }).code !== "55P03") throw error
-      await sql.query("rollback to savepoint lock_exclusively")
+      if ((error as { code?: string }).code !== "40001" || attempt >= 5) throw error
+    }
+  }
+}
+
+// Acts as `staffId`'s signed-in session for the rest of `sql`'s transaction,
+// the way the API would, so reads and calls follow the same row-level
+// security and permission checks.
+export async function actAsStaff(sql: Client, staffId: string): Promise<void> {
+  const { rows } = await sql.query<{ user_id: string }>("select user_id from public.staff_members where id = $1", [staffId])
+  if (!rows[0]) throw new Error(`No staff member ${staffId}`)
+  await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: rows[0].user_id, role: "authenticated" })])
+  await sql.query("set local role authenticated")
+}
+
+// Runs `work` between two reads of `state`, and returns both once the two
+// reads agree: nothing `state` covers changed while `work` ran. A test that
+// compares a service's answer, read through the API, with the database's own
+// uses this instead of locking the table against tests running alongside.
+// Make `state` exact, such as the ids and xmin of the rows a count covers
+// (a row's xmin changes with every committed write to it). Keep assertions
+// out of `work`: when the reads differ, `work` runs again.
+export async function whileUnchanged<S, T>(
+  state: (sql: Client) => Promise<S>,
+  work: (before: S) => Promise<T>,
+  { tries = 50 }: { tries?: number } = {},
+): Promise<{ state: S; result: T }> {
+  const sql = new Client({ connectionString: required("SUPABASE_DB_URL") })
+  await sql.connect()
+  try {
+    for (let attempt = 1; attempt <= tries; attempt++) {
+      const before = await state(sql)
+      const result = await work(before)
+      if (isDeepStrictEqual(before, await state(sql))) return { state: before, result }
       await new Promise((resolve) => setTimeout(resolve, 20 + Math.random() * 80))
     }
+    throw new Error(`The rows kept changing, ${tries} times`)
+  } finally {
+    await sql.end()
   }
 }
 
 // Runs one statement inside `sql`'s transaction without ever waiting on a
 // lock while holding another. A statement that takes several heavy locks in
-// turn, like `truncate ... cascade`, can otherwise deadlock with a test that
-// already holds one of them. It gives up a lock wait well before Postgres
-// checks for deadlocks, releases what it took and tries again.
-export async function withoutLockWaits(sql: Client, query: string): Promise<void> {
+// turn, like `truncate ... cascade`, or that updates rows other tests use,
+// can otherwise deadlock with a test that already holds one of them. It gives
+// up a lock wait well before Postgres checks for deadlocks, releases what it
+// took and tries again.
+export async function withoutLockWaits(sql: Client, query: string, params: unknown[] = []): Promise<void> {
+  const { rows } = await sql.query<{ setting: string }>("select current_setting('lock_timeout') as setting")
   for (;;) {
     await sql.query("savepoint without_lock_waits")
     try {
       await sql.query("set local lock_timeout = '50ms'")
-      await sql.query(query)
+      await sql.query(query, params)
+      // The rest of the transaction waits as long as it did before.
+      await sql.query("select set_config('lock_timeout', $1, true)", [rows[0].setting])
       await sql.query("release savepoint without_lock_waits")
       return
     } catch (error) {

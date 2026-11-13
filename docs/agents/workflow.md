@@ -99,7 +99,9 @@ If the in-app browser is not signed in to GitHub, or no in-app browser is availa
 
 ## Review and acceptance
 
-Editorial work needs the author's diff/accuracy check. Every other tier needs one independent review of the final substantive change, using `code-review` or an equivalent repository-aware reviewer. The reviewer is a fresh agent, different from the one that built or fixed the change, at high reasoning effort; the implementing agent's own reread is not independent. The lead or the owner picks the reviewer's model when they brief the thread. The task agent arranges the review without making the human relay routine requests.
+Editorial work needs the author's diff/accuracy check. Every other tier needs one independent review of the final substantive change, using `code-review` or an equivalent repository-aware reviewer. The reviewer is a fresh agent, different from the one that built or fixed the change, at high reasoning effort; the implementing agent's own reread is not independent. By default the reviewer's model comes from a different provider than the implementer's, so one provider's model reviews the other's work. The lead or the owner picks the reviewer's model when they brief the thread. The task agent arranges the review without making the human relay routine requests.
+
+**Fallback reviewer.** When the default reviewer can't run (no connection, the service is down, or its usage limit is reached), the review doesn't wait: it continues with a fallback model, and the PR says which reviewer was used and why. A fallback from the same model family as the implementer always reviews as an adversarial critic: it assumes the change is wrong until the code and tests show otherwise, looks for what the implementer would have missed, and checks each claim in the PR against the diff instead of trusting it. The fallback's READY counts like the default's.
 
 Sensitive work focuses that review on the affected trust boundary, data rule, workflow authority or release behavior. Add another specialist only for an uncovered concern. Architectural work also includes the approved design review; it does not automatically multiply implementation reviews.
 
@@ -138,6 +140,7 @@ Use these cases when changing this workflow; they are checks of the rules, not r
 | Change CI filtering or a release script | Sensitive; routing/release regression tests and focused review; full CI; internal maintenance unless deployed app behavior changes |
 | Finish a docs-only change to agent rules | Sensitive; independent review READY and green CI, then merge without the owner; no Greptile wait; no app version |
 | Finish an app PR whose migration is older than one main got since | Rebase, renumber the migration, rerun its tests; then review READY, Greptile 5/5 and green CI on the new head, and merge |
+| The default reviewer hits its usage limit or can't be reached | Review with a fallback model now; if it is the implementer's model family, it reviews as an adversarial critic; name the reviewer and the reason in the PR |
 | Review finds a new kind of issue each round, all inside the PR | Fix and re-review until READY; when NOT READY keeps coming back, ask the lead for a stronger reviewer |
 | A review round finds a defect outside the PR, or the same kind of finding again | Stop; file the outside finding and report to the lead, who decides whether the PR merges with the ticket open |
 | Add an unresolved cross-system admissions workflow | Architectural; approved design sequence, system verification and app release |

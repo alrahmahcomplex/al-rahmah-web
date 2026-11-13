@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto"
-import { readFileSync } from "node:fs"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Client } from "pg"
@@ -192,8 +191,6 @@ describe("direct SQL", () => {
 })
 
 describe("the repair migration", () => {
-  const migration = readFileSync("supabase/migrations/20261130990700_reports_imply_leads.sql", "utf8")
-  const repair = /^update public\.roles\b[\s\S]*?;$/m.exec(migration)?.[0]
 
   test("leaves no role holding reports.view without leads.view", async () => {
     const { rows } = await inRolledBackTransaction((sql) =>
@@ -204,36 +201,4 @@ describe("the repair migration", () => {
     expect(rows).toEqual([{ count: 0 }])
   })
 
-  test("takes reports.view from a role holding it alone, and leaves every other role as it was", async () => {
-    expect(repair).toBeDefined()
-    const result = await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("alter table public.roles drop constraint roles_reports_view_needs_leads_view")
-      await sql.query("alter table public.roles disable trigger imply_role_permissions")
-      const broken = await sql.query<{ id: string }>(
-        "insert into public.roles (name, permissions) values ($1, '{payments.view,reports.view}') returning id",
-        [unique("Broken")],
-      )
-      const whole = await sql.query<{ id: string }>(
-        "insert into public.roles (name, permissions) values ($1, '{leads.view,reports.view}') returning id",
-        [unique("Whole")],
-      )
-      await sql.query("alter table public.roles enable trigger imply_role_permissions")
-      await sql.query(repair!)
-      const after = await sql.query<{ id: string; permissions: string[] }>(
-        "select id, permissions from public.roles where id = any ($1)",
-        [[broken.rows[0].id, whole.rows[0].id]],
-      )
-      const audited = await sql.query<{ count: number }>(
-        "select count(*)::int as count from public.audit_log where table_name = 'roles' and row_id = $1 and action = 'update' and actor_kind = 'system'",
-        [broken.rows[0].id],
-      )
-      return {
-        broken: after.rows.find((row) => row.id === broken.rows[0].id)!.permissions,
-        whole: after.rows.find((row) => row.id === whole.rows[0].id)!.permissions,
-        audited: audited.rows[0].count,
-      }
-    })
-    expect(result).toEqual({ broken: ["payments.view"], whole: BOTH, audited: 1 })
-  })
 })

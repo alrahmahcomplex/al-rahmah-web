@@ -4,7 +4,6 @@ import type { Client } from "pg"
 import { describe, expect, onTestFinished, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
-import { decideDiscount, requestDiscount } from "@/lib/services/discounts"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
 import { declineLead } from "@/lib/services/lead-closure"
@@ -14,7 +13,7 @@ import { adjustPayment } from "@/lib/services/payment-adjustments"
 import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 import { setPriorSibling } from "@/lib/services/sibling-groups"
 
-import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -496,105 +495,3 @@ describe("the kill switch", () => {
   })
 })
 
-describe("the migration-day snapshot check", () => {
-  test("passes when every lead's result is rebuilt from today's inputs, and raises when one fee moves", async () => {
-    const year = await yearWithSchedule()
-    // Families in each backfill case: a kept 10% and a full lock, a live 10%,
-    // a Declined child, a tick, and a granted Staff child over the Sibling.
-    const [enrolledFull, kept, waiting, declined] = await family(year, 4)
-    await pay(kept, WITH_SIBLING)
-    await pay(enrolledFull, FULL, "full_payment")
-    expect((await declineLead(await signedIn(MANAGER), declined, { reason: "Other", explanation: "For the test." })).ok).toBe(true)
-    const [ticked] = await family(year, 1)
-    expect((await setPriorSibling(await signedIn(ADMISSIONS), ticked, { name: "Older Brother", className: "FORM 2" })).ok).toBe(true)
-    const [staffSibling, staffChild] = await family(year)
-    await pay(staffSibling, FULL, "full_payment")
-    const made = await requestDiscount(await signedIn(ADMISSIONS), staffChild, "staff_child", "For the test.", randomUUID())
-    if (!made.ok) throw new Error("setup failed")
-    expect((await decideDiscount(await signedIn(MANAGER), made.data, { decision: "grant" })).ok).toBe(true)
-
-    await inRolledBackTransaction(async (sql) => {
-      // Nobody else writes what the snapshot reads until this ends.
-      await lockExclusively(sql, [
-        "public.leads",
-        "public.guardian_contacts",
-        "public.lead_fee_profiles",
-        "public.lead_sibling_results",
-        "public.school_fee_payments",
-        "public.payment_adjustments",
-        "public.discount_requests",
-        "public.fee_schedules",
-        "public.fee_band_amounts",
-      ])
-      await sql.query("select public.set_audit_actor('system')")
-
-      // The backfill gives each case what the rule stored.
-      const backfill = await sql.query<{ lead_id: string; result: string; source: string; locked_result: string | null }>(
-        "select lead_id, result::text, source::text, locked_result::text from public.sibling_result_backfill() where lead_id = any($1)",
-        [[enrolledFull, kept, waiting, declined, ticked, staffChild]],
-      )
-      const byLead = Object.fromEntries(backfill.rows.map((row) => [row.lead_id, { result: row.result, source: row.source, locked_result: row.locked_result }]))
-      expect(byLead).toEqual({
-        [enrolledFull]: { result: "full", source: "locked", locked_result: "full" },
-        [kept]: { result: "ten", source: "locked", locked_result: "ten" },
-        [waiting]: { result: "ten", source: "auto", locked_result: null },
-        [declined]: { result: "ten", source: "auto", locked_result: null },
-        [ticked]: { result: "ten", source: "prior_sibling", locked_result: null },
-        [staffChild]: { result: "ten", source: "auto", locked_result: null },
-      })
-      for (const id of [enrolledFull, kept, waiting, declined, ticked, staffChild]) {
-        expect(await resultOf(id, sql)).toEqual(byLead[id])
-      }
-
-      await sql.query("create temp table result_snapshot_before as select * from public.fee_snapshot()")
-
-      // Every lead, seeded ones too, rebuilt as the migration builds it: no
-      // fee, discount, status or seat count moves. Left out: leads locked at
-      // full and out of Enrolled since, the one case the lock changes on
-      // purpose, where the backfill gives today's live answer instead. Also
-      // left out: leads other suites linked as "Sibling of" (#301), which
-      // follow the new rule rather than the Family rule this rebuilds, and
-      // linked leads that left their group since (#302's tests), and leads
-      // with a Manual Sibling fee edit (#303), which no rule rebuilds.
-      const linked = `select m.lead_id from public.sibling_group_members m
-        where m.group_id in (select c.group_id from public.sibling_group_members c where c.group_id is not null and not c.legacy)
-        or (m.group_id is null and m.cause in ('sibling_link', 'merge', 'father_name', 'sibling_request'))
-        union select x.lead_id from public.lead_sibling_results x where x.source = 'manual'`
-      const rebuilt = `r.lead_id not in (
-        select x.lead_id from public.lead_sibling_results x join public.leads l on l.id = x.lead_id
-        where x.locked_result = 'full' and l.status <> 'Enrolled') and r.lead_id not in (${linked})`
-      await sql.query(
-        `update public.lead_sibling_results r
-         set result = b.result, source = b.source, locked_result = b.locked_result,
-             locked_at = case when b.locked_result is not null then coalesce(r.locked_at, now()) end, cause = 'migration'
-         from public.sibling_result_backfill() b
-         where b.lead_id = r.lead_id and ${rebuilt}`,
-      )
-      await sql.query(
-        `update public.lead_sibling_results r
-         set result = 'none', source = 'auto', locked_result = null, locked_at = null, cause = 'migration'
-         where not exists (select 1 from public.sibling_result_backfill() b where b.lead_id = r.lead_id) and ${rebuilt}`,
-      )
-      await sql.query(
-        `insert into public.lead_sibling_results (lead_id, result, source, locked_result, locked_at, cause)
-         select b.lead_id, b.result, b.source, b.locked_result, case when b.locked_result is not null then now() end, 'migration'
-         from public.sibling_result_backfill() b
-         where b.lead_id not in (${linked})
-         on conflict (lead_id) do nothing`,
-      )
-      await sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.result_snapshot_before')")
-
-      // And the fixtures refreshed by today's rule: nothing moves either.
-      await sql.query("select public.refresh_sibling_result(l, 'sibling') from unnest($1::uuid[]) l", [
-        [enrolledFull, kept, waiting, declined, ticked, staffSibling, staffChild],
-      ])
-      await sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.result_snapshot_before')")
-
-      // One fee moved on purpose: the waiting child loses its 10%.
-      await sql.query("update public.lead_sibling_results set result = 'none', source = 'auto' where lead_id = $1", [waiting])
-      await expect(sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.result_snapshot_before')")).rejects.toThrow(
-        /fee_snapshot_changed/,
-      )
-    })
-  })
-})

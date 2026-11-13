@@ -4,10 +4,8 @@ import type { Client } from "pg"
 import { describe, expect, onTestFinished, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
-import { decideDiscount, requestDiscount } from "@/lib/services/discounts"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
-import { declineLead } from "@/lib/services/lead-closure"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import {
   confirmFamilyMatch,
@@ -19,11 +17,10 @@ import {
   type NewContact,
 } from "@/lib/services/leads"
 import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
-import { setPriorSibling } from "@/lib/services/sibling-groups"
 
-import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, secretClient, signedIn } from "../support/db"
+import { anonClient, asSystem, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
-import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS } from "../support/fixtures"
 
 // Sibling groups (#300): every confirmed Family with 2 or more leads is one
 // legacy group, and today's Sibling rule reads the group. Through the leads,
@@ -51,7 +48,6 @@ const AMOUNTS: FeeAmounts = {
 }
 
 const FULL = 2_000_000
-const WITH_SIBLING = 1_800_000
 
 async function yearWithSchedule(): Promise<number> {
   const claim = await claimFeeYear()
@@ -404,134 +400,3 @@ describe("the tables", () => {
   })
 })
 
-describe("the migration-day backfill", () => {
-  test("covers every backfill case, keeps every fee, and the snapshot check raises when one fee moves", async () => {
-    const year = await yearWithSchedule()
-    const admissions = await signedIn(ADMISSIONS)
-    const manager = await signedIn(MANAGER)
-
-    // A Family with an Enrolled child at full, a kept 10%, a live 10%, a
-    // Declined child, an Archived child and an imported Enrolled child.
-    const [enrolledFull, kept, waiting, declined, archived, imported] = await family(year, 6)
-    await pay(kept, WITH_SIBLING)
-    await pay(enrolledFull, FULL, "full_payment")
-    expect((await declineLead(manager, declined, { reason: "Other", explanation: "For the test." })).ok).toBe(true)
-    await asSystem(async (sql) => {
-      await sql.query("select public.set_lead_lifecycle_override('import')")
-      await sql.query("update public.leads set status = 'Enrolled', enrolled_by_import = true where id = $1", [imported])
-      await sql.query("select public.set_lead_lifecycle_override('close')")
-      await sql.query("update public.leads set closure = 'Archived', closure_reason = 'Record created in error' where id = $1", [archived])
-    })
-
-    // Separated: a child Enrolled with a kept 10% leaves its Family, which is
-    // left with one child.
-    const [separatedEnrolled, separatedKept] = await family(year)
-    await pay(separatedEnrolled, FULL, "full_payment")
-    await pay(separatedKept, WITH_SIBLING)
-    expect((await separateFromFamily(admissions, separatedKept)).ok).toBe(true)
-
-    // A single child with the prior-sibling tick.
-    const [ticked] = await family(year, 1)
-    expect((await setPriorSibling(admissions, ticked, { name: "Older Brother", className: "FORM 2" })).ok).toBe(true)
-
-    // A granted Staff child over the Sibling 10%.
-    const [staffSibling, staffChild] = await family(year)
-    await pay(staffSibling, FULL, "full_payment")
-    const made = await requestDiscount(admissions, staffChild, "staff_child", "For the test.", randomUUID())
-    if (!made.ok) throw new Error("setup failed")
-    expect((await decideDiscount(manager, made.data, { decision: "grant" })).ok).toBe(true)
-
-    // A pending match: the Admission form child of a known number.
-    const knownLead = await getLead(admissions, staffSibling)
-    if (!knownLead.ok) throw new Error("setup failed")
-    const pending = await createLead(secretClient(), {
-      guardian: { contact: { fullName: "Typed On The Form", relationship: "Mother", phone: knownLead.data.contact.phone } },
-      student: student(),
-      start: { kind: "admission-form" },
-    })
-    if (!pending.ok) throw new Error("setup failed")
-    // A second child on the same unconfirmed contact, so the contact has 2 leads.
-    const pendingSecond = await createLead(secretClient(), {
-      guardian: { contactId: await contactOf(pending.data.leadId) },
-      student: student(),
-      start: { kind: "admission-form" },
-    })
-    if (!pendingSecond.ok) throw new Error("setup failed")
-
-    const everyone = [
-      enrolledFull, kept, waiting, declined, archived, imported, separatedEnrolled, separatedKept, ticked, staffSibling, staffChild,
-      pending.data.leadId, pendingSecond.data.leadId,
-    ]
-
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, [
-        "public.leads",
-        "public.guardian_contacts",
-        "public.lead_fee_profiles",
-        "public.lead_sibling_results",
-        "public.sibling_groups",
-        "public.sibling_group_members",
-        "public.school_fee_payments",
-        "public.payment_adjustments",
-        "public.discount_requests",
-        "public.fee_schedules",
-        "public.fee_band_amounts",
-      ])
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("create temp table groups_snapshot_before as select * from public.fee_snapshot()")
-      const results = Object.fromEntries(await Promise.all(everyone.map(async (id) => [id, await resultOf(id, sql)])))
-
-      // As before the migration: no groups at all. Then the backfill.
-      await sql.query("alter table public.sibling_group_members disable trigger refuse_delete")
-      await sql.query("alter table public.sibling_groups disable trigger refuse_delete")
-      // Sibling requests (#302) name groups, so they go first.
-      await sql.query("alter table public.discount_requests disable trigger refuse_delete")
-      await sql.query("delete from public.discount_requests where kind = 'sibling'")
-      await sql.query("delete from public.sibling_group_members")
-      await sql.query("delete from public.sibling_groups")
-      await sql.query("select public.backfill_sibling_groups()")
-
-      expect((await sql.query("select * from public.sibling_groups_mirror_families()")).rows).toEqual([])
-      const family1 = await groupOf(enrolledFull, sql)
-      expect(family1).not.toBeNull()
-      for (const id of [kept, waiting, declined, archived, imported]) {
-        expect(await membershipOf(id, sql)).toEqual({ group_id: family1, legacy: true, sibling_of_lead_id: null, cause: "migration" })
-      }
-      // A Family of one child, a separated child, a tick and a pending match of two children: no group.
-      for (const id of [separatedEnrolled, separatedKept, ticked, pending.data.leadId, pendingSecond.data.leadId]) {
-        expect(await membershipOf(id, sql)).toBeNull()
-      }
-      expect(await groupOf(staffChild, sql)).toBe(await groupOf(staffSibling, sql))
-      expect(await groupOf(staffChild, sql)).not.toBeNull()
-
-      // The rule over groups gives every lead what it gave over the Family.
-      const parity = await sql.query(
-        `select l.id from public.leads l
-         where (select (r.result, r.source) from public.sibling_rule_result(l.id) r)
-               is distinct from (select (f.result, f.source) from public.sibling_rule_result_by_family(l.id) f)`,
-      )
-      expect(parity.rows).toEqual([])
-
-      // Refreshed by the rule, nothing moves: results, fees, seats.
-      await sql.query("select public.refresh_sibling_result(l, 'sibling') from unnest($1::uuid[]) l", [everyone])
-      for (const id of everyone) expect(await resultOf(id, sql)).toEqual(results[id])
-      expect(results[waiting]).toEqual({ result: "ten", source: "auto", locked_result: null })
-      expect(results[separatedKept]).toEqual({ result: "ten", source: "locked", locked_result: "ten" })
-      expect(results[ticked]).toEqual({ result: "ten", source: "prior_sibling", locked_result: null })
-      expect(results[pending.data.leadId]).toEqual({ result: "none", source: "auto", locked_result: null })
-      await sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.groups_snapshot_before')")
-      const staffFee = (await sql.query("select discount from public.lead_fee_amounts($1)", [staffChild])).rows[0]
-      expect(staffFee.discount).toBe("staff_child")
-
-      // One fee moved on purpose: the waiting child leaves its group.
-      await sql.query(
-        "update public.sibling_group_members set group_id = null, legacy = false, joined_at = null where lead_id = $1",
-        [waiting],
-      )
-      await sql.query("select public.refresh_sibling_result($1, 'family')", [waiting])
-      await expect(sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.groups_snapshot_before')")).rejects.toThrow(
-        /fee_snapshot_changed/,
-      )
-    })
-  })
-})

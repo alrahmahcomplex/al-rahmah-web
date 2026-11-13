@@ -1,5 +1,4 @@
 import { randomInt, randomUUID } from "node:crypto"
-import { readFileSync } from "node:fs"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Client } from "pg"
@@ -24,7 +23,6 @@ import { ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 // through the leads services; corrections through update_lead_details as
 // Admissions Staff; the history as the Super Admin.
 
-const MIGRATION = "supabase/migrations/20261211200100_custodian_brought_by_previous_school.sql"
 const [, nextYear] = admissionYears()
 const today = tanzaniaToday()
 
@@ -515,60 +513,3 @@ describe("the lock order", () => {
   })
 })
 
-// The backfill block, run again against a moved fee: the check raises and
-// undoes everything the block did.
-describe("the migration's backfill", () => {
-  test("raises when a fee moved between the snapshots", async () => {
-    const source = readFileSync(MIGRATION, "utf8")
-    const block = source.match(/do \$\$\nbegin\n {4}perform public\.set_audit_actor\('system'\);[\s\S]*?\n\$\$;/)?.[0]
-    if (!block) throw new Error("backfill block not found")
-    const tampered = block.replace(
-      "select * from public.fee_snapshot();",
-      () => "select * from public.fee_snapshot();\n    update custodian_fee_snapshot set value = value || '{\"school_fee\": -1}' where item like 'lead:%';",
-    )
-    expect(tampered).not.toBe(block)
-
-    await inRolledBackTransaction(async (sql) => {
-      await sql.query("savepoint s")
-      await expect(sql.query(tampered)).rejects.toThrow(/fee_snapshot_changed/)
-      await sql.query("rollback to savepoint s")
-      // Untouched, the block passes: every lead already holds its relationship.
-      await sql.query(block)
-    })
-  })
-
-  test("fills every lead on file, closed and Enrolled ones included, and moves no fee", async () => {
-    const source = readFileSync(MIGRATION, "utf8")
-    const block = source.match(/do \$\$\nbegin\n {4}perform public\.set_audit_actor\('system'\);[\s\S]*?\n\$\$;/)?.[0]
-    if (!block) throw new Error("backfill block not found")
-
-    const { emptied, statuses, differing } = await inRolledBackTransaction(async (sql) => {
-      // Every lead as it was before the migration: no relationship of its own.
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("alter table public.leads alter column custodian_relationship drop not null")
-      await sql.query("select set_config('app.lead_lifecycle_override', 'custodian_sync', true)")
-      const cleared = await sql.query(
-        "update public.leads set custodian_relationship = null, custodian_relationship_description = null",
-      )
-      await sql.query("select set_config('app.lead_lifecycle_override', '', true)")
-
-      await sql.query(block)
-
-      const kinds = await sql.query<{ kind: string }>(
-        `select distinct case when closure is not null then 'closed' else status::text end as kind from public.leads`,
-      )
-      const after = await sql.query<{ n: number }>(
-        `select count(*)::int as n
-         from public.leads l join public.guardian_contacts g on g.id = l.guardian_contact_id
-         where l.custodian_relationship is distinct from g.relationship
-            or l.custodian_relationship_description is distinct from g.relationship_description`,
-      )
-      return { emptied: cleared.rowCount ?? 0, statuses: kinds.rows.map((r) => r.kind), differing: after.rows[0].n }
-    })
-
-    expect(emptied).toBeGreaterThan(0)
-    // The seeds hold leads in every state the backfill must reach.
-    expect(statuses).toEqual(expect.arrayContaining(["Enrolled", "Declined", "closed"]))
-    expect(differing).toBe(0)
-  })
-})

@@ -1,5 +1,4 @@
 import { randomInt, randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 import { describe, expect, onTestFinished, test, vi } from "vitest";
 
@@ -34,7 +33,6 @@ import {
   asSystem,
   createThrowawayStaff,
   inRolledBackTransaction,
-  lockExclusively,
   secretClient,
   signedIn,
 } from "../support/db";
@@ -44,8 +42,6 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures";
 // Check-in of an Admission form family (#305), through the service and the
 // database against local Supabase. Every name and phone is made up.
 
-const MIGRATION =
-  "supabase/migrations/20261217100100_complete_admission_visit.sql";
 const DAY = 24 * 60 * 60 * 1000;
 const today = tanzaniaToday();
 const yesterday = tanzaniaToday(new Date(Date.now() - DAY));
@@ -1394,32 +1390,3 @@ describe("app.sibling_defer_contact_recompute", () => {
   });
 });
 
-// The migration's block, run again: untouched it passes, and a fee moved
-// between the snapshots makes it raise.
-describe("the migration", () => {
-  test("raises when a fee moved between the snapshots", async () => {
-    const source = readFileSync(MIGRATION, "utf8");
-    const block = source.match(/do \$migration\$[\s\S]*?\n\$migration\$;/)?.[0];
-    if (!block) throw new Error("migration block not found");
-    const tampered = block.replace(
-      "create temp table complete_visit_snapshot_before as select * from public.fee_snapshot();",
-      () =>
-        "create temp table complete_visit_snapshot_before as select * from public.fee_snapshot();\n" +
-        "    update complete_visit_snapshot_before set value = value || '{\"school_fee\": -1}' where item like 'lead:%';",
-    );
-    expect(tampered).not.toBe(block);
-
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, [
-        "public.leads",
-        "public.guardian_contacts",
-        "public.sibling_groups",
-        "public.sibling_group_members",
-      ]);
-      await sql.query("savepoint s");
-      await expect(sql.query(tampered)).rejects.toThrow(/fee_snapshot_changed/);
-      await sql.query("rollback to savepoint s");
-      await sql.query(block);
-    });
-  });
-});

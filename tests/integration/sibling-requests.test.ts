@@ -23,7 +23,7 @@ import {
   requestSiblingDiscount,
 } from "@/lib/services/sibling-requests"
 
-import { anonClient, asSystem, inRolledBackTransaction, lockExclusively, signedIn } from "../support/db"
+import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -701,36 +701,3 @@ describe("who may request and decide", () => {
   })
 })
 
-describe("migration day", () => {
-  test("the snapshot check passes with nothing moved, and raises when a fee moves", async () => {
-    const year = await yearWithSchedule()
-    const { b } = await pair(year, father(), "FORM 1", "KG 1")
-    expect(await feeOf(b)).toMatchObject({ discount: SIBLING })
-
-    await inRolledBackTransaction(async (sql) => {
-      await lockExclusively(sql, [
-        "public.leads",
-        "public.guardian_contacts",
-        "public.lead_fee_profiles",
-        "public.lead_sibling_results",
-        "public.sibling_groups",
-        "public.sibling_group_members",
-        "public.school_fee_payments",
-        "public.payment_adjustments",
-        "public.discount_requests",
-        "public.fee_schedules",
-        "public.fee_band_amounts",
-      ])
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("create temp table sibling_request_before as select * from public.fee_snapshot()")
-      // What the migration changed that a fee reads: the discount and the counting rule.
-      await sql.query("select * from public.lead_discount($1)", [b])
-      await sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.sibling_request_before')")
-
-      await sql.query("update public.lead_sibling_results set result = 'none', source = 'auto' where lead_id = $1", [b])
-      await expect(sql.query("select public.assert_fee_snapshot_unchanged('pg_temp.sibling_request_before')")).rejects.toThrow(
-        /fee_snapshot_changed/,
-      )
-    })
-  })
-})

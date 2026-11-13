@@ -1,0 +1,194 @@
+name: Measure
+
+# Throwaway. Runs only for a push to this branch, which never merges. Each
+# cell of measure/run.json gets the whole suite once: a cell named base-NN is
+# the code as it is, any other name is a planted bug from measure/mutants.json.
+# A job never fails for a failing test: the results go into its artifact, and
+# measure/collect.mjs reads them.
+
+on:
+  push:
+    branches: [claude/test-signal-measure]
+
+concurrency:
+  group: measure-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+cache-mode: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      cells: ${{ steps.plan.outputs.cells }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - id: plan
+        run: node measure/apply.mjs --cells >> "$GITHUB_OUTPUT"
+
+  unit:
+    name: Unit (${{ matrix.cell }})
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.plan.outputs.cells) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
+        with:
+          node-version: 24
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
+      - name: Plant the bug
+        run: node measure/apply.mjs "${{ matrix.cell }}"
+      - name: Typecheck, lint and unit tests
+        run: |
+          mkdir -p measure-out
+          status=0; npm run typecheck > measure-out/typecheck.log 2>&1 || status=$?
+          echo "$status" > measure-out/typecheck.status
+          status=0; npm run lint > measure-out/lint.log 2>&1 || status=$?
+          echo "$status" > measure-out/lint.status
+          status=0
+          npx vitest run --project unit --reporter=default --reporter=json --outputFile.json=measure-out/unit.json || status=$?
+          echo "$status" > measure-out/unit.status
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: m_${{ matrix.cell }}_unit
+          path: measure-out/
+          retention-days: 7
+
+  integration:
+    name: Integration (${{ matrix.cell }}, ${{ matrix.shard }}/2)
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.plan.outputs.cells) }}
+        shard: [1, 2]
+    steps:
+      - name: Reserve the local Supabase ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
+        with:
+          node-version: 24
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
+      - name: Plant the bug
+        run: node measure/apply.mjs "${{ matrix.cell }}"
+      - name: Start local Supabase
+        run: |
+          mkdir -p measure-out
+          status=0; bash scripts/ci-db-start.sh > measure-out/db-start.log 2>&1 || status=$?
+          echo "$status" > measure-out/db-start.status
+          tail -n 15 measure-out/db-start.log
+      - name: Run this shard's integration tests
+        run: |
+          status=0
+          if [ "$(cat measure-out/db-start.status)" = "0" ]; then
+            npm run env:local
+            npm run test:integration -- --shard=${{ matrix.shard }}/2 --reporter=default --reporter=github-actions --reporter=json --outputFile.json=measure-out/integration.json || status=$?
+          else
+            status=99
+          fi
+          echo "$status" > measure-out/integration.status
+          cp "$GITHUB_STEP_SUMMARY" measure-out/summary.md 2>/dev/null || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: m_${{ matrix.cell }}_integration_${{ matrix.shard }}
+          path: measure-out/
+          retention-days: 7
+
+  browser:
+    name: Browser (${{ matrix.cell }}, ${{ matrix.shard }}/8)
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.plan.outputs.cells) }}
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - name: Reserve the local Supabase ports
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=55420-55429
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        id: node
+        with:
+          node-version: 24
+      - name: Restore node_modules
+        id: modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ hashFiles('package.json', 'package-lock.json', '.npmrc') }}
+      - name: Install dependencies
+        if: ${{ steps.modules.outputs.cache-hit != 'true' }}
+        run: npm ci
+      - name: Plant the bug
+        run: node measure/apply.mjs "${{ matrix.cell }}"
+      - name: Start local Supabase, install Chromium and build the app
+        run: |
+          mkdir -p measure-out
+          node scripts/ci-build-env.mjs write
+          npx playwright install chromium > "$RUNNER_TEMP/chromium.log" 2>&1 &
+          chromium=$!
+          npm run build > measure-out/build.log 2>&1 &
+          build=$!
+          status=0; bash scripts/ci-db-start.sh > measure-out/db-start.log 2>&1 || status=$?
+          echo "$status" > measure-out/db-start.status
+          if [ "$status" = "0" ]; then npm run env:local && node scripts/ci-build-env.mjs check; fi
+          status=0; wait "$build" || status=$?
+          echo "$status" > measure-out/build.status
+          tail -n 12 measure-out/build.log
+          wait "$chromium" || { cat "$RUNNER_TEMP/chromium.log"; exit 1; }
+      # A planted bug that breaks many tests would otherwise run every one of
+      # them to its timeout, twice. Twenty-five failures say enough.
+      - name: Run this shard's browser tests
+        run: |
+          status=0
+          if [ "$(cat measure-out/db-start.status)" = "0" ] && [ "$(cat measure-out/build.status)" = "0" ]; then
+            node scripts/e2e-shards.mjs run ${{ matrix.shard }} --max-failures=25 || status=$?
+            cp test-results/e2e-results.json measure-out/e2e.json 2>/dev/null || true
+          else
+            status=99
+          fi
+          echo "$status" > measure-out/browser.status
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ always() }}
+        with:
+          name: m_${{ matrix.cell }}_browser_${{ matrix.shard }}
+          path: measure-out/
+          retention-days: 7

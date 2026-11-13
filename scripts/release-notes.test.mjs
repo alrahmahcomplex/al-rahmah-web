@@ -1,14 +1,13 @@
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
-import { combine, insertEntry, parseNote } from "./release-notes.mjs"
+import { combine, nextVersion, parseNote, release } from "./release-notes.mjs"
 
-const notes = fileURLToPath(new URL("./release-notes.mjs", import.meta.url))
-const release = fileURLToPath(new URL("./release.mjs", import.meta.url))
+const script = fileURLToPath(new URL("./release-notes.mjs", import.meta.url))
 const history = "# Changelog\n\nIntro.\n\n## October 1, 2026 `v0.10.0`\n\n### NEW\n\n- Existing app.\n"
 const note = (bump, body) => `---\nbump: ${bump}\n---\n\n${body}`
 
@@ -35,15 +34,16 @@ test("a note without a valid bump, sections or bullets is refused with its name"
   }
 })
 
-test("several notes make one entry in section order, oldest first, with the larger bump", () => {
+test("several notes make one body in section order, oldest first, with the larger bump", () => {
   const first = parseNote("a.md", note("patch", "### FIXED\n\n- A fix.\n"))
   const second = parseNote("b.md", note("minor", "### FIXED\n\n- B fix.\n\n### NEW\n\n- B new.\n"))
-  assert.deepEqual(combine([first, second]), { bump: "minor", entry: "## Unreleased\n\n### NEW\n\n- B new.\n\n### FIXED\n\n- A fix.\n- B fix.\n\n" })
+  assert.deepEqual(combine([first, second]), { bump: "minor", body: "### NEW\n\n- B new.\n\n### FIXED\n\n- A fix.\n- B fix.\n" })
   assert.equal(combine([first]).bump, "patch")
 })
 
-test("the entry goes above the newest release, below the intro", () => {
-  assert.equal(insertEntry(history, "## Unreleased\n\n### FIXED\n\n- X.\n\n"), history.replace("## October", "## Unreleased\n\n### FIXED\n\n- X.\n\n## October"))
+test("the next version follows the bump", () => {
+  assert.equal(nextVersion("v0.107.0", "patch"), "v0.107.1")
+  assert.equal(nextVersion("v0.107.3", "minor"), "v0.108.0")
 })
 
 function repo(t) {
@@ -54,7 +54,15 @@ function repo(t) {
     assert.equal(result.status, 0, result.stderr)
     return result.stdout.trim()
   }
-  const run = (script, ...args) => spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: "utf8" })
+  const run = (...args) => spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: "utf8" })
+  const merge = (name, text, seconds) => {
+    if (name) writeFileSync(join(dir, "changes", name), text)
+    else writeFileSync(join(dir, "app.txt"), String(seconds))
+    git("add", "-A")
+    const result = spawnSync("git", ["commit", "-m", `Merge ${name ?? "code"}`], { cwd: dir, encoding: "utf8", env: { ...process.env, GIT_COMMITTER_DATE: `${1_800_000_000 + seconds} +0000` } })
+    assert.equal(result.status, 0, result.stderr)
+    return git("rev-parse", "HEAD")
+  }
   git("init", "--initial-branch=main")
   git("config", "user.name", "Notes test")
   git("config", "user.email", "notes-test@example.invalid")
@@ -66,46 +74,80 @@ function repo(t) {
   git("add", "-A")
   git("commit", "-m", "Start")
   git("tag", "-a", "v0.10.0", "-m", "v0.10.0")
-  return { dir, git, run }
+  return { dir, git, run, merge }
 }
 
-test("check refuses an Unreleased entry in CHANGELOG.md and a bad note; README.md is not a note", (t) => {
+test("check refuses an Unreleased entry, a bad note, a folder and a non-.md file; README.md is not a note", (t) => {
   const { dir, run } = repo(t)
-  assert.equal(run(notes, "check").status, 0)
-  writeFileSync(join(dir, "CHANGELOG.md"), insertEntry(history, "## Unreleased\n\n### FIXED\n\n- X.\n\n"))
-  assert.match(run(notes, "check").stderr, /Unreleased/)
+  assert.equal(run("check").status, 0)
+  writeFileSync(join(dir, "CHANGELOG.md"), history.replace("## October", "## Unreleased\n\n### FIXED\n\n- X.\n\n## October"))
+  assert.match(run("check").stderr, /Unreleased/)
   writeFileSync(join(dir, "CHANGELOG.md"), history)
   writeFileSync(join(dir, "changes", "bad.md"), "no front matter\n")
-  const result = run(notes, "check")
-  assert.notEqual(result.status, 0)
-  assert.match(result.stderr, /^bad\.md: /m)
+  assert.match(run("check").stderr, /^bad\.md: /m)
+  rmSync(join(dir, "changes", "bad.md"))
+  mkdirSync(join(dir, "changes", "feature"))
+  writeFileSync(join(dir, "changes", "feature", "x.md"), note("patch", "### FIXED\n\n- X.\n"))
+  assert.match(run("check").stderr, /no folders/)
+  rmSync(join(dir, "changes", "feature"), { recursive: true })
+  writeFileSync(join(dir, "changes", "x.txt"), note("patch", "### FIXED\n\n- X.\n"))
+  assert.match(run("check").stderr, /ends in \.md/)
 })
 
-test("after two merges, collect and release.mjs make one dated, versioned and tagged release", (t) => {
-  const { dir, git, run } = repo(t)
-  writeFileSync(join(dir, "changes", "first.md"), note("patch", "### FIXED\n\n- First fix.\n"))
-  git("add", "-A")
-  git("commit", "-m", "First merge", "--date", "2026-11-13T08:00:00Z")
-  writeFileSync(join(dir, "changes", "second.md"), note("minor", "### NEW\n\n- Second feature.\n"))
-  git("add", "-A")
-  git("commit", "-m", "Second merge", "--date", "2026-11-13T09:00:00Z")
-  git("update-ref", "refs/remotes/origin/main", "HEAD")
+test("a merge with a changelog file is tagged with the next version, and its notes name the date", (t) => {
+  const { dir, git, merge } = repo(t)
+  const sha = merge("fix.md", note("patch", "### FIXED\n\n- Staff can save.\n"), 1)
+  assert.deepEqual(release(dir, sha, "2026-11-13"), { version: "v0.10.1", notes: "Released 2026-11-13.\n\n### FIXED\n\n- Staff can save.\n" })
+  assert.equal(git("rev-parse", "v0.10.1^{commit}"), sha)
+  assert.equal(git("cat-file", "-t", "v0.10.1"), "tag", "an annotated tag")
+  assert.match(git("tag", "-l", "--format=%(contents:subject)", "v0.10.1"), /^v0\.10\.1: Staff can save\.$/)
+  assert.equal(readFileSync(join(dir, "CHANGELOG.md"), "utf8"), history, "nothing is committed or changed")
+})
 
-  const collected = run(notes, "collect")
-  assert.equal(collected.status, 0, collected.stderr)
-  assert.equal(collected.stdout.trim(), "minor")
-  assert.ok(!existsSync(join(dir, "changes", "first.md")) && !existsSync(join(dir, "changes", "second.md")))
-  assert.ok(existsSync(join(dir, "changes", "README.md")))
+test("two merges released together take both files, oldest first, and the larger bump", (t) => {
+  const { dir, merge } = repo(t)
+  merge("first.md", note("patch", "### FIXED\n\n- First fix.\n"), 1)
+  const second = merge("second.md", note("minor", "### NEW\n\n- Second feature.\n"), 2)
+  assert.deepEqual(release(dir, second, "2026-11-13"), { version: "v0.11.0", notes: "Released 2026-11-13.\n\n### NEW\n\n- Second feature.\n\n### FIXED\n\n- First fix.\n" })
+})
 
-  const prepared = run(release, "prepare", "--bump", "minor", "--date", "2026-11-13", "--base", "origin/main")
-  assert.equal(prepared.status, 0, prepared.stderr)
-  assert.equal(readFileSync(join(dir, "CHANGELOG.md"), "utf8"), history.replace("## October", "## November 13, 2026 `v0.11.0`\n\n### NEW\n\n- Second feature.\n\n### FIXED\n\n- First fix.\n\n## October"))
+test("a file already released is not released again, and a merge with no new file releases nothing", (t) => {
+  const { dir, merge } = repo(t)
+  const first = merge("first.md", note("patch", "### FIXED\n\n- First fix.\n"), 1)
+  assert.equal(release(dir, first, "2026-11-13").version, "v0.10.1")
+  const code = merge(null, "", 2)
+  assert.equal(release(dir, code, "2026-11-14"), null)
+  const next = merge("next.md", note("patch", "### FIXED\n\n- Next fix.\n"), 3)
+  assert.deepEqual(release(dir, next, "2026-11-14"), { version: "v0.10.2", notes: "Released 2026-11-14.\n\n### FIXED\n\n- Next fix.\n" })
+})
 
-  git("add", "-A")
-  git("commit", "-m", "Release v0.11.0")
-  git("update-ref", "refs/remotes/origin/main", "HEAD")
-  const tagged = run(release, "tag", "--commit", git("rev-parse", "HEAD"))
-  assert.equal(tagged.status, 0, tagged.stderr)
-  assert.equal(git("tag", "--list", "v0.11.0"), "v0.11.0")
-  assert.equal(run(notes, "collect").stdout, "", "nothing is left to release")
+test("run again on a commit it already tagged, it gives the same release, so a failed push or publish can finish", (t) => {
+  const { dir, git, merge } = repo(t)
+  const sha = merge("fix.md", note("patch", "### FIXED\n\n- Staff can save.\n"), 1)
+  const first = release(dir, sha, "2026-11-13")
+  assert.deepEqual(release(dir, sha, "2026-11-13"), first)
+  assert.equal(git("tag", "--list", "v0.10.*"), "v0.10.0\nv0.10.1")
+})
+
+test("a version already used on another commit is refused, not moved", (t) => {
+  const { dir, git, merge } = repo(t)
+  const earlier = merge("first.md", note("patch", "### FIXED\n\n- First fix.\n"), 1)
+  git("branch", "elsewhere", earlier)
+  const later = merge("second.md", note("patch", "### FIXED\n\n- Second fix.\n"), 2)
+  release(dir, later, "2026-11-13")
+  assert.throws(() => release(dir, earlier, "2026-11-13"), /already exists/)
+  assert.equal(git("rev-parse", "v0.10.1^{commit}"), later)
+})
+
+test("the CLI writes the notes file and prints the version, or prints nothing", (t) => {
+  const { dir, merge, run } = repo(t)
+  const code = merge(null, "", 1)
+  const none = run("release", "--commit", code, "--notes", join(dir, "notes.md"), "--date", "2026-11-13")
+  assert.equal(none.status, 0, none.stderr)
+  assert.equal(none.stdout, "")
+  const sha = merge("fix.md", note("patch", "### FIXED\n\n- Staff can save.\n"), 2)
+  const result = run("release", "--commit", sha, "--notes", join(dir, "notes.md"), "--date", "2026-11-13")
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.stdout.trim(), "v0.10.1")
+  assert.equal(readFileSync(join(dir, "notes.md"), "utf8"), "Released 2026-11-13.\n\n### FIXED\n\n- Staff can save.\n")
 })

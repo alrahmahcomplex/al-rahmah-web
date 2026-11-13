@@ -1,15 +1,14 @@
 name: Release
 
-# After a merge that brings a changelog file in changes/: the files become a
-# dated, versioned entry at the top of CHANGELOG.md, the files go, and the
-# release commit is tagged. One release at a time; a merge that lands while one
-# runs waits its turn, and a release that finds its files already taken by the
-# one before does nothing.
+# After a merge that brings a changelog file in changes/: the merge commit gets
+# the next version's tag, and the files added since the last release become
+# that version's GitHub Release. Nothing is committed to main, so this starts
+# no CI run and no Vercel deployment: the merge itself was tested and
+# deployed.
 #
-# The release commit changes only CHANGELOG.md and changes/. A push made with
-# this workflow's token starts no other workflow, and vercel.json's
-# ignoreCommand skips the production build for such a commit: the code is the
-# merge's, which CI and Vercel already built.
+# Running it again on a commit it already tagged pushes the same tag and
+# publishes the same release, so a failed run is finished by running it
+# again (Actions tab, "Run workflow" on main, or re-run the failed job).
 
 on:
   push:
@@ -26,43 +25,31 @@ concurrency:
 
 jobs:
   release:
-    name: Version, date and tag the changelog files
+    name: Tag and publish the release
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # main as it is now, not the commit that started this run: an earlier
-      # release may have moved it.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: main
           fetch-depth: 0
           fetch-tags: true
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
-      - name: Release
+      - name: Tag the merge and publish its notes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for attempt in 1 2 3; do
-            git fetch origin main --tags
-            git reset --hard origin/main
-            bump="$(node scripts/release-notes.mjs collect)"
-            if [ -z "$bump" ]; then echo "No changelog files on main; nothing to release."; exit 0; fi
-            # The release date is the owner's: Tanzania, UTC+3.
-            node scripts/release.mjs prepare --bump "$bump" --date "$(TZ=Africa/Dar_es_Salaam date +%F)" --base origin/main
-            version="$(sed -n 's/^## .* `\(v[0-9]*\.[0-9]*\.[0-9]*\)`$/\1/p' CHANGELOG.md | head -n 1)"
-            git add -A CHANGELOG.md changes
-            git commit -m "Release $version"
-            if git push origin HEAD:main; then
-              git fetch origin main
-              node scripts/release.mjs tag --commit "$(git rev-parse HEAD)"
-              git push origin "$version"
-              echo "Released $version."
-              exit 0
-            fi
-            echo "main moved while releasing; trying again."
-          done
-          echo "::error::main kept moving; the changelog files are still in changes/. Run this workflow again by hand."
-          exit 1
+          # The release date is the owner's: Tanzania, UTC+3.
+          version="$(node scripts/release-notes.mjs release --commit "$GITHUB_SHA" --notes "$RUNNER_TEMP/notes.md" --date "$(TZ=Africa/Dar_es_Salaam date +%F)")"
+          if [ -z "$version" ]; then echo "No changelog file arrived since the last release."; exit 0; fi
+          git push origin "refs/tags/$version"
+          if gh release view "$version" > /dev/null 2>&1; then
+            echo "$version is already published."
+          else
+            gh release create "$version" --verify-tag --title "$version" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
+          echo "Released $version on $GITHUB_SHA."

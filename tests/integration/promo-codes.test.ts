@@ -264,6 +264,31 @@ describe("a lead carrying a Promo code", () => {
     expect(answer).toEqual({ state: "expired", fee: 50000 })
   })
 
+  test("on its last day a code still takes its amount off, so a pause preview lists the fee it would raise", async () => {
+    const promo = await newPromo(20000)
+    const lead = await leadWithCode(promo.code)
+    // Today in Tanzania, read inside one transaction, so the hour and time
+    // zone the test runs at can't move the day.
+    const lastDay = await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("update public.promo_codes set ends_on = public.tanzania_today() where id = $1", [promo.id])
+      const state = await sql.query<{ effective: string }>("select public.effective_state(p) as effective from public.promo_codes p where id = $1", [
+        promo.id,
+      ])
+      await actAs(sql, MANAGER.id)
+      const { rows } = await sql.query<{ impact: { lead_id: string; fee_now: number; fee_after: number }[] }>(
+        "select public.promo_code_fee_impact($1, null, 'paused', null, false) as impact",
+        [promo.id],
+      )
+      return {
+        state: state.rows[0].effective,
+        fee: await expectedFee(sql, lead),
+        pausing: rows[0].impact.map((row) => [row.lead_id, row.fee_now, row.fee_after]),
+      }
+    })
+    expect(lastDay).toEqual({ state: "active", fee: 30000, pausing: [[lead, 30000, 50000]] })
+  })
+
   test("a new last day shows the fees it moves before it is saved", async () => {
     const promo = await newPromo(20000)
     const lead = await leadWithCode(promo.code)

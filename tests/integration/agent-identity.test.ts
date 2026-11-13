@@ -213,6 +213,25 @@ describe("who may get a login", () => {
     expect((await createLogin(retiredAddress)).error).not.toBeNull()
   })
 
+  test("a switched-off agent fails the sign-up check itself, not only the link step after it", async () => {
+    // The link step rechecks switched-off on its own, so a refused login
+    // alone can't show which step said no. Ask the sign-up check directly.
+    const onAddress = email("check-on")
+    await approvedAgent(onAddress)
+    const offAddress = email("check-off")
+    const off = await approvedAgent(offAddress)
+    expect((await changeAgentStatus(await signedIn(MANAGER), off.id, "switch-off", "Left the school")).ok).toBe(true)
+
+    const open = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ switched_on: boolean; switched_off: boolean }>(
+        "select public.agent_login_open($1) as switched_on, public.agent_login_open($2) as switched_off",
+        [onAddress, offAddress],
+      )
+      return rows[0]
+    })
+    expect(open).toEqual({ switched_on: true, switched_off: false })
+  })
+
   test("staff invites still create and link the account", async () => {
     const staff = await createThrowawayStaff(["leads.view"])
     const session = await signedIn(staff)

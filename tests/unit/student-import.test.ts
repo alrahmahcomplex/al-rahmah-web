@@ -157,6 +157,11 @@ describe("the file's own checks", () => {
     ])
   })
 
+  it("accepts a visit dated today, and refuses one dated tomorrow", () => {
+    const rows = read(["Kid,STD 1,2027,,Mama,,0712000001,,09/11/2026,,", "Kid Two,STD 1,2027,,Mama,,0712000002,,10/11/2026,,"])
+    expect(rows.map((row) => row.problem)).toEqual([null, { class: "refused", reason: "Visit date in the future" }])
+  })
+
   it("refuses a student named twice with the same parent phone, and keeps siblings", () => {
     const rows = read([
       "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,",

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process"
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { pending } from "./release-notes.mjs"
+import { laterRelease, pending } from "./release-notes.mjs"
 
 const versionPattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 const usage = "Usage: node scripts/release.mjs prepare --bump patch|minor|major --date YYYY-MM-DD [--base origin/main] [--complete-app]\n       node scripts/release.mjs tag --commit <full merge SHA>"
@@ -134,8 +134,15 @@ function tagRelease(options) {
     console.log(`${version} already tags ${commit}.`)
     return
   }
-  // A tag by hand is where the next release starts from, so a changelog file
-  // merged before it and not released yet would never be published.
+  // A tag by hand is where the next release starts from. Behind a release
+  // already tagged on a later merge, it would have that release's changelog
+  // files published a second time.
+  const later = laterRelease(process.cwd(), commit)
+  if (later) {
+    throw new Error(`${version} was not tagged. ${later} already tags a later commit on main, so the next release would start from ${version} and publish ${later}'s entries a second time. Tag the milestone before later releases, or prepare it on a commit after them.`)
+  }
+  // A changelog file merged before it and not released yet would never be
+  // published.
   const unreleased = pending(process.cwd(), commit)
   if (unreleased.length) {
     throw new Error(`${version} was not tagged. These changelog files are merged and not released yet:\n${unreleased.join("\n")}\nFetch the tags. If they are still listed, wait for the Release run or run it again (gh run list --workflow release.yml), then tag.`)

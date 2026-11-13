@@ -19,7 +19,8 @@
 //   node scripts/release-notes.mjs pending --commit <sha>
 //       print the changelog files merged up to <sha> that no release holds
 //       yet, and fail if there are any; it tags nothing. `release.mjs tag`
-//       refuses a tag by hand while there are
+//       refuses a tag by hand while there are, or once a later merge is
+//       released
 //
 // A file in changes/ (a flat name ending .md; README.md is not one):
 //
@@ -205,6 +206,15 @@ export function pending(root, commit) {
   const { sha, at, released, latest } = releasesOfMain(root, commit)
   if (released.some(({ index }) => index <= at)) return []
   return addedSince(root, latest, sha)
+}
+
+// A release tagged on a later commit of main than `commit`, if there is one.
+// `pending` lists nothing then, since that release took the files. A higher
+// version tagged by hand on `commit` would still become the next release's
+// starting point, and that release's files would be published a second time.
+export function laterRelease(root, commit) {
+  const { at, released } = releasesOfMain(root, commit)
+  return released.find(({ index }) => index < at)?.tag
 }
 
 // Tags `commit` with the next version and returns { version, notes }, or null

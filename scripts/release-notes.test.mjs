@@ -377,6 +377,27 @@ test("a pending file released on the milestone's own commit leaves the milestone
   assert.equal(release(dir, sha, "2026-11-13"), null)
 })
 
+test("a milestone is not tagged by hand behind a release on a later merge", (t) => {
+  const { dir, git, merge, commit, run } = repo(t)
+  const { sha, tag } = milestone(dir, commit)
+  // An app PR merges and is released before the milestone is tagged.
+  const later = merge("later.md", note("patch", "### FIXED\n\n- A later fix.\n"), 3)
+  assert.equal(release(dir, later, "2026-11-13").version, "v0.10.1")
+  // Nothing is pending, yet v1.0.0 here would be where the next release
+  // starts, and later.md would be published again.
+  const clear = run("pending", "--commit", sha)
+  assert.equal(clear.status, 0, clear.stderr)
+  assert.equal(clear.stdout, "")
+  const refused = tag()
+  assert.equal(refused.status, 1, refused.stdout)
+  assert.match(refused.stderr, /v1\.0\.0 was not tagged\. v0\.10\.1 already tags a later commit on main/)
+  assert.match(refused.stderr, /Tag the milestone before later releases, or prepare it on a commit after them\./)
+  assert.equal(git("tag", "--list", "v*"), "v0.10.0\nv0.10.1", "nothing is tagged")
+  // The next release still starts from the later one, and publishes only its own file.
+  const next = merge("next.md", note("patch", "### FIXED\n\n- Next fix.\n"), 4)
+  assert.deepEqual(release(dir, next, "2026-11-14"), { version: "v0.10.2", notes: "Released 2026-11-14.\n\n### FIXED\n\n- Next fix.\n" })
+})
+
 test("a file name git would quote is still found, and check asks for plain names", (t) => {
   const { dir, merge, run } = repo(t)
   const sha = merge("café.md", note("patch", "### FIXED\n\n- Accents work.\n"), 1)

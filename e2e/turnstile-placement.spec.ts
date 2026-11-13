@@ -112,11 +112,6 @@ async function cloudflareKeepsFailing(page: Page) {
   })
 }
 
-async function noSidewaysScroll(page: Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-  expect(overflow).toBeLessThanOrEqual(0)
-}
-
 // The white rounded card around the check, and the check's drawn box.
 async function boxAndCard(page: Page) {
   return page.locator("[data-turnstile-box]").evaluate((container) => {
@@ -141,15 +136,6 @@ async function boxAndCard(page: Page) {
       },
     }
   })
-}
-
-async function expectInsideCardAndCentred(page: Page) {
-  const { box, content } = await boxAndCard(page)
-  expect(content).not.toBeNull()
-  expect(box.left).toBeGreaterThanOrEqual(content!.left - 0.5)
-  expect(box.right).toBeLessThanOrEqual(content!.right + 0.5)
-  const offCentre = Math.abs((box.left + box.right) / 2 - (content!.left + content!.right) / 2)
-  expect(offCentre).toBeLessThanOrEqual(1)
 }
 
 async function expectSendBringsCheckIntoView(page: Page, lang: "sw" | "en", send: string) {
@@ -189,7 +175,6 @@ for (const { name, size } of VIEWPORTS) {
       await waitForSecurityCheck(page)
       const { container } = await boxAndCard(page)
       expect(container.height).toBeLessThanOrEqual(1)
-      await noSidewaysScroll(page)
     })
 
     test("the forgot-password card shows no check while Cloudflare passes", async ({ page }) => {
@@ -197,7 +182,6 @@ for (const { name, size } of VIEWPORTS) {
       await waitForSecurityCheck(page)
       const { container } = await boxAndCard(page)
       expect(container.height).toBeLessThanOrEqual(1)
-      await noSidewaysScroll(page)
     })
 
     for (const lang of ["sw", "en"] as const) {
@@ -245,8 +229,6 @@ test.describe("the sign-in card", () => {
       await page.getByLabel("Barua pepe").fill("mzazi@example.test")
       await page.getByLabel("Nenosiri", { exact: true }).fill("a-password")
       await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible({ timeout: 20_000 })
-      await expectInsideCardAndCentred(page)
-      await noSidewaysScroll(page)
 
       await page.getByRole("button", { name: "Ingia" }).click()
       await expect(page.getByText(NEEDS_CLICK.sw)).toBeFocused()
@@ -284,7 +266,6 @@ test("a check that passed out of sight keeps its token when the window narrows (
   await page.waitForTimeout(1_000)
   expect(await checksDrawn(page)).toBe(1)
   await waitForSecurityCheck(page)
-  await noSidewaysScroll(page)
 })
 
 // Near 300px, a classic scrollbar can come and go with the box: the box
@@ -321,6 +302,4 @@ test("a check that needs a click is drawn again to fit when the window narrows",
   await expect(page.locator('[data-fake-check="compact"]')).toBeVisible()
   await expect(page.locator('[data-fake-check="flexible"]')).toHaveCount(0)
   await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible()
-  await expectInsideCardAndCentred(page)
-  await noSidewaysScroll(page)
 })

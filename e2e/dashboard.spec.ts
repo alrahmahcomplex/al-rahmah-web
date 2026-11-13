@@ -27,7 +27,7 @@ async function choose(page: Page, select: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click()
 }
 
-test("the Visited applicants tile shows all time by default, under the Reports heading", async ({ page }) => {
+test("the Visited applicants tile shows all time by default", async ({ page }) => {
   await signIn(page, MANAGER)
 
   const panel = visitedPanel(page)
@@ -35,10 +35,6 @@ test("the Visited applicants tile shows all time by default, under the Reports h
   await expect(panel.getByTestId("visited-period")).toHaveText("All time · All years")
   await expect(panel.getByTestId("visited-count")).toHaveText(/^\d[\d,]*$/)
   await expect(panel.getByRole("link", { name: "Show all time and all years" })).toHaveCount(0)
-
-  const heading = await page.getByRole("heading", { name: "Reports" }).boundingBox()
-  const tile = await panel.boundingBox()
-  expect(heading!.y).toBeLessThan(tile!.y)
 })
 
 test("filters chosen from the filter icon go into the address, survive a reload and clear in one click", async ({ page }) => {

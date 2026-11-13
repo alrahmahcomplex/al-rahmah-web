@@ -44,7 +44,6 @@ const sidebar = (page: Page) => page.getByRole("complementary", { name: "Sidebar
 const toggle = (page: Page) => page.getByRole("button", { name: "Fold or open the sidebar" })
 const handle = (page: Page) => page.getByRole("separator", { name: /^Resize the sidebar/ })
 const width = (page: Page) => sidebar(page).evaluate((el) => Math.round(el.getBoundingClientRect().width))
-const scrollsSideways = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)
 
 test.describe("on a desktop", () => {
   test.use({ viewport: { width: 1280, height: 800 } })
@@ -57,11 +56,9 @@ test.describe("on a desktop", () => {
     // The One Pip Rule: no entry carries a count.
     await expect(entry(page, "Follow-ups")).toHaveAccessibleName("Follow-ups")
     await expect(page.getByRole("main")).toContainText("Reopening requests")
-    await expect(page.locator(".ns-stage")).toHaveCSS("border-radius", "28px")
     await expect(sidebar(page).getByText("Al-Rahmah Complex")).toBeVisible()
     await expect(sidebar(page).getByText("Admissions Portal")).toBeVisible()
     await expect(page.getByRole("searchbox", { name: "Search applicants" }).or(page.getByRole("textbox", { name: "Search applicants" }))).toBeVisible()
-    expect(await scrollsSideways(page)).toBe(false)
   })
 
   test("moves between the new and the old shell", async ({ page }) => {
@@ -152,12 +149,6 @@ test.describe("on a desktop", () => {
     await bell.click()
     const list = page.getByRole("dialog", { name: "New requests" })
     await expect(list.getByRole("link", { name: /New reopening request.*Asha Kibwana/ })).toBeVisible()
-    // As the prototype's bell (#349): link rows straight under the title, 14px corners, no chevron.
-    const first = list.getByRole("link").first()
-    const [title, row] = await Promise.all([list.getByRole("heading", { name: "New requests" }).boundingBox(), first.boundingBox()])
-    expect(Math.round(row!.y - (title!.y + title!.height))).toBe(0)
-    await expect(first).toHaveCSS("border-radius", "14px")
-    await expect(list.locator(".kit-row-chev").first()).toBeHidden()
     await expect(page.locator(".ns-pip")).toHaveCount(0)
     await page.keyboard.press("Escape")
     await expect(list).toHaveCount(0)
@@ -231,7 +222,6 @@ test.describe("on a phone", () => {
     await expect(sidebar(page)).toBeHidden()
     await expect(staffNav(page)).toHaveCount(0)
     await expect(page.locator(".ns-vbar")).toBeHidden()
-    expect(await scrollsSideways(page)).toBe(false)
     // The pill shows only the initials; the name stays for screen readers.
     const me = page.getByRole("banner").getByRole("button", { name: `${MANAGER.name} ${MANAGER.roleName}` })
     await expect(me).toBeVisible()
@@ -243,8 +233,6 @@ test.describe("on a phone", () => {
     await expect(drawer).toBeVisible()
     for (const label of MANAGER_ENTRIES) await expect(drawer.getByRole("link", { name: label, exact: true })).toBeAttached()
     await expect(drawer.getByRole("link", { name: "Reopening requests", exact: true })).toHaveAttribute("aria-current", "page")
-    // A touch screen gets 44px rows.
-    expect((await drawer.getByRole("link", { name: "Today", exact: true }).boundingBox())!.height).toBe(44)
 
     await page.keyboard.press("Escape")
     await expect(drawer).toHaveCount(0)

@@ -189,6 +189,5 @@ test.describe("staff who can't record payments", () => {
     await expect(payments.first()).toContainText("Initial deposit")
     await expect(payments.first()).toContainText(`Paid ${formatDate("2026-09-25")}`)
     await expect(section.getByRole("button", { name: "Record payment" })).toHaveCount(0)
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
   })
 })

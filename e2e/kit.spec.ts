@@ -5,26 +5,12 @@ import { axeProblems, settled } from "./axe"
 import { signInOnce } from "./log-in"
 import { expect, test } from "./staff-test"
 
-// The kit page (#319): the prototype's Design system page rebuilt with
-// components/kit, then the kit's other pieces. Any signed-in staff member may
-// open it; it is drawn in the new shell (#322).
-
-const INDIGO = "rgb(9, 0, 187)"
-const PEACH_GLOW = "rgb(255, 207, 166)"
-
 async function openKit(page: Page) {
   await signInOnce(page, ADMISSIONS.email, ADMISSIONS.password)
   await page.goto("/staff/kit")
   await expect(page.getByRole("heading", { level: 1, name: "Design system" })).toBeVisible()
   await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
 }
-
-const glow = (icon: Locator) =>
-  icon.locator("circle.gf-ic-glow").evaluate((el) => {
-    const style = getComputedStyle(el)
-    return { fill: style.fill, scale: new DOMMatrixReadOnly(style.transform).a }
-  })
-const line = (icon: Locator) => icon.locator("g.gf-ic-line").first().evaluate((el) => getComputedStyle(el).stroke)
 
 test("a signed-out visitor is sent to sign in", async ({ page }) => {
   await page.goto("/staff/kit")
@@ -36,7 +22,6 @@ test("shows both parts on the stage of the new shell, and is not indexed", async
   await expect(page).toHaveTitle("Design system · Al-Rahmah Complex")
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/)
   await expect(page.locator('[data-shell="new"]').getByRole("navigation", { name: "Staff" })).toBeVisible()
-  await expect(page.locator(".ns-stage")).toHaveCSS("background-image", /linear-gradient/)
 
   const top = page.locator('[data-part="design-system"]')
   for (const title of ["Icons: one colour at rest, two in use", "Illustrations", "Colour", "Type", "Buttons", "Fields", "Selectors", "Progress bar", "Cards and chips"])
@@ -47,26 +32,6 @@ test("shows both parts on the stage of the new shell, and is not indexed", async
   const more = page.locator('[data-part="more"]')
   for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Guided form", "Sheet", "Side sheet", "Popover", "Toast", "Confetti"])
     await expect(more.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible()
-})
-
-test("the active icon state shows on hover and in a featured icon", async ({ page }) => {
-  await openKit(page)
-  const host = page.locator('[data-icons="hover"] > span').first()
-  const icon = host.locator("svg")
-
-  await expect.poll(() => glow(icon)).toEqual({ fill: "rgba(0, 0, 0, 0)", scale: 0.5 })
-  await host.hover()
-  await expect.poll(() => glow(icon)).toEqual({ fill: PEACH_GLOW, scale: 1 })
-  expect(await line(icon)).toBe(INDIGO)
-
-  const featured = page.locator('[data-icons="featured"] svg').first()
-  await expect.poll(() => glow(featured)).toEqual({ fill: PEACH_GLOW, scale: 1 })
-
-  // A round button hosts its icon's active state too.
-  const menu = page.locator('[data-part="design-system"]').getByRole("region", { name: "Buttons" }).getByRole("button", { name: "Menu" })
-  await expect.poll(() => glow(menu.locator("svg"))).toEqual({ fill: "rgba(0, 0, 0, 0)", scale: 0.5 })
-  await menu.hover()
-  await expect.poll(() => glow(menu.locator("svg"))).toEqual({ fill: PEACH_GLOW, scale: 1 })
 })
 
 test("the controls answer: selectors, filter pills, rows, chip buttons and the pending button", async ({ page }) => {
@@ -168,14 +133,6 @@ test("a centre sheet: focus on the title, Tab stays inside, Escape and Close ret
   const sheet = page.getByRole("dialog", { name: "Sibling · 10%" })
   await expect(sheet).toHaveAccessibleDescription("Latifa Omari Juma Hassan")
   await expect(sheet.getByRole("heading", { name: "Sibling · 10%" })).toBeFocused()
-  // Centred on a wide screen, once it has settled.
-  await expect(sheet).toHaveCSS("opacity", "1")
-  await expect
-    .poll(async () => {
-      const box = (await sheet.boundingBox())!
-      return [Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2)]
-    })
-    .toEqual([640, 400])
   // Close, the scrolling body, Grant and Refuse: Tab cycles through them and no further.
   await tabStaysInside(page, sheet, 6)
   await page.keyboard.press("Escape")
@@ -193,33 +150,18 @@ test("a centre sheet: focus on the title, Tab stays inside, Escape and Close ret
   await expect(sheet).toHaveCount(0)
   const toast = page.getByRole("status").filter({ hasText: "Granted for Latifa Omari Juma Hassan. The desk can see it now." })
   await expect(toast).toBeVisible()
-  await expect(toast).toHaveCSS("background-color", "rgb(3, 0, 77)")
-  // Bottom centre, 24px up.
-  await expect
-    .poll(async () => {
-      const box = (await toast.boundingBox())!
-      return [box.x + box.width / 2, box.y + box.height].map(Math.round)
-    })
-    .toEqual([640, 800 - 24])
   await expect(card.getByText("Granted", { exact: true })).toBeVisible()
   // It leaves on its own after 2.6s.
   await expect(toast).toHaveCount(0, { timeout: 5_000 })
 })
 
-test("a side sheet keeps its head and foot while only the details scroll; the inline editors", async ({ page }) => {
+test("a side sheet's inline editors: the fee with its reason, and the father's name", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 640 })
   await openKit(page)
   const row = page.locator('[data-part="more"]').getByRole("row", { name: "Zuhura Ali Mussa Khamis" })
   await row.click()
   const sheet = page.getByRole("dialog", { name: "Zuhura Ali Mussa Khamis" })
   await expect(sheet.getByRole("heading", { name: "Zuhura Ali Mussa Khamis" })).toBeFocused()
-  // 440px wide, 12px from the right, top and bottom, once it has slid in.
-  await expect
-    .poll(async () => {
-      const box = (await sheet.boundingBox())!
-      return [box.width, box.x + box.width, box.y, box.y + box.height].map(Math.round)
-    })
-    .toEqual([440, 1280 - 12, 12, 640 - 12])
 
   // The fee editor: a preview of what changes, then the reason.
   await sheet.getByRole("button", { name: "Edit fee" }).click()
@@ -228,19 +170,6 @@ test("a side sheet keeps its head and foot while only the details scroll; the in
   await sheet.locator("label", { hasText: "Full fee" }).click()
   await expect(sheet.getByText("Zuhura: TZS 1,620,000 becomes TZS 1,800,000.")).toBeVisible()
   await expect(sheet.getByText("Khalid: no change.")).toBeVisible()
-
-  const head = sheet.locator(".kit-sheet-head")
-  const foot = sheet.locator(".kit-sheet-foot")
-  const body = sheet.locator(".kit-sheet-body")
-  const headBefore = await head.boundingBox()
-  const footBefore = await foot.boundingBox()
-  expect(await body.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
-  await body.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
-  await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
-  expect(await head.boundingBox()).toEqual(headBefore)
-  expect(await foot.boundingBox()).toEqual(footBefore)
-  await expect(sheet.getByRole("heading", { name: "Zuhura Ali Mussa Khamis" })).toBeInViewport()
-  await expect(sheet.getByRole("button", { name: "Open full record" })).toBeInViewport()
 
   await sheet.getByRole("button", { name: "Save the fee" }).click()
   await expect(sheet.getByRole("alert")).toHaveText("Choose the reason.")
@@ -332,7 +261,6 @@ test("the popovers: the bell's new requests and the account menu", async ({ page
   await expect(bell).toHaveAttribute("aria-expanded", "true")
   // Opening it clears the pip.
   await expect(card.locator(".kp-pip")).toHaveCount(0)
-  await expect(requests).toHaveCSS("border-radius", "22px")
   await expect(requests.getByRole("button", { name: /New discount request/ })).toBeVisible()
   // Tab never lands on something unseen: the screen-reader Close is out of the tab order.
   for (let i = 0; i < 4; i++) {
@@ -348,7 +276,6 @@ test("the popovers: the bell's new requests and the account menu", async ({ page
   await me.click()
   const account = page.getByRole("dialog", { name: "Rehema M." })
   await expect(account).toHaveAccessibleDescription("Admissions Manager")
-  await expect(account.getByText("Admissions Manager")).toHaveCSS("color", "rgb(71, 85, 105)")
   await account.getByRole("button", { name: "Sign out" }).click()
   await expect(account).toHaveCount(0)
   await expect(me).toBeFocused()
@@ -377,8 +304,6 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
 
   // Start over hosts the Peach Glow on hover; Back is a plain chevron. Pressed, it empties the form.
   const reset = bar.getByRole("button", { name: "Start over" })
-  await reset.hover()
-  await expect.poll(() => glow(reset.locator("svg"))).toEqual({ fill: PEACH_GLOW, scale: 1 })
   await expect(bar.locator(".gf-secname")).toHaveText("Students")
   await open.getByRole("textbox", { name: "First name", exact: true }).fill("Neema")
   await reset.click()

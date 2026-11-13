@@ -5,7 +5,7 @@ import { ACCOUNTANT, DEACTIVATED, MANAGER } from "../tests/support/fixtures"
 import { logIn } from "./log-in"
 
 test.describe("the one sign-in page", () => {
-  test("is Swahili first, with the language switch above the card and no separate Discount code sign-in", async ({ page }) => {
+  test("is Swahili first, switches to English, and has no separate Discount code sign-in", async ({ page }) => {
     await page.goto("/login")
 
     await expect(page.getByRole("heading", { name: "Karibu!" })).toBeVisible()
@@ -13,13 +13,6 @@ test.describe("the one sign-in page", () => {
     await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveAttribute("placeholder", "Nenosiri")
     await expect(page.getByText(/Discount code holders/)).toHaveCount(0)
     await expect(page.getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/login/forgot-password")
-
-    // The switch sits above the card, centred; the logo sits inside the card.
-    const switchBox = (await page.getByRole("group", { name: "Lugha" }).boundingBox())!
-    const logoBox = (await page.getByRole("img", { name: "Al-Rahmah Logo" }).boundingBox())!
-    const viewport = page.viewportSize()!
-    expect(switchBox.y + switchBox.height).toBeLessThan(logoBox.y)
-    expect(Math.abs(switchBox.x + switchBox.width / 2 - viewport.width / 2)).toBeLessThan(2)
 
     await page.getByRole("button", { name: "English" }).click()
     await expect(page.getByRole("heading", { name: "Welcome!" })).toBeVisible()

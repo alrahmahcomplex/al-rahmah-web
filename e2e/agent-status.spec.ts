@@ -111,7 +111,13 @@ test.describe("switching an agent off and retiring them", () => {
     await expect(dialog.getByRole("list", { name: "Families not yet Paid" }).getByRole("listitem")).toHaveCount(2)
     const confirm = dialog.getByRole("button", { name: `Retire ${agent.code}` })
     await expect(confirm).toBeDisabled()
-    await dialog.getByLabel("Reason").fill("Has left the school")
+    // The keyboard alone reaches the reason: Tab moves focus down the dialog to it.
+    const reason = dialog.getByLabel("Reason")
+    for (let i = 0; i < 10 && !(await reason.evaluate((el) => el === document.activeElement)); i++) {
+      await page.keyboard.press("Tab")
+    }
+    await expect(reason).toBeFocused()
+    await page.keyboard.type("Has left the school")
     await expect(confirm).toBeEnabled()
     await confirm.click()
 

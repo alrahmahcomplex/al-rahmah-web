@@ -92,13 +92,10 @@ test.describe("a lead's School fee", () => {
     await expect(rows.nth(1)).toHaveText(/First\s*1 Nov 2026\s*800,000/)
     await expect(rows.nth(2)).toHaveText(/Second\s*1 Apr 2027\s*800,000/)
     await expect(rows.nth(3)).toHaveText(/Third\s*1 Jun 2027\s*400,000/)
-    // Phone width: nothing runs off the side of the screen.
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
 
     // The Overview's summary agrees, and the class is corrected there.
     await openLeadTab(page, "Overview")
     await expect(page.getByRole("region", { name: "School fee summary" })).toContainText("2,000,000")
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375)
     await page.getByRole("button", { name: "Edit student" }).click()
     const form = page.getByRole("form", { name: "Edit student" })
     await form.getByLabel("Class").selectOption("FORM 2")

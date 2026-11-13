@@ -14,14 +14,19 @@ import { readFileSync, writeFileSync } from "node:fs";
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
 const mutants = () => read("./mutants.json");
 
+// Two edits to one file build on each other: the second reads what the first
+// left. (The first run read the file afresh for each edit, so only the last
+// edit of t01 was written and t01 planted nothing. Its result is void.)
 function edits(mutant) {
-  return mutant.edits.map(({ file, find, replace }) => {
-    const text = readFileSync(file, "utf8").replace(/\r\n/g, "\n");
+  const files = new Map();
+  for (const { file, find, replace } of mutant.edits) {
+    const text = files.get(file) ?? readFileSync(file, "utf8").replace(/\r\n/g, "\n");
     const count = text.split(find).length - 1;
     if (count !== 1) throw new Error(`${mutant.id}: the text to replace is in ${file} ${count} times, not once:\n${find}`);
     if (find === replace) throw new Error(`${mutant.id}: the replacement is the same text`);
-    return { file, text: text.replace(find, () => replace) };
-  });
+    files.set(file, text.replace(find, () => replace));
+  }
+  return [...files].map(([file, text]) => ({ file, text }));
 }
 
 const [arg] = process.argv.slice(2);

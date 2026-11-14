@@ -24,8 +24,8 @@ export const ROUTE_LOOKS = {
   "/staff/check-in": "legacy",
   "/staff/check-in/new": "legacy",
   "/staff/discounts": "legacy",
-  "/staff/fees": "legacy",
-  "/staff/fees/[year]": "legacy",
+  "/staff/fees": "new",
+  "/staff/fees/[year]": "new",
   "/staff/follow-ups": "legacy",
   "/staff/group-links": "legacy",
   "/staff/interviews": "legacy",
@@ -36,7 +36,7 @@ export const ROUTE_LOOKS = {
   "/staff/reopenings": "new",
   "/staff/reports": "legacy",
   "/staff/roles": "legacy",
-  "/staff/seats": "legacy",
+  "/staff/seats": "new",
 } as const satisfies Record<string, Look>
 
 // How closely a pattern's segment fits: a fixed name beats `[id]`, which

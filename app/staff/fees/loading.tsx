@@ -1,19 +1,14 @@
-import { Bone, HeadingSkeleton, ListSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// Fee schedule: one row per Enrollment year, then New schedule.
+// Fee schedule while it opens: the header, the card of enrollment years, then
+// New schedule.
 export default function Loading() {
   return (
-    <PageSkeleton label="fee schedules">
-      <HeadingSkeleton width="w-40" />
-      <ListSkeleton rows={3} lines={2} />
-      <div className="flex max-w-sm flex-col gap-2">
-        <Bone className="h-5 w-32" />
-        <Bone className="h-4 w-28" />
-        <div className="flex gap-2">
-          <Bone className="h-10 w-28" />
-          <Bone className="h-10 w-24" />
-        </div>
-      </div>
-    </PageSkeleton>
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <span className="sr-only">Loading fee schedules…</span>
+      <SkeletonBlock width={220} height={32} />
+      <SkeletonBlock height={200} shape="card" />
+      <SkeletonBlock height={150} shape="card" />
+    </div>
   )
 }

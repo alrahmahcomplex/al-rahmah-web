@@ -1,9 +1,7 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { forbidden } from "next/navigation"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Card, Note, PageHeader, pageTitle } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { listFeeSchedules } from "@/lib/services/fees"
 import { getSeats } from "@/lib/services/seats"
@@ -11,27 +9,34 @@ import { createClient } from "@/utils/supabase/server"
 
 import { parseScheduleYear } from "../fees/years"
 import { requireStaff } from "../session"
-import { defaultSeatsYear, seatsLine, takenLine } from "./format"
+import { defaultSeatsYear } from "./format"
 import { RankedClass } from "./ranked-class"
+import { SeatsTable } from "./seats-table"
+import { YearTabs } from "./year-tabs"
+
+import "./seats.css"
 
 export const metadata: Metadata = {
-  title: "Seats · Al-Rahmah Complex",
+  title: pageTitle("Seats"),
 }
+
+const yearHref = (year: number) => `/staff/seats?year=${year}`
 
 // How full each class is in a year, and, for each class with more leads
 // holding a Seat priority than seats, its leads ranked so the Admissions
 // Manager can decide who keeps a place. For staff who manage academic years;
-// the counts sit behind payments.view in the database.
+// the counts sit behind payments.view in the database. Drawn in the new
+// shell (#329).
 export default async function SeatsPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
   const staff = await requireStaff()
   if (!staff.permissions.includes("academic_years.manage")) forbidden()
 
   if (!staff.permissions.includes("payments.view")) {
     return (
-      <div className="flex flex-col gap-6">
-        <h1 className="staff-heading">Seats</h1>
-        <p className="text-sm text-slate-700">Seats are shown only to staff who can view payments.</p>
-      </div>
+      <>
+        <PageHeader title="Seats" />
+        <p className="st-text">Seats are shown only to staff who can view payments.</p>
+      </>
     )
   }
 
@@ -44,99 +49,56 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
   const overFull = seats?.ok ? seats.data.filter((entry) => entry.ranked !== null) : []
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="staff-heading">Seats{year !== null && ` ${year}`}</h1>
+    <>
+      <PageHeader title={`Seats${year !== null ? ` ${year}` : ""}`} />
+      <div className="st-stack">
+        {years.length > 0 && (
+          <YearTabs
+            label="Enrollment years"
+            tabs={years.map((each) => ({ label: String(each), href: yearHref(each) }))}
+            current={year === null ? null : yearHref(year)}
+          />
+        )}
 
-      {years.length > 0 && (
-        <nav aria-label="Enrollment years" className="flex flex-wrap gap-2 text-sm">
-          {years.map((each) => (
-            <Link
-              key={each}
-              href={`/staff/seats?year=${each}`}
-              aria-current={each === year ? "page" : undefined}
-              className="rounded-md px-2.5 py-1 ring-1 ring-foreground/10 hover:bg-muted/50 aria-[current=page]:bg-muted aria-[current=page]:font-semibold"
-            >
-              {each}
-            </Link>
-          ))}
-        </nav>
-      )}
+        {!schedules.ok || (seats !== null && !seats.ok) ? (
+          <Note tone="bad" role="alert">
+            The seats could not be loaded. Try again in a moment.
+          </Note>
+        ) : year === null ? (
+          <p className="st-text">
+            {requested === undefined ? "No fee schedule has been set up yet, so there are no seats to count." : "Choose a year from 2000 to 2999."}
+          </p>
+        ) : (
+          seats?.ok && (
+            <>
+              {overFull.length > 0 && (
+                <Card title="Over capacity" titleId="seats-over-capacity">
+                  {overFull.map((entry) => (
+                    <RankedClass
+                      key={`${entry.className}-${entry.dayOrBoarding}`}
+                      entry={entry}
+                      canDecline={staff.permissions.includes("leads.decline")}
+                    />
+                  ))}
+                </Card>
+              )}
 
-      {!schedules.ok || (seats !== null && !seats.ok) ? (
-        <Alert variant="destructive">
-          <AlertDescription>The seats could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
-      ) : year === null ? (
-        <p className="text-sm text-slate-700">
-          {requested === undefined ? "No fee schedule has been set up yet, so there are no seats to count." : "Choose a year from 2000 to 2999."}
-        </p>
-      ) : (
-        seats?.ok && (
-          <>
-            {overFull.length > 0 && (
-              <section aria-labelledby="seats-over-capacity" className="flex flex-col gap-4">
-                <h2 id="seats-over-capacity" className="staff-section-heading">
-                  Over capacity
+              {/* Titled by hand: the table is the region named "Seats by class", so the card is not a second one (axe landmark-unique). */}
+              <Card>
+                <h2 id="seats-by-class" className="kit-card-title">
+                  Seats by class
                 </h2>
-                {overFull.map((entry) => (
-                  <RankedClass
-                    key={`${entry.className}-${entry.dayOrBoarding}`}
-                    entry={entry}
-                    canDecline={staff.permissions.includes("leads.decline")}
-                  />
-                ))}
-              </section>
-            )}
-
-            <section aria-labelledby="seats-by-class" className="flex flex-col gap-2">
-              <h2 id="seats-by-class" className="staff-section-heading">
-                Seats by class
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                An applicant takes a seat once they have a Seat priority. Declined applicants take none; Inactive and Archived applicants keep theirs.
-              </p>
-              <Table aria-label="Seats by class">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Class</TableHead>
-                    <TableHead className="text-right">Seats</TableHead>
-                    <TableHead className="text-right">Taken</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {seats.data.map((entry) => {
-                    const over = entry.seats !== null && entry.taken > entry.seats
-                    const split = takenLine(entry)
-                    return (
-                      <TableRow key={`${entry.className}-${entry.dayOrBoarding}`}>
-                        <TableCell className="font-medium whitespace-normal">
-                          {entry.className} {entry.dayOrBoarding}
-                        </TableCell>
-                        <TableCell
-                          className={
-                            entry.seats === null
-                              ? "text-right whitespace-normal text-muted-foreground"
-                              : "text-right tabular-nums"
-                          }
-                        >
-                          {seatsLine(entry)}
-                        </TableCell>
-                        <TableCell className="text-right whitespace-normal">
-                          <span className={over ? "font-semibold tabular-nums text-destructive" : "tabular-nums"}>
-                            {entry.taken}
-                            {over && " · over capacity"}
-                          </span>
-                          {split && <span className="block text-xs text-muted-foreground">{split}</span>}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </section>
-          </>
-        )
-      )}
-    </div>
+                <p className="kit-card-cap">
+                  An applicant takes a seat once they have a Seat priority. Declined applicants take none; Inactive and Archived applicants keep theirs.
+                </p>
+                <div className="st-body">
+                  <SeatsTable rows={seats.data} />
+                </div>
+              </Card>
+            </>
+          )
+        )}
+      </div>
+    </>
   )
 }

@@ -1,16 +1,16 @@
-import { Bone, CardSkeleton, HeadingSkeleton, PageSkeleton, TableSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// One year's fee schedule: the way back and the heading, the amounts by
-// class, then the academic year and seats.
+// One year's fee schedule while it opens: the way back and the header, the
+// amounts' cards, then the academic year and seats.
 export default function Loading() {
   return (
-    <PageSkeleton label="the fee schedule">
-      <div className="flex flex-col gap-1">
-        <Bone className="h-4 w-24" />
-        <HeadingSkeleton width="w-52" />
-      </div>
-      <TableSkeleton rows={8} cols={4} summary={false} />
-      <CardSkeleton lines={2} />
-    </PageSkeleton>
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <span className="sr-only">Loading the fee schedule…</span>
+      <SkeletonBlock width={80} height={16} />
+      <SkeletonBlock width={280} height={32} />
+      <SkeletonBlock width={130} height={36} shape="pill" />
+      <SkeletonBlock height={280} shape="card" />
+      <SkeletonBlock height={200} shape="card" />
+    </div>
   )
 }

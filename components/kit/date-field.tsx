@@ -242,6 +242,19 @@ function useDayText(value: string | undefined, defaultValue: string, emit: (day:
 const leaves = (event: FocusEvent<HTMLElement>) => !event.currentTarget.contains(event.relatedTarget as Node | null)
 
 /**
+ * Whether leaving should show the line now. Not when focus goes to its own form's submit button:
+ * the line would push the button down between the press and the release, and the click would be
+ * lost. The submit shows the line itself (the invalid event), so nothing is missed.
+ */
+function showsOnLeave(event: FocusEvent<HTMLElement>) {
+  if (!leaves(event)) return false
+  const to = event.relatedTarget
+  const form = (event.target as HTMLInputElement).form
+  const submits = (to instanceof HTMLButtonElement || to instanceof HTMLInputElement) && to.type === "submit"
+  return !(submits && form && (to as HTMLButtonElement).form === form)
+}
+
+/**
  * The date field (prototype version 18): a typed day-first pill (DD/MM/YYYY)
  * with a calendar button that opens our own calendar, never the browser's.
  * "5/9/2026" and a pasted "2026-09-05" tidy to "05/09/2026". Text that is not
@@ -265,7 +278,7 @@ export function DateField({ value, onChange, name, defaultValue = "", words: wor
   })
 
   return (
-    <div className={cn("kit-datef", className)} onBlur={(event) => leaves(event) && setShown(true)}>
+    <div className={cn("kit-datef", className)} onBlur={(event) => showsOnLeave(event) && setShown(true)}>
       <DateBox
         {...props}
         text={date.text}
@@ -362,7 +375,7 @@ export function DateTimeField({ id, value, onChange, name, defaultValue = "", mi
   return (
     <div className={cn("kit-datef", className)}>
       <div role="group" aria-labelledby={props["aria-labelledby"]} className="kit-dt">
-        <div onBlur={(event) => leaves(event) && setDateShown(true)}>
+        <div onBlur={(event) => showsOnLeave(event) && setDateShown(true)}>
           <DateBox
             {...props}
             id={id}
@@ -401,10 +414,10 @@ export function DateTimeField({ id, value, onChange, name, defaultValue = "", mi
             setTimeShown(false)
             emit(date.text, date.day, next, parseTime(next) ?? "")
           }}
-          onBlur={() => {
+          onBlur={(event) => {
             const tidy = parseTime(time)
             if (tidy) setTime(tidy)
-            setTimeShown(true)
+            if (showsOnLeave(event)) setTimeShown(true)
           }}
         />
       </div>

@@ -5,12 +5,11 @@ import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixture
 import { logIn } from "./log-in"
 
 // The shell around every staff page (#225): the grouped sidebar and its rail,
-// and the phone's tab bar with its More sheet.
+// and the phone's tab bar with its More sheet. Home is in the new shell
+// (#323), so each test starts on Applicants, which keeps the old one.
 
 const MANAGER_ENTRIES = [
-  "Today",
-  "Check-in",
-  "Register a student",
+  "Home",
   "Applicants",
   "Interviews",
   "Follow-ups",
@@ -28,6 +27,8 @@ const MANAGER_ENTRIES = [
 async function signIn(page: Page, person: FixtureStaff) {
   await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
+  await page.goto("/staff/applicants")
+  await expect(page.getByRole("heading", { level: 1, name: "Applicants" })).toBeVisible()
 }
 
 const sidebar = (page: Page) => page.getByRole("complementary", { name: "Sidebar" })
@@ -42,25 +43,27 @@ test.describe("on a desktop", () => {
     await signIn(page, MANAGER)
 
     const nav = staffNav(page)
-    for (const group of ["Front desk", "Admissions", "Referrals", "Money", "Admin"]) {
+    for (const group of ["Admissions", "Referrals", "Money", "Admin"]) {
       await expect(nav.getByText(group, { exact: true })).toBeVisible()
     }
     for (const label of MANAGER_ENTRIES) await expect(entry(page, label)).toBeVisible()
+    await expect(nav.getByText("Front desk", { exact: true })).toHaveCount(0)
+    await expect(nav.getByRole("link", { name: /^(Today|Check-in|Register a student)/ })).toHaveCount(0)
 
-    await expect(entry(page, "Today")).toHaveAttribute("aria-current", "page")
-    await expect(page.getByRole("banner")).toContainText("Today")
+    await expect(entry(page, "Applicants")).toHaveAttribute("aria-current", "page")
+    await expect(page.getByRole("banner")).toContainText("Applicants")
     await entry(page, "Staff and roles").click()
     await expect(page).toHaveURL(/\/staff\/roles$/)
     await expect(entry(page, "Staff and roles")).toHaveAttribute("aria-current", "page")
-    await expect(entry(page, "Today")).not.toHaveAttribute("aria-current", "page")
+    await expect(entry(page, "Applicants")).not.toHaveAttribute("aria-current", "page")
     await expect(page.getByRole("banner")).toContainText("Staff and roles")
   })
 
-  test("Admissions Staff see Front desk, Admissions, Referrals and Fee schedule, and no Admin group", async ({ page }) => {
+  test("Admissions Staff see Admissions, Referrals and Fee schedule, and no Admin group", async ({ page }) => {
     await signIn(page, ADMISSIONS)
 
     const nav = staffNav(page)
-    for (const group of ["Front desk", "Admissions", "Referrals", "Money"]) {
+    for (const group of ["Admissions", "Referrals", "Money"]) {
       await expect(nav.getByText(group, { exact: true })).toBeVisible()
     }
     await expect(entry(page, "Fee schedule")).toBeVisible()
@@ -100,28 +103,28 @@ test.describe("on a desktop", () => {
 test.describe("on a phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
 
-  test("a tab bar holds Today, Check-in and Leads, and More opens the rest", async ({ page }) => {
+  test("a tab bar holds Home and Applicants, and More opens the rest", async ({ page }) => {
     await signIn(page, MANAGER)
 
     await expect(sidebar(page)).toBeHidden()
     const tabs = staffNav(page)
-    await expect(tabs.getByRole("link")).toHaveText(["Today", "Check-in", "Applicants"])
-    await expect(tabs.getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page")
+    await expect(tabs.getByRole("link")).toHaveText(["Home", "Applicants"])
+    await expect(tabs.getByRole("link", { name: "Applicants" })).toHaveAttribute("aria-current", "page")
 
     await tabs.getByRole("button", { name: "More" }).click()
     const sheet = page.getByRole("dialog", { name: "More" })
     await expect(sheet).toContainText(`${MANAGER.name} · ${MANAGER.roleName}`)
     const more = sheet.getByRole("navigation", { name: "More" })
-    for (const label of MANAGER_ENTRIES.filter((label) => !["Today", "Check-in", "Applicants"].includes(label))) {
+    for (const label of MANAGER_ENTRIES.filter((label) => !["Home", "Applicants"].includes(label))) {
       await expect(more.getByRole("link", { name: new RegExp(`^${label}`) })).toBeVisible()
     }
-    await expect(more.getByRole("link", { name: /^(Today|Check-in|Applicants)$/ })).toHaveCount(0)
+    await expect(more.getByRole("link", { name: /^(Home|Applicants)$/ })).toHaveCount(0)
     await expect(sheet.getByRole("button", { name: "Sign out" })).toBeVisible()
 
     await more.getByRole("link", { name: "Interviews" }).click()
     await expect(page).toHaveURL(/\/staff\/interviews$/)
     await expect(sheet).toBeHidden()
     await expect(page.getByRole("banner")).toContainText("Interviews")
-    await expect(tabs.getByRole("link", { name: "Today" })).not.toHaveAttribute("aria-current", "page")
+    await expect(tabs.getByRole("link", { name: "Applicants" })).not.toHaveAttribute("aria-current", "page")
   })
 })

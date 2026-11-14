@@ -85,7 +85,7 @@ test.describe("signing in", () => {
     const sidebar = page.getByRole("complementary", { name: "Sidebar" })
     await expect(sidebar.getByText(ACCOUNTANT.name, { exact: true })).toBeVisible()
     await expect(sidebar.getByText(ACCOUNTANT.roleName, { exact: true })).toBeVisible()
-    await expect(page.getByRole("heading", { name: /^Good (morning|afternoon), Test$/ })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible()
 
     await sidebar.getByRole("button", { name: /^Account menu/ }).click()
     await page.getByRole("menuitem", { name: "Sign out" }).click()

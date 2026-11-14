@@ -18,6 +18,9 @@ const nextYear = admissionYears()[1]
 async function signIn(page: Page, person: FixtureStaff) {
   await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
+  // Home is in the new shell, which shows no counts (#323); Applicants keeps the old one.
+  await page.goto("/staff/applicants")
+  await expect(page.getByRole("heading", { level: 1, name: "Applicants" })).toBeVisible()
 }
 
 // A lead from the Admission form, then the same child sent again asking for

@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 import type { LeadImportMark } from "@/lib/services/student-import"
 
-import { initials } from "../../_today/greeting"
+import { initials } from "../../initials"
 import "./lead.css"
 
 // The top of the lead page: who the student is and where the lead stands,

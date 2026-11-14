@@ -15,7 +15,7 @@ import type { ShellItem, ShellPerson } from "./items"
 
 // The tabs along the bottom of a phone, in this order, each only when the
 // staff member may see it. Everything else is behind More.
-const TABS = ["/staff", "/staff/check-in", "/staff/applicants"]
+const TABS = ["/staff", "/staff/applicants"]
 
 // A phone's navigation: the tab bar, and the sheet More opens with the rest of
 // the entries and Sign out.
@@ -69,7 +69,9 @@ export function PhoneNav({ items, current, person }: { items: ShellItem[]; curre
           <nav aria-label="More" className="px-2">
             {groupNav(rest).map((group) => (
               <div key={group.name}>
-                <p className="px-2 pt-3 pb-1 text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">{group.name}</p>
+                {group.name && (
+                  <p className="px-2 pt-3 pb-1 text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase">{group.name}</p>
+                )}
                 <ul>
                   {group.entries.map((item) => (
                     <li key={item.href}>

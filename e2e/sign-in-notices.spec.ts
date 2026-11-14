@@ -1,7 +1,6 @@
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
-import { firstName } from "@/app/staff/_today/greeting"
 
 import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
 import { SUPER_ADMIN } from "../tests/support/fixtures"
@@ -49,7 +48,7 @@ test("a role change by another Manager shows at next sign-in, and Dismiss clears
 
   await signOut(page)
   await signIn(page, person)
-  await expect(page.getByRole("heading", { name: new RegExp(`^Good (morning|afternoon), ${firstName(person.name)}$`) })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible()
   await expect(noticesBox(page)).toHaveCount(0)
 })
 
@@ -74,6 +73,6 @@ test("a staff member nobody else has changed sees no notices", async ({ page }) 
 
   await signIn(page, person)
 
-  await expect(page.getByRole("heading", { name: new RegExp(`^Good (morning|afternoon), ${firstName(person.name)}$`) })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible()
   await expect(noticesBox(page)).toHaveCount(0)
 })

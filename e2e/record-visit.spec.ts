@@ -62,11 +62,12 @@ test.describe("recording the visit of an Applied family", () => {
     )
   })
 
-  test("staff find the seeded Applied lead by its number at check-in and record the visit", async ({ page }) => {
+  test("staff find the seeded Applied lead by its number on Home and record the visit", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await page.goto("/staff/check-in")
-    await page.getByLabel("Admission Number").fill(SEEDED_APPLIED.number)
-    await page.getByRole("button", { name: "Find" }).click()
+    await page.goto("/staff")
+    const bar = page.getByRole("search", { name: "Check in a family" })
+    await bar.getByLabel("Admission Number").fill(SEEDED_APPLIED.number)
+    await bar.getByRole("button", { name: "Find the family" }).click()
 
     await expect(page).toHaveURL(new RegExp(`/staff/applicants/${SEEDED_APPLIED.id}$`))
     await expect(page.getByRole("heading", { name: SEEDED_APPLIED.name, level: 1 })).toBeVisible()

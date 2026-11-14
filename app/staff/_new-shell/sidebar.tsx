@@ -36,9 +36,11 @@ export function SidebarContent({ items, current, folded = false, onChoose, nameR
       </div>
       <nav aria-label="Staff" className="ns-nav">
         {groupNav(items).map((group) => [
-          <p key={group.name} className="ns-group">
-            <span>{group.name}</span>
-          </p>,
+          group.name ? (
+            <p key={group.name} className="ns-group">
+              <span>{group.name}</span>
+            </p>
+          ) : null,
           ...group.entries.map((item) => (
             <Link
               key={item.href}

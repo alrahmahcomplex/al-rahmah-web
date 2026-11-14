@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto"
 import { type Browser, type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
-import { firstName } from "@/app/staff/_today/greeting"
 
 import { inRolledBackTransaction } from "../tests/support/db"
 import { ACCOUNTANT, INVITED, MANAGER, RETIRED_ROLE, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
@@ -128,7 +127,7 @@ test("the Super Admin invites a Manager, who sets a password from the email and 
 
   await expect(invitedPage).toHaveURL(/\/staff$/)
   await expect(
-    invitedPage.getByRole("heading", { name: new RegExp(`^Good (morning|afternoon), ${firstName(invitee.name)}$`) }),
+    invitedPage.getByRole("heading", { name: "Home", level: 1 }),
   ).toBeVisible()
   await expect(invitedPage.getByRole("complementary", { name: "Sidebar" })).toContainText("Admissions Manager")
   await expect(
@@ -251,7 +250,7 @@ test("someone deactivated before accepting is signed out with a message, and sig
   await expect(callout(page)).toHaveText(`Reactivated ${invitee.name}.`)
   await signIn(invitedPage, { ...invitee, password: "invitee-password" } as FixtureStaff)
   await expect(
-    invitedPage.getByRole("heading", { name: new RegExp(`^Good (morning|afternoon), ${firstName(invitee.name)}$`) }),
+    invitedPage.getByRole("heading", { name: "Home", level: 1 }),
   ).toBeVisible()
 })
 

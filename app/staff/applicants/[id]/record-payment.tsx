@@ -258,18 +258,11 @@ function PaymentForm({
             id={id}
             required
             value={type}
-            onChange={(event) => setType(event.target.value as RecordablePaymentType)}
+            onValueChange={(value) => setType(value as RecordablePaymentType)}
             aria-invalid={invalid("type")}
-          >
-            <option value="" disabled>
-              Choose a type
-            </option>
-            {choices.map((choice) => (
-              <option key={choice} value={choice}>
-                {PAYMENT_TYPE_NAMES[choice]}
-              </option>
-            ))}
-          </Select>
+            placeholder="Choose a type"
+            options={choices.map((choice) => ({ value: choice, label: PAYMENT_TYPE_NAMES[choice] }))}
+          />
         )}
       </Field>
       {waived ? (
@@ -301,7 +294,7 @@ function PaymentForm({
             max={today}
             className="max-w-48"
             value={paidOn}
-            onChange={(event) => setPaidOn(event.target.value)}
+            onChange={setPaidOn}
             aria-describedby={describedBy}
             aria-invalid={invalid("paid_on")}
           />

@@ -64,27 +64,24 @@ export function PriorSiblingTick({ leadId, sibling, canEdit }: { leadId: string;
   return (
     <div className="lr-card">
       <div className="flex items-start gap-2 text-sm">
-        <Checkbox
-          id={checkboxId}
-          // Base UI marks a disabled checkbox with data-disabled, not :disabled.
-          className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
-          checked={sibling !== null || editing}
-          disabled={!canEdit || pending}
-          onCheckedChange={toggle}
-        />
-        <span className="flex flex-col gap-0.5">
-          <label htmlFor={checkboxId} className="lr-text">
-            {PRIOR_SIBLING_LABEL}
-          </label>
+        <div className="min-w-0 flex-1">
+          <Checkbox
+            id={checkboxId}
+            checked={sibling !== null || editing}
+            disabled={!canEdit || pending}
+            onCheckedChange={toggle}
+            label={PRIOR_SIBLING_LABEL}
+            hint={sibling || editing ? undefined : PRIOR_SIBLING_HINT}
+          />
+          {/* The chosen sibling is a value, not a hint: its own line, under the label. */}
           {sibling && !editing && (
-            <span className="lr-strong">
+            <p className="lr-tick-value">
               {sibling.name}, {sibling.className}
-            </span>
+            </p>
           )}
-          {!sibling && !editing && <span className="lr-hint">{PRIOR_SIBLING_HINT}</span>}
-        </span>
+        </div>
         {canEdit && sibling && !editing && (
-          <Button variant="ghost" size="small" className="ml-auto" onClick={edit} aria-disabled={pending || undefined}>
+          <Button variant="ghost" size="small" onClick={edit} aria-disabled={pending || undefined}>
             Edit
           </Button>
         )}
@@ -116,17 +113,10 @@ export function PriorSiblingTick({ leadId, sibling, canEdit }: { leadId: string;
                 required
                 value={className}
                 aria-invalid={invalid || undefined}
-                onChange={(event) => setClassName(event.target.value as LeadClass)}
-              >
-                <option value="" disabled>
-                  Choose a class
-                </option>
-                {LEAD_CLASSES.map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </Select>
+                onValueChange={(value) => setClassName(value as LeadClass)}
+                placeholder="Choose a class"
+                options={LEAD_CLASSES.map((choice) => ({ value: choice, label: choice }))}
+              />
             )}
           </Field>
           <div className="lr-acts">

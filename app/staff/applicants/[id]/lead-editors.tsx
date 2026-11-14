@@ -96,16 +96,16 @@ export function Field({
   label: string
   hint?: string
   invalid?: boolean
-  children: (ids: { id: string; describedBy: string | undefined; invalid: boolean }) => React.ReactNode
+  children: (ids: { id: string; labelId: string; describedBy: string | undefined; invalid: boolean }) => React.ReactNode
 }) {
   const id = useId()
   const hintId = `${id}-hint`
   return (
     <div className="lr-field">
-      <label htmlFor={id} className="lr-label">
+      <label id={`${id}-label`} htmlFor={id} className="lr-label">
         {label}
       </label>
-      {children({ id, describedBy: hint ? hintId : undefined, invalid: Boolean(invalid) })}
+      {children({ id, labelId: `${id}-label`, describedBy: hint ? hintId : undefined, invalid: Boolean(invalid) })}
       {hint && (
         <p id={hintId} className="lr-hint">
           {hint}
@@ -249,13 +249,10 @@ function StudentDetailsForm({
           <Select
             id={id}
             value={className}
-            onChange={(event) => setClassName(event.target.value as LeadClass)}
+            onValueChange={(value) => setClassName(value as LeadClass)}
             aria-invalid={invalid || undefined}
-          >
-            {LEAD_CLASSES.map((choice) => (
-              <option key={choice}>{choice}</option>
-            ))}
-          </Select>
+            options={LEAD_CLASSES.map((choice) => ({ value: choice, label: choice }))}
+          />
         )}
       </Field>
       <Field label="Enrollment year" invalid={invalid("enrollment_year")}>
@@ -263,13 +260,10 @@ function StudentDetailsForm({
           <Select
             id={id}
             value={enrollmentYear}
-            onChange={(event) => setEnrollmentYear(event.target.value)}
+            onValueChange={setEnrollmentYear}
             aria-invalid={invalid || undefined}
-          >
-            {yearChoices.map((year) => (
-              <option key={year}>{year}</option>
-            ))}
-          </Select>
+            options={yearChoices.map((year) => ({ value: String(year), label: String(year) }))}
+          />
         )}
       </Field>
       <ChoiceTiles
@@ -306,7 +300,7 @@ function VisitDateForm({ lead, today, onDone }: { lead: Lead; today: string; onD
             required
             max={today}
             value={visitDate}
-            onChange={(event) => setVisitDate(event.target.value)}
+            onChange={setVisitDate}
             aria-describedby={describedBy}
             aria-invalid={refusal?.status === "refused" && refusal.field === "visit_date" ? true : undefined}
           />
@@ -433,12 +427,9 @@ function ContactForm({
           <Select
             id={id}
             value={relationship}
-            onChange={(event) => setRelationship(event.target.value as Relationship)}
-          >
-            {RELATIONSHIPS.map((choice) => (
-              <option key={choice}>{choice}</option>
-            ))}
-          </Select>
+            onValueChange={(value) => setRelationship(value as Relationship)}
+            options={RELATIONSHIPS.map((choice) => ({ value: choice, label: choice }))}
+          />
         )}
       </Field>
       {relationship === "Other" && (

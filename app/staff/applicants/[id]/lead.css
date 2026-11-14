@@ -82,3 +82,6 @@ a.lr-link:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offs
 .lr-label { font-size: 13px; font-weight: 600; color: var(--gf-ink); }
 .lr-hint { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--gf-quiet); }
 .lr-acts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+/* A value under a tick box, such as the chosen sibling: Ink at normal weight,
+   lined up with the label (the 22px box and its 12px gap). */
+.lr-tick-value { margin: 0; padding-left: 34px; font-size: 14.5px; line-height: 1.45; color: var(--gf-ink); }

@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
@@ -45,7 +46,7 @@ test.describe("a lead's history", () => {
 
     await page.getByRole("button", { name: "Edit student" }).click()
     const form = page.getByRole("form", { name: "Edit student" })
-    await form.getByLabel("Class").selectOption("STD 4")
+    await chooseOption(form.getByLabel("Class"), "STD 4")
     await form.getByRole("button", { name: "Save" }).click()
     await expect(page.getByRole("region", { name: "Student" }).getByRole("status")).toHaveText("Student details saved.")
 

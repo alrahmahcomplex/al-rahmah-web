@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption, dayFirst } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { scheduleFollowUp } from "@/lib/services/follow-ups"
@@ -10,7 +11,7 @@ import { createLead } from "@/lib/services/leads"
 import { createThrowawayStaff, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
-import { leadUrl } from "./lead-page"
+import { leadUrl, listOptions } from "./lead-page"
 import { signInOnce } from "./log-in"
 
 // Declining the lead as the outcome of a recorded contact (#94), from the
@@ -65,11 +66,11 @@ test.describe("declining the lead from Record follow-up", () => {
     await expect(record.getByLabel("Next follow-up date")).toHaveCount(0)
     await expect(record).toContainText("This application becomes read-only. Bringing it back needs a Manager's approval.")
     // Only staff who may set the seats see No seat available.
-    const reasons = await record.getByLabel("Declined reason").locator("option").allTextContents()
+    const reasons = await listOptions(record.getByLabel("Declined reason"))
     expect(reasons).toContain("Enrolled elsewhere")
     expect(reasons).not.toContain("No seat available")
 
-    await record.getByLabel("Declined reason").selectOption("Other")
+    await chooseOption(record.getByLabel("Declined reason"), "Other")
     await record.getByRole("button", { name: "Record and decline" }).click()
     await expect(record.getByRole("alert")).toHaveText("Write an explanation for Other.")
 
@@ -102,7 +103,7 @@ test.describe("declining the lead from Record follow-up", () => {
     const record = await openRecord(page)
     await record.getByLabel("Comment").fill("The class is full for this year.")
     await record.locator("label").filter({ hasText: DECLINE_OUTCOME }).click()
-    await record.getByLabel("Declined reason").selectOption("No seat available")
+    await chooseOption(record.getByLabel("Declined reason"), "No seat available")
     await record.getByRole("button", { name: "Record and decline" }).click()
 
     await expect(page.getByRole("region", { name: "This application is Declined" })).toContainText("No seat available")
@@ -117,6 +118,6 @@ test.describe("declining the lead from Record follow-up", () => {
     const record = await openRecord(page)
     await expect(record.getByText(DECLINE_OUTCOME)).toHaveCount(0)
     await expect(record.getByLabel("Declined reason")).toHaveCount(0)
-    await expect(record.getByLabel("Next follow-up date")).toHaveValue(addDays(today, 7))
+    await expect(record.getByLabel("Next follow-up date")).toHaveValue(dayFirst(addDays(today, 7)))
   })
 })

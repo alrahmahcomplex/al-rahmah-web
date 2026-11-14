@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { decideDiscount, requestDiscount } from "@/lib/services/discounts"
@@ -93,7 +94,7 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   await panel.getByRole("button", { name: "Request discount" }).click()
   const form = panel.getByRole("form", { name: "Request discount" })
   await expect(form).toContainText("Write only what the Admissions Manager needs to decide.")
-  await form.getByLabel("Discount").selectOption("Staff child (25% off)")
+  await chooseOption(form.getByLabel("Discount"), "Staff child (25% off)")
   await form.getByLabel("Note for the Manager").fill("Mother teaches Year 3.")
   await form.getByRole("button", { name: "Request discount" }).click()
 
@@ -176,7 +177,7 @@ test("the Accountant records Fee waived on a lead with a granted Qualified orpha
   const section = page.getByRole("region", { name: "School fee" })
   await section.getByRole("button", { name: "Record payment" }).click()
   const form = page.getByRole("form", { name: "Record payment" })
-  await form.getByLabel("Payment type").selectOption("Fee waived")
+  await chooseOption(form.getByLabel("Payment type"), "Fee waived")
   await expect(form.getByLabel("Amount (TZS)")).toHaveCount(0)
   await form.getByRole("button", { name: "Review payment" }).click()
   const review = page.getByRole("region", { name: "Review payment" })

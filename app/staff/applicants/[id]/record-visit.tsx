@@ -118,7 +118,7 @@ function RecordVisitForm({
             required
             max={today}
             value={visitDate}
-            onChange={(event) => setVisitDate(event.target.value)}
+            onChange={setVisitDate}
             aria-describedby={describedBy}
             aria-invalid={refusal?.status === "refused" && refusal.field === "visit_date" ? true : undefined}
           />

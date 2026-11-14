@@ -58,20 +58,20 @@ export function RequestDiscount({ leadId, kinds }: { leadId: string; kinds: read
   return (
     <form aria-label="Request discount" className="lr-form lr-inline" onSubmit={send}>
       {refusal && (
-        <Note tone="bad" role="alert">{refusal}</Note>
+        <Note tone="bad" role="alert">
+          {refusal}
+        </Note>
       )}
       <Field label="Discount">
         {({ id }) => (
-          <Select id={id} required value={kind} onChange={(event) => setKind(event.target.value as DiscountKind)}>
-            <option value="" disabled>
-              Choose a discount
-            </option>
-            {kinds.map((choice) => (
-              <option key={choice} value={choice}>
-                {discountLabel(choice)}
-              </option>
-            ))}
-          </Select>
+          <Select
+            id={id}
+            required
+            value={kind}
+            onValueChange={(value) => setKind(value as DiscountKind)}
+            placeholder="Choose a discount"
+            options={kinds.map((choice) => ({ value: choice, label: discountLabel(choice) }))}
+          />
         )}
       </Field>
       <Field label="Note for the Manager" hint={NOTE_HINT}>

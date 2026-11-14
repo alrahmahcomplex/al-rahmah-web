@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption, dayFirst } from "./kit-parts"
 
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
@@ -105,8 +106,8 @@ test.describe("recording a school-fee payment", () => {
 
     await section.getByRole("button", { name: "Record payment" }).click()
     const form = page.getByRole("form", { name: "Record payment" })
-    await expect(form.getByLabel("Payment date")).toHaveValue(today)
-    await form.getByLabel("Payment type").selectOption("Initial deposit")
+    await expect(form.getByLabel("Payment date")).toHaveValue(dayFirst(today))
+    await chooseOption(form.getByLabel("Payment type"), "Initial deposit")
     await form.getByLabel("Amount (TZS)").fill("850,000")
     await form.getByRole("button", { name: "Review payment" }).click()
 
@@ -152,7 +153,7 @@ test.describe("recording a school-fee payment", () => {
     const section = page.getByRole("region", { name: "School fee" })
     await section.getByRole("button", { name: "Record payment" }).click()
     const form = page.getByRole("form", { name: "Record payment" })
-    await form.getByLabel("Payment type").selectOption("Full payment")
+    await chooseOption(form.getByLabel("Payment type"), "Full payment")
     await form.getByLabel("Amount (TZS)").fill("2000000")
     await form.getByRole("button", { name: "Review payment" }).click()
     await expect(form.getByRole("alert")).toHaveText(

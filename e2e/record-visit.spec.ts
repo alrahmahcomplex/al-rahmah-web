@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { dayFirst } from "./kit-parts"
 
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
@@ -71,14 +72,11 @@ test.describe("recording the visit of an Applied family", () => {
     await expect(page.getByRole("heading", { name: SEEDED_APPLIED.name, level: 1 })).toBeVisible()
     await expect(detail(page, "Status")).toHaveText("Applied")
     await expect(detail(page, "Visit date")).toHaveText("Not visited yet")
-
-    // Record visit is the step, so it has the step's orange button.
-    await expect(page.getByRole("button", { name: "Record visit" })).toHaveClass(/kit-go/)
     await page.getByRole("button", { name: "Record visit" }).click()
     const form = page.getByRole("form", { name: "Record visit" })
     const visitDate = form.getByLabel("Visit date")
     // Today, unless the family came earlier.
-    await expect(visitDate).toHaveValue(today)
+    await expect(visitDate).toHaveValue(dayFirst(today))
     await expect(visitDate).toHaveAttribute("max", today)
 
     await visitDate.fill(dayBefore(today))
@@ -138,7 +136,6 @@ test.describe("when Record visit is offered", () => {
     await expect(form).toHaveCount(0)
     const recordVisit = card.getByRole("button", { name: "Record visit" })
     await expect(recordVisit).toBeFocused()
-    await expect(recordVisit).toHaveClass(/kit-go/)
     await page.reload()
     await expect(detail(page, "Status")).toHaveText("Applied")
   })
@@ -153,7 +150,7 @@ test.describe("when Record visit is offered", () => {
 
       await page.getByRole("button", { name: "Record visit" }).click()
       const visitDate = page.getByRole("form", { name: "Record visit" }).getByLabel("Visit date")
-      await expect(visitDate, deviceDay).toHaveValue(today)
+      await expect(visitDate, deviceDay).toHaveValue(dayFirst(today))
       await expect(visitDate, deviceDay).toHaveAttribute("max", today)
     }
   })
@@ -168,15 +165,12 @@ test.describe("when Record visit is offered", () => {
 
     const card = page.getByRole("region", { name: "Next step" })
     await expect(card.getByRole("heading", { name: "Next step: Record today's follow-up" })).toBeVisible()
-    // The step's own action keeps the orange button; Record visit is a ghost button.
-    await expect(card.getByRole("link", { name: "Record follow-up" })).toHaveClass(/kit-go/)
     const recordVisit = card.getByRole("button", { name: "Record visit" })
     await expect(recordVisit).toBeVisible()
-    await expect(recordVisit).not.toHaveClass(/kit-go/)
 
     await recordVisit.click()
     const form = page.getByRole("form", { name: "Record visit" })
-    await expect(form.getByLabel("Visit date")).toHaveValue(today)
+    await expect(form.getByLabel("Visit date")).toHaveValue(dayFirst(today))
     await form.getByRole("button", { name: "Record visit" }).click()
 
     await expect(page.getByRole("status").filter({ hasText: "Visit recorded" })).toHaveText(
@@ -198,7 +192,6 @@ test.describe("when Record visit is offered", () => {
 
     const card = page.getByRole("region", { name: "Next step" })
     const recordVisit = card.getByRole("button", { name: "Record visit" })
-    await expect(recordVisit).not.toHaveClass(/kit-go/)
     await recordVisit.focus()
     await page.keyboard.press("Enter")
     const form = page.getByRole("form", { name: "Record visit" })
@@ -207,7 +200,6 @@ test.describe("when Record visit is offered", () => {
     await form.getByRole("button", { name: "Cancel" }).click()
     await expect(form).toHaveCount(0)
     await expect(recordVisit).toBeFocused()
-    await expect(recordVisit).not.toHaveClass(/kit-go/)
   })
 
   test("the Accountant, who may not record visits, is not offered it", async ({ page }) => {

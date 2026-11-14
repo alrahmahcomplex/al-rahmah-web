@@ -208,7 +208,7 @@ function ScheduleForm({
             min={today}
             max={addDays(today, 365)}
             value={dueOn}
-            onChange={(event) => setDueOn(event.target.value)}
+            onChange={setDueOn}
             aria-describedby={describedBy}
             aria-invalid={refusal?.field === "due_on" ? true : undefined}
           />
@@ -287,7 +287,7 @@ function ChangeDateForm({
             min={today}
             max={addDays(today, 365)}
             value={dueOn}
-            onChange={(event) => setDueOn(event.target.value)}
+            onChange={setDueOn}
             aria-describedby={describedBy}
             aria-invalid={refusal?.field === "due_on" ? true : undefined}
           />
@@ -454,15 +454,10 @@ function RecordForm({
             <Select
               id={id}
               value={method}
-              onChange={(event) => setMethod(event.target.value)}
+              onValueChange={(value) => setMethod(value)}
               aria-invalid={refusal?.field === "method" ? true : undefined}
-            >
-              {CONTACT_METHODS.map((choice) => (
-                <option key={choice} value={choice}>
-                  {choice}
-                </option>
-              ))}
-            </Select>
+              options={CONTACT_METHODS.map((choice) => ({ value: choice, label: choice }))}
+            />
           )}
         </Field>
         <Field label="Made the contact">
@@ -470,26 +465,22 @@ function RecordForm({
             <Select
               id={id}
               value={contactedBy}
-              onChange={(event) => setContactedBy(event.target.value)}
+              onValueChange={(value) => setContactedBy(value)}
               aria-invalid={refusal?.field === "contacted_by" ? true : undefined}
-            >
-              {choices.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name}
-                </option>
-              ))}
-            </Select>
+              options={choices.map((person) => ({ value: person.id, label: person.name }))}
+            />
           )}
         </Field>
       </div>
       <Field label="When" hint="Tanzania time. Not later than now.">
-        {({ id, describedBy }) => (
+        {({ id, labelId, describedBy }) => (
           <DateTimeField
             id={id}
+            aria-labelledby={labelId}
             required
             max={now}
             value={contactedAt}
-            onChange={(event) => setContactedAt(event.target.value)}
+            onChange={setContactedAt}
             aria-describedby={describedBy}
             aria-invalid={refusal?.field === "contacted_at" ? true : undefined}
           />
@@ -515,16 +506,11 @@ function RecordForm({
               <Select
                 id={id}
                 value={declineReason}
-                onChange={(event) => setDeclineReason(event.target.value as DeclinedReason | "")}
+                onValueChange={(value) => setDeclineReason(value as DeclinedReason | "")}
                 aria-invalid={refusal?.field === "decline_reason" ? true : undefined}
-              >
-                <option value="" disabled>
-                  Choose a reason
-                </option>
-                {declineReasons.map((choice) => (
-                  <option key={choice}>{choice}</option>
-                ))}
-              </Select>
+                placeholder="Choose a reason"
+                options={declineReasons.map((choice) => ({ value: choice, label: choice }))}
+              />
             )}
           </Field>
           <Field
@@ -561,7 +547,7 @@ function RecordForm({
                 min={addDays(today, 1)}
                 max={addDays(today, 365)}
                 value={nextDueOn}
-                onChange={(event) => setNextDueOn(event.target.value)}
+                onChange={setNextDueOn}
                 aria-describedby={describedBy}
                 aria-invalid={refusal?.field === "next_due_on" || refusal?.field === "outcome" ? true : undefined}
               />

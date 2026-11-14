@@ -2,7 +2,6 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 
-import { lookFor } from "@/app/staff/route-looks"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { requestDiscount } from "@/lib/services/discounts"
 import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
@@ -68,9 +67,6 @@ async function checkSheet(page: Page, name: string, file: string) {
   await expect(page.getByRole("dialog")).toHaveCount(0)
 }
 
-// The record turns new only with the kit's form parts swapped in (#358): a
-// screen is never half-converted. Until then this spec has nothing to check.
-test.skip(lookFor("/staff/applicants/1ead") !== "new", "The lead record is still legacy until #358's parts are in")
 
 for (const width of [1280, 390]) {
   test.describe(`at ${width}px`, () => {
@@ -78,7 +74,7 @@ for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 })
     })
 
-    test("every tab passes axe", async ({ page }) => {
+    test("every tab passes axe", { tag: "@nightly" }, async ({ page }) => {
       for (const tab of TABS) {
         await open(page, SUPER_ADMIN, leadUrl(APPLIED, tab))
         expect(await axeProblems(page), tab).toEqual([])
@@ -86,7 +82,7 @@ for (const width of [1280, 390]) {
       }
     })
 
-    test("the More popover and its sheets pass axe", async ({ page }) => {
+    test("the More popover and its sheets pass axe", { tag: "@nightly" }, async ({ page }) => {
       await open(page, SUPER_ADMIN, leadUrl(APPLIED))
       const more = page.getByRole("button", { name: "More actions", exact: true })
 
@@ -104,7 +100,7 @@ for (const width of [1280, 390]) {
       await checkSheet(page, "Decline Imani Arrival", `${width}-sheet-decline`)
     })
 
-    test("the follow-up sheets pass axe", async ({ page }) => {
+    test("the follow-up sheets pass axe", { tag: "@nightly" }, async ({ page }) => {
       await open(page, SUPER_ADMIN, leadUrl(APPLIED, "Follow-ups"))
       const panel = page.getByRole("region", { name: "Follow-ups" })
       await panel.getByRole("button", { name: "Schedule follow-up" }).click()
@@ -113,13 +109,13 @@ for (const width of [1280, 390]) {
       await checkSheet(page, "Record follow-up", `${width}-sheet-record-follow-up`)
     })
 
-    test("Adjust payment passes axe", async ({ page }) => {
+    test("Adjust payment passes axe", { tag: "@nightly" }, async ({ page }) => {
       await open(page, ACCOUNTANT, leadUrl(PAID, "School fee"))
       await page.getByRole("list", { name: "Payments" }).getByRole("button", { name: "Adjust" }).first().click()
       await checkSheet(page, "Adjust payment", `${width}-sheet-adjust-payment`)
     })
 
-    test("Request discount, then Grant and Refuse on the request, pass axe", async ({ page }) => {
+    test("Request discount, then Grant and Refuse on the request, pass axe", { tag: "@nightly" }, async ({ page }) => {
       const lead = await passedLead()
 
       await open(page, ADMISSIONS, leadUrl(lead.id, "Discounts"))
@@ -141,7 +137,7 @@ for (const width of [1280, 390]) {
       await checkSheet(page, `Refuse ${lead.studentName} the discount?`, `${width}-sheet-refuse-discount`)
     })
 
-    test("Approve and Reject on a reopening request pass axe", async ({ page }) => {
+    test("Approve and Reject on a reopening request pass axe", { tag: "@nightly" }, async ({ page }) => {
       await open(page, MANAGER, leadUrl(PENDING_REOPENING))
       const pending = page.getByRole("group", { name: "Pending reopening request" })
       await pending.getByRole("button", { name: "Approve" }).click()

@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
@@ -108,7 +109,7 @@ test("a payment into a full class is recorded through the warning, and Seats ran
   const section = page.getByRole("region", { name: "School fee" })
   await section.getByRole("button", { name: "Record payment" }).click()
   const form = page.getByRole("form", { name: "Record payment" })
-  await form.getByLabel("Payment type").selectOption("Initial deposit")
+  await chooseOption(form.getByLabel("Payment type"), "Initial deposit")
   await form.getByLabel("Amount (TZS)").fill("300,000")
   await form.getByRole("button", { name: "Review payment" }).click()
 

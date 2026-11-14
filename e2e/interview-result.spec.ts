@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { dayFirst } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { registerForInterview } from "@/lib/services/interviews"
@@ -55,7 +56,7 @@ test.describe("recording an interview result", () => {
     // The first recording: the date starts at today in Tanzania.
     await panel(page).getByRole("button", { name: "Record result" }).click()
     const form = panel(page).getByRole("form", { name: "Record result" })
-    await expect(form.getByLabel("Interview date")).toHaveValue(today)
+    await expect(form.getByLabel("Interview date")).toHaveValue(dayFirst(today))
     await form.locator("label").filter({ hasText: "Passed" }).click()
     await form.getByLabel("Score (%)").fill("64.5")
     await form.getByRole("button", { name: "Save result" }).click()

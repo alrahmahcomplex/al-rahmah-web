@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
@@ -98,7 +99,7 @@ test.describe("a lead's School fee", () => {
     await expect(page.getByRole("region", { name: "School fee summary" })).toContainText("2,000,000")
     await page.getByRole("button", { name: "Edit student" }).click()
     const form = page.getByRole("form", { name: "Edit student" })
-    await form.getByLabel("Class").selectOption("FORM 2")
+    await chooseOption(form.getByLabel("Class"), "FORM 2")
     await form.getByRole("button", { name: "Save" }).click()
     await expect(page.getByRole("region", { name: "Student" }).getByRole("status")).toHaveText("Student details saved.")
 

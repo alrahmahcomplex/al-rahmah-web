@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test"
+import { expect, type Locator, type Page } from "@playwright/test"
 
 // The lead page's tabs (#228) and its More menu, for specs that work on it.
 
@@ -55,4 +55,14 @@ export async function moreActions(page: Page): Promise<string[]> {
   await page.keyboard.press("Escape")
   await expect(popover).toHaveCount(0)
   return items.map((item) => item.trim())
+}
+
+/** The options a kit choice list offers, read by opening it as a person does; Escape closes the list only. */
+export async function listOptions(field: Locator): Promise<string[]> {
+  await field.click()
+  const list = field.page().getByRole("listbox")
+  const options = (await list.getByRole("option").allTextContents()).map((text) => text.trim())
+  await field.page().keyboard.press("Escape")
+  await expect(list).toBeHidden()
+  return options
 }

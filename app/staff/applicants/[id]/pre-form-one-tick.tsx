@@ -45,22 +45,14 @@ export function PreFormOneTick({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-start gap-2 text-sm">
-        <Checkbox
-          id={checkboxId}
-          // Base UI marks a disabled checkbox with data-disabled, not :disabled.
-          className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
-          checked={ticked}
-          disabled={!editable || pending}
-          onCheckedChange={toggle}
-        />
-        <span className="flex flex-col gap-0.5">
-          <label htmlFor={checkboxId} className="lr-text">
-            {PRE_FORM_ONE_LABEL}
-          </label>
-          {!ticked && <span className="lr-hint">{PRE_FORM_ONE_HINT}</span>}
-        </span>
-      </div>
+      <Checkbox
+        id={checkboxId}
+        checked={ticked}
+        disabled={!editable || pending}
+        onCheckedChange={toggle}
+        label={PRE_FORM_ONE_LABEL}
+        hint={ticked ? undefined : PRE_FORM_ONE_HINT}
+      />
       {refusal && (
         <Note tone="bad" role="alert">{refusal}</Note>
       )}

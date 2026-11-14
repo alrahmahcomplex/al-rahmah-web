@@ -17,7 +17,7 @@ export const ROUTE_LOOKS = {
   "/staff/agents": "legacy",
   "/staff/agents/import": "legacy",
   "/staff/applicants": "legacy",
-  "/staff/applicants/[id]": "legacy",
+  "/staff/applicants/[id]": "new",
   "/staff/applicants/[id]/history": "legacy",
   "/staff/applicants/[id]/reopen": "legacy",
   "/staff/audit": "legacy",

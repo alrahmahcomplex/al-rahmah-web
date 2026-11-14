@@ -144,20 +144,15 @@ export function DeclineLead({ lead, reasons, open, onOpenChange: setOpen }: Decl
             <Select
               id={reasonId}
               value={reason}
-              onChange={(event) => {
-                setReason(event.target.value as DeclinedReason | "")
+              onValueChange={(value) => {
+                setReason(value as DeclinedReason | "")
                 setMissing(null)
               }}
               aria-invalid={missing === "reason" || undefined}
               aria-describedby={missing === "reason" ? errorId : undefined}
-            >
-              <option value="" disabled>
-                Choose a reason
-              </option>
-              {reasons.map((choice) => (
-                <option key={choice}>{choice}</option>
-              ))}
-            </Select>
+              placeholder="Choose a reason"
+              options={reasons.map((choice) => ({ value: choice, label: choice }))}
+            />
           </div>
           <div className="lr-field">
             <label htmlFor={explanationId} className="lr-label">

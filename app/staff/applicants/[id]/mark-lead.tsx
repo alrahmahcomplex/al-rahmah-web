@@ -96,20 +96,15 @@ export function MarkLead({ lead, mark, open, onOpenChange: setOpen }: MarkLeadPr
           <Select
             id={reasonId}
             value={reason}
-            onChange={(event) => {
-              setReason(event.target.value as ClosureReason | "")
+            onValueChange={(value) => {
+              setReason(value as ClosureReason | "")
               setMissing(false)
             }}
             aria-invalid={missing || undefined}
             aria-describedby={missing ? errorId : undefined}
-          >
-            <option value="" disabled>
-              Choose a reason
-            </option>
-            {CLOSURE_REASONS.map((choice) => (
-              <option key={choice}>{choice}</option>
-            ))}
-          </Select>
+            placeholder="Choose a reason"
+            options={CLOSURE_REASONS.map((choice) => ({ value: choice, label: choice }))}
+          />
         </div>
         <div className="lr-field">
           <label htmlFor={noteId} className="lr-label">

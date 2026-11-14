@@ -234,18 +234,11 @@ function AdjustForm({
               id={id}
               required
               value={reason}
-              onChange={(event) => setReason(event.target.value as AdjustmentReason)}
+              onValueChange={(value) => setReason(value as AdjustmentReason)}
               aria-invalid={invalid("reason")}
-            >
-              <option value="" disabled>
-                Choose a reason
-              </option>
-              {reasons.map((choice) => (
-                <option key={choice} value={choice}>
-                  {choice}
-                </option>
-              ))}
-            </Select>
+              placeholder="Choose a reason"
+              options={reasons.map((choice) => ({ value: choice, label: choice }))}
+            />
           )}
         </Field>
         {voiding ? (
@@ -261,15 +254,10 @@ function AdjustForm({
                   id={id}
                   required
                   value={type}
-                  onChange={(event) => setType(event.target.value as RecordedPaymentType)}
+                  onValueChange={(value) => setType(value as RecordedPaymentType)}
                   aria-invalid={invalid("type")}
-                >
-                  {typeChoices(original.type).map((choice) => (
-                    <option key={choice} value={choice}>
-                      {PAYMENT_TYPE_NAMES[choice]}
-                    </option>
-                  ))}
-                </Select>
+                  options={typeChoices(original.type).map((choice) => ({ value: choice, label: PAYMENT_TYPE_NAMES[choice] }))}
+                />
               )}
             </Field>
             {!waived && (
@@ -297,7 +285,7 @@ function AdjustForm({
                   max={today}
                   className="max-w-48"
                   value={paidOn}
-                  onChange={(event) => setPaidOn(event.target.value)}
+                  onChange={setPaidOn}
                   aria-describedby={describedBy}
                   aria-invalid={invalid("paid_on")}
                 />

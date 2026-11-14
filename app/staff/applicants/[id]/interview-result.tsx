@@ -140,7 +140,7 @@ function ResultForm({
             min={interview.registeredOn}
             max={today}
             value={interviewDate}
-            onChange={(event) => setInterviewDate(event.target.value)}
+            onChange={setInterviewDate}
             aria-describedby={describedBy}
             aria-invalid={invalid("interview_date")}
           />

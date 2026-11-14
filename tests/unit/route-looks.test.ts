@@ -36,8 +36,8 @@ describe("the staff route map", () => {
     expect(Object.keys(ROUTE_LOOKS).filter((pattern) => !pages.has(pattern))).toEqual([])
   })
 
-  it("puts only the kit page and Reopening requests in the new shell (#322)", () => {
-    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual(["/staff/kit", "/staff/reopenings"])
+  it("puts only the kit page, Reopening requests and the lead record in the new shell (#322, #325)", () => {
+    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual(["/staff/applicants/[id]", "/staff/kit", "/staff/reopenings"])
   })
 })
 
@@ -47,6 +47,8 @@ describe("routeFor and lookFor", () => {
     expect(lookFor("/staff")).toBe("legacy")
     expect(lookFor("/staff/kit")).toBe("new")
     expect(lookFor("/staff/reopenings")).toBe("new")
+    expect(lookFor("/staff/applicants/1ead0000-0000-4000-8000-000000000080")).toBe("new")
+    expect(lookFor("/staff/applicants/abc/history")).toBe("legacy")
   })
 
   it("keeps a page and the page beneath it apart", () => {

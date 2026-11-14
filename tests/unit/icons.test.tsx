@@ -10,9 +10,11 @@ import { Illustration } from "@/components/illustrations"
 const SET_2 = [
   "today", "checkin", "register", "applicants", "interviews", "followups", "reapps", "agents", "promo", "groups", "fees",
   "seats", "discounts", "reopen", "reports", "roles", "audit", "search", "bell", "panel", "menu", "back", "right", "check",
-  "plus", "x", "reset", "alert", "info", "phone", "user", "school", "link",
+  "plus", "x", "reset", "alert", "info", "phone", "user", "school", "link", "filter",
 ]
 const FORM_ONLY = ["clock", "globe", "trash"]
+// The form parts' glyphs (#358): one line, no circle.
+const FORM_PARTS = ["down", "calendar", "upload"]
 const UTILITY = ["back", "right", "check", "plus", "x"]
 const names = Object.keys(ICONS) as IconName[]
 
@@ -21,16 +23,16 @@ icon({ detail: <path d="M0 0" /> })
 
 describe("icon registry", () => {
   it("holds set 2 and the Admission form's glyphs, nothing else", () => {
-    expect(names).toEqual([...SET_2, ...FORM_ONLY])
+    expect(names).toEqual([...SET_2, ...FORM_ONLY, ...FORM_PARTS])
   })
 
   it("gives every set 2 icon a circle except the utility glyphs, and the form's glyphs none", () => {
     for (const name of SET_2) expect(Boolean(ICONS[name as IconName].circle), name).toBe(!UTILITY.includes(name))
-    for (const name of FORM_ONLY) expect(ICONS[name as IconName].circle, name).toBeUndefined()
+    for (const name of [...FORM_ONLY, ...FORM_PARTS]) expect(ICONS[name as IconName].circle, name).toBeUndefined()
   })
 
   it("keeps utility glyphs to one line", () => {
-    for (const name of UTILITY) expect(ICONS[name as IconName].detail, name).toBeUndefined()
+    for (const name of [...UTILITY, ...FORM_PARTS]) expect(ICONS[name as IconName].detail, name).toBeUndefined()
   })
 })
 

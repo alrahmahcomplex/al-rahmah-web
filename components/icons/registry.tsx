@@ -210,6 +210,14 @@ export const link = icon({
   circle: { cx: 12, cy: 12, r: 6.5 },
 })
 
+// Version 18 (#358): the funnel of the Filter button. The cone is the main
+// object, the spout the second.
+export const filter = icon({
+  outline: <path d="M3.8 5h16.4l-6.4 7.6h-3.6z" />,
+  detail: <path d="M10.2 12.6v6l3.6 1.8v-7.8" />,
+  circle: { cx: 15.5, cy: 9, r: 6 },
+})
+
 // The Admission form's own glyphs, not in the staff prototype. They keep the
 // exact lines they had in components/guided-form/icons.tsx and have no circle,
 // so they never highlight.
@@ -243,6 +251,30 @@ export const trash = icon({
     </>
   ),
   detail: <path d="M9 7V4h6v3" />,
+})
+
+// The form parts' glyphs (version 18, #358): the choice list's chevron, the
+// date field's calendar button and the file area's upload arrow. One line
+// each and no circle, so they never highlight.
+
+export const down = icon({ outline: <path d="m6 9 6 6 6-6" /> })
+
+export const calendar = icon({
+  outline: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="4.5" />
+      <path d="M8 3v4M16 3v4M3.5 10.5h17" />
+    </>
+  ),
+})
+
+export const upload = icon({
+  outline: (
+    <>
+      <path d="M12 15.5V4.5M7.5 8.5 12 4l4.5 4.5" />
+      <path d="M4.5 14.5v3a2.5 2.5 0 0 0 2.5 2.5h10a2.5 2.5 0 0 0 2.5-2.5v-3" />
+    </>
+  ),
 })
 
 export const ICONS = {
@@ -279,9 +311,13 @@ export const ICONS = {
   user,
   school,
   link,
+  filter,
   clock,
   globe,
   trash,
+  down,
+  calendar,
+  upload,
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof ICONS

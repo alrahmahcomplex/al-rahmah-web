@@ -1,5 +1,6 @@
 import { normalizeDiscountCode } from "@/lib/referral-link"
 import { FORM_NOTICE_VERSION } from "@/lib/referral-notice"
+import { personFullName, studentFullName, type PersonNameParts, type StudentNameParts } from "@/lib/names"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, type NewContact, type NewStudent } from "@/lib/services/leads"
 
@@ -10,8 +11,12 @@ import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, type NewContact, type New
 
 export const MAX_CHILDREN = 8
 
-export type AdmissionParent = NewContact
-export type AdmissionChild = NewStudent
+// A name is sent either in its parts (prototype v38, #400) or in the one box
+// of the live form. With parts, `fullName` is the name they build, in
+// capitals, as the database stores it. The one box goes once #403 moves the
+// page to parts.
+export type AdmissionParent = NewContact & { nameParts?: PersonNameParts }
+export type AdmissionChild = NewStudent & { nameParts?: StudentNameParts }
 
 export type AdmissionForm = {
   // Made by the form when it mounts, kept until a confirmation shows.
@@ -32,7 +37,31 @@ export type ParentField = "contact_name" | "relationship" | "relationship_descri
 export type ChildField = "student_name" | "class_name" | "enrollment_year" | "day_or_boarding" | "duplicate_child"
 export type FormField = ParentField | ChildField | "discount_code" | "children" | "submission_key" | "payload"
 
-export type FieldProblem = { field: FormField; child: number | null }
+// Which name box a `contact_name` or `student_name` problem is about, when
+// the name came in parts.
+export type NamePart =
+  | "first_name"
+  | "father_first"
+  | "father_middle"
+  | "father_last"
+  | "contact_first_name"
+  | "contact_middle_name"
+  | "contact_last_name"
+
+export type FieldProblem = { field: FormField; child: number | null; part?: NamePart }
+
+const PERSON_PARTS = [
+  ["firstName", "contact_first_name"],
+  ["middleName", "contact_middle_name"],
+  ["lastName", "contact_last_name"],
+] as const satisfies readonly (readonly [keyof PersonNameParts, NamePart])[]
+
+const STUDENT_PARTS = [
+  ["firstName", "first_name"],
+  ["fatherFirst", "father_first"],
+  ["fatherMiddle", "father_middle"],
+  ["fatherLast", "father_last"],
+] as const satisfies readonly (readonly [keyof StudentNameParts, NamePart])[]
 
 // The years a parent may pick: this calendar year and next, in Tanzania time.
 // Worked out on the server when the page renders, and again on submit.
@@ -51,7 +80,12 @@ export function childNameKey(name: string): string {
 // the page can name them all at once. The server names only the first.
 export function parentProblems(parent: AdmissionParent): FieldProblem[] {
   const problems: FieldProblem[] = []
-  if (!parent.fullName.trim()) problems.push({ field: "contact_name", child: null })
+  const parts = parent.nameParts
+  if (parts) {
+    for (const [key, part] of PERSON_PARTS) {
+      if (!parts[key].trim()) problems.push({ field: "contact_name", child: null, part })
+    }
+  } else if (!parent.fullName.trim()) problems.push({ field: "contact_name", child: null })
   if (!(RELATIONSHIPS as readonly string[]).includes(parent.relationship)) {
     problems.push({ field: "relationship", child: null })
   } else if (parent.relationship === "Other" && !parent.relationshipDescription?.trim()) {
@@ -72,8 +106,11 @@ export function childrenProblems(children: AdmissionChild[], years: readonly num
   const problems: FieldProblem[] = []
   const seen = new Set<string>()
   for (const [index, child] of children.entries()) {
-    const named = child.fullName.trim() !== ""
-    if (!named) problems.push({ field: "student_name", child: index })
+    const parts = child.nameParts
+    const missing = parts ? STUDENT_PARTS.filter(([key]) => !parts[key].trim()).map(([, part]) => part) : []
+    const named = parts ? missing.length === 0 : child.fullName.trim() !== ""
+    if (parts) for (const part of missing) problems.push({ field: "student_name", child: index, part })
+    else if (!named) problems.push({ field: "student_name", child: index })
     if (!(LEAD_CLASSES as readonly string[]).includes(child.className)) problems.push({ field: "class_name", child: index })
     if (!years.includes(child.enrollmentYear)) problems.push({ field: "enrollment_year", child: index })
     if (!(DAY_OR_BOARDING as readonly string[]).includes(child.dayOrBoarding)) {
@@ -112,6 +149,26 @@ function optionalText(value: unknown): string | undefined | null {
   return text(value)
 }
 
+// A name in its parts, each trimmed, when the object sends any of them; the
+// one box otherwise. Sending both, or a part that isn't text, is `null`.
+function nameOf<K extends string>(
+  value: Record<string, unknown>,
+  keys: readonly K[],
+): { parts: Record<K, string> } | { fullName: string } | null {
+  if (!keys.some((key) => key in value)) {
+    const fullName = text(value.fullName)
+    return fullName === null ? null : { fullName: fullName.trim() }
+  }
+  if ("fullName" in value) return null
+  const parts = {} as Record<K, string>
+  for (const key of keys) {
+    const part = text(value[key])
+    if (part === null) return null
+    parts[key] = part.trim()
+  }
+  return { parts }
+}
+
 // Reads the form the page posted (JSON in the `form` field) into its shape,
 // trimmed, and runs every check. Anything that isn't the shape the page
 // sends is `payload`.
@@ -135,19 +192,20 @@ export function parseAdmissionForm(
   if (!parent || typeof parent !== "object" || !Array.isArray(children)) return { ok: false, error: payload }
 
   const p = parent as Record<string, unknown>
-  const fullName = text(p.fullName)
+  const parentName = nameOf(p, PERSON_PARTS.map(([key]) => key))
   const relationship = text(p.relationship)
   const description = optionalText(p.relationshipDescription)
   const phone = text(p.phone)
   const whatsapp = optionalText(p.whatsapp)
-  if (fullName === null || relationship === null || description === null || phone === null || whatsapp === null) {
+  if (parentName === null || relationship === null || description === null || phone === null || whatsapp === null) {
     return { ok: false, error: payload }
   }
   const cleanParent: AdmissionParent = {
-    fullName: fullName.trim(),
+    fullName: "parts" in parentName ? personFullName(parentName.parts) : parentName.fullName,
     relationship: relationship as AdmissionParent["relationship"],
     phone: phone.trim(),
   }
+  if ("parts" in parentName) cleanParent.nameParts = parentName.parts
   if (relationship === "Other" && description?.trim()) cleanParent.relationshipDescription = description.trim()
   if (whatsapp?.trim()) cleanParent.whatsapp = whatsapp.trim()
 
@@ -156,18 +214,20 @@ export function parseAdmissionForm(
   for (const child of children) {
     if (!child || typeof child !== "object") return { ok: false, error: payload }
     const c = child as Record<string, unknown>
-    const name = text(c.fullName)
+    const name = nameOf(c, STUDENT_PARTS.map(([key]) => key))
     const className = text(c.className)
     const dayOrBoarding = text(c.dayOrBoarding)
     if (name === null || className === null || dayOrBoarding === null || typeof c.enrollmentYear !== "number") {
       return { ok: false, error: payload }
     }
-    cleanChildren.push({
-      fullName: name.trim(),
+    const cleanChild: AdmissionChild = {
+      fullName: "parts" in name ? studentFullName(name.parts) : name.fullName,
       className: className as AdmissionChild["className"],
       enrollmentYear: c.enrollmentYear,
       dayOrBoarding: dayOrBoarding as AdmissionChild["dayOrBoarding"],
-    })
+    }
+    if ("parts" in name) cleanChild.nameParts = name.parts
+    cleanChildren.push(cleanChild)
   }
 
   const problem = parentProblem(cleanParent) ?? childrenProblem(cleanChildren, years)

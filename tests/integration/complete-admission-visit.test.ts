@@ -6,6 +6,7 @@ import { describe, expect, onTestFinished, test, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { fatherFullName, studentFullName } from "@/lib/names";
 import { tanzaniaToday } from "@/lib/school-calendar";
 import { submitAdmissionForm } from "@/lib/services/admission-form";
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees";
@@ -96,13 +97,19 @@ const word = () =>
     .slice(0, 6)
     .padEnd(6, "c")}`;
 
-type Father = { fathersName: string; lastName: string; surname: string };
+type Father = { fatherFirst: string; fatherMiddle: string; fatherLast: string };
 const fatherParts = (): Father => ({
-  fathersName: word(),
-  lastName: word(),
-  surname: word(),
+  fatherFirst: word(),
+  fatherMiddle: word(),
+  fatherLast: word(),
 });
-const nameOf = (f: Father) => `${f.fathersName} ${f.lastName} ${f.surname}`;
+// The father's full name as stored: all three of his names, in capitals.
+const nameOf = (f: Father) =>
+  fatherFullName({ firstName: "", ...f });
+// The student's full name as stored: the student's name and the father's
+// first and last names, in capitals.
+const studentNameOf = (c: { first: string; father: Father }) =>
+  studentFullName({ firstName: c.first, ...c.father });
 
 type FormChild = { first: string; father: Father; className: LeadClass };
 const child = (father: Father, className: LeadClass = "KG 1"): FormChild => ({
@@ -119,9 +126,15 @@ async function applied(
 ) {
   const sent = await submitAdmissionForm(secretClient(), {
     submissionKey: randomUUID(),
-    parent: { fullName: `Form Parent ${word()}`, relationship, phone: phone() },
+    parent: {
+      fullName: "",
+      nameParts: { firstName: "Form", middleName: "Parent", lastName: word() },
+      relationship,
+      phone: phone(),
+    },
     children: children.map((c) => ({
-      fullName: `${c.first} ${nameOf(c.father)}`,
+      fullName: studentNameOf(c),
+      nameParts: { firstName: c.first, ...c.father },
       className: c.className,
       enrollmentYear: year,
       dayOrBoarding: "Day" as const,
@@ -360,7 +373,7 @@ describe("check-in of an Admission form family", () => {
     const students = await completed({
       people: [
         { contactId },
-        { fullName: `Aunt ${word()}`, phone: auntsPhone },
+        { firstName: "Aunt", middleName: "Of", lastName: word(), phone: auntsPhone },
       ],
       students: [
         checkIn(leadIds[0], dear, {
@@ -413,7 +426,7 @@ describe("check-in of an Admission form family", () => {
       guardian_contact_id: contactId,
     });
     expect(r1).toMatchObject({
-      brought_by_name: "Uncle Brought",
+      brought_by_name: "UNCLE BROUGHT",
       custodian_relationship: "Mother",
     });
     expect(r2.guardian_contact_id).not.toBe(contactId);
@@ -501,11 +514,11 @@ describe("check-in of an Admission form family", () => {
   test("a question after a custodian move saves nothing: no new person, no move", async () => {
     const year = await registrationYear();
     const family = {
-      fathersName: "Abdallah",
-      lastName: word(),
-      surname: word(),
+      fatherFirst: "Abdallah",
+      fatherMiddle: word(),
+      fatherLast: word(),
     };
-    const typo = { ...family, fathersName: "Abdalla" };
+    const typo = { ...family, fatherFirst: "Abdalla" };
     const kids = [child(family), child(typo)];
     const { leadIds, contactId } = await applied(kids, year);
     const fathersPhone = phone();
@@ -651,7 +664,7 @@ describe("check-in of an Admission form family", () => {
         },
       },
       student: {
-        fullName: `${kid.first} ${nameOf(kid.father)}`,
+        fullName: studentNameOf(kid).toLowerCase(),
         className: "KG 1",
         enrollmentYear: year,
         dayOrBoarding: "Day",
@@ -756,22 +769,22 @@ describe("check-in of an Admission form family", () => {
     expect(await rowOf(leadIds[0])).toMatchObject({ status: "Visited" });
   });
 
-  test("the four name fields correct the stored name and the father's full name", async () => {
+  test("the name parts correct the stored name and the father's full name", async () => {
     const year = await registrationYear();
     const typed = child(fatherParts());
     const { leadIds, contactId } = await applied([typed], year);
     const corrected = {
       ...typed,
-      father: { ...typed.father, surname: word() },
+      father: { ...typed.father, fatherLast: word() },
     };
     await completed({
       people: [{ contactId }],
       students: [checkIn(leadIds[0], corrected)],
     });
     expect(await rowOf(leadIds[0])).toMatchObject({
-      student_name: `${typed.first} ${nameOf(corrected.father)}`,
+      student_name: studentNameOf(corrected),
       father_full_name: nameOf(corrected.father),
-      father_full_name_source: "derived",
+      father_full_name_source: "entered",
     });
   });
 });
@@ -962,11 +975,11 @@ describe("refusals and questions", () => {
   test("close fathers' names ask one question; a typing mistake answer links them", async () => {
     const year = await registrationYear();
     const family = {
-      fathersName: "Mohamed",
-      lastName: word(),
-      surname: word(),
+      fatherFirst: "Mohamed",
+      fatherMiddle: word(),
+      fatherLast: word(),
     };
-    const typo = { ...family, fathersName: "Mohammed" };
+    const typo = { ...family, fatherFirst: "Mohammed" };
     const [a, b] = [child(family), child(typo)];
     const { leadIds, contactId } = await applied([a, b], year);
     const asked = await complete({
@@ -1057,7 +1070,7 @@ describe("refusals of the call", () => {
         },
       },
       student: {
-        fullName: `${a.first} ${nameOf(a.father)}`,
+        fullName: studentNameOf(a).toLowerCase(),
         className: "KG 1",
         enrollmentYear: year,
         dayOrBoarding: "Day",
@@ -1300,17 +1313,17 @@ describe("app.sibling_defer_contact_recompute", () => {
       {
         lead_id: leadIds[0],
         first_name: kids[0].first,
-        fathers_name: family.fathersName,
-        last_name: family.lastName,
-        surname: family.surname,
+        father_first: family.fatherFirst,
+        father_middle: family.fatherMiddle,
+        father_last: family.fatherLast,
         custodian: { person: 1, father: true },
       },
       {
         lead_id: leadIds[1],
         first_name: kids[1].first,
-        fathers_name: family.fathersName,
-        last_name: family.lastName,
-        surname: family.surname,
+        father_first: family.fatherFirst,
+        father_middle: family.fatherMiddle,
+        father_last: family.fatherLast,
         custodian: { person: 1, father: true },
         sibling_of: { student: 1 },
       },

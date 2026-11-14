@@ -137,6 +137,74 @@ describe("reading the posted Admission form", () => {
   })
 })
 
+describe("names sent in their parts (#400)", () => {
+  const parent = { firstName: " amina ", middleName: "Juma", lastName: "fixture", relationship: "Mother", phone: "0700 000 900" }
+  const child = { firstName: "zawadi", fatherFirst: " Hassan ", fatherMiddle: "Ali", fatherLast: "Mohamed", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }
+
+  it("keeps the parts, trimmed, and builds the full names as the database stores them", () => {
+    expect(parse(form({ parent, children: [child] }))).toEqual({
+      ok: true,
+      data: {
+        submissionKey: KEY,
+        parent: {
+          fullName: "AMINA JUMA FIXTURE",
+          nameParts: { firstName: "amina", middleName: "Juma", lastName: "fixture" },
+          relationship: "Mother",
+          phone: "0700 000 900",
+        },
+        children: [
+          {
+            // The student's name leaves out the father's middle name.
+            fullName: "ZAWADI HASSAN MOHAMED",
+            nameParts: { firstName: "zawadi", fatherFirst: "Hassan", fatherMiddle: "Ali", fatherLast: "Mohamed" },
+            className: "STD 2",
+            enrollmentYear: 2027,
+            dayOrBoarding: "Day",
+          },
+        ],
+      },
+    })
+  })
+
+  it.each([
+    ["firstName", "first_name"],
+    ["fatherFirst", "father_first"],
+    ["fatherMiddle", "father_middle"],
+    ["fatherLast", "father_last"],
+  ])("names the empty %s box of the student", (key, part) => {
+    expect(parse(form({ parent, children: [child, { ...child, firstName: "Other", [key]: "  " }] }))).toEqual({
+      ok: false,
+      error: { field: "student_name", child: 1, part },
+    })
+  })
+
+  it.each([
+    ["firstName", "contact_first_name"],
+    ["middleName", "contact_middle_name"],
+    ["lastName", "contact_last_name"],
+  ])("names the empty %s box of the custodian", (key, part) => {
+    expect(parse(form({ parent: { ...parent, [key]: "" }, children: [child] }))).toEqual({
+      ok: false,
+      error: { field: "contact_name", child: null, part },
+    })
+  })
+
+  it("finds the same child twice by the built name", () => {
+    expect(parse(form({ parent, children: [child, { ...child, fatherMiddle: "Other" }] }))).toEqual({
+      ok: false,
+      error: { field: "duplicate_child", child: 1 },
+    })
+  })
+
+  it.each([
+    ["a part and the one box together", { ...child, fullName: "Zawadi Hassan Mohamed" }],
+    ["a missing part", { ...child, fatherMiddle: undefined }],
+    ["a part that isn't text", { ...child, fatherLast: 7 }],
+  ])("treats %s as an unreadable form", (_, sent) => {
+    expect(parse(form({ parent, children: [sent] }))).toEqual({ ok: false, error: { field: "payload", child: null } })
+  })
+})
+
 describe("admissionContact", () => {
   const form = (phone: unknown) => JSON.stringify({ parent: { phone } })
 

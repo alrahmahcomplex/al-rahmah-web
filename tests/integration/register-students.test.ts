@@ -76,17 +76,18 @@ const phone = () => `068${String(randomInt(0, 10_000_000)).padStart(7, "0")}`
 const word = () => `R${randomUUID().replace(/[^a-f]/g, "").slice(0, 6).padEnd(6, "b")}`
 
 function person(over: Partial<Extract<RegistrationPerson, { phone: string }>> = {}): RegistrationPerson {
-  return { fullName: `Register Parent ${word()}`, phone: phone(), ...over }
+  return { firstName: "Register", middleName: "Parent", lastName: word(), phone: phone(), ...over }
 }
 
-// A father's full name of three words no other test uses: Father's name,
-// Last name and Surname.
-function fatherParts() {
-  return { fathersName: word(), lastName: word(), surname: word() }
+// A father's three names no other test uses.
+type Father = { fatherFirst: string; fatherMiddle: string; fatherLast: string }
+
+function fatherParts(): Father {
+  return { fatherFirst: word(), fatherMiddle: word(), fatherLast: word() }
 }
 
 function student(
-  father: { fathersName: string; lastName: string; surname?: string },
+  father: Father,
   year: number,
   over: Partial<RegistrationStudent> = {},
 ): RegistrationStudent {
@@ -236,8 +237,11 @@ async function enrolled(fatherName: string, year: number): Promise<string> {
   return leadId
 }
 
-const nameOf = (f: { fathersName: string; lastName: string; surname?: string }) =>
-  [f.fathersName, f.lastName, f.surname].filter(Boolean).join(" ")
+// The father's full name as stored: all three of his names, in capitals.
+const nameOf = (f: Father) => [f.fatherFirst, f.fatherMiddle, f.fatherLast].join(" ").toUpperCase()
+// The student's full name as stored: the student's name and the father's
+// first and last names, in capitals.
+const studentNameOf = (s: { firstName: string } & Father) => [s.firstName, s.fatherFirst, s.fatherLast].join(" ").toUpperCase()
 
 describe("one save for the whole form", () => {
   test("three children, two with the same father and a friend's: one group of two where the dearer pays full, and the friend's child alone", async () => {
@@ -268,11 +272,12 @@ describe("one save for the whole form", () => {
     expect(friendsRow.guardian_contact_id).not.toBe((await rowOf(dear.leadId)).guardian_contact_id)
     expect(friendsRow).toMatchObject({ custodian_relationship: "Other", custodian_relationship_description: "Family friend" })
 
-    // The name is the four fields; the father's is the three after the first.
+    // The student's name leaves out the father's middle name; the father's
+    // keeps all three, typed in their boxes (#400).
     const dearRow = await rowOf(dear.leadId)
     expect(dearRow.father_full_name).toBe(nameOf(family))
-    expect(dearRow.father_full_name_source).toBe("derived")
-    expect(dearRow.student_name.endsWith(` ${nameOf(family)}`)).toBe(true)
+    expect(dearRow.father_full_name_source).toBe("entered")
+    expect(dearRow.student_name).toMatch(new RegExp(`^[A-Z]+ ${family.fatherFirst.toUpperCase()} ${family.fatherLast.toUpperCase()}$`))
     expect(dearRow).toMatchObject({ status: "Visited", returning_family_joined: false, previous_school_not_known: true })
   })
 
@@ -282,7 +287,7 @@ describe("one save for the whole form", () => {
     const third = student(fatherParts(), year)
     const onFileAlready = await createLead(await signedIn(ADMISSIONS), {
       guardian: { contact: { fullName: "Already Here", relationship: "Mother", phone: (parent as { phone: string }).phone } },
-      student: { fullName: `${third.firstName} ${nameOf(third)}`, className: "KG 1", enrollmentYear: year, dayOrBoarding: "Day" },
+      student: { fullName: studentNameOf(third).toLowerCase(), className: "KG 1", enrollmentYear: year, dayOrBoarding: "Day" },
       start: { kind: "walk-in", visitDate: yesterday },
     })
     if (!onFileAlready.ok) throw new Error("setup failed")
@@ -313,7 +318,7 @@ describe("one save for the whole form", () => {
     const twice = student(fatherParts(), year)
     expect(
       await register({
-        people: [{ contactId }, { fullName: "Same Phone", phone: knownPhone }],
+        people: [{ contactId }, { firstName: "Same", middleName: "Phone", lastName: "Person", phone: knownPhone }],
         students: [twice, { ...twice, custodian: { person: 2, relationship: "Mother" }, notASibling: true }],
       }),
     ).toMatchObject({ ok: false, error: { kind: "invalid", field: "student_name", student: 2, reason: "repeated_on_form" } })
@@ -422,7 +427,7 @@ describe("one save for the whole form", () => {
       ],
     })
     expect(await rowOf(small.leadId)).toMatchObject({
-      brought_by_name: "Asha Uncle",
+      brought_by_name: "ASHA UNCLE",
       previous_school_name: null,
       previous_school_not_known: false,
     })
@@ -434,10 +439,10 @@ describe("one save for the whole form", () => {
 describe("refusals name the student or person", () => {
   test("a missing field, an unused person, an answer from STD 2 up, and an on-file sibling that is gone or closed", async () => {
     const year = await registrationYear()
-    const without = student(fatherParts(), year, { lastName: " " })
+    const without = student(fatherParts(), year, { fatherMiddle: " " })
     expect(await register({ people: [person()], students: [student(fatherParts(), year), without] })).toMatchObject({
       ok: false,
-      error: { kind: "invalid", field: "last_name", student: 2 },
+      error: { kind: "invalid", field: "father_middle", student: 2 },
     })
     expect(
       await register({ people: [person(), person()], students: [student(fatherParts(), year), student(fatherParts(), year)] }),
@@ -461,7 +466,7 @@ describe("refusals name the student or person", () => {
     const number = phone()
     expect(
       await register({
-        people: [{ fullName: "Someone", phone: number }],
+        people: [{ firstName: "Some", middleName: "One", lastName: "Else", phone: number }],
         students: [student(fatherParts(), year), student(family, year, { siblingOf: { leadId: declined } })],
       }),
     ).toEqual({ ok: false, error: { kind: "lead-closed", student: 2 } })
@@ -481,8 +486,9 @@ describe("questions before saving", () => {
   test("close fathers' names: one question and nothing saved; the typing-mistake answer writes the right spelling", async () => {
     const year = await registrationYear()
     const surname = word()
-    const right = { fathersName: "Mohamed", lastName: "Ali", surname }
-    const typo = { fathersName: "Mohammed", lastName: "Ali", surname }
+    const S = surname.toUpperCase()
+    const right = { fatherFirst: "Mohamed", fatherMiddle: "Ali", fatherLast: surname }
+    const typo = { fatherFirst: "Mohammed", fatherMiddle: "Ali", fatherLast: surname }
     const parent = person()
     // The first is dearer, so the second gets the 10% once they are siblings.
     const first = student(right, year, { className: "FORM 1" })
@@ -494,7 +500,7 @@ describe("questions before saving", () => {
       data: {
         kind: "questions",
         questions: [
-          { kind: "name", student: 2, fatherFullName: `Mohammed Ali ${surname}`, siblingFatherFullName: `Mohamed Ali ${surname}`, siblingStudent: 1 },
+          { kind: "name", student: 2, fatherFullName: `MOHAMMED ALI ${S}`, siblingFatherFullName: `MOHAMED ALI ${S}`, siblingStudent: 1 },
         ],
       },
     })
@@ -502,11 +508,11 @@ describe("questions before saving", () => {
 
     const [one, two] = await created({
       people: [parent],
-      students: [first, { ...second, nameAnswer: { answer: "typo", spelling: `Mohamed Ali ${surname}` } }],
+      students: [first, { ...second, nameAnswer: { answer: "typo", spelling: `MOHAMED ALI ${S}` } }],
     })
     expect(two.sibling).toMatchObject({ basis: "typo_confirmed" })
-    expect(await rowOf(two.leadId)).toMatchObject({ father_full_name: `Mohamed Ali ${surname}`, father_full_name_source: "typo_confirmed" })
-    expect(await rowOf(one.leadId)).toMatchObject({ father_full_name: `Mohamed Ali ${surname}`, father_full_name_source: "derived" })
+    expect(await rowOf(two.leadId)).toMatchObject({ father_full_name: `MOHAMED ALI ${S}`, father_full_name_source: "typo_confirmed" })
+    expect(await rowOf(one.leadId)).toMatchObject({ father_full_name: `MOHAMED ALI ${S}`, father_full_name_source: "entered" })
     expect(await feeOf(two.leadId)).toMatchObject({ discount: SIBLING })
   })
 
@@ -837,7 +843,7 @@ describe("locks", () => {
     )
     const newPhone = phone()
     const input = {
-      people: [{ contactId: knownContact }, { fullName: "Waiting Parent", phone: newPhone }],
+      people: [{ contactId: knownContact }, { firstName: "Waiting", middleName: "For", lastName: "Parent", phone: newPhone }],
       students: [
         student(family, year, { siblingOf: { leadId: a } }),
         student(fatherParts(), year, { custodian: { person: 2, relationship: "Mother" } }),

@@ -1,13 +1,9 @@
 "use client"
 
-import { PencilIcon } from "lucide-react"
 import Link from "next/link"
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, ChoiceTiles, Field as KitField, Note, TextLink, type FieldProps } from "@/components/kit"
 import {
   DAY_OR_BOARDING,
   LEAD_CLASSES,
@@ -21,11 +17,14 @@ import {
 } from "@/lib/services/leads"
 
 import { correctContact, correctStudent, correctVisit } from "./actions"
-import { CardHeading } from "./lead-card"
 import type { CorrectionOutcome } from "./correction-outcome"
+import { DateField, Select } from "./form-controls"
+import { CardHeading } from "./lead-card"
 
-export const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30"
+// A field in a lead form: the kit's compact pill, left-aligned.
+export function Input(props: FieldProps) {
+  return <KitField size="compact" alignStart {...props} />
+}
 
 const LOST_REQUEST: CorrectionOutcome = {
   status: "refused",
@@ -60,7 +59,7 @@ export function useCorrection(onSaved: () => void) {
 
 export function Saved({ message }: { message: string | null }) {
   return (
-    <p role="status" className="text-sm text-emerald-700">
+    <p role="status" className="lr-saved">
       {message}
     </p>
   )
@@ -70,24 +69,24 @@ export function Refusal({ refusal }: { refusal: Unsaved | null }) {
   if (!refusal) return null
   if (refusal.status === "duplicate") {
     return (
-      <Alert variant="destructive" role="alert">
-        <AlertDescription>
-          This change would make the student a duplicate of{" "}
-          <Link href={refusal.href} className="font-mono font-semibold underline">
-            {refusal.admissionNumber}
-          </Link>
-          , which is already on file. Nothing was changed.
-        </AlertDescription>
-      </Alert>
+      <Note tone="bad" role="alert">
+        This change would make the student a duplicate of{" "}
+        <Link href={refusal.href} className="lr-num font-semibold underline">
+          {refusal.admissionNumber}
+        </Link>
+        , which is already on file. Nothing was changed.
+      </Note>
     )
   }
   return (
-    <Alert variant="destructive" role="alert">
-      <AlertDescription>{refusal.message}</AlertDescription>
-    </Alert>
+    <Note tone="bad" role="alert">
+      {refusal.message}
+    </Note>
   )
 }
 
+// A labelled field: the label over the control, then the hint. The control
+// takes the id and the hint's id from `children`.
 export function Field({
   label,
   hint,
@@ -102,11 +101,13 @@ export function Field({
   const id = useId()
   const hintId = `${id}-hint`
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
+    <div className="lr-field">
+      <label htmlFor={id} className="lr-label">
+        {label}
+      </label>
       {children({ id, describedBy: hint ? hintId : undefined, invalid: Boolean(invalid) })}
       {hint && (
-        <p id={hintId} className="text-xs text-muted-foreground">
+        <p id={hintId} className="lr-hint">
           {hint}
         </p>
       )}
@@ -114,13 +115,14 @@ export function Field({
   )
 }
 
-function FormButtons({ pending, onCancel }: { pending: boolean; onCancel: () => void }) {
+// Save and Cancel under a form that opens in place in a card.
+export function FormButtons({ pending, onCancel }: { pending: boolean; onCancel: () => void }) {
   return (
-    <div className="flex gap-2">
-      <Button type="submit" disabled={pending}>
+    <div className="lr-acts">
+      <Button type="submit" size="small" pending={pending}>
         {pending ? "Saving…" : "Save"}
       </Button>
-      <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
+      <Button variant="ghost" size="small" onClick={onCancel} aria-disabled={pending || undefined}>
         Cancel
       </Button>
     </div>
@@ -158,7 +160,7 @@ export function StudentEditor({
   }
 
   return (
-    <section aria-labelledby="lead-student" className="flex flex-col gap-3">
+    <section aria-labelledby="lead-student" className="lr-card">
       <CardHeading
         id="lead-student"
         title="Student"
@@ -173,7 +175,7 @@ export function StudentEditor({
           {children}
           {canCorrectVisit && (
             <div>
-              <Button type="button" variant="outline" size="sm" onClick={() => open("visit")}>
+              <Button variant="ghost" size="small" onClick={() => open("visit")}>
                 Correct Visit date
               </Button>
             </div>
@@ -187,12 +189,11 @@ export function StudentEditor({
 
 // The one Edit in a card's heading. `label` names what it edits for screen
 // readers and tests; the button shows "Edit".
-function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
+export function EditButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <Button type="button" variant="ghost" size="sm" className="text-blue-700" aria-label={label} onClick={onClick}>
-      <PencilIcon aria-hidden="true" />
+    <TextLink aria-label={label} onClick={onClick}>
       Edit
-    </Button>
+    </TextLink>
   )
 }
 
@@ -217,7 +218,7 @@ function StudentDetailsForm({
   return (
     <form
       aria-label="Edit student"
-      className="flex max-w-xl flex-col gap-4"
+      className="lr-form"
       onSubmit={(event) => {
         event.preventDefault()
         save(() =>
@@ -245,9 +246,8 @@ function StudentDetailsForm({
       </Field>
       <Field label="Class" invalid={invalid("class_name")}>
         {({ id, invalid }) => (
-          <select
+          <Select
             id={id}
-            className={SELECT_CLASS}
             value={className}
             onChange={(event) => setClassName(event.target.value as LeadClass)}
             aria-invalid={invalid || undefined}
@@ -255,14 +255,13 @@ function StudentDetailsForm({
             {LEAD_CLASSES.map((choice) => (
               <option key={choice}>{choice}</option>
             ))}
-          </select>
+          </Select>
         )}
       </Field>
       <Field label="Enrollment year" invalid={invalid("enrollment_year")}>
         {({ id, invalid }) => (
-          <select
+          <Select
             id={id}
-            className={SELECT_CLASS}
             value={enrollmentYear}
             onChange={(event) => setEnrollmentYear(event.target.value)}
             aria-invalid={invalid || undefined}
@@ -270,26 +269,17 @@ function StudentDetailsForm({
             {yearChoices.map((year) => (
               <option key={year}>{year}</option>
             ))}
-          </select>
+          </Select>
         )}
       </Field>
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="text-sm font-medium">Day or boarding</legend>
-        <div className="flex gap-4">
-          {DAY_OR_BOARDING.map((choice) => (
-            <label key={choice} className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="day-or-boarding"
-                value={choice}
-                checked={dayOrBoarding === choice}
-                onChange={() => setDayOrBoarding(choice)}
-              />
-              {choice}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <ChoiceTiles
+        name="day-or-boarding"
+        legend={<span className="lr-label">Day or boarding</span>}
+        layout="two"
+        options={DAY_OR_BOARDING.map((choice) => ({ value: choice, label: choice }))}
+        value={dayOrBoarding}
+        onChange={(choice) => setDayOrBoarding(choice as DayOrBoarding)}
+      />
       <FormButtons pending={pending} onCancel={() => onDone(null)} />
     </form>
   )
@@ -302,7 +292,7 @@ function VisitDateForm({ lead, today, onDone }: { lead: Lead; today: string; onD
   return (
     <form
       aria-label="Correct Visit date"
-      className="flex max-w-xl flex-col gap-4"
+      className="lr-form"
       onSubmit={(event) => {
         event.preventDefault()
         save(() => correctVisit(lead.id, visitDate))
@@ -311,9 +301,8 @@ function VisitDateForm({ lead, today, onDone }: { lead: Lead; today: string; onD
       <Refusal refusal={refusal} />
       <Field label="Visit date" hint="The day the family came to campus: today or earlier.">
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             id={id}
-            type="date"
             required
             max={today}
             value={visitDate}
@@ -348,7 +337,7 @@ export function ContactEditor({
   const [saved, setSaved] = useState<string | null>(null)
 
   return (
-    <section aria-labelledby="lead-parent" className="flex flex-col gap-3">
+    <section aria-labelledby="lead-parent" className="lr-card">
       <CardHeading
         id="lead-parent"
         title="Parent or guardian"
@@ -408,7 +397,7 @@ function ContactForm({
   return (
     <form
       aria-label="Edit parent or guardian"
-      className="flex max-w-xl flex-col gap-4"
+      className="lr-form"
       onSubmit={(event) => {
         event.preventDefault()
         save(() =>
@@ -441,16 +430,15 @@ function ContactForm({
       </Field>
       <Field label="Relationship to the student" invalid={invalid("relationship")}>
         {({ id }) => (
-          <select
+          <Select
             id={id}
-            className={SELECT_CLASS}
             value={relationship}
             onChange={(event) => setRelationship(event.target.value as Relationship)}
           >
             {RELATIONSHIPS.map((choice) => (
               <option key={choice}>{choice}</option>
             ))}
-          </select>
+          </Select>
         )}
       </Field>
       {relationship === "Other" && (
@@ -504,21 +492,19 @@ function ContactForm({
         )}
       </Field>
       {shared && (
-        <Alert>
-            <AlertDescription>
-              <p>
-                This parent or guardian is shared with {siblings.length === 1 ? "another child" : `${siblings.length} other children`}.
-                Saving changes their details too:
-              </p>
-              <ul className="mt-1 list-disc pl-5">
-                {siblings.map((child) => (
-                  <li key={child.id}>
-                    {child.studentName} <span className="font-mono">{child.admissionNumber}</span>
-                  </li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
+        <Note>
+          <p className="m-0">
+            This parent or guardian is shared with {siblings.length === 1 ? "another child" : `${siblings.length} other children`}.
+            Saving changes their details too:
+          </p>
+          <ul className="lr-bullets">
+            {siblings.map((child) => (
+              <li key={child.id}>
+                {child.studentName} <span className="lr-num">{child.admissionNumber}</span>
+              </li>
+            ))}
+          </ul>
+        </Note>
       )}
       <FormButtons pending={pending} onCancel={() => onDone(null)} />
     </form>

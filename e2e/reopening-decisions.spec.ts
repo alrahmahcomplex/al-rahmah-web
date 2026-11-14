@@ -65,7 +65,7 @@ test("a Manager approves from the lead, choosing to enrol without a retaken inte
   await dialog.getByRole("button", { name: "Approve and reopen" }).click()
   await expect(dialog.getByRole("alert")).toHaveText("Choose whether the applicant retakes the interview.")
 
-  await dialog.getByLabel("Enrol without a retaken interview").check()
+  await dialog.locator("label").filter({ hasText: "Enrol without a retaken interview" }).click()
   await dialog.getByRole("button", { name: "Approve and reopen" }).click()
   await expect(dialog).toHaveCount(0)
 

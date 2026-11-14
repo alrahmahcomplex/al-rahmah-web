@@ -1,31 +1,41 @@
-import { Bone, CardSkeleton, HeadingSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
+
+import "./lead.css"
 
 // The lead's section tabs: Overview, Interview, School fee, Follow-ups,
 // Discounts.
-const TABS = ["w-16", "w-16", "w-20", "w-20", "w-16"]
+const TABS = [96, 96, 112, 112, 104]
 
-// A lead: the header (the emblem stands where the student's initials will
-// be), the next step, the section tabs and two panels.
+// A lead while it opens: the header (a disc where the student's initials will
+// be, the name, the Admission Number line, History and More), the next step,
+// the section tabs and two cards.
 export default function Loading() {
   return (
-    <PageSkeleton label="the application" className="gap-5">
-      <HeadingSkeleton width="w-56" subline avatar actions={2} />
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border border-l-4 border-l-slate-200 px-4 py-3.5">
-        <div className="flex min-w-0 flex-1 basis-72 flex-col gap-2">
-          <Bone className="h-5 w-56 max-w-full" />
-          <Bone className="h-3.5 w-80 max-w-full" />
+    <div role="status" aria-busy="true" className="lr-page">
+      <span className="sr-only">Loading the application…</span>
+      <div className="lr-head">
+        <div className="lr-head-who">
+          <SkeletonBlock width={48} height={48} shape="pill" />
+          <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+            <SkeletonBlock width={280} height={32} className="max-w-full" />
+            <SkeletonBlock width={360} height={16} className="max-w-full" />
+          </div>
         </div>
-        <Bone className="h-10 w-36" />
+        <div className="lr-head-act">
+          <SkeletonBlock width={104} height={36} shape="pill" />
+          <SkeletonBlock width={80} height={36} shape="pill" />
+        </div>
       </div>
-      <div className="flex h-10 items-center gap-6 border-b px-3">
+      <SkeletonBlock height={96} shape="card" />
+      <div className="flex flex-wrap gap-2">
         {TABS.map((width, index) => (
-          <Bone key={index} className={`h-3.5 ${width}`} />
+          <SkeletonBlock key={index} width={width} height={36} shape="pill" />
         ))}
       </div>
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <CardSkeleton lines={4} />
-        <CardSkeleton lines={3} />
+      <div className="lr-grid">
+        <SkeletonBlock height={220} shape="card" />
+        <SkeletonBlock height={180} shape="card" />
       </div>
-    </PageSkeleton>
+    </div>
   )
 }

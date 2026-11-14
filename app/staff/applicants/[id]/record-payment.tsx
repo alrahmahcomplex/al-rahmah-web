@@ -2,9 +2,7 @@
 
 import { useState, useTransition } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button, Note } from "@/components/kit"
 import { formatDate } from "@/lib/school-calendar"
 import {
   PAYMENT_TYPE_NAMES,
@@ -16,7 +14,8 @@ import {
 
 import { formatShillings } from "../../fees/format"
 import { visitDateToday } from "./actions"
-import { Field, SELECT_CLASS } from "./lead-editors"
+import { DateField, Select } from "./form-controls"
+import { Field, Input, Saved } from "./lead-editors"
 import { previewSchoolFeePayment, recordSchoolFeePayment } from "./payment-actions"
 import { overfillWarning, type PaymentField, type PaymentRefusal } from "./payment-outcome"
 
@@ -83,20 +82,16 @@ export function RecordPayment({
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Button type="button" onClick={open} disabled={opening}>
+        <Button variant="ghost" size="small" onClick={open} pending={opening}>
           {opening ? "Opening…" : "Record payment"}
         </Button>
       </div>
       {unopened && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>The payment form could not open. Check your connection and try again.</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">
+          The payment form could not open. Check your connection and try again.
+        </Note>
       )}
-      {saved && (
-        <p role="status" className="text-sm text-emerald-700">
-          {saved}
-        </p>
-      )}
+      {saved && <Saved message={saved} />}
     </div>
   )
 }
@@ -167,77 +162,79 @@ function PaymentForm({
   }
 
   const refusalAlert = refusal && (
-    <Alert variant="destructive" role="alert">
-      <AlertDescription>{refusal.message}</AlertDescription>
-    </Alert>
+    <Note tone="bad" role="alert">
+      {refusal.message}
+    </Note>
   )
 
   if (reviewed) {
     const { input, preview, requestId } = reviewed
     const warning = overfillWarning(preview)
     return (
-      <section aria-label="Review payment" className="flex max-w-xl flex-col gap-4 rounded-lg p-3 ring-1 ring-foreground/10">
-        <p className="text-sm font-medium text-slate-900">Check this payment before you confirm it. Once recorded, it can&apos;t be changed.</p>
+      <section aria-label="Review payment" className="lr-form lr-inline">
+        <p className="lr-text font-semibold">Check this payment before you confirm it. Once recorded, it can&apos;t be changed.</p>
         {refusalAlert}
         {warning && (
-          <Alert aria-label="Class full" className="border-amber-300 bg-amber-50 text-amber-950">
-            <AlertTitle>Class full</AlertTitle>
-            <AlertDescription className="text-amber-950">{warning}</AlertDescription>
-          </Alert>
+          <div role="alert" aria-label="Class full">
+            <Note tone="wait">
+              <b className="block">Class full</b>
+              {warning}
+            </Note>
+          </div>
         )}
-        <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Payment</dt>
-          <dd className="text-right text-slate-900">
+        <dl className="kit-kv">
+          <dt>Payment</dt>
+          <dd>
             {input.amount === null ? PAYMENT_TYPE_NAMES[input.type] : `${PAYMENT_TYPE_NAMES[input.type]}, TZS ${formatShillings(input.amount)}`}
-            <span className="block text-xs text-muted-foreground">Paid {formatDate(input.paidOn)}</span>
+            <small>Paid {formatDate(input.paidOn)}</small>
           </dd>
           {input.type === "pre_form_one_fee" ? (
             <>
-              <dt className="text-muted-foreground">Pre-Form One paid after</dt>
-              <dd className="text-right tabular-nums text-slate-900">
+              <dt>Pre-Form One paid after</dt>
+              <dd className="kit-num">
                 TZS {formatShillings(preview.preFormOne.paidAfter)}
-                <span className="block text-xs text-muted-foreground">now TZS {formatShillings(preview.preFormOne.paid)}</span>
+                <small>now TZS {formatShillings(preview.preFormOne.paid)}</small>
               </dd>
               {preview.preFormOne.balanceAfter !== null && (
                 <>
-                  <dt className="text-muted-foreground">Pre-Form One balance after</dt>
-                  <dd className="text-right font-medium tabular-nums text-slate-900">
+                  <dt>Pre-Form One balance after</dt>
+                  <dd className="kit-num">
                     TZS {formatShillings(preview.preFormOne.balanceAfter)}
                   </dd>
                 </>
               )}
-              <dt className="text-muted-foreground">School fee</dt>
-              <dd className="text-right text-slate-900">
+              <dt>School fee</dt>
+              <dd>
                 Unchanged
-                <span className="block text-xs text-muted-foreground">
+                <small>
                   Total paid TZS {formatShillings(preview.totalPaid)}, Seat priority {preview.priority ?? "none"}
-                </span>
+                </small>
               </dd>
             </>
           ) : (
             <>
-              <dt className="text-muted-foreground">Total paid after</dt>
-              <dd className="text-right tabular-nums text-slate-900">
+              <dt>Total paid after</dt>
+              <dd className="kit-num">
                 TZS {formatShillings(preview.totalPaidAfter)}
-                <span className="block text-xs text-muted-foreground">now TZS {formatShillings(preview.totalPaid)}</span>
+                <small>now TZS {formatShillings(preview.totalPaid)}</small>
               </dd>
-              <dt className="text-muted-foreground">Balance after</dt>
-              <dd className="text-right font-medium tabular-nums text-slate-900">TZS {formatShillings(preview.balanceAfter)}</dd>
-              <dt className="text-muted-foreground">Seat priority after</dt>
-              <dd className="text-right font-medium text-slate-900">
+              <dt>Balance after</dt>
+              <dd className="kit-num">TZS {formatShillings(preview.balanceAfter)}</dd>
+              <dt>Seat priority after</dt>
+              <dd>
                 {preview.priorityAfter ?? "None"}
-                <span className="block text-xs font-normal text-muted-foreground">
+                <small>
                   {preview.priorityAfter === preview.priority ? "unchanged" : `now ${preview.priority ?? "none"}`}
-                </span>
+                </small>
               </dd>
             </>
           )}
         </dl>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => confirm(input, requestId)} disabled={pending}>
+        <div className="lr-acts">
+          <Button size="small" onClick={() => confirm(input, requestId)} pending={pending}>
             {pending ? "Recording…" : "Confirm payment"}
           </Button>
-          <Button type="button" variant="outline" onClick={() => setReviewed(null)} disabled={pending}>
+          <Button variant="ghost" size="small" onClick={() => setReviewed(null)} aria-disabled={pending || undefined}>
             Change
           </Button>
         </div>
@@ -248,7 +245,7 @@ function PaymentForm({
   return (
     <form
       aria-label="Record payment"
-      className="flex max-w-xl flex-col gap-4"
+      className="lr-form lr-inline"
       onSubmit={(event) => {
         event.preventDefault()
         review()
@@ -257,9 +254,8 @@ function PaymentForm({
       {refusalAlert}
       <Field label="Payment type">
         {({ id }) => (
-          <select
+          <Select
             id={id}
-            className={SELECT_CLASS}
             required
             value={type}
             onChange={(event) => setType(event.target.value as RecordablePaymentType)}
@@ -273,11 +269,11 @@ function PaymentForm({
                 {PAYMENT_TYPE_NAMES[choice]}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </Field>
       {waived ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="lr-quiet">
           Fee waived has no amount. The Qualified orphan discount covers the whole School fee, and recording it makes the applicant Full.
         </p>
       ) : (
@@ -299,9 +295,8 @@ function PaymentForm({
       )}
       <Field label="Payment date" hint="The day the family paid: today or earlier.">
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             id={id}
-            type="date"
             required
             max={today}
             className="max-w-48"
@@ -312,11 +307,11 @@ function PaymentForm({
           />
         )}
       </Field>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={pending}>
+      <div className="lr-acts">
+        <Button type="submit" size="small" pending={pending}>
           {pending ? "Checking…" : "Review payment"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => onDone(null)} disabled={pending}>
+        <Button variant="ghost" size="small" onClick={() => onDone(null)} aria-disabled={pending || undefined}>
           Cancel
         </Button>
       </div>

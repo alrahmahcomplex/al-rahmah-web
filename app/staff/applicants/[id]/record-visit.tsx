@@ -2,11 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button, Note } from "@/components/kit"
 
 import { recordArrival, visitDateToday } from "./actions"
+import { DateField } from "./form-controls"
 import { Field, Refusal, Saved, useCorrection } from "./lead-editors"
 
 // Record visit, in the lead's Next step card, for an Applied family who has
@@ -19,7 +18,7 @@ import { Field, Refusal, Saved, useCorrection } from "./lead-editors"
 // `offer` is "step" when Record visit is the Next step, and gets the step's
 // orange button. It is "secondary" when the lead is still Applied but the
 // step is something else, such as a follow-up that is due: the visit can
-// still be recorded, from an outline button beside the step's own action.
+// still be recorded, from a ghost button beside the step's own action.
 //
 // Opening the form moves focus to its Visit date, and Cancel hands focus
 // back to the Record visit button that opened it (#254), so keyboard and
@@ -65,12 +64,10 @@ export function RecordVisit({ leadId, offer }: { leadId: string; offer: "step" |
   return (
     <>
       <Button
-        type="button"
-        variant={offer === "step" ? "orange" : "outline"}
-        size="lg"
-        className="h-10 px-4"
+        variant={offer === "step" ? "go" : "ghost"}
+        chevron={offer === "step"}
         onClick={open}
-        disabled={opening}
+        pending={opening}
         ref={(button) => {
           if (button && refocus.current) {
             refocus.current = false
@@ -81,9 +78,9 @@ export function RecordVisit({ leadId, offer }: { leadId: string; offer: "step" |
         {opening ? "Opening…" : "Record visit"}
       </Button>
       {unopened && (
-        <Alert variant="destructive" role="alert" className="basis-full">
-          <AlertDescription>Record visit could not open. Check your connection and try again.</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert" className="basis-full">
+          Record visit could not open. Check your connection and try again.
+        </Note>
       )}
     </>
   )
@@ -106,7 +103,7 @@ function RecordVisitForm({
   return (
     <form
       aria-label="Record visit"
-      className="flex max-w-xl basis-full flex-col gap-4 rounded-lg border p-4"
+      className="lr-form lr-inline basis-full"
       onSubmit={(event) => {
         event.preventDefault()
         save(() => recordArrival(leadId, visitDate))
@@ -115,10 +112,9 @@ function RecordVisitForm({
       <Refusal refusal={refusal} />
       <Field label="Visit date" hint="The day the family came to campus: today or earlier.">
         {({ id, describedBy }) => (
-          <Input
+          <DateField
             ref={visitDateRef}
             id={id}
-            type="date"
             required
             max={today}
             value={visitDate}
@@ -128,11 +124,11 @@ function RecordVisitForm({
           />
         )}
       </Field>
-      <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>
+      <div className="lr-acts">
+        <Button type="submit" size="small" pending={pending}>
           {pending ? "Recording…" : "Record visit"}
         </Button>
-        <Button type="button" variant="outline" onClick={() => onDone(null)} disabled={pending}>
+        <Button variant="ghost" size="small" onClick={() => onDone(null)} aria-disabled={pending || undefined}>
           Cancel
         </Button>
       </div>

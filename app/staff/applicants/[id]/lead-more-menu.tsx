@@ -1,17 +1,9 @@
 "use client"
 
-import { EllipsisIcon } from "lucide-react"
-import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useState } from "react"
 
-import { buttonVariants } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Button, ButtonLink, Popover, PopoverClose } from "@/components/kit"
 import type { DeclinedReason, MarkMove } from "@/lib/services/lead-closure"
 import type { LeadStatus } from "@/lib/services/leads"
 
@@ -23,9 +15,10 @@ import { MARK_LABEL } from "./mark-text"
 type MenuLead = { id: string; studentName: string; admissionNumber: string; status: LeadStatus }
 
 // The lead's rare actions, behind More in the header: Decline, Mark inactive,
-// Archive and Request reopening. The page decides which the staff member may
-// use on this lead, by the same rules the panels used; each opens the dialog
-// or page it opened before. Nothing to offer, no More.
+// Archive and Request reopening, in a kit popover as the account menu draws
+// its own. The page decides which the staff member may use on this lead, by
+// the same rules the panels used; each opens the sheet or page it opened
+// before. Nothing to offer, no More.
 export function LeadMoreMenu({
   lead,
   declineReasons,
@@ -51,30 +44,43 @@ export function LeadMoreMenu({
 
   return (
     <>
-      <DropdownMenu>
-        {/* Named apart from the phone tab bar's More. */}
-        <DropdownMenuTrigger className={buttonVariants({ variant: "outline" })} aria-label="More actions">
-          <EllipsisIcon aria-hidden="true" />
-          More
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-44">
+      <Popover
+        size="narrow"
+        trigger={
+          <Button variant="ghost" size="small" aria-label="More actions">
+            More
+          </Button>
+        }
+        title="More actions"
+        closeLabel="Close"
+      >
+        <div className="flex flex-col gap-2">
           {canRequestReopening && (
-            <DropdownMenuItem render={<Link href={`/staff/applicants/${lead.id}/reopen?source=lead`} />}>
+            <ButtonLink href={`/staff/applicants/${lead.id}/reopen?source=lead`} variant="ghost">
               Request reopening
-            </DropdownMenuItem>
+            </ButtonLink>
           )}
           {marks.map((mark) => (
-            <DropdownMenuItem key={mark} onClick={() => setDialog(mark)}>
-              {MARK_LABEL[mark]}
-            </DropdownMenuItem>
+            <PopoverClose
+              key={mark}
+              render={
+                <Button variant="ghost" onClick={() => setDialog(mark)}>
+                  {MARK_LABEL[mark]}
+                </Button>
+              }
+            />
           ))}
           {declineReasons !== null && (
-            <DropdownMenuItem variant="destructive" onClick={() => setDialog("decline")}>
-              Decline
-            </DropdownMenuItem>
+            <PopoverClose
+              render={
+                <Button variant="ghost" onClick={() => setDialog("decline")}>
+                  Decline
+                </Button>
+              }
+            />
           )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </div>
+      </Popover>
       {declineReasons !== null && (
         <DeclineLead lead={lead} reasons={declineReasons} open={dialog === "decline"} onOpenChange={close} />
       )}

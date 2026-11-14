@@ -27,7 +27,7 @@ export function PreFormOneProgramme({
   if (!programme.ticked && programme.paid === 0 && !canEdit) return null
 
   return (
-    <section aria-labelledby="lead-pre-form-one" className="flex flex-col gap-3 rounded-lg p-3 ring-1 ring-foreground/10">
+    <section aria-labelledby="lead-pre-form-one" className="lr-box">
       <h3 id="lead-pre-form-one" className="sr-only">
         Pre-Form One programme
       </h3>
@@ -38,25 +38,25 @@ export function PreFormOneProgramme({
         canClear={canEdit}
       />
       {programme.ticked && !programme.applies && (
-        <p role="note" className="text-sm text-amber-800">
+        <p role="note" className="lr-warn">
           {PRE_FORM_ONE_NOT_APPLYING}
         </p>
       )}
       {(programme.ticked || programme.paid > 0) && (
-        <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">
+        <dl className="kit-kv">
+          <dt>
             Pre-Form One fee
-            <span className="block text-xs">{dayOrBoarding ? `${dayOrBoarding}, no discount` : "No discount"}</span>
+            <small>{dayOrBoarding ? `${dayOrBoarding}, no discount` : "No discount"}</small>
           </dt>
-          <dd className="text-right font-medium tabular-nums text-slate-900">
-            {programme.fee === null ? <span className="font-normal text-muted-foreground">No fee schedule</span> : `TZS ${formatShillings(programme.fee)}`}
+          <dd className="kit-num">
+            {programme.fee === null ? <span className="lr-quiet">No fee schedule</span> : `TZS ${formatShillings(programme.fee)}`}
           </dd>
-          <dt className="text-muted-foreground">Pre-Form One paid</dt>
-          <dd className="text-right tabular-nums text-slate-900">TZS {formatShillings(programme.paid)}</dd>
+          <dt>Pre-Form One paid</dt>
+          <dd className="kit-num">TZS {formatShillings(programme.paid)}</dd>
           {programme.balance !== null && (
             <>
-              <dt className="text-muted-foreground">Pre-Form One balance</dt>
-              <dd className="text-right font-medium tabular-nums text-slate-900">TZS {formatShillings(programme.balance)}</dd>
+              <dt>Pre-Form One balance</dt>
+              <dd className="kit-num">TZS {formatShillings(programme.balance)}</dd>
             </>
           )}
         </dl>

@@ -1,4 +1,4 @@
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Note } from "@/components/kit"
 import { getLeadFamily } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
@@ -21,16 +21,14 @@ export async function FamilySection({
   const family = await getLeadFamily(await createClient(), leadId)
 
   return (
-    <section aria-labelledby="lead-family" className="flex flex-col gap-3">
-      <h2 id="lead-family" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="lead-family" className="lr-card">
+      <h2 id="lead-family" className="kit-card-title">
         Family
       </h2>
       {family.ok ? (
         <FamilyPanel key={leadId} leadId={leadId} studentName={studentName} family={family.data} canEdit={canEdit} />
       ) : (
-        <Alert variant="destructive" className="max-w-xl">
-          <AlertDescription>The Family could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The Family could not be loaded. Try again in a moment.</Note>
       )}
     </section>
   )

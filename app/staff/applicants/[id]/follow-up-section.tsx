@@ -1,5 +1,4 @@
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
+import { Note, Tag } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadFollowUps, listContactStaff, type FollowUp, type FollowUpRecord } from "@/lib/services/follow-ups"
 import { isLeadClosed, type DeclinedReason } from "@/lib/services/lead-closure"
@@ -45,27 +44,25 @@ export async function FollowUpSection({
   const today = tanzaniaToday()
 
   return (
-    <section aria-labelledby="lead-follow-ups" className="flex flex-col gap-3">
-      <h2 id="lead-follow-ups" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="lead-follow-ups" className="lr-card">
+      <h2 id="lead-follow-ups" className="kit-card-title">
         Follow-ups
       </h2>
       {!followUps.ok ? (
-        <Alert variant="destructive" className="max-w-xl">
-          <AlertDescription>The follow-ups could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad">The follow-ups could not be loaded. Try again in a moment.</Note>
       ) : (
-        <div className="flex max-w-xl flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
+        <div className="flex flex-col gap-4">
           {followUps.data.needsDate && (
             // A standing notice, not an announcement: the panel's status
             // messages stay the only live region.
-            <Alert role="note" className="border-amber-300 bg-amber-50 text-amber-950">
-              <AlertTitle>Reopened: set the next follow-up date</AlertTitle>
-            </Alert>
+            <Note tone="wait" role="note">
+              <b>Reopened: set the next follow-up date</b>
+            </Note>
           )}
           {followUps.data.open ? (
             <OpenFollowUp followUp={followUps.data.open} today={today} leadOpen={open} />
           ) : (
-            <p className="text-sm text-muted-foreground">No follow-up scheduled.</p>
+            <p className="lr-quiet">No follow-up scheduled.</p>
           )}
           {open && canRecord && staff && (
             <FollowUpActions
@@ -93,16 +90,16 @@ function OpenFollowUp({ followUp, today, leadOpen }: { followUp: FollowUp; today
   const due = dueLabel(followUp.dueOn, today)
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm text-muted-foreground">{leadOpen ? "Next follow-up" : "Last planned follow-up"}</p>
+      <p className="lr-quiet">{leadOpen ? "Next follow-up" : "Last planned follow-up"}</p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <p className="text-lg font-semibold text-slate-900" aria-label="Follow-up date">
+        <p className="lr-strong lr-num text-lg" aria-label="Follow-up date">
           {formatDate(followUp.dueOn)}
         </p>
         {/* A closed lead is not chased, so its date is neither due nor late. */}
-        {leadOpen && <Badge variant={due.overdue ? "destructive" : "secondary"}>{due.text}</Badge>}
+        {leadOpen && <Tag tone={due.overdue ? "bad" : "line"}>{due.text}</Tag>}
       </div>
-      <p className="text-sm break-words whitespace-pre-line text-slate-900">
-        {followUp.note ?? <span className="text-muted-foreground">No note.</span>}
+      <p className="lr-text lr-pre">
+        {followUp.note ?? <span className="lr-quiet">No note.</span>}
       </p>
     </div>
   )
@@ -114,26 +111,26 @@ function OpenFollowUp({ followUp, today, leadOpen }: { followUp: FollowUp; today
 function Records({ records, followUps }: { records: FollowUpRecord[]; followUps: (FollowUp | null)[] }) {
   const dueOn = new Map(followUps.filter((f) => f !== null).map((f) => [f.id, f.dueOn]))
   return (
-    <div className="flex flex-col gap-2 border-t pt-3">
-      <h3 id="lead-follow-up-records" className="text-xs font-medium text-muted-foreground">
+    <div className="lr-part">
+      <h3 id="lead-follow-up-records" className="lr-sub">
         Contacts
       </h3>
-      <ol aria-labelledby="lead-follow-up-records" className="flex flex-col divide-y">
+      <ol aria-labelledby="lead-follow-up-records" className="lr-list">
         {records.map((record) => (
-          <li key={record.id} className="flex flex-col gap-1 py-2 text-sm first:pt-0 last:pb-0">
+          <li key={record.id} className="flex flex-col gap-1">
             {record.kind === "contact" ? (
               <>
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="font-medium text-slate-900">
+                  <span className="lr-strong">
                     {record.method} by {record.contactedBy?.name ?? "a former staff member"}
                   </span>
-                  {record.followUpId === null && <Badge variant="outline">Unplanned</Badge>}
+                  {record.followUpId === null && <Tag tone="line">Unplanned</Tag>}
                 </p>
                 {record.followUpId && dueOn.get(record.followUpId) && (
-                  <p className="text-xs text-muted-foreground">Planned for {formatDate(dueOn.get(record.followUpId)!)}</p>
+                  <p className="lr-hint">Planned for {formatDate(dueOn.get(record.followUpId)!)}</p>
                 )}
                 {record.contactedAt && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="lr-hint">
                     <time dateTime={record.contactedAt}>{formatContactTime(record.contactedAt)}</time>
                     {enteredLate(record) && (
                       <>
@@ -143,21 +140,21 @@ function Records({ records, followUps }: { records: FollowUpRecord[]; followUps:
                     )}
                   </p>
                 )}
-                <p className="break-words whitespace-pre-line text-slate-900">{record.comment}</p>
+                <p className="lr-text lr-pre">{record.comment}</p>
               </>
             ) : (
               // A follow-up that closed with its lead: the date it was planned
               // for, and when the lead closed.
               <>
                 {record.followUpId && dueOn.get(record.followUpId) && (
-                  <p className="font-medium text-slate-900">Planned for {formatDate(dueOn.get(record.followUpId)!)}</p>
+                  <p className="lr-strong">Planned for {formatDate(dueOn.get(record.followUpId)!)}</p>
                 )}
-                <p className="text-xs text-muted-foreground">
+                <p className="lr-hint">
                   <time dateTime={record.enteredAt}>{formatContactTime(record.enteredAt)}</time>
                 </p>
               </>
             )}
-            <p className="text-xs text-slate-700">
+            <p className="lr-small">
               {recordOutcomeText(record, record.nextFollowUpId ? (dueOn.get(record.nextFollowUpId) ?? null) : null)}
             </p>
           </li>
@@ -174,18 +171,18 @@ function EarlierDates({ earlier, all }: { earlier: FollowUp[]; all: (FollowUp | 
   const moved = earlier.filter((followUp) => replacement.has(followUp.id))
   if (moved.length === 0) return null
   return (
-    <div className="flex flex-col gap-2 border-t pt-3">
-      <h3 className="text-xs font-medium text-muted-foreground">Earlier dates</h3>
-      <ul className="flex flex-col gap-2 text-sm">
+    <div className="lr-part">
+      <h3 className="lr-sub">Earlier dates</h3>
+      <ul className="lr-list">
         {moved.map((followUp) => {
           const next = replacement.get(followUp.id)
           return (
             <li key={followUp.id} className="flex flex-col gap-0.5">
-              <span className="text-slate-900">
-                <span className="line-through decoration-slate-400">{formatDate(followUp.dueOn)}</span>
+              <span className="lr-text">
+                <span className="line-through">{formatDate(followUp.dueOn)}</span>
                 {next && <> moved to {formatDate(next.dueOn)}</>}
               </span>
-              {next?.changeReason && <span className="break-words text-xs text-muted-foreground">Reason: {next.changeReason}</span>}
+              {next?.changeReason && <span className="lr-small break-words">Reason: {next.changeReason}</span>}
             </li>
           )
         })}

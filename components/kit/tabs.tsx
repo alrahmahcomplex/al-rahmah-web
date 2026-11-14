@@ -50,10 +50,15 @@ export function Tabs({
   /** Follows the track inside the nav, such as a Clear search link. */
   children?: ReactNode
 }) {
-  // The pill goes to the clicked tab at once, and back to `current` once the page says where it is.
-  const [clicked, setClicked] = useState<{ href: string; from: string | null } | null>(null)
-  const goingTo = clicked && clicked.from === current ? clicked.href : current
-  const at = tabs.findIndex((tab) => tab.href === goingTo)
+  // The pill goes to the clicked tab at once. Any new `current` (the page arriving, or the
+  // browser's Back) wins over the click.
+  const [clicked, setClicked] = useState<string | null>(null)
+  const [seen, setSeen] = useState(current)
+  if (current !== seen) {
+    setSeen(current)
+    setClicked(null)
+  }
+  const at = tabs.findIndex((tab) => tab.href === (clicked ?? current))
   const links = useRef<(HTMLAnchorElement | null)[]>([])
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -77,10 +82,11 @@ export function Tabs({
             href={tab.href}
             scroll={scroll}
             aria-current={tab.href === current ? "page" : undefined}
+            data-on={i === at ? "" : undefined}
             className="kit-track-tab kit-num"
             onClick={(event) => {
               // A link opened in a new tab leaves this page where it is.
-              if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) setClicked({ href: tab.href, from: current })
+              if (!event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && event.button === 0) setClicked(tab.href)
             }}
           >
             <span>{tab.label}</span>
@@ -160,6 +166,7 @@ export function TabSwitch<V extends string>({
             id={`${base}-tab-${i}`}
             aria-controls={`${base}-panel`}
             aria-selected={i === at}
+            data-on={i === at ? "" : undefined}
             tabIndex={i === at ? 0 : -1}
             className="kit-track-tab kit-num"
             onClick={() => choose(i)}

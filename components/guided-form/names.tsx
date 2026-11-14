@@ -86,6 +86,8 @@ function useNameBoxes<K extends string>(keys: readonly K[], props: Common<Record
     },
     onCompositionEnd: (event: CompositionEvent<HTMLInputElement>) => typed(index, event.currentTarget),
     onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
+      // Enter or Backspace inside a word the keyboard is still composing belongs to the keyboard.
+      if (event.nativeEvent.isComposing || event.keyCode === 229) return
       if (event.key === "Backspace" && !event.currentTarget.value && index > 0) {
         event.preventDefault()
         caretToEnd(refs.current[index - 1])

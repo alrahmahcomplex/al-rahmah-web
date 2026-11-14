@@ -321,3 +321,33 @@ describe("StepSlider, Tooltip and AvatarGroup", () => {
     expect(group).toHaveTextContent("+2")
   })
 })
+
+describe("tabs while a page loads, and a keyboard still composing", () => {
+  const tabs = [
+    { label: "A", href: "/a" },
+    { label: "B", href: "/b" },
+  ]
+  const on = () => screen.getAllByRole("link").filter((l) => l.hasAttribute("data-on")).map((l) => l.textContent)
+
+  it("lights the clicked tab at once, keeps aria-current on the page shown, and follows the browser's Back", () => {
+    const { rerender } = render(<Tabs label="T" tabs={tabs} current="/a" />)
+    fireEvent.click(screen.getByRole("link", { name: "B" }))
+    expect(on()).toEqual(["B"])
+    expect(screen.getByRole("link", { name: "A" })).toHaveAttribute("aria-current", "page")
+    rerender(<Tabs label="T" tabs={tabs} current="/b" />)
+    expect(on()).toEqual(["B"])
+    rerender(<Tabs label="T" tabs={tabs} current="/a" />)
+    expect(on()).toEqual(["A"])
+    expect(screen.getByRole("link", { name: "A" })).toHaveAttribute("aria-current", "page")
+  })
+
+  it("leaves Enter and Backspace to a keyboard that is still composing", () => {
+    render(<PersonNameBoxes labels={LABELS} />)
+    box("Middle name").focus()
+    fireEvent.keyDown(box("Middle name"), { key: "Enter", isComposing: true })
+    fireEvent.keyDown(box("Middle name"), { key: "Backspace", keyCode: 229 })
+    expect(box("Middle name")).toHaveFocus()
+    fireEvent.keyDown(box("Middle name"), { key: "Enter" })
+    expect(box("Last name")).toHaveFocus()
+  })
+})

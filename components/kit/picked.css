@@ -23,7 +23,8 @@
   transition: color var(--gf-t-med);
 }
 .kit-track-tab > span { overflow: hidden; text-overflow: ellipsis; }
-.kit-track-tab[aria-current="page"], .kit-track-tab[aria-selected="true"] { color: var(--gf-paper); }
+/* The text follows the pill, which can be ahead of aria-current while a page loads. */
+.kit-track-tab[data-on] { color: var(--gf-paper); }
 .kit-tabpanel { margin-top: 14px; }
 .kit-tabpanel:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 4px; border-radius: 14px; }
 

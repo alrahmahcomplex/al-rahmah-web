@@ -1,5 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 
+import { Client } from "pg";
+
 import { describe, expect, onTestFinished, test, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -1390,3 +1392,271 @@ describe("app.sibling_defer_contact_recompute", () => {
   });
 });
 
+// A child linked before check-in (#378 and the guards for it).
+describe("a child linked before check-in", () => {
+  // Before check-in, staff link the second child to the first with
+  // different fathers' names and raise a Sibling request.
+  async function linkedWithRequest() {
+    const year = await registrationYear();
+    const [a, b] = [child(fatherParts()), child(fatherParts())];
+    const { leadIds, contactId } = await applied([a, b], year);
+    const admissions = await signedIn(ADMISSIONS);
+    const linked = await linkSibling(admissions, {
+      leadId: leadIds[1],
+      siblingOfLeadId: leadIds[0],
+      siblingFatherFullName: nameOf(a.father),
+    });
+    expect(linked).toMatchObject({
+      ok: true,
+      data: { basis: "request_needed" },
+    });
+    const requested = await requestSiblingDiscount(admissions, {
+      leadId: leadIds[1],
+      note: "Proof to come",
+      requestId: randomUUID(),
+    });
+    if (!requested.ok)
+      throw new Error(`request failed: ${JSON.stringify(requested.error)}`);
+    return { a, b, leadIds, contactId, requestId: requested.data };
+  }
+
+  async function pendingRequests(leadId: string) {
+    return inRolledBackTransaction(async (sql) =>
+      (
+        await sql.query<{ id: string }>(
+          "select id from public.discount_requests where lead_id = $1 and kind = 'sibling' and state = 'pending'",
+          [leadId],
+        )
+      ).rows.map((r) => r.id),
+    );
+  }
+
+  test("sending its Sibling of again keeps its pending request, asks nothing, and checks the family in", async () => {
+    const { a, b, leadIds, contactId, requestId } = await linkedWithRequest();
+    const students = await completed({
+      people: [{ contactId }],
+      students: [
+        checkIn(leadIds[0], a),
+        checkIn(leadIds[1], b, { siblingOf: { student: 1 } }),
+      ],
+    });
+    expect(students[1].sibling).toMatchObject({
+      basis: "request_needed",
+      requestId,
+    });
+    expect(await pendingRequests(leadIds[1])).toEqual([requestId]);
+    for (const id of leadIds)
+      expect(await rowOf(id)).toMatchObject({ status: "Visited" });
+  });
+
+  test("a note sent with it again raises no second request", async () => {
+    const { a, b, leadIds, contactId, requestId } = await linkedWithRequest();
+    const students = await completed({
+      people: [{ contactId }],
+      students: [
+        checkIn(leadIds[0], a),
+        checkIn(leadIds[1], b, {
+          siblingOf: { student: 1 },
+          requestNote: "Birth certificates",
+          requestId: randomUUID(),
+        }),
+      ],
+    });
+    expect(students[1].sibling).toMatchObject({
+      basis: "request_needed",
+      requestId,
+    });
+    expect(await pendingRequests(leadIds[1])).toEqual([requestId]);
+  });
+
+  test("Not a sibling is refused for it (already_linked), and nothing is saved", async () => {
+    const { a, b, leadIds, contactId } = await linkedWithRequest();
+    expect(
+      await complete({
+        people: [{ contactId }],
+        students: [
+          checkIn(leadIds[0], a),
+          checkIn(leadIds[1], b, { notASibling: true }),
+        ],
+      }),
+    ).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid",
+        field: "sibling_of",
+        student: 2,
+        person: undefined,
+        reason: "already_linked",
+      },
+    });
+    for (const id of leadIds) expect((await rowOf(id)).status).toBe("Applied");
+  });
+
+  test("its father's name cannot change at check-in while it counts by that name (linked_member)", async () => {
+    const year = await registrationYear();
+    const family = fatherParts();
+    const [a, b] = [child(family), child(family)];
+    const { leadIds, contactId } = await applied([a, b], year);
+    const linked = await linkSibling(await signedIn(ADMISSIONS), {
+      leadId: leadIds[1],
+      siblingOfLeadId: leadIds[0],
+      siblingFatherFullName: nameOf(family),
+    });
+    expect(linked).toMatchObject({ ok: true, data: { basis: "matched" } });
+    const renamed = { ...b, father: fatherParts() };
+    expect(
+      await complete({
+        people: [{ contactId }],
+        students: [checkIn(leadIds[0], a), checkIn(leadIds[1], renamed)],
+      }),
+    ).toEqual({
+      ok: false,
+      error: {
+        kind: "invalid",
+        field: "fathers_name",
+        student: 2,
+        person: undefined,
+        reason: "linked_member",
+      },
+    });
+    expect(await rowOf(leadIds[1])).toMatchObject({
+      status: "Applied",
+      father_full_name: nameOf(family),
+    });
+  });
+});
+
+// Two check-ins on one group at once, on two connections.
+describe("two check-ins on one group at the same time", () => {
+  async function staffSession(userId: string) {
+    const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL });
+    await sql.connect();
+    await sql.query("begin");
+    await sql.query("set local track_functions = 'all'");
+    await sql.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: userId, role: "authenticated" }),
+    ]);
+    await sql.query("set local role authenticated");
+    return sql;
+  }
+
+  const recomputes = async (sql: Client) =>
+    (
+      await sql.query<{ calls: number }>(
+        `select coalesce(sum(calls), 0)::int as calls from pg_stat_xact_user_functions
+         where schemaname = 'public' and funcname = 'recompute_sibling_group'`,
+      )
+    ).rows[0].calls;
+
+  test("neither deadlocks, the second waits for the first, each recomputes the group once, and one full payer stays", async () => {
+    const year = await registrationYear();
+    const family = fatherParts();
+    // On file: a checked-in group of two, the older one paying full.
+    const [e, e2] = [child(family, "KG 2"), child(family)];
+    const other = await applied([e, e2], year);
+    const [, inGroup] = await completed({
+      people: [{ contactId: other.contactId }],
+      students: [
+        checkIn(other.leadIds[0], e),
+        checkIn(other.leadIds[1], e2, { siblingOf: { student: 1 } }),
+      ],
+    });
+    const group = inGroup.sibling!.groupId;
+    expect(await fullPayerOf(group)).toBe(other.leadIds[0]);
+
+    // Two more forms of one child each, both Sibling of the child paying full.
+    const [x, y] = [child(family), child(family)];
+    const first = await applied([x], year);
+    const second = await applied([y], year);
+    const staffUser = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query<{ user_id: string }>(
+            "select user_id from public.staff_members where email = $1",
+            [ADMISSIONS.email],
+          )
+        ).rows[0].user_id,
+    );
+    const payload = (leadId: string, c: FormChild) =>
+      JSON.stringify([
+        {
+          lead_id: leadId,
+          first_name: c.first,
+          fathers_name: c.father.fathersName,
+          last_name: c.father.lastName,
+          surname: c.father.surname,
+          custodian: { person: 1, relationship: "Mother" },
+          sibling_of: { lead_id: other.leadIds[0] },
+        },
+      ]);
+    const call =
+      "select public.complete_admission_visit($1::date, $2::jsonb, $3::jsonb) as r";
+
+    const one = await staffSession(staffUser);
+    const two = await staffSession(staffUser);
+    try {
+      const firstResult = await one.query<{ r: { result: string } }>(call, [
+        yesterday,
+        JSON.stringify([{ contact_id: first.contactId }]),
+        payload(first.leadIds[0], x),
+      ]);
+      expect(firstResult.rows[0].r.result).toBe("completed");
+
+      // The second starts while the first still holds its locks.
+      const twoPid = (
+        await two.query<{ pid: number }>("select pg_backend_pid() as pid")
+      ).rows[0].pid;
+      const secondCall = two.query<{ r: { result: string } }>(call, [
+        yesterday,
+        JSON.stringify([{ contact_id: second.contactId }]),
+        payload(second.leadIds[0], y),
+      ]);
+      for (let tries = 0; ; tries++) {
+        const waiting = await inRolledBackTransaction(
+          async (sql) =>
+            (
+              await sql.query<{ n: number }>(
+                "select count(*)::int as n from pg_locks where pid = $1 and not granted",
+                [twoPid],
+              )
+            ).rows[0].n,
+        );
+        if (waiting > 0) break;
+        if (tries > 100)
+          throw new Error("the second check-in never waited for the first");
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      expect(await recomputes(one)).toBe(1);
+      await one.query("reset role");
+      await one.query("commit");
+
+      const secondResult = await secondCall;
+      expect(secondResult.rows[0].r.result).toBe("completed");
+      expect(await recomputes(two)).toBe(1);
+      await two.query("reset role");
+      await two.query("commit");
+    } finally {
+      await one.query("rollback").catch(() => {});
+      await two.query("rollback").catch(() => {});
+      await one.end();
+      await two.end();
+    }
+
+    for (const id of [first.leadIds[0], second.leadIds[0]])
+      expect(await membershipOf(id)).toMatchObject({
+        group_id: group,
+        basis: "matched",
+      });
+    // The family already holds the older child's invoice at full: it stays the full payer.
+    expect(await fullPayerOf(group)).toBe(other.leadIds[0]);
+    expect((await feeOf(other.leadIds[0])).discount?.kind).not.toBe("sibling");
+    for (const id of [other.leadIds[1], first.leadIds[0], second.leadIds[0]])
+      expect(await feeOf(id)).toMatchObject({ discount: SIBLING });
+    // Nothing held back by either call was lost.
+    await expectNothingLeftToRecompute(
+      [group],
+      [...other.leadIds, first.leadIds[0], second.leadIds[0]],
+    );
+  });
+});

@@ -9,6 +9,10 @@ const KINDS = ["strip", "strip", "dot", "tri", "wave", "wave", "curl", "square"]
 type Kind = (typeof KINDS)[number]
 // The tick ends 800ms after the mark appears; this fires the burst if its animationend never comes.
 const FALLBACK_MS = 1000
+// One frame at 60Hz, the rate the prototype's per-frame numbers assume; a step never counts as more
+// than three of them, so a tab coming back from the background does not jump the pieces off screen.
+const FRAME_MS = 1000 / 60
+const MAX_STEP = 3
 
 type Piece = {
   x: number
@@ -101,24 +105,32 @@ function burst(x: number, y: number) {
       size: 7 + Math.random() * 7,
       colour: colours[i % colours.length],
       kind: KINDS[Math.floor(Math.random() * KINDS.length)],
+      // Lifetime in 60Hz frames: 2.7 to 4.5 seconds.
       life: 0,
       max: 160 + Math.random() * 110,
     }
   })
 
-  const frame = () => {
+  // The prototype's numbers are per frame at 60Hz. Each frame scales them by the time since the last
+  // one (k, in 60Hz frames), so the burst lasts as long on a 30Hz phone as on a 144Hz screen.
+  let last: number | undefined
+  const frame = (now: number) => {
+    const k = last === undefined ? 0 : Math.min(MAX_STEP, (now - last) / FRAME_MS)
+    last = now
     g.clearRect(0, 0, w, h)
     let alive = 0
     for (const p of pieces) {
-      if (++p.life > p.max || p.y > h + 40) continue
+      p.life += k
+      if (p.life > p.max || p.y > h + 40) continue
       alive++
-      p.vx *= p.drag
-      p.vy = p.vy * p.drag + p.g
-      p.sw += 0.06
-      p.x += p.vx + Math.sin(p.sw) * 0.7
-      p.y += p.vy
-      p.rot += p.vr
-      p.fl += p.vf
+      const drag = p.drag ** k
+      p.vx *= drag
+      p.vy = p.vy * drag + p.g * k
+      p.sw += 0.06 * k
+      p.x += (p.vx + Math.sin(p.sw) * 0.7) * k
+      p.y += p.vy * k
+      p.rot += p.vr * k
+      p.fl += p.vf * k
       g.save()
       g.globalAlpha = Math.min(1, (p.max - p.life) / 40)
       g.translate(p.x, p.y)

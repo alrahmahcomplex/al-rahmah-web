@@ -19,6 +19,14 @@ function fakeContext() {
   const ctx = {
     saves: 0,
     colours,
+    // Where each piece was drawn in the last frame.
+    at: [] as [number, number][],
+    clearRect() {
+      ctx.at = []
+    },
+    translate(x: number, y: number) {
+      ctx.at.push([x, y])
+    },
     set fillStyle(v: string) {
       colours.add(v)
     },
@@ -29,7 +37,7 @@ function fakeContext() {
       ctx.saves++
     },
   }
-  for (const m of ["scale", "clearRect", "restore", "translate", "rotate", "fillRect", "beginPath", "arc", "fill", "moveTo", "lineTo", "closePath", "stroke"])
+  for (const m of ["scale", "restore", "rotate", "fillRect", "beginPath", "arc", "fill", "moveTo", "lineTo", "closePath", "stroke"])
     Object.assign(ctx, { [m]: () => {} })
   return ctx
 }
@@ -37,10 +45,16 @@ function fakeContext() {
 let ctx: ReturnType<typeof fakeContext>
 let frames: FrameRequestCallback[]
 
-function runOneFrame() {
+function runOneFrame(time = 0) {
   const next = frames
   frames = []
-  for (const f of next) f(0)
+  for (const f of next) f(time)
+}
+
+/** Runs frames every `step` ms from 0 to `until` ms; true while the burst still draws. */
+function runFrames(step: number, until: number) {
+  for (let t = 0; t <= until && frames.length; t += step) runOneFrame(t)
+  return frames.length > 0
 }
 
 function setWidth(width: number) {
@@ -64,6 +78,7 @@ afterEach(() => {
   document.documentElement.classList.remove("rm")
   document.querySelectorAll(".kit-cf").forEach((c) => c.remove())
   setWidth(1024)
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: 768 })
 })
 
 describe("rainConfetti", () => {
@@ -71,6 +86,7 @@ describe("rainConfetti", () => {
     setWidth(1280)
     const { container } = render(<FinishMark />)
     const mark = container.querySelector<HTMLElement>(".kit-mark")!
+    vi.spyOn(mark, "getBoundingClientRect").mockReturnValue({ left: 100, top: 200, width: 84, height: 84 } as DOMRect)
     rainConfetti(mark)
     expect(document.querySelector("canvas.kit-cf")).toBeNull()
 
@@ -82,6 +98,8 @@ describe("rainConfetti", () => {
     runOneFrame()
     // 85 pieces on a desktop, in our six colours only.
     expect(ctx.saves).toBe(85)
+    // Every piece starts at the mark's centre.
+    expect(new Set(ctx.at.map(([x, y]) => `${x},${y}`))).toEqual(new Set(["142,242"]))
     expect([...ctx.colours].sort()).toEqual(Object.values(TOKENS).sort())
 
     // It fires once: the fallback timer adds no second burst.
@@ -108,6 +126,17 @@ describe("rainConfetti", () => {
     fireEvent.animationEnd(mark.querySelector(".kit-mark-tick")!)
     expect(mark).toHaveAttribute("data-burst")
     expect(document.querySelector("canvas.kit-cf")).not.toBeNull()
+  })
+
+  it.each([30, 60, 144])("lasts as long at %iHz: the pieces live 2.7 to 4.5 seconds", (hz) => {
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 100_000 })
+    rainConfetti(null)
+    expect(runFrames(1000 / hz, 2600)).toBe(true)
+    frames = []
+    ctx = fakeContext()
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => ctx) as never)
+    rainConfetti(null)
+    expect(runFrames(1000 / hz, 4700)).toBe(false)
   })
 
   it("does nothing under reduced motion", () => {

@@ -282,7 +282,7 @@ The tokens live in `app/tokens.css` as `--gf-*` custom properties, which the roo
 - **Go Green** (`#0f7a3d`) on **Green Tint** (`#eefbf3`): success marks and the finished-group tick. **Alert Red** (`#c81e1e`) on **Red Tint** (`#fef2f2`): field errors and destructive confirmation.
 
 ### The page wash
-Every page body, public and staff, sits on the lavender wash (`--gf-wash`): `linear-gradient(135deg, #f6f5fd 0%, rgb(224 220 249 / 0.35) 45%, #fff 100%)`, 30% fainter since prototype v38. On staff screens the wash fills the stage (see Layout), not the white frame around it.
+Every page body sits on a lavender wash. The staff look reads `--gf-wash`: `linear-gradient(135deg, #f6f5fd 0%, rgb(224 220 249 / 0.35) 45%, #fff 100%)`, 30% fainter since prototype v38. On staff screens it fills the stage (see Layout), not the white frame around it. The public pages still draw the old wash (`#f2f0fc` through half Mist) with their own classes until they move to v38.
 
 ### Named Rules
 **The One Invitation Rule.** Sunrise Orange marks the single next step on a screen. If two buttons are orange, one of them is wrong. A sheet counts as its own screen while it is open.

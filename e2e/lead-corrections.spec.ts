@@ -137,7 +137,12 @@ test.describe("correcting a lead", () => {
     await page.goto(`/staff/applicants/${lead.id}`)
     await page.getByRole("button", { name: "Correct Visit date" }).click()
     const input = page.getByLabel("Visit date", { exact: true })
-    await expect(input).toHaveAttribute("max", today)
+    // A later day is typed as any other; the server refuses it.
+    const later = new Date(`${today}T00:00:00Z`)
+    later.setUTCDate(later.getUTCDate() + 1)
+    await input.fill(later.toISOString().slice(0, 10))
+    await page.getByRole("button", { name: "Save" }).click()
+    await expect(page.getByRole("alert").filter({ hasText: "Choose today or an earlier date for the visit." })).toBeVisible()
     await input.fill(earlierDate)
     await page.getByRole("button", { name: "Save" }).click()
     await expect(page.getByRole("region", { name: "Student" }).getByRole("status")).toHaveText("Visit date saved.")

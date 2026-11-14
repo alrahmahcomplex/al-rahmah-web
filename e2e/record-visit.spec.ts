@@ -77,7 +77,6 @@ test.describe("recording the visit of an Applied family", () => {
     const visitDate = form.getByLabel("Visit date")
     // Today, unless the family came earlier.
     await expect(visitDate).toHaveValue(dayFirst(today))
-    await expect(visitDate).toHaveAttribute("max", today)
 
     await visitDate.fill(dayBefore(today))
     await form.getByRole("button", { name: "Record visit" }).click()
@@ -151,7 +150,6 @@ test.describe("when Record visit is offered", () => {
       await page.getByRole("button", { name: "Record visit" }).click()
       const visitDate = page.getByRole("form", { name: "Record visit" }).getByLabel("Visit date")
       await expect(visitDate, deviceDay).toHaveValue(dayFirst(today))
-      await expect(visitDate, deviceDay).toHaveAttribute("max", today)
     }
   })
 

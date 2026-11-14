@@ -61,6 +61,7 @@ export async function moreActions(page: Page): Promise<string[]> {
 export async function listOptions(field: Locator): Promise<string[]> {
   await field.click()
   const list = field.page().getByRole("listbox")
+  await expect(list.getByRole("option").first()).toBeVisible()
   const options = (await list.getByRole("option").allTextContents()).map((text) => text.trim())
   await field.page().keyboard.press("Escape")
   await expect(list).toBeHidden()

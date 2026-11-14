@@ -409,6 +409,7 @@ describe("table scroll box and sheet body", () => {
 
   it.each([
     [false, 200, 200],
+    [true, 201, 200],
     [true, 900, 200],
   ])("puts the sheet body in the tab order only while it scrolls (scrolls: %s)", async (scrolls, scrollHeight, clientHeight) => {
     const { Sheet } = await import("@/components/kit")
@@ -453,11 +454,17 @@ describe("table scroll box and sheet body", () => {
     Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 200 })
     const resized = () => act(() => observers.forEach((callback) => callback()))
     try {
-      const sheet = (rows: number) => (
+      // Rows straight in the body, then rows inside a wrapper whose own box never changes.
+      const sheet = (rows: number, nested = 0) => (
         <Sheet open onOpenChange={() => {}} title="Retire the role" closeLabel="Close">
           {Array.from({ length: rows }, (_, i) => (
             <p key={i}>Row {i}</p>
           ))}
+          <div>
+            {Array.from({ length: nested }, (_, i) => (
+              <p key={i}>Nested {i}</p>
+            ))}
+          </div>
         </Sheet>
       )
       const { rerender } = render(sheet(1))
@@ -479,6 +486,14 @@ describe("table scroll box and sheet body", () => {
       expect(body).toHaveAttribute("tabindex", "0")
       scrollHeight = 200
       await act(async () => rerender(sheet(1)))
+      expect(body).not.toHaveAttribute("tabindex")
+
+      // Content loading inside a wrapper, deeper than the body's own children, is seen too.
+      scrollHeight = 900
+      await act(async () => rerender(sheet(1, 8)))
+      expect(body).toHaveAttribute("tabindex", "0")
+      scrollHeight = 200
+      await act(async () => rerender(sheet(1, 0)))
       expect(body).not.toHaveAttribute("tabindex")
     } finally {
       if (scroll) Object.defineProperty(HTMLElement.prototype, "scrollHeight", scroll)

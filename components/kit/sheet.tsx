@@ -64,24 +64,26 @@ function useScrolls(body: HTMLElement | null) {
   const [scrolls, setScrolls] = useState(false)
   useEffect(() => {
     if (!body) return
-    const check = () => setScrolls(body.scrollHeight > body.clientHeight + 1)
+    // Exact: a body one pixel taller than its box still scrolls, so it stays reachable.
+    const check = () => setScrolls(body.scrollHeight > body.clientHeight)
     check()
-    if (typeof ResizeObserver === "undefined") return
-    const resize = new ResizeObserver(check)
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(check)
     const watch = () => {
+      if (!resize) return
       resize.disconnect()
       resize.observe(body)
       for (const child of Array.from(body.children)) resize.observe(child)
     }
     watch()
-    // A child added or removed (an inline editor opening) changes the height too.
+    // Content added, removed or changed anywhere inside (an inline editor opening, a list
+    // loading inside a wrapper of fixed height) can change the height without resizing a watched box.
     const mutate = new MutationObserver(() => {
       watch()
       check()
     })
-    mutate.observe(body, { childList: true })
+    mutate.observe(body, { childList: true, subtree: true, characterData: true })
     return () => {
-      resize.disconnect()
+      resize?.disconnect()
       mutate.disconnect()
     }
   }, [body])

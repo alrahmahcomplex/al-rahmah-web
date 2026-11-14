@@ -20,7 +20,7 @@ import {
   TextArea,
   toast,
 } from "@/components/kit"
-import { addDays, mondayOf, todayIso } from "@/components/kit/dates"
+import { addDays, mondayOf } from "@/components/kit/dates"
 
 // The prototype's Design system card "Form parts on the student's record"
 // and its "See them in a sheet" button (version 18, #358), with its words and
@@ -165,8 +165,8 @@ function DeclineSheet() {
 }
 
 /** The calendar sitting open with a week chosen, and the sentence under it. */
-function WeekPart() {
-  const [day, setDay] = useState(() => todayIso())
+function WeekPart({ today }: { today: string }) {
+  const [day, setDay] = useState(today)
   const monday = mondayOf(day)
   const sunday = addDays(monday, 6)
   return (
@@ -182,9 +182,9 @@ function WeekPart() {
   )
 }
 
-export function FormPartsCard({ tab }: { tab: string }) {
+/** `today` is Tanzania's date from the server, so the page hydrates the same in any time zone. */
+export function FormPartsCard({ tab, today }: { tab: string; today: string }) {
   const [filters, setFilters] = useState([false, true])
-  const today = todayIso()
   const current = TABS.find(([, key]) => key === tab) ?? TABS[0]
   const ids = { pay: useId(), paid: useId(), paidHint: useId(), at: useId(), atLabel: useId(), why: useId(), whyHint: useId(), ends: useId() }
 
@@ -248,7 +248,7 @@ export function FormPartsCard({ tab }: { tab: string }) {
         </div>
         <div className="kp-fpc">
           <h3>Week</h3>
-          <WeekPart />
+          <WeekPart today={today} />
           <p className="kp-spec">Inside a filter the calendar sits open. Any day chooses its week, Monday to Sunday.</p>
         </div>
         <div className="kp-fpc">

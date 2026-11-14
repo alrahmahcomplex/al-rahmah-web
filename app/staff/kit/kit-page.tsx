@@ -84,7 +84,7 @@ function Swatch({ name, token }: { name: string; token: string }) {
   )
 }
 
-function DesignSystem({ tab }: { tab: string }) {
+function DesignSystem({ tab, today }: { tab: string; today: string }) {
   const [popPressed, setPopPressed] = useState(true)
   const [cls, setCls] = useState<string | null>("STD 6")
   const [sibling, setSibling] = useState<string | null>("sibling")
@@ -213,7 +213,7 @@ function DesignSystem({ tab }: { tab: string }) {
         />
       </Card>
 
-      <FormPartsCard tab={tab} />
+      <FormPartsCard tab={tab} today={today} />
 
       <Card title="Progress bar">
         <ProgressBar
@@ -518,11 +518,11 @@ function MorePieces() {
 }
 
 // Drawn in the new shell (#322), which holds the stage, the page column and the kit Toaster.
-export function KitPage({ tab = "" }: { tab?: string }) {
+export function KitPage({ tab = "", today }: { tab?: string; today: string }) {
   return (
     <>
       <PageHeader title="Design system" subtitle="Every piece below is copied from the Admission form’s code, so the staff side and the parent side stay one family." />
-      <DesignSystem tab={tab} />
+      <DesignSystem tab={tab} today={today} />
       <MorePieces />
     </>
   )

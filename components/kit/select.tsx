@@ -70,6 +70,8 @@ export function Select({
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  // Whether the pointer opened the list; the keyboard marks its own item.
+  const byPointer = useRef(false)
   // Required with nothing chosen when its form was sent: the pill takes the invalid look and focus,
   // as the approved prototype does, with no sentence. A choice clears it.
   const [missing, setMissing] = useState(false)
@@ -113,8 +115,10 @@ export function Select({
       disabled={disabled}
       modal={false}
       onOpenChange={(open) => {
-        if (!open) return
-        // As the prototype, the open list marks the chosen item, or the first, even when a click opened it.
+        if (!open || !byPointer.current) return
+        byPointer.current = false
+        // As the prototype, a list a click opened marks the chosen item, or the first. Not after a key:
+        // the key's release would land on that item and choose it.
         requestAnimationFrame(() => {
           const list = listRef.current
           if (!list || list.querySelector("[data-highlighted]")) return
@@ -135,6 +139,12 @@ export function Select({
         // The caller's own invalid state wins; otherwise "required and nothing chosen" after a send.
         aria-invalid={(invalid ?? (aria["aria-invalid"] === undefined ? missing : aria["aria-invalid"] === true || aria["aria-invalid"] === "true")) || undefined}
         data-empty={chosen ? undefined : ""}
+        onPointerDown={() => {
+          byPointer.current = true
+        }}
+        onKeyDown={() => {
+          byPointer.current = false
+        }}
         className={cn("kit-field kit-sel", className)}
       >
         <span className="kit-sel-v">{chosen ? chosen.label : placeholder}</span>

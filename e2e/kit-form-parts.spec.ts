@@ -11,6 +11,10 @@ import { expect, test } from "./staff-test"
 // and the choice list inside a popover. The card is one plain form whose
 // parts are all uncontrolled, so each test reads what it would post.
 
+// Staff are in Tanzania, and the kit page takes Tanzania's date from the server: the device's
+// today matches it at any hour. The block behind UTC sets its own zone.
+test.use({ timezoneId: "Africa/Dar_es_Salaam" })
+
 const CARD = "Form parts on the student’s record"
 const WRONG_DATE = "Type the date as day/month/year, for example 25/09/2026."
 const WRONG_TIME = "Type the time as hours:minutes, for example 14:30."
@@ -508,7 +512,7 @@ test("axe finds nothing in the form parts card or its open popups", { tag: "@nig
 
   await card.getByRole("combobox", { name: "Payment type" }).click()
   await expect(page.getByRole("listbox")).toBeVisible()
-  expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
+  expect(await axeProblems(page, ".kit-sel-pop[data-open]")).toEqual([])
   await page.keyboard.press("Escape")
 
   await card.getByRole("button", { name: "Open the calendar" }).first().click()
@@ -521,7 +525,7 @@ test("axe finds nothing in the form parts card or its open popups", { tag: "@nig
   await settled(sheet)
   await sheet.getByRole("combobox", { name: "Reason" }).click()
   await expect(page.getByRole("listbox")).toBeVisible()
-  expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
+  expect(await axeProblems(page, ".kit-sel-pop[data-open]")).toEqual([])
   await page.keyboard.press("Escape")
   await page.keyboard.press("Escape")
 
@@ -529,5 +533,5 @@ test("axe finds nothing in the form parts card or its open popups", { tag: "@nig
   await pc.getByRole("button", { name: "Filter Visited applicants" }).click()
   await page.getByRole("dialog", { name: "Visited applicants" }).getByRole("combobox", { name: "Period" }).click()
   await expect(page.getByRole("listbox")).toBeVisible()
-  expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
+  expect(await axeProblems(page, ".kit-sel-pop[data-open]")).toEqual([])
 })

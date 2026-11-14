@@ -1,8 +1,10 @@
 import type { Metadata } from "next"
 
 import { pageTitle } from "@/components/kit"
+import { tanzaniaToday } from "@/lib/school-calendar"
 
 import { requireStaff } from "../session"
+
 import { KitPage } from "./kit-page"
 
 export const metadata: Metadata = {
@@ -17,5 +19,5 @@ export default async function DesignSystemPage({ searchParams }: { searchParams:
   await requireStaff()
   const { tab } = await searchParams
   // The form parts card's Tabs are links; the open one is ?tab=.
-  return <KitPage tab={typeof tab === "string" ? tab : ""} />
+  return <KitPage tab={typeof tab === "string" ? tab : ""} today={tanzaniaToday()} />
 }

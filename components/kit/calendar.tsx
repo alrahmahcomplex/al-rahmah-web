@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, type ButtonHTMLAttributes } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes } from "react"
 import { DayPicker, type CalendarDay, type Modifiers } from "react-day-picker"
 
 import { Icon } from "@/components/icons"
@@ -26,6 +26,16 @@ export const DATE_WORDS = {
 }
 
 export type DateWords = typeof DATE_WORDS
+
+const noSubscribe = () => () => {}
+
+/**
+ * Today on this device, read only in the browser: the server's clock can be in another time
+ * zone, so it renders no "today" and the page hydrates without a mismatch (#334's rule).
+ */
+export function useDeviceToday(): string | null {
+  return useSyncExternalStore(noSubscribe, todayIso, () => null)
+}
 
 type DayButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { day: CalendarDay; modifiers: Modifiers }
 
@@ -79,9 +89,11 @@ export type MonthGridProps = {
 export function MonthGrid({ mode = "day", value, onPick, min, max, autoFocus, words: wordsProp, className }: MonthGridProps) {
   const words = { ...DATE_WORDS, ...wordsProp }
   const chosen = isIsoDate(value) ? value : ""
-  const [month, setMonth] = useState(() => localOf(chosen || todayIso()))
+  const today = useDeviceToday()
+  // The month on screen: the chosen day's, else today's once the browser knows it.
+  const [picked, setMonth] = useState<Date | null>(() => (chosen ? localOf(chosen) : null))
+  const month = picked ?? (today ? localOf(today) : null)
   const [hovered, setHovered] = useState("")
-  const today = todayIso()
 
   // A new value from outside opens its month, as the field's typed date does.
   const [shown, setShown] = useState(chosen)
@@ -94,6 +106,9 @@ export function MonthGrid({ mode = "day", value, onPick, min, max, autoFocus, wo
   const inWeek = (monday: string) => (date: Date) => !!monday && mondayOf(isoOf(date)) === monday
   const bandStart = (date: Date) => date.getDay() === 1 || date.getDate() === 1
   const bandEnd = (date: Date) => date.getDay() === 0 || isoOf(date) === addDays(isoOf(new Date(date.getFullYear(), date.getMonth() + 1, 1)), -1)
+
+  // On the server, with no day chosen, there is no month to show yet; the browser draws it.
+  if (!month) return <div className={cn("kit-cal", className)} />
 
   return (
     <DayPicker
@@ -111,7 +126,8 @@ export function MonthGrid({ mode = "day", value, onPick, min, max, autoFocus, wo
       showOutsideDays={false}
       navLayout="around"
       autoFocus={autoFocus}
-      today={localOf(today)}
+      // Before the browser knows today, no day is marked as today.
+      today={today ? localOf(today) : localOf("1000-01-01")}
       startMonth={min ? localOf(min) : undefined}
       endMonth={max ? localOf(max) : undefined}
       disabled={(date: Date) => !withinBounds(isoOf(date), min, max)}

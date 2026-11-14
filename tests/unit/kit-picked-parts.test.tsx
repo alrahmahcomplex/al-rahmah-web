@@ -315,6 +315,20 @@ describe("StepSlider, Tooltip and AvatarGroup", () => {
     expect(container.querySelector(".kit-tipw")).toHaveAttribute("data-dismissed")
   })
 
+  it("hides a tooltip shown by the pointer on Escape, with focus elsewhere, until the pointer leaves", () => {
+    const { container } = render(
+      <Tooltip label="New requests">
+        <RoundButton icon="bell" label="New requests" />
+      </Tooltip>,
+    )
+    const wrap = container.querySelector(".kit-tipw") as HTMLElement
+    fireEvent.pointerEnter(wrap)
+    fireEvent.keyDown(document.body, { key: "Escape" })
+    expect(wrap).toHaveAttribute("data-dismissed")
+    fireEvent.pointerLeave(wrap)
+    expect(wrap).not.toHaveAttribute("data-dismissed")
+  })
+
   it("names the group and counts the people not shown", () => {
     render(<AvatarGroup people={["RM", "AS", "JK", "LO", "BS", "MK"].map((initials) => ({ initials }))} label="Rehema M. and 5 others" />)
     const group = screen.getByRole("img", { name: "Rehema M. and 5 others" })

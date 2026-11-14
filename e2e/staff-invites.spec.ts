@@ -129,7 +129,8 @@ test("the Super Admin invites a Manager, who sets a password from the email and 
   await expect(
     invitedPage.getByRole("heading", { name: "Home", level: 1 }),
   ).toBeVisible()
-  await expect(invitedPage.getByRole("complementary", { name: "Sidebar" })).toContainText("Admissions Manager")
+  // Home is in the new shell (#323): the person pill in the top bar names the role.
+  await expect(invitedPage.getByRole("banner").locator(".ns-me")).toContainText("Admissions Manager")
   await expect(
     invitedPage.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Staff and roles" }),
   ).toBeVisible()

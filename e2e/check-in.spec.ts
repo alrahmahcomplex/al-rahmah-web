@@ -50,8 +50,8 @@ test.describe("registering a new family", () => {
   test("Admissions Staff register a walk-in and the confirmation shows the Admission Number", async ({ page }) => {
     const family = newFamily()
     await signIn(page, ADMISSIONS)
-    await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Check-in" }).click()
-    await page.getByRole("link", { name: "New family, never registered" }).click()
+    // Register students on Home opens the New Student form until #308.
+    await page.getByRole("link", { name: "Register students" }).click()
 
     await fillParent(page, family)
     await fillStudent(page, family.child)

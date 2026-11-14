@@ -2,7 +2,7 @@ import { expect, test } from "./staff-test"
 
 import { asSystem, createThrowawayStaff } from "../tests/support/db"
 import { ACCOUNTANT, DEACTIVATED, MANAGER } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { logIn, signOut } from "./log-in"
 
 test.describe("the one sign-in page", () => {
   test("is Swahili first, switches to English, and has no separate Discount code sign-in", async ({ page }) => {
@@ -82,14 +82,11 @@ test.describe("signing in", () => {
     await signIn(page, ACCOUNTANT.email, ACCOUNTANT.password)
 
     await expect(page).toHaveURL(/\/staff$/)
-    const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-    await expect(sidebar.getByText(ACCOUNTANT.name, { exact: true })).toBeVisible()
-    await expect(sidebar.getByText(ACCOUNTANT.roleName, { exact: true })).toBeVisible()
     await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible()
+    // Home is in the new shell (#323): the person pill in the top bar names them.
+    await expect(page.getByRole("banner").getByRole("button", { name: `${ACCOUNTANT.name} ${ACCOUNTANT.roleName}` })).toBeVisible()
 
-    await sidebar.getByRole("button", { name: /^Account menu/ }).click()
-    await page.getByRole("menuitem", { name: "Sign out" }).click()
-    await expect(page).toHaveURL(/\/login$/)
+    await signOut(page)
     await page.goto("/staff")
     await expect(page).toHaveURL(/\/login$/)
   })

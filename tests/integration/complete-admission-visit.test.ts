@@ -1526,7 +1526,7 @@ describe("a child linked before check-in", () => {
       ok: false,
       error: {
         kind: "invalid",
-        field: "fathers_name",
+        field: "father_full_name",
         student: 2,
         person: undefined,
         reason: "linked_member",
@@ -1600,9 +1600,9 @@ describe("two check-ins on one group at the same time", () => {
         {
           lead_id: leadId,
           first_name: c.first,
-          fathers_name: c.father.fathersName,
-          last_name: c.father.lastName,
-          surname: c.father.surname,
+          father_first: c.father.fatherFirst,
+          father_middle: c.father.fatherMiddle,
+          father_last: c.father.fatherLast,
           custodian: { person: 1, relationship: "Mother" },
           sibling_of: { lead_id: other.leadIds[0] },
         },

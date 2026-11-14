@@ -76,7 +76,7 @@ const CHILD_PARTS = new Set<string>(["first_name", "father_first", "father_middl
 // in a fixed key order. The Discount code joins it only when there is one, so
 // a form without a code hashes as it did before codes existed, and a name's
 // parts only when it came in parts, so a one-box form hashes as before #400.
-function payloadHash({ parent, children, discountCode }: Pick<AdmissionForm, "parent" | "children" | "discountCode">): string {
+export function payloadHash({ parent, children, discountCode }: Pick<AdmissionForm, "parent" | "children" | "discountCode">): string {
   const canonical = JSON.stringify({
     ...(discountCode ? { discountCode } : {}),
     parent: [

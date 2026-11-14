@@ -381,13 +381,7 @@ html.rm .kit-cf { display: none; }
 .kit-rv[data-open] > div { padding: 6px; }
 
 /* ---------- form parts (prototype version 18, "round 17"; #358) ---------- */
-/* Tabs: the filter pill as links; the current one is the indigo pill. */
-.kit-tabs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-a.kit-fpill { display: inline-flex; align-items: center; text-decoration: none; }
-.kit-fpill[aria-current="page"] {
-  background: var(--gf-indigo); border-color: var(--gf-indigo); color: var(--gf-paper);
-  font: italic 700 13.5px var(--font-exo), "Exo", system-ui, sans-serif;
-}
+/* Tabs: the sliding track, in picked.css (#402). */
 
 /* The choice list: the 44px pill field as a button, with a chevron that turns while the list is open.
    Its text sits in the middle of the pill, the placeholder too. */

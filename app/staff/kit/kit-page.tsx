@@ -38,6 +38,7 @@ import { FormPartsCard, ListInPopoverCard } from "./form-parts"
 import { GuidedDemo } from "./guided-demo"
 import "./kit-page.css"
 import { OverlayCards } from "./overlays"
+import { PickedPartsCards } from "./picked-parts"
 
 // The approved prototype's "Design system" page (version 13), rebuilt with
 // the kit, card for card; then the kit's other pieces, filled with the
@@ -215,7 +216,7 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
 
       <FormPartsCard tab={tab} today={today} />
 
-      <Card title="Progress bar">
+      <Card title="Stepper: chip bar">
         <ProgressBar
           className="kp-static"
           groups={groups}
@@ -511,6 +512,7 @@ function MorePieces() {
         <GuidedDemo />
       </Card>
 
+      <PickedPartsCards />
       <OverlayCards />
       <ListInPopoverCard />
     </div>

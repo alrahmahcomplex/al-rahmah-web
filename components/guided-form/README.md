@@ -102,3 +102,29 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 | `Icon` | The prototype's line icons by name | `icon()` in core.js |
 
 `prefersReducedMotion()`, `foldMs()` and `buzz()` are exported for page code that times its own steps. The prototype's card frame (`.card`, 32px corners on phones, 40px from 640px, Indigo lift) and the lavender page wash stay with the page: use Tailwind there.
+
+## Name boxes and the code box
+
+Prototype v38. They live here, not in the kit, so the public forms (#403, #404) and the staff screens import the same parts and no public page loads the kit's stylesheet. Field names follow the names contract on #400.
+
+```tsx
+const LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
+
+<PersonNameBoxes aria-labelledby={titleId} labels={LABELS} value={person} onChange={setPerson} invalid={{ lastName: !person.lastName }} aria-describedby="name-error" />
+<StudentNameBoxes aria-labelledby={titleId} labels={{ ...LABELS, student: "Student’s name", father: "Father’s name" }} />
+<FullNameBox name="brought_by_name" aria-label="Their full name" />   {/* check hasTwoNames() before saving */}
+<CodeBox name="code" aria-label="Discount code" placeholder="Discount code, e.g. ABC-123" />
+```
+
+| Part | Layout | Posts |
+|---|---|---|
+| `PersonNameBoxes` | First across, Middle and Last side by side (an agent, a custodian) | `firstName`, `middleName`, `lastName` |
+| `FatherNameBoxes` | First and Middle side by side, Last across | `fatherFirst`, `fatherMiddle`, `fatherLast` |
+| `StudentNameBoxes` | The student's name across, then the "Father's name" group in the father layout | `firstName`, `fatherFirst`, `fatherMiddle`, `fatherLast` |
+| `FullNameBox` | One box, spaces kept ("Who brought the students") | its `name` |
+| `CodeBox` | One box: capitals, the hyphen after the third character, at most 7 (AAN132 → AAN-132) | its `name` |
+
+- **The labels are the placeholders**, inside the boxes, and each box's name for a screen reader. Never put a label above them. Name the group with `aria-labelledby` (the question's title).
+- **Typing:** capitals; Space ends a box and moves to the next, a pasted full name spreads across the boxes, Backspace in an empty box goes back to the one before, Enter moves on instead of sending the form. The last box keeps its spaces (BIN SALIM). While a phone keyboard is composing a word, nothing changes until the word is done.
+- Every box is `required` unless `required={false}`. `names` changes what a box posts as, such as `students[0][firstName]`; `value` and `onChange` take the contract's object. The last box can end in a space while typing: save `cleanName(value)`.
+- `typeInNameBox`, `cleanName`, `hasTwoNames` and `formatCode` are the plain rules, for a server check or a test.

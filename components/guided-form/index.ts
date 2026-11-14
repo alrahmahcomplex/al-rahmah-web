@@ -23,6 +23,18 @@ export {
   type PriceAnchorProps,
 } from "./controls"
 export { Icon, type IconName } from "./icons"
+export {
+  CodeBox,
+  FatherNameBoxes,
+  FullNameBox,
+  PersonNameBoxes,
+  StudentNameBoxes,
+  type FatherName,
+  type NameLabels,
+  type PersonName,
+  type StudentName,
+} from "./names"
+export { cleanName, formatCode, hasTwoNames, typeInNameBox } from "./typing"
 export { buzz, foldMs, prefersReducedMotion } from "./motion"
 export { ProgressBar, type ProgressBarLabels, type ProgressBarProps, type ProgressGroup } from "./progress-bar"
 export { GuidedHead, GuidedNote, GuidedStack, GuidedStep, revealStep, SummaryRow, type GuidedStepProps, type StepState } from "./stack"

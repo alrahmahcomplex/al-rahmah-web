@@ -19,7 +19,13 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 | `DateField`, `DateTimeField`, `Calendar` | `<input type="date">`, `datetime-local`, `ui/calendar` |
 | `TextArea` | `ui/textarea` |
 | `Checkbox`, `Switch` | `ui/checkbox` |
-| `Tabs` | hand-made tab links |
+| `Tabs` (links), `TabSwitch` (panels on one screen) | hand-made tab links, `FilterPills` as tabs |
+| `Pagination` | hand-made page links, Load more |
+| `Avatar`, `AvatarGroup` | hand-made initials circles |
+| `Tooltip` | a `title` alone on an icon button |
+| `StepSlider` | a bare `<input type="range">` |
+| `Accordion` | a stack of `Disclosure`s for questions |
+| `PersonNameBoxes`, `StudentNameBoxes`, `FatherNameBoxes`, `FullNameBox`, `CodeBox` from the guided form | one free-text name field, a code field without the hyphen |
 | `Disclosure` | `ui/collapsible`, `<details>` |
 | `FilePicker` | a bare `<input type="file">` |
 | `FilterPills` | `ui/button` toggles, tabs |
@@ -74,7 +80,6 @@ The parts from prototype version 18 (the card "Form parts on the student’s rec
 <DateTimeField id="at" name="contacted_at" max={now} aria-labelledby="at-label" />  {/* posts "YYYY-MM-DDTHH:MM" */}
 <TextArea id="why" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
 <Checkbox label="Pre-Form One programme" hint="Its fee is charged on its own." checked={on} onCheckedChange={setOn} />
-<Tabs label="Application sections" tabs={tabs} current={href} scroll={false}><TextLink>Clear search</TextLink></Tabs>
 <Disclosure variant="boxed" label="More options" open={hasError}>…</Disclosure>
 <FilePicker id="csv" name="file" accept=".csv,text/csv" required title="Drop the CSV here or choose a file" chooseLabel="Choose file" />
 <RoundButton icon="filter" label="Filter Visited applicants" on={filtered} />
@@ -109,6 +114,30 @@ What the browser no longer checks for you, so the server's own refusal (already 
 | `FilePicker` | `accept` | Filters the file dialog; a dropped file of another type is still taken. |
 
 Under reduced motion the popups appear at once and the tick and chevrons do not move.
+
+## Picked parts (prototype v38)
+
+The parts the owner picked on v38's Design system page (#402). Their styles are in `picked.css`.
+
+```tsx
+<Tabs label="Application sections" tabs={tabs} current={href} scroll={false}><TextLink>Clear search</TextLink></Tabs>
+<TabSwitch label="Charts" tabs={[{ value: "week", label: "This week", panel: <WeekChart /> }]} value={tab} onChange={setTab} />
+<Pagination label="Applicant pages" page={page} pageCount={12} href={(p) => `/staff/applicants?page=${p}`} previousLabel="Previous page" nextLabel="Next page" pageLabel={(p) => `Page ${p}`} />
+<Avatar initials="RM" name="Rehema M." size={40} tone="orange" />
+<AvatarGroup people={people} label="Rehema M., Asha Saidi and 5 others" />
+<Tooltip label="New requests"><RoundButton icon="bell" label="New requests" /></Tooltip>
+<StepSlider min={0} max={25} step={5} value={percent} onValueChange={setPercent} unit="%" aria-label="Discount, percent" />
+<Accordion items={[{ title: "Who sees the family’s Discount code?", content: <p>…</p> }]} />
+```
+
+- **Tabs C, sliding track:** equal tabs on a Lavender Whisper track; one indigo pill slides to the chosen one (at once under reduced motion). `Tabs` are links, for a page's sections or a search param; the pill moves on the click, before the page arrives. `TabSwitch` is a tablist with one panel, for sections inside one screen. Left and Right arrows, Home and End move along both; in `TabSwitch` they choose the tab too. A long label is cut with an ellipsis, so keep labels short.
+- **Pagination A, numbered pills:** for a list longer than 10 rows. At most seven places: the first and last page always, `…` for the rest (`pageWindow`). `href` makes links (a server page); `onPage` makes buttons (a client part). Nothing shows for one page.
+- **Avatars B, soft tints:** `indigo`, `orange` or `green`; sizes 24, 32, 40 and 56. `AvatarGroup` stacks 36px avatars in those tints in turn, then "+3".
+- **Tooltips A, light:** white, the thin line, the soft shadow, above the button on hover and keyboard focus; Escape hides it. It removes the button's `title`, so the browser's own tooltip does not show too. The button keeps its name.
+- **Slider B, steps with labels:** a native range input, each step's value under the track. Write the chosen value in words beside it.
+- **Accordion A, separate cards:** one open at a time; each question is a heading (`headingLevel`, 3 by default) holding its button.
+- **Stepper A, chip bar:** the guided form's `ProgressBar` (see `components/guided-form/README.md`); a staff task gets it through `GuidedTask`.
+- **Name boxes and the code box** are the guided form's (`components/guided-form/README.md`, Name boxes and the code box), so the public forms use them too.
 
 ## Choices and filters
 

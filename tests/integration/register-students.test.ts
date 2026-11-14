@@ -613,6 +613,27 @@ describe("siblings on file", () => {
     expect(await rowOf(older)).toMatchObject({ father_full_name: nameOf(right), father_full_name_source: "typo_confirmed" })
   })
 
+  test("the replaced spelling is recognised whatever characters the name holds, a semicolon included", async () => {
+    const year = await registrationYear()
+    const [last, sur] = [word(), word()]
+    const right = { fathersName: "Mohamed", lastName: last, surname: sur }
+    const typed = `Mohamed; ${last} ${sur}`
+    const older = await onFile(typed, "STD 2")
+    const contactId = await contactOf(older)
+    await onFile(`${word()} ${word()}`, "KG 1", contactId)
+    const answered: Partial<RegistrationStudent> = {
+      siblingOf: { leadId: older },
+      siblingFatherFullName: typed,
+      nameAnswer: { answer: "typo", spelling: nameOf(right) },
+    }
+    const saved = await created({
+      people: [{ contactId }],
+      students: [student(right, year, answered), student(right, year, { ...answered, className: "KG 2" })],
+    })
+    expect(saved.map((s) => s.sibling?.basis)).toEqual(["typo_confirmed", "matched"])
+    expect((await rowOf(older)).father_full_name).toBe(nameOf(right))
+  })
+
   test("a later student's answer that is neither the stored name nor the replaced spelling is still refused", async () => {
     const year = await registrationYear()
     const [last, sur] = [word(), word()]

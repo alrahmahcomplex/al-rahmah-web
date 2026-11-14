@@ -16,7 +16,8 @@
 --    the sibling, so the second student's answer used to be refused as
 --    `invalid` `sibling_father_full_name`, the same payload every time.
 --    write_typo_spelling now records each lead and the spelling it replaced
---    in app.sibling_typo_replaced (transaction-local), and
+--    in app.sibling_typo_replaced (transaction-local, a JSON array of
+--    [lead id, normalized name] pairs), and
 --    save_sibling_choice drops a sibling's father's-name answer that is that
 --    replaced spelling for that sibling, as it already drops one that
 --    matches the stored name. A different name is still refused.
@@ -30,6 +31,12 @@
 do $migration$
 begin
     perform public.set_audit_actor('system');
+
+    -- Nobody writes these while the functions are replaced, so the snapshot
+    -- check compares like with like.
+    lock table public.leads, public.guardian_contacts, public.sibling_groups, public.sibling_group_members,
+        public.discount_requests
+        in share row exclusive mode;
 
     drop table if exists pg_temp.repeated_answers_snapshot_before;
     create temp table repeated_answers_snapshot_before as select * from public.fee_snapshot();
@@ -64,10 +71,14 @@ begin
             -- Kept for the rest of this transaction: a later answer in the
             -- same save that still gives the replaced spelling for this
             -- lead is no new answer (save_sibling_choice, #367).
+            -- A JSON array of [lead id, normalized replaced name] pairs, so
+            -- no character in a name can split an entry.
             perform set_config(
                 'app.sibling_typo_replaced',
-                concat_ws(';', nullif(current_setting('app.sibling_typo_replaced', true), ''),
-                          each_lead::text || ':' || public.normalize_father_name(write_typo_spelling.replaced)),
+                (coalesce(nullif(current_setting('app.sibling_typo_replaced', true), ''), '[]')::jsonb
+                 || jsonb_build_array(jsonb_build_array(
+                        each_lead::text, public.normalize_father_name(write_typo_spelling.replaced)
+                    )))::text,
                 true
             );
         end loop;
@@ -109,7 +120,7 @@ begin
         sibling_name text := save_sibling_choice.choice ->> 'sibling_father_full_name';
         target public.leads;
         target_member public.sibling_group_members;
-        replaced text := coalesce(current_setting('app.sibling_typo_replaced', true), '');
+        replaced jsonb := coalesce(nullif(current_setting('app.sibling_typo_replaced', true), ''), '[]')::jsonb;
         pending public.discount_requests;
     begin
         begin
@@ -126,8 +137,9 @@ begin
                         or (target_member.group_id is null
                             and (target.father_full_name is null or target.father_full_name_source = 'backfilled')))
                    and (public.father_name_match(sibling_name, target.father_full_name) = 'same'
-                        or (target.id::text || ':' || public.normalize_father_name(sibling_name))
-                           = any (string_to_array(replaced, ';'))) then
+                        or replaced @> jsonb_build_array(jsonb_build_array(
+                               target.id::text, public.normalize_father_name(sibling_name)
+                           ))) then
                     sibling_name := null;
                 end if;
             end if;

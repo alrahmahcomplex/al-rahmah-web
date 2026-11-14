@@ -1532,6 +1532,10 @@ describe("two check-ins on one group at the same time", () => {
     const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL });
     await sql.connect();
     await sql.query("begin");
+    // Shorter than the test's own timeout: a stuck wait ends and frees the
+    // shared database instead of running on after the test.
+    await sql.query("set local statement_timeout = '20s'");
+    await sql.query("set local lock_timeout = '20s'");
     await sql.query("set local track_functions = 'all'");
     await sql.query("select set_config('request.jwt.claims', $1, true)", [
       JSON.stringify({ sub: userId, role: "authenticated" }),
@@ -1592,41 +1596,75 @@ describe("two check-ins on one group at the same time", () => {
     const call =
       "select public.complete_admission_visit($1::date, $2::jsonb, $3::jsonb) as r";
 
+    // A third connection holds the first check-in's own lead row, so the
+    // first call stops mid-way: it has taken its Family and group locks and
+    // waits on the row. The second call then starts while the first is
+    // still running, and waits on the first's locks.
+    const barrier = new Client({
+      connectionString: process.env.SUPABASE_DB_URL,
+    });
+    await barrier.connect();
+    await barrier.query("begin");
+    await barrier.query("set local statement_timeout = '20s'");
+    await barrier.query(
+      "select id from public.leads where id = $1 for update",
+      [first.leadIds[0]],
+    );
+    const pidOf = async (sql: Client) =>
+      (await sql.query<{ pid: number }>("select pg_backend_pid() as pid"))
+        .rows[0].pid;
+    // Waits until the session waits on a lock: any lock, or a row lock
+    // (`row`), which the check-in takes only after its Family and group
+    // locks. Checking for any waiting lock, not one particular blocker,
+    // keeps this short when another test queues behind these sessions.
+    const waitsOn = async (pid: number, kind: "any" | "row") => {
+      for (let tries = 0; ; tries++) {
+        const n = await inRolledBackTransaction(
+          async (sql) =>
+            (
+              await sql.query<{ n: number }>(
+                `select count(*)::int as n from pg_locks
+                 where pid = $1 and not granted
+                   and ($2 = 'any' or locktype in ('transactionid', 'tuple'))`,
+                [pid, kind],
+              )
+            ).rows[0].n,
+        );
+        if (n > 0) return;
+        if (tries > 200) throw new Error(`session ${pid} never waited`);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    };
+
     const one = await staffSession(staffUser);
     const two = await staffSession(staffUser);
     try {
-      const firstResult = await one.query<{ r: { result: string } }>(call, [
+      const [onePid, twoPid] = await Promise.all([pidOf(one), pidOf(two)]);
+      const firstCall = one.query<{ r: { result: string } }>(call, [
         yesterday,
         JSON.stringify([{ contact_id: first.contactId }]),
         payload(first.leadIds[0], x),
       ]);
-      expect(firstResult.rows[0].r.result).toBe("completed");
+      let firstDone = false;
+      void firstCall.then(
+        () => (firstDone = true),
+        () => (firstDone = true),
+      );
+      // The first holds its Family and group locks and waits on the row.
+      await waitsOn(onePid, "row");
 
-      // The second starts while the first still holds its locks.
-      const twoPid = (
-        await two.query<{ pid: number }>("select pg_backend_pid() as pid")
-      ).rows[0].pid;
       const secondCall = two.query<{ r: { result: string } }>(call, [
         yesterday,
         JSON.stringify([{ contact_id: second.contactId }]),
         payload(second.leadIds[0], y),
       ]);
-      for (let tries = 0; ; tries++) {
-        const waiting = await inRolledBackTransaction(
-          async (sql) =>
-            (
-              await sql.query<{ n: number }>(
-                "select count(*)::int as n from pg_locks where pid = $1 and not granted",
-                [twoPid],
-              )
-            ).rows[0].n,
-        );
-        if (waiting > 0) break;
-        if (tries > 100)
-          throw new Error("the second check-in never waited for the first");
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
+      // Both calls are running now: the second waits, the first is not done.
+      await waitsOn(twoPid, "any");
+      expect(firstDone).toBe(false);
 
+      await barrier.query("rollback");
+      const firstResult = await firstCall;
+      expect(firstResult.rows[0].r.result).toBe("completed");
       expect(await recomputes(one)).toBe(1);
       await one.query("reset role");
       await one.query("commit");
@@ -1637,8 +1675,10 @@ describe("two check-ins on one group at the same time", () => {
       await two.query("reset role");
       await two.query("commit");
     } finally {
+      await barrier.query("rollback").catch(() => {});
       await one.query("rollback").catch(() => {});
       await two.query("rollback").catch(() => {});
+      await barrier.end();
       await one.end();
       await two.end();
     }

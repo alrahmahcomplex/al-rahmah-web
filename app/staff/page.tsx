@@ -24,6 +24,8 @@ export const metadata: Metadata = {
 }
 
 const REGISTER_HREF = "/staff/check-in/new"
+const DAY_WORDS = { pick: "Open the calendar", choose: "Choose a date", close: "Close", reset: "Back to today" }
+const WEEK_WORDS = { pick: "Show another week", choose: "Choose a week", close: "Close", reset: "Back to this week" }
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 const one = (value: string | string[] | undefined) => (typeof value === "string" ? value : undefined)
@@ -83,10 +85,10 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <div className="hm-main" />
         <div className="hm-side">
           {interviewCounts?.ok && (
-            <StatCard card={interviewCard(day, today, interviewCounts.data)} param="day" resetLabel="Back to today" />
+            <StatCard card={interviewCard(day, today, interviewCounts.data)} param="day" today={today} picked={day} words={DAY_WORDS} />
           )}
           {appliedCounts?.ok && (
-            <StatCard card={appliedCard(week, today, appliedCounts.data)} param="week" resetLabel="Back to this week" />
+            <StatCard card={appliedCard(week, today, appliedCounts.data)} param="week" today={today} picked={week} words={WEEK_WORDS} />
           )}
           {statsFailed && <Note tone="bad">The numbers could not be counted. Try again in a moment.</Note>}
           <QuickActions actions={actions} />

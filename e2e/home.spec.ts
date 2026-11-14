@@ -145,6 +145,32 @@ test.describe("the stat cards", () => {
     await expect(page).toHaveURL(/\/staff$/)
   })
 
+  test("the calendar picks a past day, and the filter a past week in the calendar's week mode", async ({ page }) => {
+    // The 10th of last month, wherever today falls.
+    const today = tanzaniaToday()
+    const [year, month] = today.split("-").map(Number)
+    const last = new Date(Date.UTC(year, month - 2, 10))
+    const day = last.toISOString().slice(0, 10)
+    // The calendar names a day "10 October 2026", and a week "Week of 10 October 2026".
+    const dayName = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(last)
+    await signIn(page, ADMISSIONS)
+
+    await statCard(page, "Interviews today").getByRole("button", { name: "Open the calendar" }).click()
+    const days = page.getByRole("dialog", { name: "Choose a date" })
+    await days.getByRole("button", { name: "Previous month" }).click()
+    await days.getByRole("button", { name: dayName }).click()
+    await expect(statCard(page, `Interviews on ${shortDay(day)}`)).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/staff\\?day=${day}$`))
+
+    await statCard(page, "Applied this week").getByRole("button", { name: "Show another week" }).click()
+    const weeks = page.getByRole("dialog", { name: "Choose a week" })
+    await weeks.getByRole("button", { name: "Previous month" }).click()
+    await weeks.getByRole("button", { name: `Week of ${dayName}` }).click()
+    const monday = mondayOf(day)
+    await expect(statCard(page, `Applied ${shortRange(monday, addDays(monday, 6))}`)).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/staff\\?day=${day}&week=${monday}$`))
+  })
+
   test("a day or week that has not passed yet shows today and this week", async ({ page }) => {
     const today = tanzaniaToday()
     await signIn(page, ADMISSIONS)

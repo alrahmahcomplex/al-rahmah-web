@@ -1,13 +1,12 @@
 "use client"
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { useId, useState, type ReactNode } from "react"
+import { useId, useState } from "react"
 
-import { RoundButton } from "@/components/kit"
+import { MonthGrid, Popover, RoundButton } from "@/components/kit"
 
 import { sparkShape, SPARK_HEIGHT, SPARK_WIDTH } from "./spark"
-import type { StatCard as StatCardData } from "./stats"
-import { shortDay } from "./stats"
+import { mondayOf, shortDay, type StatCard as StatCardData } from "./stats"
 
 const TREND_PATHS = {
   up: ["M3 17l6-6 4 4 8-8", "M15 7h6v6"],
@@ -81,25 +80,37 @@ function Spark({ days }: { days: StatCardData["days"] }) {
 export function StatCard({
   card,
   param,
-  resetLabel,
-  picker,
+  today,
+  picked,
+  words,
 }: {
   card: StatCardData
+  /** `day` picks a past day in the calendar; `week` picks a past week in its week mode. */
   param: "day" | "week"
-  resetLabel: string
-  picker?: ReactNode
+  /** Today in Tanzania, "YYYY-MM-DD". */
+  today: string
+  /** The past day, or the Monday of the past week, the card shows; null for today or this week. */
+  picked: string | null
+  words: { pick: string; choose: string; close: string; reset: string }
 }) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
   const labelId = useId()
-  const picked = params.has(param)
+  const [open, setOpen] = useState(false)
 
-  function reset() {
+  function show(value: string | null) {
     const next = new URLSearchParams(params)
-    next.delete(param)
+    if (value) next.set(param, value)
+    else next.delete(param)
     const query = next.toString()
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }
+
+  function pick(day: string) {
+    setOpen(false)
+    if (param === "day") show(day < today ? day : null)
+    else show(mondayOf(day) < mondayOf(today) ? mondayOf(day) : null)
   }
 
   return (
@@ -108,14 +119,24 @@ export function StatCard({
         <b className="kit-num">{card.value}</b>
         <Trend change={card.change} comparedWith={card.comparedWith} />
       </div>
-      {picker && <div className="hm-stat-pick">{picker}</div>}
+      <div className="hm-stat-pick">
+        <Popover
+          open={open}
+          onOpenChange={setOpen}
+          title={<span className="sr-only">{words.choose}</span>}
+          closeLabel={words.close}
+          trigger={<RoundButton icon={param === "day" ? "calendar" : "filter"} label={words.pick} size={40} on={!!picked} />}
+        >
+          <MonthGrid mode={param} value={picked ?? today} max={today} onPick={pick} autoFocus />
+        </Popover>
+      </div>
       <div className="hm-stat-g">
         <Spark days={card.days} />
       </div>
       <p className="hm-stat-t" id={labelId}>
         {card.label}
       </p>
-      {picked && <RoundButton icon="reset" label={resetLabel} size={40} className="hm-stat-reset" onClick={reset} />}
+      {picked && <RoundButton icon="reset" label={words.reset} size={40} className="hm-stat-reset" onClick={() => show(null)} />}
     </section>
   )
 }

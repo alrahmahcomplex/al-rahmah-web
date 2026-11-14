@@ -169,7 +169,8 @@ a.kit-row { border-radius: 14px; }
 .kit-row-chev { color: var(--gf-quiet); }
 
 /* ---------- tables ---------- */
-.kit-tw { overflow-x: auto; margin: 0 -8px; }
+/* position: relative keeps an sr-only label in a cell inside the scroll box, so it never widens the page (#374). */
+.kit-tw { position: relative; overflow-x: auto; margin: 0 -8px; }
 .kit-tbl { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
 .kit-tbl thead th { font-size: 12px; font-weight: 600; color: var(--gf-quiet); padding: 6px 12px 10px; white-space: nowrap; }
 .kit-tbl :is(td, tbody th) { padding: 12px; border-top: 1px solid var(--gf-mist); vertical-align: middle; font-variant-numeric: tabular-nums; }

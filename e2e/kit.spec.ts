@@ -137,7 +137,7 @@ test("a centre sheet: focus on the title, Tab stays inside, Escape and Close ret
   const sheet = page.getByRole("dialog", { name: "Sibling · 10%" })
   await expect(sheet).toHaveAccessibleDescription("Latifa Omari Juma Hassan")
   await expect(sheet.getByRole("heading", { name: "Sibling · 10%" })).toBeFocused()
-  // Close, the scrolling body, Grant and Refuse: Tab cycles through them and no further.
+  // Close, Grant and Refuse (and the body, only while it scrolls): Tab cycles through them and no further.
   await tabStaysInside(page, sheet, 6)
   await page.keyboard.press("Escape")
   await expect(sheet).toHaveCount(0)
@@ -157,6 +157,31 @@ test("a centre sheet: focus on the title, Tab stays inside, Escape and Close ret
   await expect(card.getByText("Granted", { exact: true })).toBeVisible()
   // It leaves on its own after 2.6s.
   await expect(toast).toHaveCount(0, { timeout: 5_000 })
+})
+
+// #375: the body takes focus only while it scrolls, so the keyboard can scroll a long one and skips one that fits.
+test("a sheet's body is in the tab order only while it scrolls", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await openKit(page)
+  await page.locator('[data-part="more"]').getByRole("region", { name: "Sheet", exact: true }).getByRole("button", { name: "Review" }).first().click()
+  const review = page.getByRole("dialog", { name: "Sibling · 10%" })
+  await expect(review.getByRole("heading", { name: "Sibling · 10%" })).toBeFocused()
+  await page.keyboard.press("Tab")
+  await expect(review.getByRole("button", { name: "Close" })).toBeFocused()
+  await page.keyboard.press("Tab")
+  await expect(review.getByRole("button", { name: "Grant the discount" })).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(review).toHaveCount(0)
+
+  // On a phone the record's body is longer than the sheet: Tab reaches it, so the keyboard can scroll it.
+  await page.setViewportSize({ width: 360, height: 640 })
+  await page.locator('[data-part="more"]').getByRole("row", { name: "Rehema Said Abdallah" }).click()
+  const record = page.getByRole("dialog", { name: "Rehema Said Abdallah" })
+  await expect(record.getByRole("heading", { name: "Rehema Said Abdallah" })).toBeFocused()
+  await page.keyboard.press("Tab")
+  await expect(record.getByRole("button", { name: "Close" })).toBeFocused()
+  await page.keyboard.press("Tab")
+  await expect(record.locator(".kit-sheet-body")).toBeFocused()
 })
 
 test("a side sheet's inline editors: the fee with its reason, and the father's name", async ({ page }) => {

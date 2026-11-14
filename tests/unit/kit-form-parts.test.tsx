@@ -584,16 +584,42 @@ describe("required and disabled edges", () => {
     expect(pill).not.toHaveAttribute("aria-invalid")
   })
 
-  it("a file dropped on an area inside a disabled fieldset is not taken", () => {
+  // jsdom has no DataTransfer and its file input takes only a real FileList: both are stood in for,
+  // so a drop the part accepts really reaches onFileChange, and the disabled case fails on its assertion.
+  function dropFile(disabled: boolean) {
+    vi.stubGlobal(
+      "DataTransfer",
+      class {
+        list: File[] = []
+        items = { add: (file: File) => this.list.push(file) }
+        get files() {
+          return this.list
+        }
+      },
+    )
     const onFileChange = vi.fn()
-    render(
-      <fieldset disabled>
+    const { unmount } = render(
+      <fieldset disabled={disabled}>
         <FilePicker name="file" title="Drop the CSV here or choose a file" chooseLabel="Choose file" inputLabel="CSV file" onFileChange={onFileChange} />
       </fieldset>,
     )
+    const input = screen.getByLabelText("CSV file") as HTMLInputElement
+    let files: unknown = null
+    Object.defineProperty(input, "files", { configurable: true, get: () => files, set: (next) => (files = next) })
     const area = screen.getByText("Drop the CSV here or choose a file").closest("div")!
     fireEvent.drop(area, { dataTransfer: { files: [new File(["x"], "a.csv", { type: "text/csv" })] } })
-    expect(onFileChange).not.toHaveBeenCalled()
-    expect(screen.getByText("Drop the CSV here or choose a file")).toBeInTheDocument()
+    const shown = screen.queryByText("a.csv") !== null
+    unmount()
+    vi.unstubAllGlobals()
+    return { onFileChange, shown }
+  }
+
+  it("a file dropped on an area inside a disabled fieldset is not taken; on an enabled one it is", () => {
+    const enabled = dropFile(false)
+    expect(enabled.onFileChange).toHaveBeenCalledTimes(1)
+    expect(enabled.shown).toBe(true)
+    const disabled = dropFile(true)
+    expect(disabled.onFileChange).not.toHaveBeenCalled()
+    expect(disabled.shown).toBe(false)
   })
 })

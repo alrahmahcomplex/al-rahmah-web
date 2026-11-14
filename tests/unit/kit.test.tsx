@@ -397,3 +397,38 @@ describe("states", () => {
     expect(bone).toHaveStyle({ width: "140px", height: "36px" })
   })
 })
+
+// #374 and #375: two kit fixes that jsdom has no layout to show, read from the rule and the DOM.
+describe("table scroll box and sheet body", () => {
+  it("keeps the table's scroll box positioned, so an sr-only label in a cell stays inside it", async () => {
+    const { readFileSync } = await import("node:fs")
+    const css = readFileSync(`${process.cwd()}/components/kit/kit.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
+    const rule = /(^|\})\s*\.kit-tw\s*\{([^}]*)\}/.exec(css)
+    expect(rule?.[2]).toMatch(/position:\s*relative/)
+  })
+
+  it.each([
+    [false, 200, 200],
+    [true, 900, 200],
+  ])("puts the sheet body in the tab order only while it scrolls (scrolls: %s)", async (scrolls, scrollHeight, clientHeight) => {
+    const { Sheet } = await import("@/components/kit")
+    const height = (value: number) => ({ configurable: true, get: () => value })
+    const scroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight")
+    const client = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight")
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", height(scrollHeight))
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", height(clientHeight))
+    try {
+      render(
+        <Sheet open onOpenChange={() => {}} title="Retire the role" hint="Its staff keep their sign-in." closeLabel="Close">
+          <p>Details</p>
+        </Sheet>,
+      )
+      const body = document.querySelector(".kit-sheet-body")!
+      if (scrolls) expect(body).toHaveAttribute("tabindex", "0")
+      else expect(body).not.toHaveAttribute("tabindex")
+    } finally {
+      if (scroll) Object.defineProperty(HTMLElement.prototype, "scrollHeight", scroll)
+      if (client) Object.defineProperty(HTMLElement.prototype, "clientHeight", client)
+    }
+  })
+})

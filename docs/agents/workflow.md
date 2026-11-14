@@ -95,7 +95,7 @@ Screenshots, recordings and report files (such as Lighthouse HTML and JSON) go i
 
 This is the only way to attach evidence. Never push it to a branch (no `evidence/*` branches and no screenshots committed to any branch), never use a gist or `IMAGE_ADAPTER=gist`, never link files as `blob/...?raw=true`, and never use a third-party file host. `before-and-after` and `evidence-driven-testing` are for capturing only: skip their upload steps (`upload-and-copy.sh` with any adapter, 0x0.st included) and attach their files as above. Vercel builds every pushed branch outside `claude/**` and `codex/**`, so each push to an evidence branch also spends one of the day's deployments, fails a Preview build and emails the owner.
 
-If the in-app browser is not signed in to GitHub, or no in-app browser is available, ask the human to sign in or open one (`AskUserQuestion` in Claude Code), wait until they say it is done, then upload. A sub-agent that cannot ask the human reports the missing sign-in to its parent as a blocker. Do not switch to another way of hosting the files while you wait.
+If no tab is open or GitHub looks signed out, open the PR's URL in the in-app browser yourself and follow [Hosted services](hosted-services.md) to get back in before you ask the human. A sub-agent that cannot ask the human reports the blocker to its parent, with what it tried. Do not switch to another way of hosting the files while you wait.
 
 ## Review and acceptance
 

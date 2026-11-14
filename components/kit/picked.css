@@ -1,0 +1,114 @@
+/* The kit parts the owner picked on prototype v38's Design system page (#402):
+   Tabs C sliding track, Pagination A numbered pills, Avatars B soft tints,
+   Tooltips A light, Slider B steps with labels, Accordion A separate cards.
+   Kept apart from kit.css so the v38 look (#401) can change that file
+   alongside. Colours come from app/tokens.css only (scripts/design-lint.mjs). */
+
+:is(.kit-track-tab, .kit-pg, .kit-acc-btn):focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+
+/* ---------- tabs: one indigo pill slides along a lavender track ---------- */
+.kit-tabs { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.kit-track {
+  --i: 0; position: relative; flex: 1 1 320px; min-width: 0; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  padding: 4px; border-radius: 999px; background: var(--gf-whisper);
+}
+.kit-track-pill {
+  position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / var(--n)); border-radius: 999px;
+  background: var(--gf-indigo); transform: translateX(calc(var(--i) * 100%)); transition: transform 300ms var(--gf-ease-out);
+}
+.kit-track-tab {
+  position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; min-height: 40px; min-width: 0; padding: 0 6px;
+  border: 0; border-radius: 999px; background: none; cursor: pointer; text-decoration: none;
+  font-weight: 600; font-size: 13px; color: var(--gf-indigo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: color var(--gf-t-med);
+}
+.kit-track-tab > span { overflow: hidden; text-overflow: ellipsis; }
+.kit-track-tab[aria-current="page"], .kit-track-tab[aria-selected="true"] { color: var(--gf-paper); }
+.kit-tabpanel { margin-top: 14px; }
+.kit-tabpanel:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 4px; border-radius: 14px; }
+
+/* ---------- pagination: numbered pills, the current page in indigo ---------- */
+.kit-pga { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.kit-pg {
+  min-width: 36px; height: 36px; padding: 0 8px; border-radius: 999px; border: 0.75px solid var(--gf-line); background: var(--gf-paper);
+  color: var(--gf-indigo); font-weight: 600; font-size: 14px; font-variant-numeric: tabular-nums; text-decoration: none; cursor: pointer;
+  display: inline-grid; place-items: center; transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.kit-pg:hover { background: var(--gf-whisper); }
+.kit-pg[aria-current="page"] {
+  background: var(--gf-indigo); border-color: var(--gf-indigo); color: var(--gf-paper);
+  font: italic 700 14px var(--font-exo), "Exo", system-ui, sans-serif;
+}
+.kit-pg:disabled { opacity: 0.4; cursor: default; }
+.kit-pg:disabled:hover { background: var(--gf-paper); }
+.kit-pg .gf-ic { width: 16px; height: 16px; }
+.kit-pg-gap { padding: 0 2px; color: var(--gf-quiet); }
+
+/* ---------- avatars: initials on a soft tint ---------- */
+.kit-av {
+  --s: 40px; width: var(--s); height: var(--s); flex: none; border-radius: 50%; display: inline-grid; place-items: center;
+  font: italic 800 calc(var(--s) * 0.36)/1 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: 0.01em;
+  background: var(--gf-whisper); color: var(--gf-indigo);
+}
+.kit-av[data-tone="orange"] { background: var(--gf-orange-tint); color: var(--gf-orange-deep); }
+.kit-av[data-tone="green"] { background: var(--gf-green-tint); color: var(--gf-green); }
+.kit-av[data-more] {
+  background: var(--gf-paper); color: var(--gf-ink-soft); box-shadow: inset 0 0 0 0.75px var(--gf-line);
+  font-family: inherit; font-style: normal; font-weight: 700;
+}
+.kit-avg { display: inline-flex; }
+.kit-avg .kit-av { position: relative; box-shadow: 0 0 0 2.5px var(--gf-paper); }
+.kit-avg .kit-av[data-more] { box-shadow: inset 0 0 0 0.75px var(--gf-line), 0 0 0 2.5px var(--gf-paper); }
+.kit-avg .kit-av + .kit-av { margin-left: -8px; }
+.kit-avg .kit-av:nth-child(1) { z-index: 5; }
+.kit-avg .kit-av:nth-child(2) { z-index: 4; }
+.kit-avg .kit-av:nth-child(3) { z-index: 3; }
+.kit-avg .kit-av:nth-child(4) { z-index: 2; }
+.kit-avg .kit-av:nth-child(5) { z-index: 1; }
+
+/* ---------- tooltip: white, a thin line and a soft shadow, above its button ---------- */
+.kit-tipw { position: relative; display: inline-flex; }
+.kit-tip {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; z-index: 5; transform: translate(-50%, 4px); opacity: 0; pointer-events: none;
+  white-space: nowrap; padding: 6px 10px; border-radius: 10px; font-size: 12.5px; font-weight: 600;
+  background: var(--gf-paper); color: var(--gf-indigo-night); border: 0.75px solid var(--gf-line); box-shadow: 0 8px 18px -10px rgb(9 0 187 / 0.4);
+  transition: opacity var(--gf-t-fast), transform var(--gf-t-med) var(--gf-ease-out);
+}
+/* Over the 8px between the button and the tooltip, the pointer keeps it open. */
+.kit-tip::after { content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 9px; }
+.kit-tipw:is(:hover, :has(:focus-visible)):not([data-dismissed]) .kit-tip { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+
+/* ---------- slider: steps with their labels under the track ---------- */
+.kit-sld { --p: 0%; position: relative; padding-top: 4px; }
+.kit-sld input { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 28px; margin: 0; background: transparent; cursor: pointer; }
+.kit-sld input::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: linear-gradient(90deg, var(--gf-indigo) var(--p), var(--gf-mist) var(--p)); }
+.kit-sld input::-moz-range-track { height: 6px; border-radius: 999px; background: linear-gradient(90deg, var(--gf-indigo) var(--p), var(--gf-mist) var(--p)); }
+.kit-sld input::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 24px; height: 24px; margin-top: -9px; border-radius: 50%;
+  background: var(--gf-paper); border: 2px solid var(--gf-indigo); box-shadow: 0 2px 6px rgb(9 0 187 / 0.25);
+}
+.kit-sld input::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--gf-paper); border: 2px solid var(--gf-indigo); box-shadow: 0 2px 6px rgb(9 0 187 / 0.25); }
+.kit-sld input:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 4px; border-radius: 999px; }
+.kit-sld input:disabled { opacity: 0.5; cursor: not-allowed; }
+.kit-sld-stops { display: flex; justify-content: space-between; padding: 2px 4px 0; font-size: 12px; color: var(--gf-quiet); font-variant-numeric: tabular-nums; }
+
+/* ---------- accordion: separate cards, one open at a time ---------- */
+.kit-acc { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.kit-acc-item { border: 0.75px solid var(--gf-line); border-radius: 20px; background: var(--gf-paper); }
+.kit-acc-item > :is(h2, h3, h4) { margin: 0; font: inherit; }
+.kit-acc-btn {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 10px 16px;
+  border: 0; border-radius: 20px; background: none; cursor: pointer; text-align: left; font-weight: 600; font-size: 14.5px; color: var(--gf-ink);
+}
+.kit-acc-btn .gf-ic { flex: none; color: var(--gf-indigo); transition: transform var(--gf-fold) var(--gf-ease-out); }
+.kit-acc-item[data-open] .kit-acc-btn .gf-ic { transform: rotate(180deg); }
+.kit-acc-panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--gf-fold) var(--gf-ease-out); }
+.kit-acc-item[data-open] .kit-acc-panel { grid-template-rows: 1fr; }
+.kit-acc-panel > div { min-height: 0; overflow: hidden; }
+.kit-acc-body { padding: 0 16px 14px; font-size: 14px; line-height: 1.5; color: var(--gf-ink-soft); }
+.kit-acc-body > p { margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-track-pill, .kit-acc-panel, .kit-acc-btn .gf-ic, .kit-tip { transition: none; }
+}
+html.rm :is(.kit-track-pill, .kit-acc-panel, .kit-acc-btn .gf-ic, .kit-tip) { transition: none; }

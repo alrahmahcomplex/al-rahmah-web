@@ -58,7 +58,9 @@ test("the code box adds its hyphen, and the full-name box asks for two names", a
   await card.getByRole("button", { name: "Check the name" }).click()
   await expect(card.getByText("Type their full name, at least two names.")).toBeVisible()
   await expect(who).toHaveAttribute("aria-invalid", "true")
+  // The text is centred, so a click can land inside the word; type at its end.
   await who.click()
+  await page.keyboard.press("End")
   await page.keyboard.type(" khamis")
   await expect(who).toHaveValue("JUMA KHAMIS")
   await card.getByRole("button", { name: "Check the name" }).click()

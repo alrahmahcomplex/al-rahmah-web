@@ -34,7 +34,7 @@ test("shows both parts on the stage of the new shell, and is not indexed", async
   await expect(top.getByText("#0900bb")).toBeVisible()
 
   const more = page.locator('[data-part="more"]')
-  for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Guided form", "Sheet", "Side sheet", "Popover", "Toast", "Confetti"])
+  for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Guided form", "Sheet", "Side sheet", "Popover", "Toast", "Finish"])
     await expect(more.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible()
 })
 

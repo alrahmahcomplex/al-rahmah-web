@@ -8,11 +8,18 @@ import { cn } from "@/lib/utils"
 
 import "./kit.css"
 
-export type ButtonVariant = "go" | "ghost"
+export type ButtonVariant = "go" | "ghost" | "bad" | "warn"
 export type ButtonSize = "default" | "small" | "wide"
 
+const VARIANT_CLASS: Record<ButtonVariant, string> = { go: "kit-go", ghost: "kit-ghost", bad: "kit-bad", warn: "kit-warn" }
+
 type Look = {
-  /** `go`: the one orange next step on a screen. `ghost`: the other way forward. */
+  /**
+   * `go`: the one orange next step on a screen, the only filled button.
+   * `ghost`: the other way forward. `bad`: outlined red, for a step that
+   * removes, declines or clears. `warn`: outlined dark orange, for a step
+   * back that can be undone, such as withdrawing a request.
+   */
   variant?: ButtonVariant
   /** `default` 44px, `small` 36px for actions inside a card or header, `wide` full width at the foot of a task card or sheet. */
   size?: ButtonSize
@@ -23,7 +30,7 @@ type Look = {
 }
 
 function lookClass({ variant = "go", size = "default" }: Look, className?: string) {
-  return cn("kit-btn", variant === "go" ? "kit-go" : "kit-ghost", size === "small" && "kit-sm", size === "wide" && "kit-wide", className)
+  return cn("kit-btn", VARIANT_CLASS[variant], size === "small" && "kit-sm", size === "wide" && "kit-wide", className)
 }
 
 function Inside({ icon, chevron, children }: { icon?: IconName; chevron?: boolean; children: ReactNode }) {
@@ -48,7 +55,7 @@ export type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "childre
     ref?: Ref<HTMLButtonElement>
   }
 
-/** The kit's one button (DESIGN.md, Buttons): Go, Ghost, Small and Wide. Exo 600 italic in a full pill. */
+/** The kit's one button (DESIGN.md, Buttons): Go, Ghost, Bad and Warn; Small and Wide. Exo 600 italic in a full pill. */
 export function Button({ variant, size, icon, chevron, pending, className, children, type = "button", onClick, ref, ...props }: ButtonProps) {
   const refuse = pending || props["aria-disabled"] === true || props["aria-disabled"] === "true"
   return (

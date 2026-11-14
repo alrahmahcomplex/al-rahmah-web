@@ -13,9 +13,23 @@
 .kp-sw b { display: block; color: var(--gf-ink); font-size: 12px; font-weight: 600; }
 
 .kp-rowx { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.kp-icg { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; color: var(--gf-indigo); }
-.kp-icg > span { height: 44px; border-radius: 14px; background: var(--gf-chrome); display: grid; place-items: center; }
+/* The prototype's icon grid (v38): each icon over its name; then the three sizes. */
+.kp-icg { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; color: var(--gf-indigo); }
+.kp-icg > span { padding: 12px 4px 8px; border-radius: 14px; background: var(--gf-chrome); display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .kp-icg .gf-ic { width: 22px; height: 22px; }
+.kp-icg small, .kp-icsz small { font-size: 11px; color: var(--gf-quiet); }
+.kp-icsz > span { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; color: var(--gf-indigo); }
+
+/* The illustrations, style C, three to a row (two on a phone), each in a thin-lined tile. */
+.kp-ilg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 720px) { .kp-ilg { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kp-ilt {
+  margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 12px 14px; min-width: 0; text-align: center;
+  border: var(--gf-stroke) solid var(--gf-line-soft); border-radius: 20px; background: var(--gf-paper);
+}
+.kp-ilt figcaption { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.kp-ilt b { font-size: 14px; font-weight: 600; color: var(--gf-ink); }
+.kp-ilt small { font-size: 12.5px; line-height: 1.4; color: var(--gf-quiet); }
 
 .kp-spec { margin: 0; font-size: 13px; color: var(--gf-ink-soft); }
 .kp-spec code { font: 600 12px ui-monospace, "Cascadia Code", Consolas, monospace; color: var(--gf-indigo); background: var(--gf-whisper); border-radius: 6px; padding: 1px 6px; }
@@ -23,7 +37,6 @@
   font: italic 800 26px/1.18 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: -0.01em; text-wrap: balance; color: var(--gf-indigo);
 }
 .kp-reading { margin: 0; font-size: 16px; }
-.kp-fig { margin: 0; text-align: center; }
 
 /* The progress bar sits still inside its card here, not sticky on a task card. */
 .kp-static.gf-bar-row { position: static; margin: 0; padding-top: 12px; }
@@ -46,7 +59,7 @@
   font: 700 10.5px/1 var(--font-sans), system-ui, sans-serif; font-style: normal;
 }
 .kp-me {
-  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 4px; border-radius: 999px; border: 1.5px solid var(--gf-line);
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 4px; border-radius: 999px; border: var(--gf-stroke) solid var(--gf-line);
   background: var(--gf-paper); color: var(--gf-ink); flex: none; text-align: left; cursor: pointer; font: inherit;
   transition: background var(--gf-t-med) var(--gf-ease-out);
 }

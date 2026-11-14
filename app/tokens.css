@@ -19,7 +19,7 @@
   --gf-ember: #cc6200;
   --gf-orange-deep: #b35500;
   --gf-orange-tint: #fff4e8;
-  /* the soft circle inside an active icon (DESIGN.md, Icons) */
+  /* the one peach highlight in a line illustration (DESIGN.md, Illustrations) */
   --gf-peach-glow: #ffcfa6;
   --gf-paper: #ffffff;
   --gf-ink: #1e293b;
@@ -38,8 +38,12 @@
   --gf-sun: 0 4px 6px -1px rgb(238 115 0 / 0.25), 0 2px 4px -2px rgb(238 115 0 / 0.25);
   /* every resting white card on the stage */
   --gf-card-shadow: 0 1px 2px rgb(9 0 187 / 0.04), 0 12px 28px -18px rgb(9 0 187 / 0.22);
-  /* the lavender wash under every page body and the staff stage */
-  --gf-wash: linear-gradient(135deg, #f2f0fc 0%, rgb(224 220 249 / 0.5) 45%, #fff 100%);
+  /* the lavender wash under every page body and the staff stage; 30% fainter
+     since prototype v38 (#401) */
+  --gf-wash: linear-gradient(135deg, #f6f5fd 0%, rgb(224 220 249 / 0.35) 45%, #fff 100%);
+  /* the thin line of every outlined part in the staff look: half the old
+     1.5px since prototype v38 (#401) */
+  --gf-stroke: 0.75px;
   --gf-t-fast: 140ms;
   --gf-t-med: 280ms;
   --gf-t-slow: 420ms;
@@ -63,9 +67,12 @@
   --gf-note-good-ink: #0b5a2d;
   --gf-note-wait-ink: #6b2a00;
   --gf-note-bad-ink: #a11717;
-  /* the two light pieces of the staff registration's confetti (DESIGN.md, Confetti) */
+  /* the light partners of orange, indigo and green in the finish confetti (DESIGN.md, Confetti) */
   --gf-confetti-peach: #ffb066;
   --gf-confetti-violet: #7b73ff;
+  --gf-confetti-mint: #4cc38a;
+  /* an active icon's second line on indigo (DESIGN.md, Icons, set 1) */
+  --gf-icon-detail-on-indigo: #ffa24d;
   /* the thumb of the staff stage's scrollbar, drawn outside the stage (DESIGN.md, Layout) */
   --gf-scroll-thumb: #cbc5f6;
   /* a calendar day that may not be chosen (DESIGN.md, Inputs; #358) */

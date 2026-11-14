@@ -1,6 +1,6 @@
 # Kit
 
-The staff app's components in the Admission form's design language (DESIGN.md, Components), measured from the approved prototype, version 13. Each component imports `kit.css`; its classes start with `kit-` and read the `--gf-*` tokens from `app/tokens.css`. No hex colour may be written here (`scripts/design-lint.mjs`). No component holds page words: pass every string as a prop.
+The staff app's components in the Admission form's design language (DESIGN.md, Components), measured from the approved prototype, version 13, with the look of version 38: thin 0.75px lines (`--gf-stroke`), icon set 1, line illustrations, outlined red and dark orange buttons, tinted notes and toasts, and the finish mark. Each component imports `kit.css`; its classes start with `kit-` and read the `--gf-*` tokens from `app/tokens.css`. No hex colour may be written here (`scripts/design-lint.mjs`). No component holds page words: pass every string as a prop.
 
 Import from `@/components/kit`. Every piece, in every state, is on the kit page, `/staff/kit`. Check a change there against the prototype's "Design system" page.
 
@@ -10,7 +10,7 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 
 | Use | Not |
 |---|---|
-| `Button` (`variant`, `size`, `pending`), `ButtonLink` | `ui/button`, `staff/pending-button` |
+| `Button` (`variant`, `size`, `pending`), `ButtonLink` | `ui/button`, `staff/pending-button`; `variant="bad"` for `ui/button`'s `destructive` |
 | `RoundButton` | `ui/button` with `size="icon"` |
 | `TextLink` | an underlined `ui/button` `variant="link"` |
 | `Field`, `FieldError` | `ui/input`, `auth-fields` |
@@ -36,14 +36,14 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 | `Table` | `ui/table` |
 | `KeyValueList`, `Section` | hand-made `dl` grids |
 | `Note` | `ui/alert` |
-| `EmptyState`, `LoadingState`, `FinishedState` | `staff/empty-state` |
+| `EmptyState`, `LoadingState`, `FinishedState`, `FinishMark` | `staff/empty-state`, `staff/success-mark` on a finished task |
 | `SkeletonBlock` | `staff/page-skeleton`'s `Bone`, `ui/skeleton` |
 | `Icon` from `@/components/icons` | `lucide-react` |
 | `ContinuePill` from the guided form | stays the guided form's own Continue; elsewhere use `Button size="wide" chevron` |
 | `Sheet`, `InlineEditor` | `ui/dialog`, `ui/sheet`, `ui/alert-dialog`, `guided-form/bottom-sheet` |
 | `Popover`, `PopoverClose` | `ui/popover`, `ui/dropdown-menu` |
 | `toast` and `Toaster` from the kit | `toast` from `sonner`, `ui/sonner` |
-| `rainConfetti` | the Admission form's `Confetti` (that burst stays on the Admission form) |
+| `rainConfetti` | the Admission form's `Confetti` (that burst stays on the Admission form until it moves to v38) |
 
 The new shell (#322) draws a route marked `"new"` in `app/staff/route-looks.ts`; ESLint then refuses the old parts in that route's folder.
 
@@ -53,12 +53,14 @@ The new shell (#322) draws a route marked `"new"` in `app/staff/route-looks.ts`;
 <Button size="wide" chevron onClick={next}>Continue</Button>
 <Button variant="ghost" size="wide" icon="plus">Yes, add a student</Button>
 <Button size="small" pending={saving}>{saving ? "Saving…" : "Save"}</Button>
+<Button variant="bad" size="wide" onClick={clear}>Yes, clear the form</Button>
+<Button variant="warn" size="small" onClick={withdraw}>Withdraw request</Button>
 <ButtonLink href="/staff/applicants" size="wide" chevron>Open Applicants</ButtonLink>
 <RoundButton icon="back" label="Back" />            {/* 44px; 40 for the top bar, 36 to close a sheet */}
 <TextLink onClick={edit}>Edit</TextLink>
 ```
 
-One `go` button per screen (The One Invitation Rule). `pending` keeps the button focusable, sets `aria-busy` and `aria-disabled`, drops the chevron and refuses clicks and form submits; change the label in the same render. A `RoundButton` hosts its icon's active state on hover. That state, like a `ListRow`'s featured disc, shows only inside the new shell (`data-shell="new"`) or the kit page (`data-kit`); see `components/icons/icons.css`.
+One `go` button per screen (The One Invitation Rule), and it is the only filled one. `bad` is outlined red, for a step that removes, declines or clears; `warn` is outlined dark orange, for a step back that can be undone. Never fill a button red. `pending` keeps the button focusable, sets `aria-busy` and `aria-disabled`, drops the chevron and refuses clicks and form submits; change the label in the same render. A `RoundButton` hosts its icon's active state on hover: set 1 turns the main line indigo and the detail orange. That state, like a `ListRow`'s featured disc and the date field's calendar while it is open, shows only inside the new shell (`data-shell="new"`) or the kit page (`data-kit`); see `components/icons/icons.css`. Any element can host it with `data-icon-host=""`.
 
 ## Fields
 
@@ -166,13 +168,15 @@ export const metadata = { title: pageTitle("Applicants") }
 
 `PageHeader` is the page's one `h1`. A client part deeper down adds an action to its slot with `<PageActions>`. A `Card` with a title is a region named by it. `TaskCard` is the one lifted card on a page.
 
-`ListRow` is a link with `href`, a button with `onClick`, a plain row otherwise; `icon` draws the featured disc, `leading` takes a Line tag instead. `Table` takes `columns` (`header`, `cell`, `align: "end"` for money, `rowHeader` for the cell that names its row, such as a name) and `rows`; `onOpen` makes rows focusable, opened by click or Enter, named by `rowLabel`. `total` adds the bold total row. `KeyValueList` items take a `reason` line and `numeric`. `Section` heads a part of a card or sheet. `Note tone="info" | "good" | "wait" | "bad"` takes a `role`: `status` for news, `alert` for a failure.
+`ListRow` is a link with `href`, a button with `onClick`, a plain row otherwise; `icon` draws the featured disc, `leading` takes a Line tag instead. `Table` takes `columns` (`header`, `cell`, `align: "end"` for money, `rowHeader` for the cell that names its row, such as a name) and `rows`; `onOpen` makes rows focusable, opened by click or Enter, named by `rowLabel`. `total` adds the bold total row. `KeyValueList` items take a `reason` line and `numeric`. `Section` heads a part of a card or sheet. `Note tone="info" | "good" | "wait" | "bad"` takes a `role`: `status` for news, `alert` for a failure. Each tone is a faint tint with a thin line in its own colour.
 
 ## States
 
-- `EmptyState` (title, hint, at most one action), inside the card where the list would be.
-- `LoadingState label="Finding the family…"` while a task waits; `role="status"`.
-- `FinishedState` inside a `TaskCard`: title, hint, `results` (Admission Numbers), then notes and the next actions as children.
+- `EmptyState` (title, hint, at most one action), inside the card where the list would be. `illustration`: `search` when nothing matches (the default), `done` when nothing is due, `inbox` when no request waits, `oops` for a failure with Try again.
+- `LoadingState label="Finding the family…"` while a task waits; `role="status"`. `illustration="sending"` for longer work such as a batch.
+- `FinishedState` inside a `TaskCard`: the finish mark, title, hint, `results` (Admission Numbers), then notes and the next actions as children.
+- `FinishMark` is that mark on its own: the live Admission form's 84px green circle, drawn, then its tick left to right. Pass it (its `ref`) to `rainConfetti`.
+- The pictures are `Illustration` from `@/components/illustrations`: line drawings in style C, "Soft circle", never isometric. They move until removed and stand still under reduced motion.
 - `SkeletonBlock` builds a page's `loading.tsx`: still Lavender Whisper blocks at the real sizes (`shape="pill"` or `"card"`), inside an element with `role="status"` that names what is loading.
 
 ## Guided form
@@ -191,9 +195,9 @@ A staff task that asks one question at a time (registration, check-in) uses the 
 </GuidedTask>
 ```
 
-- The task card sits in a 640px centred column. The progress bar sticks to the top of the stage's scroll area, with Back and Start over drawn with the set 2 icons (Start over takes the Peach Glow on hover; Back is a plain chevron).
+- The task card sits in a 640px centred column. The progress bar sticks to the top of the stage's scroll area, with Back and Start over drawn with the set 1 icons (Start over's arrow turns orange on hover; Back is a plain chevron).
 - The stage's scroll area sets `--kit-stage-pt` to its top padding and carries `data-stage-scroll`; `revealStep` then scrolls it instead of the window. Without them the bar sticks to the window's top.
-- `finished` swaps the card for `FinishedState`: its title takes focus and `rainConfetti` runs once. Wait 950ms after the save before setting it, so the last group's cheer plays first.
+- `finished` swaps the card for `FinishedState`: its title takes focus, the finish mark draws, and `rainConfetti` bursts from it once. Wait 950ms after the save before setting it, so the last group's cheer plays first.
 - `GuidedReveal open` unfolds part of an open question once the answers before it allow (a phone field after a choice, Continue once the question is complete); closed, it takes no space and is inert.
 - Reduced motion: folds are instant with a 120ms fade; the cheer, bubbles and confetti are off.
 
@@ -251,8 +255,9 @@ It draws the dashed line and the small Save and Cancel; when it closes, focus go
 ## Toasts and confetti
 
 ```tsx
-toast("Fee saved. The change and its reason are in the audit log.")
-rainConfetti()
+toast("Fee saved. The change and its reason are in the audit log.", { tone: "good" })
+toast("The batch stopped early. Its report shows how far it got.", { tone: "bad" })
+rainConfetti(markRef.current)
 ```
 
-`toast` shows one sentence in the Indigo Night pill at the bottom centre for 2.6s, at most half the window wide, so on a phone it wraps; a new one replaces it. It goes to the kit's `Toaster`, which the new shell mounts once; the old shell's toasts keep their look. `rainConfetti` is the finished registration's rain. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, and there is no confetti.
+`toast` shows one sentence at the bottom centre for 2.6s, at most half the window wide, so on a phone it wraps; a new one replaces it. `tone` is the note's: `info` (the default) for news, `good` for a save, `wait` for a warning, `bad` for a failure, which is read out as an alert. Each is a faint tint with a thin line and its icon. It goes to the kit's `Toaster`, which the new shell mounts once; the old shell's toasts keep their look. `rainConfetti(mark)` waits for the finish mark's tick, then bursts from its centre: 60 pieces under 600px, 85 wider, mixed shapes in orange, indigo and green only. Without a mark it finds the last one on the screen. Both, and every sheet, honour reduced motion: sheets fade in place, the toast does not rise, the mark is drawn at once and there is no confetti.

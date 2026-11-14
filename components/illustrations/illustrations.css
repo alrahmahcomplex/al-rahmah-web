@@ -1,0 +1,35 @@
+/* Line illustrations, style C "Soft circle" (DESIGN.md, Illustrations; prototype v38). */
+
+.ill { display: block; margin: 0 auto; max-width: 100%; height: auto; overflow: visible; }
+.ill-bg { fill: var(--gf-whisper); }
+.ill-wh { fill: var(--gf-paper); }
+.ill-hl { fill: var(--gf-peach-glow); }
+.ill-ln, .ill-ac { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ill-ln { stroke: var(--gf-indigo); }
+.ill-ac { stroke: var(--gf-orange); }
+
+@keyframes ill-bob { 50% { transform: translateY(-4px); } }
+.ill-bob { animation: ill-bob 2.6s var(--gf-ease-io) infinite; }
+@keyframes ill-tw { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.6); } }
+.ill-tw { transform-box: fill-box; transform-origin: center; animation: ill-tw 1.8s ease-in-out infinite; }
+.ill-d2 { animation-delay: 0.9s; }
+@keyframes ill-steam { 0% { transform: translateY(4px); opacity: 0; } 40% { opacity: 1; } 100% { transform: translateY(-6px); opacity: 0; } }
+.ill-steam path { animation: ill-steam 2.4s ease-out infinite; }
+.ill-steam path:nth-child(2) { animation-delay: 0.5s; }
+.ill-steam path:nth-child(3) { animation-delay: 1s; }
+@keyframes ill-rays { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+.ill-rays path { animation: ill-rays 1.6s ease-in-out infinite; }
+.ill-rays path:nth-child(2) { animation-delay: 0.3s; }
+.ill-rays path:nth-child(3) { animation-delay: 0.6s; }
+@keyframes ill-sweep { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-28px, -14px); } 50% { transform: translate(-30px, 6px); } 75% { transform: translate(-8px, -16px); } }
+.ill-sweep { animation: ill-sweep 3.2s var(--gf-ease-io) infinite; }
+@keyframes ill-fly { 50% { transform: translate(4px, -5px); } }
+.ill-fly { animation: ill-fly 1.6s var(--gf-ease-io) infinite; }
+@keyframes ill-trail { to { stroke-dashoffset: -16; } }
+.ill-trail { stroke-dasharray: 3 5; animation: ill-trail 0.8s linear infinite; }
+
+/* Reduced motion: the picture stands still. */
+@media (prefers-reduced-motion: reduce) {
+  .ill * { animation: none !important; }
+}
+html.rm .ill * { animation: none !important; }

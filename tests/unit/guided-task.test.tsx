@@ -36,9 +36,9 @@ describe("ProgressBar icons", () => {
     rerender(<ProgressBar {...PROGRESS} kitIcons />)
     expect(container.querySelectorAll("button[data-icon-host]")).toHaveLength(2)
     expect(container.querySelectorAll(".gf-round svg.gf-ic")).toHaveLength(2)
-    // Start over has the soft circle that turns Peach Glow on hover; Back is a plain chevron, as in the prototype.
-    expect(screen.getByRole("button", { name: "Back", hidden: true }).querySelector("circle")).toBeNull()
-    expect(container.querySelector(".gf-reset circle.gf-ic-glow")).not.toBeNull()
+    // Set 1: Start over has its arrow as a second line that turns orange on hover; Back is a plain chevron, as in the prototype.
+    expect(screen.getByRole("button", { name: "Back", hidden: true }).querySelector(".gf-ic-detail")).toBeNull()
+    expect(container.querySelector(".gf-reset .gf-ic-detail")).not.toBeNull()
   })
 })
 
@@ -75,6 +75,8 @@ describe("GuidedTask", () => {
     expect(screen.getByRole("button", { name: "Register another family" })).toBeInTheDocument()
     rerender(<GuidedTask progress={PROGRESS} finished={{ ...finished }}>{null}</GuidedTask>)
     expect(rain).toHaveBeenCalledTimes(1)
+    // The burst starts from the finished card's own mark.
+    expect(rain).toHaveBeenCalledWith(container.querySelector(".kit-mark"))
   })
 })
 

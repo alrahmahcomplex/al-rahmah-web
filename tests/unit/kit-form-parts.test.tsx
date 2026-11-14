@@ -520,7 +520,8 @@ describe("RoundButton on", () => {
     render(<RoundButton icon="filter" label="Filter Visited applicants" on />)
     const button = screen.getByRole("button", { name: "Filter Visited applicants" })
     expect(button).toHaveAttribute("data-on", "")
-    expect(button.querySelector("circle.gf-ic-glow")).not.toBeNull()
+    expect(button).toHaveAttribute("data-icon-host", "")
+    expect(button.querySelector(".gf-ic-detail")).not.toBeNull()
   })
 })
 

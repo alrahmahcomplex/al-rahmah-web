@@ -44,7 +44,7 @@ import { PickedPartsCards } from "./picked-parts"
 // the kit, card for card; then the kit's other pieces, filled with the
 // prototype's own example data. Fixture text only.
 
-const ICON_NAMES = (Object.keys(ICONS) as IconName[]).filter((name) => ICONS[name].detail && ICONS[name].circle)
+const ICON_NAMES = Object.keys(ICONS) as IconName[]
 
 const SWATCHES = [
   ["Rahmah Indigo", "--gf-indigo"],
@@ -57,12 +57,16 @@ const SWATCHES = [
   ["Alert red", "--gf-red"],
 ] as const
 
-const ILLUSTRATIONS: [IllustrationName, string][] = [
-  ["empty", "Nothing to show"],
-  ["loading", "Loading"],
-  ["finished", "Finished"],
-  ["front-desk", "Front desk"],
+// The prototype's Illustrations card (v38): style C, with what each picture is for.
+const ILLUSTRATIONS: { name: IllustrationName; kind: "Empty" | "Loading" | "Working" | "Error"; title: string; caption: string }[] = [
+  { name: "search", kind: "Empty", title: "Nothing found", caption: "No applicant matches. Clear the filter to see everyone." },
+  { name: "done", kind: "Empty", title: "All caught up", caption: "Nothing is due today. New work shows up here." },
+  { name: "inbox", kind: "Empty", title: "No requests", caption: "Discount and reopening requests will be listed here." },
+  { name: "finding", kind: "Loading", title: "Finding the family", caption: "Loading: the lens sweeps the list until the record opens." },
+  { name: "sending", kind: "Working", title: "Sending invites", caption: "Working: the plane bobs and its trail runs until the batch is done." },
+  { name: "oops", kind: "Error", title: "Something went wrong", caption: "Shown with Try again. Your answers are kept." },
 ]
+const KIND_TONE = { Empty: "line", Loading: "wait", Working: "wait", Error: "bad" } as const
 
 const PROGRESS_STEPS = [3, 3, 2]
 const PROGRESS_LABELS = ["Students", "Custodians", "Finish"]
@@ -112,35 +116,42 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
   return (
     <div className="kp-ds" data-part="design-system" data-rise="group">
       <Card title="Icons: one colour at rest, two in use" className="kp-full">
-        <p className="kp-spec">One colour at rest. Two colours when hovered, current, or shown large. Hover the icons to see it.</p>
-        <div className="kp-ds" data-rise="group">
-          <Card title="Set 2 · Soft highlight">
-            <p className="kp-spec">From your second picture: an indigo outline over a faint light-orange shape that grows in.</p>
-            <div className="kp-icg" data-icons="hover">
-              {ICON_NAMES.map((name) => (
-                <span key={name} title={name} data-icon-host="">
-                  <Icon name={name} />
-                </span>
-              ))}
-            </div>
-            <div className="kp-icg" data-icons="featured">
-              {ICON_NAMES.slice(0, 9).map((name) => (
-                <span key={name}>
-                  <Icon name={name} featured />
-                </span>
-              ))}
-            </div>
-          </Card>
+        <p className="kp-spec">
+          Set 1 · Two lines: the main shape in indigo, its detail in orange when hovered or current. One colour at rest. 24px grid, 2px round stroke. Hover them.
+        </p>
+        <div className="kp-icg" data-icons="hover">
+          {ICON_NAMES.map((name) => (
+            <span key={name} title={name} data-icon-host="">
+              <Icon name={name} />
+              <small>{name}</small>
+            </span>
+          ))}
         </div>
+        <div className="kp-rowx kp-icsz" data-icons="featured">
+          {([16, 20, 24] as const).map((size) => (
+            <span key={size}>
+              <Icon name="applicants" size={size} featured />
+              <small>{size}px</small>
+            </span>
+          ))}
+        </div>
+        <p className="kp-spec">16 in small buttons and rows, 20 in buttons and fields, 24 on their own.</p>
       </Card>
 
       <Card title="Illustrations" className="kp-full">
-        <p className="kp-spec">Isometric, in our colours, for the moments between work: nothing to show, waiting, and finished. Working screens keep the line icons.</p>
-        <div className="kp-rowx" style={{ justifyContent: "space-around" }}>
-          {ILLUSTRATIONS.map(([name, caption]) => (
-            <figure key={name} className="kp-fig">
-              <Illustration name={name} size={150} />
-              <figcaption className="kp-spec">{caption}</figcaption>
+        <p className="kp-spec">
+          C · Soft circle, for empty lists, loading and longer work: each picture sits on a lavender circle with white fills and one peach highlight. Line drawings in
+          our colours, never isometric. The loading and working pictures move until the wait is over.
+        </p>
+        <div className="kp-ilg">
+          {ILLUSTRATIONS.map(({ name, kind, title, caption }) => (
+            <figure key={name} className="kp-ilt">
+              <Illustration name={name} size={132} />
+              <figcaption>
+                <Tag tone={KIND_TONE[kind]}>{kind}</Tag>
+                <b>{title}</b>
+                <small>{caption}</small>
+              </figcaption>
             </figure>
           ))}
         </div>
@@ -153,7 +164,7 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
           ))}
         </div>
         <p className="kp-spec">
-          Page background: the lavender wash, <code>135deg</code> from Whisper through half Mist to white.
+          Page background: the lavender wash, <code>135deg</code> from a fainter Whisper through a third of Mist to white.
         </p>
       </Card>
 
@@ -181,7 +192,21 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
           <RoundButton icon="reset" label="Start over" />
           <RoundButton icon="menu" label="Menu" />
         </div>
-        <p className="kp-spec">One orange button per screen: the next step. Pills everywhere a person presses.</p>
+        <Button variant="bad" size="wide">
+          Yes, clear the form
+        </Button>
+        <div className="kp-rowx">
+          <Button variant="bad" size="small">
+            Decline application
+          </Button>
+          <Button variant="warn" size="small">
+            Withdraw request
+          </Button>
+        </div>
+        <p className="kp-spec">
+          One orange button per screen: the next step. Everything else is outlined; only the orange action is ever filled. A red outline closes or removes; a dark
+          orange outline is a step back that can be undone.
+        </p>
       </Card>
 
       <Card title="Fields">
@@ -243,7 +268,7 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
           <Tag tone="wait">Waiting</Tag>
         </div>
         <p className="kp-spec">
-          White card, <code>1.5px</code> indigo line at 22%, a soft indigo shadow. Only the card that holds the task is lifted.
+          White card, <code>0.75px</code> indigo line at 22%, a soft indigo shadow. Only the card that holds the task is lifted.
         </p>
         <Note tone="good">Fathers’ names match. The 10% sibling discount applies by itself.</Note>
         <Note tone="wait">Fathers’ names don’t match. Ask for proof.</Note>
@@ -471,11 +496,22 @@ function MorePieces() {
       </Card>
 
       <Card title="Empty state">
-        <EmptyState title="No applicant matches" hint="Clear the filter to see everyone." />
+        <EmptyState
+          title="No applicant matches"
+          hint="Clear the filter to see everyone."
+          action={
+            <Button variant="ghost" size="small">
+              Clear the filter
+            </Button>
+          }
+        />
+        <EmptyState illustration="done" title="All caught up" hint="New work shows up here." />
+        <EmptyState illustration="oops" title="Something went wrong" hint="Your answers are kept." action={<Button size="small">Try again</Button>} />
       </Card>
 
       <Card title="Loading state">
         <LoadingState label="Finding the family…" />
+        <LoadingState illustration="sending" label="Sending invites…" />
       </Card>
 
       <Card title="Skeleton">

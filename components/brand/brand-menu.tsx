@@ -165,7 +165,7 @@ export function BrandMenu({ language, labels, onClearForm, buttonRef, returnTo }
                   </button>
                   <button
                     type="button"
-                    className="min-h-11 flex-1 rounded-full border-0 bg-[#c81e1e] text-sm font-semibold text-white outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
+                    className="min-h-11 flex-1 rounded-full border-[0.75px] border-[#c81e1e] bg-white text-sm font-semibold text-[#c81e1e] outline-none hover:bg-red-50 focus-visible:ring-3 focus-visible:ring-red-700/40"
                     onClick={() => {
                       close(false)
                       onClearForm()

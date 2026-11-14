@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react"
+import type { CSSProperties, ReactNode, Ref } from "react"
 
 import { Illustration } from "@/components/illustrations"
 import { cn } from "@/lib/utils"
@@ -6,14 +6,28 @@ import { cn } from "@/lib/utils"
 import "./kit.css"
 
 /**
- * Nothing to show (DESIGN.md, States): the Empty illustration at 130px, a
- * title saying why, a line saying how to get something back, and at most one
- * action. It stands where the list would be, inside the same card.
+ * Nothing to show (DESIGN.md, States): a line illustration at 150px, a title
+ * saying why, a line saying how to get something back, and at most one
+ * action. It stands where the list would be, inside the same card. `search`
+ * when nothing matches, `done` when nothing is due, `inbox` when no request
+ * waits, `oops` for a failure shown with Try again.
  */
-export function EmptyState({ title, hint, action, className }: { title: ReactNode; hint?: ReactNode; action?: ReactNode; className?: string }) {
+export function EmptyState({
+  title,
+  hint,
+  action,
+  illustration = "search",
+  className,
+}: {
+  title: ReactNode
+  hint?: ReactNode
+  action?: ReactNode
+  illustration?: "search" | "done" | "inbox" | "oops"
+  className?: string
+}) {
   return (
     <div className={cn("kit-empty", className)}>
-      <Illustration name="empty" size={130} />
+      <Illustration name={illustration} size={150} />
       <b className="kit-empty-title">{title}</b>
       {hint && <p>{hint}</p>}
       {action && <div className="kit-empty-act">{action}</div>}
@@ -21,23 +35,43 @@ export function EmptyState({ title, hint, action, className }: { title: ReactNod
   )
 }
 
-/** Waiting inside a task ("Finding the family…"): the Loading illustration at 150px over one line, announced politely. */
-export function LoadingState({ label, className }: { label: ReactNode; className?: string }) {
+/**
+ * Waiting inside a task ("Finding the family…"): a moving line illustration at
+ * 170px over one line, announced politely. `finding` while a record loads,
+ * `sending` for longer work such as a batch.
+ */
+export function LoadingState({ label, illustration = "finding", className }: { label: ReactNode; illustration?: "finding" | "sending"; className?: string }) {
   return (
     <div role="status" className={cn("kit-loading", className)}>
-      <Illustration name="loading" size={150} />
+      <Illustration name={illustration} size={170} />
       <p>{label}</p>
     </div>
+  )
+}
+
+/**
+ * The finish mark (DESIGN.md, Finish): the live Admission form's 84px green
+ * circle, which draws itself, then the tick, left to right. Give it to
+ * `rainConfetti` and the confetti bursts from its centre once the tick ends.
+ * Under reduced motion it is drawn at once. Decorative.
+ */
+export function FinishMark({ className, ref }: { className?: string; ref?: Ref<HTMLSpanElement> }) {
+  return (
+    <span ref={ref} className={cn("kit-mark", className)} aria-hidden="true">
+      <svg viewBox="0 0 84 84" width="84" height="84" focusable="false">
+        <circle cx="42" cy="42" r="40" />
+        <path className="kit-mark-tick" d="M26 43l11 11 21-23" />
+      </svg>
+    </span>
   )
 }
 
 export type FinishedResult = { label: ReactNode; value: ReactNode }
 
 /**
- * A finished task, inside its TaskCard: the Finished illustration at 150px, a
- * title saying what happened, a hint saying what to do next, the results
- * (each Admission Number on a Lavender Whisper row), then `children`: notes
- * and the next actions.
+ * A finished task, inside its TaskCard: the finish mark, a title saying what
+ * happened, a hint saying what to do next, the results (each Admission Number
+ * on a Lavender Whisper row), then `children`: notes and the next actions.
  */
 export function FinishedState({
   title,
@@ -57,7 +91,7 @@ export function FinishedState({
 }) {
   return (
     <div className={cn("kit-done", className)}>
-      <Illustration name="finished" size={150} />
+      <FinishMark />
       <h2 id={titleId} tabIndex={-1} className="kit-done-title">
         {title}
       </h2>

@@ -125,7 +125,7 @@ test("a payment into a full class is recorded through the warning, and Seats ran
   // holder first because it reached Deposit a day earlier.
   await page.context().clearCookies()
   await signIn(page, MANAGER)
-  await expect(page.getByRole("link", { name: "Seats", exact: true })).toHaveAttribute("href", "/staff/seats")
+  await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Seats", exact: true })).toHaveAttribute("href", "/staff/seats")
   await page.setViewportSize({ width: 375, height: 812 })
   await page.goto(`/staff/seats?year=${year}`)
   await expect(page.getByRole("heading", { name: `Seats ${year}` })).toBeVisible()

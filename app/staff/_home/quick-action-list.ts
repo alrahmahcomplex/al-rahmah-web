@@ -15,14 +15,15 @@ export const mayDecideDiscounts = (permissions: readonly Permission[]) => has(pe
 
 /**
  * The class to name as full, when exactly one is. A class with Day and
- * Boarding seats is named only when both are full; when several classes are
- * full, none is named, since no words for that are approved yet.
+ * Boarding seats is named only when both are full, and seats not set are
+ * never full, as the database counts them; when several classes are full,
+ * none is named, since no words for that are approved yet.
  */
 export function onlyFullClass(classes: readonly ClassSeatFigures[]): string | null {
   const isFull = (entry: ClassSeatFigures) => entry.seats !== null && entry.taken >= entry.seats
   const names = [...new Set(classes.filter(isFull).map((entry) => entry.className))]
   if (names.length !== 1) return null
-  return classes.filter((entry) => entry.className === names[0] && entry.seats !== null).every(isFull) ? names[0] : null
+  return classes.filter((entry) => entry.className === names[0]).every(isFull) ? names[0] : null
 }
 
 export function quickActions({

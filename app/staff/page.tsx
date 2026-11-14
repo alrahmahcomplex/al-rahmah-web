@@ -9,6 +9,7 @@ import { countInterviewsByDay, countRegistrationsByDay } from "@/lib/services/ho
 import { getMyNotices } from "@/lib/services/staff-admin"
 import { createClient } from "@/utils/supabase/server"
 
+import { defaultSeatsYear } from "./seats/format"
 import { FindFamily } from "./_home/find-family"
 import { Notices } from "./_home/notices"
 import { mayCallBack, mayDecideDiscounts, mayOpenSeats, onlyFullClass, quickActions } from "./_home/quick-action-list"
@@ -26,6 +27,16 @@ export const metadata: Metadata = {
 const REGISTER_HREF = "/staff/check-in/new"
 const DAY_WORDS = { pick: "Open the calendar", choose: "Choose a date", close: "Close", reset: "Back to today" }
 const WEEK_WORDS = { pick: "Show another week", choose: "Choose a week", close: "Close", reset: "Back to this week" }
+
+// The seats in the year the Seats screen opens on, so the caption names a
+// class in the year the link shows.
+async function seatsOnOpening(today: string) {
+  const supabase = await createClient()
+  const latest = await getSeatsByClass(supabase)
+  if (!latest.ok) return latest
+  const opening = defaultSeatsYear(latest.data.years, today)
+  return opening === null || opening === latest.data.year ? latest : getSeatsByClass(supabase, opening)
+}
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 const one = (value: string | string[] | undefined) => (typeof value === "string" ? value : undefined)
@@ -54,7 +65,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     canView ? countInterviewsByDay(supabase, interviews.from, interviews.to) : null,
     canView ? countRegistrationsByDay(supabase, applied.from, applied.to) : null,
     mayCallBack(permissions) ? getOverdueCount(supabase) : null,
-    mayOpenSeats(permissions) ? getSeatsByClass(supabase) : null,
+    mayOpenSeats(permissions) ? seatsOnOpening(today) : null,
     mayDecideDiscounts(permissions) ? countPendingDiscountRequests(supabase) : null,
   ])
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { forbidden } from "next/navigation"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Note, PageHeader, pageTitle } from "@/components/kit"
 import { getStaffAdminHistory, getStaffAndRoles } from "@/lib/services/staff-admin"
 import { managesStaff } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
@@ -11,9 +11,10 @@ import { History } from "./history"
 import { RolePane } from "./role-pane"
 import { RoleRail } from "./role-rail"
 import { managesRole, roleView, type Viewer } from "./view"
+import "./roles.css"
 
 export const metadata: Metadata = {
-  title: "Staff and roles · Al-Rahmah Complex",
+  title: pageTitle("Staff and roles"),
 }
 
 export default async function StaffAndRolesPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
@@ -24,15 +25,15 @@ export default async function StaffAndRolesPage({ searchParams }: { searchParams
 
   const supabase = await createClient()
   const overview = await getStaffAndRoles(supabase)
-  const heading = <h1 className="staff-heading">Staff and roles</h1>
+  const heading = <PageHeader title="Staff and roles" />
   if (!overview.ok) {
     return (
-      <div className="flex flex-col gap-4">
+      <>
         {heading}
-        <Alert variant="destructive">
-          <AlertDescription>Staff and roles could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
-      </div>
+        <Note tone="bad" role="alert">
+          Staff and roles could not be loaded. Try again in a moment.
+        </Note>
+      </>
     )
   }
 
@@ -50,9 +51,9 @@ export default async function StaffAndRolesPage({ searchParams }: { searchParams
   const history = staff.permissions.includes("audit.view") ? await getStaffAdminHistory(supabase, overview.data) : null
 
   return (
-    <div className="flex flex-col gap-4">
+    <>
       {heading}
-      <div className="grid items-start gap-4 md:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="ro-grid">
         <RoleRail roles={overview.data.roles} selectedId={selectedId} yourRoleId={yourRoleId ?? null} viewer={viewer} />
         {role && (
           <RolePane key={role.id} role={role} permissions={overview.data.permissions}>
@@ -60,6 +61,6 @@ export default async function StaffAndRolesPage({ searchParams }: { searchParams
           </RolePane>
         )}
       </div>
-    </div>
+    </>
   )
 }

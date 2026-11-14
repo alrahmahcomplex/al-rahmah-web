@@ -33,7 +33,7 @@ function personRow(page: Page, name: string) {
   return page.getByRole("list", { name: /^People in / }).getByRole("listitem", { name, exact: true })
 }
 
-const callout = (page: Page) => page.locator("[data-slot=alert]")
+const callout = (page: Page) => page.getByTestId("role-outcome")
 
 function newInvitee() {
   const suffix = randomUUID().slice(0, 8)

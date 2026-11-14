@@ -1,0 +1,37 @@
+/* Reports: the dashboard's grid, its count cards and their filters (DESIGN.md, Cards and Lists). */
+.rp-dash { display: flex; flex-direction: column; gap: 12px; }
+.rp-dash > .kit-sec-title { margin: 0; }
+.rp-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; }
+@media (min-width: 640px) {
+  .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rp-wide { grid-column: 1 / -1; }
+}
+@media (min-width: 1024px) {
+  .rp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Applicants by enrollment class stands in the right-hand column, beside the tiles. */
+  .rp-side { grid-column: 3; grid-row: 1 / span 3; }
+}
+
+/* A panel: its card title and period on the left, the filter on the right. */
+.rp-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rp-head { display: flex; align-items: flex-start; gap: 12px; }
+.rp-head > div { flex: 1; min-width: 0; }
+.rp-head .kit-card-title { margin: 0; }
+.rp-period { margin: 2px 0 0; color: var(--gf-quiet); font-size: 12.5px; }
+.rp-count { margin: 4px 0 0; font: 600 30px/1.2 var(--font-sans), system-ui, sans-serif; color: var(--gf-ink); font-variant-numeric: tabular-nums; }
+.rp-cap { margin: 0; color: var(--gf-quiet); font-size: 12.5px; }
+.rp-quiet { color: var(--gf-quiet); }
+.rp-over { font-weight: 700; color: var(--gf-red); }
+.rp-split { display: block; color: var(--gf-quiet); font-size: 12.5px; }
+.rp-link { align-self: flex-start; color: var(--gf-indigo); font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; border-radius: 4px; }
+.rp-link:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.rp-err { margin: 0; color: var(--gf-ink-soft); font-size: 14px; }
+
+/* The filter popover's parts. */
+.rp-filter { display: flex; flex-direction: column; gap: 12px; padding: 8px 0 8px; }
+.rp-filter label { display: block; margin-bottom: 6px; font-size: 12.5px; font-weight: 600; color: var(--gf-ink-soft); }
+.rp-pair { display: flex; gap: 8px; }
+/* A table's hidden "Seats not set" stays inside its scrolling wrapper, not out at the page's edge. */
+.rp-panel .kit-tw { position: relative; }
+/* Counts, not money: as before the redesign, a long Taken split or "Seats not set" wraps, so the table fits a phone. */
+.rp-panel .kit-tbl td[data-align="end"] { white-space: normal; }

@@ -1,33 +1,23 @@
-import { Bone, CardSkeleton, HeadingSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// One count tile: title, period, the number, what it counts.
-function Tile() {
-  return (
-    <div className="flex flex-col gap-3 rounded-xl p-4 ring-1 ring-foreground/10">
-      <Bone className="h-4 w-32" />
-      <Bone className="h-3 w-40" />
-      <Bone className="mt-1 h-8 w-16" />
-      <Bone className="h-3 w-36" />
-    </div>
-  )
-}
+import "./reports.css"
 
-// Reports: the five count tiles, Leads by enrollment class in the right-hand
-// column, Seats by class across the bottom.
+// Reports while it opens: the title, the Dashboard heading, the five count
+// cards with Applicants by enrollment class in the right-hand column, and
+// Seats by class across the bottom.
 export default function Loading() {
   return (
-    <PageSkeleton label="reports">
-      <HeadingSkeleton width="w-28" />
-      <div className="flex flex-col gap-3">
-        <Bone className="h-5 w-24" />
-        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 5 }, (_, index) => (
-            <Tile key={index} />
-          ))}
-          <CardSkeleton lines={9} className="lg:col-start-3 lg:row-span-3 lg:row-start-1" />
-          <CardSkeleton lines={5} className="sm:col-span-2 lg:col-span-3" />
-        </div>
+    <div role="status" aria-busy="true" className="rp-dash">
+      <span className="sr-only">Loading reports…</span>
+      <SkeletonBlock width={160} height={32} />
+      <SkeletonBlock width={110} height={18} />
+      <div className="rp-grid">
+        {Array.from({ length: 5 }, (_, index) => (
+          <SkeletonBlock key={index} height={168} shape="card" />
+        ))}
+        <SkeletonBlock height={520} shape="card" className="rp-side" />
+        <SkeletonBlock height={300} shape="card" className="rp-wide" />
       </div>
-    </PageSkeleton>
+    </div>
   )
 }

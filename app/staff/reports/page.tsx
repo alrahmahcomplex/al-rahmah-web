@@ -1,13 +1,14 @@
 import type { Metadata } from "next"
 import { forbidden } from "next/navigation"
 
+import { PageHeader, pageTitle } from "@/components/kit"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
 import { Dashboard } from "./_dashboard/dashboard"
 
 export const metadata: Metadata = {
-  title: "Reports · Al-Rahmah Complex",
+  title: pageTitle("Reports"),
 }
 
 // The statistics that were the staff home until #226, for holders of
@@ -25,13 +26,13 @@ export default async function ReportsPage({
   const supabase = await createClient()
 
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="staff-heading">Reports</h1>
+    <>
+      <PageHeader title="Reports" />
       <Dashboard
         supabase={supabase}
         searchParams={await searchParams}
         canOpenSeats={staff.permissions.includes("academic_years.manage")}
       />
-    </div>
+    </>
   )
 }

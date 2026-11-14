@@ -6,6 +6,7 @@ import { expect, test } from "./staff-test"
 import { roleTemplate } from "../lib/role-templates"
 import { createThrowawayStaff, inRolledBackTransaction, signedIn } from "../tests/support/db"
 import { MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
+import { axeProblems } from "./axe"
 import { signInAsSuperAdmin } from "./super-admin"
 import { signInOnce } from "./log-in"
 
@@ -27,7 +28,7 @@ async function roleId(name: string) {
 }
 
 const unique = (name: string) => `${name} ${randomUUID().slice(0, 8)}`
-const callout = (page: Page) => page.locator("[data-slot=alert]")
+const callout = (page: Page) => page.getByTestId("role-outcome")
 
 function personRow(page: Page, name: string) {
   return page.getByRole("list", { name: /^People in / }).getByRole("listitem", { name, exact: true })
@@ -115,8 +116,11 @@ test("an Administrator manages a Manager, changes no role and has no audit scree
 
   const row = personRow(page, manager.name)
   await row.getByRole("button", { name: "Deactivate" }).click()
-  await expect(page.getByRole("alertdialog")).toContainText("including managing staff")
-  await page.getByRole("alertdialog").getByRole("button", { name: "Deactivate" }).click()
+  await expect(page.getByRole("dialog", { name: /\?$/ })).toContainText("including managing staff")
+  // The confirmation is a kit sheet (#331). The pointer leaves its orange button, so axe reads the resting colours.
+  await page.mouse.move(0, 0)
+  expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
+  await page.getByRole("dialog", { name: /\?$/ }).getByRole("button", { name: "Deactivate" }).click()
   await expect(callout(page)).toHaveText(`Deactivated ${manager.name}.`)
   await row.getByRole("button", { name: "Reactivate" }).click()
   await expect(callout(page)).toHaveText(`Reactivated ${manager.name}.`)

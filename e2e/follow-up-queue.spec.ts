@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getOverdueCount } from "@/lib/services/follow-ups"
@@ -116,7 +117,7 @@ test("recording a contact from a queue row moves the row to Upcoming", async ({ 
   await panel.getByRole("button", { name: "Record follow-up" }).click()
   const record = page.getByRole("dialog", { name: "Record follow-up" })
   await record.getByLabel("Comment").fill("The mother asked us to call after the holiday.")
-  await record.getByLabel("Contact method").selectOption("SMS")
+  await chooseOption(record.getByLabel("Contact method"), "SMS")
   await record.getByLabel("Next follow-up date").fill(addDays(today, 2))
   await record.getByRole("button", { name: "Record follow-up" }).click()
   await expect(panel.getByRole("status")).toHaveText(`Follow-up recorded. Next follow-up on ${formatDate(addDays(today, 2))}.`)

@@ -111,7 +111,7 @@ test("the Manager declines a ranked lead from Seats with No seat available", asy
   // The lead screen opens Decline with No seat available chosen.
   await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}\\?decline=No\\+seat\\+available$`))
   const dialog = page.getByRole("dialog", { name: `Decline ${lead.name}`, exact: true })
-  await expect(dialog.getByLabel("Reason")).toHaveValue("No seat available")
+  await expect(dialog.getByLabel("Reason")).toHaveText("No seat available")
   await dialog.getByRole("button", { name: "Continue" }).click()
 
   const confirm = page.getByRole("dialog", { name: `Decline ${lead.name}?`, exact: true })

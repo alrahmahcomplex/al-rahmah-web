@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
@@ -13,7 +14,7 @@ import { asSystem, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
-import { leadUrl } from "./lead-page"
+import { leadUrl, listOptions } from "./lead-page"
 import { signInOnce } from "./log-in"
 
 // Adjusting and voiding school-fee payments on the lead screen (#110). The
@@ -105,9 +106,10 @@ test("the Accountant adjusts one payment and voids a duplicate, and each shows i
 
   // Adjust the first deposit: it was really TZS 850,000.
   await first.getByRole("button", { name: "Adjust" }).click()
-  const form = page.getByRole("form", { name: "Adjust payment" })
+  // The sheet holds the form and, in its foot, the form's buttons.
+  const form = page.getByRole("dialog", { name: "Adjust payment" })
   await expect(form.getByLabel("Amount (TZS)")).toHaveValue("300,000")
-  await form.getByLabel("Reason").selectOption("Wrong amount")
+  await chooseOption(form.getByLabel("Reason"), "Wrong amount")
   await form.getByLabel("Amount (TZS)").fill("850,000")
   await form.getByLabel("Note (optional)").fill("The receipt says 850,000.")
   await form.getByRole("button", { name: "Save adjustment" }).click()
@@ -129,7 +131,7 @@ test("the Accountant adjusts one payment and voids a duplicate, and each shows i
 
   // Void the duplicate.
   await duplicate.getByRole("button", { name: "Adjust" }).click()
-  await form.getByLabel("Reason").selectOption("Duplicate entry")
+  await chooseOption(form.getByLabel("Reason"), "Duplicate entry")
   await expect(form.getByLabel("Amount (TZS)")).toHaveCount(0)
   await form.getByRole("button", { name: "Void payment" }).click()
   await expect(form).toHaveCount(0)
@@ -145,9 +147,11 @@ test("the Accountant adjusts one payment and voids a duplicate, and each shows i
 
   // A voided payment comes back only with Data-entry correction.
   await voided.getByRole("button", { name: "Adjust" }).click()
-  await expect(page.getByRole("heading", { name: "Restore payment" })).toBeVisible()
-  await expect(form.getByLabel("Reason").locator("option:not([disabled])")).toHaveText(["Data-entry correction"])
-  await form.getByRole("button", { name: "Cancel" }).click()
+  // Its sheet is named for what it does now.
+  const restore = page.getByRole("dialog", { name: "Restore payment" })
+  await expect(restore).toBeVisible()
+  expect(await listOptions(restore.getByLabel("Reason"))).toEqual(["Data-entry correction"])
+  await restore.getByRole("button", { name: "Cancel" }).click()
 
   // The history says what each adjustment did.
   await openLeadHistoryAsSuperAdmin(page, id)

@@ -78,7 +78,7 @@ test.describe("registering a new family", () => {
     await expect(page.getByText(/^\+2557\d{8}$/)).toBeVisible()
     // The lead opens to read, with corrections offered but no form open.
     await expect(page.getByRole("button", { name: "Edit student" })).toBeVisible()
-    await expect(page.getByRole("textbox")).toHaveCount(0)
+    await expect(page.getByRole("main").getByRole("textbox")).toHaveCount(0)
   })
 
   test("the number can be copied from the confirmation", async ({ page, context }) => {

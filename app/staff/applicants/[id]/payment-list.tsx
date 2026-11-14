@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge"
+import { Tag } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import type { PaymentAdjustment } from "@/lib/services/payment-adjustments"
 import { PAYMENT_TYPE_NAMES, type SchoolFeePayment } from "@/lib/services/school-fee-payments"
@@ -31,33 +31,33 @@ function adjustmentText(adjustment: PaymentAdjustment): string {
 export function PaymentList({ leadId, payments, canAdjust }: { leadId: string; payments: SchoolFeePayment[]; canAdjust: boolean }) {
   const today = tanzaniaToday()
   return (
-    <ul aria-label="Payments" className="flex flex-col divide-y rounded-lg text-sm ring-1 ring-foreground/10">
+    <ul aria-label="Payments" className="lr-list">
       {payments.map((payment) => {
         const shown = payment.effective ?? payment
         const adjusted = payment.adjustments.length > 0
         return (
-          <li key={payment.id} className="flex flex-col gap-2 px-3 py-2">
+          <li key={payment.id} className="flex flex-col gap-2">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-2 font-medium text-slate-900">
+                <p className="lr-strong flex flex-wrap items-center gap-2">
                   {PAYMENT_TYPE_NAMES[shown.type]}
-                  {payment.effective === null && <Badge variant="destructive">Void</Badge>}
-                  {payment.effective !== null && adjusted && <Badge variant="secondary">Adjusted</Badge>}
+                  {payment.effective === null && <Tag tone="bad">Void</Tag>}
+                  {payment.effective !== null && adjusted && <Tag tone="line">Adjusted</Tag>}
                 </p>
                 {adjusted ? (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="lr-hint">
                     {payment.effective === null
                       ? `No longer counts toward ${payment.type === "pre_form_one_fee" ? "the Pre-Form One fee" : "Total paid"}.`
                       : `Paid ${formatDate(shown.paidOn)}.`}
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="lr-hint">
                     Paid {formatDate(payment.paidOn)}. Recorded by {by(payment.recordedBy, payment.recordedAt)}.
                   </p>
                 )}
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
-                <p className={`text-right tabular-nums ${payment.effective === null ? "text-muted-foreground line-through" : "text-slate-900"}`}>
+                <p className={`lr-num text-right ${payment.effective === null ? "lr-quiet line-through" : "lr-strong"}`}>
                   {shown.amount === null ? "Waived" : `TZS ${formatShillings(shown.amount)}`}
                 </p>
                 {canAdjust && (
@@ -72,14 +72,14 @@ export function PaymentList({ leadId, payments, canAdjust }: { leadId: string; p
               </div>
             </div>
             {adjusted && (
-              <ol aria-label="Original entry and adjustments" className="flex flex-col gap-1 border-l-2 pl-3 text-xs text-muted-foreground">
+              <ol aria-label="Original entry and adjustments" className="lr-trail">
                 <li>
-                  <span className="font-medium text-slate-900">Original entry: </span>
+                  <span className="lr-strong">Original entry: </span>
                   {paymentSummary(payment)}. Recorded by {by(payment.recordedBy, payment.recordedAt)}.
                 </li>
                 {payment.adjustments.map((adjustment) => (
                   <li key={adjustment.id}>
-                    <span className="font-medium text-slate-900">{adjustmentText(adjustment)}</span> Adjusted by{" "}
+                    <span className="lr-strong">{adjustmentText(adjustment)}</span> Adjusted by{" "}
                     {by(adjustment.recordedBy, adjustment.recordedAt)}.
                     {adjustment.note && <span className="block whitespace-pre-line">Note: {adjustment.note}</span>}
                   </li>

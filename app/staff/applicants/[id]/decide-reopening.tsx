@@ -2,23 +2,13 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Button, ChoiceTiles, Note, Sheet } from "@/components/kit"
 import { REOPENING_REASON_MAX } from "@/lib/services/reopening-requests"
 
-import { SeatPriorityBadge } from "../seat-priority-badge"
+import { TextArea } from "./form-controls"
 import { approveReopeningAction, rejectReopeningAction } from "./reopening-decision-actions"
 import { RETAKE_LABELS, type ApprovalSeats, type DecisionOutcome } from "./reopening-decision-outcome"
+import { SeatPriorityTag } from "./seat-priority-tag"
 
 const LOST_REQUEST: DecisionOutcome = {
   status: "refused",
@@ -40,12 +30,12 @@ type DecideReopeningProps = {
 }
 
 // Approve and Reject, for approvers, on a Pending request. Each asks in a
-// dialog first. A decision that lands refreshes the page: an approved lead
+// sheet first. A decision that lands refreshes the page: an approved lead
 // opens again, and a rejected request moves to the earlier requests with its
 // reason.
 export function DecideReopening(props: DecideReopeningProps) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="lr-acts">
       <ApproveReopening {...props} />
       <RejectReopening {...props} />
     </div>
@@ -78,8 +68,8 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
   const [choice, setChoice] = useState<"retake" | "enrol" | null>(null)
   const [missing, setMissing] = useState(false)
   const { refusal, setRefusal, pending, send } = useDecision()
-  const legendId = useId()
   const errorId = useId()
+  const formId = useId()
 
   function changeOpen(next: boolean) {
     if (pending) return
@@ -100,70 +90,58 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
 
   return (
     <>
-      <Button type="button" size="sm" onClick={() => changeOpen(true)}>
+      <Button variant="ghost" size="small" onClick={() => changeOpen(true)}>
         Approve
       </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent
-          className={`max-h-[calc(100dvh-2rem)] overflow-y-auto ${seats.kind === "full" ? "sm:max-w-lg" : "sm:max-w-md"}`}
-        >
-          <form className="grid gap-4" onSubmit={approve} noValidate>
-            <DialogHeader>
-              <DialogTitle>Approve reopening {studentName}?</DialogTitle>
-              <DialogDescription>
-                {admissionNumber}. {consequence}
-              </DialogDescription>
-            </DialogHeader>
-            <SeatWarning seats={seats} />
-            {askRetake && (
-              <fieldset
-                className="grid gap-2"
-                aria-labelledby={legendId}
-                aria-invalid={missing || undefined}
-                aria-describedby={missing ? errorId : undefined}
-              >
-                <legend id={legendId} className="mb-1 text-sm font-medium text-slate-900">
-                  The application was declined after its interview. How does it go on?
-                </legend>
-                {(["retake", "enrol"] as const).map((value) => (
-                  <Label key={value} className="flex items-center gap-2 font-normal">
-                    <input
-                      type="radio"
-                      name="retake"
-                      value={value}
-                      checked={choice === value}
-                      onChange={() => {
-                        setChoice(value)
-                        setMissing(false)
-                      }}
-                      className="size-4 accent-primary"
-                    />
-                    {RETAKE_LABELS[value]}
-                  </Label>
-                ))}
-              </fieldset>
-            )}
-            {missing && (
-              <p id={errorId} role="alert" className="text-sm text-destructive">
-                Choose whether the applicant retakes the interview.
-              </p>
-            )}
-            {refusal && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{refusal}</AlertDescription>
-              </Alert>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? "Approving…" : "Approve and reopen"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <Sheet
+        open={open}
+        onOpenChange={changeOpen}
+        title={`Approve reopening ${studentName}?`}
+        hint={
+          <>
+            {admissionNumber}. {consequence}
+          </>
+        }
+        closeLabel="Close"
+        foot={
+          <>
+            <Button type="submit" form={formId} size="wide" pending={pending}>
+              {pending ? "Approving…" : "Approve and reopen"}
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} aria-disabled={pending || undefined}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        <form id={formId} className="lr-form" onSubmit={approve} noValidate>
+          <SeatWarning seats={seats} />
+          {askRetake && (
+            <ChoiceTiles
+              name="retake"
+              legend={<span className="lr-label">The application was declined after its interview. How does it go on?</span>}
+              layout="rows"
+              options={(["retake", "enrol"] as const).map((value) => ({ value, label: RETAKE_LABELS[value] }))}
+              value={choice}
+              onChange={(value) => {
+                setChoice(value as "retake" | "enrol")
+                setMissing(false)
+              }}
+              describedBy={missing ? errorId : undefined}
+            />
+          )}
+          {missing && (
+            <p id={errorId} role="alert" className="lr-error">
+              Choose whether the applicant retakes the interview.
+            </p>
+          )}
+          {refusal && (
+            <Note tone="bad" role="alert">
+              {refusal}
+            </Note>
+          )}
+        </form>
+      </Sheet>
     </>
   )
 }
@@ -173,38 +151,40 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
 // approver can still approve, and a failed check is a quiet note.
 function SeatWarning({ seats }: { seats: ApprovalSeats }) {
   if (seats.kind === "room") return null
-  if (seats.kind === "unchecked") return <p className="text-xs text-muted-foreground">{seats.message}</p>
+  if (seats.kind === "unchecked") return <p className="lr-hint">{seats.message}</p>
   return (
-    <Alert aria-label="Class full" className="border-amber-300 bg-amber-50 text-amber-950">
-      <AlertTitle>Class full</AlertTitle>
-      <AlertDescription className="grid gap-2 text-amber-950">
-        <p>{seats.message}</p>
-        {seats.ranked && (
-          <ol aria-label="Applicants ranked for the seats" className="flex max-h-56 flex-col divide-y divide-amber-200 overflow-y-auto">
-            {seats.ranked.map((holder) => (
-              <li
-                key={holder.leadId}
-                aria-current={holder.thisLead || undefined}
-                className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 aria-[current=true]:font-semibold"
-              >
-                <span className="w-6 shrink-0 tabular-nums">{holder.rank}.</span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span>
-                    {holder.studentName}
-                    {holder.thisLead && " (this applicant)"}
+    <div role="alert" aria-label="Class full">
+      <Note tone="wait">
+        <span className="flex flex-col gap-2">
+          <b>Class full</b>
+          <span>{seats.message}</span>
+          {seats.ranked && (
+            <ol aria-label="Applicants ranked for the seats" className="lr-list max-h-56 overflow-y-auto">
+              {seats.ranked.map((holder) => (
+                <li
+                  key={holder.leadId}
+                  aria-current={holder.thisLead || undefined}
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 aria-[current=true]:font-semibold"
+                >
+                  <span className="lr-num w-6 shrink-0">{holder.rank}.</span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span>
+                      {holder.studentName}
+                      {holder.thisLead && " (this applicant)"}
+                    </span>
+                    <span className="lr-num text-xs font-normal">{holder.admissionNumber}</span>
                   </span>
-                  <span className="text-xs font-normal">{holder.admissionNumber}</span>
-                </span>
-                <span className="flex items-center gap-2">
-                  <SeatPriorityBadge priority={holder.priority} />
-                  {holder.pastLastSeat && <span className="text-xs font-medium text-destructive">Past the last seat</span>}
-                </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </AlertDescription>
-    </Alert>
+                  <span className="flex items-center gap-2">
+                    <SeatPriorityTag priority={holder.priority} />
+                    {holder.pastLastSeat && <span className="lr-error text-xs">Past the last seat</span>}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </span>
+      </Note>
+    </div>
   )
 }
 
@@ -216,6 +196,7 @@ function RejectReopening({ leadId, requestId, studentName, admissionNumber }: De
   const reasonId = useId()
   const hintId = useId()
   const errorId = useId()
+  const formId = useId()
 
   function changeOpen(next: boolean) {
     if (pending) return
@@ -237,56 +218,62 @@ function RejectReopening({ leadId, requestId, studentName, admissionNumber }: De
 
   return (
     <>
-      <Button type="button" size="sm" variant="outline" onClick={() => changeOpen(true)}>
+      <Button variant="ghost" size="small" onClick={() => changeOpen(true)}>
         Reject
       </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form className="grid gap-4" onSubmit={reject} noValidate>
-            <DialogHeader>
-              <DialogTitle>Reject reopening {studentName}?</DialogTitle>
-              <DialogDescription>
-                {admissionNumber}. The application stays closed. The person who asked reads your reason on the application.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-1.5">
-              <Label htmlFor={reasonId}>Why is it rejected?</Label>
-              <Textarea
-                id={reasonId}
-                value={reason}
-                maxLength={REOPENING_REASON_MAX}
-                onChange={(event) => {
-                  setReason(event.target.value)
-                  setMissing(false)
-                }}
-                aria-invalid={missing || undefined}
-                aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
-              />
-              <p id={hintId} className="text-xs text-muted-foreground">
-                Required.
-              </p>
-            </div>
-            {missing && (
-              <p id={errorId} role="alert" className="text-sm text-destructive">
-                Write why the request is rejected.
-              </p>
-            )}
-            {refusal && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{refusal}</AlertDescription>
-              </Alert>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="destructive" disabled={pending}>
-                {pending ? "Rejecting…" : "Reject request"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <Sheet
+        open={open}
+        onOpenChange={changeOpen}
+        title={`Reject reopening ${studentName}?`}
+        hint={
+          <>
+            {admissionNumber}. The application stays closed. The person who asked reads your reason on the application.
+          </>
+        }
+        closeLabel="Close"
+        foot={
+          <>
+            <Button type="submit" form={formId} size="wide" pending={pending}>
+              {pending ? "Rejecting…" : "Reject request"}
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} aria-disabled={pending || undefined}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        <form id={formId} className="lr-form" onSubmit={reject} noValidate>
+          <div className="lr-field">
+            <label htmlFor={reasonId} className="lr-label">
+              Why is it rejected?
+            </label>
+            <TextArea
+              id={reasonId}
+              value={reason}
+              maxLength={REOPENING_REASON_MAX}
+              onChange={(event) => {
+                setReason(event.target.value)
+                setMissing(false)
+              }}
+              aria-invalid={missing || undefined}
+              aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
+            />
+            <p id={hintId} className="lr-hint">
+              Required.
+            </p>
+          </div>
+          {missing && (
+            <p id={errorId} role="alert" className="lr-error">
+              Write why the request is rejected.
+            </p>
+          )}
+          {refusal && (
+            <Note tone="bad" role="alert">
+              {refusal}
+            </Note>
+          )}
+        </form>
+      </Sheet>
     </>
   )
 }

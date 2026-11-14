@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
@@ -12,7 +13,7 @@ import { asSystem, createThrowawayStaff, signedIn } from "../tests/support/db"
 import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 
-import { leadUrl } from "./lead-page"
+import { leadUrl, listOptions } from "./lead-page"
 import { signInOnce } from "./log-in"
 
 // The Pre-Form One programme (#114): the seeded lead whose tick no longer
@@ -105,7 +106,7 @@ test("Admissions Staff tick the programme on a FORM 1 lead, and the Accountant r
   await expect(page.getByRole("region", { name: "Pre-Form One programme" }).getByRole("checkbox")).toBeDisabled()
   await page.getByRole("button", { name: "Record payment" }).click()
   const form = page.getByRole("form", { name: "Record payment" })
-  await form.getByLabel("Payment type").selectOption({ label: "Pre-Form One fee" })
+  await chooseOption(form.getByLabel("Payment type"), "Pre-Form One fee")
   await form.getByLabel("Amount (TZS)").fill("200,000")
   await form.getByRole("button", { name: "Review payment" }).click()
   const review = page.getByRole("region", { name: "Review payment" })
@@ -156,5 +157,5 @@ test("the programme isn't offered on another class, and a tick kept after a clas
   await signIn(page, ACCOUNTANT)
   await page.goto(leadUrl(SABRA, "School fee"))
   await page.getByRole("button", { name: "Record payment" }).click()
-  await expect(page.getByRole("form", { name: "Record payment" }).getByLabel("Payment type").locator("option", { hasText: "Pre-Form One fee" })).toHaveCount(0)
+  expect(await listOptions(page.getByRole("form", { name: "Record payment" }).getByLabel("Payment type"))).not.toContain("Pre-Form One fee")
 })

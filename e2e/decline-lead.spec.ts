@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
@@ -9,7 +10,7 @@ import { createLead } from "@/lib/services/leads"
 import { signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
-import { chooseMore, moreActions } from "./lead-page"
+import { chooseMore, listOptions, moreActions } from "./lead-page"
 import { signInOnce } from "./log-in"
 
 // Declining a lead from the lead screen (#97). Each test declines a lead of
@@ -50,7 +51,7 @@ test.describe("declining a lead", () => {
 
     await chooseMore(page, "Decline")
     const dialog = page.getByRole("dialog", { name: `Decline ${lead.name}`, exact: true })
-    await dialog.getByLabel("Reason").selectOption("Other")
+    await chooseOption(dialog.getByLabel("Reason"), "Other")
     await dialog.getByRole("button", { name: "Continue" }).click()
     await expect(dialog.getByRole("alert")).toHaveText("Write an explanation for Other.")
 
@@ -83,10 +84,10 @@ test.describe("declining a lead", () => {
 
     await chooseMore(page, "Decline")
     const dialog = page.getByRole("dialog", { name: `Decline ${lead.name}`, exact: true })
-    await dialog.getByLabel("Reason").selectOption("Fees or cost")
+    await chooseOption(dialog.getByLabel("Reason"), "Fees or cost")
     await dialog.getByRole("button", { name: "Continue" }).click()
     await page.getByRole("dialog", { name: `Decline ${lead.name}?`, exact: true }).getByRole("button", { name: "Back" }).click()
-    await expect(dialog.getByLabel("Reason")).toHaveValue("Fees or cost")
+    await expect(dialog.getByLabel("Reason")).toHaveText("Fees or cost")
     await dialog.getByRole("button", { name: "Cancel" }).click()
 
     await page.reload()
@@ -99,15 +100,15 @@ test.describe("declining a lead", () => {
     await signIn(page, ADMISSIONS)
     await page.goto(`/staff/applicants/${lead.id}`)
     await chooseMore(page, "Decline")
-    const options = page.getByRole("dialog").getByLabel("Reason").locator("option")
-    await expect(options).toContainText(["Fees or cost", "Other"])
-    await expect(options.filter({ hasText: "No seat available" })).toHaveCount(0)
+    const options = await listOptions(page.getByRole("dialog").getByLabel("Reason"))
+    expect(options).toEqual(expect.arrayContaining(["Fees or cost", "Other"]))
+    expect(options).not.toContain("No seat available")
 
     await page.context().clearCookies()
     await signIn(page, MANAGER)
     await page.goto(`/staff/applicants/${lead.id}`)
     await chooseMore(page, "Decline")
-    await expect(page.getByRole("dialog").getByLabel("Reason").locator("option", { hasText: "No seat available" })).toHaveCount(1)
+    expect(await listOptions(page.getByRole("dialog").getByLabel("Reason"))).toContain("No seat available")
   })
 
   test("the Accountant gets no Decline, and a closed lead offers none", async ({ page }) => {

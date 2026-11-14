@@ -53,11 +53,11 @@ describe("the import guard", () => {
     expect(await restricted("app/staff/discounts/page.tsx", source(line))).toEqual([])
   })
 
-  // A route folder with brackets is a literal name, not a glob (#360). No
-  // such route is "new" yet, so the test marks three of them new in a copy
-  // of the route map and lints their real files with that config.
+  // A route folder with brackets is a literal name, not a glob (#360). The
+  // test marks three legacy ones new in a copy of the route map and lints
+  // their real files with that config.
   it.each([
-    ["/staff/applicants/[id]", "app/staff/applicants/[id]/page.tsx"],
+    ["/staff/re-applications/[id]", "app/staff/re-applications/[id]/page.tsx"],
     ["/staff/fees/[year]", "app/staff/fees/[year]/page.tsx"],
     ["/staff/[...rest]", "app/staff/[...rest]/page.tsx"],
   ])("refuses an old part in %s once it is marked new", async (route, filePath) => {

@@ -2,15 +2,12 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Note } from "@/components/kit"
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
 import { PRIOR_SIBLING_NAME_MAX, type PriorSibling } from "@/lib/services/sibling-groups"
 
-import { Field, SELECT_CLASS } from "./lead-editors"
+import { Checkbox, Select } from "./form-controls"
+import { Field, Input } from "./lead-editors"
 import { setPriorSiblingAction } from "./prior-sibling-actions"
 import { PRIOR_SIBLING_HINT, PRIOR_SIBLING_LABEL, type PriorSiblingOutcome } from "./prior-sibling-outcome"
 
@@ -65,44 +62,37 @@ export function PriorSiblingTick({ leadId, sibling, canEdit }: { leadId: string;
   if (!canEdit && sibling === null) return null
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="lr-card">
       <div className="flex items-start gap-2 text-sm">
-        <Checkbox
-          id={checkboxId}
-          // Base UI marks a disabled checkbox with data-disabled, not :disabled.
-          className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
-          checked={sibling !== null || editing}
-          disabled={!canEdit || pending}
-          onCheckedChange={toggle}
-        />
-        <span className="flex flex-col gap-0.5">
-          <Label htmlFor={checkboxId} className="font-normal text-slate-900">
-            {PRIOR_SIBLING_LABEL}
-          </Label>
+        <div className="min-w-0 flex-1">
+          <Checkbox
+            id={checkboxId}
+            checked={sibling !== null || editing}
+            disabled={!canEdit || pending}
+            onCheckedChange={toggle}
+            label={PRIOR_SIBLING_LABEL}
+            hint={sibling || editing ? undefined : PRIOR_SIBLING_HINT}
+          />
+          {/* The chosen sibling is a value, not a hint: its own line, under the label. */}
           {sibling && !editing && (
-            <span className="text-slate-900">
+            <p className="lr-tick-value">
               {sibling.name}, {sibling.className}
-            </span>
+            </p>
           )}
-          {!sibling && !editing && <span className="text-xs text-muted-foreground">{PRIOR_SIBLING_HINT}</span>}
-        </span>
+        </div>
         {canEdit && sibling && !editing && (
-          <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={edit} disabled={pending}>
+          <Button variant="ghost" size="small" onClick={edit} aria-disabled={pending || undefined}>
             Edit
           </Button>
         )}
       </div>
       {refusal && !editing && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal.message}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{refusal.message}</Note>
       )}
       {editing && (
-        <form aria-label="Sibling already at Al-Rahmah" className="flex flex-col gap-4" onSubmit={submit}>
+        <form aria-label="Sibling already at Al-Rahmah" className="lr-form lr-inline" onSubmit={submit}>
           {refusal && (
-            <Alert variant="destructive" role="alert">
-              <AlertDescription>{refusal.message}</AlertDescription>
-            </Alert>
+            <Note tone="bad" role="alert">{refusal.message}</Note>
           )}
           <Field label="Sibling's name" invalid={refusal?.field === "name"}>
             {({ id, invalid }) => (
@@ -118,30 +108,22 @@ export function PriorSiblingTick({ leadId, sibling, canEdit }: { leadId: string;
           </Field>
           <Field label="Sibling's class" invalid={refusal?.field === "class"}>
             {({ id, invalid }) => (
-              <select
+              <Select
                 id={id}
-                className={SELECT_CLASS}
                 required
                 value={className}
                 aria-invalid={invalid || undefined}
-                onChange={(event) => setClassName(event.target.value as LeadClass)}
-              >
-                <option value="" disabled>
-                  Choose a class
-                </option>
-                {LEAD_CLASSES.map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(value) => setClassName(value as LeadClass)}
+                placeholder="Choose a class"
+                options={LEAD_CLASSES.map((choice) => ({ value: choice, label: choice }))}
+              />
             )}
           </Field>
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={pending}>
+          <div className="lr-acts">
+            <Button type="submit" size="small" pending={pending}>
               {pending ? "Saving…" : "Save"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => setEditing(false)} disabled={pending}>
+            <Button variant="ghost" size="small" onClick={() => setEditing(false)} aria-disabled={pending || undefined}>
               Cancel
             </Button>
           </div>

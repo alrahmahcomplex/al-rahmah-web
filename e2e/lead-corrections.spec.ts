@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { createLead, getLead } from "@/lib/services/leads"
@@ -63,8 +64,8 @@ test.describe("correcting a lead", () => {
 
     await page.getByRole("button", { name: "Edit student" }).click()
     const form = page.getByRole("form", { name: "Edit student" })
-    await expect(form.getByLabel("Class")).toHaveValue("STD 3")
-    await form.getByLabel("Class").selectOption("STD 4")
+    await expect(form.getByLabel("Class")).toHaveText("STD 3")
+    await chooseOption(form.getByLabel("Class"), "STD 4")
     await form.getByRole("button", { name: "Save" }).click()
 
     await expect(page.getByRole("region", { name: "Student" }).getByRole("status")).toHaveText("Student details saved.")
@@ -136,7 +137,12 @@ test.describe("correcting a lead", () => {
     await page.goto(`/staff/applicants/${lead.id}`)
     await page.getByRole("button", { name: "Correct Visit date" }).click()
     const input = page.getByLabel("Visit date", { exact: true })
-    await expect(input).toHaveAttribute("max", today)
+    // A later day is typed as any other; the server refuses it.
+    const later = new Date(`${today}T00:00:00Z`)
+    later.setUTCDate(later.getUTCDate() + 1)
+    await input.fill(later.toISOString().slice(0, 10))
+    await page.getByRole("button", { name: "Save" }).click()
+    await expect(page.getByRole("alert").filter({ hasText: "Choose today or an earlier date for the visit." })).toBeVisible()
     await input.fill(earlierDate)
     await page.getByRole("button", { name: "Save" }).click()
     await expect(page.getByRole("region", { name: "Student" }).getByRole("status")).toHaveText("Visit date saved.")

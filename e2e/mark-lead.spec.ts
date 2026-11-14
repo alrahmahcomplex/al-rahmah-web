@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { declineLead } from "@/lib/services/lead-closure"
@@ -44,7 +45,6 @@ async function newLead() {
   return { id: created.data.leadId, name, admissionNumber: created.data.admissionNumber }
 }
 
-
 test.describe("marking a lead", () => {
   test("Admissions Staff mark an open lead inactive, and then only Archive is left", async ({ page }) => {
     const lead = await newLead()
@@ -58,7 +58,7 @@ test.describe("marking a lead", () => {
     await dialog.getByRole("button", { name: "Mark inactive" }).click()
     await expect(dialog.getByRole("alert")).toHaveText("Choose a reason.")
 
-    await dialog.getByLabel("Reason").selectOption("No longer pursuing admission")
+    await chooseOption(dialog.getByLabel("Reason"), "No longer pursuing admission")
     await dialog.getByLabel("Note").fill("Waiting to hear about a job transfer.")
     await dialog.getByRole("button", { name: "Mark inactive" }).click()
 
@@ -84,7 +84,7 @@ test.describe("marking a lead", () => {
     expect(await moreActions(page)).toEqual(expect.arrayContaining(["Mark inactive", "Archive"]))
     await chooseMore(page, "Archive")
     const dialog = page.getByRole("dialog", { name: `Archive ${lead.name}`, exact: true })
-    await dialog.getByLabel("Reason").selectOption("Admission cycle ended")
+    await chooseOption(dialog.getByLabel("Reason"), "Admission cycle ended")
     await dialog.getByRole("button", { name: "Archive" }).click()
 
     const banner = page.getByRole("region", { name: "This application is Declined and Archived" })
@@ -101,7 +101,7 @@ test.describe("marking a lead", () => {
 
     await chooseMore(page, "Archive")
     const dialog = page.getByRole("dialog", { name: `Archive ${lead.name}`, exact: true })
-    await dialog.getByLabel("Reason").selectOption("Duplicate record")
+    await chooseOption(dialog.getByLabel("Reason"), "Duplicate record")
     await dialog.getByRole("button", { name: "Cancel" }).click()
 
     await page.reload()

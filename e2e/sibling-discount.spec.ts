@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption } from "./kit-parts"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
@@ -116,7 +117,7 @@ test("Admissions Staff tick Has a sibling already at Al-Rahmah, which gives the 
   await form.getByRole("button", { name: "Save" }).click()
   await expect(form.getByLabel("Sibling's name")).toBeFocused()
   await form.getByLabel("Sibling's name").fill("Amina Older")
-  await form.getByLabel("Sibling's class").selectOption("STD 6")
+  await chooseOption(form.getByLabel("Sibling's class"), "STD 6")
   await form.getByRole("button", { name: "Save" }).click()
 
   await expect(form).toHaveCount(0)

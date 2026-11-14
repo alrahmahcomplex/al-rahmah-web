@@ -2,22 +2,12 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Button, Note, Sheet } from "@/components/kit"
 import { DISCOUNT_TEXT_MAX } from "@/lib/services/discounts"
 
 import { decideDiscountAction } from "./discount-actions"
 import type { DiscountOutcome } from "./discount-outcome"
+import { TextArea } from "./form-controls"
 
 const LOST_REQUEST: DiscountOutcome = {
   status: "refused",
@@ -36,11 +26,12 @@ type DecideDiscountProps = {
 }
 
 // Grant and Refuse on a Pending discount request, for the Admissions
-// Manager, on the lead and on the Discount requests screen. Each asks in a
-// dialog first. A decision that lands refreshes the page.
+// Manager, on the lead. Each asks in a sheet first. A decision that lands
+// refreshes the page. The Discount requests screen keeps its own in the old
+// look until it converts (app/staff/discounts/decide-discount.tsx).
 export function DecideDiscount(props: DecideDiscountProps) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="lr-acts">
       {props.canGrant && <GrantDiscount {...props} />}
       <RefuseDiscount {...props} />
     </div>
@@ -71,6 +62,7 @@ function useDecision() {
 function GrantDiscount({ leadId, requestId, studentName, admissionNumber, discount }: DecideDiscountProps) {
   const [open, setOpen] = useState(false)
   const { refusal, setRefusal, pending, send } = useDecision()
+  const formId = useId()
 
   function changeOpen(next: boolean) {
     if (pending) return
@@ -80,41 +72,46 @@ function GrantDiscount({ leadId, requestId, studentName, admissionNumber, discou
 
   return (
     <>
-      <Button type="button" size="sm" onClick={() => changeOpen(true)}>
+      <Button variant="ghost" size="small" onClick={() => changeOpen(true)}>
         Grant
       </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              send(() => decideDiscountAction(leadId, requestId, "grant", null), () => setOpen(false))
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle>Grant {studentName} the discount?</DialogTitle>
-              <DialogDescription>
-                {admissionNumber}. {discount}. The School fee goes down at once, and the applicant becomes Enrolled if their payments now
-                reach the line. A granted discount can&apos;t be taken back here.
-              </DialogDescription>
-            </DialogHeader>
-            {refusal && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{refusal}</AlertDescription>
-              </Alert>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>
-                {pending ? "Granting…" : "Grant discount"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <Sheet
+        open={open}
+        onOpenChange={changeOpen}
+        title={`Grant ${studentName} the discount?`}
+        hint={
+          <>
+            {admissionNumber}. {discount}. The School fee goes down at once, and the applicant becomes Enrolled if their payments now
+            reach the line. A granted discount can&apos;t be taken back here.
+          </>
+        }
+        closeLabel="Close"
+        foot={
+          <>
+            <Button type="submit" form={formId} size="wide" pending={pending}>
+              {pending ? "Granting…" : "Grant discount"}
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} aria-disabled={pending || undefined}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        <form
+          id={formId}
+          className="lr-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            send(() => decideDiscountAction(leadId, requestId, "grant", null), () => setOpen(false))
+          }}
+        >
+          {refusal && (
+            <Note tone="bad" role="alert">
+              {refusal}
+            </Note>
+          )}
+        </form>
+      </Sheet>
     </>
   )
 }
@@ -127,6 +124,7 @@ function RefuseDiscount({ leadId, requestId, studentName, admissionNumber, disco
   const reasonId = useId()
   const hintId = useId()
   const errorId = useId()
+  const formId = useId()
 
   function changeOpen(next: boolean) {
     if (pending) return
@@ -148,56 +146,62 @@ function RefuseDiscount({ leadId, requestId, studentName, admissionNumber, disco
 
   return (
     <>
-      <Button type="button" size="sm" variant="outline" onClick={() => changeOpen(true)}>
+      <Button variant="ghost" size="small" onClick={() => changeOpen(true)}>
         Refuse
       </Button>
-      <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent className="sm:max-w-md">
-          <form className="grid gap-4" onSubmit={refuse} noValidate>
-            <DialogHeader>
-              <DialogTitle>Refuse {studentName} the discount?</DialogTitle>
-              <DialogDescription>
-                {admissionNumber}. {discount}. The School fee stays as it is. The person who asked reads your reason on the application.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-1.5">
-              <Label htmlFor={reasonId}>Why is it refused?</Label>
-              <Textarea
-                id={reasonId}
-                value={reason}
-                maxLength={DISCOUNT_TEXT_MAX}
-                onChange={(event) => {
-                  setReason(event.target.value)
-                  setMissing(false)
-                }}
-                aria-invalid={missing || undefined}
-                aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
-              />
-              <p id={hintId} className="text-xs text-muted-foreground">
-                Required.
-              </p>
-            </div>
-            {missing && (
-              <p id={errorId} role="alert" className="text-sm text-destructive">
-                Write why the discount is refused.
-              </p>
-            )}
-            {refusal && (
-              <Alert variant="destructive" role="alert">
-                <AlertDescription>{refusal}</AlertDescription>
-              </Alert>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => changeOpen(false)} disabled={pending}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="destructive" disabled={pending}>
-                {pending ? "Refusing…" : "Refuse request"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <Sheet
+        open={open}
+        onOpenChange={changeOpen}
+        title={`Refuse ${studentName} the discount?`}
+        hint={
+          <>
+            {admissionNumber}. {discount}. The School fee stays as it is. The person who asked reads your reason on the application.
+          </>
+        }
+        closeLabel="Close"
+        foot={
+          <>
+            <Button type="submit" form={formId} size="wide" pending={pending}>
+              {pending ? "Refusing…" : "Refuse request"}
+            </Button>
+            <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} aria-disabled={pending || undefined}>
+              Cancel
+            </Button>
+          </>
+        }
+      >
+        <form id={formId} className="lr-form" onSubmit={refuse} noValidate>
+          <div className="lr-field">
+            <label htmlFor={reasonId} className="lr-label">
+              Why is it refused?
+            </label>
+            <TextArea
+              id={reasonId}
+              value={reason}
+              maxLength={DISCOUNT_TEXT_MAX}
+              onChange={(event) => {
+                setReason(event.target.value)
+                setMissing(false)
+              }}
+              aria-invalid={missing || undefined}
+              aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
+            />
+            <p id={hintId} className="lr-hint">
+              Required.
+            </p>
+          </div>
+          {missing && (
+            <p id={errorId} role="alert" className="lr-error">
+              Write why the discount is refused.
+            </p>
+          )}
+          {refusal && (
+            <Note tone="bad" role="alert">
+              {refusal}
+            </Note>
+          )}
+        </form>
+      </Sheet>
     </>
   )
 }

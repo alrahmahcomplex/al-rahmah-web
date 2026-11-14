@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
+import { chooseOption, dayFirst } from "./kit-parts"
 
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { scheduleFollowUp } from "@/lib/services/follow-ups"
@@ -60,7 +61,7 @@ test.describe("the Follow-ups panel", () => {
 
     const schedule = page.getByRole("dialog", { name: "Schedule follow-up" })
     // The date starts at tomorrow.
-    await expect(schedule.getByLabel("Follow-up date")).toHaveValue(addDays(today, 1))
+    await expect(schedule.getByLabel("Follow-up date")).toHaveValue(dayFirst(addDays(today, 1)))
     await schedule.getByLabel("Note (optional)").fill("Ask whether they need the school bus.")
     await schedule.getByRole("button", { name: "Schedule follow-up" }).click()
 
@@ -133,10 +134,10 @@ test.describe("the Follow-ups panel", () => {
     await expect(record).toContainText("What was discussed. Keep it to what admissions needs.")
     // Who made the contact starts at the signed-in staff member, the next
     // date at a week ahead.
-    await expect(record.getByLabel("Made the contact")).toHaveValue(ADMISSIONS.id)
-    await expect(record.getByLabel("Next follow-up date")).toHaveValue(addDays(today, 7))
+    await expect(record.getByLabel("Made the contact")).toHaveText(ADMISSIONS.name)
+    await expect(record.getByLabel("Next follow-up date")).toHaveValue(dayFirst(addDays(today, 7)))
     await record.getByLabel("Comment").fill("The mother will bring the report card on Monday.")
-    await record.getByLabel("Contact method").selectOption("WhatsApp")
+    await chooseOption(record.getByLabel("Contact method"), "WhatsApp")
     await record.getByRole("button", { name: "Record follow-up" }).click()
 
     await expect(panel(page).getByRole("status")).toHaveText(`Follow-up recorded. Next follow-up on ${formatDate(addDays(today, 7))}.`)
@@ -169,7 +170,7 @@ test.describe("the Follow-ups panel", () => {
     const record = page.getByRole("dialog", { name: "Record follow-up" })
     await expect(record.getByLabel("Next follow-up date (optional)")).toHaveValue("")
     await record.getByLabel("Comment").fill("The father phoned to thank the office.")
-    await record.getByLabel("Made the contact").selectOption({ label: MANAGER.name })
+    await chooseOption(record.getByLabel("Made the contact"), MANAGER.name)
     await record.getByRole("button", { name: "Record follow-up" }).click()
 
     await expect(panel(page).getByRole("status")).toHaveText("Follow-up recorded.")

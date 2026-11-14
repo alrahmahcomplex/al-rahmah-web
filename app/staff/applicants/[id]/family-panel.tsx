@@ -3,8 +3,7 @@
 import Link from "next/link"
 import { useState } from "react"
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, StatusChip, Table, Tag } from "@/components/kit"
 import { isClosed, type LeadFamily, type LeadFamilyChild } from "@/lib/services/leads"
 
 import { childHref, relationshipLabel } from "../../check-in/family"
@@ -52,11 +51,11 @@ export function FamilyPanel({
   return (
     <div className="flex flex-col gap-4">
       {match && (
-        <div className="flex max-w-xl flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4">
-          <p className="text-sm font-semibold text-slate-900">Unconfirmed Family match</p>
-          <p className="text-sm text-slate-700">
+        <div className="lr-box lr-wait">
+          <p className="lr-text lr-strong">Unconfirmed Family match</p>
+          <p className="lr-text">
             The Admission form matched this parent&apos;s phone to{" "}
-            <span className="font-medium text-slate-900">{match.fullName}</span> (
+            <span className="font-semibold">{match.fullName}</span> (
             {relationshipLabel(match.relationship, match.relationshipDescription)}, {match.phone}), who is already on
             file. Check with the family that they are the same person.
           </p>
@@ -87,11 +86,11 @@ export function FamilyPanel({
             />
           )}
           {canSettle && step === null && (
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" onClick={() => open("confirm")}>
+            <div className="lr-acts">
+              <Button variant="ghost" size="small" onClick={() => open("confirm")}>
                 Confirm match
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => open("reject")}>
+              <Button variant="ghost" size="small" onClick={() => open("reject")}>
                 Reject match
               </Button>
             </div>
@@ -100,13 +99,13 @@ export function FamilyPanel({
       )}
 
       {others.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No other children are in this Family.</p>
+        <p className="lr-quiet">No other children are in this Family.</p>
       ) : (
         <FamilyTable rows={others} />
       )}
 
       {step === "separate" && (
-        <div className="flex max-w-xl flex-col gap-3 rounded-lg border p-4">
+        <div className="lr-box">
           <SettleStep
             ask={`${studentName} will get a parent or guardian contact of their own, copied from the shared one. Changes to it will no longer reach:`}
             note="The Returning family badge goes, unless the child re-applied."
@@ -121,7 +120,7 @@ export function FamilyPanel({
       )}
       {canSeparate && step === null && (
         <div>
-          <Button type="button" variant="outline" size="sm" onClick={() => open("separate")}>
+          <Button variant="ghost" size="small" onClick={() => open("separate")}>
             Separate from this Family
           </Button>
         </div>
@@ -156,29 +155,29 @@ function SettleStep({
   return (
     <form
       aria-label={action}
-      className="flex flex-col gap-3"
+      className="lr-form"
       onSubmit={(event) => {
         event.preventDefault()
         save(run)
       }}
     >
       <Refusal refusal={refusal} />
-      <div className="text-sm text-slate-900">
+      <div className="lr-text">
         <p>{ask}</p>
-        <ul className="mt-1 list-disc pl-5">
+        <ul className="lr-bullets">
           {reaches.map((child) => (
             <li key={child.id}>
-              {child.studentName} <span className="font-mono">{child.admissionNumber}</span>
+              {child.studentName} <span className="lr-num">{child.admissionNumber}</span>
             </li>
           ))}
         </ul>
-        {note && <p className="mt-2 text-muted-foreground">{note}</p>}
+        {note && <p className="lr-quiet mt-2">{note}</p>}
       </div>
-      <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={pending}>
+      <div className="lr-acts">
+        <Button type="submit" size="small" pending={pending}>
           {pending ? pendingLabel : action}
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => onDone(null)} disabled={pending}>
+        <Button variant="ghost" size="small" onClick={() => onDone(null)} aria-disabled={pending || undefined}>
           Cancel
         </Button>
       </div>
@@ -188,39 +187,33 @@ function SettleStep({
 
 function FamilyTable({ rows }: { rows: LeadFamilyChild[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
-      <table aria-label="Children in this Family" className="w-full min-w-[36rem] text-left text-sm">
-        <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
-          <tr>
-            <th scope="col" className="px-3 py-2 font-medium">Admission Number</th>
-            <th scope="col" className="px-3 py-2 font-medium">Student</th>
-            <th scope="col" className="px-3 py-2 font-medium">Class</th>
-            <th scope="col" className="px-3 py-2 font-medium">Year</th>
-            <th scope="col" className="px-3 py-2 font-medium">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((child) => (
-            <tr key={child.id} className="border-b last:border-b-0">
-              <td className="px-3 py-2 font-mono whitespace-nowrap">{child.admissionNumber}</td>
-              <td className="px-3 py-2 font-medium text-slate-900">
-                <Link href={childHref(child)} className="text-blue-700 underline underline-offset-4">
-                  {child.studentName}
-                </Link>
-              </td>
-              <td className="px-3 py-2 whitespace-nowrap">{child.className}</td>
-              <td className="px-3 py-2">{child.enrollmentYear}</td>
-              <td className="px-3 py-2">
-                <div className="flex flex-wrap gap-1">
-                  <Badge variant={child.status === "Declined" ? "destructive" : "secondary"}>{child.status}</Badge>
-                  {child.closure && <Badge variant="outline">{child.closure}</Badge>}
-                  {child.unconfirmed && <Badge variant="outline">Unconfirmed</Badge>}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table
+      label="Children in this Family"
+      rows={rows}
+      rowKey={(child) => child.id}
+      columns={[
+        { header: "Admission Number", cell: (child) => <span className="whitespace-nowrap">{child.admissionNumber}</span> },
+        {
+          header: "Student",
+          cell: (child) => (
+            <Link href={childHref(child)} className="lr-link">
+              {child.studentName}
+            </Link>
+          ),
+        },
+        { header: "Class", cell: (child) => <span className="whitespace-nowrap">{child.className}</span> },
+        { header: "Year", cell: (child) => child.enrollmentYear },
+        {
+          header: "Status",
+          cell: (child) => (
+            <div className="flex flex-wrap gap-1">
+              <StatusChip status={child.status} />
+              {child.closure && <StatusChip status={child.closure} />}
+              {child.unconfirmed && <Tag tone="line">Unconfirmed</Tag>}
+            </div>
+          ),
+        },
+      ]}
+    />
   )
 }

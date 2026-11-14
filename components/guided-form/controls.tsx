@@ -129,13 +129,15 @@ export type ChoiceTilesProps = {
   /** Segmented tiles only: 56px, the label in Exo 800 italic indigo, as the kit page shows a class choice. */
   big?: boolean
   describedBy?: string
+  /** Native required: the form will not submit until one is chosen. */
+  required?: boolean
   children?: ReactNode
 }
 
 /** Real radios drawn as pills. The fieldset keeps arrow-key movement and the legend. */
-export function ChoiceTiles({ name, legend, options, value, onChange, layout = "rows", big, describedBy, children }: ChoiceTilesProps) {
+export function ChoiceTiles({ name, legend, options, value, onChange, layout = "rows", big, describedBy, required, children }: ChoiceTilesProps) {
   const radio = (o: ChoiceOption) => (
-    <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} aria-describedby={describedBy} />
+    <input type="radio" name={name} value={o.value} required={required} checked={value === o.value} onChange={() => onChange(o.value)} aria-describedby={describedBy} />
   )
   return (
     <fieldset className="m-0 flex min-w-0 flex-col gap-2.5 border-0 p-0">

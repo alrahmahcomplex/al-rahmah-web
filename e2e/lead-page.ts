@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test"
+import { expect, type Locator, type Page } from "@playwright/test"
 
 // The lead page's tabs (#228) and its More menu, for specs that work on it.
 
@@ -26,10 +26,18 @@ export async function openLeadTab(page: Page, tab: LeadTabName): Promise<void> {
 
 export type MoreAction = "Decline" | "Mark inactive" | "Archive" | "Request reopening"
 
+// The header's More popover (#325): a kit popover named "More actions", whose
+// actions are buttons, and a link for Request reopening.
+function morePopover(page: Page) {
+  return page.getByRole("dialog", { name: "More actions" })
+}
+
 // Opens the header's More menu and picks an action.
 export async function chooseMore(page: Page, action: MoreAction): Promise<void> {
   await page.getByRole("button", { name: "More actions", exact: true }).click()
-  await page.getByRole("menuitem", { name: action, exact: true }).click()
+  const popover = morePopover(page)
+  await expect(popover).toBeVisible()
+  await popover.getByRole(action === "Request reopening" ? "link" : "button", { name: action, exact: true }).click()
 }
 
 // The actions the More menu offers on the open lead page, none when there is
@@ -40,10 +48,22 @@ export async function moreActions(page: Page): Promise<string[]> {
   const more = page.getByRole("button", { name: "More actions", exact: true })
   if ((await more.count()) === 0) return []
   await more.click()
-  const menu = page.getByRole("menu")
-  await expect(menu).toBeVisible()
-  const items = await menu.getByRole("menuitem").allTextContents()
+  const popover = morePopover(page)
+  await expect(popover).toBeVisible()
+  // Its actions in order; the screen-reader Close is not one of them.
+  const items = await popover.locator("a.kit-btn, button.kit-btn").allTextContents()
   await page.keyboard.press("Escape")
-  await expect(menu).toHaveCount(0)
+  await expect(popover).toHaveCount(0)
   return items.map((item) => item.trim())
+}
+
+/** The options a kit choice list offers, read by opening it as a person does; Escape closes the list only. */
+export async function listOptions(field: Locator): Promise<string[]> {
+  await field.click()
+  const list = field.page().getByRole("listbox")
+  await expect(list.getByRole("option").first()).toBeVisible()
+  const options = (await list.getByRole("option").allTextContents()).map((text) => text.trim())
+  await field.page().keyboard.press("Escape")
+  await expect(list).toBeHidden()
+  return options
 }

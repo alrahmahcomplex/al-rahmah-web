@@ -2,10 +2,9 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
+import { Note } from "@/components/kit"
 
+import { Checkbox } from "./form-controls"
 import { setPreFormOneAction } from "./pre-form-one-actions"
 import { PRE_FORM_ONE_HINT, PRE_FORM_ONE_LABEL, type PreFormOneOutcome } from "./pre-form-one-outcome"
 
@@ -46,26 +45,16 @@ export function PreFormOneTick({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-start gap-2 text-sm">
-        <Checkbox
-          id={checkboxId}
-          // Base UI marks a disabled checkbox with data-disabled, not :disabled.
-          className="mt-0.5 data-disabled:cursor-not-allowed data-disabled:opacity-50"
-          checked={ticked}
-          disabled={!editable || pending}
-          onCheckedChange={toggle}
-        />
-        <span className="flex flex-col gap-0.5">
-          <Label htmlFor={checkboxId} className="font-normal text-slate-900">
-            {PRE_FORM_ONE_LABEL}
-          </Label>
-          {!ticked && <span className="text-xs text-muted-foreground">{PRE_FORM_ONE_HINT}</span>}
-        </span>
-      </div>
+      <Checkbox
+        id={checkboxId}
+        checked={ticked}
+        disabled={!editable || pending}
+        onCheckedChange={toggle}
+        label={PRE_FORM_ONE_LABEL}
+        hint={ticked ? undefined : PRE_FORM_ONE_HINT}
+      />
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{refusal}</Note>
       )}
     </div>
   )

@@ -2,23 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button, Note, Sheet } from "@/components/kit"
 import { STAFF_REMINDER } from "@/lib/referral-notice"
-import { cn } from "@/lib/utils"
 
-import { Field, Saved } from "./lead-editors"
+import { Field, Input, Saved } from "./lead-editors"
 import { lookUpReferralCode, saveLeadReferralCode } from "./referral-actions"
 import { referralLookupNote, usableCode, type ReferralLookup, type ReferralOutcome } from "./referral-outcome"
 
@@ -67,7 +54,7 @@ export function ReferralEditor({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="lr-card">
       {editing ? (
         <CodeForm
           current={current?.code ?? null}
@@ -79,58 +66,64 @@ export function ReferralEditor({
           }}
         />
       ) : (
-        <div className="flex flex-wrap gap-2">
+        <div className="lr-acts">
           <Button
-            type="button"
-            variant="outline"
+            variant="ghost"
+            size="small"
             onClick={() => {
               setSaved(null)
               setRefusal(null)
               setEditing(true)
             }}
-            disabled={pending}
+            aria-disabled={pending || undefined}
           >
             {current ? "Edit" : "Add a code"}
           </Button>
           {current && (
-            <Button type="button" variant="outline" onClick={() => setConfirmClear(true)} disabled={pending}>
+            <Button variant="ghost" size="small" onClick={() => setConfirmClear(true)} pending={pending}>
               {pending ? "Clearing…" : "Clear"}
             </Button>
           )}
         </div>
       )}
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">{refusal}</Note>
       )}
       <Saved message={saved} />
 
       {current && (
-        <AlertDialog open={confirmClear} onOpenChange={setConfirmClear}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear the referral code?</AlertDialogTitle>
-              <AlertDialogDescription>
-                <span className="font-mono font-semibold text-foreground">{current.code}</span>
-                {current.holderName ? ` (${current.holderName})` : ""} will no longer be on this application
-                {discountApplied ? ", and the interview fee loses its discount." : "."} The application&apos;s history keeps
-                the change.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
+        <Sheet
+          open={confirmClear}
+          onOpenChange={setConfirmClear}
+          title="Clear the referral code?"
+          hint={
+            <>
+              <span className="lr-num font-semibold">{current.code}</span>
+              {current.holderName ? ` (${current.holderName})` : ""} will no longer be on this application
+              {discountApplied ? ", and the interview fee loses its discount." : "."} The application&apos;s history keeps
+              the change.
+            </>
+          }
+          closeLabel="Close"
+          foot={
+            <>
+              <Button
+                size="wide"
                 onClick={() => {
                   setConfirmClear(false)
                   send(null, () => {})
                 }}
               >
                 Clear code
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </Button>
+              <Button variant="ghost" size="wide" onClick={() => setConfirmClear(false)}>
+                Cancel
+              </Button>
+            </>
+          }
+        >
+          {null}
+        </Sheet>
       )}
     </div>
   )
@@ -154,7 +147,7 @@ function CodeForm({
 
   return (
     <form
-      className="flex flex-col gap-3"
+      className="lr-form lr-inline"
       onSubmit={(event) => {
         event.preventDefault()
         if (found && !unchanged) onSave(found.code)
@@ -175,33 +168,30 @@ function CodeForm({
               maxLength={40}
               aria-describedby={typed.trim() ? `${id}-agent ${id}-reminder` : `${id}-agent`}
               aria-invalid={lookup.status === "none" || (lookup.status === "found" && found === null)}
-              className="max-w-48 font-mono uppercase"
+              className="max-w-48 uppercase"
             />
             {/* Names the agent as the code is typed. */}
             <p
               id={`${id}-agent`}
               role="status"
-              className={cn(
-                "text-sm",
-                found ? "text-slate-900" : lookup.status === "none" || lookup.status === "found" ? "text-destructive" : "text-muted-foreground",
-              )}
+              className={found ? "lr-text" : lookup.status === "none" || lookup.status === "found" ? "lr-error" : "lr-quiet"}
             >
               {unchanged ? `${referralLookupNote(lookup)} (the application's current code)` : referralLookupNote(lookup)}
             </p>
             {/* A code staff save records that the family was told (#182). */}
             {typed.trim() && (
-              <p id={`${id}-reminder`} data-notice-version="staff_reminder" className="text-sm text-slate-900">
+              <p id={`${id}-reminder`} data-notice-version="staff_reminder" className="lr-text">
                 {STAFF_REMINDER}
               </p>
             )}
           </>
         )}
       </Field>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={pending || !found || unchanged}>
+      <div className="lr-acts">
+        <Button type="submit" size="small" pending={pending} aria-disabled={!found || unchanged || undefined}>
           {pending ? "Saving…" : "Save"}
         </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
+        <Button variant="ghost" size="small" onClick={onCancel} aria-disabled={pending || undefined}>
           Cancel
         </Button>
       </div>

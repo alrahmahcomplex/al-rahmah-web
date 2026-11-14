@@ -71,8 +71,6 @@ The full suite runs as parallel jobs:
 - **Migration-day tests that lock tables.** A test that replays a migration and, to do it, locks or alters whole tables stays out of the suite: a block that takes `lock table`, an `alter table` to stage old data, a backfill run again. It holds the busiest tables while the tests beside it run, and they deadlock. Run it on the branch, put its output in the PR as evidence, and delete it before merge. A test that runs part of a migration again without locking or altering a table may stay. So do tests of what the migration leaves behind: the rule, the permission, the shape of the data.
 - **No whole-table locks in integration tests.** Four test files run at once against one database, so no test takes `lock table`, runs `alter table` or holds a table to keep a count still. A test that compares counts reads them in one snapshot (`inOneSnapshot` in `tests/support/db.ts`), or reads the database's answer before and after the service's (`whileUnchanged`). A test that truncates or writes rows other tests use goes through `withoutLockWaits`. To switch a trigger off, use `set local session_replication_role = replica`. A test that changes something the whole database shares, such as the Sibling kill switch, goes in `tests/integration/serial/`, which runs alone after the other files. `tests/unit/integration-table-locks.test.ts` fails when a parallel file has `lock table`, `alter table`, a truncate outside `withoutLockWaits`, or the kill switch.
 
-[The CI report](../ci/REPORT.md) has the measurements and the commands, and [the manual](../ci/MANUAL.md) the monthly check that says when to change any of this.
-
 ## Evidence
 
 Choose evidence that demonstrates the acceptance criteria:

@@ -1,9 +1,9 @@
 // Measures CI run time from the GitHub API through `gh`. Read-only: it never
-// starts, re-runs or cancels a run. docs/ci/REPORT.md lists the commands.
+// starts, re-runs or cancels a run.
 //
-//   node scripts/ci-measure.mjs fetch --event pull_request --out docs/ci/data/x.json
-//   node scripts/ci-measure.mjs summary docs/ci/data/x.json [more.json ...]
-//   node scripts/ci-measure.mjs summary --json docs/ci/data/x.json
+//   node scripts/ci-measure.mjs fetch --event pull_request --out <file>.json
+//   node scripts/ci-measure.mjs summary <file>.json [more.json ...]
+//   node scripts/ci-measure.mjs summary --json <file>.json
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";

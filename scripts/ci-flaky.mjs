@@ -1,7 +1,7 @@
 // Lists the tests that failed or were flaky in recent CI runs, from the job
-// logs. Read-only. docs/ci/REPORT.md lists the command.
+// logs. Read-only.
 //
-//   node scripts/ci-flaky.mjs --limit 100 --out docs/ci/data/flaky.json
+//   node scripts/ci-flaky.mjs --limit 100 --out <file>.json
 //
 // A Playwright test is "flaky" when it failed and then passed on a retry in
 // the same job. A test that fails in one attempt of a run and passes in a

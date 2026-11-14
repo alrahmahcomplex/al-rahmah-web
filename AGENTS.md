@@ -44,7 +44,7 @@ Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, V
 - **Planning, verification or PR preparation:** [Workflow](docs/agents/workflow.md).
 - **Merge or release:** [Releasing](docs/agents/releasing.md).
 - **Local database, shared resources or parallel feature slices:** [Parallel work](docs/agents/parallel-work.md).
-- **Production, Preview, hosted dashboards or service setup:** [Hosted services](docs/agents/hosted-services.md). Check the signed-in in-app browser yourself; request sign-in if needed.
+- **Production, Preview, hosted dashboards or service setup:** [Hosted services](docs/agents/hosted-services.md). Open the URL in the signed-in in-app browser yourself and try every way in before you ask the human to sign in.
 - **Business behavior or terminology:** relevant sections of [CONTEXT.md](CONTEXT.md), relevant [ADRs](docs/adr/), and [domain guidance](docs/agents/domain.md).
 - **Tickets or triage:** [Issue tracker](docs/agents/issue-tracker.md) and [triage labels](docs/agents/triage-labels.md).
 

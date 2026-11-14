@@ -1,12 +1,13 @@
 # Hosted services
 
-Checking production, a Vercel Preview or a dashboard (GitHub, Supabase, Vercel) is the agent's job. The in-app browser holds the human's sessions and shares them across agent sessions, so:
+Checking production, a Vercel Preview or a dashboard (GitHub, Supabase, Vercel) is the agent's job. The human has signed in to every service this project uses in the in-app browser. It keeps those sessions for every agent session, even when no tab is open, so having no tab open never blocks you:
 
-1. Open the page in the in-app browser and see whether it is signed in.
-2. If it shows a sign-in page, ask the human to sign in to that service or site (`AskUserQuestion` in Claude Code), wait for their answer that they are done, then open it again.
-3. Report what the page shows.
+1. Open the page's URL in the in-app browser yourself and see whether it is signed in.
+2. If it isn't, try the other ways in first: reload, open the service's sign-in page (a kept session often signs straight back in), try another page of the same service, or wait and retry after a rate limit or outage. Where the task allows it, check the same fact with `gh` or an API that already has credentials.
+3. Ask the human only once you have shown that they must act, for example to type a password or a 2FA code. Ask in one message (`AskUserQuestion` in Claude Code) that says what you tried, the one thing they need to do and the link. Wait until they say it is done, then open the page again.
+4. Report what the page shows.
 
-A missing session is a sign-in to ask for, never a reason to hand the check to the human. Their calls are destructive changes, and the merges [Releasing → When to merge](releasing.md#when-to-merge) leaves to them.
+A missing session is never a reason to hand the check itself to the human. Their calls are destructive changes, and the merges [Releasing → When to merge](releasing.md#when-to-merge) leaves to them.
 
 ## Hosted setup
 

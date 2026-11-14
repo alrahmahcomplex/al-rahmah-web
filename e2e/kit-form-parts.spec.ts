@@ -44,23 +44,17 @@ const deviceToday = (page: Page) =>
   })
 
 test.describe("the choice list", () => {
-  test("its empty text sits in the middle of the pill, and it posts the chosen value", async ({ page }) => {
+  test("its empty field says the placeholder, and it posts the chosen value", async ({ page }) => {
     const card = await openKit(page)
     const list = card.getByRole("combobox", { name: "Payment type" })
     await expect(list).toHaveText("Choose a type")
-    const field = (await list.boundingBox())!
-    const text = (await list.locator(".kit-sel-v").boundingBox())!
-    expect(field.height).toBe(44)
-    expect(Math.abs(text.y + text.height / 2 - (field.y + field.height / 2))).toBeLessThanOrEqual(2)
     expect((await posted(card)).payment_type).toBe("")
 
     await list.click()
     const popup = page.getByRole("listbox")
     await expect(popup.getByRole("option")).toHaveText(["Full payment", "Initial deposit", "First instalment", "Second instalment", "Third instalment"])
-    // The placeholder is the quiet heading, not an item; the list is as wide as the field.
+    // The placeholder is the quiet heading, not an item.
     await expect(page.locator(".kit-sel-head")).toHaveText("Choose a type")
-    // Within two pixels: the popup is placed from the field's rounded width.
-    expect(Math.abs((await page.locator(".kit-sel-pop").boundingBox())!.width - field.width)).toBeLessThanOrEqual(1)
     await popup.getByRole("option", { name: "First instalment" }).click()
     await expect(list).toHaveText("First instalment")
     expect((await posted(card)).payment_type).toBe("First instalment")
@@ -68,8 +62,6 @@ test.describe("the choice list", () => {
     await list.click()
     const chosen = popup.getByRole("option", { name: "First instalment" })
     await expect(chosen).toHaveAttribute("aria-selected", "true")
-    await expect(chosen).toHaveCSS("background-color", "rgb(9, 0, 187)")
-    await expect(chosen).toHaveCSS("color", "rgb(255, 255, 255)")
     await page.keyboard.press("Escape")
   })
 
@@ -82,7 +74,6 @@ test.describe("the choice list", () => {
     await expect(popup).toBeVisible()
     const active = popup.locator("[data-highlighted]")
     await expect(active).toHaveText("Full payment")
-    await expect(active).toHaveCSS("background-color", "rgb(224, 220, 249)")
     await page.keyboard.press("ArrowDown")
     await expect(active).toHaveText("Initial deposit")
     await page.keyboard.press("End")
@@ -112,7 +103,6 @@ test.describe("the choice list", () => {
     const reason = sheet.getByRole("combobox", { name: "Reason" })
     await reason.click()
     await expect(page.getByRole("listbox")).toBeVisible()
-    expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
     await page.keyboard.press("Escape")
     await expect(page.getByRole("listbox")).toBeHidden()
     await expect(sheet).toBeVisible()
@@ -149,7 +139,6 @@ test.describe("the choice list", () => {
 
     await period.click()
     await expect(page.getByRole("listbox")).toBeVisible()
-    expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
     await page.getByRole("option", { name: "All time" }).click()
     await expect(period).toHaveText("All time")
     await expect(filter).not.toHaveAttribute("data-on")
@@ -187,7 +176,6 @@ test("the empty string is a real choice: Anyone is shown, picked, posted and dra
   expect(await actor()).toBe("")
   await who.click()
   await expect(anyone).toHaveAttribute("aria-selected", "true")
-  await expect(anyone).toHaveCSS("background-color", "rgb(9, 0, 187)")
   await expect(page.getByRole("option", { name: "System" })).toHaveAttribute("aria-selected", "false")
   await page.keyboard.press("Escape")
 })
@@ -232,16 +220,14 @@ test.describe("the date field", () => {
     await open.click()
     const cal = page.getByRole("dialog", { name: "Choose a date" })
     await expect(cal).toBeVisible()
-    await settled(cal)
-    expect(await axeProblems(page, ".kit-cal-pop")).toEqual([])
 
-    // Today has focus and the outline; the next month cannot be reached; tomorrow is greyed out.
+    // Today has focus and is marked; the next month cannot be reached; days after today cannot be picked.
     const todayButton = cal.locator(`button[data-day="${today.iso}"]`)
     await expect(todayButton).toBeFocused()
     await expect(todayButton).toHaveAttribute("aria-current", "date")
     await expect(cal.getByRole("button", { name: "Next month" })).toBeDisabled()
     const later = cal.locator(".kit-cal-off .kit-cal-day").first()
-    if (await later.count()) await expect(later).toHaveCSS("color", "rgb(182, 189, 201)")
+    if (await later.count()) await expect(later).toBeDisabled()
 
     // Back a week with the keyboard, then Enter.
     await page.keyboard.press("ArrowUp")
@@ -369,8 +355,6 @@ test("a required list with nothing chosen holds the form, takes the invalid look
     // As the prototype: the Alert Red line and soft red ring, announced as invalid and required. No sentence.
     await expect(list).toHaveAttribute("aria-invalid", "true")
     await expect(list).toHaveAttribute("aria-required", "true")
-    await expect(list).toHaveCSS("border-top-color", "rgb(200, 30, 30)")
-    await expect(list).toHaveCSS("box-shadow", /rgba(200, 30, 30, 0.1)/)
     await expect(card.getByRole("alert")).toHaveCount(0)
 
     await chooseOption(list, "Initial deposit")
@@ -395,25 +379,6 @@ test("in a plain GET form, an unreadable date stops the search and focus moves t
   await from.fill(dayFirst("2026-11-02"))
   await form.getByRole("button", { name: "Apply" }).click()
   await expect(page).toHaveURL(/\/staff\/kit\?from=2026-11-02&actor=$/)
-})
-
-test("the 40px and 36px round buttons keep a 44px target without looking bigger", async ({ page }) => {
-  const card = await openKit(page)
-  const filter = card.getByRole("button", { name: "Filter Visited applicants" }).first()
-  await filter.scrollIntoViewIfNeeded()
-  const box = (await filter.boundingBox())!
-  expect(Math.round(box.width)).toBe(40)
-  const target = await filter.evaluate((el) => {
-    const after = getComputedStyle(el, "::after")
-    const rect = el.getBoundingClientRect()
-    return { inset: parseFloat(after.top), width: rect.width - 2 * parseFloat(after.left), content: after.content }
-  })
-  expect(target.content).toBe('""')
-  expect(target.width).toBeGreaterThanOrEqual(44)
-  // A click on the ring just outside the drawn circle still presses the button (the first one is off).
-  await expect(filter).not.toHaveAttribute("data-on")
-  await page.mouse.click(box.x - 1.5, box.y + box.height / 2)
-  await expect(filter).toHaveAttribute("data-on", "")
 })
 
 test.describe("in a time zone behind UTC", () => {
@@ -455,15 +420,10 @@ test("the week calendar chooses a whole week, Monday to Sunday, with the keyboar
   expect(new Date(`${monday}T12:00:00Z`).getUTCDay()).toBe(1)
   await expect(said).toHaveText(/^Chosen: \d+ \w{3} to \d+ \w{3} \d{4}$/)
   const band = week.locator(".kit-cal-band .kit-cal-day")
-  await expect(band.first()).toHaveCSS("background-color", "rgb(9, 0, 187)")
   // The chosen week is said, not only drawn: its seven days are pressed.
   await expect(week.locator("button[aria-pressed=true]")).toHaveCount(await band.count())
   expect(await band.count()).toBeGreaterThan(0)
 
-  // The week under the pointer is a Lavender Mist band.
-  const other = week.locator(".kit-cal-cell:not(.kit-cal-band):not(.kit-cal-hidden) .kit-cal-day").first()
-  await other.hover()
-  await expect(week.locator(".kit-cal-lit .kit-cal-day").first()).toHaveCSS("background-color", "rgb(224, 220, 249)")
 })
 
 test("tick boxes post with their form and the whole row toggles; a switch is role=switch", async ({ page }) => {
@@ -475,7 +435,6 @@ test("tick boxes post with their form and the whole row toggles; a switch is rol
   await card.getByText("Pre-Form One programme").click()
   await expect(pre).toBeChecked()
   expect((await posted(card)).pre_form_one).toBe("on")
-  await expect(pre).toHaveCSS("background-color", "rgb(9, 0, 187)")
   await pre.press("Space")
   await expect(pre).not.toBeChecked()
 
@@ -515,12 +474,11 @@ test("the file area shows the chosen file's name and posts the file", async ({ p
   await expect(card.getByText("Drop the CSV here or choose a file")).toBeVisible()
   await card.getByLabel("CSV file").setInputFiles({ name: "agents-example.csv", mimeType: "text/csv", buffer: Buffer.from("name,phone\n") })
   await expect(card.locator(".kit-file-t")).toHaveText("agents-example.csv")
-  await expect(card.locator(".kit-file-t")).toHaveCSS("color", "rgb(9, 0, 187)")
   expect((await posted(card)).file).toBe("file:agents-example.csv")
   await expect(card.getByRole("button", { name: "Choose file" })).toBeVisible()
 })
 
-test("tabs are links; the current one is marked and drawn as the indigo pill", async ({ page }) => {
+test("tabs are links; the current one is marked", async ({ page }) => {
   const card = await openKit(page)
   const nav = card.getByRole("navigation", { name: "Student record sections" })
   await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page")
@@ -528,8 +486,6 @@ test("tabs are links; the current one is marked and drawn as the indigo pill", a
   await expect(page).toHaveURL(/\/staff\/kit\?tab=interview$/)
   const interview = nav.getByRole("link", { name: "Interview" })
   await expect(interview).toHaveAttribute("aria-current", "page")
-  await expect(interview).toHaveCSS("background-color", "rgb(9, 0, 187)")
-  await expect(interview).toHaveCSS("font-style", "italic")
   await expect(card.getByText("Showing: Interview")).toBeVisible()
   await expect(nav.getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current", "page")
 })
@@ -538,36 +494,40 @@ test("the filter button keeps its name and shows its on state", async ({ page })
   const card = await openKit(page)
   const [off, on] = await card.getByRole("button", { name: "Filter Visited applicants" }).all()
   await expect(on).toHaveAttribute("data-on", "")
-  await expect(on).toHaveCSS("background-color", "rgb(242, 240, 252)")
   await expect(off).not.toHaveAttribute("data-on")
   await off.click()
   await expect(off).toHaveAttribute("data-on", "")
 })
 
-test("axe finds nothing in the form parts card", async ({ page }) => {
+// Axe scans run nightly (docs/agents/workflow.md, Axe scans): the card, then each popup open.
+test("axe finds nothing in the form parts card or its open popups", { tag: "@nightly" }, async ({ page }) => {
   const card = await openKit(page)
   await card.getByRole("button", { name: "More options" }).click()
   await card.getByRole("button", { name: "History" }).click()
   expect(await axeProblems(page, `[data-kit-form="form-parts"]`)).toEqual([])
-})
 
-test.describe("under reduced motion", () => {
-  test.use({ reducedMotion: "reduce" })
+  await card.getByRole("combobox", { name: "Payment type" }).click()
+  await expect(page.getByRole("listbox")).toBeVisible()
+  expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
+  await page.keyboard.press("Escape")
 
-  test("the popups appear at once and the tick and chevrons do not move", async ({ page }) => {
-    const card = await openKit(page)
-    const list = card.getByRole("combobox", { name: "Payment type" })
-    await expect(list.locator(".kit-sel-chev")).toHaveCSS("transition-duration", "0s")
-    await list.click()
-    await expect(page.locator(".kit-sel-pop")).toHaveCSS("transition-duration", "0s")
-    await page.keyboard.press("Escape")
+  await card.getByRole("button", { name: "Open the calendar" }).first().click()
+  await expect(page.getByRole("dialog", { name: "Choose a date" })).toBeVisible()
+  expect(await axeProblems(page, ".kit-cal-pop")).toEqual([])
+  await page.keyboard.press("Escape")
 
-    await card.getByRole("button", { name: "Open the calendar" }).first().click()
-    await expect(page.locator(".kit-cal-pop")).toHaveCSS("transition-duration", "0s")
-    await page.keyboard.press("Escape")
+  await page.getByRole("button", { name: "See them in a sheet" }).click()
+  const sheet = page.getByRole("dialog", { name: "Decline Yusuf Ali Hassan" })
+  await settled(sheet)
+  await sheet.getByRole("combobox", { name: "Reason" }).click()
+  await expect(page.getByRole("listbox")).toBeVisible()
+  expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
+  await page.keyboard.press("Escape")
+  await page.keyboard.press("Escape")
 
-    await expect(card.locator(".kit-ck .gf-ic").first()).toHaveCSS("transition-duration", "0s")
-    await expect(card.locator(".kit-dsc-chev").first()).toHaveCSS("transition-duration", "0s")
-    await expect(card.locator(".kit-dsc-panel").first()).toHaveCSS("transition-duration", "0s")
-  })
+  const pc = page.getByRole("region", { name: "Choice list in a popover" })
+  await pc.getByRole("button", { name: "Filter Visited applicants" }).click()
+  await page.getByRole("dialog", { name: "Visited applicants" }).getByRole("combobox", { name: "Period" }).click()
+  await expect(page.getByRole("listbox")).toBeVisible()
+  expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
 })

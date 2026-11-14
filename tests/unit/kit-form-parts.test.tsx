@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
 import { act, fireEvent, render, screen } from "@testing-library/react"
 import { useState } from "react"
 import { describe, expect, it, vi } from "vitest"
@@ -6,7 +9,7 @@ import { Checkbox, DateField, DateTimeField, Disclosure, FilePicker, RoundButton
 
 // The kit's form parts (#358): what each one posts from a plain form, and
 // how it keeps a controlled value. The browser tests on /staff/kit cover the
-// popups, the keyboard and the look.
+// popups and the keyboard; screenshots in the PR cover the look.
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: { href: string; children: React.ReactNode; scroll?: boolean }) => {
@@ -531,5 +534,30 @@ describe("Sheet hintId", () => {
     expect(document.getElementById("sheet-hint")).toHaveTextContent("Their code is made from the name.")
     expect(screen.getByRole("textbox", { name: "Name" })).toHaveAccessibleDescription("Their code is made from the name.")
     expect(screen.getByRole("dialog", { name: "New agent" })).toHaveAccessibleDescription("Their code is made from the name.")
+  })
+})
+
+// jsdom has no layout, so the 44px touch target is read from the rule that draws it.
+describe("round button touch target", () => {
+  const css = readFileSync(join(process.cwd(), "components/kit/kit.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
+  // The last `inset` of any rule whose selector list names `<selector>::after`, as the cascade applies it.
+  const inset = (selector: string) => {
+    let found: number | null = null
+    for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+      const names = selectors.split(",").map((part) => part.trim())
+      const value = /inset:\s*-(\d+)px/.exec(body)
+      if (names.includes(`${selector}::after`) && value) found = Number(value[1])
+    }
+    return found
+  }
+
+  it.each([
+    [`.kit-round[data-size="40"]`, 40],
+    [`.kit-round[data-size="36"]`, 36],
+    [".kit-round.kit-cal-arrow", 34],
+  ])("%s reaches 44px with its invisible ring", (selector, size) => {
+    const ring = inset(selector)
+    expect(ring, selector).not.toBeNull()
+    expect(size + 2 * ring!).toBeGreaterThanOrEqual(44)
   })
 })

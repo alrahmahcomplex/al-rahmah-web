@@ -28,7 +28,7 @@ export async function FamilySection({
       {family.ok ? (
         <FamilyPanel key={leadId} leadId={leadId} studentName={studentName} family={family.data} canEdit={canEdit} />
       ) : (
-        <Note tone="bad">The Family could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The Family could not be loaded. Try again in a moment.</Note>
       )}
     </section>
   )

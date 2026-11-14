@@ -43,7 +43,7 @@ export async function InterviewSection({
         Interview
       </h2>
       {!interviews.ok ? (
-        <Note tone="bad">The interview could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The interview could not be loaded. Try again in a moment.</Note>
       ) : current ? (
         <CurrentInterview
           interview={current}

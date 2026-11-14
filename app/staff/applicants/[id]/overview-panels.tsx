@@ -72,7 +72,7 @@ export async function FeeSummaryPanel({ lead, staff }: LeadPanelProps) {
         }
       />
       {!fee.ok ? (
-        <Note tone="bad">The School fee could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The School fee could not be loaded. Try again in a moment.</Note>
       ) : fee.data.kind === "no-schedule" ? (
         <p className="lr-quiet">No fee schedule for {fee.data.year} yet.</p>
       ) : (
@@ -121,7 +121,7 @@ export async function RecentActivityPanel({ lead, staff }: LeadPanelProps) {
         }
       />
       {!history.ok ? (
-        <Note tone="bad">The history could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The history could not be loaded. Try again in a moment.</Note>
       ) : entries.length === 0 ? (
         <p className="lr-quiet">No changes yet.</p>
       ) : (

@@ -38,13 +38,13 @@ export async function DiscountSection({ lead, staff, open }: LeadPanelProps) {
         Discounts
       </h2>
       {!discounts.ok ? (
-        <Note tone="bad">The discounts could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The discounts could not be loaded. Try again in a moment.</Note>
       ) : (
         <div className="flex flex-col gap-4">
           {!priorSibling.ok ? (
             // Unread, the tick could show unticked over a saved sibling, so
             // nothing about it shows until it loads.
-            <Note tone="bad">Has a sibling already at Al-Rahmah could not be loaded. Try again in a moment.</Note>
+            <Note tone="bad" role="alert">Has a sibling already at Al-Rahmah could not be loaded. Try again in a moment.</Note>
           ) : (
             (sibling || mayRequest) && (
               <div className="border-b border-gf-mist pb-4">

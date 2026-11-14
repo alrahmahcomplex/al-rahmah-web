@@ -60,7 +60,7 @@ export async function SchoolFeeSection({
         School fee
       </h2>
       {!fee.ok ? (
-        <Note tone="bad">The School fee could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The School fee could not be loaded. Try again in a moment.</Note>
       ) : fee.data.kind === "no-schedule" ? (
         <div className="lr-form">
           <p className="lr-quiet">No fee schedule for {fee.data.year} yet.</p>
@@ -134,7 +134,7 @@ export async function SchoolFeeSection({
           Payments
         </h3>
         {!payments.ok ? (
-          <Note tone="bad">The payments could not be loaded. Try again in a moment.</Note>
+          <Note tone="bad" role="alert">The payments could not be loaded. Try again in a moment.</Note>
         ) : payments.data.length === 0 ? (
           <p className="lr-quiet">No payments recorded yet.</p>
         ) : (

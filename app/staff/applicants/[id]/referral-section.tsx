@@ -30,7 +30,7 @@ export async function ReferralSection({ leadId, canEdit }: { leadId: string; can
         Referral code
       </h2>
       {!referral.ok ? (
-        <Note tone="bad">The referral code could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The referral code could not be loaded. Try again in a moment.</Note>
       ) : (
         <div className="flex flex-col gap-4">
           <Code referral={referral.data} />

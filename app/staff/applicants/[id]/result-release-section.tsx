@@ -29,7 +29,7 @@ export async function ResultReleaseSection({ leadId }: { leadId: string }) {
         Result release
       </h3>
       {!view.ok ? (
-        <Note tone="bad">The result release could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The result release could not be loaded. Try again in a moment.</Note>
       ) : (
         <>
           {view.data.interviewId !== null && (

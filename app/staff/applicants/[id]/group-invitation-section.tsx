@@ -24,7 +24,7 @@ export async function GroupInvitationSection({ lead, open }: LeadPanelProps) {
         WhatsApp group invitation
       </h2>
       {!view.ok ? (
-        <Note tone="bad">The group invitation could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The group invitation could not be loaded. Try again in a moment.</Note>
       ) : (
         <>
           {view.data.latest ? (

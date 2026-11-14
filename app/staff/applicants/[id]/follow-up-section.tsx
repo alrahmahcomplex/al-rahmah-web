@@ -49,7 +49,7 @@ export async function FollowUpSection({
         Follow-ups
       </h2>
       {!followUps.ok ? (
-        <Note tone="bad">The follow-ups could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The follow-ups could not be loaded. Try again in a moment.</Note>
       ) : (
         <div className="flex flex-col gap-4">
           {followUps.data.needsDate && (

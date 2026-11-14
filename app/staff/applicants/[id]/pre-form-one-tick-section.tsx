@@ -22,7 +22,7 @@ export async function PreFormOneTickSection({ leadId, formOne, canEdit }: { lead
       {!ticked.ok ? (
         // Unread, the tick could show unticked over a saved one, so nothing
         // about it shows until it loads.
-        <Note tone="bad">The Pre-Form One programme could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The Pre-Form One programme could not be loaded. Try again in a moment.</Note>
       ) : (
         <div className="lr-box">
           <PreFormOneTick leadId={leadId} ticked={ticked.data} canTick={canEdit && formOne} canClear={canEdit} />

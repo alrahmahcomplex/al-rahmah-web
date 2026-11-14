@@ -52,7 +52,7 @@ export async function ReopeningSection({ lead, staff }: LeadPanelProps) {
         Reopening requests
       </h2>
       {!reopenings.ok ? (
-        <Note tone="bad">The reopening requests could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The reopening requests could not be loaded. Try again in a moment.</Note>
       ) : (
         <div className="flex flex-col gap-4">
           {reopenings.data.pending && (

@@ -21,7 +21,7 @@ export async function ReApplicationSection({ lead }: LeadPanelProps) {
         Re-applications
       </h2>
       {!reApplications.ok ? (
-        <Note tone="bad">The re-applications could not be loaded. Try again in a moment.</Note>
+        <Note tone="bad" role="alert">The re-applications could not be loaded. Try again in a moment.</Note>
       ) : (
         <ul className="lr-list">
           {reApplications.data.map((entry) => (

@@ -483,7 +483,7 @@ function ContactForm({
         )}
       </Field>
       {shared && (
-        <Note>
+        <Note role="alert">
           <p className="m-0">
             This parent or guardian is shared with {siblings.length === 1 ? "another child" : `${siblings.length} other children`}.
             Saving changes their details too:

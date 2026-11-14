@@ -45,7 +45,7 @@ export default async function LeadPage({
   if (!lead.ok && lead.error === "not-found") notFound()
   if (!lead.ok) {
     return (
-      <Note tone="bad">This application could not be loaded. Try again in a moment.</Note>
+      <Note tone="bad" role="alert">This application could not be loaded. Try again in a moment.</Note>
     )
   }
 

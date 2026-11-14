@@ -93,13 +93,19 @@ export type RoundButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "ch
   label: string
   /** 44px outlined in a guided form, 40px outlined in the top bar, 36px borderless to close a sheet. */
   size?: 44 | 40 | 36
+  /**
+   * Something it controls is on, such as a filter: its icon keeps its two
+   * colours on a Lavender Whisper circle with the stronger line. The name
+   * stays the same; say what is on elsewhere on the screen.
+   */
+  on?: boolean
   ref?: Ref<HTMLButtonElement>
 }
 
 /** A round icon button (Back, Start over, Menu, the bell, Close). Its icon turns active on hover. */
-export function RoundButton({ icon, label, size = 44, className, type = "button", ref, ...props }: RoundButtonProps) {
+export function RoundButton({ icon, label, size = 44, on, className, type = "button", ref, ...props }: RoundButtonProps) {
   return (
-    <button ref={ref} type={type} aria-label={label} title={label} data-size={size} data-icon-host="" className={cn("kit-round", className)} {...props}>
+    <button ref={ref} type={type} aria-label={label} title={label} data-size={size} data-on={on ? "" : undefined} data-icon-host="" className={cn("kit-round", className)} {...props}>
       <Icon name={icon} />
     </button>
   )

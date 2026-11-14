@@ -68,6 +68,8 @@
   --gf-confetti-violet: #7b73ff;
   /* the thumb of the staff stage's scrollbar, drawn outside the stage (DESIGN.md, Layout) */
   --gf-scroll-thumb: #cbc5f6;
+  /* a calendar day that may not be chosen (DESIGN.md, Inputs; #358) */
+  --gf-day-off: #b6bdc9;
 }
 html.rm {
   --gf-t-fast: 1ms;

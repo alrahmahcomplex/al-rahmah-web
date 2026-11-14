@@ -469,7 +469,7 @@ One library, set 2 ("Soft highlight"), drawn for this app. It replaces lucide on
 - **Two layers:** each icon is a main outline and a second detail (for example the calendar and its tick), plus a soft circle placed off-centre, partly outside the outline. Utility glyphs (back, right, check, plus, x) are a single line with no circle.
 - **At rest:** both layers take the text colour; the circle is invisible at half size.
 - **Active** (hovered, current, inside a pressed button, or featured in a row disc): both layers turn Rahmah Indigo and the circle fills Peach Glow and grows to full size (420ms on the ease-out curve). On indigo, the lines turn white and the circle Sunrise Orange.
-- **Names:** today, checkin, register, applicants, interviews, followups, reapps, agents, promo, groups, fees, seats, discounts, reopen, reports, roles, audit, search, bell, panel, menu, back, right, check, plus, x, reset, alert, info, phone, user, school, link. The prototype holds each path and circle. A new icon follows the same grid and gets its own circle; it is added to the library, never drawn inline in a page.
+- **Names:** today, checkin, register, applicants, interviews, followups, reapps, agents, promo, groups, fees, seats, discounts, reopen, reports, roles, audit, search, bell, panel, menu, back, right, check, plus, x, reset, alert, info, phone, user, school, link, filter (version 18). The form parts also draw three one-line glyphs with no circle: down, calendar and upload. The prototype holds each path and circle. A new icon follows the same grid and gets its own circle; it is added to the library, never drawn inline in a page.
 - Icons are `aria-hidden`; the button or link around them carries the name.
 
 ### Illustrations

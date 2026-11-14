@@ -56,6 +56,41 @@ function useKeyboardInset(active: boolean) {
 }
 
 /**
+ * Whether the body is taller than its box. Only then is it in the tab order, so the keyboard can
+ * scroll it; a body that fits, or holds nothing (a confirmation whose words are all in the hint),
+ * is skipped and Tab goes on to the foot (#375).
+ */
+function useScrolls(body: HTMLElement | null) {
+  const [scrolls, setScrolls] = useState(false)
+  useEffect(() => {
+    if (!body) return
+    // Exact: a body one pixel taller than its box still scrolls, so it stays reachable.
+    const check = () => setScrolls(body.scrollHeight > body.clientHeight)
+    check()
+    const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(check)
+    const watch = () => {
+      if (!resize) return
+      resize.disconnect()
+      resize.observe(body)
+      for (const child of Array.from(body.children)) resize.observe(child)
+    }
+    watch()
+    // Content added, removed or changed anywhere inside (an inline editor opening, a list
+    // loading inside a wrapper of fixed height) can change the height without resizing a watched box.
+    const mutate = new MutationObserver(() => {
+      watch()
+      check()
+    })
+    mutate.observe(body, { childList: true, subtree: true, characterData: true })
+    return () => {
+      resize?.disconnect()
+      mutate.disconnect()
+    }
+  }, [body])
+  return scrolls
+}
+
+/**
  * A sheet (DESIGN.md, Sheets and dialogs) on base-ui's Dialog: a fixed head
  * (title, hint, chips, Close), a body that alone scrolls, and a fixed foot.
  * Escape and the backdrop close it; focus moves to the title, stays inside,
@@ -63,6 +98,8 @@ function useKeyboardInset(active: boolean) {
  */
 export function Sheet({ open, onOpenChange, placement = "centre", title, hint, hintId, chips, closeLabel, foot, children, className }: SheetProps) {
   const titleRef = useRef<HTMLHeadingElement>(null)
+  const [body, setBody] = useState<HTMLDivElement | null>(null)
+  const scrolls = useScrolls(body)
   const inset = useKeyboardInset(open)
   const style = inset ? ({ "--kit-kb": `${inset.cover}px`, "--kit-vvh": `${inset.height}px` } as CSSProperties) : undefined
 
@@ -83,7 +120,7 @@ export function Sheet({ open, onOpenChange, placement = "centre", title, hint, h
             {chips && <div>{chips}</div>}
             <Dialog.Close render={<RoundButton icon="x" label={closeLabel} size={36} className="kit-sheet-x" />} />
           </div>
-          <div className="kit-sheet-body" tabIndex={0}>
+          <div ref={setBody} className="kit-sheet-body" tabIndex={scrolls ? 0 : undefined}>
             {children}
           </div>
           {foot && <div className="kit-sheet-foot">{foot}</div>}

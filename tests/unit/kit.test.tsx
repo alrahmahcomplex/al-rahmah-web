@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 
 import {
@@ -395,5 +395,110 @@ describe("states", () => {
     expect(bone).toHaveAttribute("aria-hidden", "true")
     expect(bone).toHaveAttribute("data-shape", "pill")
     expect(bone).toHaveStyle({ width: "140px", height: "36px" })
+  })
+})
+
+// #374 and #375: two kit fixes that jsdom has no layout to show, read from the rule and the DOM.
+describe("table scroll box and sheet body", () => {
+  it("keeps the table's scroll box positioned, so an sr-only label in a cell stays inside it", async () => {
+    const { readFileSync } = await import("node:fs")
+    const css = readFileSync(`${process.cwd()}/components/kit/kit.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
+    const rule = /(^|\})\s*\.kit-tw\s*\{([^}]*)\}/.exec(css)
+    expect(rule?.[2]).toMatch(/position:\s*relative/)
+  })
+
+  it.each([
+    [false, 200, 200],
+    [true, 201, 200],
+    [true, 900, 200],
+  ])("puts the sheet body in the tab order only while it scrolls (scrolls: %s)", async (scrolls, scrollHeight, clientHeight) => {
+    const { Sheet } = await import("@/components/kit")
+    const height = (value: number) => ({ configurable: true, get: () => value })
+    const scroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight")
+    const client = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight")
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", height(scrollHeight))
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", height(clientHeight))
+    try {
+      render(
+        <Sheet open onOpenChange={() => {}} title="Retire the role" hint="Its staff keep their sign-in." closeLabel="Close">
+          <p>Details</p>
+        </Sheet>,
+      )
+      const body = document.querySelector(".kit-sheet-body")!
+      if (scrolls) expect(body).toHaveAttribute("tabindex", "0")
+      else expect(body).not.toHaveAttribute("tabindex")
+    } finally {
+      if (scroll) Object.defineProperty(HTMLElement.prototype, "scrollHeight", scroll)
+      if (client) Object.defineProperty(HTMLElement.prototype, "clientHeight", client)
+    }
+  })
+
+  it("follows the body as it grows, shrinks and gains or loses content while open", async () => {
+    const { Sheet } = await import("@/components/kit")
+    // A stand-in ResizeObserver whose callback the test fires, and heights the test sets.
+    const observers: (() => void)[] = []
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          observers.push(callback)
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    let scrollHeight = 200
+    const scroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight")
+    const client = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight")
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => scrollHeight })
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 200 })
+    const resized = () => act(() => observers.forEach((callback) => callback()))
+    try {
+      // Rows straight in the body, then rows inside a wrapper whose own box never changes.
+      const sheet = (rows: number, nested = 0) => (
+        <Sheet open onOpenChange={() => {}} title="Retire the role" closeLabel="Close">
+          {Array.from({ length: rows }, (_, i) => (
+            <p key={i}>Row {i}</p>
+          ))}
+          <div>
+            {Array.from({ length: nested }, (_, i) => (
+              <p key={i}>Nested {i}</p>
+            ))}
+          </div>
+        </Sheet>
+      )
+      const { rerender } = render(sheet(1))
+      const body = document.querySelector(".kit-sheet-body")!
+      expect(body).not.toHaveAttribute("tabindex")
+
+      // The body grows past its box: the keyboard can now reach it to scroll.
+      scrollHeight = 900
+      resized()
+      expect(body).toHaveAttribute("tabindex", "0")
+      // It shrinks back: it leaves the tab order.
+      scrollHeight = 200
+      resized()
+      expect(body).not.toHaveAttribute("tabindex")
+
+      // Content added while open is seen through the child list, without a resize.
+      scrollHeight = 900
+      await act(async () => rerender(sheet(8)))
+      expect(body).toHaveAttribute("tabindex", "0")
+      scrollHeight = 200
+      await act(async () => rerender(sheet(1)))
+      expect(body).not.toHaveAttribute("tabindex")
+
+      // Content loading inside a wrapper, deeper than the body's own children, is seen too.
+      scrollHeight = 900
+      await act(async () => rerender(sheet(1, 8)))
+      expect(body).toHaveAttribute("tabindex", "0")
+      scrollHeight = 200
+      await act(async () => rerender(sheet(1, 0)))
+      expect(body).not.toHaveAttribute("tabindex")
+    } finally {
+      if (scroll) Object.defineProperty(HTMLElement.prototype, "scrollHeight", scroll)
+      if (client) Object.defineProperty(HTMLElement.prototype, "clientHeight", client)
+      vi.unstubAllGlobals()
+    }
   })
 })

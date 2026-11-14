@@ -561,3 +561,39 @@ describe("round button touch target", () => {
     expect(size + 2 * ring!).toBeGreaterThanOrEqual(44)
   })
 })
+
+// Greptile, PR #379: three edges of required and disabled fields.
+describe("required and disabled edges", () => {
+  it("a required date holding only spaces stays empty, so the form is still held", () => {
+    const form = inForm(<DateField aria-label="Due" name="due" required />)
+    const input = screen.getByLabelText("Due")
+    fireEvent.change(input, { target: { value: "   " } })
+    expect(input).toHaveValue("")
+    expect(form.checkValidity()).toBe(false)
+    expect(posted(form)).toEqual({ due: "" })
+  })
+
+  it("a form reset clears a required list's invalid look", () => {
+    const form = inForm(<Select aria-label="Payment type" name="type" required options={[{ value: "full", label: "Full payment" }]} />)
+    const pill = screen.getByRole("combobox", { name: "Payment type" })
+    act(() => {
+      form.reportValidity()
+    })
+    expect(pill).toHaveAttribute("aria-invalid", "true")
+    act(() => form.reset())
+    expect(pill).not.toHaveAttribute("aria-invalid")
+  })
+
+  it("a file dropped on an area inside a disabled fieldset is not taken", () => {
+    const onFileChange = vi.fn()
+    render(
+      <fieldset disabled>
+        <FilePicker name="file" title="Drop the CSV here or choose a file" chooseLabel="Choose file" inputLabel="CSV file" onFileChange={onFileChange} />
+      </fieldset>,
+    )
+    const area = screen.getByText("Drop the CSV here or choose a file").closest("div")!
+    fireEvent.drop(area, { dataTransfer: { files: [new File(["x"], "a.csv", { type: "text/csv" })] } })
+    expect(onFileChange).not.toHaveBeenCalled()
+    expect(screen.getByText("Drop the CSV here or choose a file")).toBeInTheDocument()
+  })
+})

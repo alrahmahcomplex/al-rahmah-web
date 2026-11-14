@@ -74,7 +74,8 @@ export function FilePicker({
   const drop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
     setDragging(false)
-    if (disabled || !input.current || !event.dataTransfer.files.length) return
+    // A disabled fieldset around the area disables the input too, and the drop with it.
+    if (disabled || !input.current || input.current.matches(":disabled") || !event.dataTransfer.files.length) return
     // The dropped file goes into the real input, so the form posts it.
     const transfer = new DataTransfer()
     transfer.items.add(event.dataTransfer.files[0])

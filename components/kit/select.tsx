@@ -91,11 +91,14 @@ export function Select({
     return () => input.removeEventListener("invalid", onInvalid)
   }, [])
 
-  // Uncontrolled, a form's reset puts the first value back, as a native select does.
+  // A form's reset clears the "nothing chosen" look and, uncontrolled, puts the first value back, as a native select does.
   useEffect(() => {
     const form = inputRef.current?.form
-    if (controlled || !form) return
-    const reset = () => setInner(defaultValue)
+    if (!form) return
+    const reset = () => {
+      setMissing(false)
+      if (!controlled) setInner(defaultValue)
+    }
     form.addEventListener("reset", reset)
     return () => form.removeEventListener("reset", reset)
   }, [controlled, defaultValue])

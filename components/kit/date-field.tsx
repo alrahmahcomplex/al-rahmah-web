@@ -227,7 +227,9 @@ function useDayText(value: string | undefined, defaultValue: string, emit: (day:
     if (value !== day && !(value === "" && unreadable)) setText(showDayFirst(value))
   }
 
-  const onText = (next: string) => {
+  const onText = (typed: string) => {
+    // Spaces alone are no text: the field stays truly empty, so `required` still holds the form.
+    const next = typed.trim() === "" ? "" : typed
     setText(next)
     const nextDay = parseDayFirst(next) ?? ""
     const nextUnreadable = next.trim() !== "" && !nextDay
@@ -409,7 +411,8 @@ export function DateTimeField({ id, value, onChange, name, defaultValue = "", mi
           className="kit-field kit-time"
           data-size="compact"
           onChange={(event) => {
-            const next = event.target.value
+            // Spaces alone are no time, as for the date.
+            const next = event.target.value.trim() === "" ? "" : event.target.value
             setTime(next)
             setTimeShown(false)
             emit(date.text, date.day, next, parseTime(next) ?? "")

@@ -56,7 +56,7 @@ export function SendInvites({
         return
       }
       if (outcome.status === "refused") return setRefusal(outcome.message)
-      if (outcome.status === "stopped") toast(outcome.message)
+      if (outcome.status === "stopped") toast(outcome.message, { tone: "bad" })
       setOpen(false)
       router.push(reportHref(outcome.batchId))
     })

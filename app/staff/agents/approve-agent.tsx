@@ -30,7 +30,9 @@ export function ApproveAgent({
     startTransition(async () => {
       const outcome = await approveMarketingAgent(agent.id, { fullName: agent.fullName, code: agent.code }, email)
       if (outcome.status !== "approved") return setRefusal(outcome.message)
-      toast(outcome.message)
+      // Approved, but the invite email did not go: a warning, so the Manager sends it again.
+      const inviteMissed = "inviteSent" in outcome && !outcome.inviteSent && Boolean(email)
+      toast(outcome.message, { tone: inviteMissed ? "wait" : "good" })
     })
   }
 

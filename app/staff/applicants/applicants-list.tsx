@@ -65,26 +65,25 @@ export function ApplicantsList({
 
   // The filters as last chosen, not as `search` has them: a second change made
   // before the first one's page arrives would otherwise undo it. They follow
-  // the URL again whenever its page arrives (and on Back and Forward).
-  const shownHref = leadsHref(search)
+  // the URL again whenever a page of the list arrives (Back and Forward, and
+  // the same address again, included): the server sends new results with each.
   const [chosen, setChosen] = useState({ status: search.status, closure: search.closure, earlierLinkYear: search.earlierLinkYear })
-  const [chosenFor, setChosenFor] = useState(shownHref)
-  if (chosenFor !== shownHref) {
-    setChosenFor(shownHref)
+  const [chosenFor, setChosenFor] = useState(results)
+  if (chosenFor !== results) {
+    setChosenFor(results)
     setChosen({ status: search.status, closure: search.closure, earlierLinkYear: search.earlierLinkYear })
   }
   function filter(changes: Partial<Pick<LeadSearch, "status" | "closure" | "earlierLinkYear">>) {
     const next = { ...chosen, ...changes }
     setChosen(next)
     const href = leadsHref({ ...next, importBatchId: search.importBatchId, page: 1 })
-    // Choosing what is already shown changes nothing.
-    if (href === shownHref) return
     // The top bar's search carries these until their page arrives.
     setPendingFilters({ href, fields: [...new URLSearchParams(href.split("?")[1] ?? "")] })
     router.push(href)
   }
-  // Settles on every page of the list that arrives.
-  useEffect(() => settlePendingFilters(), [shownHref])
+  // Settles whenever a page of the list arrives, the same address again
+  // included: the server sends new results with each one.
+  useEffect(() => settlePendingFilters(), [results])
   useEffect(() => () => setPendingFilters(null), [])
 
   // A year from the URL with no saved link still shows, so the list says

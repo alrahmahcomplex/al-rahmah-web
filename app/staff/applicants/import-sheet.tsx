@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useEffect, useId, useState, useTransition } from "react"
 
 import {
   Button,
@@ -370,11 +370,17 @@ function Result({ row }: { row: StudentImportRow }) {
   )
 }
 
-// The result is a status, so a screen reader announces it when the step opens.
+// The result's title takes focus when the step opens, as the kit's finished
+// state does, so a screen reader reads it and the keyboard starts there.
 function Done({ done }: { done: Extract<Step, { name: "done" }> }) {
+  const titleId = useId()
+  useEffect(() => {
+    document.getElementById(titleId)?.focus()
+  }, [titleId])
   return (
-    <div role="status">
+    <div>
       <FinishedState
+        titleId={titleId}
         title={doneTitle(done)}
         hint={<>Each new applicant has an Admission Number and a history line &ldquo;Created by the workbook import ({done.fileName})&rdquo;.</>}
       >

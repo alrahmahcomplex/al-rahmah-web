@@ -187,12 +187,15 @@ test.describe("the Applicants screen", () => {
     // is made while the address still has the old filters.
     let release = () => {}
     const held = new Promise<void>((resolve) => (release = resolve))
+    let holding = false
     const filterPage = /\/staff\/applicants\?closure=Inactive(&_rsc=|$)/
     await page.route(filterPage, async (route) => {
+      holding = true
       await held
       await route.continue().catch(() => {})
     })
     await chooseOption(closure(page), "Inactive")
+    await expect.poll(() => holding).toBe(true)
     await searchFor(page, "Fixture")
     await expect(page).toHaveURL(/q=Fixture/)
     release()
@@ -229,6 +232,62 @@ test.describe("the Applicants screen", () => {
     await expect(page).toHaveURL(/\/staff\/applicants\?q=Fixture$/)
     await page.getByRole("main").getByRole("link", { name: "Clear" }).click()
     await expect(page).toHaveURL(/\/staff\/applicants$/)
+  })
+
+  test("the last filter chosen wins, even before the first one's page arrives", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/applicants")
+
+    // Applied's page is held back while All is chosen again.
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    let holding = false
+    const appliedPage = /\/staff\/applicants\?status=Applied(&_rsc=|$)/
+    await page.route(appliedPage, async (route) => {
+      holding = true
+      await held
+      await route.continue().catch(() => {})
+    })
+    await statusPill(page, "Applied").click()
+    await expect.poll(() => holding).toBe(true)
+    await statusPill(page, "All").click()
+    await expect(statusPill(page, "All")).toHaveAttribute("aria-pressed", "true")
+    release()
+    await page.unroute(appliedPage)
+    // The list stays on All once Applied's page is let through.
+    await expect(page).toHaveURL(/\/staff\/applicants$/)
+    await expect(statusPill(page, "All")).toHaveAttribute("aria-pressed", "true")
+
+    await searchFor(page, "Fixture")
+    await expect(page).toHaveURL(/\/staff\/applicants\?q=Fixture$/)
+    await page.getByRole("main").getByRole("link", { name: "Clear" }).click()
+    await expect(page).toHaveURL(/\/staff\/applicants$/)
+  })
+
+  test("opening Applicants again forgets a filter whose page never came", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/applicants")
+
+    // Inactive's page is held back; the sidebar's Applicants comes instead.
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    let holding = false
+    const filterPage = /\/staff\/applicants\?closure=Inactive(&_rsc=|$)/
+    await page.route(filterPage, async (route) => {
+      holding = true
+      await held
+      await route.continue().catch(() => {})
+    })
+    await chooseOption(closure(page), "Inactive")
+    await expect.poll(() => holding).toBe(true)
+    await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Applicants" }).click()
+    await expect(closure(page)).toHaveText("Without a closure mark")
+    release()
+    await page.unroute(filterPage)
+    await expect(page).toHaveURL(/\/staff\/applicants$/)
+
+    await searchFor(page, "Fixture")
+    await expect(page).toHaveURL(/\/staff\/applicants\?q=Fixture$/)
   })
 
   test("old /staff/leads addresses go to the same place under /staff/applicants", async ({ page, request }) => {

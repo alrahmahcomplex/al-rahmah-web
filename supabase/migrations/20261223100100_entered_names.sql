@@ -33,9 +33,11 @@
 --    lead, and comparing it on screen is a later ticket.
 --    Check-in (complete_admission_visit) of a child already linked by its
 --    father's name accepts a typed name that only adds the middle name to
---    the stored one (father_name_adds_middle), and the father's-name
---    trigger keeps that child's sibling basis: completing a name is not a
---    change of father.
+--    the stored one (father_name_adds_middle), while it still agrees with
+--    the group, and the father's-name trigger keeps that child's sibling
+--    basis on the same terms: completing a name is not a change of father.
+--    Siblings completed with different middle names are refused at
+--    check-in and lose the basis on any other path.
 -- 5. Who brought the students: one box, at least two names, in capitals.
 -- 6. The student import stores new rows' student and guardian names in
 --    capitals. Its father's name is still taken from the student's name:
@@ -984,8 +986,9 @@ begin
 
     -- sibling_check_on_father_name_change, as 20261214100200 made it, now
     -- also leaving a member alone when its father's name only gains a middle
-    -- name: the name still matches the group as before, so its basis stays.
-    -- Same trigger.
+    -- name and still fits another counting member of its group: the same
+    -- name, or one it completes. Two siblings completed with different
+    -- middle names do not both keep their basis. Same trigger.
     create or replace function public.sibling_check_on_father_name_change()
     returns trigger
     language plpgsql
@@ -997,8 +1000,7 @@ begin
         checked record;
         next_basis text;
     begin
-        if public.father_name_match(old.father_full_name, new.father_full_name) = 'same'
-           or public.father_name_adds_middle(old.father_full_name, new.father_full_name) then
+        if public.father_name_match(old.father_full_name, new.father_full_name) = 'same' then
             return null;
         end if;
         select * into member from public.sibling_group_members m where m.lead_id = new.id;
@@ -1006,6 +1008,23 @@ begin
             return null;
         end if;
         if coalesce(current_setting('app.sibling_typo_group', true), '') = member.group_id::text then
+            return null;
+        end if;
+        -- Only a middle name added, and the new name still fits a counting
+        -- member (the same name, or one it completes): the basis stays
+        -- (#400). Otherwise the check below runs as before.
+        if public.father_name_adds_middle(old.father_full_name, new.father_full_name)
+           and exists (
+               select 1
+               from public.sibling_group_members m
+               join public.leads l on l.id = m.lead_id
+               where m.group_id = member.group_id
+                 and not m.legacy
+                 and public.sibling_basis_counts(m.basis)
+                 and m.lead_id <> new.id
+                 and (public.father_name_match(l.father_full_name, new.father_full_name) = 'same'
+                      or public.father_name_adds_middle(l.father_full_name, new.father_full_name))
+           ) then
             return null;
         end if;
 
@@ -2275,8 +2294,33 @@ begin
             if s_linked[i] and member.basis in ('matched', 'typo_confirmed')
                and public.father_name_match(lead.father_full_name, s_father[i]) is distinct from 'same'
                -- Completing a stored name with its middle name is not a
-               -- change of father (#400).
-               and not public.father_name_adds_middle(lead.father_full_name, s_father[i]) then
+               -- change of father (#400), while the completed name still
+               -- agrees with the group: another counting member holds it,
+               -- or a name it completes, and no other child of this call in
+               -- the group is typed with a different name. Anything else is
+               -- the name question on the lead, so no fee moves here.
+               and not (
+                   public.father_name_adds_middle(lead.father_full_name, s_father[i])
+                   and exists (
+                       select 1
+                       from public.sibling_group_members m
+                       join public.leads l on l.id = m.lead_id
+                       where m.group_id = member.group_id
+                         and not m.legacy
+                         and public.sibling_basis_counts(m.basis)
+                         and m.lead_id <> lead.id
+                         and (public.father_name_match(l.father_full_name, s_father[i]) = 'same'
+                              or public.father_name_adds_middle(l.father_full_name, s_father[i]))
+                   )
+                   and not exists (
+                       select 1
+                       from generate_subscripts(s_lead, 1) j
+                       join public.sibling_group_members m on m.lead_id = s_lead[j]
+                       where j <> i
+                         and m.group_id = member.group_id
+                         and public.father_name_match(s_father[j], s_father[i]) is distinct from 'same'
+                   )
+               ) then
                 raise exception 'invalid'
                     using detail = jsonb_build_object('student', i, 'field', 'father_full_name', 'reason', 'linked_member')::text;
             end if;

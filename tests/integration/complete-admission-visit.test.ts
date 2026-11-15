@@ -1604,9 +1604,11 @@ describe("a child linked before check-in", () => {
         people: [{ contactId }],
         students: [checkIn(leadIds[0], a), checkIn(leadIds[1], otherMiddle(b))],
       }),
+      // Each child is checked against every other one on the form, so the
+      // first one checked is the one named.
     ).toEqual({
       ok: false,
-      error: { kind: "invalid", field: "father_full_name", student: 2, person: undefined, reason: "linked_member" },
+      error: { kind: "invalid", field: "father_full_name", student: 1, person: undefined, reason: "linked_member" },
     });
     for (const id of leadIds) {
       expect(await rowOf(id)).toMatchObject({ status: "Applied" });

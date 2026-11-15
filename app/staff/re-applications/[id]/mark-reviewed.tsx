@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { toast } from "sonner"
+import { useId, useState, useTransition } from "react"
 
-import { Button } from "@/components/ui/button"
+import { Button, FieldError, toast } from "@/components/kit"
 
+import "../re-applications.css"
 import { markReviewedAction } from "./actions"
 import type { MarkReviewedOutcome } from "./outcome"
 
@@ -18,6 +18,7 @@ const LOST_REQUEST: MarkReviewedOutcome = {
 export function MarkReviewed({ reApplicationId }: { reApplicationId: string }) {
   const [refusal, setRefusal] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const errorId = useId()
 
   function mark() {
     setRefusal(null)
@@ -28,21 +29,17 @@ export function MarkReviewed({ reApplicationId }: { reApplicationId: string }) {
       } catch {
         outcome = LOST_REQUEST
       }
-      if (outcome.status === "reviewed") toast.success(outcome.message)
+      if (outcome.status === "reviewed") toast(outcome.message, { tone: "good" })
       else setRefusal(outcome.message)
     })
   }
 
   return (
-    <div className="flex flex-col items-start gap-1">
-      <Button onClick={mark} disabled={pending}>
+    <div className="ra-act">
+      <Button onClick={mark} pending={pending} aria-describedby={refusal ? errorId : undefined}>
         {pending ? "Marking reviewed…" : "Mark reviewed"}
       </Button>
-      {refusal && (
-        <p role="alert" className="text-sm text-destructive">
-          {refusal}
-        </p>
-      )}
+      {refusal && <FieldError id={errorId} message={refusal} alignStart />}
     </div>
   )
 }

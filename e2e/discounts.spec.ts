@@ -50,9 +50,6 @@ async function signIn(page: Page, person: FixtureStaff) {
   await page.context().clearCookies()
   await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
-  // Home is in the new shell, which shows no counts (#323); Interviews keeps the old one.
-  await page.goto("/staff/interviews")
-  await expect(page.getByRole("heading", { level: 1, name: "Interviews" })).toBeVisible()
 }
 
 async function passedLead(): Promise<{ id: string; admissionNumber: string }> {
@@ -110,6 +107,10 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   await expect(panel.getByRole("button", { name: "Request discount" })).toHaveCount(0)
 
   await signIn(page, MANAGER)
+  // Reports keeps the old shell, which shows the count beside the entry; the
+  // new shell shows none (#323, #328).
+  await page.goto("/staff/reports")
+  await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
   const nav = page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /Discount requests/ })
   await expect(nav).toContainText(/\d+/)
   await nav.click()

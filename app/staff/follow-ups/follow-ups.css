@@ -1,0 +1,41 @@
+/* Follow-ups: the two section cards and their rows (DESIGN.md, Lists). Tokens only. */
+.fu-stack { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.fu-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.fu-list > li + li { border-top: 1px solid var(--gf-mist); }
+.fu-group { margin-top: 14px; }
+.fu-group + .fu-group { padding-top: 14px; border-top: 1px solid var(--gf-mist); }
+.fu-group .fu-list { margin-top: 0; }
+.fu-pages { margin-top: 14px; }
+
+/* A row is a link to the lead (round 14): the name's link covers the row, and
+   the phone sits above it so a tap on the number calls the family. */
+.fu-row { position: relative; border-radius: 14px; transition: background var(--gf-t-med) var(--gf-ease-out); }
+.fu-row:hover { background: var(--gf-chrome); --kit-quiet: var(--gf-quiet-on-tint); }
+.fu-row .kit-row { align-items: flex-start; }
+.fu-open { color: inherit; text-decoration: none; }
+.fu-open::after { content: ""; position: absolute; inset: 0; border-radius: 14px; }
+.fu-open:hover { text-decoration: underline; text-underline-offset: 3px; }
+.fu-open:focus-visible { outline: none; }
+.fu-open:focus-visible::after { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
+
+.fu-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.fu-number { color: var(--kit-quiet, var(--gf-quiet)); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.fu-line { display: block; margin-top: 3px; }
+.fu-due { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.fu-date { color: var(--gf-ink); font-weight: 600; }
+.fu-note { color: var(--gf-ink); white-space: pre-line; overflow-wrap: anywhere; }
+
+.fu-who { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; max-width: 45%; text-align: right; font-size: 14px; }
+.fu-guardian { color: var(--gf-ink); overflow-wrap: anywhere; }
+.fu-phone {
+  position: relative; z-index: 1; display: inline-flex; align-items: center; min-height: 32px;
+  color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fu-phone:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; border-radius: 4px; }
+
+/* On a phone the family's name and number go under the follow-up. */
+@media (max-width: 600px) {
+  .fu-row .kit-row { flex-wrap: wrap; }
+  .fu-row .kit-row-text { flex-basis: calc(100% - 48px); }
+  .fu-who { align-items: flex-start; max-width: none; margin-left: 48px; text-align: left; }
+}

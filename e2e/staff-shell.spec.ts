@@ -5,9 +5,11 @@ import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixture
 import { logIn } from "./log-in"
 
 // The shell around every staff page (#225): the grouped sidebar and its rail,
-// and the phone's tab bar with its More sheet. Home and Applicants are in the
-// new shell (#323, #324), so each test starts on Interviews, which keeps the
-// old one.
+// and the phone's tab bar with its More sheet. Most routes are in the new
+// shell now (#323, #324, #328), so the Manager's tests start on Reports,
+// which keeps the old one. Admissions Staff reach no old-shell route from the
+// sidebar any more, so their test reads the sidebar on the staff 404, which
+// the old shell draws (the catch-all route).
 
 const MANAGER_ENTRIES = [
   "Home",
@@ -28,9 +30,13 @@ const MANAGER_ENTRIES = [
 async function signIn(page: Page, person: FixtureStaff) {
   await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
-  await page.goto("/staff/interviews")
-  await expect(page.getByRole("heading", { level: 1, name: "Interviews" })).toBeVisible()
+  await page.goto("/staff/reports")
+  await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
 }
+
+// An address no page answers: the staff 404, inside the old shell.
+const UNKNOWN = "/staff/no-such-page"
+const UNKNOWN_404 = /^console\.error: Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/[^)]+\/staff\/no-such-page\)$/
 
 const sidebar = (page: Page) => page.getByRole("complementary", { name: "Sidebar" })
 const staffNav = (page: Page) => page.getByRole("navigation", { name: "Staff" })
@@ -51,17 +57,21 @@ test.describe("on a desktop", () => {
     await expect(nav.getByText("Front desk", { exact: true })).toHaveCount(0)
     await expect(nav.getByRole("link", { name: /^(Today|Check-in|Register a student)/ })).toHaveCount(0)
 
-    await expect(entry(page, "Interviews")).toHaveAttribute("aria-current", "page")
-    await expect(page.getByRole("banner")).toContainText("Interviews")
+    await expect(entry(page, "Reports")).toHaveAttribute("aria-current", "page")
+    await expect(page.getByRole("banner")).toContainText("Reports")
     await entry(page, "Staff and roles").click()
     await expect(page).toHaveURL(/\/staff\/roles$/)
     await expect(entry(page, "Staff and roles")).toHaveAttribute("aria-current", "page")
-    await expect(entry(page, "Interviews")).not.toHaveAttribute("aria-current", "page")
+    await expect(entry(page, "Reports")).not.toHaveAttribute("aria-current", "page")
     await expect(page.getByRole("banner")).toContainText("Staff and roles")
   })
 
-  test("Admissions Staff see Admissions, Referrals and Fee schedule, and no Admin group", async ({ page }) => {
-    await signIn(page, ADMISSIONS)
+  test("Admissions Staff see Admissions, Referrals and Fee schedule, and no Admin group", async ({ page, allowConsoleError }) => {
+    allowConsoleError(UNKNOWN_404, "the staff 404 may answer with a 404 status")
+    await logIn(page, ADMISSIONS.email, ADMISSIONS.password)
+    await expect(page).toHaveURL(/\/staff$/)
+    await page.goto(UNKNOWN)
+    await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
 
     const nav = staffNav(page)
     for (const group of ["Admissions", "Referrals", "Money"]) {
@@ -73,7 +83,7 @@ test.describe("on a desktop", () => {
   })
 
   test("the rail survives a navigation and a reload", async ({ page }) => {
-    await signIn(page, ADMISSIONS)
+    await signIn(page, MANAGER)
     // The button's name says which way the rail is: Collapse while open, Expand while folded.
     const collapse = page.getByRole("button", { name: "Collapse sidebar" })
     const expand = page.getByRole("button", { name: "Expand sidebar" })
@@ -82,13 +92,13 @@ test.describe("on a desktop", () => {
     await collapse.click()
     await expect(expand).toBeVisible()
     // The labels fold away, but every link keeps its name, and a tooltip shows it.
-    // Follow-ups is still drawn in the old shell, whose rail this is.
-    await expect(entry(page, "Follow-ups")).toBeVisible()
-    await entry(page, "Follow-ups").hover()
-    await expect(page.locator("[data-slot=tooltip-content]")).toHaveText(/^Follow-ups/)
+    // Staff and roles is still drawn in the old shell, whose rail this is.
+    await expect(entry(page, "Staff and roles")).toBeVisible()
+    await entry(page, "Staff and roles").hover()
+    await expect(page.locator("[data-slot=tooltip-content]")).toHaveText("Staff and roles")
 
-    await entry(page, "Follow-ups").click()
-    await expect(page).toHaveURL(/\/staff\/follow-ups$/)
+    await entry(page, "Staff and roles").click()
+    await expect(page).toHaveURL(/\/staff\/roles$/)
     await expect(expand).toBeVisible()
 
     await page.reload()
@@ -110,7 +120,7 @@ test.describe("on a phone", () => {
     await expect(sidebar(page)).toBeHidden()
     const tabs = staffNav(page)
     await expect(tabs.getByRole("link")).toHaveText(["Home", "Applicants"])
-    // Interviews is behind More, so no tab is the current page.
+    // Reports is behind More, so no tab is the current page.
     await expect(tabs.getByRole("link", { name: "Applicants" })).not.toHaveAttribute("aria-current", "page")
 
     await tabs.getByRole("button", { name: "More" }).click()
@@ -123,10 +133,11 @@ test.describe("on a phone", () => {
     await expect(more.getByRole("link", { name: /^(Home|Applicants)$/ })).toHaveCount(0)
     await expect(sheet.getByRole("button", { name: "Sign out" })).toBeVisible()
 
-    await more.getByRole("link", { name: /^Follow-ups/ }).click()
-    await expect(page).toHaveURL(/\/staff\/follow-ups$/)
+    // Staff and roles keeps the old shell, with its tab bar.
+    await more.getByRole("link", { name: "Staff and roles" }).click()
+    await expect(page).toHaveURL(/\/staff\/roles$/)
     await expect(sheet).toBeHidden()
-    await expect(page.getByRole("banner")).toContainText("Follow-ups")
+    await expect(page.getByRole("banner")).toContainText("Staff and roles")
     await expect(tabs.getByRole("link", { name: "Applicants" })).not.toHaveAttribute("aria-current", "page")
   })
 })

@@ -1,12 +1,15 @@
-import { HeadingSkeleton, PageSkeleton, TableSkeleton, ToolbarSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// Re-applications: the reviewed/unreviewed switch, then the queue.
+// Re-applications while it opens: the header, the reviewed switch, then the
+// table's card.
 export default function Loading() {
   return (
-    <PageSkeleton label="re-applications">
-      <HeadingSkeleton width="w-44" subline />
-      <ToolbarSkeleton chips={1} />
-      <TableSkeleton rows={6} cols={5} />
-    </PageSkeleton>
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <span className="sr-only">Loading re-applications…</span>
+      <SkeletonBlock width={260} height={32} />
+      <SkeletonBlock width="50%" height={16} />
+      <SkeletonBlock width={140} height={36} shape="pill" />
+      <SkeletonBlock height={260} shape="card" />
+    </div>
   )
 }

@@ -34,3 +34,9 @@ export function splitToday<T extends { dueOn: string }>(items: readonly T[], tod
     later: items.filter((item) => item.dueOn > today),
   }
 }
+
+// How many a section holds, in words under its title: "1 follow-up",
+// "12 follow-ups".
+export function followUpCount(total: number): string {
+  return total === 1 ? "1 follow-up" : `${total} follow-ups`
+}

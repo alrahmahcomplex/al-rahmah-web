@@ -98,16 +98,16 @@ test.describe("Marketing Agents", () => {
 
   test("the Accountant reads every agent, with no Approve and no Pending count", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    // The old shell, on Interviews, shows the Pending count to whoever may approve
-    // agents; Home's new shell shows no counts at all (#323), so look there.
-    await page.goto("/staff/interviews")
-    await expect(page.getByRole("heading", { level: 1, name: "Interviews" })).toBeVisible()
+    // Every page the Accountant opens from the sidebar is in the new shell,
+    // which shows no counts to anyone (#323, #328): the entry is its label.
     await expect(agentsLink(page)).toHaveAccessibleName("Marketing Agents")
     await agentsLink(page).click()
 
     await expect(page.getByRole("link", { name: "All", exact: true })).toHaveAttribute("aria-current", "page")
     await expect(page.getByRole("table", { name: "Marketing Agents" })).toBeVisible()
     await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0)
+    // The screen's own Pending line is for those who may approve.
+    await expect(page.getByRole("main").getByText(/^Pending: \d+/)).toHaveCount(0)
 
     // The seeded Approved agent, with who approved them.
     await page.getByLabel("Search agents").fill("Baraka Juma")

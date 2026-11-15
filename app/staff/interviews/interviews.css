@@ -1,0 +1,25 @@
+/* Interviews: the filter rows and the table's cells (DESIGN.md, Lists). Tokens only. */
+.iv-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.iv-stack > .iv-stack { gap: 12px; }
+
+/* Each filter: its name on the left, the pills after it; stacked on a phone. */
+.iv-filters { display: flex; flex-direction: column; gap: 10px; }
+.iv-filter { display: flex; flex-direction: column; gap: 6px; }
+.iv-filter-label { margin: 0; color: var(--gf-quiet); font-size: 13px; font-weight: 500; }
+.iv-pills { margin: 0; }
+@media (min-width: 640px) {
+  .iv-filter { flex-direction: row; align-items: center; gap: 12px; }
+  .iv-filter-label { width: 128px; flex: none; }
+}
+
+.iv-count { margin: 0; color: var(--gf-quiet); font-size: 14px; }
+
+.iv-sn { font-weight: 700; }
+.iv-nowrap { white-space: nowrap; }
+.iv-quiet { color: var(--gf-quiet); }
+.iv-student { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 160px; }
+.iv-name {
+  color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere;
+}
+.iv-name[data-closed] { color: var(--gf-ink-soft); }
+.iv-name:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; border-radius: 4px; }

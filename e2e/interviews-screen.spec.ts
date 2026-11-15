@@ -11,6 +11,7 @@ import { createLead } from "@/lib/services/leads"
 import { asSystem, signedIn } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { claimInterviewYear, type InterviewYearClaim } from "../tests/support/interview-years"
+import { axeProblems } from "./axe"
 import { signInOnce } from "./log-in"
 
 // The Interviews screen. Slice 5's seeded registrations hold S/N 1 to 3 for
@@ -65,8 +66,8 @@ async function readyLead(year: number) {
 
 // The Interview fee and Result sent columns' cells, by the column they're in
 // rather than their position.
-const FEE_CELL = 'td[data-column="fee"]'
-const SENT_CELL = 'td[data-column="sent"]'
+const FEE_CELL = '[data-column="fee"]'
+const SENT_CELL = '[data-column="sent"]'
 
 test.describe("the Interviews screen", () => {
   test("Admissions Staff open it from the navigation, walk the result filters and open a lead", async ({ page }) => {
@@ -196,3 +197,15 @@ test.describe("the Result sent column and the Ready to send filter", () => {
     await expect(row(page).locator(SENT_CELL)).toHaveText(formatDate(tanzaniaToday()))
   })
 })
+
+// Axe may report only the accepted white on orange, at the desktop and the
+// phone width (docs/agents/workflow.md, Axe scans).
+for (const width of [1280, 390]) {
+  test(`axe finds nothing on Interviews at ${width}px`, { tag: "@nightly" }, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/interviews?year=2027")
+    await expect(rows(page).first()).toBeVisible()
+    expect(await axeProblems(page)).toEqual([])
+  })
+}

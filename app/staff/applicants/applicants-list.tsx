@@ -140,7 +140,14 @@ export function ApplicantsList({
         </span>
       ),
     },
-    ...(nextSteps ? [{ header: "Next step", cell: (lead: LeadListItem) => nextSteps[lead.id] ?? "" }] : []),
+    ...(nextSteps
+      ? [
+          {
+            header: "Next step",
+            cell: (lead: LeadListItem) => (nextSteps[lead.id] ? <span className="ap-step">{nextSteps[lead.id]}</span> : null),
+          },
+        ]
+      : []),
     ...(priorities
       ? [
           {

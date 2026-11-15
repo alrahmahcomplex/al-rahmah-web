@@ -1,16 +1,17 @@
-import { Bone, HeadingSkeleton, PageSkeleton, TableSkeleton, ToolbarSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// Seats: the year links, then seats by class.
+// Seats while it opens: the header, the year links, then seats by class.
 export default function Loading() {
   return (
-    <PageSkeleton label="seats">
-      <HeadingSkeleton width="w-32" />
-      <ToolbarSkeleton chips={3} />
-      <div className="flex flex-col gap-2">
-        <Bone className="h-5 w-32" />
-        <Bone className="h-3.5 w-full max-w-2xl" />
-        <TableSkeleton rows={8} cols={3} summary={false} />
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <span className="sr-only">Loading seats…</span>
+      <SkeletonBlock width={160} height={32} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <SkeletonBlock width={56} height={28} />
+        <SkeletonBlock width={56} height={28} />
+        <SkeletonBlock width={56} height={28} />
       </div>
-    </PageSkeleton>
+      <SkeletonBlock height={420} shape="card" />
+    </div>
   )
 }

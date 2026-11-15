@@ -62,6 +62,11 @@ describe("the import guard", () => {
     ["/staff/[...rest]", "app/staff/[...rest]/page.tsx"],
   ])("refuses an old part in %s once it is marked new", async (route, filePath) => {
     const map = readFileSync("app/staff/route-looks.ts", "utf8")
+    // A route already converted is guarded by the real config as it stands.
+    if (map.includes(`"${route}": "new"`)) {
+      expect(await restricted(filePath, source(OLD_IMPORTS[0]))).toHaveLength(1)
+      return
+    }
     const legacy = `"${route}": "legacy"`
     expect(map).toContain(legacy)
     const marked = new ESLint({

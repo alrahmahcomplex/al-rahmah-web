@@ -53,8 +53,9 @@
 -- Rollback: a new migration putting back the functions as 20261216100100,
 -- 20261217100100, 20261211100100, 20261022300200, 20261123400100,
 -- 20261207130100, 20261210100100 and 20261214100200 made them, and dropping
--- name_part, registration_person_name and father_name_adds_middle. The enum
--- value and the Re-application column can stay.
+-- name_part, registration_person_name, father_name_adds_middle and
+-- father_name_fits_group. The enum value and the Re-application column can
+-- stay.
 
 -- Its own statement: a value added to an enum can be used only once the
 -- statement that added it has committed. Nothing below uses it before the
@@ -197,6 +198,31 @@ begin
     $fn$;
 
     revoke execute on function public.father_name_adds_middle(text, text) from public, anon, authenticated, service_role;
+
+    -- father_name_fits_group(group_id, lead_id, name): every other member of
+    -- the group that counts by its father's name (basis matched or
+    -- typo_confirmed, not legacy) holds this name or one it completes, and
+    -- there is at least one. A granted member is left out: it counts by the
+    -- Manager's decision, whatever its name. Two siblings completed with
+    -- different middle names never both fit (#400). Internal.
+    create function public.father_name_fits_group(group_id uuid, lead_id uuid, name text)
+    returns boolean
+    language sql
+    stable
+    set search_path = ''
+    as $fn$
+        select count(*) > 0
+               and bool_and(public.father_name_match(l.father_full_name, father_name_fits_group.name) = 'same'
+                            or public.father_name_adds_middle(l.father_full_name, father_name_fits_group.name))
+        from public.sibling_group_members m
+        join public.leads l on l.id = m.lead_id
+        where m.group_id = father_name_fits_group.group_id
+          and not m.legacy
+          and m.basis in ('matched', 'typo_confirmed')
+          and m.lead_id <> father_name_fits_group.lead_id;
+    $fn$;
+
+    revoke execute on function public.father_name_fits_group(uuid, uuid, text) from public, anon, authenticated, service_role;
 
     -- -----------------------------------------------------------------------
     -- Who brought the students.
@@ -986,9 +1012,9 @@ begin
 
     -- sibling_check_on_father_name_change, as 20261214100200 made it, now
     -- also leaving a member alone when its father's name only gains a middle
-    -- name and still fits another counting member of its group: the same
-    -- name, or one it completes. Two siblings completed with different
-    -- middle names do not both keep their basis. Same trigger.
+    -- name and still fits every member of its group that counts by its name
+    -- (father_name_fits_group). Two siblings completed with different middle
+    -- names do not both keep their basis. Same trigger.
     create or replace function public.sibling_check_on_father_name_change()
     returns trigger
     language plpgsql
@@ -1010,21 +1036,11 @@ begin
         if coalesce(current_setting('app.sibling_typo_group', true), '') = member.group_id::text then
             return null;
         end if;
-        -- Only a middle name added, and the new name still fits a counting
-        -- member (the same name, or one it completes): the basis stays
+        -- Only a middle name added, and the new name still fits every member
+        -- counting by its name (father_name_fits_group): the basis stays
         -- (#400). Otherwise the check below runs as before.
         if public.father_name_adds_middle(old.father_full_name, new.father_full_name)
-           and exists (
-               select 1
-               from public.sibling_group_members m
-               join public.leads l on l.id = m.lead_id
-               where m.group_id = member.group_id
-                 and not m.legacy
-                 and public.sibling_basis_counts(m.basis)
-                 and m.lead_id <> new.id
-                 and (public.father_name_match(l.father_full_name, new.father_full_name) = 'same'
-                      or public.father_name_adds_middle(l.father_full_name, new.father_full_name))
-           ) then
+           and public.father_name_fits_group(member.group_id, new.id, new.father_full_name) then
             return null;
         end if;
 
@@ -2295,23 +2311,14 @@ begin
                and public.father_name_match(lead.father_full_name, s_father[i]) is distinct from 'same'
                -- Completing a stored name with its middle name is not a
                -- change of father (#400), while the completed name still
-               -- agrees with the group: another counting member holds it,
-               -- or a name it completes, and no other child of this call in
-               -- the group is typed with a different name. Anything else is
-               -- the name question on the lead, so no fee moves here.
+               -- agrees with the group: every member counting by its name
+               -- holds it or a name it completes (father_name_fits_group),
+               -- and no other child of this call in the group is typed with
+               -- a different name. Anything else is the name question on the
+               -- lead, so no fee moves here.
                and not (
                    public.father_name_adds_middle(lead.father_full_name, s_father[i])
-                   and exists (
-                       select 1
-                       from public.sibling_group_members m
-                       join public.leads l on l.id = m.lead_id
-                       where m.group_id = member.group_id
-                         and not m.legacy
-                         and public.sibling_basis_counts(m.basis)
-                         and m.lead_id <> lead.id
-                         and (public.father_name_match(l.father_full_name, s_father[i]) = 'same'
-                              or public.father_name_adds_middle(l.father_full_name, s_father[i]))
-                   )
+                   and public.father_name_fits_group(member.group_id, lead.id, s_father[i])
                    and not exists (
                        select 1
                        from generate_subscripts(s_lead, 1) as other(at_index)

@@ -514,7 +514,8 @@ function StateChange({
             <Button variant="ghost" size="small" disabled={pending} onClick={() => setTo(null)}>
               Keep as is
             </Button>
-            <Button size="small" pending={pending} onClick={confirm}>
+            {/* End is for good: outlined red. Pause can be undone: outlined dark orange. */}
+            <Button variant={to === "ended" ? "bad" : to === "paused" ? "warn" : "go"} size="small" pending={pending} onClick={confirm}>
               {pending ? "Saving…" : `${stateVerb(to)} code`}
             </Button>
           </div>

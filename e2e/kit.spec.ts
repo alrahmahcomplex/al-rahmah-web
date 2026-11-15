@@ -82,6 +82,22 @@ test("the controls answer: selectors, filter pills, rows, chip buttons and the p
   await expect(more.getByRole("region", { name: "Note" }).getByText("The payment form could not open. Check your connection and try again.")).toBeVisible()
 })
 
+test("the link filter pills: each is a link to ?filter=, the current one is marked, and Back returns (#419)", async ({ page }) => {
+  await openKit(page)
+  const pills = page.getByRole("navigation", { name: "Filter by status, as links" })
+  const pill = (name: string) => pills.getByRole("link", { name, exact: true })
+  await expect(pill("All")).toHaveAttribute("aria-current", "page")
+
+  await pill("Visited").click()
+  await expect(page).toHaveURL(/\/staff\/kit\?filter=Visited$/)
+  await expect(pill("Visited")).toHaveAttribute("aria-current", "page")
+  await expect(pill("All")).not.toHaveAttribute("aria-current")
+
+  await page.goBack()
+  await expect(page).toHaveURL(/\/staff\/kit$/)
+  await expect(pill("All")).toHaveAttribute("aria-current", "page")
+})
+
 for (const width of [1280, 390]) {
   test(`axe finds nothing but the accepted white-on-orange contrast at ${width}px`, { tag: "@nightly" }, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
@@ -89,6 +105,13 @@ for (const width of [1280, 390]) {
     // The guided form's first question fades in; mid-fade its colours are blended.
     await settled(page.locator(".kit-guided"))
     expect(await axeProblems(page)).toEqual([])
+
+    // #380: quiet text on a hovered row's Lavender Chrome (the tinted boxes on Whisper, Chrome and Mist are in the scan above).
+    const more = page.locator('[data-part="more"]')
+    await more.getByRole("row", { name: "Baraka Mfano" }).hover()
+    expect(await axeProblems(page, ".kit-tr-open:hover")).toEqual([])
+    await more.getByRole("region", { name: "List row" }).locator("button.kit-row").first().hover()
+    expect(await axeProblems(page, "button.kit-row:hover")).toEqual([])
   })
 
   test(`axe finds nothing in the open sheets and popover at ${width}px`, { tag: "@nightly" }, async ({ page }) => {

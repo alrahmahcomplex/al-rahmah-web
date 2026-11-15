@@ -21,9 +21,9 @@ export const mayDecideDiscounts = (permissions: readonly Permission[]) => has(pe
  */
 export function onlyFullClass(classes: readonly ClassSeatFigures[]): string | null {
   const isFull = (entry: ClassSeatFigures) => entry.seats !== null && entry.taken >= entry.seats
-  const names = [...new Set(classes.filter(isFull).map((entry) => entry.className))]
-  if (names.length !== 1) return null
-  return classes.filter((entry) => entry.className === names[0]).every(isFull) ? names[0] : null
+  const names = [...new Set(classes.map((entry) => entry.className))]
+  const full = names.filter((name) => classes.filter((entry) => entry.className === name).every(isFull))
+  return full.length === 1 ? full[0] : null
 }
 
 export function quickActions({

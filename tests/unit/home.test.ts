@@ -132,6 +132,10 @@ describe("Quick actions", () => {
     // Full for Day pupils but not Boarders is not "STD 6 is full".
     expect(onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 6", "Boarding", 20, 12)])).toBeNull()
     expect(onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 6", "Boarding", 20, 20)])).toBe("STD 6")
+    // A class only partly full does not hide the one that is full.
+    expect(
+      onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 6", "Boarding", 20, 20), seat("STD 5", "Day", 30, 30), seat("STD 5", "Boarding", 20, 3)]),
+    ).toBe("STD 6")
     // Boarding seats not set are never full, so the class is not full.
     expect(onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 6", "Boarding", null, 4)])).toBeNull()
   })

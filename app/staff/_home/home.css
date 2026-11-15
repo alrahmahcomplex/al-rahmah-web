@@ -6,7 +6,9 @@
   .ns-scroll:has(.hm) { padding-right: 76px; }
 }
 
-.hm { display: flex; flex-direction: column; gap: 18px; max-width: 1120px; margin: 0 auto; }
+/* Home lays out by its own width, not the window, so an open sidebar never
+   squeezes the check-in bar. */
+.hm { container: hm / inline-size; display: flex; flex-direction: column; gap: 18px; max-width: 1120px; margin: 0 auto; }
 .hm-date {
   margin: 0; font: italic 700 13px/1 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: 0.06em;
   text-transform: uppercase; color: var(--gf-orange-deep);
@@ -117,13 +119,13 @@
 .hm-fab:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
 .hm-fab .gf-ic { width: 22px; height: 22px; }
 
-@media (max-width: 1000px) {
-  .hm-top { grid-template-columns: minmax(0, 1fr) 260px; }
-  .hm-body { grid-template-columns: minmax(0, 1fr); }
+/* Below 820px of Home the bar, its label and Find the family no longer fit
+   beside a 300px column: everything stacks, Register students full width. */
+@container hm (max-width: 820px) {
+  .hm-top, .hm-body { grid-template-columns: minmax(0, 1fr); }
   .hm-main { display: none; }
 }
 @media (max-width: 860px) {
-  .hm-top { grid-template-columns: minmax(0, 1fr); }
   .hm-find-l b { display: none; }
   .hm-find-l { padding-right: 8px; }
   .hm-fab[data-folded] { top: auto; bottom: 18px; right: 16px; width: 56px; height: 56px; }

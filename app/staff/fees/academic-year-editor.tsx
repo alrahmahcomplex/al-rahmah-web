@@ -3,12 +3,11 @@
 import { useRouter } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 
-import { Button, Field, Note } from "@/components/kit"
+import { Button, DateField, Field, Note } from "@/components/kit"
 import type { AcademicYearField, AcademicYearSettings, SeatSetting } from "@/lib/services/fees"
 import { DAY_OR_BOARDING, LEAD_CLASSES, type DayOrBoarding, type LeadClass } from "@/lib/services/leads"
 
 import { saveAcademicYear } from "./actions"
-import { DateInput } from "./date-input"
 import type { AcademicYearOutcome } from "./outcome"
 
 type Refused = Extract<AcademicYearOutcome, { status: "refused" }>
@@ -159,7 +158,7 @@ function AcademicYearForm({
         <label htmlFor={startId} className="fs-label">
           Academic-year start
         </label>
-        <DateInput
+        <DateField
           id={startId}
           min={`${year}-01-01`}
           max={`${year}-01-31`}

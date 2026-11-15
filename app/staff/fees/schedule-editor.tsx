@@ -2,11 +2,10 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Button, Field, Note } from "@/components/kit"
+import { Button, DateField, Field, Note } from "@/components/kit"
 import { BAND_NAMES, FEE_BANDS, type FeeAmounts, type FeeBand, type FeeField } from "@/lib/services/fees"
 
 import { saveSchedule } from "./actions"
-import { DateInput } from "./date-input"
 import { FieldLabel } from "./field-label"
 import type { SaveScheduleOutcome } from "./outcome"
 import { bandClasses, INSTALMENTS } from "./format"
@@ -219,7 +218,7 @@ function ScheduleForm({
               invalid={invalid(`${key}_share`, "split")}
               onChange={(share) => setDraft({ ...draft, split: { ...draft.split, [key]: share } })}
             />
-            <DateField
+            <DueDateField
               label={`${label} instalment due date`}
               shortLabel="Due date"
               value={draft.dueDates[key]}
@@ -307,13 +306,13 @@ function AmountField({ label, shortLabel, value, invalid, onChange }: FieldProps
   )
 }
 
-// A due date, through the one date-field boundary (./date-input).
-function DateField({ label, shortLabel, value, invalid, onChange }: FieldProps) {
+// A due date, typed day first or picked in the kit calendar.
+function DueDateField({ label, shortLabel, value, invalid, onChange }: FieldProps) {
   const id = useId()
   return (
     <div className="fs-field">
       <FieldLabel htmlFor={id} label={label} shortLabel={shortLabel} />
-      <DateInput id={id} value={value} invalid={invalid} onChange={onChange} />
+      <DateField id={id} value={value} invalid={invalid} onChange={onChange} />
     </div>
   )
 }

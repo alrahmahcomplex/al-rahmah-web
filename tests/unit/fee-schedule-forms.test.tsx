@@ -53,7 +53,7 @@ const amountCases: AmountCase[] = [
     const label = ["First", "Second", "Third"][i]
     return [
       { label: `${label} instalment share (%)`, value: "33", expect: (a: FeeAmounts) => (a.split[key] = 33) },
-      { label: `${label} instalment due date`, value: "2027-02-0" + (i + 2), expect: (a: FeeAmounts) => (a.dueDates[key] = "2027-02-0" + (i + 2)) },
+      { label: `${label} instalment due date`, value: "0" + (i + 2) + "/02/2027", expect: (a: FeeAmounts) => (a.dueDates[key] = "2027-02-0" + (i + 2)) },
     ]
   }),
   { label: "Minimum Initial deposit", value: "123,456", expect: (a) => (a.minimumDeposit = 123_456) },
@@ -85,6 +85,19 @@ describe("the Fee schedule form", () => {
     expect(actions.saveSchedule).toHaveBeenCalledWith(YEAR, expected)
     expect(await screen.findByRole("status")).toHaveTextContent("Fee amounts saved.")
   })
+
+  it("does not save while a due date cannot be read", async () => {
+    render(<ScheduleEditor year={YEAR} amounts={AMOUNTS} />)
+    fireEvent.click(screen.getByRole("button", { name: "Edit amounts" }))
+    const due = field("Second instalment due date")
+    fireEvent.change(due, { target: { value: "31/02/20x7" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+
+    await waitFor(() => expect(due).toHaveFocus())
+    expect(due).toHaveAttribute("aria-invalid", "true")
+    expect(actions.saveSchedule).not.toHaveBeenCalled()
+    expect(screen.getByRole("form", { name: `Fee schedule ${YEAR}` })).toBeInTheDocument()
+  })
 })
 
 const START = "2027-01-11"
@@ -109,7 +122,7 @@ function settingsOpened(): AcademicYearSettings {
 type SeatCase = { label: string; value: string; expect: (settings: AcademicYearSettings) => void }
 
 const seatCases: SeatCase[] = [
-  { label: "Academic-year start", value: "2027-01-20", expect: (s) => (s.start = "2027-01-20") },
+  { label: "Academic-year start", value: "20/01/2027", expect: (s) => (s.start = "2027-01-20") },
   ...LEAD_CLASSES.flatMap((className) =>
     DAY_OR_BOARDING.map((dayOrBoarding) => ({
       label: `${className} ${dayOrBoarding} seats`,

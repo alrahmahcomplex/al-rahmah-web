@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { forbidden } from "next/navigation"
 
-import { Card, Note, PageHeader, pageTitle } from "@/components/kit"
+import { Card, Note, PageHeader, pageTitle, Tabs } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { listFeeSchedules } from "@/lib/services/fees"
 import { getSeats } from "@/lib/services/seats"
@@ -12,7 +12,6 @@ import { requireStaff } from "../session"
 import { defaultSeatsYear } from "./format"
 import { RankedClass } from "./ranked-class"
 import { SeatsTable } from "./seats-table"
-import { YearTabs } from "./year-tabs"
 
 import "./seats.css"
 
@@ -53,7 +52,7 @@ export default async function SeatsPage({ searchParams }: { searchParams: Promis
       <PageHeader title={`Seats${year !== null ? ` ${year}` : ""}`} />
       <div className="st-stack">
         {years.length > 0 && (
-          <YearTabs
+          <Tabs
             label="Enrollment years"
             tabs={years.map((each) => ({ label: String(each), href: yearHref(each) }))}
             current={year === null ? null : yearHref(year)}

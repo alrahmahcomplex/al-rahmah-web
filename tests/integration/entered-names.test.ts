@@ -147,6 +147,36 @@ describe("the Admission form in parts", () => {
 })
 
 describe("a Re-application in parts", () => {
+  test("names that differ only in capitals are not differences", async () => {
+    const parentParts = personParts()
+    const kid = studentParts()
+    const number = phone()
+    // On file from today's one-box form, as typed in lower case.
+    const first = await submitAdmissionForm(
+      secretClient(),
+      form({ fullName: personFullName(parentParts).toLowerCase(), relationship: "Mother", phone: number }, [
+        { fullName: studentFullName(kid).toLowerCase(), className: "KG 2", enrollmentYear: nextYear, dayOrBoarding: "Day" },
+      ]),
+    )
+    if (!first.ok) throw new Error(JSON.stringify(first.error))
+    const again = await submitAdmissionForm(
+      secretClient(),
+      form({ ...partsParent(parentParts), phone: number }, [partsChild(kid)]),
+    )
+    if (!again.ok) throw new Error(JSON.stringify(again.error))
+    const differing = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query<{ differing_fields: string[] }>(
+            `select r.differing_fields from public.re_applications r join public.leads l on l.id = r.lead_id
+             where l.admission_number = $1`,
+            [first.data[0].admissionNumber],
+          )
+        ).rows,
+    )
+    expect(differing).toEqual([{ differing_fields: [] }])
+  })
+
   test("a new father's middle name is kept on the Re-application, and the lead keeps its own", async () => {
     const parent = partsParent()
     const kid = studentParts()

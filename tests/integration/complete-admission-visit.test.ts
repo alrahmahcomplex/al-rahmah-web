@@ -1537,6 +1537,55 @@ describe("a child linked before check-in", () => {
       father_full_name: nameOf(family),
     });
   });
+
+  test("siblings from the one-box form, linked by their father's name, check in with his middle name added and stay matched", async () => {
+    const year = await registrationYear();
+    const family = fatherParts();
+    const [a, b] = [child(family), child(family)];
+    // Today's form: one box per name, so each father's name is the
+    // student's name after its first word, with no middle name.
+    const sent = await submitAdmissionForm(secretClient(), {
+      submissionKey: randomUUID(),
+      parent: { fullName: `One Box ${word()}`, relationship: "Mother", phone: phone() },
+      children: [a, b].map((c) => ({
+        fullName: `${c.first} ${c.father.fatherFirst} ${c.father.fatherLast}`,
+        className: c.className,
+        enrollmentYear: year,
+        dayOrBoarding: "Day" as const,
+      })),
+    });
+    if (!sent.ok) throw new Error(`form failed: ${JSON.stringify(sent.error)}`);
+    const rows = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query<{ id: string; guardian_contact_id: string; father_full_name: string }>(
+            "select id, guardian_contact_id, father_full_name from public.leads where admission_number = any($1::text[]) order by array_position($1::text[], admission_number)",
+            [sent.data.map((o) => o.admissionNumber)],
+          )
+        ).rows,
+    );
+    const leadIds = rows.map((r) => r.id);
+    const twoWords = `${family.fatherFirst} ${family.fatherLast}`;
+    expect(rows.map((r) => r.father_full_name)).toEqual([twoWords, twoWords]);
+    const linked = await linkSibling(await signedIn(ADMISSIONS), {
+      leadId: leadIds[1],
+      siblingOfLeadId: leadIds[0],
+    });
+    expect(linked).toMatchObject({ ok: true, data: { basis: "matched" } });
+
+    await completed({
+      people: [{ contactId: rows[0].guardian_contact_id }],
+      students: [checkIn(leadIds[0], a), checkIn(leadIds[1], b)],
+    });
+    for (const id of leadIds) {
+      expect(await rowOf(id)).toMatchObject({
+        status: "Visited",
+        father_full_name: nameOf(family),
+        father_full_name_source: "entered",
+      });
+      expect(await membershipOf(id)).toMatchObject({ basis: "matched" });
+    }
+  });
 });
 
 // Two check-ins on one group at once, on two connections.

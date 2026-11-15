@@ -39,6 +39,8 @@ describe("a re-application in the lead's history", () => {
             change("phone", null, "+255700000301"),
             change("whatsapp", null, "+255700000311"),
             change("student_name", null, "Zuberi Marudio"),
+            // Kept since #400, not shown until #421.
+            change("father_full_name", null, "ALI HASSAN MARUDIO"),
             change("class_name", null, "STD 4"),
             change("differing_fields", null, ["class_name", "whatsapp"]),
             change("reviewed_at", null, null),

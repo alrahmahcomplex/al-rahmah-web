@@ -148,6 +148,8 @@ const HIDDEN: Record<string, ReadonlySet<string>> = {
     "whatsapp_as_sent",
     "reviewed_at",
     "reviewed_by",
+    // Kept for staff since #400; shown once #421 decides how.
+    "father_full_name",
   ]),
   // A record's follow-ups show as their own entries; its kind and entry time
   // show in the entry itself.

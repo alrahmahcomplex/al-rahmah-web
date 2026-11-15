@@ -31,6 +31,12 @@
 --    father's full name as sent (re_applications.father_full_name), since
 --    the student's name leaves out his middle name; it never reaches the
 --    lead, and comparing it on screen is a later ticket.
+--    Check-in (complete_admission_visit) of a child already linked by its
+--    father's name accepts a typed name that only adds the middle name to
+--    the stored one (father_name_adds_middle), and the father's-name
+--    trigger keeps that child's sibling basis: completing a name is not a
+--    change of father. Re-applications compare names without regard to
+--    case.
 -- 5. Who brought the students: one box, at least two names, in capitals.
 -- 6. The student import stores new rows' student and guardian names in
 --    capitals. Its father's name is still taken from the student's name:
@@ -45,9 +51,9 @@
 --
 -- Rollback: a new migration putting back the functions as 20261216100100,
 -- 20261217100100, 20261211100100, 20261022300200, 20261123400100,
--- 20261207130100 and 20261210100100 made them, and dropping name_part and
--- registration_person_name. The enum value and the Re-application column
--- can stay.
+-- 20261207130100, 20261210100100 and 20261214100200 made them, and dropping
+-- name_part, registration_person_name and father_name_adds_middle. The enum
+-- value and the Re-application column can stay.
 
 -- Its own statement: a value added to an enum can be used only once the
 -- statement that added it has committed. Nothing below uses it before the
@@ -159,6 +165,37 @@ begin
     $fn$;
 
     revoke execute on function public.registration_person_name(jsonb, integer) from public, anon, authenticated, service_role;
+
+    -- father_name_adds_middle(stored, typed): the typed name is the stored
+    -- one with one middle word added, its first and last words kept, once
+    -- both are normalized: "ALI HASSAN MOHAMED" typed for a stored "Ali
+    -- Mohamed". An older or imported father's name, taken from the student's
+    -- name, has no middle name, and typing the three boxes completes it
+    -- rather than changing it (#400). Internal.
+    create function public.father_name_adds_middle(stored text, typed text)
+    returns boolean
+    language plpgsql
+    immutable
+    set search_path = ''
+    as $fn$
+    declare
+        s text[] := string_to_array(public.normalize_father_name(father_name_adds_middle.stored), ' ');
+        t text[] := string_to_array(public.normalize_father_name(father_name_adds_middle.typed), ' ');
+        i integer;
+    begin
+        if s is null or t is null or cardinality(s) < 2 or cardinality(t) <> cardinality(s) + 1 then
+            return false;
+        end if;
+        for i in 2 .. cardinality(t) - 1 loop
+            if t[1:i - 1] || t[i + 1:cardinality(t)] = s then
+                return true;
+            end if;
+        end loop;
+        return false;
+    end;
+    $fn$;
+
+    revoke execute on function public.father_name_adds_middle(text, text) from public, anon, authenticated, service_role;
 
     -- -----------------------------------------------------------------------
     -- Who brought the students.
@@ -766,7 +803,8 @@ begin
         'The father''s full name the Admission form built from its three name parts (#400), as sent. Null from a one-box form. Never copied to the lead.';
 
     -- record_re_application, as 20261123400100 made it, now also storing
-    -- `submitted -> 'student' ->> 'father_full_name'`. Same signature.
+    -- `submitted -> 'student' ->> 'father_full_name'`, and comparing the
+    -- student's and contact's names without regard to case. Same signature.
     create or replace function public.record_re_application(lead_id uuid, submission_key uuid, submitted jsonb)
     returns uuid
     language plpgsql
@@ -900,11 +938,13 @@ begin
 
         select * into contact from public.guardian_contacts g where g.id = lead.guardian_contact_id for share;
 
-        if pupil_name <> lead.student_name then differing := array_append(differing, 'student_name'); end if;
+        -- Names in any case are the same name: the parts arrive in capitals
+        -- while older leads hold names as typed (#400).
+        if lower(pupil_name) <> lower(lead.student_name) then differing := array_append(differing, 'student_name'); end if;
         if student_class <> lead.class_name then differing := array_append(differing, 'class_name'); end if;
         if student_year <> lead.enrollment_year then differing := array_append(differing, 'enrollment_year'); end if;
         if student_boarding <> lead.day_or_boarding then differing := array_append(differing, 'day_or_boarding'); end if;
-        if contact_name <> contact.full_name then differing := array_append(differing, 'contact_name'); end if;
+        if lower(contact_name) <> lower(contact.full_name) then differing := array_append(differing, 'contact_name'); end if;
         if contact_relationship <> contact.relationship then differing := array_append(differing, 'relationship'); end if;
         if contact_description is distinct from contact.relationship_description then
             differing := array_append(differing, 'relationship_description');
@@ -939,6 +979,55 @@ begin
 
     revoke execute on function public.record_re_application(uuid, uuid, jsonb) from public, anon, authenticated;
     grant execute on function public.record_re_application(uuid, uuid, jsonb) to service_role;
+
+    -- -----------------------------------------------------------------------
+    -- A father's name completed with its middle name.
+    -- -----------------------------------------------------------------------
+
+    -- sibling_check_on_father_name_change, as 20261214100200 made it, now
+    -- also leaving a member alone when its father's name only gains a middle
+    -- name: the name still matches the group as before, so its basis stays.
+    -- Same trigger.
+    create or replace function public.sibling_check_on_father_name_change()
+    returns trigger
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    declare
+        member public.sibling_group_members;
+        checked record;
+        next_basis text;
+    begin
+        if public.father_name_match(old.father_full_name, new.father_full_name) = 'same'
+           or public.father_name_adds_middle(old.father_full_name, new.father_full_name) then
+            return null;
+        end if;
+        select * into member from public.sibling_group_members m where m.lead_id = new.id;
+        if member.group_id is null or member.legacy or member.basis not in ('matched', 'typo_confirmed') then
+            return null;
+        end if;
+        if coalesce(current_setting('app.sibling_typo_group', true), '') = member.group_id::text then
+            return null;
+        end if;
+
+        select * into checked from public.sibling_name_check(new.id, new.father_full_name, member.group_id);
+        if checked.verdict is null then
+            return null;
+        end if;
+        next_basis := case when checked.verdict = 'same' then member.basis else 'request_needed' end;
+        if next_basis is distinct from member.basis then
+            update public.sibling_group_members m
+            set basis = next_basis, cause = 'father_name', updated_at = now()
+            where m.id = member.id;
+            perform public.recompute_sibling_group(member.group_id, 'sibling');
+            perform public.withdraw_stale_sibling_requests(array[new.id]);
+        end if;
+        return null;
+    end;
+    $fn$;
+
+    revoke execute on function public.sibling_check_on_father_name_change() from public, anon, authenticated, service_role;
 
     -- -----------------------------------------------------------------------
     -- The student import.
@@ -2186,7 +2275,10 @@ begin
                     using detail = jsonb_build_object('student', i, 'field', 'sibling_of', 'reason', 'already_linked')::text;
             end if;
             if s_linked[i] and member.basis in ('matched', 'typo_confirmed')
-               and public.father_name_match(lead.father_full_name, s_father[i]) is distinct from 'same' then
+               and public.father_name_match(lead.father_full_name, s_father[i]) is distinct from 'same'
+               -- Completing a stored name with its middle name is not a
+               -- change of father (#400).
+               and not public.father_name_adds_middle(lead.father_full_name, s_father[i]) then
                 raise exception 'invalid'
                     using detail = jsonb_build_object('student', i, 'field', 'father_full_name', 'reason', 'linked_member')::text;
             end if;

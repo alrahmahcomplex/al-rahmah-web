@@ -1576,11 +1576,13 @@ describe("a child linked before check-in", () => {
     const [a, b] = kids;
     const { leadIds, contactId } = await oneBoxForm(kids);
     const twoWords = twoWordsOf(family);
-    for (const leadId of leadIds.slice(1)) {
+    for (const [index, leadId] of leadIds.slice(1).entries()) {
+      // The first link confirms the legacy sibling's name; after it the
+      // first child is in a group of its own and needs none.
       const linked = await linkSibling(await signedIn(ADMISSIONS), {
         leadId,
         siblingOfLeadId: leadIds[0],
-        siblingFatherFullName: twoWords,
+        ...(index === 0 ? { siblingFatherFullName: twoWords } : {}),
       });
       expect(linked).toMatchObject({ ok: true, data: { basis: "matched" } });
     }

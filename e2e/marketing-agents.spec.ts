@@ -98,7 +98,8 @@ test.describe("Marketing Agents", () => {
 
   test("the Accountant reads every agent, with no Approve and no Pending count", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await expect(agentsLink(page)).toHaveText("Marketing Agents")
+    // Home is in the new shell (#323): no entry carries a count, so the name is the label alone.
+    await expect(agentsLink(page)).toHaveAccessibleName("Marketing Agents")
     await agentsLink(page).click()
 
     await expect(page.getByRole("link", { name: "All", exact: true })).toHaveAttribute("aria-current", "page")

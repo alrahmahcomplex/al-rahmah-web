@@ -1,6 +1,6 @@
 /* The kit (DESIGN.md, Components): the staff side of the Admission form's
    design language, measured from the approved prototype (version 13). Kit
-   components import this file themselves, so public pages never load it.
+   components import this file themselves, so no public page loads it.
    Every class starts with `kit-`. Colours come from app/tokens.css only
    (scripts/design-lint.mjs). */
 
@@ -13,7 +13,7 @@
   outline-offset: 2px;
 }
 /* The guided form's parts the kit uses (ChoiceTiles, GuidedTask) take the same ring and quiet text on staff screens.
-   This file never loads on a public page, so the Admission form keeps its own until it moves to v38. `html` outranks
+   No public page loads this file, so the Admission form keeps its own until it moves to v38. `html` outranks
    guided-form.css whatever order the two load in. */
 html :is(.gf-choice input:focus-visible + .gf-row, .gf-seg input:focus-visible + span, .gf-pop:focus-visible, .gf-round:focus-visible) {
   outline-color: var(--gf-focus-ring);

@@ -3,8 +3,8 @@ import { SkeletonBlock } from "@/components/kit"
 import "../lead.css"
 import "./history.css"
 
-// A lead's history while it opens: the heading with the student's name, the
-// card of entries, then the way back.
+// A lead's history while it opens: the History heading with the student's
+// name and number under it, the card of entries, then the way back.
 export default function Loading() {
   return (
     <div role="status" aria-busy="true" className="lr-page">

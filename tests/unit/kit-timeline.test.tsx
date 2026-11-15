@@ -22,6 +22,9 @@ describe("Timeline", () => {
     expect(items).toHaveLength(2)
     expect(items[0]).toHaveTextContent("Rehema M. changed the application15 Nov 2026, 09:12Class: STD 3 → STD 4")
     expect(items[1]).toHaveTextContent("Rehema M. created the application14 Nov 2026, 16:40")
+    // The tone colours the dot; an item without one keeps the indigo default.
+    expect(items[1]).toHaveAttribute("data-tone", "ok")
+    expect(items[0]).not.toHaveAttribute("data-tone")
   })
 
   it("leaves the meta line out when there is none", () => {

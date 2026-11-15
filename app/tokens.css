@@ -38,8 +38,8 @@
   --gf-sun: 0 4px 6px -1px rgb(238 115 0 / 0.25), 0 2px 4px -2px rgb(238 115 0 / 0.25);
   /* every resting white card on the stage */
   --gf-card-shadow: 0 1px 2px rgb(9 0 187 / 0.04), 0 12px 28px -18px rgb(9 0 187 / 0.22);
-  /* the lavender wash under every page body and the staff stage; 30% fainter
-     since prototype v38 (#401) */
+  /* the staff stage's lavender wash; 30% fainter since prototype v38 (#401).
+     The public pages draw their own until they move to v38. */
   --gf-wash: linear-gradient(135deg, #f6f5fd 0%, rgb(224 220 249 / 0.35) 45%, #fff 100%);
   /* the thin line of every outlined part in the staff look: half the old
      1.5px since prototype v38 (#401) */

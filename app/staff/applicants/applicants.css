@@ -40,6 +40,4 @@
 .ap-steps [aria-current="step"], .ap-steps .ap-past { color: var(--gf-indigo); font-weight: 600; }
 .ap-steps .ap-line { width: 16px; height: 1px; background: var(--gf-mist); }
 
-.ap-review-row td, .ap-review-row th { vertical-align: top; }
-.ap-review-row[data-changed] { background: var(--gf-whisper); }
 .ap-reason { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--gf-quiet); overflow-wrap: anywhere; }

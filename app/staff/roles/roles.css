@@ -1,7 +1,7 @@
 /* Staff and roles: the role rail beside the chosen role (DESIGN.md, Cards, Lists and Inputs). */
 .ro-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; }
 @media (min-width: 768px) {
-  .ro-grid { grid-template-columns: 240px minmax(0, 1fr); }
+  .ro-grid { grid-template-columns: 272px minmax(0, 1fr); }
 }
 
 /* The rail. */

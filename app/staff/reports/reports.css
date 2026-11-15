@@ -7,7 +7,8 @@
   .rp-wide { grid-column: 1 / -1; }
 }
 @media (min-width: 1024px) {
-  .rp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* The third row takes what the tall table needs, so the tiles above it sit close together. */
+  .rp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto 1fr; }
   /* Applicants by enrollment class stands in the right-hand column, beside the tiles. */
   .rp-side { grid-column: 3; grid-row: 1 / span 3; }
 }

@@ -52,11 +52,23 @@ describe("typeInNameBox", () => {
 })
 
 describe("the single-box rules", () => {
-  it("adds the hyphen after three characters and keeps at most seven", () => {
+  it("puts the hyphen between one to three letters and the number", () => {
     expect(formatCode("aan132")).toBe("AAN-132")
     expect(formatCode("AAN")).toBe("AAN")
-    expect(formatCode("aa n-1 3 2 9")).toBe("AAN-132")
+    expect(formatCode("aan1")).toBe("AAN-1")
+    expect(formatCode("aa n-1 3 2 9")).toBe("AAN-1329")
     expect(formatCode("a!a")).toBe("AA")
+    // Two-name agents and numbers past 999 (#404).
+    expect(formatCode("jd123")).toBe("JD-123")
+    expect(formatCode("abc1234")).toBe("ABC-1234")
+    expect(formatCode("ABC-1000")).toBe("ABC-1000")
+  })
+
+  it("keeps any other code as typed, Promo codes included, up to 20 characters", () => {
+    for (const promo of ["MWAKASEGE", "KARIBU2026", "SAVE10", "2026", "RAMADHAN25", "ABCD12"]) expect(formatCode(promo)).toBe(promo)
+    expect(formatCode("karibu 2026")).toBe("KARIBU2026")
+    expect(formatCode("mama.salma")).toBe("MAMA.SALMA")
+    expect(formatCode("A".repeat(25))).toBe("A".repeat(20))
   })
 
   it("asks for at least two names", () => {
@@ -180,7 +192,7 @@ describe("FullNameBox and CodeBox", () => {
         <CodeBox name="code" aria-label="Discount code" onValueChange={(v) => changes.push(v)} />
       </form>,
     )
-    await user.type(box("Discount code"), "aan1329")
+    await user.type(box("Discount code"), "aan132")
     expect(box("Discount code")).toHaveValue("AAN-132")
     expect(changes.at(-1)).toBe("AAN-132")
     expect(posted(screen.getByTestId("form"))).toEqual({ code: "AAN-132" })

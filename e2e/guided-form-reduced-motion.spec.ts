@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
 import { family, openQuestion as openApplyQuestion, setLanguageCookie, WORDS as APPLY } from "./admission-form"
-import { chooseLanguage, newcomer, openQuestion as openCodeQuestion, WORDS as CODE } from "./discount-code"
+import { chooseLanguage, nameBox, newcomer, openQuestion as openCodeQuestion, typeName, WORDS as CODE } from "./discount-code"
 
 // #334: with reduced motion on, the first question of each guided form
 // stayed folded at 1px. The server drew it about to unfold; the browser,
@@ -53,10 +53,10 @@ for (const viewport of [
     await page.goto("/discount-code")
 
     const q = openCodeQuestion(page)
-    await expect(page.getByLabel(CODE.sw.name)).toBeVisible()
+    await expect(nameBox(page, "sw")).toBeVisible()
     expect((await q.boundingBox())?.height).toBeGreaterThan(50)
 
-    await page.getByLabel(CODE.sw.name).fill(newcomer().name)
+    await typeName(page, "sw", newcomer().name)
     await q.getByRole("button", { name: CODE.sw.next }).click()
     await expect(page.getByLabel(CODE.sw.phone)).toBeVisible()
     expect(errors).toEqual([])

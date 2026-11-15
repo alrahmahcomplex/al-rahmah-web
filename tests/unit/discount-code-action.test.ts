@@ -36,7 +36,9 @@ import { registerAsAgent } from "@/app/discount-code/actions"
 function posted(fields: Record<string, string> = {}) {
   const data = new FormData()
   data.set("cf-turnstile-response", "token-from-widget")
-  data.set("full_name", "Rehema Juma")
+  data.set("firstName", "Rehema")
+  data.set("middleName", "Ali")
+  data.set("lastName", "Juma")
   data.set("phone", "0712 345 678")
   data.set("whatsapp", "")
   data.set("email", "Rehema@Example.test")
@@ -82,7 +84,7 @@ describe("registering for a Discount code", () => {
     })
     expect(stubs.register).toHaveBeenCalledWith(
       { secret: "client" },
-      { fullName: "Rehema Juma", phone: "0712 345 678", whatsapp: null, email: "rehema@example.test", hasCode: false, code: null },
+      { fullName: "REHEMA ALI JUMA", phone: "0712 345 678", whatsapp: null, email: "rehema@example.test", hasCode: false, code: null },
     )
   })
 
@@ -135,7 +137,7 @@ describe("registering for a Discount code", () => {
   })
 
   it.each([
-    ["full_name", { full_name: "R" }],
+    ["full_name", { middleName: " " }],
     ["phone", { phone: "" }],
     ["whatsapp", { whatsapp: "0".repeat(41) }],
     ["email", { email: "" }],

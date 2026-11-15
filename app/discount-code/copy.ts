@@ -18,16 +18,28 @@ type Copy = {
   // Takes the discount as written ("TZS 10,000"), or null when it couldn't be
   // read, and then names no figure.
   intro: (discount: string | null) => string
-  // The progress bar's two groups: you (name, phone, WhatsApp), then the code (email, code).
+  // The progress bar's two groups: you (name, phone, WhatsApp), then the code
+  // (email, "Do you already have one?", the code, the review).
   groups: { you: string; code: string }
   back: string
   startOver: string
+  // Start over with answers asks first, in a sheet (v38).
+  startOverSheet: { title: string; body: string; warning: string; yes: string; no: string; close: string }
+  // The toasts: an empty form, a cleared one, and a new form from the finished screen.
+  nothingToClear: string
+  clearedToast: string
+  newFormToast: string
   // The progress line read to screen readers.
   progress: (group: string, step: number, of: number) => string
   progressDone: string
+  // The progress line on the finished screen.
+  progressFinished: string
   next: string
   // The questions, one at a time; the short labels name the folded answers.
   nameQuestion: string
+  nameHint: string
+  // The three name boxes' placeholders, which are also their labels.
+  names: { first: string; middle: string; last: string }
   fullName: string
   phoneQuestion: string
   phone: string
@@ -43,14 +55,21 @@ type Copy = {
   no: string
   code: string
   codeHint: string
+  codePlaceholder: string
   reviewQuestion: string
   reviewHint: string
+  // The review's note: a new code starts with these initials; a claimed one is matched to the phone.
+  // Around the initials, which the page shows in bold.
+  newCodeNote: { before: string; after: string }
+  claimNote: string
   // The two-word links on the folded answers.
-  change: { name: string; phone: string; email: string; code: string }
+  change: { name: string; phone: string; email: string; hasCode: string; code: string }
   signInPrompt: string
   signIn: string
   optional: string
+  // Send for a new code, and for a code the person already has.
   send: string
+  sendClaim: string
   sending: string
   problems: Record<AgentField | "phone_unreadable" | "code_unreadable", string>
   messages: Record<SignUpMessage, string>
@@ -59,6 +78,8 @@ type Copy = {
   checkFailed: string
   unavailable: string
   doneTitle: string
+  // The finished screen's title after a claim on an existing code.
+  claimDoneTitle: string
   linkLabel: string
   copy: string
   copied: string
@@ -69,8 +90,10 @@ type Copy = {
   // On a new code's done page: where the set-password email will go.
   emailNote: (email: string) => string
   // On a claimed code's done page.
-  claimNote: string
+  claimDoneNote: string
   call: string
+  // The finished screen's link to a new, empty form.
+  again: string
 }
 
 export const COPY: Record<Language, Copy> = {
@@ -81,10 +104,24 @@ export const COPY: Record<Language, Copy> = {
     groups: { you: "Wewe", code: "Code" },
     back: "Rudi",
     startOver: "Anza upya",
+    startOverSheet: {
+      title: "Uanze upya?",
+      body: "Kila ulichoandika kwenye fomu hii kitafutwa.",
+      warning: "Hili haliwezi kurudishwa. Utaanza tena kutoka swali la kwanza.",
+      yes: "Ndiyo, futa fomu",
+      no: "Hapana, acha majibu yangu",
+      close: "Funga",
+    },
+    nothingToClear: "Hakuna cha kufuta bado. Fomu iko tupu.",
+    clearedToast: "Fomu imeanza upya.",
+    newFormToast: "Fomu mpya iko tayari.",
     progress: (group, step, of) => `${group}: hatua ${step} kati ya ${of}`,
     progressDone: "Kila kitu kimejazwa. Hakiki kisha utume.",
+    progressFinished: "Imetumwa.",
     next: "Endelea",
     nameQuestion: "Unaitwa nani?",
+    nameHint: "Majina yote matatu. Code yako ya Punguzo inatengenezwa kwa herufi zao za kwanza.",
+    names: { first: "Jina la kwanza", middle: "Jina la kati", last: "Jina la mwisho" },
     fullName: "Jina lako kamili",
     phoneQuestion: "Namba yako ya simu?",
     phone: "Namba ya simu",
@@ -100,21 +137,28 @@ export const COPY: Record<Language, Copy> = {
     no: "Hapana",
     code: "Code yako ya Punguzo",
     codeHint: "Iandike kama ulivyopewa, mfano ABC-123.",
+    codePlaceholder: "Code ya Punguzo, mfano ABC-123",
     reviewQuestion: "Hakiki kisha utume",
     reviewHint: "Gusa Badilisha kurekebisha chochote.",
-    change: { name: "Badilisha Jina", phone: "Badilisha Namba", email: "Badilisha Barua pepe", code: "Badilisha Code" },
+    newCodeNote: {
+      before: "Code yako ya Punguzo itaanza na ",
+      after: ", herufi za kwanza za majina yako matatu. Utaiona code yote kwenye ukurasa unaofuata.",
+    },
+    claimNote: "Tunalinganisha code hii na namba yako ya simu. Kisha shule inaithibitisha.",
+    change: { name: "Badilisha Jina", phone: "Badilisha Namba", email: "Badilisha Barua pepe", hasCode: "Badilisha Jibu", code: "Badilisha Code" },
     signInPrompt: "Umeshaweka nenosiri?",
     signIn: "Ingia",
     optional: "si lazima",
     send: "Pata Code ya Punguzo",
+    sendClaim: "Tuma",
     sending: "Inatuma…",
     problems: {
-      full_name: "Andika jina lako kamili.",
+      full_name: "Andika majina yako yote matatu. Code yako ya Punguzo inatengenezwa kutokana nayo.",
       phone: "Andika namba yako ya simu.",
       phone_unreadable: "Hatukuweza kusoma namba hii ya simu. Iandike kama 0712 345 678 au +255 712 345 678.",
       whatsapp: "Hatukuweza kusoma namba hii ya WhatsApp. Iandike kama 0712 345 678, au iache wazi.",
       email: "Andika barua pepe yako, mfano jina@mfano.com.",
-      code: "Andika Code yako ya Punguzo.",
+      code: "Andika code yako kama ulivyopewa, mfano ABC-123.",
       code_unreadable: "Hatukuweza kusoma code hii. Iandike kama ulivyopewa, mfano ABC-123.",
     },
     messages: {
@@ -132,6 +176,7 @@ export const COPY: Record<Language, Copy> = {
     checkFailed: "Ukaguzi wa usalama haukukamilika. Jaribu tena. Majibu yako bado yapo.",
     unavailable: "Hatukuweza kukupatia code kwa sasa. Majibu yako bado yapo; jaribu tena baada ya muda mfupi.",
     doneTitle: "Code yako ya Punguzo",
+    claimDoneTitle: "Ombi limepokelewa",
     linkLabel: "Kiungo chako",
     copy: "Nakili kiungo",
     copied: "Kiungo kimenakiliwa",
@@ -143,9 +188,10 @@ export const COPY: Record<Language, Copy> = {
       "Punguzo litaanza kufanya kazi shule itakapothibitisha code yako. Shule itawasiliana nawe. Unaweza kuanza kushiriki code na kiungo sasa hivi.",
     emailNote: (email) =>
       `Shule itakapothibitisha code yako, utapokea barua pepe ya kuweka nenosiri kwenye ${email}. Ikichelewa, angalia spam.`,
-    claimNote:
+    claimDoneNote:
       "Shule itathibitisha barua pepe yako, kisha utapokea barua pepe ya kuweka nenosiri. Ikichelewa, angalia spam.",
     call: "Una swali? Piga simu ofisi ya udahili",
+    again: "Anza tena",
   },
   en: {
     title: "Discount code",
@@ -154,10 +200,24 @@ export const COPY: Record<Language, Copy> = {
     groups: { you: "You", code: "Code" },
     back: "Back",
     startOver: "Start over",
+    startOverSheet: {
+      title: "Start over?",
+      body: "Everything typed on this form will be cleared.",
+      warning: "This can’t be undone. You start again from the first question.",
+      yes: "Yes, clear the form",
+      no: "No, keep my answers",
+      close: "Close",
+    },
+    nothingToClear: "Nothing to clear yet. The form is empty.",
+    clearedToast: "The form has started over.",
+    newFormToast: "A new form is ready.",
     progress: (group, step, of) => `${group}: step ${step} of ${of}`,
     progressDone: "Everything is filled in. Check, then send.",
+    progressFinished: "Sent.",
     next: "Continue",
     nameQuestion: "What's your name?",
+    nameHint: "All three names. Your Discount code is made from their first letters.",
+    names: { first: "First name", middle: "Middle name", last: "Last name" },
     fullName: "Your full name",
     phoneQuestion: "Your phone number?",
     phone: "Phone number",
@@ -167,32 +227,39 @@ export const COPY: Record<Language, Copy> = {
     email: "Email",
     emailQuestion: "Your email?",
     emailHint: "We send the email to set your password here.",
-    hasCode: "Already have a Discount code?",
-    hasCodeHint: "Have a code but no email to set a password yet? Choose Yes.",
+    hasCode: "Do you already have a Discount code?",
+    hasCodeHint: "You have a code but haven’t had the email to set your password yet? Choose Yes.",
     yes: "Yes",
     no: "No",
     code: "Your Discount code",
     codeHint: "Type it as you were given it, for example ABC-123.",
+    codePlaceholder: "Discount code, e.g. ABC-123",
     reviewQuestion: "Check, then send",
     reviewHint: "Tap Change to fix anything.",
-    change: { name: "Change Name", phone: "Change Number", email: "Change Email", code: "Change Code" },
+    newCodeNote: {
+      before: "Your Discount code will start with ",
+      after: ", the first letters of your three names. You see the whole code on the next screen.",
+    },
+    claimNote: "We match this code to your phone number. The school then confirms it.",
+    change: { name: "Change Name", phone: "Change Number", email: "Change Email", hasCode: "Change Answer", code: "Change Code" },
     signInPrompt: "Already set a password?",
     signIn: "Sign in",
     optional: "optional",
-    send: "Get my Discount code",
+    send: "Get Discount code",
+    sendClaim: "Send",
     sending: "Sending…",
     problems: {
-      full_name: "Enter your full name.",
+      full_name: "Type all three of your names. Your Discount code is made from them.",
       phone: "Enter your phone number.",
       phone_unreadable: "We couldn't read that phone number. Write it like 0712 345 678 or +255 712 345 678.",
       whatsapp: "We couldn't read that WhatsApp number. Write it like 0712 345 678, or leave it empty.",
       email: "Enter your email, for example name@example.com.",
-      code: "Enter your Discount code.",
+      code: "Type your code as you were given it, for example ABC-123.",
       code_unreadable: "We couldn't read that code. Type it as you were given it, for example ABC-123.",
     },
     messages: {
       "code-needed":
-        "This number already has a Discount code. Tick 'Already have a Discount code?' and type it, or call the office.",
+        "This number already has a Discount code. Answer Yes to 'Do you already have a Discount code?' and type it, or call the office.",
       "phone-mismatch": "We couldn't match the code with this number. Check both, or call the office.",
       "no-match": "We couldn't find this code. Check it, or call the office.",
       "claim-waiting": "We have your request; the school will confirm it.",
@@ -206,6 +273,7 @@ export const COPY: Record<Language, Copy> = {
     checkFailed: "The security check didn't finish. Try again. Everything you typed is still here.",
     unavailable: "We couldn't give you a code just now. Everything you typed is still here; try again in a moment.",
     doneTitle: "Your Discount code",
+    claimDoneTitle: "Request received",
     linkLabel: "Your link",
     copy: "Copy link",
     copied: "Link copied",
@@ -217,7 +285,8 @@ export const COPY: Record<Language, Copy> = {
       "The discount starts once the school confirms your code. The school will contact you. You can start sharing your code and link now.",
     emailNote: (email) =>
       `Once the school confirms your code, you'll get an email at ${email} to set your password. If it's slow to arrive, check spam.`,
-    claimNote: "The school will confirm your email, then you'll get an email to set your password. If it's slow to arrive, check spam.",
+    claimDoneNote: "The school will confirm your email, then you'll get an email to set your password. If it's slow to arrive, check spam.",
     call: "Questions? Call the admissions office",
+    again: "Start again",
   },
 }

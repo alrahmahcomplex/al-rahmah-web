@@ -244,7 +244,11 @@ export function FullNameBox({ className, ...props }: OneBoxProps) {
   return <FieldInput autoComplete="off" autoCapitalize="characters" spellCheck={false} {...rest} {...box} className={cn(CAPS, className)} />
 }
 
-/** The Discount code box: capitals, the hyphen added by itself (AAN132 → AAN-132), at most 7 characters. */
+/**
+ * The Discount code box: capitals, the hyphen added between the initials and
+ * the number by itself (AAN132 → AAN-132, JD123 → JD-123), anything else kept
+ * as typed, at most 20 characters. See `formatCode`.
+ */
 export function CodeBox({ className, ...props }: OneBoxProps) {
   const { value, defaultValue, onValueChange, ...rest } = props
   const box = useOneBox({ value, defaultValue: defaultValue === undefined ? undefined : formatCode(defaultValue), onValueChange }, formatCode, true)

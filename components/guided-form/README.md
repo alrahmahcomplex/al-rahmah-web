@@ -122,9 +122,10 @@ const LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
 | `FatherNameBoxes` | First and Middle side by side, Last across | `fatherFirst`, `fatherMiddle`, `fatherLast` |
 | `StudentNameBoxes` | The student's name across, then the "Father's name" group in the father layout | `firstName`, `fatherFirst`, `fatherMiddle`, `fatherLast` |
 | `FullNameBox` | One box, spaces kept ("Who brought the students") | its `name` |
-| `CodeBox` | One box: capitals, the hyphen after the third character, at most 7 (AAN132 → AAN-132) | its `name` |
+| `CodeBox` | One box: capitals; one to three letters followed by digits get the hyphen between them (AAN132 → AAN-132, JD123 → JD-123, ABC1234 → ABC-1234); anything else, such as a Promo code (KARIBU2026), stays as typed; at most 20 characters | its `name` |
 
 - **The labels are the placeholders**, inside the boxes, and each box's name for a screen reader. Never put a label above them. Name the group with `aria-labelledby` (the question's title).
 - **Typing:** capitals; Space ends a box and moves to the next, a pasted full name spreads across the boxes, Backspace in an empty box goes back to the one before, Enter moves on instead of sending the form. The last box keeps its spaces (BIN SALIM). While a phone keyboard is composing a word, nothing changes until the word is done.
 - Every box is `required` unless `required={false}`. `names` changes what a box posts as, such as `students[0][firstName]`; `value` and `onChange` take the contract's object. The last box can end in a space while typing: save `cleanName(value)`.
+- A Promo code of one to three letters then digits (EID2026) gets the hyphen too, since it has an agent code's shape. A lookup that takes both kinds of code matches Promo codes with the hyphen removed; Promo codes never contain one.
 - `typeInNameBox`, `cleanName`, `hasTwoNames` and `formatCode` are the plain rules, for a server check or a test.

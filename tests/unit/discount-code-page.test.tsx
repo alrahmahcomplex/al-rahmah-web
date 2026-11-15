@@ -4,7 +4,15 @@ import { forwardRef, useImperativeHandle, type ImgHTMLAttributes } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const jar = vi.hoisted(() => ({ values: new Map<string, string>() }))
-const stubs = vi.hoisted(() => ({ submit: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), token: "fake-token", client: vi.fn(), discount: vi.fn() }))
+const stubs = vi.hoisted(() => ({
+  submit: vi.fn(),
+  reset: vi.fn(),
+  reveal: vi.fn(() => false),
+  token: "fake-token",
+  client: vi.fn(),
+  discount: vi.fn(),
+  toast: vi.fn(),
+}))
 
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 vi.mock("next/headers", () => ({
@@ -32,6 +40,7 @@ vi.mock("@/utils/supabase/public-form", () => ({ publicFormClient: () => stubs.c
 vi.mock("@/lib/services/referral", () => ({ getInterviewDiscount: (...args: unknown[]) => stubs.discount(...args) }))
 vi.mock("@/app/discount-code/actions", () => ({ registerAsAgent: stubs.submit }))
 vi.mock("@/app/actions/language", () => ({ setLanguage: vi.fn() }))
+vi.mock("sonner", () => ({ toast: stubs.toast }))
 vi.mock("@/components/turnstile-widget", () => ({
   TurnstileWidget: forwardRef(function FakeTurnstile({ action }: { action: string }, ref) {
     useImperativeHandle(ref, () => ({ reset: stubs.reset, reveal: stubs.reveal }))
@@ -47,27 +56,41 @@ const FORBIDDEN = /agent|referral|approv|wakala|idhini/i
 const WORDS = {
   sw: {
     name: "Unaitwa nani?",
+    first: "Jina la kwanza",
+    middle: "Jina la kati",
+    last: "Jina la mwisho",
     phone: "Namba yako ya simu?",
     whatsappToggle: "Namba yangu ya WhatsApp ni tofauti",
     whatsapp: "Namba ya WhatsApp (si lazima)",
     email: "Barua pepe yako?",
+    hasCode: "Tayari una code?",
     yes: "Ndiyo",
     no: "Hapana",
     code: "Code yako ya Punguzo",
     next: "Endelea",
     send: "Pata Code ya Punguzo",
+    sendClaim: "Tuma",
+    startOver: "Anza upya",
+    back: "Rudi",
   },
   en: {
     name: "What's your name?",
+    first: "First name",
+    middle: "Middle name",
+    last: "Last name",
     phone: "Your phone number?",
     whatsappToggle: "My WhatsApp number is different",
     whatsapp: "WhatsApp number (optional)",
     email: "Your email?",
+    hasCode: "Do you already have a Discount code?",
     yes: "Yes",
     no: "No",
     code: "Your Discount code",
     next: "Continue",
-    send: "Get my Discount code",
+    send: "Get Discount code",
+    sendClaim: "Send",
+    startOver: "Start over",
+    back: "Back",
   },
 } as const
 
@@ -76,8 +99,8 @@ type User = ReturnType<typeof userEvent.setup>
 
 const REGISTERED = {
   status: "registered",
-  code: "RJ-407",
-  link: "https://alrahmah.example/apply?ref=RJ-407",
+  code: "RAJ-124",
+  link: "https://alrahmah.example/apply?ref=RAJ-124",
   email: "rehema@example.test",
 }
 
@@ -88,6 +111,7 @@ beforeEach(() => {
   stubs.submit.mockReset()
   stubs.reset.mockReset()
   stubs.reveal.mockReset().mockReturnValue(false)
+  stubs.toast.mockReset()
   stubs.token = "fake-token"
   stubs.client.mockReset().mockReturnValue({ secret: "client" })
   stubs.discount.mockReset().mockResolvedValue({ ok: true, data: 10000 })
@@ -105,11 +129,18 @@ async function next(user: User, lang: Lang = "sw") {
   await user.click(openStep().getByRole("button", { name: WORDS[lang].next }))
 }
 
-// Walks every question up to the send step. `code`: answer "Tayari una code?"
-// with Ndiyo and this code; otherwise Hapana.
+const box = (lang: Lang, which: "first" | "middle" | "last") => screen.getByRole("textbox", { name: WORDS[lang][which] })
+
+// A full name typed into the first box: each space moves on to the next box.
+async function typeName(user: User, lang: Lang = "sw", name = "Rehema Ali Juma") {
+  await user.type(box(lang, "first"), name)
+}
+
+// Walks every question up to the send step. `code`: answer the code
+// question with Yes and this code; otherwise No, which skips the code box.
 async function fill(user: User, lang: Lang = "sw", { whatsapp = "", code = "" } = {}) {
   const t = WORDS[lang]
-  await user.type(screen.getByLabelText(t.name), "Rehema Juma")
+  await typeName(user, lang)
   await next(user, lang)
   await user.type(screen.getByLabelText(t.phone), "0712 345 678")
   if (whatsapp) {
@@ -121,15 +152,17 @@ async function fill(user: User, lang: Lang = "sw", { whatsapp = "", code = "" } 
   await next(user, lang)
   if (code) {
     await user.click(screen.getByRole("radio", { name: t.yes }))
-    await user.type(screen.getByLabelText(t.code), code)
+    await user.type(await screen.findByLabelText(t.code), code)
+    await next(user, lang)
+    await screen.findByRole("button", { name: t.sendClaim })
   } else {
     await user.click(screen.getByRole("radio", { name: t.no }))
+    await screen.findByRole("button", { name: t.send })
   }
-  await next(user, lang)
 }
 
-async function send(user: User, lang: Lang = "sw") {
-  await user.click(screen.getByRole("button", { name: WORDS[lang].send }))
+async function send(user: User, lang: Lang = "sw", claim = false) {
+  await user.click(screen.getByRole("button", { name: claim ? WORDS[lang].sendClaim : WORDS[lang].send }))
 }
 
 describe("the Discount code page", { timeout: 30_000 }, () => {
@@ -165,7 +198,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
 
     expect(screen.getByRole("main")).toHaveAttribute("lang", "en")
     expect(screen.getByRole("heading", { level: 1, name: "Discount code" })).toBeInTheDocument()
-    expect(screen.getByLabelText(WORDS.en.name)).toBeInTheDocument()
+    expect(screen.getByRole("group", { name: WORDS.en.name })).toBeInTheDocument()
     expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/interview fee once the school confirms/)
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
     expect(await generateMetadata()).toEqual(expect.objectContaining({ title: "Discount code · Al-Rahmah Complex" }))
@@ -194,20 +227,32 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(screen.getByText(/get a discount on the interview fee once the school confirms/)).toBeInTheDocument()
   })
 
-  it("names a missing name or phone on its own question, and folds an answer with its Badilisha link", async () => {
+  it("asks for all three names in capitals, marks the empty ones, and folds the answer with its Badilisha link", async () => {
     const user = userEvent.setup()
     render(await DiscountCodePage())
 
+    expect(screen.getByRole("group", { name: WORDS.sw.name })).toBeInTheDocument()
+    expect(box("sw", "first")).toHaveAccessibleDescription(/Majina yote matatu/)
     await next(user)
-    expect(screen.getByLabelText(WORDS.sw.name)).toHaveAccessibleDescription(/Andika jina lako kamili/)
-    expect(screen.getByLabelText(WORDS.sw.name)).toHaveFocus()
+    expect(box("sw", "first")).toHaveFocus()
+    expect(box("sw", "first")).toHaveAccessibleDescription(/Andika majina yako yote matatu/)
     expect(screen.queryByLabelText(WORDS.sw.phone)).not.toBeInTheDocument()
 
-    await user.type(screen.getByLabelText(WORDS.sw.name), "Rehema Juma")
+    // Middle is required too.
+    await user.type(box("sw", "first"), "rehema")
+    await user.type(box("sw", "last"), "juma")
+    await next(user)
+    expect(box("sw", "middle")).toHaveFocus()
+    expect(box("sw", "middle")).toHaveAttribute("aria-invalid", "true")
+    expect(box("sw", "first")).not.toHaveAttribute("aria-invalid", "true")
+    expect(box("sw", "first")).toHaveValue("REHEMA")
+
+    await user.type(box("sw", "middle"), "ali")
     await next(user)
     expect(screen.getByLabelText(WORDS.sw.phone)).toHaveFocus()
     expect(screen.getByLabelText(WORDS.sw.phone)).toHaveAccessibleDescription("Mfano: 0712 345 678")
     expect(screen.getByText("Jina lako kamili")).toBeInTheDocument()
+    expect(screen.getByText("REHEMA ALI JUMA")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Jina" })).toBeInTheDocument()
 
     await next(user)
@@ -215,8 +260,8 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(screen.queryByLabelText(WORDS.sw.email)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Badilisha Jina" }))
-    expect(screen.getByLabelText(WORDS.sw.name)).toHaveFocus()
-    expect(screen.getByLabelText(WORDS.sw.name)).toHaveValue("Rehema Juma")
+    expect(box("sw", "first")).toHaveFocus()
+    expect(box("sw", "first")).toHaveValue("REHEMA")
     expect(stubs.submit).not.toHaveBeenCalled()
   })
 
@@ -224,7 +269,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     const user = userEvent.setup()
     stubs.submit.mockResolvedValue(REGISTERED)
     render(await DiscountCodePage())
-    await user.type(screen.getByLabelText(WORDS.sw.name), "Rehema Juma")
+    await typeName(user)
     await next(user)
 
     const toggle = screen.getByRole("button", { name: WORDS.sw.whatsappToggle })
@@ -241,17 +286,17 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     await user.type(screen.getByLabelText(WORDS.sw.email), "rehema@example.test")
     await next(user)
     await user.click(screen.getByRole("radio", { name: WORDS.sw.no }))
-    await next(user)
+    await screen.findByRole("button", { name: WORDS.sw.send })
     await send(user)
 
     const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
     expect(sent.get("whatsapp")).toBe("")
   })
 
-  it("asks 'Tayari una code?' as two tiles: Ndiyo makes the code required, Hapana leaves it optional", async () => {
+  it("No skips the code box and goes straight to the review, which shows only the person's own initials", async () => {
     const user = userEvent.setup()
     render(await DiscountCodePage())
-    await user.type(screen.getByLabelText(WORDS.sw.name), "Rehema Juma")
+    await typeName(user)
     await next(user)
     await user.type(screen.getByLabelText(WORDS.sw.phone), "0712 345 678")
     await next(user)
@@ -260,28 +305,61 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     await user.type(screen.getByLabelText(WORDS.sw.email), "rehema@example.test")
     await next(user)
 
-    const tiles = screen.getByRole("group", { name: "Tayari una code?" })
+    const tiles = screen.getByRole("group", { name: WORDS.sw.hasCode })
     expect(within(tiles).getByRole("radio", { name: "Ndiyo" })).toHaveAccessibleDescription(
       "Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Chagua Ndiyo.",
     )
     // Nothing to fill until a tile is picked.
-    expect(screen.queryByLabelText(/Code yako ya Punguzo/)).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole("radio", { name: WORDS.sw.yes }))
-    expect(screen.getByLabelText(WORDS.sw.code)).toBeInTheDocument()
-    await next(user)
-    expect(screen.getByLabelText(WORDS.sw.code)).toHaveAccessibleDescription(/Andika Code yako ya Punguzo/)
-    expect(screen.queryByRole("button", { name: WORDS.sw.send })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(WORDS.sw.code)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("radio", { name: WORDS.sw.no }))
-    expect(screen.getByLabelText("Code yako ya Punguzo (si lazima)")).toBeInTheDocument()
-    await next(user)
-    expect(screen.getByRole("button", { name: WORDS.sw.send })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Badilisha Code" })).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: WORDS.sw.send })).toBeInTheDocument()
+    expect(screen.queryByLabelText(WORDS.sw.code)).not.toBeInTheDocument()
+    const note = screen.getByText(/Code yako ya Punguzo itaanza na/)
+    expect(within(note).getByText("RAJ")).toBeInTheDocument()
+    expect(note).toHaveTextContent(/Utaiona code yote kwenye ukurasa unaofuata/)
+    // No code at all before the finish.
+    expect(document.body.textContent).not.toMatch(/[A-Z]{1,3}-\d{3,}/)
+    expect(screen.getByRole("button", { name: "Badilisha Jibu" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Barua pepe" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Namba" })).toBeInTheDocument()
     expect(document.querySelector('input[name="cf-turnstile-response"]')).toHaveAttribute("data-action", "agent")
+
+    // Back from the review passes the skipped code box.
+    await user.click(screen.getByRole("button", { name: WORDS.sw.back }))
+    expect(openStep().getByRole("radio", { name: WORDS.sw.no })).toBeChecked()
     expect(stubs.submit).not.toHaveBeenCalled()
+  })
+
+  it("Yes opens the code box, which needs a code and adds the hyphen by itself", async () => {
+    const user = userEvent.setup()
+    jar.values.set("lang", "en")
+    render(await DiscountCodePage())
+    await typeName(user, "en")
+    await next(user, "en")
+    await user.type(screen.getByLabelText(WORDS.en.phone), "0712 345 678")
+    await next(user, "en")
+    await user.type(screen.getByLabelText(WORDS.en.email), "rehema@example.test")
+    await next(user, "en")
+    expect(screen.getByRole("group", { name: WORDS.en.hasCode })).toBeInTheDocument()
+
+    await user.click(screen.getByRole("radio", { name: WORDS.en.yes }))
+    const code = await screen.findByLabelText(WORDS.en.code)
+    await next(user, "en")
+    expect(code).toHaveAccessibleDescription(/Type your code as you were given it/)
+    expect(screen.queryByRole("button", { name: WORDS.en.sendClaim })).not.toBeInTheDocument()
+
+    await user.type(code, "aan132")
+    expect(code).toHaveValue("AAN-132")
+    await next(user, "en")
+    expect(screen.getByRole("button", { name: WORDS.en.sendClaim })).toBeInTheDocument()
+    expect(screen.getByText("We match this code to your phone number. The school then confirms it.")).toBeInTheDocument()
+
+    // Changing the answer to No drops the code box and its code.
+    await user.click(screen.getByRole("button", { name: "Change Answer" }))
+    await user.click(screen.getByRole("radio", { name: WORDS.en.no }))
+    expect(await screen.findByRole("button", { name: WORDS.en.send })).toBeInTheDocument()
+    expect(screen.queryByText("AAN-132")).not.toBeInTheDocument()
   })
 
   it("waits for the security check before sending", async () => {
@@ -301,12 +379,12 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     const user = userEvent.setup()
     render(await DiscountCodePage())
     await fill(user)
-    await user.click(screen.getByRole("button", { name: WORDS.sw.send }))
+    await send(user)
 
     expect(stubs.reveal).toHaveBeenCalled()
     expect(screen.queryByText(/Subiri ukaguzi wa usalama/)).toBeNull()
     expect(screen.queryByRole("alert")).toBeNull()
-    expect(screen.getByLabelText(WORDS.sw.name)).toHaveValue("Rehema Juma")
+    expect(box("sw", "first")).toHaveValue("REHEMA")
     expect(stubs.submit).not.toHaveBeenCalled()
   })
 
@@ -318,7 +396,9 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     await send(user)
 
     const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
-    expect(sent.get("full_name")).toBe("Rehema Juma")
+    expect(sent.get("firstName")).toBe("REHEMA")
+    expect(sent.get("middleName")).toBe("ALI")
+    expect(sent.get("lastName")).toBe("JUMA")
     expect(sent.get("phone")).toBe("0712 345 678")
     expect(sent.get("whatsapp")).toBe("0754 000 111")
     expect(sent.get("cf-turnstile-response")).toBe("fake-token")
@@ -329,14 +409,14 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })).toHaveFocus()
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1)
     expect(screen.getByText("AL-RAHMAH COMPLEX")).toBeInTheDocument()
-    expect(screen.getByText("RJ-407")).toBeInTheDocument()
+    expect(screen.getByText("RAJ-124")).toBeInTheDocument()
     expect(screen.getByText(REGISTERED.link)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Nakili kiungo" })).toBeInTheDocument()
     const share = screen.getByRole("link", { name: "Shiriki kwenye WhatsApp" })
     const href = share.getAttribute("href")!
     expect(href.startsWith("https://wa.me/?text=")).toBe(true)
     const text = decodeURIComponent(href.slice("https://wa.me/?text=".length))
-    expect(text).toContain("RJ-407")
+    expect(text).toContain("RAJ-124")
     expect(text.endsWith(REGISTERED.link)).toBe(true)
     expect(text).not.toMatch(FORBIDDEN)
     expect(screen.getByText(/shule itakapothibitisha code yako\. Shule/)).toHaveTextContent(/Shule itawasiliana nawe/)
@@ -357,7 +437,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Your Discount code" })).toBeInTheDocument()
     const href = screen.getByRole("link", { name: "Share on WhatsApp" }).getAttribute("href")!
     const text = decodeURIComponent(href.slice("https://wa.me/?text=".length))
-    expect(text).toMatch(/Discount code RJ-407/)
+    expect(text).toMatch(/Discount code RAJ-124/)
     expect(text).not.toMatch(FORBIDDEN)
     expect(screen.getByText(/once the school confirms your code\. The school/)).toHaveTextContent(/The school will contact you/)
     expect(screen.getByText(/email at rehema@example\.test to set your password/)).toBeInTheDocument()
@@ -393,7 +473,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(openStep().getByRole("alert")).toBe(alert)
     expect(await screen.findByRole("button", { name: WORDS.sw.send })).toBeEnabled()
     expect(stubs.reset).toHaveBeenCalledTimes(1)
-    expect(screen.getByLabelText(WORDS.sw.name)).toHaveValue("Rehema Juma")
+    expect(box("sw", "last")).toHaveValue("JUMA")
     expect(screen.getByLabelText(WORDS.sw.phone)).toHaveValue("0712 345 678")
     expect(screen.getByLabelText(WORDS.sw.whatsapp)).toHaveValue("0754 000 111")
   })
@@ -407,7 +487,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/Hatukuweza kukupatia code kwa sasa/)
     expect(stubs.reset).toHaveBeenCalledTimes(1)
-    expect(screen.getByLabelText(WORDS.sw.name)).toHaveValue("Rehema Juma")
+    expect(box("sw", "first")).toHaveValue("REHEMA")
   })
 
   it("reopens the phone question when the server couldn't read it, keeping the entries and resetting the widget", async () => {
@@ -436,17 +516,18 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
   })
 
   it("sends a claim with Ndiyo and the code, then shows the claimed code and says to check spam", async () => {
-    stubs.submit.mockResolvedValue({ status: "claimed", code: "RJ-407", link: REGISTERED.link })
+    stubs.submit.mockResolvedValue({ status: "claimed", code: "RJ-407", link: "https://alrahmah.example/apply?ref=RJ-407" })
     const user = userEvent.setup()
     render(await DiscountCodePage())
-    await fill(user, "sw", { code: "rj-407" })
-    expect(screen.getByText("Ndiyo · rj-407")).toBeInTheDocument()
-    await send(user)
+    await fill(user, "sw", { code: "rj407" })
+    expect(screen.getByText("RJ-407")).toBeInTheDocument()
+    expect(screen.getByText(/Tunalinganisha code hii na namba yako ya simu/)).toBeInTheDocument()
+    await send(user, "sw", true)
 
     const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
     expect(sent.get("has_code")).toBe("yes")
-    expect(sent.get("code")).toBe("rj-407")
-    expect(await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })).toHaveFocus()
+    expect(sent.get("code")).toBe("RJ-407")
+    expect(await screen.findByRole("heading", { level: 1, name: "Ombi limepokelewa" })).toHaveFocus()
     expect(screen.getByText("RJ-407")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Shiriki kwenye WhatsApp" })).toBeInTheDocument()
     expect(screen.getByText(/Shule itathibitisha barua pepe yako/)).toHaveTextContent(/angalia spam/)
@@ -454,7 +535,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
   })
 
   it.each([
-    ["code-needed", "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.", /This number already has a Discount code/],
+    ["code-needed", "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.", /Answer Yes to 'Do you already have a Discount code\?'/],
     ["phone-mismatch", "Hatukuweza kulinganisha code na namba hii. Zihakiki, au piga simu ofisini.", /couldn't match the code with this number/],
     ["no-match", "Hatukupata code hii. Ihakiki, au piga simu ofisini.", /couldn't find this code/],
     ["claim-waiting", "Tumepokea ombi lako; shule itathibitisha.", /the school will confirm it/],
@@ -494,7 +575,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
   it("the menu's 'Futa fomu yote' asks first, then clears every answer back to the first question", async () => {
     const user = userEvent.setup()
     render(await DiscountCodePage())
-    await user.type(screen.getByLabelText(WORDS.sw.name), "Rehema Juma")
+    await typeName(user)
     await next(user)
     await user.type(screen.getByLabelText(WORDS.sw.phone), "0712 345 678")
 
@@ -507,7 +588,75 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Futa fomu yote" }))
     await user.click(screen.getByRole("button", { name: "Ndiyo, futa" }))
     await waitFor(() => expect(screen.queryByLabelText(WORDS.sw.phone)).not.toBeInTheDocument())
-    expect(screen.getByLabelText(WORDS.sw.name)).toHaveValue("")
+    expect(box("sw", "first")).toHaveValue("")
     expect(screen.queryByRole("button", { name: "Badilisha Jina" })).not.toBeInTheDocument()
+  })
+})
+
+describe("Start over", { timeout: 30_000 }, () => {
+  it("shows on the first question even when the form is empty, and says there is nothing to clear", async () => {
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+
+    expect(screen.queryByRole("button", { name: WORDS.sw.back })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: WORDS.sw.startOver }))
+    expect(stubs.toast).toHaveBeenCalledWith("Hakuna cha kufuta bado. Fomu iko tupu.")
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("gives way to Back from the second question", async () => {
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await typeName(user)
+    await next(user)
+
+    expect(screen.queryByRole("button", { name: WORDS.sw.startOver })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: WORDS.sw.back }))
+    expect(screen.getByRole("button", { name: WORDS.sw.startOver })).toBeInTheDocument()
+  })
+
+  it("with answers, asks in a sheet: No keeps them, Yes clears the form", async () => {
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await typeName(user)
+
+    await user.click(screen.getByRole("button", { name: WORDS.sw.startOver }))
+    const sheet = await screen.findByRole("dialog", { name: "Uanze upya?" })
+    expect(within(sheet).getByText(/Hili haliwezi kurudishwa/)).toBeInTheDocument()
+    await user.click(within(sheet).getByRole("button", { name: "Hapana, acha majibu yangu" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(box("sw", "first")).toHaveValue("REHEMA")
+
+    await user.click(screen.getByRole("button", { name: WORDS.sw.startOver }))
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Ndiyo, futa fomu" }))
+    await waitFor(() => expect(box("sw", "first")).toHaveValue(""))
+    expect(box("sw", "last")).toHaveValue("")
+    expect(stubs.toast).toHaveBeenCalledWith("Fomu imeanza upya.")
+  })
+
+  it("on the finished screen, opens a new form at once", async () => {
+    stubs.submit.mockResolvedValue(REGISTERED)
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await fill(user)
+    await send(user)
+    await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })
+
+    await user.click(screen.getByRole("button", { name: WORDS.sw.startOver }))
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(await screen.findByRole("group", { name: WORDS.sw.name })).toBeInTheDocument()
+    expect(box("sw", "first")).toHaveValue("")
+    expect(screen.queryByText("RAJ-124")).not.toBeInTheDocument()
+    expect(stubs.toast).toHaveBeenCalledWith("Fomu mpya iko tayari.")
+  })
+
+  it("'Anza tena' on the finished screen opens a new form too", async () => {
+    stubs.submit.mockResolvedValue(REGISTERED)
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await fill(user)
+    await send(user)
+    await user.click(await screen.findByRole("button", { name: "Anza tena" }))
+    expect(await screen.findByRole("group", { name: WORDS.sw.name })).toBeInTheDocument()
   })
 })

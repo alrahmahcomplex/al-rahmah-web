@@ -43,12 +43,19 @@ export const cleanName = (value: string) => value.trim().replace(/\s+/g, " ").to
 /** "Who brought the students" needs at least two names. */
 export const hasTwoNames = (value: string) => cleanName(value).split(" ").filter(Boolean).length >= 2
 
+/** The longest code the database reads (`normalize_referral_code`). */
+export const CODE_MAX_LENGTH = 20
+
 /**
- * A Discount code is three letters, a hyphen and three digits. Capitals, only
- * letters and digits kept, the hyphen added after the third, at most 7
- * characters: "aan132" becomes "AAN-132".
+ * A Discount code is the agent's initials, a hyphen and a number: AAN-132.
+ * Capitals, no spaces, and only letters, digits, "-" and "." kept. One to
+ * three letters followed straight by digits get the hyphen between them, so
+ * "aan132" becomes "AAN-132", "jd123" becomes "JD-123" and "abc1234" becomes
+ * "ABC-1234". Anything else stays as typed, such as a Promo code that starts
+ * with four letters (KARIBU2026), up to 20 characters.
  */
 export function formatCode(raw: string): string {
-  const plain = raw.toUpperCase().replace(/[^A-Z0-9]/g, "")
-  return plain.length > 3 ? `${plain.slice(0, 3)}-${plain.slice(3, 6)}` : plain
+  const plain = raw.toUpperCase().replace(/[^A-Z0-9.-]/g, "")
+  const joined = plain.match(/^([A-Z]{1,3})([0-9]+)$/)
+  return (joined ? `${joined[1]}-${joined[2]}` : plain).slice(0, CODE_MAX_LENGTH)
 }

@@ -4,7 +4,20 @@ import { expect, test } from "./staff-test"
 import { secretClient } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
-import { chooseLanguage, FORBIDDEN, fillRegistration, newcomer, WORDS, type Lang } from "./discount-code"
+import {
+  chooseLanguage,
+  continueFrom,
+  FORBIDDEN,
+  fillRegistration,
+  nameBox,
+  newcomer,
+  openQuestion,
+  pickTile,
+  sendButton,
+  typeName,
+  WORDS,
+  type Lang,
+} from "./discount-code"
 import { E2E_PORT } from "./server"
 import { signInOnce } from "./log-in"
 
@@ -18,7 +31,8 @@ test.beforeEach(async ({ context }) => {
 })
 
 const ORIGIN = `http://localhost:${E2E_PORT}`
-const CODE = /^[A-Z]{1,3}-\d{3,4}$/
+// The newcomer's own initials, a hyphen and the number (#404).
+const CODE = /^RMX-\d{3,}$/
 
 async function register(page: Page, lang: Lang, who: ReturnType<typeof newcomer>, whatsapp = "") {
   const t = WORDS[lang]
@@ -26,7 +40,7 @@ async function register(page: Page, lang: Lang, who: ReturnType<typeof newcomer>
   await expect(page.getByRole("main")).toHaveAttribute("lang", lang)
   await fillRegistration(page, lang, who, { whatsapp })
   await waitForSecurityCheck(page)
-  await page.getByRole("button", { name: t.send }).click()
+  await sendButton(page, lang).click()
   await expect(page.getByRole("heading", { level: 1, name: t.done })).toBeVisible()
   const code = (await page.getByText(CODE).textContent())!.trim()
   return code
@@ -101,9 +115,9 @@ test("registering again with the same details shows the same code; another name 
   await expect(page.getByText(`${ORIGIN}/apply?ref=${first}`, { exact: true })).toBeVisible()
 
   await page.goto("/discount-code")
-  await fillRegistration(page, "sw", { ...who, name: `${who.name} Tena` })
+  await fillRegistration(page, "sw", { ...who, name: `${who.name} TENA` })
   await waitForSecurityCheck(page)
-  await page.getByRole("button", { name: WORDS.sw.send }).click()
+  await sendButton(page, "sw").click()
   await expect(page.getByRole("main").getByRole("alert")).toHaveText(
     "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.",
   )
@@ -127,7 +141,7 @@ test("the new agent arrives Pending on the Marketing Agents screen", async ({ pa
 test("the menu changes the language in place, keeping every answer, and 'Futa fomu yote' asks before clearing", async ({ page }) => {
   const who = newcomer()
   await page.goto("/discount-code")
-  await page.getByLabel(WORDS.sw.name).fill(who.name)
+  await typeName(page, "sw", who.name)
   await page.locator("li.gf-open").getByRole("button", { name: WORDS.sw.next }).click()
   await page.getByLabel(WORDS.sw.phone).fill(who.phone)
 
@@ -143,7 +157,7 @@ test("the menu changes the language in place, keeping every answer, and 'Futa fo
   await clear.click()
   await expect(page.getByText("Clear every answer?")).toBeVisible()
   await page.getByRole("button", { name: "Yes, clear" }).click()
-  await expect(page.getByLabel(WORDS.en.name)).toHaveValue("")
+  await expect(nameBox(page, "en")).toHaveValue("")
   await expect(page.getByLabel(WORDS.en.phone)).toHaveCount(0)
 })
 
@@ -165,4 +179,109 @@ test("the page is noindex and the landing page doesn't link to it", async ({ pag
 
   await page.goto("/")
   await expect(page.locator('a[href*="discount-code"]')).toHaveCount(0)
+})
+
+test("No skips the code box and goes straight to the review, which names only the person's own initials", async ({ page }) => {
+  const who = newcomer()
+  await page.goto("/discount-code")
+  await typeName(page, "sw", who.name)
+  await expect(nameBox(page, "sw", "middle")).toHaveValue("MAJARIBIO")
+  await continueFrom(page, "sw")
+  await page.getByLabel(WORDS.sw.phone).fill(who.phone)
+  await continueFrom(page, "sw")
+  await page.getByLabel(WORDS.sw.email).fill(who.email)
+  await continueFrom(page, "sw")
+  await pickTile(page, WORDS.sw.no)
+
+  await expect(sendButton(page, "sw")).toBeVisible()
+  await expect(page.getByLabel(WORDS.sw.code, { exact: true })).toHaveCount(0)
+  await expect(openQuestion(page).getByText(/Code yako ya Punguzo itaanza na RMX,/)).toBeVisible()
+})
+
+test("Yes opens the code box, which adds the hyphen by itself", async ({ page }) => {
+  const who = newcomer()
+  await chooseLanguage(page.context(), "en")
+  await page.goto("/discount-code")
+  await typeName(page, "en", who.name)
+  await continueFrom(page, "en")
+  await page.getByLabel(WORDS.en.phone).fill(who.phone)
+  await continueFrom(page, "en")
+  await page.getByLabel(WORDS.en.email).fill(who.email)
+  await continueFrom(page, "en")
+  await pickTile(page, WORDS.en.yes)
+
+  const box = page.getByLabel(WORDS.en.code, { exact: true })
+  await box.pressSequentially("aan132")
+  await expect(box).toHaveValue("AAN-132")
+  await continueFrom(page, "en")
+  await expect(sendButton(page, "en", true)).toBeVisible()
+  await expect(page.getByText("We match this code to your phone number. The school then confirms it.")).toBeVisible()
+})
+
+test("no page or response before the finish carries an agent's code, and the finish carries only the person's own", async ({ page }) => {
+  const { data, error } = await secretClient().from("marketing_agents").select("code")
+  if (error) throw new Error(error.message)
+  const codes = data.map((row) => row.code as string)
+  expect(codes.length).toBeGreaterThan(0)
+
+  // Everything the server sends this page: documents, RSC payloads and the
+  // Server Action's answer. Static scripts are build output and hold no data.
+  // Each response is filed under the phase it arrived in, before its body is read.
+  let finishing = false
+  const before: Promise<string>[] = []
+  const after: Promise<string>[] = []
+  page.on("response", (response) => {
+    if (!["document", "fetch", "xhr"].includes(response.request().resourceType())) return
+    ;(finishing ? after : before).push(response.text().catch(() => ""))
+  })
+
+  const who = newcomer()
+  await page.goto("/discount-code")
+  await fillRegistration(page, "sw", who)
+  // The language switch re-renders the page on the server, too.
+  await page.getByRole("button", { name: "Menyu" }).click()
+  await page.getByRole("button", { name: "English" }).click()
+  await expect(sendButton(page, "en")).toBeVisible()
+  await waitForSecurityCheck(page)
+  const bodiesBefore = await Promise.all(before)
+  // The page itself and the language switch's re-render, at least.
+  expect(bodiesBefore.length).toBeGreaterThanOrEqual(2)
+  expect(bodiesBefore.join("")).toContain(WORDS.sw.name)
+  for (const body of bodiesBefore) for (const code of codes) expect(body.includes(code), `a response before the finish carries ${code}`).toBe(false)
+
+  finishing = true
+  await sendButton(page, "en").click()
+  await expect(page.getByRole("heading", { level: 1, name: WORDS.en.done })).toBeVisible()
+  const own = (await page.locator("[data-own-code]").textContent())!.trim()
+  expect(own).toMatch(CODE)
+  const bodiesAfter = await Promise.all(after)
+  expect(bodiesAfter.some((body) => body.includes(own))).toBe(true)
+  for (const body of bodiesAfter) for (const code of codes) expect(body.includes(code), `the finish carries ${code}`).toBe(false)
+})
+
+test("Start over: on the first question only, a toast on an empty form, a sheet with answers, and a new form from the finish", async ({ page }) => {
+  const who = newcomer()
+  await page.goto("/discount-code")
+  const startOver = page.getByRole("button", { name: WORDS.sw.startOver })
+  await startOver.click()
+  await expect(page.getByText("Hakuna cha kufuta bado. Fomu iko tupu.")).toBeVisible()
+
+  await typeName(page, "sw", who.name)
+  await continueFrom(page, "sw")
+  await expect(startOver).toHaveCount(0)
+  await page.getByRole("button", { name: WORDS.sw.back }).click()
+  await startOver.click()
+  const sheet = page.getByRole("dialog", { name: "Uanze upya?" })
+  await sheet.getByRole("button", { name: "Ndiyo, futa fomu" }).click()
+  await expect(nameBox(page, "sw")).toHaveValue("")
+  await expect(page.getByText("Fomu imeanza upya.")).toBeVisible()
+
+  await fillRegistration(page, "sw", who)
+  await waitForSecurityCheck(page)
+  await sendButton(page, "sw").click()
+  await expect(page.getByRole("heading", { level: 1, name: WORDS.sw.done })).toBeVisible()
+  await startOver.click()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expect(nameBox(page, "sw")).toHaveValue("")
+  await expect(page.getByText("Fomu mpya iko tayari.")).toBeVisible()
 })

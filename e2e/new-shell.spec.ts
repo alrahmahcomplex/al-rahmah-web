@@ -95,7 +95,8 @@ test.describe("on a desktop", () => {
     await page.reload()
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
     await expect(handle(page)).toHaveCount(0)
-    await page.goto("/staff/applicants")
+    // Interviews is still drawn in the old shell.
+    await page.goto("/staff/interviews")
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
     await page.getByRole("button", { name: "Expand sidebar" }).click()
 

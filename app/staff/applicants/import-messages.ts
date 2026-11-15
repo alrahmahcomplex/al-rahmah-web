@@ -1,3 +1,4 @@
+import type { TagTone } from "@/components/kit"
 import { importFileMessage, type Bilingual, type ImportFileError } from "@/lib/import"
 import type { StudentImportClass, StudentImportSummary } from "@/lib/student-import"
 
@@ -50,8 +51,7 @@ export function importErrorMessage(error: StudentImportRefusal): ImportMessage {
   }
 }
 
-// Each review class: its chip label and tint. The tints are the status
-// chips' soft pairs, so they read at 4.5:1 or more.
+// Each review class: its chip label and its kit Tag tone.
 export const CLASS_LABELS: Record<StudentImportClass, string> = {
   create: "To create",
   "joins-family": "Joins a family",
@@ -60,12 +60,12 @@ export const CLASS_LABELS: Record<StudentImportClass, string> = {
   refused: "Refused",
 }
 
-export const CLASS_TONES: Record<StudentImportClass, string> = {
-  create: "bg-green-50 text-green-800",
-  "joins-family": "bg-blue-50 text-blue-700",
-  present: "bg-slate-100 text-slate-700",
-  flagged: "bg-amber-50 text-amber-900",
-  refused: "bg-red-50 text-red-700",
+export const CLASS_TONES: Record<StudentImportClass, TagTone> = {
+  create: "ok",
+  "joins-family": "line",
+  present: "line",
+  flagged: "wait",
+  refused: "bad",
 }
 
 // The order the summary chips come in.

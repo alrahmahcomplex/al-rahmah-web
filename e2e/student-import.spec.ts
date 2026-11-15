@@ -104,7 +104,7 @@ test("the Manager imports applicants, reviews every row, creates them and finds 
 
   // Create, then Done.
   await sheet.getByRole("button", { name: "Create 4 applicants" }).click()
-  await expect(sheet.getByRole("status").filter({ hasText: "4 applicants created, 1 joined a family, 3 skipped." })).toBeVisible()
+  await expect(sheet.getByRole("heading", { name: "4 applicants created, 1 joined a family, 3 skipped." })).toBeVisible()
   await expect(sheet.getByText(`Created by the workbook import (${file.name})`)).toBeVisible()
   await expect(sheet.getByText("Test Manager")).toBeVisible()
 
@@ -118,7 +118,8 @@ test("the Manager imports applicants, reviews every row, creates them and finds 
   }
 
   // The workbook's Contracted student is Enrolled by the import, with no payment.
-  await listed.getByRole("link", { name: `Chausiku ${file.tag} Mfano` }).click()
+  await listed.filter({ hasText: `Chausiku ${file.tag} Mfano` }).click()
+  await page.getByRole("dialog", { name: `Chausiku ${file.tag} Mfano` }).getByRole("link", { name: "Open full record" }).click()
   await expect(page.getByRole("heading", { name: `Chausiku ${file.tag} Mfano`, level: 1 })).toBeVisible()
   await expect(page.getByText("Enrolled · imported, payments not recorded")).toBeVisible()
 

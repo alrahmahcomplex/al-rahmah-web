@@ -97,6 +97,8 @@ describe("searching by Admission Number", () => {
           // Seeded, not brought in by the student import.
           imported: false,
           createdAt: expect.any(String),
+          // The parent or guardian, for the list's Custodian column (#324).
+          custodianName: "Omari Fixture",
         },
       ])
       expect(found.total).toBe(1)

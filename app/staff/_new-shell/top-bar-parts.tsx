@@ -1,7 +1,8 @@
 "use client"
 
 import Form from "next/form"
-import { useState, useTransition, type MouseEvent } from "react"
+import { usePathname, useSearchParams } from "next/navigation"
+import { Suspense, useState, useTransition, type MouseEvent } from "react"
 import { useFormStatus } from "react-dom"
 
 import { Button, Field, ListRow, Note, Popover, RoundButton } from "@/components/kit"
@@ -11,11 +12,52 @@ import type { ShellPerson } from "../shell-types"
 import { loadBellRequests } from "./bell-actions"
 import type { BellRequest } from "./bell-requests"
 
-/** The 40px search: searching opens Applicants with the term. */
+/**
+ * The 40px search: searching opens Applicants with the term. On Applicants
+ * it holds the search the list shows, and carries the list's filters, so
+ * Clear returns to the filtered list (#324).
+ */
 export function TopBarSearch() {
   return (
+    <Suspense fallback={<SearchForm query="" carried={[]} />}>
+      <ApplicantsAwareSearch />
+    </Suspense>
+  )
+}
+
+// The filters the Applicants list keeps in its address (app/staff/applicants/search-params.ts).
+const CARRIED = ["status", "closure", "earlier_link", "import"] as const
+
+function ApplicantsAwareSearch() {
+  const onApplicants = usePathname() === "/staff/applicants"
+  const params = useSearchParams()
+  const query = onApplicants ? (params.get("q") ?? "") : ""
+  const carried = onApplicants
+    ? CARRIED.flatMap((name) => {
+        const value = params.get(name)
+        return value ? [[name, value] as const] : []
+      })
+    : []
+  return <SearchForm query={query} carried={carried} />
+}
+
+function SearchForm({ query, carried }: { query: string; carried: readonly (readonly [string, string])[] }) {
+  return (
     <Form action="/staff/applicants" role="search" className="ns-search">
-      <Field size="search" icon="search" name="q" placeholder="Search a name or Admission Number" aria-label="Search applicants" autoComplete="off" />
+      {carried.map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
+      {/* Keyed on the search, so the box follows Clear, Back and Forward. */}
+      <Field
+        key={query}
+        defaultValue={query}
+        size="search"
+        icon="search"
+        name="q"
+        placeholder="Search a name or Admission Number"
+        aria-label="Search applicants"
+        autoComplete="off"
+      />
     </Form>
   )
 }

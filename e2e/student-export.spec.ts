@@ -4,6 +4,7 @@ import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
 import { ADMISSIONS, MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
+import { chooseOption } from "./kit-parts"
 import { signInOnce } from "./log-in"
 
 // Exporting applicants from the Applicants list. Admissions Staff hold
@@ -24,6 +25,12 @@ async function openExport(page: Page) {
   const sheet = page.getByRole("dialog", { name: "Export applicants" })
   await expect(sheet.getByLabel("Which applicants")).toBeVisible()
   return sheet
+}
+
+// A preset tile: its radio lies under its words, so the click goes to the label holding both.
+async function choosePreset(sheet: ReturnType<Page["getByRole"]>, name: RegExp) {
+  await sheet.locator("label").filter({ has: sheet.page().getByRole("radio", { name }) }).click()
+  await expect(sheet.getByRole("radio", { name })).toBeChecked()
 }
 
 function presets(sheet: ReturnType<Page["getByRole"]>) {
@@ -48,13 +55,13 @@ test("Admissions Staff export the applicant columns only", async ({ page }) => {
   await expect(sheet.getByRole("radio", { name: /^Full data/ })).toHaveCount(0)
 
   // Choose columns shows the locked groups as one line each.
-  await sheet.getByRole("radio", { name: /^Choose columns/ }).check()
+  await choosePreset(sheet, /^Choose columns/)
   await expect(sheet.getByText("Parent contact needs the Export applicants permission.")).toBeVisible()
   await expect(sheet.getByText(/Full data is the Super Admin.s export only/)).toBeVisible()
   await expect(sheet.getByRole("checkbox", { name: "Parent phone" })).toHaveCount(0)
   await expect(sheet.getByRole("checkbox", { name: "Admission Number" })).toBeChecked()
 
-  await sheet.getByRole("radio", { name: /^Class list/ }).check()
+  await choosePreset(sheet, /^Class list/)
   await expect(sheet.getByText(/^\d[\d,]* rows?, 6 columns$/)).toBeVisible()
   const download = page.waitForEvent("download")
   await sheet.getByRole("button", { name: "Download CSV" }).click()
@@ -77,13 +84,13 @@ test("the Manager, with leads.export, exports parent contacts but not Full data"
 
   await expect(sheet.getByRole("radio", { name: /^Full data/ })).toHaveCount(0)
   await expect(sheet.getByText(/Personal Data Protection Act/)).toHaveCount(0)
-  await sheet.getByRole("radio", { name: /^Follow-up calls/ }).check()
+  await choosePreset(sheet, /^Follow-up calls/)
   await expect(
     sheet.getByText(
       "Includes parent names and phone numbers, personal data under the Personal Data Protection Act. Share only with staff who need it.",
     ),
   ).toBeVisible()
-  await sheet.getByLabel("Which applicants").selectOption({ label: "Every applicant" })
+  await chooseOption(sheet.getByRole("combobox", { name: "Which applicants" }), "Every applicant")
   await expect(sheet.getByText(/^\d[\d,]* rows?, 8 columns$/)).toBeVisible()
 
   const download = page.waitForEvent("download")
@@ -108,9 +115,9 @@ test("the Manager, with leads.export, exports parent contacts but not Full data"
 test("the Super Admin exports Full data", async ({ page }) => {
   await signIn(page, SUPER_ADMIN)
   const sheet = await openExport(page)
-  await sheet.getByRole("radio", { name: /^Full data/ }).check()
+  await choosePreset(sheet, /^Full data/)
   await expect(sheet.getByText("Includes payments and notes. Keep this file inside the school.")).toBeVisible()
-  await sheet.getByLabel("Which applicants").selectOption({ label: `Enrollment year ${new Date().getFullYear() + 1}` })
+  await chooseOption(sheet.getByRole("combobox", { name: "Which applicants" }), `Enrollment year ${new Date().getFullYear() + 1}`)
 
   const download = page.waitForEvent("download")
   const answered = exportAnswer(page)

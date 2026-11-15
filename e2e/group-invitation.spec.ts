@@ -15,6 +15,7 @@ import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixture
 import { claimGroupInvitationYear, currentGroupLink, type GroupInvitationYearClaim } from "../tests/support/group-invitation-years"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl } from "./lead-page"
+import { chooseOption } from "./kit-parts"
 import { signInOnce } from "./log-in"
 
 // Sending the admissions WhatsApp group invitation from a lead's screen
@@ -189,12 +190,12 @@ test.describe("the group invitation on a lead's screen", () => {
     }
 
     await page.goto("/staff/applicants")
-    await page.getByLabel("Group invitation").selectOption(String(year))
+    await chooseOption(page.getByRole("main").getByRole("combobox", { name: "Group invitation" }), `Invitation sent with an earlier link, ${year}`)
     await expect(page).toHaveURL(`/staff/applicants?earlier_link=${year}`)
     const rows = page.getByRole("table", { name: "Applicants" }).getByRole("row")
     await expect(rows).toHaveCount(3)
-    await expect(page.getByRole("link", { name: sender.studentName })).toBeVisible()
-    await expect(page.getByRole("link", { name: sibling.studentName })).toBeVisible()
+    await expect(page.getByRole("row", { name: new RegExp(sender.studentName) })).toBeVisible()
+    await expect(page.getByRole("row", { name: new RegExp(sibling.studentName) })).toBeVisible()
 
     await page.screenshot({ path: "test-results/186-earlier-link-filter.png", fullPage: true })
     await page.goto(leadUrl(sender.id, "Interview"))

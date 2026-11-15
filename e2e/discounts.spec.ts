@@ -50,9 +50,9 @@ async function signIn(page: Page, person: FixtureStaff) {
   await page.context().clearCookies()
   await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
-  // Home is in the new shell, which shows no counts (#323); Applicants keeps the old one.
-  await page.goto("/staff/applicants")
-  await expect(page.getByRole("heading", { level: 1, name: "Applicants" })).toBeVisible()
+  // Home is in the new shell, which shows no counts (#323); Interviews keeps the old one.
+  await page.goto("/staff/interviews")
+  await expect(page.getByRole("heading", { level: 1, name: "Interviews" })).toBeVisible()
 }
 
 async function passedLead(): Promise<{ id: string; admissionNumber: string }> {

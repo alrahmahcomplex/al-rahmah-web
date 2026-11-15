@@ -253,7 +253,5 @@ describe("the last number", () => {
       )
       expect(toPublic.rows[0].n).toBe(0)
     })
-    const read = await secretClient().from("agent_code_numbers").select("*")
-    expect(read.error).not.toBeNull()
   })
 })

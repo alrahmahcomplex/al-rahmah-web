@@ -1528,8 +1528,9 @@ describe("a child linked before check-in", () => {
 
 // Two check-ins on one group at once, on two connections.
 describe("two check-ins on one group at the same time", () => {
-  async function staffSession(userId: string) {
+  async function staffSession(userId: string, opened: Client[]) {
     const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL });
+    opened.push(sql);
     await sql.connect();
     await sql.query("begin");
     // Shorter than the test's own timeout: a stuck wait ends and frees the
@@ -1600,16 +1601,8 @@ describe("two check-ins on one group at the same time", () => {
     // first call stops mid-way: it has taken its Family and group locks and
     // waits on the row. The second call then starts while the first is
     // still running, and waits on the first's locks.
-    const barrier = new Client({
-      connectionString: process.env.SUPABASE_DB_URL,
-    });
-    await barrier.connect();
-    await barrier.query("begin");
-    await barrier.query("set local statement_timeout = '20s'");
-    await barrier.query(
-      "select id from public.leads where id = $1 for update",
-      [first.leadIds[0]],
-    );
+    // Every client opened here, closed in `finally` even when setup fails.
+    const opened: Client[] = [];
     const pidOf = async (sql: Client) =>
       (await sql.query<{ pid: number }>("select pg_backend_pid() as pid"))
         .rows[0].pid;
@@ -1636,9 +1629,23 @@ describe("two check-ins on one group at the same time", () => {
       }
     };
 
-    const one = await staffSession(staffUser);
-    const two = await staffSession(staffUser);
     try {
+      const barrier = new Client({
+        connectionString: process.env.SUPABASE_DB_URL,
+      });
+      opened.push(barrier);
+      await barrier.connect();
+      await barrier.query("begin");
+      await barrier.query("set local statement_timeout = '20s'");
+      await barrier.query(
+        "set local idle_in_transaction_session_timeout = '20s'",
+      );
+      await barrier.query(
+        "select id from public.leads where id = $1 for update",
+        [first.leadIds[0]],
+      );
+      const one = await staffSession(staffUser, opened);
+      const two = await staffSession(staffUser, opened);
       const [onePid, twoPid] = await Promise.all([pidOf(one), pidOf(two)]);
       const firstCall = one.query<{ r: { result: string } }>(call, [
         yesterday,
@@ -1675,12 +1682,10 @@ describe("two check-ins on one group at the same time", () => {
       await two.query("reset role");
       await two.query("commit");
     } finally {
-      await barrier.query("rollback").catch(() => {});
-      await one.query("rollback").catch(() => {});
-      await two.query("rollback").catch(() => {});
-      await barrier.end();
-      await one.end();
-      await two.end();
+      for (const sql of opened) {
+        await sql.query("rollback").catch(() => {});
+        await sql.end().catch(() => {});
+      }
     }
 
     for (const id of [first.leadIds[0], second.leadIds[0]])

@@ -97,7 +97,6 @@ declare
     prefix text;
     candidate text;
     number bigint;
-    attempt integer;
     violated text;
 begin
     select * into draft
@@ -139,9 +138,11 @@ begin
         prefix := public.marketing_agent_code_prefix(draft.agent_name);
     end if;
 
-    -- A generated code takes the next number until its code is free. The
-    -- unique index catches a typed code committed alongside.
-    for attempt in 1..100 loop
+    -- A generated code takes the next number until its code is free, however
+    -- many in a row are taken: the numbers only go up, so a free one always
+    -- comes. A typed code is tried once, and either saves or raises. The
+    -- unique index catches a code committed alongside.
+    loop
         if draft.agent_code is not null then
             candidate := draft.agent_code;
         else
@@ -178,7 +179,5 @@ begin
             end if;
         end;
     end loop;
-
-    raise exception 'unavailable';
 end;
 $$;

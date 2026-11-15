@@ -119,6 +119,22 @@ describe("the Discount code format", () => {
     })
   })
 
+  test("a long run of taken codes is passed over, however long", async () => {
+    const n = farNumber()
+    await atNumber(n, async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      // 150 typed codes in a row, ZXQ-(n+1) to ZXQ-(n+150), none of which moves the sequence.
+      const planted = await sql.query(
+        `insert into public.marketing_agents (full_name, phone, code)
+         select 'Taken Run', '+2556' || lpad((k + $2::int)::text, 8, '0'), 'ZXQ-' || ($1::bigint + k)
+         from generate_series(1, 150) k`,
+        [n, randomInt(0, 90_000_000)],
+      )
+      expect(planted.rowCount).toBe(150)
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${n + 151}`)
+    })
+  })
+
   test("a retired record's code is never generated again", async () => {
     const n = farNumber()
     await atNumber(n, async (sql) => {

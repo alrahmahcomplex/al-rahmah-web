@@ -26,9 +26,10 @@ export function PanelHead({
   return (
     <div className="rp-head">
       <div>
-        <h2 id={headingId} className="kit-card-title">
+        {/* Under the Dashboard heading, as before the redesign. */}
+        <h3 id={headingId} className="kit-card-title">
           {title}
-        </h2>
+        </h3>
         <p className="rp-period" data-testid={periodTestId}>
           {period}
         </p>

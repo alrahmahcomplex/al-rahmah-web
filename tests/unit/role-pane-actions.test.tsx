@@ -85,9 +85,9 @@ const ROLE: RoleView = {
 
 const OK = { ok: true, message: "Done." }
 
-function renderPane(role: RoleView = ROLE) {
+function renderPane(role: RoleView = ROLE, permissions: PermissionOption[] = PERMISSIONS) {
   return render(
-    <RolePane role={role} permissions={PERMISSIONS}>
+    <RolePane role={role} permissions={permissions}>
       {null}
     </RolePane>,
   )
@@ -257,5 +257,74 @@ describe("New role", () => {
     await user.click(screen.getByRole("button", { name: "Add" }))
     await waitFor(() => expect(actions.addRole).toHaveBeenCalledWith("Gatekeepers", null))
     await waitFor(() => expect(push).toHaveBeenCalledWith("/staff/roles?role=r-new"))
+  })
+})
+
+describe("Staff and roles controls that are closed", () => {
+  it("closes Move to, Deactivate and Reactivate when the screen says why, and links the reason", () => {
+    renderPane({
+      ...ROLE,
+      people: [
+        person({ moveBlocked: "Only one Super Admin.", deactivateBlocked: "You can't deactivate yourself." }),
+        person({ id: "p-3", name: "Chausiku Gone", active: false, status: "Deactivated", canSendReset: false, reactivateBlocked: "Their role is retired." }),
+      ],
+    })
+    const asha = row("Asha Fixture")
+    expect(within(asha).getByRole("button", { name: "Move to…" })).toBeDisabled()
+    expect(within(asha).getByRole("button", { name: "Move to…" })).toHaveAccessibleDescription(/Only one Super Admin\./)
+    expect(within(asha).getByRole("button", { name: "Deactivate" })).toBeDisabled()
+    expect(within(asha).getByRole("button", { name: "Deactivate" })).toHaveAccessibleDescription(/You can't deactivate yourself\./)
+    expect(within(row("Chausiku Gone")).getByRole("button", { name: "Reactivate" })).toBeDisabled()
+  })
+
+  it("closes Retire role while someone holds it, and says who", () => {
+    renderPane({ ...ROLE, retireBlocked: "Admissions Manager is still held by Asha Fixture. Move them to another role first." })
+    const retire = screen.getByRole("button", { name: "Retire role" })
+    expect(retire).toBeDisabled()
+    expect(retire).toHaveAccessibleDescription("Admissions Manager is still held by Asha Fixture. Move them to another role first.")
+  })
+
+  it("closes Rename and the permission tick boxes on a role that is not open to editing", () => {
+    renderPane({ ...ROLE, editable: false })
+    expect(screen.getByRole("button", { name: "Rename" })).toBeDisabled()
+    for (const box of screen.getAllByRole("checkbox", { name: /View applicants|Record payments/ })) expect(box).toHaveAttribute("aria-disabled", "true")
+  })
+
+  it("on a retired role, closes the managed set and offers Reactivate role, not Retire", () => {
+    renderPane({ ...ROLE, retired: true, editable: false })
+    expect(screen.queryByRole("button", { name: "Retire role" })).toBeNull()
+    expect(screen.getByRole("button", { name: "Reactivate role" })).toBeEnabled()
+    expect(screen.getByRole("checkbox", { name: "Accountant" })).toHaveAttribute("aria-disabled", "true")
+  })
+
+  it("lets a retired managed role be taken out of the set, but not put in", () => {
+    renderPane({
+      ...ROLE,
+      managedOptions: [
+        { id: "r-old", name: "Receptionist", checked: true, retired: true },
+        { id: "r-gone", name: "Cashier", checked: false, retired: true },
+      ],
+    })
+    expect(screen.getByRole("checkbox", { name: "Receptionist (retired)" })).not.toHaveAttribute("aria-disabled", "true")
+    expect(screen.getByRole("checkbox", { name: "Cashier (retired)" })).toHaveAttribute("aria-disabled", "true")
+  })
+
+  it("names the paired permission under Reports, as before", () => {
+    renderPane({ ...ROLE, permissions: [] }, [...PERMISSIONS, { name: "reports.view", label: "View Reports" }])
+    expect(screen.getByRole("checkbox", { name: "View Reports" })).toHaveAccessibleDescription(
+      "Reports need “View applicants and their history”. Ticking this ticks it too, and unticking it unticks this.",
+    )
+  })
+
+  it("tells what was ticked with it when Reports is granted", async () => {
+    const user = userEvent.setup()
+    renderPane({ ...ROLE, permissions: [] }, [...PERMISSIONS, { name: "reports.view", label: "View Reports" }])
+    await user.click(screen.getByRole("checkbox", { name: "View Reports" }))
+    await waitFor(() => expect(actions.setPermission).toHaveBeenCalledWith("r-man", "reports.view", true))
+    await waitFor(() =>
+      expect(screen.getByTestId("role-outcome")).toHaveTextContent(
+        "Admissions Manager can now: View Reports. “View applicants and their history” is ticked too, since Reports need it.",
+      ),
+    )
   })
 })

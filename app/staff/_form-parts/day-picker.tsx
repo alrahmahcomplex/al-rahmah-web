@@ -16,5 +16,5 @@ export function DayPicker({
   weekStart?: string
   onPick: (day: string) => void
 }) {
-  return <Calendar mode={kind === "week" ? "week" : "day"} value={anchor} onPick={onPick} label={kind === "week" ? "Week" : "Date"} />
+  return <Calendar mode={kind === "week" ? "week" : "day"} value={anchor} onPick={onPick} />
 }

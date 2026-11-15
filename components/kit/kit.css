@@ -35,7 +35,8 @@
 /* Delete and warning (v38): outlined, never filled. Red removes or closes; dark orange is a step back that can be undone. */
 .kit-bad { background: var(--gf-paper); color: var(--gf-red); box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-red); }
 .kit-bad:hover { background: var(--gf-red-tint); }
-.kit-bad:focus-visible { outline-color: rgb(200 30 30 / 0.45); }
+/* 0.7, not the prototype's 0.45: 3.6:1 on Paper, so the focus ring passes WCAG 1.4.11's 3:1 (2.2:1 before). */
+.kit-bad:focus-visible { outline-color: rgb(200 30 30 / 0.7); }
 .kit-warn { background: var(--gf-paper); color: var(--gf-orange-deep); box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-orange-deep); }
 .kit-warn:hover { background: var(--gf-orange-tint); }
 .kit-bad:active, .kit-warn:active { transform: scale(0.96); }

@@ -52,7 +52,8 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
   )
 
   return (
-    <div className="lr-page">
+    // The header keeps its own space below it, so the page gap starts after it.
+    <div>
       <PageHeader
         title="History"
         subtitle={
@@ -63,29 +64,30 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
           )
         }
       />
+      <div className="lr-page">
+        {!lead.ok || !history.ok ? (
+          <Note tone="bad" role="alert">
+            This application&apos;s history could not be loaded. Try again in a moment.
+          </Note>
+        ) : (
+          <>
+            {!followUps.ok && (
+              <Note tone="wait" role="alert">
+                The names of staff who made contacts could not be loaded, so some contact entries show an id. Reload to try
+                again.
+              </Note>
+            )}
+            <Card className="lh-card">
+              <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }, importFile)} />
+            </Card>
+          </>
+        )}
 
-      {!lead.ok || !history.ok ? (
-        <Note tone="bad" role="alert">
-          This application&apos;s history could not be loaded. Try again in a moment.
-        </Note>
-      ) : (
-        <>
-          {!followUps.ok && (
-            <Note tone="wait" role="alert">
-              The names of staff who made contacts could not be loaded, so some contact entries show an id. Reload to try
-              again.
-            </Note>
-          )}
-          <Card className="lh-card">
-            <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }, importFile)} />
-          </Card>
-        </>
-      )}
-
-      <div>
-        <ButtonLink href={`/staff/applicants/${id}`} variant="ghost">
-          Back to the application
-        </ButtonLink>
+        <div>
+          <ButtonLink href={`/staff/applicants/${id}`} variant="ghost">
+            Back to the application
+          </ButtonLink>
+        </div>
       </div>
     </div>
   )

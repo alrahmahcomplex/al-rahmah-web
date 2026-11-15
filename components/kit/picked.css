@@ -4,7 +4,7 @@
    Kept apart from kit.css so the v38 look (#401) can change that file
    alongside. Colours come from app/tokens.css only (scripts/design-lint.mjs). */
 
-:is(.kit-track-tab, .kit-pg, .kit-acc-btn):focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+:is(.kit-track-tab, .kit-pg, .kit-acc-btn):focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
 
 /* ---------- tabs: one indigo pill slides along a lavender track ---------- */
 .kit-tabs { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
@@ -26,7 +26,7 @@
 /* The text follows the pill, which can be ahead of aria-current while a page loads. */
 .kit-track-tab[data-on] { color: var(--gf-paper); }
 .kit-tabpanel { margin-top: 14px; }
-.kit-tabpanel:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 4px; border-radius: 14px; }
+.kit-tabpanel:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 4px; border-radius: 14px; }
 
 /* ---------- pagination: numbered pills, the current page in indigo ---------- */
 .kit-pga { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -43,7 +43,7 @@
 .kit-pg:disabled { opacity: 0.4; cursor: default; }
 .kit-pg:disabled:hover { background: var(--gf-paper); }
 .kit-pg .gf-ic { width: 16px; height: 16px; }
-.kit-pg-gap { padding: 0 2px; color: var(--gf-quiet); }
+.kit-pg-gap { padding: 0 2px; color: var(--kit-quiet, var(--gf-quiet)); }
 
 /* ---------- avatars: initials on a soft tint ---------- */
 .kit-av {
@@ -89,9 +89,9 @@
   background: var(--gf-paper); border: 2px solid var(--gf-indigo); box-shadow: 0 2px 6px rgb(9 0 187 / 0.25);
 }
 .kit-sld input::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--gf-paper); border: 2px solid var(--gf-indigo); box-shadow: 0 2px 6px rgb(9 0 187 / 0.25); }
-.kit-sld input:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 4px; border-radius: 999px; }
+.kit-sld input:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 4px; border-radius: 999px; }
 .kit-sld input:disabled { opacity: 0.5; cursor: not-allowed; }
-.kit-sld-stops { display: flex; justify-content: space-between; padding: 2px 4px 0; font-size: 12px; color: var(--gf-quiet); font-variant-numeric: tabular-nums; }
+.kit-sld-stops { display: flex; justify-content: space-between; padding: 2px 4px 0; font-size: 12px; color: var(--kit-quiet, var(--gf-quiet)); font-variant-numeric: tabular-nums; }
 
 /* ---------- accordion: separate cards, one open at a time ---------- */
 .kit-acc { display: flex; flex-direction: column; gap: 8px; text-align: left; }

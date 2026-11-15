@@ -79,6 +79,7 @@ export function FamilyPanel({
               ask={`Rejecting clears the match for ${onContact.length === 1 ? "this child" : `these ${onContact.length} children`}, and their Returning family badge unless they re-applied:`}
               reaches={onContact}
               action="Reject"
+              variant="bad"
               pending="Rejecting…"
               run={() => rejectMatch(leadId, onContact.map((child) => child.id))}
               onDone={done}
@@ -137,6 +138,7 @@ function SettleStep({
   reaches,
   action,
   pending: pendingLabel,
+  variant,
   run,
   onDone,
   saved,
@@ -146,6 +148,8 @@ function SettleStep({
   reaches: LeadFamilyChild[]
   action: string
   pending: string
+  /** "bad" for a step that clears something (DESIGN.md, Buttons). */
+  variant?: "go" | "bad"
   run: () => ReturnType<typeof confirmMatch>
   onDone: (saved: string | null) => void
   saved: string
@@ -174,7 +178,7 @@ function SettleStep({
         {note && <p className="lr-quiet mt-2">{note}</p>}
       </div>
       <div className="lr-acts">
-        <Button type="submit" size="small" pending={pending}>
+        <Button type="submit" variant={variant} size="small" pending={pending}>
           {pending ? pendingLabel : action}
         </Button>
         <Button variant="ghost" size="small" onClick={() => onDone(null)} aria-disabled={pending || undefined}>

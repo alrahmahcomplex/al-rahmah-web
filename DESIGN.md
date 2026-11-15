@@ -20,6 +20,7 @@ colors:
   slate-ink: "#1e293b"
   slate-soft: "#475569"
   slate-quiet: "#64748b"
+  slate-quiet-on-tint: "#566478"
   placeholder: "#8a94a6"
   go-green: "#0f7a3d"
   green-tint: "#eefbf3"
@@ -278,7 +279,7 @@ The tokens live in `app/tokens.css` as `--gf-*` custom properties, which the roo
 
 ### Neutral
 - **Paper** (`#ffffff`): cards, inputs, sheets, the sidebar and the frame around the stage.
-- **Slate Ink** (`--gf-ink`, `#1e293b`): body text. **Slate Soft** (`#475569`): subtitles and resting sidebar items. **Slate Quiet** (`#64748b`): captions, table headings, field icons. **Placeholder** (`#8a94a6`).
+- **Slate Ink** (`--gf-ink`, `#1e293b`): body text. **Slate Soft** (`#475569`): subtitles and resting sidebar items. **Slate Quiet** (`#64748b`): captions, table headings, field icons, on white only, where it reads 4.76:1. **Quiet on tint** (`--gf-quiet-on-tint`, `#566478`): the same text on Lavender Whisper, Chrome or Mist, or a note's tint, where Slate Quiet falls under 4.5:1; it reads 4.52:1 on Mist. **Placeholder** (`#8a94a6`).
 - **Go Green** (`#0f7a3d`) on **Green Tint** (`#eefbf3`): success marks and the finished-group tick. **Alert Red** (`#c81e1e`) on **Red Tint** (`#fef2f2`): field errors and destructive confirmation.
 
 ### The page wash
@@ -386,7 +387,7 @@ All of these are built once and shared. Parent pages and staff pages import the 
 - **Wide:** full width, at least 52px, 18px label, at the foot of a task card or sheet. A wide ghost that adds something is 64px with 24px corners.
 - **Round:** a 44px outlined circle in a guided form (Back, Start over, the brand menu); a 40px outlined circle in the staff top bar (the bell, the Menu button); a 36px borderless circle to close a sheet. Lavender Whisper on hover, scale 0.92 on press.
 - **Text link:** indigo, 600, 14px, underlined 3px below ("Edit", "Add", "Clear").
-- **Focus:** buttons, choices, links and rows show a 3px indigo outline at 45%, 2px out. Fields instead turn their outline solid indigo with a 4px ring at 12% (see Inputs). The existing guided-form controls keep their 3px ring at 40%: `ContinuePill`, `ChangeLink`, `OfferPill`, `InfoButton` and the `orange` button variant.
+- **Focus:** buttons, choices, links and rows show a 3px indigo outline at 47% (`--gf-focus-ring`), 2px out: 3.16:1 on Paper and 3.07:1 on Lavender Whisper, over the 3:1 a focus ring needs. On staff screens the guided form's choices and controls take the same ring; the public pages, which don't load the kit's styles, keep 45% until they move to v38 (after a staff member signs out, the styles already loaded stay for that browser session). Fields instead turn their outline solid indigo with a 4px ring at 12% (see Inputs). The existing guided-form controls keep their 3px ring at 40%: `ContinuePill`, `ChangeLink`, `OfferPill`, `InfoButton` and the `orange` button variant.
 
 ### Inputs
 - **Pill field:** 52px, thin Indigo Line, Paper, 17px Geist, centred text, orange caret, 20px padding (48px with a field icon, which sits 18px in, Slate Quiet). Focus: solid indigo outline and a 4px indigo ring at 12%. Invalid (`aria-invalid="true"`): Alert Red outline and a 4px red ring at 10%, with an error line under the field that folds open, has `role="alert"` and says what to do.

@@ -118,7 +118,7 @@
 .hm-fab:is([data-folded], [data-narrow]) { padding: 0; }
 .hm-fab:is([data-folded], [data-narrow]) span { display: none; }
 .hm-fab:hover { background: var(--gf-ember); }
-.hm-fab:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.hm-fab:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
 .hm-fab .gf-ic { width: 22px; height: 22px; }
 
 /* Below 820px of Home the bar, its label and Find the family no longer fit

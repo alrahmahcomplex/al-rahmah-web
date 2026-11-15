@@ -64,7 +64,7 @@
   transition: background var(--gf-t-med) var(--gf-ease-out);
 }
 .kp-me:hover, .kp-me[aria-expanded="true"] { background: var(--gf-whisper); }
-.kp-me:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.kp-me:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
 .kp-me i {
   width: 30px; height: 30px; border-radius: 50%; background: var(--gf-indigo); color: var(--gf-paper); display: grid; place-items: center;
   font: italic 800 12px var(--font-exo), "Exo", system-ui, sans-serif;
@@ -90,3 +90,11 @@
 .kp-fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; text-align: left; }
 .kp-fl { font-size: 13px; font-weight: 600; color: var(--gf-ink); text-align: left; }
 .kp-pop-fld { padding: 10px 0 8px; }
+/* The link filter pills under the table (#419). */
+.kp-links { margin: 14px 0 0; }
+/* Kit quiet text in a box on each tint (#380): a screen's own tinted box sets --kit-quiet. */
+.kp-tints { display: grid; gap: 8px; margin-top: 14px; }
+.kp-tints > div { border-radius: 16px; padding: 10px 14px; --kit-quiet: var(--gf-quiet-on-tint); }
+.kp-tints > [data-surface="whisper"] { background: var(--gf-whisper); }
+.kp-tints > [data-surface="chrome"] { background: var(--gf-chrome); }
+.kp-tints > [data-surface="mist"] { background: var(--gf-mist); }

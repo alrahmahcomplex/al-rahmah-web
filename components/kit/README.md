@@ -4,6 +4,14 @@ The staff app's components in the Admission form's design language (DESIGN.md, C
 
 Import from `@/components/kit`. Every piece, in every state, is on the kit page, `/staff/kit`. Check a change there against the prototype's "Design system" page.
 
+**Quiet text on a tint.** Slate Quiet (`--gf-quiet`) reads 4.5:1 only on white. The kit's quiet text (captions, table headings, keys, hints) reads `--kit-quiet`, and every part the kit tints sets it to Quiet on tint (`--gf-quiet-on-tint`): notes, toasts, the finished state's numbers, hovered and current list rows, a hovered table row that opens, a hovered `ChoiceTiles` row, the highlighted option in a `Select`'s list, a file dragged over the `FilePicker`, the tab track. A box of your own on Lavender Whisper, Chrome or Mist, or on a note's tint, sets it too, and so does a quiet class of the screen's own (`color: var(--kit-quiet, var(--gf-quiet))`):
+
+```css
+.ag-read { background: var(--gf-whisper); --kit-quiet: var(--gf-quiet-on-tint); }
+```
+
+**Focus ring.** Every kit control's ring is 3px of `--gf-focus-ring`, 2px out (3.16:1 on Paper, 3.07:1 on Lavender Whisper), and so are the guided form's parts on staff screens (`ChoiceTiles`, the `GuidedTask` controls), through `kit.css`. A screen's own focusable part uses the same token.
+
 ## Use this, not that
 
 A converted staff screen uses only the kit. The old parts stay for screens that have not converted yet.
@@ -149,6 +157,14 @@ The parts the owner picked on v38's Design system page (#402). Their styles are 
 ```tsx
 <FilterPills label="Filter by status" options={statuses} value={filter} onChange={setFilter}>
   <TextLink onClick={clear}>Clear</TextLink>
+</FilterPills>
+```
+
+When the filter is a page or a search param, give each option an `href` and pass `current` (the href on screen, or `null`) instead of `value` and `onChange`. The pills are then links in a `<nav>` named by `label`, so the filter works without JavaScript and Back returns to it; the current one has `aria-current="page"` and the pressed look. Use it rather than `Tabs` when there are many filters or long labels, which the equal tabs would cut.
+
+```tsx
+<FilterPills label="Agent status" options={[{ label: "Pending", href: "/staff/agents" }, { label: "Retired (3)", href: "/staff/agents?status=retired" }]} current={href}>
+  <Link href={clearHref}>Clear search</Link>
 </FilterPills>
 ```
 

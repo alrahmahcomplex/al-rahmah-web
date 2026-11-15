@@ -68,6 +68,16 @@ const ILLUSTRATIONS: { name: IllustrationName; kind: "Empty" | "Loading" | "Work
 ]
 const KIND_TONE = { Empty: "line", Loading: "wait", Working: "wait", Error: "bad" } as const
 
+// The link filter pills (#419) are links to ?filter=; All is the page itself.
+const filterHref = (filter: string) => (filter === "All" ? "/staff/kit" : `/staff/kit?filter=${filter}`)
+
+// Kit quiet text on each tint a screen may draw a box in (#380): the box sets --kit-quiet (kit-page.css).
+const TINTS = [
+  ["whisper", "Lavender Whisper"],
+  ["chrome", "Lavender Chrome"],
+  ["mist", "Lavender Mist"],
+] as const
+
 const PROGRESS_STEPS = [3, 3, 2]
 const PROGRESS_LABELS = ["Students", "Custodians", "Finish"]
 
@@ -327,7 +337,7 @@ function ApplicantDetail({ a }: { a: Applicant }) {
   )
 }
 
-function MorePieces() {
+function MorePieces({ linkFilter }: { linkFilter: string }) {
   const [filter, setFilter] = useState("All")
   const [picked, setPicked] = useState(APPLICANTS[0].number)
   const [payment, setPayment] = useState<string | null>(null)
@@ -385,6 +395,13 @@ function MorePieces() {
         ) : (
           <EmptyState title="No applicant matches" hint="Clear the filter to see everyone." />
         )}
+        <FilterPills
+          label="Filter by status, as links"
+          className="kp-links"
+          options={FILTERS.map((f) => ({ label: f, href: filterHref(f) }))}
+          current={filterHref(FILTERS.includes(linkFilter) ? linkFilter : "All")}
+          scroll={false}
+        />
       </Card>
 
       <Card title="Table" className="kp-full">
@@ -432,6 +449,13 @@ function MorePieces() {
 
       <Card title="Sections and key-value list">
         <ApplicantDetail a={current} />
+        <div className="kp-tints">
+          {TINTS.map(([surface, name]) => (
+            <div key={surface} data-surface={surface}>
+              <KeyValueList items={[{ key: name, value: FEE_SCHEDULE[0][1], reason: "Full fee", numeric: true }]} />
+            </div>
+          ))}
+        </div>
       </Card>
 
       <Card title="Chips">
@@ -556,12 +580,12 @@ function MorePieces() {
 }
 
 // Drawn in the new shell (#322), which holds the stage, the page column and the kit Toaster.
-export function KitPage({ tab = "", today }: { tab?: string; today: string }) {
+export function KitPage({ tab = "", filter = "", today }: { tab?: string; filter?: string; today: string }) {
   return (
     <>
       <PageHeader title="Design system" subtitle="Every piece below is copied from the Admission form’s code, so the staff side and the parent side stay one family." />
       <DesignSystem tab={tab} today={today} />
-      <MorePieces />
+      <MorePieces linkFilter={filter} />
     </>
   )
 }

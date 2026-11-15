@@ -4,7 +4,7 @@ import Link from "next/link"
 import { forbidden } from "next/navigation"
 import type { ReactNode } from "react"
 
-import { Button, ButtonLink, Card, EmptyState, Field, Note, PageHeader, pageTitle } from "@/components/kit"
+import { Button, ButtonLink, Card, EmptyState, Field, FilterPills, Note, PageHeader, pageTitle } from "@/components/kit"
 import { getAgentAccess } from "@/lib/services/agent-access"
 import { accountFilterStates, listAgentsInAccountState, listAgentsInBatchOutcome } from "@/lib/services/agent-account-list"
 import { getAgentImport } from "@/lib/services/agent-import"
@@ -27,7 +27,6 @@ import { ClaimQueue } from "./claim-queue"
 import { CreateAgent } from "./create-agent"
 import { AgentsTable, type AgentRow } from "./agents-table"
 import type { DiscountAgent } from "./discount-sheet"
-import { FilterLinks } from "./form-parts"
 import { SendInvites } from "./invite-batch"
 import { budgetLine } from "./invite-batch-outcome"
 import { InviteBatchReportPanel } from "./invite-batch-report"
@@ -222,13 +221,13 @@ export default async function MarketingAgentsPage({
           </p>
         </Form>
 
-        <FilterLinks label="Agent status" links={tabs} current={tabs.find((tab) => tab.current)?.href ?? null}>
+        <FilterPills label="Agent status" options={tabs} current={tabs.find((tab) => tab.current)?.href ?? null} className="ag-filters">
           {search.query && (
             <Link href={agentsHref(search, { query: undefined, page: 1 })} className="ag-link">
               Clear search
             </Link>
           )}
-        </FilterLinks>
+        </FilterPills>
         {attention && <NeedsAttention attention={attention} pending={pendingCount?.ok ? pendingCount.data : null} />}
       </div>
 

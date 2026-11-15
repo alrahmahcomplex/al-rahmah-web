@@ -70,7 +70,7 @@ html:has(.ns) body { background: var(--gf-paper); }
 }
 .ns-link:hover { background: var(--gf-chrome); color: var(--gf-indigo); }
 /* Inside the ring, as the list clips anything past its edges. */
-.ns-link:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offset: -3px; }
+.ns-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: -3px; }
 .ns-link[aria-current="page"] {
   background: var(--gf-whisper); color: var(--gf-indigo);
   font: italic 700 13.5px var(--font-exo), "Exo", system-ui, sans-serif;
@@ -135,7 +135,7 @@ html:has(.ns) body { background: var(--gf-paper); }
   transition: background var(--gf-t-med) var(--gf-ease-out);
 }
 .ns-me:hover, .ns-me[aria-expanded="true"] { background: var(--gf-whisper); }
-.ns-me:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offset: 2px; }
+.ns-me:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
 .ns-me i {
   width: 30px; height: 30px; border-radius: 50%; background: var(--gf-indigo); color: var(--gf-paper); display: grid; place-items: center;
   font: italic 800 12px var(--font-exo), "Exo", system-ui, sans-serif;

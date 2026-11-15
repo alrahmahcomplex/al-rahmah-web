@@ -13,4 +13,4 @@
 .kit-tl > li[data-tone="wait"] > i { box-shadow: inset 0 0 0 2.5px var(--gf-orange); }
 .kit-tl-body { display: flex; flex-direction: column; min-width: 0; }
 .kit-tl-title { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--gf-ink); overflow-wrap: anywhere; }
-.kit-tl-meta { margin: 0; font-size: 12.5px; color: var(--gf-quiet); }
+.kit-tl-meta { margin: 0; font-size: 12.5px; color: var(--kit-quiet, var(--gf-quiet)); }

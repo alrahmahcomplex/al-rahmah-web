@@ -210,6 +210,37 @@ describe("ChipButtons and FilterPills", () => {
     fireEvent.click(screen.getByRole("button", { name: "Applied" }))
     expect(onChange).toHaveBeenCalledWith("Applied")
   })
+
+  it("draws href options as links in a named nav, the current one marked, with children after them (#419)", () => {
+    render(
+      <FilterPills
+        label="Agent status"
+        options={[
+          { label: "Pending", href: "/staff/agents" },
+          { label: "Retired (3)", href: "/staff/agents?status=retired" },
+        ]}
+        current="/staff/agents?status=retired"
+      >
+        <span>Clear search</span>
+      </FilterPills>,
+    )
+    const nav = screen.getByRole("navigation", { name: "Agent status" })
+    expect(screen.queryByRole("button")).not.toBeInTheDocument()
+    expect(Array.from(nav.children).map((child) => [child.tagName, child.textContent])).toEqual([
+      ["A", "Pending"],
+      ["A", "Retired (3)"],
+      ["SPAN", "Clear search"],
+    ])
+    expect(screen.getByRole("link", { name: "Retired (3)" })).toHaveAttribute("aria-current", "page")
+    expect(screen.getByRole("link", { name: "Retired (3)" })).toHaveAttribute("href", "/staff/agents?status=retired")
+    expect(screen.getByRole("link", { name: "Pending" })).not.toHaveAttribute("aria-current")
+  })
+
+  it("marks no link when no filter is on screen", () => {
+    render(<FilterPills label="Agent status" options={[{ label: "Pending", href: "/staff/agents" }]} current={null} />)
+    expect(screen.getByRole("navigation", { name: "Agent status" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Pending" })).not.toHaveAttribute("aria-current")
+  })
 })
 
 describe("chips", () => {

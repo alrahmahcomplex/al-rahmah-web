@@ -25,9 +25,16 @@
   --gf-ink: #1e293b;
   --gf-ink-soft: #475569;
   --gf-quiet: #64748b;
+  /* quiet text on Lavender Whisper, Chrome or Mist (#380): Slate Quiet made just
+     dark enough to read 4.5:1 on Mist, the darkest tint (5.34:1 on Whisper,
+     5.65:1 on Chrome). Slate Quiet itself is 4.5:1 only on white. */
+  --gf-quiet-on-tint: #566478;
   --gf-line: rgb(9 0 187 / 0.22);
   --gf-line-strong: rgb(9 0 187 / 0.45);
   --gf-line-soft: rgb(9 0 187 / 0.12);
+  /* the staff app's indigo focus ring (#422): 3.16:1 on Paper and 3.07:1 on
+     Lavender Whisper, over WCAG 1.4.11's 3:1 (0.45 gave 2.98:1 and 2.90:1) */
+  --gf-focus-ring: rgb(9 0 187 / 0.47);
   --gf-red: #c81e1e;
   --gf-red-tint: #fef2f2;
   --gf-green: #0f7a3d;

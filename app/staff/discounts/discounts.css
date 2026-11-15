@@ -15,4 +15,4 @@
 .dr-number {
   color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; font-variant-numeric: tabular-nums;
 }
-.dr-number:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offset: 2px; border-radius: 4px; }
+.dr-number:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; border-radius: 4px; }

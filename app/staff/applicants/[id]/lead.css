@@ -44,7 +44,7 @@
 a.lr-link {
   color: var(--gf-indigo); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px;
 }
-a.lr-link:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offset: 2px; border-radius: 4px; }
+a.lr-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; border-radius: 4px; }
 
 /* A part of a card that stands on its own, such as the current interview: the
    summary box's 20px corners and the Indigo Line. */

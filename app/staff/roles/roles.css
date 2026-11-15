@@ -7,6 +7,9 @@
 /* The rail. */
 .ro-rail { padding: 12px; }
 .ro-rail .kit-sec-title { padding: 4px 8px 6px; }
+/* The roles stay a list, as before; the line between rows moves to the items. */
+.ro-roles { margin: 0; padding: 0; list-style: none; }
+.ro-roles > li + li > .kit-row { border-top: 1px solid var(--gf-mist); }
 .ro-role { display: flex; min-width: 0; flex: 1; flex-direction: column; }
 .ro-role > span:first-child { overflow-wrap: anywhere; }
 .ro-cap { color: var(--gf-quiet); font-size: 12.5px; font-weight: 400; }

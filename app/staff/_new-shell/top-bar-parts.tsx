@@ -2,12 +2,13 @@
 
 import Form from "next/form"
 import { usePathname, useSearchParams } from "next/navigation"
-import { Suspense, useState, useTransition, type MouseEvent } from "react"
+import { Suspense, useState, useSyncExternalStore, useTransition, type MouseEvent } from "react"
 import { useFormStatus } from "react-dom"
 
 import { Button, Field, ListRow, Note, Popover, RoundButton } from "@/components/kit"
 
 import { signOut } from "../actions"
+import { readNoPendingFilters, readPendingFilters, subscribePendingFilters } from "../applicants/pending-filters"
 import type { ShellPerson } from "../shell-types"
 import { loadBellRequests } from "./bell-actions"
 import type { BellRequest } from "./bell-requests"
@@ -31,26 +32,37 @@ const CARRIED = ["status", "closure", "earlier_link", "import"] as const
 function ApplicantsAwareSearch() {
   const onApplicants = usePathname() === "/staff/applicants"
   const params = useSearchParams()
+  // Filters chosen a moment ago whose page hasn't arrived yet win over the address.
+  const pending = useSyncExternalStore(subscribePendingFilters, readPendingFilters, readNoPendingFilters)
   const query = onApplicants ? (params.get("q") ?? "") : ""
-  const carried = onApplicants
-    ? CARRIED.flatMap((name) => {
-        const value = params.get(name)
-        return value ? [[name, value] as const] : []
-      })
-    : []
+  const carried = !onApplicants
+    ? []
+    : pending
+      ? pending.fields.filter(([name]) => (CARRIED as readonly string[]).includes(name))
+      : CARRIED.flatMap((name) => {
+          const value = params.get(name)
+          return value ? [[name, value] as const] : []
+        })
   return <SearchForm query={query} carried={carried} />
 }
 
 function SearchForm({ query, carried }: { query: string; carried: readonly (readonly [string, string])[] }) {
+  // The box follows the search the page shows (Clear, Back and Forward), and
+  // keeps what is typed in between. It is never remounted, so focus stays.
+  const [typed, setTyped] = useState(query)
+  const [typedFor, setTypedFor] = useState(query)
+  if (typedFor !== query) {
+    setTypedFor(query)
+    setTyped(query)
+  }
   return (
     <Form action="/staff/applicants" role="search" className="ns-search">
       {carried.map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      {/* Keyed on the search, so the box follows Clear, Back and Forward. */}
       <Field
-        key={query}
-        defaultValue={query}
+        value={typed}
+        onChange={(event) => setTyped(event.target.value)}
         size="search"
         icon="search"
         name="q"

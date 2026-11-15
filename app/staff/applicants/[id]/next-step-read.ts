@@ -6,15 +6,16 @@ import { readFee, readFollowUps, readInterviews, readRegistration, readRelease, 
 
 // The lead's next step (lib/lead-next-step) from what the lead page reads,
 // for the record's Next step card and the Applicants side sheet. Null when
-// the interviews can't be read, so the step can't be worked out. The fee
-// counts only for staff who may view payments.
-export async function readNextStep(lead: Lead, canSeeFee: boolean): Promise<NextStep | null> {
+// the interviews can't be read, so the step can't be worked out. `feeRead`
+// is the caller's read of the fee (readFee), so a caller that shows the fee
+// too reads it once; null for staff who may not view payments.
+export async function readNextStep(lead: Lead, feeRead: ReturnType<typeof readFee> | null): Promise<NextStep | null> {
   const [interviews, registration, reopenings, release, fee, followUps] = await Promise.all([
     readInterviews(lead.id),
     readRegistration(lead.id),
     readReopenings(lead.id),
     readRelease(lead.id),
-    canSeeFee ? readFee(lead.id) : null,
+    feeRead,
     readFollowUps(lead.id),
   ])
   if (!interviews.ok) return null

@@ -78,12 +78,13 @@ test.describe("on a desktop", () => {
     await collapse.click()
     await expect(expand).toBeVisible()
     // The labels fold away, but every link keeps its name, and a tooltip shows it.
-    await expect(entry(page, "Applicants")).toBeVisible()
-    await entry(page, "Applicants").hover()
-    await expect(page.locator("[data-slot=tooltip-content]")).toHaveText("Applicants")
+    // Interviews is still drawn in the old shell, whose rail this is.
+    await expect(entry(page, "Interviews")).toBeVisible()
+    await entry(page, "Interviews").hover()
+    await expect(page.locator("[data-slot=tooltip-content]")).toHaveText("Interviews")
 
-    await entry(page, "Applicants").click()
-    await expect(page).toHaveURL(/\/staff\/applicants$/)
+    await entry(page, "Interviews").click()
+    await expect(page).toHaveURL(/\/staff\/interviews$/)
     await expect(expand).toBeVisible()
 
     await page.reload()

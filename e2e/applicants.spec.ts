@@ -85,13 +85,36 @@ test.describe("the Applicants screen", () => {
     await page.keyboard.press("Enter")
     const sheet = page.getByRole("dialog", { name: "Baraka Fixture" })
     await expect(sheet.getByText(/^Next step: .+\.$/)).toBeVisible()
-    // Staff who may view payments see the School fee.
+    // Staff who may view payments see the School fee; those who may record one get a link to the record's School fee tab.
     await expect(sheet.getByRole("heading", { name: "School fee" })).toBeVisible()
     await expect(sheet.getByRole("heading", { name: "Custodian" })).toBeVisible()
+    await expect(sheet.getByRole("link", { name: "Record payment" })).toHaveAttribute(
+      "href",
+      "/staff/applicants/1ead0000-0000-4000-8000-000000000002?tab=school-fee#lead-school-fee",
+    )
 
     await page.keyboard.press("Escape")
     await expect(sheet).toBeHidden()
     await expect(row).toBeFocused()
+  })
+
+  test("Record payment shows only to staff who may record one, and only on an open application", async ({ page }) => {
+    // Admissions Staff see the fee but don't record payments.
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/applicants?q=ADMSN-90002")
+    await page.getByRole("row", { name: /Baraka Fixture/ }).click()
+    const baraka = page.getByRole("dialog", { name: "Baraka Fixture" })
+    await expect(baraka.getByRole("heading", { name: "School fee" })).toBeVisible()
+    await expect(baraka.getByRole("link", { name: "Record payment" })).toHaveCount(0)
+
+    // The Accountant records payments, but not on a closed application.
+    await page.context().clearCookies()
+    await signIn(page, ACCOUNTANT)
+    await page.goto("/staff/applicants?q=ADMSN-90005")
+    await page.getByRole("row", { name: /Hamisi Fixture/ }).click()
+    const hamisi = page.getByRole("dialog", { name: "Hamisi Fixture" })
+    await expect(hamisi.getByRole("heading", { name: "School fee" })).toBeVisible()
+    await expect(hamisi.getByRole("link", { name: "Record payment" })).toHaveCount(0)
   })
 
   test("finds leads by part of a name, with closed leads badged and last", async ({ page }) => {
@@ -160,8 +183,8 @@ test.describe("the Applicants screen", () => {
     await signIn(page, ADMISSIONS)
     await page.goto("/staff/applicants")
 
+    // The search goes before the filter's page arrives.
     await chooseOption(closure(page), "Inactive")
-    await expect(page).toHaveURL(/closure=Inactive/)
     await searchFor(page, "Fixture")
     await expect(page).toHaveURL(/q=Fixture/)
     await expect(resultRows(page)).toHaveCount(6)

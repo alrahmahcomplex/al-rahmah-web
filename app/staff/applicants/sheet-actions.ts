@@ -30,7 +30,9 @@ export async function loadApplicantSheet(leadId: string): Promise<ApplicantSheet
 
   const open = !isClosed(lead.data)
   const canSeeFee = staff.permissions.includes("payments.view")
-  const [fee, step] = await Promise.all([canSeeFee ? readFee(leadId) : null, open ? readNextStep(lead.data, canSeeFee) : null])
+  // One read of the fee, for the School fee section and the next step.
+  const feeRead = canSeeFee ? readFee(leadId) : null
+  const [fee, step] = await Promise.all([feeRead, open ? readNextStep(lead.data, feeRead) : null])
 
   const text = step && step.kind !== "closed" ? nextStepText(step, formatDate) : null
   return {

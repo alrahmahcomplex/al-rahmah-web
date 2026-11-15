@@ -5,6 +5,7 @@ import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 
 import { LEAD_CARD } from "./lead-card"
+import { readFee } from "./lead-reads"
 import { readNextStep } from "./next-step-read"
 import { RecordVisit } from "./record-visit"
 import { LEAD_TABS, leadTabHref, type LeadTab } from "./tabs"
@@ -23,7 +24,7 @@ export async function NextStepCard({
   // The tab open below the card.
   tab: LeadTab
 }) {
-  const step = await readNextStep(lead, staff.permissions.includes("payments.view"))
+  const step = await readNextStep(lead, staff.permissions.includes("payments.view") ? readFee(lead.id) : null)
   if (step?.kind === "closed") return null
 
   const text = step && nextStepText(step, formatDate)

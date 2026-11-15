@@ -206,6 +206,9 @@ export function ImportSheet({ staffName }: { staffName: string }) {
                   {skippedRowsLabel(skippedInFile)}
                 </Button>
               )}
+              <Button variant="ghost" size="wide" onClick={() => openChange(false)}>
+                Cancel
+              </Button>
             </>
           ) : step.name === "done" ? (
             <Button size="wide" chevron onClick={() => showInList(step.batchId)}>

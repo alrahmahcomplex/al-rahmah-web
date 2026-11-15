@@ -2,14 +2,15 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
-import { EmptyState, FilterPills, Pagination, Select, StatusChip, Table, Tag, type TableColumn } from "@/components/kit"
+import { ButtonLink, EmptyState, FilterPills, Pagination, Select, StatusChip, Table, Tag, type TableColumn } from "@/components/kit"
 import { LEAD_STATUSES, type ClosureFilter, type LeadListItem, type LeadSearch, type LeadSearchResults, type LeadStatus } from "@/lib/services/leads"
 import type { SeatPriority } from "@/lib/services/school-fee-payments"
 
 import { SeatPriorityTag } from "./[id]/seat-priority-tag"
 import { ApplicantSheet, type SheetApplicant } from "./applicant-sheet"
+import { setPendingFilters, settlePendingFilters } from "./pending-filters"
 import { leadsHref } from "./search-params"
 import { loadApplicantSheet } from "./sheet-actions"
 import type { ApplicantSheetAnswer } from "./sheet-view"
@@ -75,8 +76,13 @@ export function ApplicantsList({
   function filter(changes: Partial<Pick<LeadSearch, "status" | "closure" | "earlierLinkYear">>) {
     const next = { ...chosen, ...changes }
     setChosen(next)
-    router.push(leadsHref({ ...next, importBatchId: search.importBatchId, page: 1 }))
+    const href = leadsHref({ ...next, importBatchId: search.importBatchId, page: 1 })
+    // The top bar's search carries these until their page arrives.
+    setPendingFilters({ href, fields: [...new URLSearchParams(href.split("?")[1] ?? "")] })
+    router.push(href)
   }
+  useEffect(() => settlePendingFilters(shownHref, searching), [shownHref, searching])
+  useEffect(() => () => setPendingFilters(null), [])
 
   // A year from the URL with no saved link still shows, so the list says
   // what the page is showing.
@@ -203,7 +209,17 @@ export function ApplicantsList({
       )}
       {total === 0 && (
         <div role="status">
-          <EmptyState title={EMPTY[mode]} hint={filtered ? "Clear the filter to see everyone." : undefined} />
+          <EmptyState
+            title={EMPTY[mode]}
+            hint={filtered ? "Clear the filter to see everyone." : undefined}
+            action={
+              filtered ? (
+                <ButtonLink href="/staff/applicants" variant="ghost" size="small">
+                  Clear the filter
+                </ButtonLink>
+              ) : undefined
+            }
+          />
         </div>
       )}
 

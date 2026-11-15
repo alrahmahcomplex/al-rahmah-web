@@ -106,6 +106,8 @@ test.describe("Marketing Agents", () => {
     await expect(page.getByRole("link", { name: "All", exact: true })).toHaveAttribute("aria-current", "page")
     await expect(page.getByRole("table", { name: "Marketing Agents" })).toBeVisible()
     await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0)
+    // The screen's own Pending line is for those who may approve.
+    await expect(page.getByRole("main").getByText(/^Pending: \d+/)).toHaveCount(0)
 
     // The seeded Approved agent, with who approved them.
     await page.getByLabel("Search agents").fill("Baraka Juma")

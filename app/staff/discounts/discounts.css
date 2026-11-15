@@ -1,0 +1,18 @@
+/* Discount requests: the list of rows and the review sheet (DESIGN.md, Lists, Sheets). Tokens only. */
+.dr-list { list-style: none; margin: 0; padding: 0; }
+.dr-list > li + li { border-top: 1px solid var(--gf-mist); }
+
+/* The note on one line, cut short; who asked follows it, or wraps below. */
+.dr-cap { display: flex; flex-wrap: wrap; column-gap: 4px; min-width: 0; }
+.dr-why { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dr-by { flex: none; max-width: 100%; }
+
+.dr-end { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; flex: none; }
+
+.dr-review { display: flex; flex-direction: column; gap: 12px; }
+.dr-review .kit-kv { margin-block: 2px; }
+.dr-note { white-space: pre-line; overflow-wrap: anywhere; }
+.dr-number {
+  color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; font-variant-numeric: tabular-nums;
+}
+.dr-number:focus-visible { outline: 3px solid var(--gf-line-strong); outline-offset: 2px; border-radius: 4px; }

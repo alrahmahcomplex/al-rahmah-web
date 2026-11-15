@@ -96,6 +96,7 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
             <Button
               type="submit"
               form={`${reasonId}-form`}
+              variant={action === "switch-on" ? "go" : "bad"}
               size="wide"
               disabled={pending || impact.status !== "ready" || reason.trim() === ""}
             >

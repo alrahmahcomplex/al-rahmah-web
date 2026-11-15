@@ -77,6 +77,23 @@ describe("Button", () => {
     expect(wide.querySelectorAll("svg")).toHaveLength(2)
   })
 
+  it("draws Bad and Warn, the outlined red and dark orange steps (v38)", () => {
+    render(
+      <>
+        <Button variant="bad" size="wide">
+          Yes, clear the form
+        </Button>
+        <Button variant="warn" size="small">
+          Withdraw request
+        </Button>
+      </>,
+    )
+    const bad = screen.getByRole("button", { name: "Yes, clear the form" })
+    expect(bad).toHaveClass("kit-btn", "kit-bad", "kit-wide")
+    expect(bad).not.toHaveClass("kit-go")
+    expect(screen.getByRole("button", { name: "Withdraw request" })).toHaveClass("kit-btn", "kit-warn", "kit-sm")
+  })
+
   it("while pending stays focusable, is busy, drops the chevron and refuses clicks and submits", () => {
     const onClick = vi.fn()
     const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())
@@ -364,25 +381,41 @@ describe("details", () => {
 })
 
 describe("states", () => {
-  it("shows an empty state with its illustration hidden", () => {
-    const { container } = render(<EmptyState title="No applicant matches" hint="Clear the filter to see everyone." action={<Button size="small">Clear</Button>} />)
+  it("shows an empty state with its line illustration hidden", () => {
+    const { container, rerender } = render(
+      <EmptyState title="No applicant matches" hint="Clear the filter to see everyone." action={<Button size="small">Clear</Button>} />,
+    )
     expect(screen.getByText("No applicant matches")).toBeInTheDocument()
     expect(screen.queryByRole("img")).toBeNull()
-    expect(container.querySelector("img")).toHaveAttribute("src", "/illustrations/empty.svg")
+    expect(container.querySelector("img")).toBeNull()
+    const picture = container.querySelector("svg[data-illustration]")!
+    expect(picture).toHaveAttribute("data-illustration", "search")
+    expect(picture).toHaveAttribute("aria-hidden", "true")
     expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument()
+    rerender(<EmptyState illustration="oops" title="Something went wrong" />)
+    expect(container.querySelector("svg[data-illustration]")).toHaveAttribute("data-illustration", "oops")
   })
 
-  it("announces loading", () => {
-    render(<LoadingState label="Finding the family…" />)
+  it("announces loading over its moving picture", () => {
+    const { container, rerender } = render(<LoadingState label="Finding the family…" />)
     expect(screen.getByRole("status")).toHaveTextContent("Finding the family…")
+    expect(container.querySelector("svg[data-illustration]")).toHaveAttribute("data-illustration", "finding")
+    rerender(<LoadingState illustration="sending" label="Sending invites…" />)
+    expect(container.querySelector("svg[data-illustration]")).toHaveAttribute("data-illustration", "sending")
   })
 
-  it("shows the finished task with its results", () => {
-    render(
+  it("shows the finished task with the finish mark and its results", () => {
+    const { container } = render(
       <FinishedState title="2 students registered" hint="Give the family these Admission Numbers." results={[{ label: "Bakari", value: "DMSN-90013" }]}>
         <Button size="wide">Open Applicants</Button>
       </FinishedState>,
     )
+    // The live Admission form's mark: a circle and a tick, hidden from screen readers; no illustration.
+    const mark = container.querySelector(".kit-mark")!
+    expect(mark).toHaveAttribute("aria-hidden", "true")
+    expect(mark.querySelector("circle")).toHaveAttribute("r", "40")
+    expect(mark.querySelector(".kit-mark-tick")).toHaveAttribute("d", "M26 43l11 11 21-23")
+    expect(container.querySelector("[data-illustration]")).toBeNull()
     const title = screen.getByRole("heading", { level: 2, name: "2 students registered" })
     expect(title).toHaveAttribute("tabindex", "-1")
     expect(screen.getByRole("listitem")).toHaveTextContent("BakariDMSN-90013")

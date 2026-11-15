@@ -59,7 +59,10 @@ describe("design tokens", () => {
     expect(root.get("--gf-indigo-deep")).toBe("#070099")
     expect(root.get("--gf-line-soft")).toBe("rgb(9 0 187 / 0.12)")
     expect(root.get("--gf-card-shadow")).toBe("0 1px 2px rgb(9 0 187 / 0.04), 0 12px 28px -18px rgb(9 0 187 / 0.22)")
-    expect(root.get("--gf-wash")).toBe("linear-gradient(135deg, #f2f0fc 0%, rgb(224 220 249 / 0.5) 45%, #fff 100%)")
+    // v38 (#401): the wash 30% fainter, and the thin line of the staff look.
+    expect(root.get("--gf-wash")).toBe("linear-gradient(135deg, #f6f5fd 0%, rgb(224 220 249 / 0.35) 45%, #fff 100%)")
+    expect(root.get("--gf-stroke")).toBe("0.75px")
+    expect(root.get("--gf-confetti-mint")).toBe("#4cc38a")
     expect(root.get("--gf-side")).toBe("460ms")
     expect(root.get("--gf-peach-glow")).toBe("#ffcfa6")
     expect(declared(tokens, "html.rm").get("--gf-side")).toBe("1ms")

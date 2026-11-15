@@ -171,7 +171,7 @@ export function useRecreateForm({
     ),
     foot: (
       <>
-        <Button type="submit" form={formId} size="wide" disabled={pending || !ready || !same || reason.trim() === ""}>
+        <Button type="submit" form={formId} variant="bad" size="wide" disabled={pending || !ready || !same || reason.trim() === ""}>
           {pending ? "Saving…" : `Recreate ${code}`}
         </Button>
         <Button variant="ghost" size="wide" onClick={onBack ?? onDone} disabled={pending}>

@@ -34,7 +34,7 @@ test("shows both parts on the stage of the new shell, and is not indexed", async
   await expect(top.getByText("#0900bb")).toBeVisible()
 
   const more = page.locator('[data-part="more"]')
-  for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Guided form", "Sheet", "Side sheet", "Popover", "Toast", "Confetti"])
+  for (const title of ["Page header", "Filter pills and table", "Table", "List row", "Chips", "Note", "Empty state", "Loading state", "Skeleton", "Task card and finished state", "Guided form", "Sheet", "Side sheet", "Popover", "Toast", "Finish"])
     await expect(more.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible()
 })
 
@@ -114,6 +114,17 @@ for (const width of [1280, 390]) {
     await more.getByRole("region", { name: "Popover" }).getByRole("button", { name: "New requests" }).click()
     await expect(page.getByRole("dialog", { name: "New requests" })).toBeVisible()
     expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
+    await page.keyboard.press("Escape")
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+
+    // #414: a choice list with nothing chosen shows its placeholder as text, closed and open.
+    const empty = page.getByRole("combobox", { name: "Payment type" })
+    await expect(empty).toHaveText(/Choose a type/)
+    expect(await axeProblems(page, '[data-kit-form="form-parts"] .kit-sel[data-empty]')).toEqual([])
+    await empty.click()
+    await expect(page.getByRole("listbox")).toBeVisible()
+    expect(await axeProblems(page, '[data-kit-form="form-parts"] .kit-sel[data-empty]')).toEqual([])
+    expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
   })
 }
 

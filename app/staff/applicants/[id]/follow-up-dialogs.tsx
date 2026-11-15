@@ -384,7 +384,7 @@ function RecordForm({
       }
       closeLabel="Close"
       foot={
-        <Button type="submit" form={formId} size="wide" pending={pending}>
+        <Button type="submit" form={formId} variant={declining ? "bad" : "go"} size="wide" pending={pending}>
           {pending ? "Recording…" : declining ? "Record and decline" : "Record follow-up"}
         </Button>
       }

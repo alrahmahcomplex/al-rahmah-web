@@ -4,40 +4,39 @@ import { describe, expect, it } from "vitest"
 import { Icon as FormIcon } from "@/components/guided-form/icons"
 import { Icon, ICONS, type IconName, type IconSize } from "@/components/icons"
 import { icon } from "@/components/icons/registry"
-import { Illustration } from "@/components/illustrations"
+import { Illustration, ILLUSTRATION_NAMES } from "@/components/illustrations"
 
-// DESIGN.md, Icons: the names of set 2, then the Admission form's own glyphs.
-const SET_2 = [
+// DESIGN.md, Icons: the names of set 1, then the Admission form's own glyphs.
+const SET_1 = [
   "today", "checkin", "register", "applicants", "interviews", "followups", "reapps", "agents", "promo", "groups", "fees",
   "seats", "discounts", "reopen", "reports", "roles", "audit", "search", "bell", "panel", "menu", "back", "right", "check",
-  "plus", "x", "reset", "alert", "info", "phone", "user", "school", "link", "filter",
+  "plus", "x", "reset", "alert", "info", "phone", "user", "school", "house", "link", "filter",
 ]
 const FORM_ONLY = ["clock", "globe", "trash"]
-// The form parts' glyphs (#358): one line, no circle.
+// The form parts' glyphs (#358); the calendar has two lines since v38.
 const FORM_PARTS = ["down", "calendar", "upload"]
-const UTILITY = ["back", "right", "check", "plus", "x"]
+const ONE_LINE = ["back", "right", "check", "plus", "x", "phone", "down", "upload"]
 const names = Object.keys(ICONS) as IconName[]
 
 // @ts-expect-error: the registry type rejects an icon without an outline.
 icon({ detail: <path d="M0 0" /> })
 
 describe("icon registry", () => {
-  it("holds set 2 and the Admission form's glyphs, nothing else", () => {
-    expect(names).toEqual([...SET_2, ...FORM_ONLY, ...FORM_PARTS])
+  it("holds set 1 and the Admission form's glyphs, nothing else", () => {
+    expect(names).toEqual([...SET_1, ...FORM_ONLY, ...FORM_PARTS])
   })
 
-  it("gives every set 2 icon a circle except the utility glyphs, and the form's glyphs none", () => {
-    for (const name of SET_2) expect(Boolean(ICONS[name as IconName].circle), name).toBe(!UTILITY.includes(name))
-    for (const name of [...FORM_ONLY, ...FORM_PARTS]) expect(ICONS[name as IconName].circle, name).toBeUndefined()
+  it("gives every icon a second line except the one-line glyphs", () => {
+    for (const name of names) expect(Boolean(ICONS[name].detail), name).toBe(!ONE_LINE.includes(name))
   })
 
-  it("keeps utility glyphs to one line", () => {
-    for (const name of [...UTILITY, ...FORM_PARTS]) expect(ICONS[name as IconName].detail, name).toBeUndefined()
+  it("draws the house as the prototype's Home entry", () => {
+    expect(render(<Icon name="house" />).container.innerHTML).toBe(render(<Icon name="school" />).container.innerHTML)
   })
 })
 
 describe("Icon", () => {
-  it.each([16, 18, 20] as IconSize[])("renders every icon at %ipx", (size) => {
+  it.each([16, 18, 20, 24] as IconSize[])("renders every icon at %ipx", (size) => {
     for (const name of names) {
       const { container, unmount } = render(<Icon name={name} size={size} />)
       const svg = container.querySelector("svg")!
@@ -45,22 +44,15 @@ describe("Icon", () => {
       expect(svg).toHaveAttribute("height", String(size))
       expect(svg).toHaveAttribute("viewBox", "0 0 24 24")
       expect(svg).toHaveAttribute("aria-hidden", "true")
-      const layers = svg.querySelectorAll(":scope > g.gf-ic-line")
-      expect(layers.length, name).toBe(ICONS[name].detail ? 2 : 1)
-      for (const layer of layers) expect(layer.children.length, name).toBeGreaterThan(0)
-      const glow = svg.querySelector(":scope > circle.gf-ic-glow")
-      expect(Boolean(glow), name).toBe(Boolean(ICONS[name].circle))
+      // Set 1: the main line, then the detail in its own layer; no soft shape behind them.
+      const main = svg.querySelectorAll(":scope > g.gf-ic-line")
+      const detail = svg.querySelectorAll(":scope > g.gf-ic-detail")
+      expect(main.length, name).toBe(1)
+      expect(detail.length, name).toBe(ICONS[name].detail ? 1 : 0)
+      expect(svg.children.length, name).toBe(main.length + detail.length)
+      for (const layer of [...main, ...detail]) expect(layer.children.length, name).toBeGreaterThan(0)
       unmount()
     }
-  })
-
-  it("draws the circle first, under the lines, at the prototype's place", () => {
-    const { container } = render(<Icon name="today" />)
-    const glow = container.querySelector("svg")!.firstElementChild!
-    expect(glow).toHaveClass("gf-ic-glow")
-    expect(glow).toHaveAttribute("cx", "16")
-    expect(glow).toHaveAttribute("cy", "16")
-    expect(glow).toHaveAttribute("r", "6")
   })
 
   it("defaults to 20px and marks a featured icon", () => {
@@ -73,14 +65,14 @@ describe("Icon", () => {
 })
 
 describe("the Admission form's Icon", () => {
-  it("draws the same lines as the registry, with no circle and no wrapper", () => {
+  it("draws the same lines as the registry, with no layers", () => {
     for (const name of names) {
       const { container, unmount } = render(<FormIcon name={name} />)
       const svg = container.querySelector("svg")!
       expect(svg).toHaveClass("gf-icon")
-      expect(svg.querySelector("circle.gf-ic-glow, g"), name).toBeNull()
+      expect(svg.querySelector("g"), name).toBeNull()
       const staff = render(<Icon name={name} />)
-      const layers = [...staff.container.querySelectorAll("g.gf-ic-line")]
+      const layers = [...staff.container.querySelectorAll("g.gf-ic-line, g.gf-ic-detail")]
       if (name === "menu") {
         // One path holding both layers' lines, as the form always drew it.
         const d = layers.map((g) => g.querySelector("path")!.getAttribute("d")).join("")
@@ -98,15 +90,22 @@ describe("the Admission form's Icon", () => {
 })
 
 describe("Illustration", () => {
-  it.each([130, 140, 150] as const)("lays the scene out %ipx wide, decorative", (size) => {
-    const { container } = render(<Illustration name="empty" size={size} />)
-    const box = container.firstElementChild as HTMLElement
-    expect(box.style.width).toBe(`${size}px`)
-    const img = container.querySelector("img")!
-    expect(img).toHaveAttribute("src", "/illustrations/empty.svg")
-    expect(img).toHaveAttribute("alt", "")
-    // The file's frame is 144 units for the prototype's 128-unit box.
-    expect(Number(img.getAttribute("width"))).toBeCloseTo((size * 144) / 128)
-    expect(img.style.marginLeft).toBe(`${(-8 * size) / 128}px`)
+  it("has the six style C pictures of prototype v38", () => {
+    expect(ILLUSTRATION_NAMES).toEqual(["search", "done", "inbox", "finding", "sending", "oops"])
+  })
+
+  it.each([120, 132, 150, 170])("draws each picture inline at %ipx wide, five sixths as tall, decorative", (size) => {
+    for (const name of ILLUSTRATION_NAMES) {
+      const { container, unmount } = render(<Illustration name={name} size={size} />)
+      const svg = container.querySelector("svg")!
+      expect(svg, name).toHaveAttribute("width", String(size))
+      expect(svg).toHaveAttribute("height", String(Math.round((size * 100) / 120)))
+      expect(svg).toHaveAttribute("viewBox", "0 0 120 100")
+      expect(svg).toHaveAttribute("aria-hidden", "true")
+      // Every picture sits on the soft circle, and none is an image file.
+      expect(svg.firstElementChild).toHaveClass("ill-bg")
+      expect(container.querySelector("img")).toBeNull()
+      unmount()
+    }
   })
 })

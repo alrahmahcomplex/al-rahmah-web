@@ -186,7 +186,7 @@ function DateBox({ id, text, onText, min, max, required, disabled, invalid, word
             if (day) onText(showDayFirst(day))
           }}
         />
-        <BasePopover.Trigger disabled={disabled} aria-label={words.openCalendar} className="kit-date-btn">
+        <BasePopover.Trigger disabled={disabled} aria-label={words.openCalendar} className="kit-date-btn" data-icon-host="">
           <Icon name="calendar" size={18} />
         </BasePopover.Trigger>
       </div>

@@ -108,6 +108,7 @@ export function ReferralEditor({
           foot={
             <>
               <Button
+                variant="bad"
                 size="wide"
                 onClick={() => {
                   setConfirmClear(false)

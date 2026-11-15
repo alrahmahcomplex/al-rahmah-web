@@ -29,7 +29,7 @@ export type TableProps<Row> = {
    */
   onOpen?: (row: Row) => void
   rowLabel?: (row: Row) => string
-  /** A bold total row over a 1.5px Indigo Line, one cell per column. */
+  /** A bold total row over a thin Indigo Line, one cell per column. */
   total?: ReactNode[]
   className?: string
 }

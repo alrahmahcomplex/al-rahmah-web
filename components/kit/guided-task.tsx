@@ -24,7 +24,7 @@ export type GuidedTaskProps = {
   progress: Omit<ProgressBarProps, "kitIcons" | "cheerDelay">
   /** The questions: a `GuidedStack` from the guided form. */
   children: ReactNode
-  /** Set once the task is saved: the card shows the Finished screen instead, and the confetti rains. */
+  /** Set once the task is saved: the card shows the Finished screen instead, and the confetti bursts from its mark. */
   finished?: GuidedTaskFinished | null
   className?: string
 }
@@ -33,8 +33,9 @@ export type GuidedTaskProps = {
  * The guided form on a staff page (DESIGN.md, Guided form): one lifted task
  * card in a 640px centred column, the progress bar sticky at the top of the
  * stage's scroll area, then the questions. When `finished` is set, the card
- * gives way to the Finished screen; its title takes focus and the confetti
- * rains once. Set it 950ms after the save, so the last group's cheer plays first.
+ * gives way to the Finished screen; its title takes focus, the finish mark
+ * draws, and the confetti bursts from it once. Set it 950ms after the save, so
+ * the last group's cheer plays first.
  *
  * The bar sticks to the top of the nearest scroll area. A staff stage whose
  * scroll area is padded sets `--kit-stage-pt` to that top padding, so the bar
@@ -65,7 +66,7 @@ function FinishedCard({ finished }: { finished: GuidedTaskFinished }) {
     card.current?.querySelector<HTMLElement>(".kit-done-title")?.focus()
     if (rained.current) return
     rained.current = true
-    rainConfetti()
+    rainConfetti(card.current?.querySelector(".kit-mark"))
   }, [])
 
   return (

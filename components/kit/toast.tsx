@@ -3,11 +3,14 @@
 import type { CSSProperties } from "react"
 import { Toaster as Sonner, toast as sonnerToast } from "sonner"
 
+import { Icon, type IconName } from "@/components/icons"
+
+import type { NoteTone } from "./details"
 import "./kit.css"
 
-// The new look's toast is the app's one toast library, sonner, drawn as an
-// Indigo Night pill. Its toasts carry this id, so the root layout's Toaster
-// (the old shell's) never shows them and keeps its own look.
+// The new look's toast is the app's one toast library, sonner, drawn as a
+// tinted note at the bottom centre. Its toasts carry this id, so the root
+// layout's Toaster (the old shell's) never shows them and keeps its own look.
 const TOASTER_ID = "kit"
 const DURATION = 2600
 
@@ -38,17 +41,25 @@ export function Toaster() {
   )
 }
 
+/** The note's tones: `info` for news, `good` for a save, `wait` for a warning, `bad` for a failure. */
+export type ToastTone = NoteTone
+
+const TOAST_ICON: Record<ToastTone, IconName> = { info: "info", good: "check", wait: "alert", bad: "alert" }
+
 /**
- * Confirms a save that closed its sheet (DESIGN.md, Toasts): one sentence,
- * what happened and anything the person must do next. It leaves after 2.6s;
- * a new toast replaces the one showing.
+ * Confirms a save that closed its sheet, or tells of a failure (DESIGN.md,
+ * Toasts): one sentence, what happened and anything the person must do next,
+ * on a faint tint with a thin line in its tone's colour. It leaves after
+ * 2.6s; a new toast replaces the one showing. A `bad` toast is an alert; the
+ * others are read out politely.
  */
-export function toast(message: string) {
+export function toast(message: string, { tone = "info" }: { tone?: ToastTone } = {}) {
   if (shown !== undefined) sonnerToast.dismiss(shown)
   shown = sonnerToast.custom(
     () => (
-      <div role="status" className="kit-toast">
-        {message}
+      <div role={tone === "bad" ? "alert" : "status"} className="kit-toast" data-tone={tone === "info" ? undefined : tone}>
+        <Icon name={TOAST_ICON[tone]} size={16} />
+        <span>{message}</span>
       </div>
     ),
     { toasterId: TOASTER_ID, duration: DURATION },

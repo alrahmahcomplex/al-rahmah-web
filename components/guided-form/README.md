@@ -47,7 +47,7 @@ The language control posts to `setLanguage`, so the page re-renders through the 
 - A group whose `done` reaches `steps` merges, gets the green tick and, 820 ms later, the number cheers (pop, shake, bubbles, deep orange). A group already full on first paint shows the orange number without the cheer.
 - `activeGroup` past the last group (the send step) keeps the last label in the chip. Hide the whole bar on the success screen.
 - `status` goes to an `aria-live="polite"` line; build it with the page's words.
-- `kitIcons` (staff pages, set by the kit's `GuidedTask`) draws Back and Start over with the set 2 icons as icon hosts. The public forms leave it off.
+- `kitIcons` (staff pages, set by the kit's `GuidedTask`) draws Back and Start over with the set 1 icons as icon hosts. The public forms leave it off.
 
 Prototype CSS: `.bar-row`, `.navslot`, `.backbtn`, `.resetbtn`, `.prog`, `.pg`, `.who`, `.gn`, `.chip`, `.liquid`, `.ok`, `.secname`.
 

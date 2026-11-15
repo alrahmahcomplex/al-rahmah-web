@@ -79,7 +79,7 @@ export function MarkLead({ lead, mark, open, onOpenChange: setOpen }: MarkLeadPr
       closeLabel="Close"
       foot={
         <>
-          <Button type="submit" form={formId} size="wide" pending={pending}>
+          <Button type="submit" form={formId} variant="bad" size="wide" pending={pending}>
             {pending ? "Saving…" : label}
           </Button>
           <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} aria-disabled={pending || undefined}>

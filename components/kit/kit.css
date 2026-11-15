@@ -24,7 +24,7 @@
 .kit-go { background: var(--gf-orange); color: var(--gf-paper); box-shadow: var(--gf-sun); }
 .kit-go:hover { background: var(--gf-ember); transform: translateY(-2px); }
 .kit-go:active { transform: scale(0.96); }
-.kit-ghost { border: 1.5px solid var(--gf-line-strong); color: var(--gf-indigo); background: var(--gf-paper); }
+.kit-ghost { border: var(--gf-stroke) solid var(--gf-line-strong); color: var(--gf-indigo); background: var(--gf-paper); }
 .kit-ghost:hover { background: var(--gf-whisper); }
 .kit-ghost:active { transform: scale(0.96); }
 .kit-sm { height: 36px; padding: 0 16px; font-size: 14px; }
@@ -32,14 +32,24 @@
 .kit-wide { width: 100%; height: auto; min-height: 52px; font-size: 18px; padding: 0 24px; }
 .kit-wide.kit-ghost { min-height: 64px; border-radius: 24px; background: transparent; }
 .kit-wide.kit-ghost:hover { background: var(--gf-whisper); }
+/* Delete and warning (v38): outlined, never filled. Red removes or closes; dark orange is a step back that can be undone. */
+.kit-bad { background: var(--gf-paper); color: var(--gf-red); box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-red); }
+.kit-bad:hover { background: var(--gf-red-tint); }
+/* 0.7, not the prototype's 0.45: 3.6:1 on Paper, so the focus ring passes WCAG 1.4.11's 3:1 (2.2:1 before). */
+.kit-bad:focus-visible { outline-color: rgb(200 30 30 / 0.7); }
+.kit-warn { background: var(--gf-paper); color: var(--gf-orange-deep); box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-orange-deep); }
+.kit-warn:hover { background: var(--gf-orange-tint); }
+.kit-bad:active, .kit-warn:active { transform: scale(0.96); }
 /* Pending: the label says what is happening; no rise, no press. */
 .kit-btn:is([aria-busy="true"], [aria-disabled="true"], :disabled) { opacity: 0.7; transform: none; cursor: default; }
 .kit-go:is([aria-busy="true"], [aria-disabled="true"], :disabled):hover { background: var(--gf-orange); }
-.kit-ghost:is([aria-busy="true"], [aria-disabled="true"], :disabled):hover { background: var(--gf-paper); }
+.kit-ghost:is([aria-busy="true"], [aria-disabled="true"], :disabled):hover,
+.kit-bad:is([aria-busy="true"], [aria-disabled="true"], :disabled):hover,
+.kit-warn:is([aria-busy="true"], [aria-disabled="true"], :disabled):hover { background: var(--gf-paper); }
 
 .kit-round {
   position: relative; width: 44px; height: 44px; flex: none; border-radius: 50%; padding: 0; cursor: pointer;
-  border: 1.5px solid var(--gf-line); background: var(--gf-paper); color: var(--gf-indigo); display: grid; place-items: center;
+  border: var(--gf-stroke) solid var(--gf-line); background: var(--gf-paper); color: var(--gf-indigo); display: grid; place-items: center;
   transition: background var(--gf-t-med) var(--gf-ease-out), transform var(--gf-t-fast) var(--gf-ease-out);
 }
 .kit-round[data-size="40"] { width: 40px; height: 40px; }
@@ -61,7 +71,7 @@
 
 /* ---------- fields ---------- */
 .kit-field {
-  height: 52px; width: 100%; border-radius: 999px; border: 1.5px solid var(--gf-line); background: var(--gf-paper); padding: 0 20px;
+  height: 52px; width: 100%; border-radius: 999px; border: var(--gf-stroke) solid var(--gf-line); background: var(--gf-paper); padding: 0 20px;
   font: 400 17px var(--font-sans), system-ui, sans-serif; color: var(--gf-ink); text-align: center; caret-color: var(--gf-orange); outline: none;
   transition: border-color var(--gf-t-med), box-shadow var(--gf-t-med), background var(--gf-t-med);
 }
@@ -92,7 +102,7 @@
 /* ---------- chip buttons and filter pills ---------- */
 .kit-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .kit-chipb {
-  height: 40px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--gf-line); background: var(--gf-paper); color: var(--gf-ink);
+  height: 40px; padding: 0 16px; border-radius: 999px; border: var(--gf-stroke) solid var(--gf-line); background: var(--gf-paper); color: var(--gf-ink);
   font: 600 14px var(--font-sans), system-ui, sans-serif; cursor: pointer;
   transition: background var(--gf-t-med) var(--gf-ease-out), color var(--gf-t-med), border-color var(--gf-t-med), transform var(--gf-t-fast);
 }
@@ -102,7 +112,7 @@
 
 .kit-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
 .kit-fpill {
-  height: 36px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--gf-line); background: var(--gf-paper); color: var(--gf-indigo);
+  height: 36px; padding: 0 14px; border-radius: 999px; border: var(--gf-stroke) solid var(--gf-line); background: var(--gf-paper); color: var(--gf-indigo);
   font: 600 13px var(--font-sans), system-ui, sans-serif; cursor: pointer;
   transition: background var(--gf-t-med) var(--gf-ease-out), color var(--gf-t-med), border-color var(--gf-t-med);
 }
@@ -122,9 +132,9 @@
 .kit-chip[data-tone="ok"] { background: var(--gf-chip-green); color: var(--gf-chip-green-ink); }
 .kit-chip[data-tone="bad"] { background: var(--gf-red-tint); color: var(--gf-chip-red-ink); }
 .kit-chip[data-tone="wait"] { background: var(--gf-orange-tint); color: var(--gf-orange-deep); }
-.kit-chip[data-tone="inactive"] { background: var(--gf-paper); box-shadow: inset 0 0 0 1.5px var(--gf-line); color: var(--gf-chip-inactive-ink); }
+.kit-chip[data-tone="inactive"] { background: var(--gf-paper); box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-line); color: var(--gf-chip-inactive-ink); }
 .kit-chip[data-tone="archived"] { background: var(--gf-chip-archived); color: var(--gf-chip-slate-ink); }
-.kit-chip[data-tone="line"] { background: var(--gf-paper); box-shadow: inset 0 0 0 1.5px var(--gf-line); color: var(--gf-indigo); }
+.kit-chip[data-tone="line"] { background: var(--gf-paper); box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-line); color: var(--gf-indigo); }
 
 /* ---------- page header ---------- */
 .kit-ph { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px; margin-bottom: 26px; }
@@ -139,7 +149,7 @@
 
 /* ---------- cards ---------- */
 .kit-card {
-  background: var(--gf-paper); border-radius: 24px; border: 1.5px solid var(--gf-line); box-shadow: var(--gf-card-shadow);
+  background: var(--gf-paper); border-radius: 24px; border: var(--gf-stroke) solid var(--gf-line); box-shadow: var(--gf-card-shadow);
   padding: 22px 24px; min-width: 0;
 }
 .kit-card-title { margin: 0; font: italic 800 17px/1.3 var(--font-exo), "Exo", system-ui, sans-serif; color: var(--gf-indigo); }
@@ -181,7 +191,7 @@ a.kit-row { border-radius: 14px; }
 .kit-tbl :is(td, tbody th) b { font-weight: 600; display: block; }
 .kit-tbl :is(td, tbody th) small { color: var(--gf-quiet); font-size: 12.5px; font-weight: 400; }
 .kit-tbl [data-align="end"] { text-align: right; white-space: nowrap; }
-.kit-tbl tfoot td { font-weight: 700; border-top: 1.5px solid var(--gf-line); }
+.kit-tbl tfoot td { font-weight: 700; border-top: var(--gf-stroke) solid var(--gf-line); }
 
 /* ---------- key-value list and section ---------- */
 .kit-kv { margin: 0; display: grid; grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.4fr); gap: 8px 14px; font-size: 14px; }
@@ -197,13 +207,15 @@ a.kit-row { border-radius: 14px; }
 .kit-note {
   margin: 0; display: flex; gap: 10px; align-items: flex-start; text-align: left; border-radius: 16px; padding: 12px 14px;
   font-size: 14px; line-height: 1.45; background: var(--gf-whisper); color: var(--gf-indigo-night);
+  border: var(--gf-stroke) solid rgb(9 0 187 / 0.28);
 }
+/* A faint tint and a thin line in the note's own colour (v38). The toast's tones below use the same pairs. */
 .kit-note > .gf-ic { margin-top: 1px; color: var(--gf-indigo); }
-.kit-note[data-tone="good"] { background: var(--gf-green-tint); color: var(--gf-note-good-ink); }
+.kit-note[data-tone="good"] { background: var(--gf-green-tint); color: var(--gf-note-good-ink); border-color: rgb(15 122 61 / 0.38); }
 .kit-note[data-tone="good"] > .gf-ic { color: var(--gf-green); }
-.kit-note[data-tone="wait"] { background: var(--gf-orange-tint); color: var(--gf-note-wait-ink); }
+.kit-note[data-tone="wait"] { background: var(--gf-orange-tint); color: var(--gf-note-wait-ink); border-color: rgb(238 115 0 / 0.42); }
 .kit-note[data-tone="wait"] > .gf-ic { color: var(--gf-orange-deep); }
-.kit-note[data-tone="bad"] { background: var(--gf-red-tint); color: var(--gf-note-bad-ink); }
+.kit-note[data-tone="bad"] { background: var(--gf-red-tint); color: var(--gf-note-bad-ink); border-color: rgb(200 30 30 / 0.38); }
 .kit-note[data-tone="bad"] > .gf-ic { color: var(--gf-red); }
 
 /* ---------- states ---------- */
@@ -219,6 +231,24 @@ a.kit-row { border-radius: 14px; }
   color: var(--gf-indigo); overflow-wrap: anywhere; outline: none;
 }
 .kit-done-hint { margin: 0; font-size: 14px; color: var(--gf-quiet); }
+/* The finish mark (v38): the live Admission form's. The circle draws in 700ms, then the tick, left to right. */
+.kit-mark { position: relative; display: block; flex: none; width: 84px; height: 84px; margin: 0 auto; border-radius: 50%; }
+.kit-mark svg { display: block; width: 84px; height: 84px; }
+.kit-mark circle {
+  fill: var(--gf-green-tint); stroke: var(--gf-green); stroke-width: 3; stroke-dasharray: 252; stroke-dashoffset: 252;
+  animation: kit-draw 700ms var(--gf-ease-out) forwards;
+}
+.kit-mark-tick {
+  fill: none; stroke: var(--gf-green); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 60; stroke-dashoffset: 60;
+  animation: kit-draw 420ms var(--gf-ease-out) 380ms forwards;
+}
+@keyframes kit-draw { to { stroke-dashoffset: 0; } }
+/* As the confetti bursts, one green ring pulses out of the mark. */
+.kit-mark[data-burst]::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--gf-green); pointer-events: none;
+  animation: kit-ring 700ms var(--gf-ease-out) forwards;
+}
+@keyframes kit-ring { from { opacity: 0.8; transform: scale(1); } to { opacity: 0; transform: scale(1.9); } }
 .kit-nums { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; text-align: left; }
 .kit-nums li { display: flex; align-items: center; gap: 12px; border-radius: 20px; background: var(--gf-whisper); padding: 12px 14px 12px 18px; }
 .kit-nums span { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
@@ -293,7 +323,7 @@ a.kit-row { border-radius: 14px; }
 /* ---------- menus and popovers ---------- */
 .kit-pop-pos { z-index: 50; }
 .kit-pop {
-  width: min(340px, calc(100vw - 32px)); background: var(--gf-paper); color: var(--gf-ink); border: 1.5px solid var(--gf-line); border-radius: 22px;
+  width: min(340px, calc(100vw - 32px)); background: var(--gf-paper); color: var(--gf-ink); border: var(--gf-stroke) solid var(--gf-line); border-radius: 22px;
   box-shadow: var(--gf-lift); padding: 14px 16px 8px; outline: none; transform-origin: var(--transform-origin);
   font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif;
   transition: opacity 180ms var(--gf-ease-out), transform 180ms var(--gf-ease-out);
@@ -319,19 +349,28 @@ a.kit-row { border-radius: 14px; }
 .kit-toaster [data-sonner-toast][data-mounted="false"],
 .kit-toaster [data-sonner-toast][data-removed="true"][data-front="true"][data-swipe-out="false"],
 .kit-toaster [data-sonner-toast][data-removed="true"] { --y: translateY(20px); opacity: 0; }
-/* The prototype's toast sits at left: 50%, so it is at most half the window wide and wraps. */
+/* The prototype's toast sits at left: 50%, so it is at most half the window wide and wraps.
+   v38: a tinted note with a thin line in its tone's colour, as the notes above. */
 .kit-toast {
-  max-width: min(50vw, calc(100vw - 32px)); background: var(--gf-indigo-night); color: var(--gf-paper); border-radius: 999px; padding: 10px 18px;
-  font: 600 13.5px/1.5 var(--font-sans), system-ui, sans-serif; pointer-events: none;
+  max-width: min(50vw, calc(100vw - 32px)); display: flex; align-items: flex-start; gap: 8px; padding: 10px 18px; border-radius: 18px;
+  background: var(--gf-whisper); color: var(--gf-indigo-night); border: var(--gf-stroke) solid rgb(9 0 187 / 0.28);
+  box-shadow: 0 14px 30px -14px rgb(9 0 187 / 0.35); font: 600 13.5px/1.5 var(--font-sans), system-ui, sans-serif; pointer-events: none;
 }
+.kit-toast > .gf-ic { margin-top: 2px; color: var(--gf-indigo); }
+.kit-toast[data-tone="good"] { background: var(--gf-green-tint); color: var(--gf-note-good-ink); border-color: rgb(15 122 61 / 0.38); }
+.kit-toast[data-tone="good"] > .gf-ic { color: var(--gf-green); }
+.kit-toast[data-tone="wait"] { background: var(--gf-orange-tint); color: var(--gf-note-wait-ink); border-color: rgb(238 115 0 / 0.42); }
+.kit-toast[data-tone="wait"] > .gf-ic { color: var(--gf-orange-deep); }
+.kit-toast[data-tone="bad"] { background: var(--gf-red-tint); color: var(--gf-note-bad-ink); border-color: rgb(200 30 30 / 0.38); }
+.kit-toast[data-tone="bad"] > .gf-ic { color: var(--gf-red); }
 
-/* ---------- confetti: the staff registration rain ---------- */
-.kit-cf { position: fixed; inset: 0; pointer-events: none; z-index: 80; overflow: hidden; }
-.kit-cf i { position: absolute; top: -16px; width: 8px; height: 14px; border-radius: 2px; animation: kit-cf 1700ms var(--gf-ease-io) forwards; }
-@keyframes kit-cf { to { transform: translate(var(--x), 108vh) rotate(var(--r)); } }
+/* ---------- confetti: the burst from the finish mark (confetti.ts draws it) ---------- */
+.kit-cf { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 80; }
 
-/* Reduced motion: sheets fade in place, popovers and toasts appear, no confetti. */
+/* Reduced motion: sheets fade in place, popovers and toasts appear, the finish mark is drawn at once, no confetti. */
 @media (prefers-reduced-motion: reduce) {
+  .kit-mark circle, .kit-mark-tick { animation: none; stroke-dashoffset: 0; }
+  .kit-mark[data-burst]::after { content: none; }
   .kit-sheet { transition: opacity var(--gf-fade) linear; }
   .kit-sheet:is([data-starting-style], [data-ending-style]) { transform: none; opacity: 0; }
   .kit-sheet-back { transition-duration: var(--gf-fade); }
@@ -344,6 +383,8 @@ a.kit-row { border-radius: 14px; }
   .kit-sheet[data-placement="centre"]:is([data-starting-style], [data-ending-style]) { transform: translateY(-50%); }
   .kit-sheet[data-placement="side"]:is([data-starting-style], [data-ending-style]) { transform: none; }
 }
+html.rm :is(.kit-mark circle, .kit-mark-tick) { animation: none; stroke-dashoffset: 0; }
+html.rm .kit-mark[data-burst]::after { content: none; }
 html.rm .kit-sheet { transition: opacity var(--gf-fade) linear; }
 html.rm .kit-sheet:is([data-starting-style], [data-ending-style]) { transform: none; opacity: 0; }
 html.rm .kit-sheet-back { transition-duration: var(--gf-fade); }
@@ -369,6 +410,11 @@ html.rm .kit-cf { display: none; }
 .kit-guided .gf-head .kit-link { font-size: 13px; }
 /* The question shrinks on a small phone, as the prototype's .gf-title does; the Admission form keeps 26px. */
 @media (max-width: 400px) { .kit-guided .gf-body h2 { font-size: 23px; } }
+/* v38's thin lines on the Admission form's parts where the staff look draws them: the guided form,
+   the choice tiles in sheets and on staff pages. The Admission form itself keeps its own (#403). */
+:is([data-shell="new"], [data-kit], .kit-guided, .kit-sheet, .kit-pop)
+  :is(.gf-round, .gf-secname, .gf-row, .gf-tick, .gf-seg span, .gf-pop, .gf-anchor, .gf-ghost) { border-width: var(--gf-stroke); }
+:is([data-shell="new"], [data-kit], .kit-guided, .kit-sheet, .kit-pop) .gf-anchor > div + div { border-width: var(--gf-stroke); }
 
 /* Part of an open question that unfolds when it is needed (GuidedReveal). Closed, the
    negative margins cancel the form's 14px gap. */
@@ -390,7 +436,8 @@ html.rm .kit-cf { display: none; }
   font-size: 16px; text-align: left; cursor: pointer; user-select: none;
 }
 .kit-sel-v { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kit-sel[data-empty] .kit-sel-v { color: var(--gf-placeholder); }
+/* Slate Quiet, not the field placeholder grey: this is real text, so it must meet 4.5:1 on Paper (#414). */
+.kit-sel[data-empty] .kit-sel-v { color: var(--gf-quiet); }
 .kit-sel-chev { flex: none; color: var(--gf-indigo); stroke-width: 2.4; transition: transform var(--gf-t-med) var(--gf-ease-out); }
 .kit-sel[aria-expanded="true"] { border-color: var(--gf-indigo); box-shadow: 0 0 0 4px rgb(9 0 187 / 0.12); }
 .kit-sel[aria-expanded="true"] .kit-sel-chev { transform: rotate(180deg); }
@@ -400,7 +447,7 @@ html.rm .kit-cf { display: none; }
    shadow. Above a sheet (61); they scroll inside. */
 .kit-up-pos { z-index: 65; }
 .kit-up {
-  background: var(--gf-paper); color: var(--gf-ink); border: 1.5px solid var(--gf-line); border-radius: 22px; box-shadow: var(--gf-lift);
+  background: var(--gf-paper); color: var(--gf-ink); border: var(--gf-stroke) solid var(--gf-line); border-radius: 22px; box-shadow: var(--gf-lift);
   overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--gf-mist) transparent; outline: none;
   font: 400 14px/1.5 var(--font-sans), system-ui, sans-serif; transform-origin: var(--transform-origin);
   transition: opacity 180ms var(--gf-ease-out), transform 180ms var(--gf-ease-out);
@@ -463,7 +510,7 @@ html.rm .kit-cf { display: none; }
   transition: background var(--gf-t-fast), color var(--gf-t-fast);
 }
 .kit-cal-day:hover { background: var(--gf-mist); }
-.kit-cal-day[aria-current="date"] { box-shadow: inset 0 0 0 1.5px var(--gf-line-strong); color: var(--gf-indigo); font-weight: 700; }
+.kit-cal-day[aria-current="date"] { box-shadow: inset 0 0 0 var(--gf-stroke) var(--gf-line-strong); color: var(--gf-indigo); font-weight: 700; }
 .kit-cal-on .kit-cal-day { background: var(--gf-indigo); color: var(--gf-paper); font-weight: 700; box-shadow: none; }
 .kit-cal-off .kit-cal-day { color: var(--gf-day-off); cursor: not-allowed; }
 .kit-cal-off .kit-cal-day:hover { background: none; }
@@ -479,7 +526,7 @@ html.rm .kit-cf { display: none; }
 .kit-cal-wk .kit-cal-day[aria-current="date"] { box-shadow: none; }
 .kit-cal-wk .kit-cal-band .kit-cal-day { background: var(--gf-indigo); color: var(--gf-paper); font-weight: 700; }
 /* The calendar sitting open inside a filter. */
-.kit-cal-open { max-width: 320px; padding: 14px; border: 1.5px solid var(--gf-line); border-radius: 22px; background: var(--gf-paper); }
+.kit-cal-open { max-width: 320px; padding: 14px; border: var(--gf-stroke) solid var(--gf-line); border-radius: 22px; background: var(--gf-paper); }
 
 /* Long text: the field's outline and focus ring, with the summary box's 20px corners. */
 .kit-field.kit-ta {
@@ -494,7 +541,7 @@ html.rm .kit-cf { display: none; }
 .kit-tick-t { display: flex; flex-direction: column; gap: 2px; font-size: 14.5px; line-height: 1.45; color: var(--gf-ink); }
 .kit-tick-t small { font-size: 13px; color: var(--gf-ink-soft); }
 .kit-ck {
-  flex: none; width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--gf-line-strong); background: var(--gf-paper);
+  flex: none; width: 22px; height: 22px; border-radius: 7px; border: var(--gf-stroke) solid var(--gf-line-strong); background: var(--gf-paper);
   display: grid; place-items: center; color: var(--gf-paper); cursor: pointer; outline: none;
   transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med);
 }
@@ -539,7 +586,7 @@ html.rm .kit-cf { display: none; }
 .kit-dsc-in { min-height: 0; overflow: hidden; visibility: hidden; transition: visibility 0s linear var(--gf-fold); }
 .kit-dsc[data-open] > .kit-dsc-panel > .kit-dsc-in { visibility: visible; transition-delay: 0s; }
 .kit-dsc-body { padding: 8px 0 4px; }
-.kit-dsc[data-variant="boxed"] { border: 1.5px solid var(--gf-line); border-radius: 20px; background: var(--gf-paper); }
+.kit-dsc[data-variant="boxed"] { border: var(--gf-stroke) solid var(--gf-line); border-radius: 20px; background: var(--gf-paper); }
 .kit-dsc[data-variant="boxed"] > .kit-dsc-btn {
   align-self: stretch; justify-content: space-between; min-height: 48px; margin: 0; padding: 0 16px 0 18px; border-radius: 20px;
   font-size: 15px; font-weight: 400; color: var(--gf-ink);
@@ -551,7 +598,7 @@ html.rm .kit-cf { display: none; }
 /* The file area: a dashed area to drop a file on, with a button to choose one. */
 .kit-file {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 18px; text-align: center;
-  border: 1.5px dashed var(--gf-line-strong); border-radius: 20px; background: var(--gf-paper);
+  border: var(--gf-stroke) dashed var(--gf-line-strong); border-radius: 20px; background: var(--gf-paper);
   transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med);
 }
 .kit-file[data-drag] { background: var(--gf-whisper); border-color: var(--gf-indigo); border-style: solid; }

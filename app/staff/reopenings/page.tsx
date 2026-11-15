@@ -52,7 +52,7 @@ export default async function ReopeningRequestsPage() {
           Reopening requests could not be loaded. Try again in a moment.
         </Note>
       ) : (
-        <Card>{rows.length === 0 ? <EmptyState title="No reopening requests are waiting." /> : <RequestsTable rows={rows} />}</Card>
+        <Card>{rows.length === 0 ? <EmptyState illustration="inbox" title="No reopening requests are waiting." /> : <RequestsTable rows={rows} />}</Card>
       )}
     </>
   )

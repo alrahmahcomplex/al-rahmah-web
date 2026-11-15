@@ -9,6 +9,7 @@ import {
   ChoiceTiles,
   Field,
   FieldError,
+  FinishMark,
   InlineEditor,
   KeyValueList,
   ListRow,
@@ -668,15 +669,50 @@ export function OverlayCards() {
       <ApplicantSheets />
       <Popovers />
       <Card title="Toast">
-        <Button variant="ghost" size="small" style={{ alignSelf: "flex-start" }} onClick={() => toast("Fee saved. The change and its reason are in the audit log.")}>
-          Play it
-        </Button>
+        <div className="kp-rowx">
+          <Button variant="ghost" size="small" onClick={() => toast("Approved. Invite sent to asha@example.com.")}>
+            News
+          </Button>
+          <Button variant="ghost" size="small" onClick={() => toast("Saved. Amina’s interview is on 18 November at 09:00.", { tone: "good" })}>
+            Saved
+          </Button>
+          <Button variant="ghost" size="small" onClick={() => toast("Approved. Add their email to send the invite.", { tone: "wait" })}>
+            Warning
+          </Button>
+          <Button
+            variant="ghost"
+            size="small"
+            onClick={() => toast("The batch stopped early because something went wrong. Its report shows how far it got.", { tone: "bad" })}
+          >
+            Error
+          </Button>
+        </div>
+        <p className="kp-spec">One sentence at the bottom of the screen after a save or a failure, on a faint tint with a thin line in its own colour. It leaves by itself.</p>
       </Card>
-      <Card title="Confetti">
-        <Button variant="ghost" size="small" style={{ alignSelf: "flex-start" }} onClick={rainConfetti}>
-          Play it
-        </Button>
-      </Card>
+      <FinishCard />
     </>
+  )
+}
+
+/** The finish mark, drawn again with its confetti each time Play it is pressed. */
+function FinishCard() {
+  const [round, setRound] = useState(0)
+  const mark = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    if (round > 0) rainConfetti(mark.current)
+  }, [round])
+
+  return (
+    <Card title="Finish">
+      <p className="kp-spec">
+        When a form is done, the green circle draws itself, then the tick, left to right, as on the live Admission form. Then confetti bursts out of the tick in
+        orange, indigo and green, and flutters down: 60 pieces on a phone, 85 wider.
+      </p>
+      <FinishMark key={round} ref={mark} />
+      <Button variant="ghost" size="small" style={{ alignSelf: "flex-start" }} onClick={() => setRound((n) => n + 1)}>
+        Play it
+      </Button>
+    </Card>
   )
 }

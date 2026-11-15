@@ -45,9 +45,11 @@ async function pendingInDatabase(): Promise<number> {
 
 const agentsLink = (page: Page) => page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /^Marketing Agents/ })
 
+// The new shell's sidebar carries no counts (the One Pip Rule), so the count
+// is the screen's own "Pending: n" line.
 async function pendingCount(page: Page): Promise<number> {
-  const name = (await agentsLink(page).textContent()) ?? ""
-  const match = /(\d+)\s*Pending/.exec(name)
+  const line = (await page.getByRole("main").getByText(/^Pending: \d+/).textContent()) ?? ""
+  const match = /Pending: (\d+)/.exec(line)
   return match ? Number(match[1]) : 0
 }
 
@@ -56,11 +58,11 @@ test.describe("Marketing Agents", () => {
     const agent = await registerPendingAgent()
     await signIn(page, MANAGER)
 
+    await agentsLink(page).click()
+    await expect(page.getByRole("heading", { name: "Marketing Agents", exact: true })).toBeVisible()
     const before = await pendingCount(page)
     expect(before).toBeGreaterThanOrEqual(1)
     expect(before).toBeLessThanOrEqual(await pendingInDatabase())
-    await agentsLink(page).click()
-    await expect(page.getByRole("heading", { name: "Marketing Agents", exact: true })).toBeVisible()
     // Pending first for an approver.
     await expect(page.getByRole("link", { name: "Pending", exact: true })).toHaveAttribute("aria-current", "page")
 

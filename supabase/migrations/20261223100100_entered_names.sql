@@ -35,8 +35,7 @@
 --    father's name accepts a typed name that only adds the middle name to
 --    the stored one (father_name_adds_middle), and the father's-name
 --    trigger keeps that child's sibling basis: completing a name is not a
---    change of father. Re-applications compare names without regard to
---    case.
+--    change of father.
 -- 5. Who brought the students: one box, at least two names, in capitals.
 -- 6. The student import stores new rows' student and guardian names in
 --    capitals. Its father's name is still taken from the student's name:
@@ -803,8 +802,9 @@ begin
         'The father''s full name the Admission form built from its three name parts (#400), as sent. Null from a one-box form. Never copied to the lead.';
 
     -- record_re_application, as 20261123400100 made it, now also storing
-    -- `submitted -> 'student' ->> 'father_full_name'`, and comparing the
-    -- student's and contact's names without regard to case. Same signature.
+    -- `submitted -> 'student' ->> 'father_full_name'`. A name sent in
+    -- capitals for one on file in another case still differs, as before:
+    -- staff Apply it to move the record to capitals. Same signature.
     create or replace function public.record_re_application(lead_id uuid, submission_key uuid, submitted jsonb)
     returns uuid
     language plpgsql
@@ -938,13 +938,11 @@ begin
 
         select * into contact from public.guardian_contacts g where g.id = lead.guardian_contact_id for share;
 
-        -- Names in any case are the same name: the parts arrive in capitals
-        -- while older leads hold names as typed (#400).
-        if lower(pupil_name) <> lower(lead.student_name) then differing := array_append(differing, 'student_name'); end if;
+        if pupil_name <> lead.student_name then differing := array_append(differing, 'student_name'); end if;
         if student_class <> lead.class_name then differing := array_append(differing, 'class_name'); end if;
         if student_year <> lead.enrollment_year then differing := array_append(differing, 'enrollment_year'); end if;
         if student_boarding <> lead.day_or_boarding then differing := array_append(differing, 'day_or_boarding'); end if;
-        if lower(contact_name) <> lower(contact.full_name) then differing := array_append(differing, 'contact_name'); end if;
+        if contact_name <> contact.full_name then differing := array_append(differing, 'contact_name'); end if;
         if contact_relationship <> contact.relationship then differing := array_append(differing, 'relationship'); end if;
         if contact_description is distinct from contact.relationship_description then
             differing := array_append(differing, 'relationship_description');

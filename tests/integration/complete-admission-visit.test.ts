@@ -1567,9 +1567,12 @@ describe("a child linked before check-in", () => {
     const leadIds = rows.map((r) => r.id);
     const twoWords = `${family.fatherFirst} ${family.fatherLast}`;
     expect(rows.map((r) => r.father_full_name)).toEqual([twoWords, twoWords]);
+    // Form children are legacy members of their Family's group, so the
+    // link confirms the on-file sibling's father's name.
     const linked = await linkSibling(await signedIn(ADMISSIONS), {
       leadId: leadIds[1],
       siblingOfLeadId: leadIds[0],
+      siblingFatherFullName: twoWords,
     });
     expect(linked).toMatchObject({ ok: true, data: { basis: "matched" } });
 

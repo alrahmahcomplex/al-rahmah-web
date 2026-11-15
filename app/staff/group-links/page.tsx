@@ -1,11 +1,7 @@
-import { MessageCircleIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
-import { EmptyState } from "@/components/staff/empty-state"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Button, Card, EmptyState, Field, Note, PageHeader, pageTitle } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { countInvitedFamilies } from "@/lib/services/group-invitations"
 import { listGroupLinks } from "@/lib/services/group-links"
@@ -13,8 +9,9 @@ import { createClient } from "@/utils/supabase/server"
 import { requireStaff } from "../session"
 import { familiesInvitedText, familiesWarning } from "./families-text"
 import { LinkForm } from "./link-form"
+import "../agents/agents.css"
 
-export const metadata: Metadata = { title: "WhatsApp groups · Al-Rahmah Complex" }
+export const metadata: Metadata = { title: pageTitle("WhatsApp groups") }
 
 export default async function GroupLinksPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
   const staff = await requireStaff()
@@ -28,28 +25,29 @@ export default async function GroupLinksPage({ searchParams }: { searchParams: P
   ])
   const warning = families?.ok ? familiesWarning(families.data) : null
   const saved = links.ok ? links.data.find((link) => link.year === year) : null
-  return <div className="flex flex-col gap-6">
-    <h1 className="staff-heading">WhatsApp groups</h1>
-    <p className="max-w-xl text-sm text-muted-foreground">Save the admissions WhatsApp group link for each Enrollment year, even before its Fee schedule is ready.</p>
-    <form action="/staff/group-links" className="flex max-w-sm flex-col gap-2" aria-label="Choose year">
-      <Label htmlFor="group-year">Enrollment year</Label>
-      <div className="flex gap-2"><Input id="group-year" name="year" defaultValue={requested ?? String(year)} required pattern="2\d{3}" inputMode="numeric" className="w-28" /><Button variant="outline" type="submit">Open year</Button></div>
+  return <div className="ag-page">
+    <PageHeader title="WhatsApp groups" subtitle="Save the admissions WhatsApp group link for each Enrollment year, even before its Fee schedule is ready." />
+    <form action="/staff/group-links" className="ag-field ag-year" aria-label="Choose year">
+      <label htmlFor="group-year" className="ag-label">Enrollment year</label>
+      <div className="ag-row"><Field id="group-year" name="year" size="compact" defaultValue={requested ?? String(year)} required pattern="2\d{3}" inputMode="numeric" /><Button variant="ghost" type="submit">Open year</Button></div>
     </form>
-    {year === null ? <p role="alert" className="text-sm text-destructive">Enter an Enrollment year from 2000 to 2999.</p> : !links.ok ?
-      <p role="alert" className="text-sm text-destructive">The group links could not be loaded. Reload the page to try again.</p> :
-      <section aria-label={`Group ${year}`} className="flex flex-col gap-4">
-        <h2 className="staff-section-heading">Admissions {year}</h2>
-        {saved ? <div className="flex max-w-xl flex-col items-start gap-2">
-          <p className="break-all text-sm">{saved.url}</p>
-          <p className="text-sm text-muted-foreground">Set by {saved.setByName} on <time dateTime={saved.setAt}>{new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Dar_es_Salaam", dateStyle: "medium", timeStyle: "short" }).format(new Date(saved.setAt))}</time> (Tanzania)</p>
-          <a href={saved.url} target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">Open to test</a>
-        </div> : <EmptyState icon={MessageCircleIcon} title={`No group link saved for ${year} yet.`} className="max-w-xl" />}
-        {families && (families.ok ? <div className="flex max-w-xl flex-col gap-2">
-          <p className="text-sm">{familiesInvitedText(families.data)}</p>
-          {warning && <p role="alert" className="text-sm font-medium text-amber-700">{warning}</p>}
-        </div> : <p role="alert" className="text-sm text-destructive">The families invited could not be counted. Reload the page to try again.</p>)}
-        {staff.permissions.includes("group_links.manage") && <LinkForm key={year} year={year} saved={saved?.url ?? null} />}
-      </section>}
-    {links.ok && links.data.length > 0 && <nav aria-label="Saved group years" className="flex flex-wrap gap-4">{links.data.map((link) => <Link key={link.year} href={`/staff/group-links?year=${link.year}`} className="text-sm underline underline-offset-4">{link.year}</Link>)}</nav>}
+    {year === null ? <p role="alert" className="ag-error">Enter an Enrollment year from 2000 to 2999.</p> : !links.ok ?
+      <p role="alert" className="ag-error">The group links could not be loaded. Reload the page to try again.</p> :
+      <Card aria-label={`Group ${year}`}>
+        <h2 className="kit-card-title">Admissions {year}</h2>
+        <div className="ag-card-body ag-narrow">
+          {saved ? <div className="ag-cell">
+            <p className="ag-p ag-wrap">{saved.url}</p>
+            <p className="ag-p ag-quiet">Set by {saved.setByName} on <time dateTime={saved.setAt}>{new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Dar_es_Salaam", dateStyle: "medium", timeStyle: "short" }).format(new Date(saved.setAt))}</time> (Tanzania)</p>
+            <a href={saved.url} target="_blank" rel="noopener noreferrer" className="ag-link">Open to test</a>
+          </div> : <EmptyState title={`No group link saved for ${year} yet.`} />}
+          {families && (families.ok ? <div className="ag-stack">
+            <p className="ag-p">{familiesInvitedText(families.data)}</p>
+            {warning && <Note tone="wait" role="alert">{warning}</Note>}
+          </div> : <p role="alert" className="ag-error">The families invited could not be counted. Reload the page to try again.</p>)}
+          {staff.permissions.includes("group_links.manage") && <LinkForm key={year} year={year} saved={saved?.url ?? null} />}
+        </div>
+      </Card>}
+    {links.ok && links.data.length > 0 && <nav aria-label="Saved group years" className="ag-row ag-years">{links.data.map((link) => <Link key={link.year} href={`/staff/group-links?year=${link.year}`} className="ag-link">{link.year}</Link>)}</nav>}
   </div>
 }

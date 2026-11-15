@@ -45,9 +45,11 @@ async function pendingInDatabase(): Promise<number> {
 
 const agentsLink = (page: Page) => page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /^Marketing Agents/ })
 
+// The new shell's sidebar carries no counts (the One Pip Rule), so the count
+// is the screen's own "Pending: n" line.
 async function pendingCount(page: Page): Promise<number> {
-  const name = (await agentsLink(page).textContent()) ?? ""
-  const match = /(\d+)\s*Pending/.exec(name)
+  const line = (await page.getByRole("main").getByText(/^Pending: \d+/).textContent()) ?? ""
+  const match = /Pending: (\d+)/.exec(line)
   return match ? Number(match[1]) : 0
 }
 
@@ -56,11 +58,11 @@ test.describe("Marketing Agents", () => {
     const agent = await registerPendingAgent()
     await signIn(page, MANAGER)
 
+    await agentsLink(page).click()
+    await expect(page.getByRole("heading", { name: "Marketing Agents", exact: true })).toBeVisible()
     const before = await pendingCount(page)
     expect(before).toBeGreaterThanOrEqual(1)
     expect(before).toBeLessThanOrEqual(await pendingInDatabase())
-    await agentsLink(page).click()
-    await expect(page.getByRole("heading", { name: "Marketing Agents", exact: true })).toBeVisible()
     // Pending first for an approver.
     await expect(page.getByRole("link", { name: "Pending", exact: true })).toHaveAttribute("aria-current", "page")
 
@@ -73,7 +75,7 @@ test.describe("Marketing Agents", () => {
     await expect(row.getByRole("link", { name: agent.displayPhone })).toHaveAttribute("href", `tel:${agent.phone}`)
 
     await row.getByRole("button", { name: `Approve ${agent.fullName}` }).click()
-    const dialog = page.getByRole("alertdialog")
+    const dialog = page.getByRole("dialog", { name: `Approve ${agent.fullName}?` })
     await expect(dialog).toContainText(`Approve ${agent.fullName}?`)
     await expect(dialog).toContainText(agent.code)
     await dialog.getByRole("button", { name: `Approve ${agent.code}` }).click()
@@ -120,6 +122,10 @@ test.describe("Marketing Agents", () => {
     const pending = page.getByRole("row", { name: new RegExp(agent.fullName) })
     await expect(pending).toContainText("Pending")
     await expect(page.getByRole("button", { name: /Approve/ })).toHaveCount(0)
+    // No other action either: those are the Manager's.
+    await expect(pending.getByRole("button", { name: /invite|email|Switch|Retire|Recreate/ })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Add agent" })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Import from CSV" })).toHaveCount(0)
   })
 
   test("the screen says whether agent access is on and who last changed it", async ({ page }) => {

@@ -1,7 +1,8 @@
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Note } from "@/components/kit"
 import type { FeeImpactFamily } from "@/lib/services/marketing-agents"
 
 import { familyLine, feeImpactLine } from "./outcome"
+import "./agents.css"
 
 export type ImpactState = { status: "loading" } | { status: "ready"; families: FeeImpactFamily[] } | { status: "refused"; message: string }
 
@@ -14,36 +15,38 @@ function tzs(amount: number) {
 export function FeeImpact({ impact }: { impact: ImpactState }) {
   const families = impact.status === "ready" ? impact.families : []
   return (
-    <section aria-label="Fee impact" className="grid gap-2" aria-busy={impact.status === "loading"}>
-      {impact.status === "loading" && <p className="text-sm text-muted-foreground">Finding the families this changes…</p>}
+    <section aria-label="Fee impact" className="ag-stack" aria-busy={impact.status === "loading"}>
+      {impact.status === "loading" && <p className="ag-p ag-quiet">Finding the families this changes…</p>}
       {impact.status === "refused" && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{impact.message}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">
+          {impact.message}
+        </Note>
       )}
       {impact.status === "ready" && (
         <>
-          <p className="text-sm font-semibold text-slate-900">{feeImpactLine(families.length)}</p>
+          <p className="ag-p ag-strong">{feeImpactLine(families.length)}</p>
           {families.length > 0 && (
             <>
-              <ul aria-label="Families not yet Paid" className="max-h-48 divide-y overflow-y-auto rounded-md text-sm ring-1 ring-foreground/10">
+              <ul aria-label="Families not yet Paid" className="ag-families">
                 {families.map((family) => (
-                  <li key={family.leadId} className="px-3 py-2">
-                    <p className="font-medium text-slate-900">
-                      {family.studentName} <span className="font-normal text-muted-foreground">· {family.admissionNumber} · {family.className}</span>
-                    </p>
-                    <p className="text-muted-foreground">
-                      {family.contactName} · <a href={`tel:${family.contactPhone}`} className="underline-offset-4 hover:underline">{family.contactPhone}</a>{" "}
+                  <li key={family.leadId}>
+                    <span className="ag-strong">{family.studentName}</span>{" "}
+                    <span className="ag-quiet">
+                      · {family.admissionNumber} · {family.className}
+                    </span>
+                    <small>
+                      {family.contactName} ·{" "}
+                      <a href={`tel:${family.contactPhone}`} className="ag-tel">
+                        {family.contactPhone}
+                      </a>{" "}
                       · {tzs(family.feeNow)} → {tzs(family.feeAfter)}
-                    </p>
+                    </small>
                   </li>
                 ))}
               </ul>
-              <div className="rounded-md bg-slate-50 px-3 py-2 text-sm">
-                <p className="text-xs text-muted-foreground">Read this to each family:</p>
-                <p lang="sw" className="text-slate-900">
-                  {familyLine(families[0])}
-                </p>
+              <div className="ag-read">
+                <p className="ag-small ag-soft">Read this to each family:</p>
+                <p lang="sw">{familyLine(families[0])}</p>
               </div>
             </>
           )}

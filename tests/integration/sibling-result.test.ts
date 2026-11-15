@@ -213,7 +213,11 @@ describe("other ways into Enrolled, and lock order", () => {
 
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      // As confirm_student_import sets Enrolled, with no payment.
+      // As confirm_student_import sets Enrolled, with no payment. The import
+      // already holds the lead's Family lock then: it took it, with the pause
+      // lock, when it inserted the lead. A bare update would take the row
+      // first, which no real path does (#372).
+      await sql.query("select public.lock_lead_family($1)", [imported])
       await sql.query("select public.set_lead_lifecycle_override('import')")
       await sql.query("update public.leads set status = 'Enrolled', enrolled_by_import = true where id = $1", [imported])
       // An Enrolled lead's live answer was the kept discount or the tick: full.

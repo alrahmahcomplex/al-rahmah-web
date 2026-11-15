@@ -1,4 +1,4 @@
-import { enrolsWithoutRetake, nextStep, releaseInput, type NextStep } from "@/lib/lead-next-step"
+import { nextStep, readNextStepInput, type NextStep } from "@/lib/lead-next-step"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 
@@ -10,30 +10,18 @@ import { readFee, readFollowUps, readInterviews, readRegistration, readRelease, 
 // is the caller's read of the fee (readFee), so a caller that shows the fee
 // too reads it once; null for staff who may not view payments.
 export async function readNextStep(lead: Lead, feeRead: ReturnType<typeof readFee> | null): Promise<NextStep | null> {
-  const [interviews, registration, reopenings, release, fee, followUps] = await Promise.all([
-    readInterviews(lead.id),
-    readRegistration(lead.id),
-    readReopenings(lead.id),
-    readRelease(lead.id),
+  const input = await readNextStepInput(
+    {
+      interviews: readInterviews,
+      registration: readRegistration,
+      reopenings: readReopenings,
+      release: readRelease,
+      releaseStatus: readReleaseStatus,
+      followUps: readFollowUps,
+    },
+    lead,
     feeRead,
-    readFollowUps(lead.id),
-  ])
-  if (!interviews.ok) return null
-
-  // Once a result has gone, whether it changed since comes from the status
-  // every viewer reads, not only those who may send it (#248).
-  const sentFor = release.ok && release.data.latestRelease !== null ? release.data.interviewId : null
-  const status = sentFor ? await readReleaseStatus(sentFor) : null
-  const current = interviews.data[0] ?? null
-  return nextStep({
-    status: lead.status,
-    closure: lead.closure,
-    interview: current && { feeStatus: current.feeStatus, amount: current.amount, result: current.result },
-    registration: registration.ok ? registration.data : null,
-    enrolWithoutRetake: reopenings.ok && enrolsWithoutRetake(reopenings.data.decided),
-    release: release.ok ? releaseInput(release.data, status?.ok && sentFor ? (status.data.get(sentFor) ?? null) : null) : null,
-    fee: fee?.ok && fee.data.kind === "fee" ? { priority: fee.data.priority } : null,
-    followUps: followUps.ok ? { dueOn: followUps.data.open?.dueOn ?? null, needsDate: followUps.data.needsDate } : null,
-    today: tanzaniaToday(),
-  })
+    tanzaniaToday(),
+  )
+  return input && nextStep(input)
 }

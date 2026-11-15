@@ -601,6 +601,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "forbidden" },
   },
+  "public.lead_next_step_inputs(lead_ids uuid[])": {
+    roles: ["authenticated"],
+    args: { lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]" },
+    agent: { refused: "forbidden" },
+  },
   "public.lead_seat_priorities(lead_ids uuid[])": {
     roles: ["authenticated"],
     args: { lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]" },

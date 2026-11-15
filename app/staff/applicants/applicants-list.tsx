@@ -48,6 +48,7 @@ export function ApplicantsList({
   search,
   groupYears,
   priorities,
+  nextSteps,
   importLabel,
 }: {
   results: LeadSearchResults
@@ -56,6 +57,9 @@ export function ApplicantsList({
   groupYears: number[]
   // Seat priority by lead id; null hides the column.
   priorities: Record<string, SeatPriority> | null
+  // The next step's title by lead id, null on a closed lead; null hides the
+  // column.
+  nextSteps: Record<string, string | null> | null
   // What the import chip says, while the list shows one import's applicants.
   importLabel: string | null
 }) {
@@ -136,6 +140,7 @@ export function ApplicantsList({
         </span>
       ),
     },
+    ...(nextSteps ? [{ header: "Next step", cell: (lead: LeadListItem) => nextSteps[lead.id] ?? "" }] : []),
     ...(priorities
       ? [
           {

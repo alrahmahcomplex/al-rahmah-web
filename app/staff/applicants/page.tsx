@@ -2,7 +2,9 @@ import type { Metadata } from "next"
 import { forbidden } from "next/navigation"
 
 import { ButtonLink, Card, Note, PageHeader, pageTitle } from "@/components/kit"
-import { enrollmentYears } from "@/lib/school-calendar"
+import { nextStep, nextStepText } from "@/lib/lead-next-step"
+import { enrollmentYears, formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { listNextStepFacts } from "@/lib/services/lead-next-steps"
 import { listGroupLinks } from "@/lib/services/group-links"
 import { searchLeads } from "@/lib/services/leads"
 import { listSeatPriorities } from "@/lib/services/school-fee-payments"
@@ -47,12 +49,27 @@ export default async function ApplicantsPage({
   ])
   // Only the earlier-link filter's choices: without them it isn't offered.
   const groupYears = groupLinks.ok ? groupLinks.data.map((link) => link.year) : []
-  // Seat priorities need payments.view. They only decorate the rows, so if
-  // they can't be read the list still shows, without the column.
-  const priorities =
-    results.ok && staff.permissions.includes("payments.view")
-      ? await listSeatPriorities(supabase, results.data.leads.map((lead) => lead.id))
-      : null
+  // Seat priorities need payments.view. They and the next steps only
+  // decorate the rows, so if they can't be read the list still shows,
+  // without the column. The next steps of the whole page come in one read.
+  const leadIds = results.ok ? results.data.leads.map((lead) => lead.id) : []
+  const [priorities, facts] = results.ok
+    ? await Promise.all([
+        staff.permissions.includes("payments.view") ? listSeatPriorities(supabase, leadIds) : null,
+        listNextStepFacts(supabase, leadIds),
+      ])
+    : [null, null]
+  // The words the side sheet uses, by lead id. A closed lead has none: the
+  // record shows its closed banner instead.
+  const today = tanzaniaToday()
+  const nextSteps = facts?.ok
+    ? Object.fromEntries(
+        [...facts.data].map(([id, each]) => {
+          const step = nextStep({ ...each, today })
+          return [id, step.kind === "closed" ? null : nextStepText(step, formatDate).title]
+        }),
+      )
+    : null
 
   const listSearch = { query: search.query, status: search.status, closure: search.closure, earlierLinkYear: search.earlierLinkYear, importBatchId: search.importBatchId }
   // Starting a registration needs both permissions, as the database does.
@@ -98,6 +115,11 @@ export default async function ApplicantsPage({
               Seat priority could not be loaded, so it isn&apos;t shown. Try again in a moment.
             </Note>
           )}
+          {facts && !facts.ok && (
+            <Note tone="bad" role="alert">
+              The next step could not be worked out. Try again in a moment.
+            </Note>
+          )}
           <Card aria-label="Results">
             <ApplicantsList
               results={results.data}
@@ -106,6 +128,7 @@ export default async function ApplicantsPage({
               priorities={
                 priorities?.ok ? Object.fromEntries(Object.entries(priorities.data).map(([id, each]) => [id, each.priority])) : null
               }
+              nextSteps={nextSteps}
               importLabel={importLabel}
             />
           </Card>

@@ -168,8 +168,13 @@ async function Comparison({ entry, staff }: { entry: ReApplication; staff: Staff
     )
   }
 
+  // The heading is plain, not the card's title: the table's own scroll area
+  // is already a region with this name, and two would repeat the landmark.
   return (
-    <Card title="Compared with the application" titleId="re-application-compare">
+    <Card>
+      <h2 id="re-application-compare" className="kit-card-title">
+        Compared with the application
+      </h2>
       {body}
     </Card>
   )

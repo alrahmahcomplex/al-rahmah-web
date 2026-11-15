@@ -32,7 +32,8 @@ export function ApproveAgent({
       if (outcome.status !== "approved") return setRefusal(outcome.message)
       // Approved, but the invite email did not go: a warning, so the Manager sends it again.
       const inviteMissed = "inviteSent" in outcome && !outcome.inviteSent && Boolean(email)
-      toast(outcome.message, { tone: inviteMissed ? "wait" : "good" })
+      // Approved with its invite is news, as the prototype's toast example shows it.
+      toast(outcome.message, { tone: inviteMissed ? "wait" : "info" })
     })
   }
 

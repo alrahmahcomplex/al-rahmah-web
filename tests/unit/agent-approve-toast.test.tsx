@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// Approving an agent confirms with a toast (#401): a save when the invite
+// Approving an agent confirms with a toast (#401): news when the invite
 // went, a warning when the agent is Approved but the invite email did not go.
 
 const { approve, toast } = vi.hoisted(() => ({ approve: vi.fn(), toast: vi.fn() }))
@@ -25,10 +25,10 @@ beforeEach(() => {
 })
 
 describe("Approve's toast", () => {
-  it("is a save when the invite went", async () => {
+  it("is news when the invite went", async () => {
     approve.mockResolvedValue({ status: "approved", inviteSent: true, message: "Approved. Invite sent to neema@example.com." })
     await approveAgent()
-    expect(toast).toHaveBeenCalledWith("Approved. Invite sent to neema@example.com.", { tone: "good" })
+    expect(toast).toHaveBeenCalledWith("Approved. Invite sent to neema@example.com.", { tone: "info" })
   })
 
   it("is a warning when the agent is Approved but the invite did not go", async () => {

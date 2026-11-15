@@ -23,7 +23,7 @@ export const ROUTE_LOOKS = {
   "/staff/audit": "legacy",
   "/staff/check-in": "legacy",
   "/staff/check-in/new": "legacy",
-  "/staff/discounts": "legacy",
+  "/staff/discounts": "new",
   "/staff/fees": "new",
   "/staff/fees/[year]": "new",
   "/staff/follow-ups": "legacy",

@@ -50,7 +50,7 @@ describe("the import guard", () => {
   })
 
   it.each(OLD_IMPORTS)("allows %s in a legacy route", async (line) => {
-    expect(await restricted("app/staff/discounts/page.tsx", source(line))).toEqual([])
+    expect(await restricted("app/staff/interviews/page.tsx", source(line))).toEqual([])
   })
 
   // A route folder with brackets is a literal name, not a glob (#360). The

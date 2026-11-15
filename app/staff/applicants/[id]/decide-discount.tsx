@@ -8,11 +8,17 @@ import { DISCOUNT_TEXT_MAX } from "@/lib/services/discounts"
 import { decideDiscountAction } from "./discount-actions"
 import type { DiscountOutcome } from "./discount-outcome"
 import { TextArea } from "./form-controls"
+import "./lead.css"
 
 const LOST_REQUEST: DiscountOutcome = {
   status: "refused",
   message: "The decision could not be confirmed. Check your connection, reload the page and see whether it was saved.",
 }
+
+// What each decision does, said before it is made.
+export const GRANT_EFFECT =
+  "The School fee goes down at once, and the applicant becomes Enrolled if their payments now reach the line. A granted discount can't be taken back here."
+export const REFUSE_EFFECT = "The School fee stays as it is. The person who asked reads your reason on the application."
 
 type DecideDiscountProps = {
   leadId: string
@@ -27,8 +33,8 @@ type DecideDiscountProps = {
 
 // Grant and Refuse on a Pending discount request, for the Admissions
 // Manager, on the lead. Each asks in a sheet first. A decision that lands
-// refreshes the page. The Discount requests screen keeps its own in the old
-// look until it converts (app/staff/discounts/decide-discount.tsx).
+// refreshes the page. The Discount requests screen reviews a request in one
+// sheet with the same decision (useDiscountDecision, RefuseReason).
 export function DecideDiscount(props: DecideDiscountProps) {
   return (
     <div className="lr-acts">
@@ -38,7 +44,11 @@ export function DecideDiscount(props: DecideDiscountProps) {
   )
 }
 
-function useDecision() {
+/**
+ * Sends a grant or a refusal of one request. `refusal` is the sentence to
+ * show when it did not land; `done` runs once it did.
+ */
+export function useDiscountDecision(leadId: string, requestId: string) {
   const [refusal, setRefusal] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -56,18 +66,92 @@ function useDecision() {
     })
   }
 
-  return { refusal, setRefusal, pending, send }
+  return {
+    refusal,
+    clearRefusal: () => setRefusal(null),
+    pending,
+    grant: (done: () => void) => send(() => decideDiscountAction(leadId, requestId, "grant", null), done),
+    refuse: (reason: string, done: () => void) => send(() => decideDiscountAction(leadId, requestId, "refuse", reason), done),
+  }
+}
+
+/** The reason a refusal needs, and whether to say it is missing. */
+export function useRefuseReason() {
+  const [reason, setReason] = useState("")
+  const [missing, setMissing] = useState(false)
+  return {
+    reason,
+    missing,
+    change: (next: string) => {
+      setReason(next)
+      setMissing(false)
+    },
+    /** True when there is a reason; otherwise shows the missing line. */
+    check: () => {
+      if (reason.trim() !== "") return true
+      setMissing(true)
+      return false
+    },
+    clearMissing: () => setMissing(false),
+    reset: () => {
+      setReason("")
+      setMissing(false)
+    },
+  }
+}
+
+/** "Why is it refused?" with its hint, and the line when it is left empty. */
+export function RefuseReason({
+  reason,
+  missing,
+  onChange,
+  autoFocus,
+}: {
+  reason: string
+  missing: boolean
+  onChange: (reason: string) => void
+  autoFocus?: boolean
+}) {
+  const reasonId = useId()
+  const hintId = useId()
+  const errorId = useId()
+  return (
+    <>
+      <div className="lr-field">
+        <label htmlFor={reasonId} className="lr-label">
+          Why is it refused?
+        </label>
+        <TextArea
+          id={reasonId}
+          value={reason}
+          maxLength={DISCOUNT_TEXT_MAX}
+          autoFocus={autoFocus}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={missing || undefined}
+          aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
+        />
+        <p id={hintId} className="lr-hint">
+          Required.
+        </p>
+      </div>
+      {missing && (
+        <p id={errorId} role="alert" className="lr-error">
+          Write why the discount is refused.
+        </p>
+      )}
+    </>
+  )
 }
 
 function GrantDiscount({ leadId, requestId, studentName, admissionNumber, discount }: DecideDiscountProps) {
   const [open, setOpen] = useState(false)
-  const { refusal, setRefusal, pending, send } = useDecision()
+  const { refusal, clearRefusal, pending, grant } = useDiscountDecision(leadId, requestId)
   const formId = useId()
 
   function changeOpen(next: boolean) {
     if (pending) return
     setOpen(next)
-    if (!next) setRefusal(null)
+    if (!next) clearRefusal()
   }
 
   return (
@@ -81,8 +165,7 @@ function GrantDiscount({ leadId, requestId, studentName, admissionNumber, discou
         title={`Grant ${studentName} the discount?`}
         hint={
           <>
-            {admissionNumber}. {discount}. The School fee goes down at once, and the applicant becomes Enrolled if their payments now
-            reach the line. A granted discount can&apos;t be taken back here.
+            {admissionNumber}. {discount}. {GRANT_EFFECT}
           </>
         }
         closeLabel="Close"
@@ -102,7 +185,7 @@ function GrantDiscount({ leadId, requestId, studentName, admissionNumber, discou
           className="lr-form"
           onSubmit={(event) => {
             event.preventDefault()
-            send(() => decideDiscountAction(leadId, requestId, "grant", null), () => setOpen(false))
+            grant(() => setOpen(false))
           }}
         >
           {refusal && (
@@ -118,29 +201,25 @@ function GrantDiscount({ leadId, requestId, studentName, admissionNumber, discou
 
 function RefuseDiscount({ leadId, requestId, studentName, admissionNumber, discount }: DecideDiscountProps) {
   const [open, setOpen] = useState(false)
-  const [reason, setReason] = useState("")
-  const [missing, setMissing] = useState(false)
-  const { refusal, setRefusal, pending, send } = useDecision()
-  const reasonId = useId()
-  const hintId = useId()
-  const errorId = useId()
+  const why = useRefuseReason()
+  const { refusal, clearRefusal, pending, refuse } = useDiscountDecision(leadId, requestId)
   const formId = useId()
 
   function changeOpen(next: boolean) {
     if (pending) return
     setOpen(next)
     if (!next) {
-      setMissing(false)
-      setRefusal(null)
+      why.clearMissing()
+      clearRefusal()
     }
   }
 
-  function refuse(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (reason.trim() === "") return setMissing(true)
-    send(() => decideDiscountAction(leadId, requestId, "refuse", reason), () => {
+    if (!why.check()) return
+    refuse(why.reason, () => {
       setOpen(false)
-      setReason("")
+      why.reset()
     })
   }
 
@@ -155,7 +234,7 @@ function RefuseDiscount({ leadId, requestId, studentName, admissionNumber, disco
         title={`Refuse ${studentName} the discount?`}
         hint={
           <>
-            {admissionNumber}. {discount}. The School fee stays as it is. The person who asked reads your reason on the application.
+            {admissionNumber}. {discount}. {REFUSE_EFFECT}
           </>
         }
         closeLabel="Close"
@@ -170,31 +249,8 @@ function RefuseDiscount({ leadId, requestId, studentName, admissionNumber, disco
           </>
         }
       >
-        <form id={formId} className="lr-form" onSubmit={refuse} noValidate>
-          <div className="lr-field">
-            <label htmlFor={reasonId} className="lr-label">
-              Why is it refused?
-            </label>
-            <TextArea
-              id={reasonId}
-              value={reason}
-              maxLength={DISCOUNT_TEXT_MAX}
-              onChange={(event) => {
-                setReason(event.target.value)
-                setMissing(false)
-              }}
-              aria-invalid={missing || undefined}
-              aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
-            />
-            <p id={hintId} className="lr-hint">
-              Required.
-            </p>
-          </div>
-          {missing && (
-            <p id={errorId} role="alert" className="lr-error">
-              Write why the discount is refused.
-            </p>
-          )}
+        <form id={formId} className="lr-form" onSubmit={submit} noValidate>
+          <RefuseReason reason={why.reason} missing={why.missing} onChange={why.change} />
           {refusal && (
             <Note tone="bad" role="alert">
               {refusal}

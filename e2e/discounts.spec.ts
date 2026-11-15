@@ -16,6 +16,7 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/sup
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { leadUrl, openLeadTab } from "./lead-page"
 import { signInOnce } from "./log-in"
+import { axeProblems } from "./axe"
 
 // Requesting, granting and refusing a Staff child or Qualified orphan
 // discount, and recording Fee waived (#112). Each test makes its own Passed
@@ -113,18 +114,20 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   const row = page.getByRole("listitem", { name: new RegExp(lead.admissionNumber) })
   await expect(row).toContainText("Staff child (25% off)")
   await expect(row).toContainText(`Requested by ${ADMISSIONS.name}`)
+  await row.getByRole("button", { name: "Review" }).click()
+  const review = page.getByRole("dialog", { name: "Staff child (25% off)" })
+  await expect(review).toContainText("Mother teaches Year 3.")
   // The request links to the lead's Discounts tab.
-  await expect(row.getByRole("link", { name: lead.admissionNumber })).toHaveAttribute(
+  await expect(review.getByRole("link", { name: lead.admissionNumber })).toHaveAttribute(
     "href",
     `/staff/applicants/${lead.id}?tab=discounts#lead-discounts`,
   )
-  await row.getByRole("button", { name: "Grant" }).click()
-  const grant = page.getByRole("dialog")
-  await grant.getByRole("button", { name: "Grant discount" }).click()
-  // The dialog closes once the grant is saved. While it is open, the page
+  await review.getByRole("button", { name: "Grant the discount" }).click()
+  // The sheet closes once the grant is saved. While it is open, the page
   // behind it is hidden from the accessibility tree, so the row can't be
   // found even before the grant lands (#173).
-  await expect(grant).toHaveCount(0)
+  await expect(review).toHaveCount(0)
+  await expect(page.getByRole("status").filter({ hasText: "The desk can see it now." })).toBeVisible()
   await expect(row).toHaveCount(0)
 
   await page.goto(leadUrl(lead.id, "School fee"))
@@ -165,6 +168,29 @@ test("the Manager refuses a request on the lead with a reason, which the request
   await expect(feeDetail(page, "Annual fee")).toHaveText("TZS 2,000,000")
 })
 
+test("the Manager refuses a request from Discount requests, after giving a reason", async ({ page }) => {
+  const lead = await passedLead()
+  const made = await requestDiscount(await signedIn(ADMISSIONS), lead.id, "qualified_orphan", "Father passed away last year.", randomUUID())
+  if (!made.ok) throw new Error(JSON.stringify(made.error))
+
+  await signIn(page, MANAGER)
+  await page.goto("/staff/discounts")
+  const row = page.getByRole("listitem", { name: new RegExp(lead.admissionNumber) })
+  await expect(row).toContainText("Qualified orphan")
+  await row.getByRole("button", { name: "Review" }).click()
+  const review = page.getByRole("dialog")
+  await review.getByRole("button", { name: "Refuse request" }).click()
+  await review.getByRole("button", { name: "Refuse request" }).click()
+  await expect(review.getByRole("alert")).toHaveText("Write why the discount is refused.")
+  await review.getByLabel("Why is it refused?").fill("No death certificate was brought.")
+  await review.getByRole("button", { name: "Refuse request" }).click()
+  await expect(review).toHaveCount(0)
+  await expect(row).toHaveCount(0)
+
+  await page.goto(leadUrl(lead.id, "Discounts"))
+  await expect(page.getByRole("region", { name: "Discounts" })).toContainText("Reason for refusing: No death certificate was brought.")
+})
+
 test("the Accountant records Fee waived on a lead with a granted Qualified orphan discount", async ({ page }) => {
   const lead = await passedLead()
   const made = await requestDiscount(await signedIn(ADMISSIONS), lead.id, "qualified_orphan", "Both parents died.", randomUUID())
@@ -187,4 +213,26 @@ test("the Accountant records Fee waived on a lead with a granted Qualified orpha
   await expect(section.getByRole("status")).toContainText("Seat priority: Full.")
   await expect(feeDetail(page, "Seat priority")).toHaveText("Full")
   await expect(feeDetail(page, "Enrolled")).toHaveText("By Fee waived")
+})
+
+test("axe finds nothing on Discount requests, its review sheet and the reason step", { tag: "@nightly" }, async ({ page }) => {
+  const lead = await passedLead()
+  const made = await requestDiscount(await signedIn(ADMISSIONS), lead.id, "staff_child", "Mother teaches Year 3.", randomUUID())
+  if (!made.ok) throw new Error(JSON.stringify(made.error))
+
+  await signIn(page, MANAGER)
+  await page.goto("/staff/discounts")
+  await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
+  const row = page.getByRole("listitem", { name: new RegExp(lead.admissionNumber) })
+  await expect(row).toBeVisible()
+  expect(await axeProblems(page)).toEqual([])
+
+  await row.getByRole("button", { name: "Review" }).click()
+  const review = page.getByRole("dialog")
+  await expect(review.getByRole("button", { name: "Grant the discount" })).toBeVisible()
+  expect(await axeProblems(page, ".kit-sheet")).toEqual([])
+
+  await review.getByRole("button", { name: "Refuse request" }).click()
+  await expect(review.getByLabel("Why is it refused?")).toBeFocused()
+  expect(await axeProblems(page, ".kit-sheet")).toEqual([])
 })

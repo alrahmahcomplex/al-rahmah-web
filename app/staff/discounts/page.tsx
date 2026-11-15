@@ -1,26 +1,25 @@
-import { BadgePercentIcon } from "lucide-react"
 import type { Metadata } from "next"
-import Link from "next/link"
 import { forbidden } from "next/navigation"
 
-import { EmptyState } from "@/components/staff/empty-state"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card, EmptyState, ListRow, Note, PageHeader, pageTitle, Tag } from "@/components/kit"
 import { listPendingDiscountRequests } from "@/lib/services/discounts"
 import { createClient } from "@/utils/supabase/server"
 
-import { DecideDiscount } from "./decide-discount"
-import { canDecideDiscount, discountLabel } from "../applicants/[id]/discount-outcome"
+import { canDecideDiscount, DISCOUNT_STATE_LABELS, discountLabel } from "../applicants/[id]/discount-outcome"
 import { dayOf } from "../applicants/[id]/reopening-outcome"
 import { leadTabHref } from "../applicants/[id]/tabs"
 import { requireStaff } from "../session"
+import { ReviewDiscount } from "./review-discount"
+import "./discounts.css"
 
 export const metadata: Metadata = {
-  title: "Discount requests · Al-Rahmah Complex",
+  title: pageTitle("Discount requests"),
 }
 
 // Every Pending Staff child and Qualified orphan request, oldest first, for
 // the Admissions Manager to grant or refuse (#112). A request on a lead that
-// was closed since can only be refused until the lead is reopened.
+// was closed since can only be refused until the lead is reopened. Each row
+// opens a review sheet with the decision (#327). Drawn in the new shell.
 export default async function DiscountRequestsPage() {
   const staff = await requireStaff()
   if (!canDecideDiscount(staff.permissions)) forbidden()
@@ -28,61 +27,61 @@ export default async function DiscountRequestsPage() {
   const requests = await listPendingDiscountRequests(await createClient())
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="staff-heading">Discount requests</h1>
-        <p className="text-sm text-muted-foreground">
-          Staff child and Qualified orphan discounts waiting for a decision, oldest first. Check the supporting documents outside the
-          system.
-        </p>
-      </div>
-
+    <>
+      <PageHeader
+        title="Discount requests"
+        subtitle="Staff child and Qualified orphan discounts waiting for a decision, oldest first. Check the supporting documents outside the system."
+      />
       {!requests.ok ? (
-        <Alert variant="destructive">
-          <AlertDescription>Discount requests could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
-      ) : requests.data.length === 0 ? (
-        <EmptyState icon={BadgePercentIcon} title="No discount requests are waiting." className="max-w-3xl" />
+        <Note tone="bad" role="alert">
+          Discount requests could not be loaded. Try again in a moment.
+        </Note>
       ) : (
-        <ol aria-label="Pending discount requests" className="flex max-w-3xl flex-col gap-3">
-          {requests.data.map((request) => (
-            <li
-              key={request.id}
-              aria-label={`${request.admissionNumber} ${request.studentName}`}
-              className="flex flex-col gap-2 rounded-xl p-4 ring-1 ring-foreground/10"
-            >
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <Link
-                  href={leadTabHref(request.leadId, "discounts", "lead-discounts")}
-                  className="font-mono text-sm font-medium text-blue-600 underline-offset-4 hover:underline"
-                >
-                  {request.admissionNumber}
-                </Link>
-                <span className="text-sm font-medium text-slate-900">{request.studentName}</span>
-                <span className="text-xs text-muted-foreground">
-                  {request.className} {request.dayOrBoarding}, {request.enrollmentYear}
-                </span>
-              </div>
-              <p className="text-sm font-medium text-slate-900">{discountLabel(request.kind)}</p>
-              <p className="text-xs text-muted-foreground">
-                Requested by {request.requestedBy ?? "a staff member"} on {dayOf(request.requestedAt)}
-              </p>
-              <p className="text-sm break-words whitespace-pre-line text-slate-900">{request.note}</p>
-              {!request.leadOpen && (
-                <p className="text-sm text-slate-700">This application is closed. It can be granted only after it is reopened.</p>
-              )}
-              <DecideDiscount
-                leadId={request.leadId}
-                requestId={request.id}
-                studentName={request.studentName}
-                admissionNumber={request.admissionNumber}
-                discount={discountLabel(request.kind)}
-                canGrant={request.leadOpen}
-              />
-            </li>
-          ))}
-        </ol>
+        <Card>
+          {requests.data.length === 0 ? (
+            <EmptyState illustration="inbox" title="No discount requests are waiting." />
+          ) : (
+            <ol aria-label="Pending discount requests" className="dr-list">
+              {requests.data.map((request) => {
+                const discount = discountLabel(request.kind)
+                const requestedByOn = `${request.requestedBy ?? "a staff member"} on ${dayOf(request.requestedAt)}`
+                return (
+                  <li key={request.id} aria-label={`${request.admissionNumber} ${request.studentName}`}>
+                    <ListRow
+                      icon="discounts"
+                      title={`${request.studentName} · ${discount}`}
+                      caption={
+                        <span className="dr-cap">
+                          <span className="dr-why">{request.note}</span>
+                          <span className="dr-by">· Requested by {requestedByOn}</span>
+                        </span>
+                      }
+                      trailing={
+                        <span className="dr-end">
+                          {!request.leadOpen && <Tag tone="line">Closed</Tag>}
+                          <Tag tone="wait">{DISCOUNT_STATE_LABELS.pending}</Tag>
+                          <ReviewDiscount
+                            leadId={request.leadId}
+                            requestId={request.id}
+                            studentName={request.studentName}
+                            admissionNumber={request.admissionNumber}
+                            leadHref={leadTabHref(request.leadId, "discounts", "lead-discounts")}
+                            discount={discount}
+                            place={`${request.className} ${request.dayOrBoarding}, ${request.enrollmentYear}`}
+                            note={request.note}
+                            requestedByOn={requestedByOn}
+                            canGrant={request.leadOpen}
+                          />
+                        </span>
+                      }
+                    />
+                  </li>
+                )
+              })}
+            </ol>
+          )}
+        </Card>
       )}
-    </div>
+    </>
   )
 }

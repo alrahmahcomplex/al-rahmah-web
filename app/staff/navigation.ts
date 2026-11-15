@@ -42,14 +42,13 @@ export type StaffNavEntry = {
 
 // The staff home, where Check-in and Register students start (#323).
 // Everyone signed in sees it, so it needs no permission and sits outside
-// STAFF_NAV; the shell puts it first, in the group with no title. Its icon is
-// the registry's school until the house arrives with icon set 1 (#401).
+// STAFF_NAV; the shell puts it first, in the group with no title.
 export const STAFF_HOME = {
   href: "/staff",
   label: "Home",
   group: "",
   icon: HouseIcon,
-  iconName: "school",
+  iconName: "house",
 } as const satisfies Omit<StaffNavEntry, "permission">
 
 // Every area of the staff side, each shown only to holders of the permission

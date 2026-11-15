@@ -1,5 +1,5 @@
-/* Home (#323), measured from prototype v38 → Home. Borders and outlines use
-   the kit's current tokens; the thinner v38 lines arrive kit-wide with #401. */
+/* Home (#323), measured from prototype v38 → Home. Lines use the kit's
+   --gf-stroke (#401). */
 
 /* The stage keeps a right gutter on Home for the folded Register button. */
 @media (min-width: 861px) {
@@ -19,12 +19,12 @@
 .hm-find { display: flex; flex-direction: column; min-width: 0; }
 .hm-find-bar {
   display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 6px 0 16px; background: var(--gf-paper);
-  border: 1.5px solid var(--gf-line); border-radius: 999px; box-shadow: var(--gf-card-shadow);
+  border: var(--gf-stroke) solid var(--gf-line); border-radius: 999px; box-shadow: var(--gf-card-shadow);
   transition: border-color var(--gf-t-med), box-shadow var(--gf-t-med);
 }
 .hm-find-bar:focus-within { border-color: var(--gf-indigo); box-shadow: 0 0 0 4px rgb(9 0 187 / 0.12); }
 .hm-find-l {
-  flex: none; display: flex; align-items: center; gap: 8px; padding-right: 12px; border-right: 1.5px solid var(--gf-line);
+  flex: none; display: flex; align-items: center; gap: 8px; padding-right: 12px; border-right: var(--gf-stroke) solid var(--gf-line);
   color: var(--gf-indigo);
 }
 .hm-find-l b { font-weight: 600; font-size: 14px; color: var(--gf-ink); white-space: nowrap; }
@@ -42,7 +42,7 @@
 /* ---------- a stat card ---------- */
 .hm-stat {
   display: grid; grid-template-columns: minmax(0, 1fr) 36px; grid-template-rows: auto auto 36px; column-gap: 10px; row-gap: 6px;
-  padding: 16px 16px 10px 18px; border-radius: 22px; background: var(--gf-paper); border: 1.5px solid var(--gf-line);
+  padding: 16px 16px 10px 18px; border-radius: 22px; background: var(--gf-paper); border: var(--gf-stroke) solid var(--gf-line);
   transition: border-color var(--gf-t-med);
 }
 .hm-stat:hover { border-color: var(--gf-line-strong); }
@@ -91,7 +91,7 @@
 }
 .hm-tip {
   position: absolute; z-index: 2; transform: translate(-50%, calc(-100% - 10px)); padding: 4px 10px; border-radius: 10px;
-  background: var(--gf-paper); border: 1.5px solid var(--gf-mist); box-shadow: var(--gf-card-shadow); pointer-events: none;
+  background: var(--gf-paper); border: var(--gf-stroke) solid var(--gf-mist); box-shadow: var(--gf-card-shadow); pointer-events: none;
   font-weight: 700; font-size: 13px; color: var(--gf-indigo-night); white-space: nowrap;
 }
 

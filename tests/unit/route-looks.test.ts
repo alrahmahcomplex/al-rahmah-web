@@ -65,7 +65,7 @@ describe("routeFor and lookFor", () => {
     expect(lookFor("/staff/applicants/1ead0000-0000-4000-8000-000000000080")).toBe("new")
     expect(lookFor("/staff/applicants/abc/history")).toBe("new")
     expect(lookFor("/staff/applicants/abc/reopen")).toBe("new")
-    expect(lookFor("/staff/applicants")).toBe("legacy")
+    expect(lookFor("/staff/applicants")).toBe("new")
     expect(lookFor("/staff/fees")).toBe("new")
     expect(lookFor("/staff/fees/2027")).toBe("new")
     expect(lookFor("/staff/seats")).toBe("new")

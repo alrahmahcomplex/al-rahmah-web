@@ -250,10 +250,19 @@ test("no page or response before the finish carries an agent's code, and the fin
   for (const body of bodiesBefore) for (const code of codes) expect(body.includes(code), `a response before the finish carries ${code}`).toBe(false)
 
   finishing = true
-  // The Server Action's own answer, read as it arrives.
-  const answer = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/discount-code")
+  // The Server Action's own answer. The test fetches it itself and hands it
+  // on to the page, so its body is read here rather than from the browser,
+  // which may already have let it go once the finish shows (#425).
+  let resolveSent: (body: string) => void = () => {}
+  const answer = new Promise<string>((resolve) => (resolveSent = resolve))
+  await page.route("**/discount-code", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback()
+    const response = await route.fetch()
+    resolveSent(await response.text())
+    await route.fulfill({ response })
+  })
   await sendButton(page, "en").click()
-  const sent = await (await answer).text()
+  const sent = await answer
   await expect(page.getByRole("heading", { level: 1, name: WORDS.en.done })).toBeVisible()
   const own = (await page.locator("[data-own-code]").textContent())!.trim()
   expect(own).toMatch(CODE)

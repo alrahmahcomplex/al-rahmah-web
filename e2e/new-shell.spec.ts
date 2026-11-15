@@ -81,7 +81,8 @@ test.describe("on a desktop", () => {
     await expect(page).toHaveURL(/\/staff\/applicants\?q=Asha$/)
   })
 
-  test("the toggle folds the sidebar to its icons, for both shells, across a reload", async ({ page }) => {
+  test("the toggle folds the sidebar to its icons, for both shells, across a reload", async ({ page, allowConsoleError }) => {
+    allowConsoleError(/^console\.error: Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/[^)]+\/staff\/no-such-page\)$/, "the staff 404 answers with a 404 status")
     await open(page, ADMISSIONS, "/staff/kit")
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "true")
     await toggle(page).click()
@@ -93,8 +94,8 @@ test.describe("on a desktop", () => {
     await page.reload()
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
     await expect(handle(page)).toHaveCount(0)
-    // Interviews is still drawn in the old shell.
-    await page.goto("/staff/interviews")
+    // The staff 404 (the catch-all route) is still drawn in the old shell.
+    await page.goto("/staff/no-such-page")
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
     await page.getByRole("button", { name: "Expand sidebar" }).click()
 

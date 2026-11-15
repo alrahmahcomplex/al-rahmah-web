@@ -119,7 +119,7 @@ function Section({
         <EmptyState
           title="This page is past the end of the list."
           action={
-            <ButtonLink href={followUpsHref(search, { [section]: Math.max(result.data.pageCount, 1) })} variant="ghost">
+            <ButtonLink href={followUpsHref(search, { [section]: result.data.pageCount })} variant="ghost">
               Previous page
             </ButtonLink>
           }

@@ -67,7 +67,7 @@ test.describe("on a desktop", () => {
   })
 
   test("Admissions Staff see Admissions, Referrals and Fee schedule, and no Admin group", async ({ page, allowConsoleError }) => {
-    allowConsoleError(UNKNOWN_404, "the staff 404 answers with a 404 status")
+    allowConsoleError(UNKNOWN_404, "the staff 404 may answer with a 404 status")
     await logIn(page, ADMISSIONS.email, ADMISSIONS.password)
     await expect(page).toHaveURL(/\/staff$/)
     await page.goto(UNKNOWN)

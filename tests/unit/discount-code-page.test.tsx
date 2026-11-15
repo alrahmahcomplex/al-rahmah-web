@@ -359,7 +359,8 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Change Answer" }))
     await user.click(screen.getByRole("radio", { name: WORDS.en.no }))
     expect(await screen.findByRole("button", { name: WORDS.en.send })).toBeInTheDocument()
-    expect(screen.queryByText("AAN-132")).not.toBeInTheDocument()
+    // The code's folded row folds shut before it leaves the page.
+    await waitFor(() => expect(screen.queryByText("AAN-132")).not.toBeInTheDocument())
   })
 
   it("waits for the security check before sending", async () => {

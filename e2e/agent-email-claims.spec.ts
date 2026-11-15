@@ -6,7 +6,7 @@ import { expect, test } from "./staff-test"
 import { asSystem, secretClient, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
 import { PHONE_WIDTH, waitForSecurityCheck } from "./admission-form"
-import { chooseLanguage, FORBIDDEN, fillRegistration, WORDS } from "./discount-code"
+import { chooseLanguage, FORBIDDEN, fillRegistration, nameBox, sendButton, WORDS } from "./discount-code"
 import { logIn } from "./log-in"
 
 // Sign-up with an email and claiming an existing Discount code (#193) end to
@@ -55,7 +55,7 @@ async function send(page: Page, entry: Entry) {
   if (entry.hasCode) await fillRegistration(page, "sw", entry, { code: entry.code ?? "" })
   else await fillRegistration(page, "sw", entry)
   await waitForSecurityCheck(page)
-  await page.getByRole("button", { name: t.send }).click()
+  await sendButton(page, "sw", !!entry.hasCode).click()
 }
 
 async function claim(page: Page, agent: { fullName: string; phone: string; code: string }, address: string, name = agent.fullName) {
@@ -94,7 +94,7 @@ test.describe("the Discount code page's answers", () => {
     const address = email("claim")
     await claim(page, agent, address)
 
-    await expect(page.getByRole("heading", { level: 1, name: t.done })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: t.claimDone })).toBeVisible()
     await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
     await expect(page.getByText(new RegExp(`/apply\\?ref=${agent.code}$`))).toBeVisible()
     await expect(page.getByRole("link", { name: t.share })).toBeVisible()
@@ -112,7 +112,7 @@ test.describe("the Discount code page's answers", () => {
     await expect(notice(page)).toHaveText(
       "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.",
     )
-    await expect(page.getByLabel(t.name)).toHaveValue(agent.fullName)
+    await expect(nameBox(page, "sw")).toHaveValue("ZAWADI")
   })
 
   test("3. the code matches but the mobile doesn't", async ({ page }) => {
@@ -122,7 +122,7 @@ test.describe("the Discount code page's answers", () => {
   })
 
   test("4. nothing matches, a switched-off code included", async ({ page }) => {
-    await send(page, { name: "Zawadi Hakuna", phone: phone(), email: email("four"), code: `NO-${randomInt(1000, 9999)}`, hasCode: true })
+    await send(page, { name: "Zawadi Hakuna Kitu", phone: phone(), email: email("four"), code: `NO-${randomInt(1000, 9999)}`, hasCode: true })
     await expect(notice(page)).toHaveText("Hatukupata code hii. Ihakiki, au piga simu ofisini.")
 
     const off = await existingAgent()
@@ -140,9 +140,9 @@ test.describe("the Discount code page's answers", () => {
     const agent = await existingAgent()
     const address = email("five")
     await claim(page, agent, address)
-    await expect(page.getByRole("heading", { level: 1, name: t.done })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: t.claimDone })).toBeVisible()
 
-    await claim(page, agent, address, "Jina Lingine")
+    await claim(page, agent, address, "Jina Lingine Kabisa")
     await expect(notice(page)).toHaveText("Tumepokea ombi lako; shule itathibitisha.")
     await claim(page, agent, email("five-other"))
     await expect(notice(page)).toHaveText("Tumepokea ombi lako; shule itathibitisha.")
@@ -180,15 +180,15 @@ test.describe("the Discount code page's answers", () => {
   })
 
   test("an email already in use gets the neutral reply", async ({ page }) => {
-    await send(page, { name: "Zawadi Barua", phone: phone(), email: MANAGER.email })
+    await send(page, { name: "Zawadi Barua Pepe", phone: phone(), email: MANAGER.email })
     await expect(notice(page)).toHaveText("Barua pepe hii haiwezi kutumika. Tumia nyingine au piga simu ofisini.")
   })
 
   test("the sign-up prompt and the sign-in prompt stay apart", async ({ page }) => {
     await chooseLanguage(page.context(), "sw")
     await page.goto("/discount-code")
-    await fillRegistration(page, "sw", { name: "Zawadi Barua", phone: phone(), email: email("apart") })
-    await page.getByRole("button", { name: "Badilisha Code" }).click()
+    await fillRegistration(page, "sw", { name: "Zawadi Barua Pepe", phone: phone(), email: email("apart") })
+    await page.getByRole("button", { name: "Badilisha Jibu" }).click()
     await expect(page.getByRole("group", { name: t.hasCode })).toBeVisible()
     await expect(page.getByText("Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Chagua Ndiyo.")).toBeVisible()
     await expect(page.getByText("Umeshaweka nenosiri?")).toBeVisible()
@@ -204,8 +204,8 @@ test.describe("the Manager's queue", () => {
     const rival = email("rival")
     const visitor = await browser.newPage({ viewport: PHONE_WIDTH })
     await claim(visitor, agent, address, `${agent.fullName} Mwenyewe`)
-    await expect(visitor.getByRole("heading", { level: 1, name: t.done })).toBeVisible()
-    await claim(visitor, agent, rival, "Mtu Mwingine")
+    await expect(visitor.getByRole("heading", { level: 1, name: t.claimDone })).toBeVisible()
+    await claim(visitor, agent, rival, "Mtu Mwingine Kabisa")
     await expect(notice(visitor)).toHaveText("Tumepokea ombi lako; shule itathibitisha.")
     await visitor.close()
 
@@ -218,8 +218,9 @@ test.describe("the Manager's queue", () => {
     const card = queueCard(page, agent.fullName)
     await expect(card).toContainText(`Phone ${agent.fullName} on`)
     await expect(card).toContainText("1 other attempt")
-    await expect(card).toContainText(`${agent.fullName} Mwenyewe`)
-    await expect(card).toContainText("Mtu Mwingine")
+    // A claim's typed name is stored in capitals, as the three name boxes take it.
+    await expect(card).toContainText(`${agent.fullName} Mwenyewe`.toUpperCase())
+    await expect(card).toContainText("MTU MWINGINE KABISA")
     await card.getByRole("button", { name: `Confirm ${address} for ${agent.fullName}` }).click()
     await expect(page.getByText(`Email confirmed for ${agent.fullName}. Invite sent to ${address}.`)).toBeVisible()
     await expect(card).toHaveCount(0)
@@ -233,7 +234,7 @@ test.describe("the Manager's queue", () => {
     const agent = await existingAgent()
     const address = email("reject")
     await claim(page, agent, address)
-    await expect(page.getByRole("heading", { level: 1, name: t.done })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: t.claimDone })).toBeVisible()
 
     await signInManager(page)
     await page.goto("/staff/agents?status=all&account=awaiting-confirmation")
@@ -250,7 +251,7 @@ test.describe("the Manager's queue", () => {
     const typo = email("typo")
     const corrected = email("corrected")
     await claim(page, agent, typo)
-    await expect(page.getByRole("heading", { level: 1, name: t.done })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: t.claimDone })).toBeVisible()
 
     await signInManager(page)
     await page.goto("/staff/agents?status=all&account=awaiting-confirmation")

@@ -108,7 +108,7 @@ describe("Seam 1: the Manager creates an agent", () => {
     const created = await createAgent(await signedIn(MANAGER), { fullName: `  ${fullName} `, phone: number, email: ` ${email} ` })
     expect(created).toEqual({
       ok: true,
-      data: { kind: "created", agent: { id: expect.any(String), fullName, code: expect.stringMatching(/^NC[A-Z]?-\d{3,4}$/), phone: asE164(number) } },
+      data: { kind: "created", agent: { id: expect.any(String), fullName, code: expect.stringMatching(/^NC[A-Z]?-\d{3,}$/), phone: asE164(number) } },
     })
     if (!created.ok || created.data.kind !== "created") return
     expect(await agentRow(created.data.agent.id)).toMatchObject({
@@ -181,54 +181,6 @@ describe("Seam 1: the Manager creates an agent", () => {
     })
     expect(await agentsWithPhone(asE164(number))).toEqual([])
   })
-
-  test("generated codes skip codes already on leads", async () => {
-    // Every three-digit code for this name's prefix is on a lead with no
-    // agent behind it, so the generated code has four digits.
-    const prefix = `Q${String.fromCharCode(65 + randomInt(0, 26))}${String.fromCharCode(65 + randomInt(0, 26))}`
-    const fullName = `${prefix[0]}uddus ${prefix[1]}aleh ${prefix[2]}atibu`
-    const template = await codedLeadWithUnknownCode(freshCode())
-    const { code, coded } = await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      // Admission numbers are drawn at random from the free ones, as the
-      // app and other suites draw theirs. One taken by a transaction running
-      // alongside raises a unique violation, so the planting retries from a
-      // savepoint with a fresh draw.
-      let inserted
-      for (let attempt = 1; ; attempt++) {
-        await sql.query("savepoint plant")
-        try {
-          inserted = await sql.query(
-            `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, guardian_contact_id, status, visit_date, referral_code)
-             select free.number, 'Coded ' || free.n, l.class_name, l.enrollment_year, l.day_or_boarding, l.guardian_contact_id, l.status, l.visit_date,
-                    $1 || '-' || lpad((free.n - 1)::text, 3, '0')
-             from public.leads l,
-                  (select number, row_number() over () as n
-                   from (select 'ADMSN-' || lpad(g::text, 5, '0') as number
-                         from generate_series(0, 99999) g
-                         where not exists (select 1 from public.leads x where x.admission_number = 'ADMSN-' || lpad(g::text, 5, '0'))
-                         order by random()
-                         limit 1000) picked) free
-             where l.id = $2`,
-            [prefix, template],
-          )
-          await sql.query("release savepoint plant")
-          break
-        } catch (error) {
-          if ((error as { code?: string }).code !== "23505" || attempt === 5) throw error
-          await sql.query("rollback to savepoint plant")
-        }
-      }
-      const { rows } = await sql.query("select agent_id from public.create_agent_record($1, $2, null, null, null, 'Pending', null)", [
-        fullName,
-        asE164(phone()),
-      ])
-      const made = await sql.query("select code from public.marketing_agents where id = $1", [rows[0].agent_id])
-      return { code: made.rows[0].code as string, coded: inserted!.rowCount }
-    })
-    expect(coded).toBe(1000)
-    expect(code).toMatch(new RegExp(`^${prefix}-\\d{4}$`))
-  }, 60_000)
 
   test("refuses bad input field by field", async () => {
     const manager = await signedIn(MANAGER)

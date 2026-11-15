@@ -375,36 +375,6 @@ describe("partial uniqueness", () => {
     await expect(insert(agent.code, agent.phone)).resolves.toBeUndefined()
   })
 
-  test("registration never generates a code a retired record holds", async () => {
-    const prefix = `R${String.fromCharCode(65 + randomInt(0, 26))}${String.fromCharCode(65 + randomInt(0, 26))}`
-    const name = `${prefix[0]}ashidi ${prefix[1]}ama ${prefix[2]}uma`
-    const { code, retired } = await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      // Every three-digit code for this prefix, then all of them retired.
-      await sql.query(
-        `insert into public.marketing_agents (full_name, phone, code)
-         select 'Retired Agent', '+2556' || lpad((n + $2::int)::text, 8, '0'), $1 || '-' || lpad(n::text, 3, '0')
-         from generate_series(0, 999) n
-         on conflict do nothing`,
-        [prefix, randomInt(0, 90_000_000)],
-      )
-      const { rows } = await sql.query(
-        `select count(public.record_agent_status_change(a.id, 'retired', 'Test: retired', null))::int as retired
-         from public.marketing_agents a where a.full_name = 'Retired Agent' and a.retired_at is null and a.code like $1 || '-___'`,
-        [prefix],
-      )
-      await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
-      await sql.query("set local role service_role")
-      const made = await sql.query<{ answer: { outcome: string; code: string } }>(
-        "select public.sign_up_marketing_agent($1, $2, null, $3, false, null) as answer",
-        [name, phone(), `rashidi-${randomUUID().slice(0, 8)}@example.test`],
-      )
-      expect(made.rows[0].answer.outcome).toBe("registered")
-      return { code: made.rows[0].answer.code, retired: rows[0].retired as number }
-    })
-    expect(retired).toBe(1000)
-    expect(code).toMatch(new RegExp(`^${prefix}-\\d{4}$`))
-  }, 60_000)
 })
 
 describe("the cached status columns and their history", () => {

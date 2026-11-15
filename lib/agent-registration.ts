@@ -1,3 +1,4 @@
+import { cleanName } from "@/components/guided-form/typing"
 import type { Result } from "@/lib/services/result"
 
 // The Discount code page's own rules: reading what someone typed, and the
@@ -5,12 +6,23 @@ import type { Result } from "@/lib/services/result"
 // Action, so both check a draft the same way. The phone's format, and
 // whether a code is one, are the database's to judge (`normalize_phone`,
 // `normalize_referral_code`), so here they only have to be present and
-// short enough. An email is required (#193); the "Already have a Discount
-// code?" box makes the code required too.
+// short enough. An email is required (#193). The name comes in three boxes,
+// First, Middle and Last, all required (v38), and is stored as one full name
+// in capitals. "Do you already have a Discount code?" Yes makes the code
+// required; No sends no code at all, so the database makes a new one.
 
 export type AgentField = "full_name" | "phone" | "whatsapp" | "email" | "code"
 
-export type AgentDraft = { fullName: string; phone: string; whatsapp: string; email: string; hasCode: boolean; code: string }
+export type AgentDraft = {
+  firstName: string
+  middleName: string
+  lastName: string
+  phone: string
+  whatsapp: string
+  email: string
+  hasCode: boolean
+  code: string
+}
 export type AgentRegistration = {
   fullName: string
   phone: string
@@ -22,21 +34,38 @@ export type AgentRegistration = {
 
 const MAX_PHONE_LENGTH = 40
 const MAX_CODE_LENGTH = 40
+const MAX_NAME_LENGTH = 100
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
-
-function clean(value: string) {
-  return value.trim().replace(/\s+/g, " ")
-}
 
 function text(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value : ""
 }
 
+/** The three names as one full name, in capitals: what the database stores. */
+export function agentFullName(draft: Pick<AgentDraft, "firstName" | "middleName" | "lastName">): string {
+  return [draft.firstName, draft.middleName, draft.lastName].map(cleanName).filter(Boolean).join(" ")
+}
+
+/**
+ * The letters a new Discount code starts with, by the database's rule
+ * (`marketing_agent_code_prefix`): the first letter of each of the first
+ * three words, keeping only A to Z, or AR when none is left.
+ */
+export function agentCodePrefix(fullName: string): string {
+  const initials = cleanName(fullName)
+    .split(" ")
+    .slice(0, 3)
+    .map((word) => word.charAt(0))
+    .filter((letter) => /^[A-Z]$/.test(letter))
+    .join("")
+  return initials || "AR"
+}
+
 function read(draft: AgentDraft): Result<AgentRegistration, AgentField> {
-  const fullName = clean(draft.fullName)
+  const parts = [draft.firstName, draft.middleName, draft.lastName].map(cleanName)
+  const fullName = parts.join(" ")
   // Counted in characters, as the database counts them.
-  const nameLength = Array.from(fullName).length
-  if (nameLength < 2 || nameLength > 100) return { ok: false, error: "full_name" }
+  if (parts.some((part) => part === "") || Array.from(fullName).length > MAX_NAME_LENGTH) return { ok: false, error: "full_name" }
 
   const phone = draft.phone.trim()
   if (!phone || phone.length > MAX_PHONE_LENGTH) return { ok: false, error: "phone" }
@@ -47,7 +76,8 @@ function read(draft: AgentDraft): Result<AgentRegistration, AgentField> {
   const email = draft.email.trim().toLowerCase()
   if (email.length > 254 || !EMAIL.test(email)) return { ok: false, error: "email" }
 
-  const code = draft.code.trim()
+  // No skips the code box: whatever a stale draft holds there is not sent.
+  const code = draft.hasCode ? draft.code.trim() : ""
   if (code.length > MAX_CODE_LENGTH || (draft.hasCode && !code)) return { ok: false, error: "code" }
 
   return { ok: true, data: { fullName, phone, whatsapp: whatsapp || null, email, hasCode: draft.hasCode, code: code || null } }
@@ -62,7 +92,9 @@ export function agentRegistrationProblem(draft: AgentDraft): AgentField | null {
 // The Server Action's reading of the posted form.
 export function parseAgentRegistration(formData: FormData): Result<AgentRegistration, AgentField> {
   return read({
-    fullName: text(formData.get("full_name")),
+    firstName: text(formData.get("firstName")),
+    middleName: text(formData.get("middleName")),
+    lastName: text(formData.get("lastName")),
     phone: text(formData.get("phone")),
     whatsapp: text(formData.get("whatsapp")),
     email: text(formData.get("email")),

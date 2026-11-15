@@ -3,11 +3,14 @@
 import { Check, ChevronDown, Copy, MessageCircle, Phone, Plus } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState, useTransition, type KeyboardEvent, type ReactNode } from "react"
+import { toast } from "sonner"
 
 import { BrandTopBar } from "@/components/brand"
 import {
+  BottomSheet,
   ChangeLink,
   ChoiceTiles,
+  CodeBox,
   Confetti,
   ContinuePill,
   FieldError,
@@ -17,14 +20,16 @@ import {
   GuidedStep,
   Hint,
   NoticeBox,
+  PersonNameBoxes,
   ProgressBar,
   QuestionTitle,
   revealStep,
   SummaryRow,
+  type PersonName,
 } from "@/components/guided-form"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import { buttonVariants } from "@/components/ui/button"
-import { agentRegistrationProblem, type AgentDraft, type AgentField } from "@/lib/agent-registration"
+import { agentCodePrefix, agentFullName, agentRegistrationProblem, type AgentDraft, type AgentField } from "@/lib/agent-registration"
 import { discountCodeShareLink } from "@/lib/discount-code-share"
 import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
@@ -33,15 +38,26 @@ import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
 import { COPY } from "./copy"
 import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
+import "./discount-code.css"
 
-// The Discount code page's form and its confirmation, in concept C: one
-// question at a time, answered ones folding into a line with a two-word
-// "Badilisha …" link. The entries live in this component's state, so the
-// menu's language switch (which re-renders the page around it) or a refused
-// send never loses one. "Tayari una code?" claims an existing code (#193):
-// Ndiyo makes the code required, Hapana leaves it optional.
+// The Discount code page's form and its confirmation, in concept C as
+// prototype v38 draws it: one question at a time, answered ones folding into
+// a line with a two-word "Badilisha …" link. The entries live in this
+// component's state, so the menu's language switch (which re-renders the page
+// around it) or a refused send never loses one.
+//
+// - The name is three boxes, First, Middle and Last, all required.
+// - "Do you already have a Discount code?" Yes opens the code box, which adds
+//   the hyphen by itself, and claims that code (#193). No goes straight to
+//   the review: the database makes a new code from the initials.
+// - The page never shows another agent's code. The review shows only the
+//   person's own initials; the whole code appears on their finished screen.
+// - Start over sits on the first question only; Back takes its place after.
+//   With answers it asks first, in a sheet; on an empty form it says there is
+//   nothing to clear; on the finished screen it opens a new form at once.
 
-const EMPTY: AgentDraft = { fullName: "", phone: "", whatsapp: "", email: "", hasCode: false, code: "" }
+const EMPTY: AgentDraft = { firstName: "", middleName: "", lastName: "", phone: "", whatsapp: "", email: "", hasCode: false, code: "" }
+const NAME_KEYS = ["firstName", "middleName", "lastName"] as const
 
 type Copy = (typeof COPY)[Language]
 type Done = Extract<DiscountCodeState, { status: "registered" | "claimed" }>
@@ -49,13 +65,20 @@ type Done = Extract<DiscountCodeState, { status: "registered" | "claimed" }>
 // database couldn't read, which reads differently from an empty one.
 type Shown = { field: AgentField; server: boolean }
 type Notice = "check-pending" | DiscountCodeMessage | null
-type Step = "name" | "phone" | "email" | "code" | "send"
+type Step = "name" | "phone" | "email" | "has" | "code" | "send"
 type CodeAnswer = "yes" | "no" | null
 
-const ORDER: Step[] = ["name", "phone", "email", "code", "send"]
+const ORDER: Step[] = ["name", "phone", "email", "has", "code", "send"]
 // The step each field is asked on. The draft is checked in this same order
 // (lib/agent-registration.ts), so the first problem names the earliest step.
 const FIELD_STEP: Record<AgentField, Step> = { full_name: "name", phone: "phone", whatsapp: "phone", email: "email", code: "code" }
+// The progress bar: Wewe holds the name (1), then phone and WhatsApp (2 and
+// 3); Code holds the email, the question, the code box and the review.
+const YOU_STEPS = 3
+const CODE_STEPS = 4
+const CODE_POSITION: Partial<Record<Step, number>> = { email: 0, has: 1, code: 2, send: 3 }
+// How long a picked tile shows its tick before the form moves on.
+const TILE_PAUSE_MS = 240
 
 // Answers that aren't a problem with the form: shown calmly.
 const CALM = new Set<Notice>(["claim-waiting", "invited", "joined"])
@@ -98,23 +121,38 @@ export function DiscountCodeForm({
   const [problem, setProblem] = useState<Shown | null>(null)
   const [notice, setNotice] = useState<Notice>(null)
   const [done, setDone] = useState<Done | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const [sending, startSending] = useTransition()
-  // Counts restarts, so an answer to a send from before "Futa fomu yote" is ignored.
+  // Counts restarts, so an answer to a send from before a restart is ignored.
   const round = useRef(0)
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const form = useRef<HTMLFormElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const moved = useRef(false)
+  const tileTimer = useRef<number | undefined>(undefined)
 
-  // What gets checked and sent: WhatsApp only while its field is shown.
-  const entries: AgentDraft = { ...draft, whatsapp: whatsappOn ? draft.whatsapp : "", hasCode: codeAnswer === "yes" }
+  // What gets checked and sent: WhatsApp only while its field is shown, the
+  // code only after Yes.
+  const entries: AgentDraft = {
+    ...draft,
+    whatsapp: whatsappOn ? draft.whatsapp : "",
+    hasCode: codeAnswer === "yes",
+    code: codeAnswer === "yes" ? draft.code : "",
+  }
+  const fullName = agentFullName(draft)
+
+  useEffect(() => () => window.clearTimeout(tileTimer.current), [])
 
   // After a problem or a send, put the reader at the field to fix, or at the
   // confirmation. Runs after the step's own focus, so it wins.
   useEffect(() => {
     if (!moved.current) return
     moved.current = false
-    const target = problem ? document.querySelector<HTMLElement>(`[data-field="${problem.field}"]`) : heading.current
+    let target: HTMLElement | null = heading.current
+    if (problem?.field === "full_name") {
+      const boxes = NAME_KEYS.map((key) => document.getElementById(`name-${key}`) as HTMLInputElement | null)
+      target = boxes.find((box) => box && !box.value.trim()) ?? boxes[0]
+    } else if (problem) target = document.querySelector<HTMLElement>(`[data-field="${problem.field}"]`)
     target?.focus({ preventScroll: problem !== null })
   }, [problem, done, open])
 
@@ -130,6 +168,9 @@ export function DiscountCodeForm({
     setOpen(FIELD_STEP[shown.field])
   }
 
+  // A step the form passes over: the code box, unless the answer is Yes.
+  const skipped = (step: Step, answer: CodeAnswer) => step === "code" && answer !== "yes"
+
   // The problem on this step or an earlier one, or null.
   function problemUpTo(step: Step): AgentField | null {
     const found = agentRegistrationProblem(entries)
@@ -137,16 +178,18 @@ export function DiscountCodeForm({
     return ORDER.indexOf(FIELD_STEP[found]) <= ORDER.indexOf(step) ? found : null
   }
 
-  function next(step: Step) {
+  function next(step: Step, answer: CodeAnswer = codeAnswer) {
     const found = problemUpTo(step)
     if (found) return show({ field: found, server: false })
     const now = new Set(answered).add(step)
     setAnswered(now)
     setProblem(null)
-    setOpen(ORDER.find((k) => !now.has(k)) ?? "send")
+    setOpen(ORDER.find((k) => !now.has(k) && !skipped(k, answer)) ?? "send")
   }
 
   function openStep(step: Step) {
+    // A tile picked a moment ago would otherwise move on over this choice.
+    window.clearTimeout(tileTimer.current)
     if (step === open) return
     // Leaving an answered step half-fixed would fold a wrong answer away.
     if (open !== "send" && answered.has(open)) {
@@ -157,9 +200,26 @@ export function DiscountCodeForm({
     setOpen(step)
   }
 
+  function back() {
+    let i = ORDER.indexOf(open) - 1
+    while (i > 0 && skipped(ORDER[i], codeAnswer)) i -= 1
+    openStep(ORDER[Math.max(0, i)])
+  }
+
+  // Yes opens the code box; No goes straight to the review. Picking the same
+  // answer again (after Change Answer) moves on too.
+  function answerHasCode(value: string) {
+    const answer = value as Exclude<CodeAnswer, null>
+    setCodeAnswer(answer)
+    setProblem(null)
+    window.clearTimeout(tileTimer.current)
+    tileTimer.current = window.setTimeout(() => next("has", answer), TILE_PAUSE_MS)
+  }
+
   function startOver() {
     // A send still in flight belongs to the form being cleared; its answer is ignored.
     round.current += 1
+    window.clearTimeout(tileTimer.current)
     setDraft(EMPTY)
     setWhatsappOn(false)
     setCodeAnswer(null)
@@ -168,9 +228,18 @@ export function DiscountCodeForm({
     setProblem(null)
     setNotice(null)
     setDone(null)
+    setConfirming(false)
     // A full restart skips the fold animations, for that one render.
     setInstant(true)
     window.setTimeout(() => setInstant(false), 0)
+  }
+
+  const nothingYet = answered.size === 0 && codeAnswer === null && !whatsappOn && Object.values(draft).every((v) => v === "" || v === false)
+
+  // Start over on the first question: a toast on an empty form, the sheet otherwise.
+  function askStartOver() {
+    if (nothingYet) toast(copy.nothingToClear)
+    else setConfirming(true)
   }
 
   function onSend() {
@@ -186,7 +255,9 @@ export function DiscountCodeForm({
       setNotice(turnstile.current?.reveal() ? null : "check-pending")
       return
     }
-    data.set("full_name", entries.fullName)
+    data.set("firstName", entries.firstName)
+    data.set("middleName", entries.middleName)
+    data.set("lastName", entries.lastName)
     data.set("phone", entries.phone)
     data.set("whatsapp", entries.whatsapp)
     data.set("email", entries.email)
@@ -215,15 +286,23 @@ export function DiscountCodeForm({
     })
   }
 
-  const topBar = (
-    <BrandTopBar variant="complex" language={language} showLanguagePrompt={showLanguagePrompt} onClearForm={startOver} />
-  )
+  const topBar = <BrandTopBar variant="complex" language={language} showLanguagePrompt={showLanguagePrompt} onClearForm={startOver} />
 
   if (done) {
     return (
       <>
         {topBar}
-        <Confirmation copy={copy} done={done} officePhone={officePhone} headingRef={heading} />
+        <Confirmation
+          copy={copy}
+          done={done}
+          officePhone={officePhone}
+          headingRef={heading}
+          onAgain={startOver}
+          onNewForm={() => {
+            startOver()
+            toast(copy.newFormToast)
+          }}
+        />
       </>
     )
   }
@@ -234,6 +313,14 @@ export function DiscountCodeForm({
     if (problem.server && field === "code") return copy.problems.code_unreadable
     return copy.problems[field]
   }
+  // The name boxes to mark: the empty ones, or all three when none is empty
+  // (the whole name is too long, or the database refused it).
+  const nameInvalid = (() => {
+    if (problem?.field !== "full_name") return undefined
+    const empty = NAME_KEYS.filter((key) => !draft[key].trim())
+    const marked = empty.length > 0 ? empty : NAME_KEYS
+    return Object.fromEntries(marked.map((key) => [key, true])) as Partial<Record<keyof PersonName, boolean>>
+  })()
 
   // Enter moves on, as the pill does.
   const onEnter = (step: Step) => (event: KeyboardEvent<HTMLInputElement>) => {
@@ -250,23 +337,23 @@ export function DiscountCodeForm({
     revealStep(li)
   }
 
-  const visible = (step: Step) => answered.has(step) || open === step
+  const visible = (step: Step) => !skipped(step, codeAnswer) && (answered.has(step) || open === step)
   const stateOf = (step: Step) => (open === step ? "open" : "folded")
   const change = (step: Step, label: string) => <ChangeLink onClick={() => openStep(step)}>{label}</ChangeLink>
   const describedBy = (...ids: (string | false)[]) => ids.filter(Boolean).join(" ") || undefined
 
-  // Wewe: name (1), then phone and WhatsApp together (2 and 3). Code: email, then the code.
   const youDone = (answered.has("name") ? 1 : 0) + (answered.has("phone") ? 2 : 0)
-  const codeDone = (answered.has("email") ? 1 : 0) + (answered.has("code") ? 1 : 0)
-  const activeGroup = open === "name" || open === "phone" ? 0 : open === "send" ? 2 : 1
-  const position = { name: 1, phone: 2, email: 1, code: 2, send: 0 }[open]
+  // The code box counts as done once No has passed it by.
+  const codeBoxDone = codeAnswer === "yes" ? answered.has("code") : answered.has("has")
+  const codeDone = answered.has("email") ? (answered.has("has") ? (codeBoxDone ? 3 : 2) : 1) : 0
+  const activeGroup = open === "name" || open === "phone" ? 0 : 1
+  const position = activeGroup === 0 ? (open === "name" ? 1 : 2) : (CODE_POSITION[open] ?? 0) + 1
   const status =
     open === "send"
       ? copy.progressDone
       : activeGroup === 0
-        ? copy.progress(copy.groups.you, position, 3)
-        : copy.progress(copy.groups.code, position, 2)
-  const nothingYet = answered.size === 0 && Object.values(draft).every((v) => v === "" || v === false)
+        ? copy.progress(copy.groups.you, position, YOU_STEPS)
+        : copy.progress(copy.groups.code, position, CODE_STEPS)
 
   return (
     <>
@@ -275,14 +362,14 @@ export function DiscountCodeForm({
       <section className={CARD}>
         <ProgressBar
           groups={[
-            { label: copy.groups.you, steps: 3, done: youDone, current: activeGroup === 0 ? position - 1 : undefined },
-            { label: copy.groups.code, steps: 2, done: codeDone, current: activeGroup === 1 ? position - 1 : undefined },
+            { label: copy.groups.you, steps: YOU_STEPS, done: youDone, current: activeGroup === 0 ? position - 1 : undefined },
+            { label: copy.groups.code, steps: CODE_STEPS, done: codeDone, current: activeGroup === 1 ? position - 1 : undefined },
           ]}
           activeGroup={activeGroup}
           canBack={open !== "name"}
-          onBack={() => openStep(ORDER[ORDER.indexOf(open) - 1])}
-          canReset={open === "name" && !nothingYet}
-          onReset={startOver}
+          onBack={back}
+          canReset={open === "name"}
+          onReset={askStartOver}
           labels={{ back: copy.back, reset: copy.startOver }}
           status={status}
         />
@@ -294,7 +381,7 @@ export function DiscountCodeForm({
           onSubmit={(event) => {
             event.preventDefault()
             if (open === "send") onSend()
-            else next(open)
+            else if (open !== "has") next(open)
           }}
         >
           <GuidedStack instant={instant}>
@@ -309,25 +396,23 @@ export function DiscountCodeForm({
                 key="name"
                 state={stateOf("name")}
                 onOpened={focusFirstField}
-                summary={answered.has("name") && <SummaryRow label={copy.fullName} value={draft.fullName.trim()} action={change("name", copy.change.name)} />}
+                summary={answered.has("name") && <SummaryRow label={copy.fullName} value={fullName} action={change("name", copy.change.name)} />}
               >
-                <QuestionTitle htmlFor="full-name">{copy.nameQuestion}</QuestionTitle>
-                <div>
-                  <FieldInput
-                    id="full-name"
-                    name="full_name"
-                    data-field="full_name"
-                    value={draft.fullName}
-                    onChange={(event) => update({ fullName: event.target.value })}
-                    onKeyDown={onEnter("name")}
-                    autoComplete="name"
-                    autoCapitalize="words"
-                    enterKeyHint="next"
-                    maxLength={200}
-                    invalid={!!message("full_name")}
-                    aria-describedby={describedBy(!!message("full_name") && "full-name-error")}
+                <QuestionTitle id="name-title">{copy.nameQuestion}</QuestionTitle>
+                <div className="flex flex-col gap-2">
+                  <Hint id="name-hint" className="-mt-2 text-center">
+                    {copy.nameHint}
+                  </Hint>
+                  <PersonNameBoxes
+                    id="name"
+                    aria-labelledby="name-title"
+                    aria-describedby={describedBy("name-hint", !!message("full_name") && "name-error")}
+                    labels={copy.names}
+                    value={{ firstName: draft.firstName, middleName: draft.middleName, lastName: draft.lastName }}
+                    onChange={(name) => update(name)}
+                    invalid={nameInvalid}
                   />
-                  <FieldError id="full-name-error" message={message("full_name")} />
+                  <FieldError id="name-error" message={message("full_name")} />
                 </div>
                 <ContinuePill onClick={() => next("name")}>{copy.next}</ContinuePill>
               </GuidedStep>
@@ -449,19 +534,15 @@ export function DiscountCodeForm({
               </GuidedStep>
             )}
 
-            {visible("code") && (
+            {visible("has") && (
               <GuidedStep
-                key="code"
-                state={stateOf("code")}
+                key="has"
+                state={stateOf("has")}
                 onOpened={focusFirstField}
                 openOnMount
                 summary={
-                  answered.has("code") && (
-                    <SummaryRow
-                      label={copy.hasCode}
-                      value={entries.code.trim() ? `${codeAnswer === "yes" ? copy.yes : copy.no} · ${entries.code.trim()}` : copy.no}
-                      action={change("code", copy.change.code)}
-                    />
+                  answered.has("has") && (
+                    <SummaryRow label={copy.hasCode} value={codeAnswer === "yes" ? copy.yes : copy.no} action={change("has", copy.change.hasCode)} />
                   )
                 }
               >
@@ -474,44 +555,43 @@ export function DiscountCodeForm({
                     { value: "no", label: copy.no },
                   ]}
                   value={codeAnswer}
-                  onChange={(value) => {
-                    setCodeAnswer(value as CodeAnswer)
-                    setProblem(null)
-                  }}
+                  onChange={answerHasCode}
                   describedBy="has-code-hint"
                 >
                   <Hint id="has-code-hint" className="text-center">
                     {copy.hasCodeHint}
                   </Hint>
                 </ChoiceTiles>
-                {codeAnswer && (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <label htmlFor="code" className="text-[15px] font-semibold text-slate-800">
-                        {copy.code}
-                        {codeAnswer === "no" && <span className="font-normal text-slate-500"> ({copy.optional})</span>}
-                      </label>
-                      <Hint id="code-hint">{copy.codeHint}</Hint>
-                      <FieldInput
-                        id="code"
-                        name="code"
-                        data-field="code"
-                        autoComplete="off"
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                        enterKeyHint="next"
-                        value={draft.code}
-                        onChange={(event) => update({ code: event.target.value })}
-                        onKeyDown={onEnter("code")}
-                        maxLength={200}
-                        invalid={!!message("code")}
-                        aria-describedby={describedBy("code-hint", !!message("code") && "code-error")}
-                      />
-                      <FieldError id="code-error" message={message("code")} />
-                    </div>
-                    <ContinuePill onClick={() => next("code")}>{copy.next}</ContinuePill>
-                  </>
-                )}
+                {/* After Change Answer, the same answer moves on with Continue. */}
+                {codeAnswer && answered.has("has") && <ContinuePill onClick={() => next("has")}>{copy.next}</ContinuePill>}
+              </GuidedStep>
+            )}
+
+            {visible("code") && (
+              <GuidedStep
+                key="code"
+                state={stateOf("code")}
+                onOpened={focusFirstField}
+                openOnMount
+                summary={answered.has("code") && <SummaryRow label={copy.code} value={entries.code.trim()} action={change("code", copy.change.code)} />}
+              >
+                <QuestionTitle htmlFor="code">{copy.code}</QuestionTitle>
+                <div className="flex flex-col gap-2">
+                  <Hint id="code-hint">{copy.codeHint}</Hint>
+                  <CodeBox
+                    id="code"
+                    name="code"
+                    data-field="code"
+                    placeholder={copy.codePlaceholder}
+                    enterKeyHint="next"
+                    value={draft.code}
+                    onValueChange={(code) => update({ code })}
+                    invalid={!!message("code")}
+                    aria-describedby={describedBy("code-hint", !!message("code") && "code-error")}
+                  />
+                  <FieldError id="code-error" message={message("code")} />
+                </div>
+                <ContinuePill onClick={() => next("code")}>{copy.next}</ContinuePill>
               </GuidedStep>
             )}
 
@@ -519,6 +599,18 @@ export function DiscountCodeForm({
               <GuidedStep key="send" state="open" onOpened={focusFirstField} openOnMount>
                 <QuestionTitle>{copy.reviewQuestion}</QuestionTitle>
                 <Hint className="-mt-2">{copy.reviewHint}</Hint>
+                {/* Only the person's own initials: the whole code shows after sending. */}
+                <NoticeBox tone="info">
+                  {entries.hasCode ? (
+                    copy.claimNote
+                  ) : (
+                    <>
+                      {copy.newCodeNote.before}
+                      <b data-initials>{agentCodePrefix(fullName)}</b>
+                      {copy.newCodeNote.after}
+                    </>
+                  )}
+                </NoticeBox>
                 {notice && (
                   <NoticeBox tone={CALM.has(notice) ? "info" : "bad"} role="alert">
                     {noticeText(copy, notice)}
@@ -536,15 +628,15 @@ export function DiscountCodeForm({
                     needs a click, and then right above Send. */}
                 <TurnstileWidget ref={turnstile} action="agent" language={language} />
                 <ContinuePill type="submit" pending={sending} disabled={sending}>
-                  {sending ? copy.sending : copy.send}
+                  {sending ? copy.sending : entries.hasCode ? copy.sendClaim : copy.send}
                 </ContinuePill>
               </GuidedStep>
             )}
           </GuidedStack>
         </form>
 
-        {/* Kept apart from "Tayari una code?": this one is for someone who
-            has already set a password. */}
+        {/* Kept apart from "Do you already have a Discount code?": this one is
+            for someone who has already set a password. */}
         <p className="mt-6 text-center text-sm text-slate-600">
           {copy.signInPrompt}{" "}
           <Link
@@ -555,6 +647,26 @@ export function DiscountCodeForm({
           </Link>
         </p>
       </section>
+
+      <BottomSheet open={confirming} onClose={() => setConfirming(false)} title={copy.startOverSheet.title} closeLabel={copy.startOverSheet.close}>
+        <div className="flex flex-col gap-3">
+          <Hint>{copy.startOverSheet.body}</Hint>
+          <NoticeBox tone="bad">{copy.startOverSheet.warning}</NoticeBox>
+          <button
+            type="button"
+            className="dc-clear inline-flex min-h-13 w-full items-center justify-center rounded-full border-[1.5px] border-[#c81e1e] bg-white px-6 font-exo text-lg font-semibold text-[#c81e1e] italic outline-none hover:bg-red-50 focus-visible:ring-3 focus-visible:ring-red-700/40 active:scale-[0.97]"
+            onClick={() => {
+              startOver()
+              toast(copy.clearedToast)
+            }}
+          >
+            {copy.startOverSheet.yes}
+          </button>
+          <ContinuePill variant="ghost" onClick={() => setConfirming(false)}>
+            {copy.startOverSheet.no}
+          </ContinuePill>
+        </div>
+      </BottomSheet>
     </>
   )
 }
@@ -575,14 +687,19 @@ function Confirmation({
   done,
   officePhone,
   headingRef,
+  onAgain,
+  onNewForm,
 }: {
   copy: Copy
   done: Done
   officePhone: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
+  // "Start again" under the screen, and Start over in the progress bar.
+  onAgain: () => void
+  onNewForm: () => void
 }) {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
-  const tick = useRef<HTMLDivElement>(null)
+  const mark = useRef<HTMLSpanElement>(null)
   const shareHref = discountCodeShareLink(copy.shareText(done.code, done.link))
 
   async function copyLink() {
@@ -596,21 +713,39 @@ function Confirmation({
 
   return (
     <section className={cn(CARD, "flex flex-col items-center gap-4 text-center")}>
-      <Confetti originRef={tick} />
-      <div
-        ref={tick}
-        className="grid size-[84px] place-items-center rounded-full bg-orange-500 text-white shadow-[0_10px_30px_-8px_rgb(238_115_0/0.6)] motion-safe:animate-in motion-safe:zoom-in-50 motion-safe:fade-in motion-safe:duration-500"
-      >
-        <Check className="size-11" strokeWidth={3} aria-hidden />
-      </div>
+      {/* Every step done; Start over opens a new form at once. */}
+      <ProgressBar
+        className="w-full"
+        groups={[
+          { label: copy.groups.you, steps: YOU_STEPS, done: YOU_STEPS },
+          { label: copy.groups.code, steps: CODE_STEPS, done: CODE_STEPS },
+        ]}
+        activeGroup={1}
+        canBack={false}
+        onBack={() => {}}
+        canReset
+        onReset={onNewForm}
+        labels={{ back: copy.back, reset: copy.startOver }}
+        status={copy.progressFinished}
+      />
+      <span ref={mark} className="block">
+        <svg className="dc-done-mark size-[84px]" viewBox="0 0 84 84" aria-hidden="true">
+          <circle cx="42" cy="42" r="40" />
+          <path d="M26 43l11 11 21-23" />
+        </svg>
+      </span>
+      <Confetti originRef={mark} />
       <h1
         ref={headingRef}
         tabIndex={-1}
         className="font-exo text-[26px] leading-[1.18] font-extrabold tracking-[-0.01em] text-balance text-blue-600 italic outline-none"
       >
-        {copy.doneTitle}
+        {done.status === "registered" ? copy.doneTitle : copy.claimDoneTitle}
       </h1>
-      <p className="w-full max-w-full rounded-full bg-blue-50 px-4 py-3 font-mono text-[2.5rem] leading-tight font-bold tracking-wide wrap-anywhere text-blue-600 ring-1 ring-blue-600/15 max-[330px]:text-[2rem]">
+      <p
+        data-own-code
+        className="max-w-full rounded-2xl border-[1.5px] border-dashed border-blue-600/40 px-6 py-2 font-exo text-[2.5rem] leading-tight font-extrabold tracking-wide wrap-anywhere text-blue-600 italic tabular-nums max-[330px]:text-[2rem]"
+      >
         {done.code}
       </p>
 
@@ -647,7 +782,7 @@ function Confirmation({
           </Note>
         </>
       ) : (
-        <Note tone="info">{copy.claimNote}</Note>
+        <Note tone="info">{copy.claimDoneNote}</Note>
       )}
 
       <div className="flex flex-col items-center">
@@ -660,6 +795,8 @@ function Confirmation({
           {officePhone}
         </a>
       </div>
+
+      <ChangeLink onClick={onAgain}>{copy.again}</ChangeLink>
     </section>
   )
 }

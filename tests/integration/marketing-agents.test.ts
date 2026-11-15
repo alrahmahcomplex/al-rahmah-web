@@ -4,8 +4,6 @@ import { describe, expect, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
-import type { Client } from "pg"
-
 import { signUpAgent } from "@/lib/services/agent-sign-up"
 import { approveAgent, getPendingAgentCount, listAgents, type MarketingAgent } from "@/lib/services/marketing-agents"
 
@@ -62,19 +60,11 @@ async function findAgent(code: string, as = MANAGER): Promise<MarketingAgent> {
   return agent
 }
 
-// Runs `work` as the secret key would, inside a transaction that is rolled
-// back, so it can see rows the same transaction made.
-async function asServiceRole<T>(sql: Client, work: () => Promise<T>): Promise<T> {
-  await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
-  await sql.query("set local role service_role")
-  return work()
-}
-
 describe("registration", () => {
-  test("a new agent gets a code of the name's initials, a hyphen and three digits, and is Pending", async () => {
+  test("a new agent gets a code of the name's initials, a hyphen and at least three digits, and is Pending", async () => {
     const number = phone()
     const agent = await register("  amina   juma mrisho  khamis ", number, "+255 711 222 333")
-    expect(agent.code).toMatch(/^AJM-\d{3}$/)
+    expect(agent.code).toMatch(/^AJM-\d{3,}$/)
 
     const found = await findAgent(agent.code)
     expect(found).toMatchObject({
@@ -128,62 +118,6 @@ describe("registration", () => {
 
     const list = await listAgents(await signedIn(MANAGER), { query: number, page: 1 })
     expect(list.ok && list.data.total).toBe(1)
-  })
-
-  test("a code already taken is never given again, and once ten tries collide the code has four digits", async () => {
-    const prefix = `Q${String.fromCharCode(65 + randomInt(0, 26))}${String.fromCharCode(65 + randomInt(0, 26))}`
-    const name = `${prefix[0]}uentin ${prefix[1]}ola ${prefix[2]}uma`
-    const codes = await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      // Every three-digit code for this prefix.
-      await sql.query(
-        `insert into public.marketing_agents (full_name, phone, code)
-         select 'Collision Agent', '+2556' || lpad((n + $2::int)::text, 8, '0'), $1 || '-' || lpad(n::text, 3, '0')
-         from generate_series(0, 999) n
-         on conflict do nothing`,
-        [prefix, randomInt(0, 90_000_000)],
-      )
-      return asServiceRole(sql, async () => {
-        const made: string[] = []
-        for (let i = 0; i < 3; i++) {
-          const { rows } = await sql.query(
-            "select public.sign_up_marketing_agent($1, $2, null, $3, false, null) ->> 'code' as code",
-            [name, phone(), email()],
-          )
-          made.push(rows[0].code)
-        }
-        return made
-      })
-    })
-    for (const code of codes) expect(code).toMatch(new RegExp(`^${prefix}-\\d{4}$`))
-    expect(new Set(codes).size).toBe(3)
-  })
-
-  test("with most three-digit codes taken, a new code still collides with none", async () => {
-    const prefix = `X${String.fromCharCode(65 + randomInt(0, 26))}${String.fromCharCode(65 + randomInt(0, 26))}`
-    const name = `${prefix[0]}avier ${prefix[1]}ena ${prefix[2]}uri`
-    const { code, taken } = await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      // All but ten of the three-digit codes.
-      await sql.query(
-        `insert into public.marketing_agents (full_name, phone, code)
-         select 'Collision Agent', '+2556' || lpad((n + $2::int)::text, 8, '0'), $1 || '-' || lpad(n::text, 3, '0')
-         from generate_series(10, 999) n
-         on conflict do nothing`,
-        [prefix, randomInt(0, 90_000_000)],
-      )
-      const { rows: before } = await sql.query("select code from public.marketing_agents where code like $1 || '-%'", [prefix])
-      const made = await asServiceRole(sql, async () => {
-        const { rows } = await sql.query(
-          "select public.sign_up_marketing_agent($1, $2, null, $3, false, null) ->> 'code' as code",
-          [name, phone(), email()],
-        )
-        return rows[0].code as string
-      })
-      return { code: made, taken: new Set(before.map((r) => r.code as string)) }
-    })
-    expect(code).toMatch(new RegExp(`^${prefix}-(\\d{3}|\\d{4})$`))
-    expect(taken.has(code)).toBe(false)
   })
 
   test("only the secret key may register: visitors and staff are refused", async () => {

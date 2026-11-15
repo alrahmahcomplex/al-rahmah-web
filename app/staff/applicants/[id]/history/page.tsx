@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { forbidden, notFound } from "next/navigation"
 
-import { ButtonLink, Card, EmptyState, Note, PageHeader, pageTitle, Timeline } from "@/components/kit"
+import { ButtonLink, Card, Note, PageHeader, pageTitle, Timeline } from "@/components/kit"
 import { getLeadHistory } from "@/lib/services/audit"
 import { getLeadFollowUps } from "@/lib/services/follow-ups"
 import { getLead } from "@/lib/services/leads"
@@ -94,7 +94,9 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
 }
 
 function Entries({ entries }: { entries: DescribedEntry[] }) {
-  if (entries.length === 0) return <EmptyState title="No changes yet." />
+  // A plain line: none of the kit's empty pictures (no match, nothing due, no
+  // request waiting) says "nothing has changed yet".
+  if (entries.length === 0) return <p className="lr-quiet">No changes yet.</p>
 
   return (
     <Timeline

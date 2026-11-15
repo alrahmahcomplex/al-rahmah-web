@@ -112,6 +112,8 @@ for (const width of [1280, 390]) {
     expect(await axeProblems(page, ".kit-tr-open:hover")).toEqual([])
     await more.getByRole("region", { name: "List row" }).locator("button.kit-row").first().hover()
     expect(await axeProblems(page, "button.kit-row:hover")).toEqual([])
+    await page.locator('[data-part="design-system"]').getByText("Not a sibling", { exact: true }).hover()
+    expect(await axeProblems(page, ".gf-choice:hover")).toEqual([])
   })
 
   test(`axe finds nothing in the open sheets and popover at ${width}px`, { tag: "@nightly" }, async ({ page }) => {

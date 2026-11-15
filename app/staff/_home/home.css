@@ -57,7 +57,9 @@
   grid-column: 1; grid-row: 3; align-self: center; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; font-size: 13px; color: var(--gf-ink-soft);
 }
+/* v38 draws these 36px but outlined; the kit's ring keeps the 44px target. */
 .hm-stat .kit-round { width: 36px; height: 36px; }
+.hm-stat .kit-round::after { inset: -4px; }
 
 /* Reset shows on hover or keyboard focus; on a touch screen it always shows. */
 .hm-stat-reset {

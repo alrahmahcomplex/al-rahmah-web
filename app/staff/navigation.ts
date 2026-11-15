@@ -1,10 +1,9 @@
 import {
   ArmchairIcon,
   BadgePercentIcon,
-  CalendarCheckIcon,
   ChartColumnIcon,
   ClipboardCheckIcon,
-  DoorOpenIcon,
+  HouseIcon,
   MegaphoneIcon,
   MessageCircleIcon,
   PhoneIcon,
@@ -13,7 +12,6 @@ import {
   ScrollTextIcon,
   ShieldCheckIcon,
   TicketPercentIcon,
-  UserPlusIcon,
   UsersIcon,
   WalletIcon,
   type LucideIcon,
@@ -23,8 +21,9 @@ import type { IconName } from "@/components/icons"
 import type { Permission } from "@/lib/permissions"
 
 // The sidebar's groups, in the order they are shown. A group none of whose
-// entries the staff member may see is not shown at all.
-export const NAV_GROUPS = ["Front desk", "Admissions", "Referrals", "Money", "Admin"] as const
+// entries the staff member may see is not shown at all. The first has no
+// title: it holds Home alone, at the top (#323).
+export const NAV_GROUPS = ["", "Admissions", "Referrals", "Money", "Admin"] as const
 export type StaffNavGroup = (typeof NAV_GROUPS)[number]
 
 // An entry needs one permission, or any one of several, and also
@@ -41,29 +40,20 @@ export type StaffNavEntry = {
   alsoNeeds?: Permission
 } & ({ permission: Permission | readonly Permission[]; managesStaff?: never } | { managesStaff: true; permission?: never })
 
-// The staff home. Everyone signed in sees it, so it needs no permission and
-// sits outside STAFF_NAV; the shell puts it first in Front desk.
+// The staff home, where Check-in and Register students start (#323).
+// Everyone signed in sees it, so it needs no permission and sits outside
+// STAFF_NAV; the shell puts it first, in the group with no title.
 export const STAFF_HOME = {
   href: "/staff",
-  label: "Today",
-  group: "Front desk",
-  icon: CalendarCheckIcon,
-  iconName: "today",
+  label: "Home",
+  group: "",
+  icon: HouseIcon,
+  iconName: "house",
 } as const satisfies Omit<StaffNavEntry, "permission">
 
 // Every area of the staff side, each shown only to holders of the permission
 // it needs. Later slices add their entries here.
 export const STAFF_NAV: readonly StaffNavEntry[] = [
-  { href: "/staff/check-in", label: "Check-in", group: "Front desk", icon: DoorOpenIcon, iconName: "checkin", permission: "leads.view" },
-  {
-    href: "/staff/check-in/new",
-    label: "Register a student",
-    group: "Front desk",
-    icon: UserPlusIcon,
-    iconName: "register",
-    permission: "leads.create",
-    alsoNeeds: "visits.record",
-  },
   { href: "/staff/applicants", label: "Applicants", group: "Admissions", icon: UsersIcon, iconName: "applicants", permission: "leads.view" },
   { href: "/staff/interviews", label: "Interviews", group: "Admissions", icon: ClipboardCheckIcon, iconName: "interviews", permission: "leads.view" },
   { href: "/staff/follow-ups", label: "Follow-ups", group: "Admissions", icon: PhoneIcon, iconName: "followups", permission: "leads.view" },
@@ -117,14 +107,18 @@ export function groupNav<T extends { group: StaffNavGroup }>(entries: readonly T
   )
 }
 
+// Check-in and Register students start on Home (#323), so their pages are
+// Home's in the sidebar.
+const HOME_PAGES = ["/staff/check-in"]
+
 // The entry the page at `pathname` belongs to: the longest href that is the
-// path or a parent of it, so /staff/check-in/new is Register a student rather
-// than Check-in, and /staff/applicants/<id> is Applicants. The home is a parent of every
-// staff page, so it counts only for itself.
+// path or a parent of it, so /staff/applicants/<id> is Applicants. The home is
+// a parent of every staff page, so it counts only for itself and HOME_PAGES.
 export function currentNavHref(pathname: string, hrefs: readonly string[]): string | undefined {
+  const within = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
   let current: string | undefined
   for (const href of hrefs) {
-    const matches = href === STAFF_HOME.href ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)
+    const matches = href === STAFF_HOME.href ? pathname === href || HOME_PAGES.some(within) : within(href)
     if (matches && (current === undefined || href.length > current.length)) current = href
   }
   return current

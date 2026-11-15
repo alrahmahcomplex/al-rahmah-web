@@ -80,27 +80,14 @@ describe("the staff navigation", () => {
       expect(NAV_GROUPS).toContain(entry.group)
       expect(entry.icon).toBeTypeOf("object")
     }
-    expect(STAFF_HOME).toMatchObject({ href: "/staff", label: "Today", group: "Front desk" })
+    // Home heads the group with no title (#323).
+    expect(STAFF_HOME).toMatchObject({ href: "/staff", label: "Home", group: "" })
+    expect(NAV_GROUPS[0]).toBe("")
   })
 
-  it("shows Check-in to anyone who may view leads, and to no one else", () => {
-    const checkIn = STAFF_NAV.find((entry) => entry.label === "Check-in")
-    expect(checkIn).toMatchObject({ href: "/staff/check-in", group: "Front desk", permission: "leads.view" })
-    expect(navFor(["leads.view"])).toContain(checkIn)
-    expect(navFor(["payments.view"])).not.toContain(checkIn)
-  })
-
-  it("shows Register a student to those who may both create leads and record visits, as the page needs", () => {
-    const register = STAFF_NAV.find((entry) => entry.label === "Register a student")
-    expect(register).toMatchObject({
-      href: "/staff/check-in/new",
-      group: "Front desk",
-      permission: "leads.create",
-      alsoNeeds: "visits.record",
-    })
-    expect(navFor(["leads.create", "visits.record"])).toContain(register)
-    expect(navFor(["leads.create"])).not.toContain(register)
-    expect(navFor(["leads.view", "visits.record"])).not.toContain(register)
+  it("has no Check-in or Register entry: both start on Home (#323)", () => {
+    expect(STAFF_NAV.filter((entry) => entry.href.startsWith("/staff/check-in"))).toEqual([])
+    expect(STAFF_NAV.filter((entry) => entry.group === "")).toEqual([])
   })
 
   it("shows Fee schedule to anyone who may view payments or manage academic years", () => {
@@ -164,13 +151,13 @@ describe("groupNav", () => {
 
   it("keeps the sidebar's group order and each group's entries in the order given", () => {
     const grouped = groupNav([STAFF_HOME, ...navFor(ADMISSIONS_MANAGER, undefined, { managesStaff: true })])
-    expect(names(grouped)).toEqual(["Front desk", "Admissions", "Referrals", "Money", "Admin"])
-    expect(grouped[0].entries.map((entry) => entry.label)).toEqual(["Today", "Check-in", "Register a student"])
+    expect(names(grouped)).toEqual(["", "Admissions", "Referrals", "Money", "Admin"])
+    expect(grouped[0].entries.map((entry) => entry.label)).toEqual(["Home"])
     expect(grouped[4].entries.map((entry) => entry.label)).toEqual(["Discount requests", "Reopening requests", "Reports", "Staff and roles"])
   })
 
   it("leaves out a group with nothing in it", () => {
-    expect(names(groupNav([STAFF_HOME, ...navFor(ADMISSIONS_STAFF)]))).toEqual(["Front desk", "Admissions", "Referrals", "Money"])
+    expect(names(groupNav([STAFF_HOME, ...navFor(ADMISSIONS_STAFF)]))).toEqual(["", "Admissions", "Referrals", "Money"])
     expect(groupNav(navFor(ADMISSIONS_STAFF)).find((group) => group.name === "Money")?.entries.map((entry) => entry.label)).toEqual([
       "Fee schedule",
     ])
@@ -179,27 +166,30 @@ describe("groupNav", () => {
   })
 
   it("gives the Accountant, who may view leads, the lead screens as well as Money", () => {
-    expect(names(groupNav([STAFF_HOME, ...navFor(ACCOUNTANT)]))).toEqual(["Front desk", "Admissions", "Referrals", "Money"])
+    expect(names(groupNav([STAFF_HOME, ...navFor(ACCOUNTANT)]))).toEqual(["", "Admissions", "Referrals", "Money"])
   })
 })
 
 describe("currentNavHref", () => {
-  const hrefs = ["/staff", "/staff/check-in", "/staff/check-in/new", "/staff/applicants"]
+  const hrefs = ["/staff", "/staff/fees", "/staff/fees/import", "/staff/applicants"]
 
   it("picks the entry whose href is the page or its nearest parent", () => {
-    expect(currentNavHref("/staff/check-in", hrefs)).toBe("/staff/check-in")
-    expect(currentNavHref("/staff/check-in/new", hrefs)).toBe("/staff/check-in/new")
+    expect(currentNavHref("/staff/fees", hrefs)).toBe("/staff/fees")
+    expect(currentNavHref("/staff/fees/import", hrefs)).toBe("/staff/fees/import")
     expect(currentNavHref("/staff/applicants/1ead0000-0000-4000-8000-000000000001", hrefs)).toBe("/staff/applicants")
     expect(currentNavHref("/staff/applicants/x/history", hrefs)).toBe("/staff/applicants")
   })
 
   it("does not take a prefix for a parent", () => {
-    expect(currentNavHref("/staff/check-inn", hrefs)).toBeUndefined()
+    expect(currentNavHref("/staff/feesx", hrefs)).toBeUndefined()
     expect(currentNavHref("/staff/applicantsx", hrefs)).toBeUndefined()
   })
 
-  it("marks the home only on the home itself", () => {
+  it("marks the home on the home itself, and on the Check-in pages that start there (#323)", () => {
     expect(currentNavHref("/staff", hrefs)).toBe("/staff")
+    expect(currentNavHref("/staff/check-in", hrefs)).toBe("/staff")
+    expect(currentNavHref("/staff/check-in/new", hrefs)).toBe("/staff")
+    expect(currentNavHref("/staff/check-inn", hrefs)).toBeUndefined()
     expect(currentNavHref("/staff/somewhere-else", hrefs)).toBeUndefined()
   })
 })

@@ -63,14 +63,16 @@ export function LegacyShell({ items, folded: collapsed, onFoldedChange, person, 
           <nav aria-label="Staff" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             {groupNav(items).map((group) => (
               <div key={group.name} className={collapsed ? "not-first:mt-4" : "not-first:mt-2.5"}>
-                <p
-                  className={cn(
-                    "px-2.5 pb-1 text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase",
-                    collapsed && "sr-only",
-                  )}
-                >
-                  {group.name}
-                </p>
+                {group.name && (
+                  <p
+                    className={cn(
+                      "px-2.5 pb-1 text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase",
+                      collapsed && "sr-only",
+                    )}
+                  >
+                    {group.name}
+                  </p>
+                )}
                 <ul className={cn("flex flex-col gap-0.5", collapsed && "items-center")}>
                   {group.entries.map((item) => (
                     <li key={item.href}>

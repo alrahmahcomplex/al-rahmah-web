@@ -98,7 +98,11 @@ test.describe("Marketing Agents", () => {
 
   test("the Accountant reads every agent, with no Approve and no Pending count", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await expect(agentsLink(page)).toHaveText("Marketing Agents")
+    // The old shell, on Interviews, shows the Pending count to whoever may approve
+    // agents; Home's new shell shows no counts at all (#323), so look there.
+    await page.goto("/staff/interviews")
+    await expect(page.getByRole("heading", { level: 1, name: "Interviews" })).toBeVisible()
+    await expect(agentsLink(page)).toHaveAccessibleName("Marketing Agents")
     await agentsLink(page).click()
 
     await expect(page.getByRole("link", { name: "All", exact: true })).toHaveAttribute("aria-current", "page")

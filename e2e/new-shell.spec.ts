@@ -6,15 +6,13 @@ import { axeProblems } from "./axe"
 import { logIn, signInOnce, signOut } from "./log-in"
 import { expect, test } from "./staff-test"
 
-// The new staff shell (#322), on the first routes it holds: the kit page and
-// Reopening requests. Every other route keeps the old shell
+// The new staff shell (#322), on the first routes it holds: Home, the kit
+// page and Reopening requests. Every other route keeps the old shell
 // (e2e/staff-shell.spec.ts). Both shells keep the same contract: a
 // navigation landmark named "Staff" and the page's main.
 
 const MANAGER_ENTRIES = [
-  "Today",
-  "Check-in",
-  "Register a student",
+  "Home",
   "Applicants",
   "Interviews",
   "Follow-ups",
@@ -50,7 +48,7 @@ test.describe("on a desktop", () => {
 
   test("draws the grouped sidebar with no counts, the top bar and the stage around Reopening requests", async ({ page }) => {
     await open(page, MANAGER, "/staff/reopenings")
-    for (const group of ["Front desk", "Admissions", "Referrals", "Money", "Admin"]) await expect(staffNav(page).getByText(group, { exact: true })).toBeVisible()
+    for (const group of ["Admissions", "Referrals", "Money", "Admin"]) await expect(staffNav(page).getByText(group, { exact: true })).toBeVisible()
     for (const label of MANAGER_ENTRIES) await expect(entry(page, label)).toBeVisible()
     await expect(entry(page, "Reopening requests")).toHaveAttribute("aria-current", "page")
     // The One Pip Rule: no entry carries a count.
@@ -243,8 +241,9 @@ test.describe("on a phone", () => {
     await drawer.getByRole("link", { name: "Interviews", exact: true }).click()
     await expect(page).toHaveURL(/\/staff\/interviews$/)
     await expect(drawer).toHaveCount(0)
-    // Interviews keeps the old shell, with its tab bar.
-    await expect(staffNav(page).getByRole("link", { name: "Today" })).toBeVisible()
+    // Interviews keeps the old shell.
+    await expect(shell(page)).toHaveCount(0)
+    await expect(staffNav(page).getByRole("link", { name: "Home" })).toBeVisible()
   })
 
   test("Sign out from the person pill ends the session", async ({ page }) => {

@@ -131,6 +131,9 @@ describe("the three-level father's-name check", () => {
     ["Ali Mohamed", "Hassan Ali Mohamed", false],
     ["Ali Mohamed", "Ali Mohamed Hassan", false],
     ["Ali", "Ali Hassan", false],
+    // Only a two-word stored name, and only one middle word.
+    ["Ali Hassan Juma", "Ali Hassan Mohamed Juma", false],
+    ["Ali Mohamed", "Ali Abdul Karim Mohamed", false],
     [null, "Ali Hassan Mohamed", false],
   ])("%s completed by %s is %s", async (stored, typed, expected) => {
     const [row] = await owner<{ adds: boolean }>("select public.father_name_adds_middle($1, $2) as adds", [stored, typed])

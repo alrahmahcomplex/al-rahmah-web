@@ -1542,11 +1542,8 @@ describe("a child linked before check-in", () => {
   // student's name after its first word, with no middle name, linked by
   // that name (basis matched). Form children are legacy members of their
   // Family's group, so the link confirms the on-file sibling's name.
-  async function linkedOneBoxPair(count = 2) {
+  async function oneBoxForm(kids: FormChild[]) {
     const year = await registrationYear();
-    const family = fatherParts();
-    const kids = Array.from({ length: count }, () => child(family));
-    const [a, b] = kids;
     const sent = await submitAdmissionForm(secretClient(), {
       submissionKey: randomUUID(),
       parent: { fullName: `One Box ${word()}`, relationship: "Mother", phone: phone() },
@@ -1567,9 +1564,18 @@ describe("a child linked before check-in", () => {
           )
         ).rows,
     );
-    const leadIds = rows.map((r) => r.id);
-    const twoWords = `${family.fatherFirst} ${family.fatherLast}`;
-    expect(rows.map((r) => r.father_full_name)).toEqual(kids.map(() => twoWords));
+    expect(rows.map((r) => r.father_full_name)).toEqual(kids.map((c) => `${c.father.fatherFirst} ${c.father.fatherLast}`));
+    return { leadIds: rows.map((r) => r.id), contactId: rows[0].guardian_contact_id };
+  }
+
+  const twoWordsOf = (f: Father) => `${f.fatherFirst} ${f.fatherLast}`;
+
+  async function linkedOneBoxPair(count = 2) {
+    const family = fatherParts();
+    const kids = Array.from({ length: count }, () => child(family));
+    const [a, b] = kids;
+    const { leadIds, contactId } = await oneBoxForm(kids);
+    const twoWords = twoWordsOf(family);
     for (const leadId of leadIds.slice(1)) {
       const linked = await linkSibling(await signedIn(ADMISSIONS), {
         leadId,
@@ -1578,7 +1584,7 @@ describe("a child linked before check-in", () => {
       });
       expect(linked).toMatchObject({ ok: true, data: { basis: "matched" } });
     }
-    return { a, b, kids, family, leadIds, contactId: rows[0].guardian_contact_id };
+    return { a, b, kids, family, leadIds, contactId };
   }
 
   // The father's three names with another middle name.
@@ -1655,6 +1661,60 @@ describe("a child linked before check-in", () => {
       sql.query("update public.leads set father_full_name = $2, father_full_name_source = 'edited' where id = $1", [leadIds[1], diverged]),
     );
     expect(await membershipOf(leadIds[1])).toMatchObject({ basis: "request_needed" });
+  });
+
+  test("outside check-in, completing a father's name is checked as before: with its sibling on the short name, it needs a request", async () => {
+    const { family, leadIds } = await linkedOneBoxPair();
+    await asSystem((sql) =>
+      sql.query("update public.leads set father_full_name = $2, father_full_name_source = 'edited' where id = $1", [leadIds[0], nameOf(family)]),
+    );
+    expect(await membershipOf(leadIds[0])).toMatchObject({ basis: "request_needed" });
+  });
+
+  test("a linked child with no sibling of the same name checks in with its father's middle name added", async () => {
+    // Two fathers on one form; the second child was linked anyway and waits
+    // on a Sibling request, so the first has no sibling of its own name.
+    const [a, b] = [child(fatherParts()), child(fatherParts())];
+    const { leadIds, contactId } = await oneBoxForm([a, b]);
+    const admissions = await signedIn(ADMISSIONS);
+    const linked = await linkSibling(admissions, {
+      leadId: leadIds[1],
+      siblingOfLeadId: leadIds[0],
+      siblingFatherFullName: twoWordsOf(a.father),
+    });
+    expect(linked).toMatchObject({ ok: true, data: { basis: "request_needed" } });
+    const requested = await requestSiblingDiscount(admissions, { leadId: leadIds[1], note: "Proof to come", requestId: randomUUID() });
+    if (!requested.ok) throw new Error(`request failed: ${JSON.stringify(requested.error)}`);
+
+    await completed({
+      people: [{ contactId }],
+      students: [checkIn(leadIds[0], a), checkIn(leadIds[1], b, { siblingOf: { student: 1 } })],
+    });
+    expect(await rowOf(leadIds[0])).toMatchObject({ status: "Visited", father_full_name: nameOf(a.father) });
+    expect(await membershipOf(leadIds[0])).toMatchObject({ basis: "matched" });
+    expect(await membershipOf(leadIds[1])).toMatchObject({ basis: "request_needed" });
+  });
+
+  test("a cousin with another father on the same form does not block the brothers' middle name", async () => {
+    const family = fatherParts();
+    const [a, b, cousin] = [child(family), child(family), child(fatherParts())];
+    const { leadIds, contactId } = await oneBoxForm([a, b, cousin]);
+    const linked = await linkSibling(await signedIn(ADMISSIONS), {
+      leadId: leadIds[1],
+      siblingOfLeadId: leadIds[0],
+      siblingFatherFullName: twoWordsOf(family),
+    });
+    expect(linked).toMatchObject({ ok: true, data: { basis: "matched" } });
+
+    await completed({
+      people: [{ contactId }],
+      students: [checkIn(leadIds[0], a), checkIn(leadIds[1], b), checkIn(leadIds[2], cousin)],
+    });
+    for (const id of leadIds.slice(0, 2)) {
+      expect(await rowOf(id)).toMatchObject({ status: "Visited", father_full_name: nameOf(family) });
+      expect(await membershipOf(id)).toMatchObject({ basis: "matched" });
+    }
+    expect(await rowOf(leadIds[2])).toMatchObject({ status: "Visited", father_full_name: nameOf(cousin.father) });
   });
 
   test("a father's name completed with a middle name no sibling holds loses the basis, on any path", async () => {

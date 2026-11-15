@@ -19,12 +19,12 @@ export function setPendingFilters(next: PendingFilters | null) {
 }
 
 /**
- * Forgets the pending filters once their page (`href`) is the one shown, or
- * once a search's page is: a search made while they were on their way
- * carried them, and its page replaced theirs.
+ * Forgets the pending filters once any page of the list arrives: it is
+ * either theirs, or one that replaced theirs (a search, Back, a newer
+ * filter), since a newer navigation cancels an older one.
  */
-export function settlePendingFilters(shownHref: string, searching: boolean) {
-  if (pending && (searching || pending.href === shownHref)) setPendingFilters(null)
+export function settlePendingFilters() {
+  if (pending) setPendingFilters(null)
 }
 
 export function subscribePendingFilters(listener: () => void) {

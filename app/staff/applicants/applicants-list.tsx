@@ -77,11 +77,14 @@ export function ApplicantsList({
     const next = { ...chosen, ...changes }
     setChosen(next)
     const href = leadsHref({ ...next, importBatchId: search.importBatchId, page: 1 })
+    // Choosing what is already shown changes nothing.
+    if (href === shownHref) return
     // The top bar's search carries these until their page arrives.
     setPendingFilters({ href, fields: [...new URLSearchParams(href.split("?")[1] ?? "")] })
     router.push(href)
   }
-  useEffect(() => settlePendingFilters(shownHref, searching), [shownHref, searching])
+  // Settles on every page of the list that arrives.
+  useEffect(() => settlePendingFilters(), [shownHref])
   useEffect(() => () => setPendingFilters(null), [])
 
   // A year from the URL with no saved link still shows, so the list says

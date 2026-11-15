@@ -183,10 +183,20 @@ test.describe("the Applicants screen", () => {
     await signIn(page, ADMISSIONS)
     await page.goto("/staff/applicants")
 
-    // The search goes before the filter's page arrives.
+    // The filter's page is held back until the search has gone, so the search
+    // is made while the address still has the old filters.
+    let release = () => {}
+    const held = new Promise<void>((resolve) => (release = resolve))
+    const filterPage = /\/staff\/applicants\?closure=Inactive(&_rsc=|$)/
+    await page.route(filterPage, async (route) => {
+      await held
+      await route.continue().catch(() => {})
+    })
     await chooseOption(closure(page), "Inactive")
     await searchFor(page, "Fixture")
     await expect(page).toHaveURL(/q=Fixture/)
+    release()
+    await page.unroute(filterPage)
     await expect(resultRows(page)).toHaveCount(6)
 
     await page.getByRole("main").getByRole("link", { name: "Clear" }).click()
@@ -202,6 +212,23 @@ test.describe("the Applicants screen", () => {
     await expect(page).toHaveURL(/\/staff\/applicants\?closure=Inactive$/)
     await expect(searchBox(page)).toHaveValue("")
     await expect(closure(page)).toHaveText("Inactive")
+  })
+
+  test("a filter left with Back is not carried by the next search", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/applicants")
+
+    await statusPill(page, "Applied").click()
+    await expect(page).toHaveURL(/\/staff\/applicants\?status=Applied$/)
+    // Choosing what is already shown changes nothing.
+    await statusPill(page, "Applied").click()
+    await page.goBack()
+    await expect(page).toHaveURL(/\/staff\/applicants$/)
+
+    await searchFor(page, "Fixture")
+    await expect(page).toHaveURL(/\/staff\/applicants\?q=Fixture$/)
+    await page.getByRole("main").getByRole("link", { name: "Clear" }).click()
+    await expect(page).toHaveURL(/\/staff\/applicants$/)
   })
 
   test("old /staff/leads addresses go to the same place under /staff/applicants", async ({ page, request }) => {

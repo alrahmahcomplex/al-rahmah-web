@@ -370,19 +370,22 @@ function Result({ row }: { row: StudentImportRow }) {
   )
 }
 
+// The result is a status, so a screen reader announces it when the step opens.
 function Done({ done }: { done: Extract<Step, { name: "done" }> }) {
   return (
-    <FinishedState
-      title={doneTitle(done)}
-      hint={<>Each new applicant has an Admission Number and a history line &ldquo;Created by the workbook import ({done.fileName})&rdquo;.</>}
-    >
-      <KeyValueList
-        items={[
-          { key: "Imported by", value: done.importedBy },
-          { key: "When", value: <time dateTime={done.importedAt}>{WHEN.format(new Date(done.importedAt))}</time> },
-          { key: "Recorded", value: "Audit history, one line" },
-        ]}
-      />
-    </FinishedState>
+    <div role="status">
+      <FinishedState
+        title={doneTitle(done)}
+        hint={<>Each new applicant has an Admission Number and a history line &ldquo;Created by the workbook import ({done.fileName})&rdquo;.</>}
+      >
+        <KeyValueList
+          items={[
+            { key: "Imported by", value: done.importedBy },
+            { key: "When", value: <time dateTime={done.importedAt}>{WHEN.format(new Date(done.importedAt))}</time> },
+            { key: "Recorded", value: "Audit history, one line" },
+          ]}
+        />
+      </FinishedState>
+    </div>
   )
 }

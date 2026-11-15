@@ -30,3 +30,4 @@ export { Calendar, DATE_WORDS, MonthGrid, type CalendarProps, type DateWords } f
 export { DateField, DateTimeField, type DateFieldProps, type DateTimeFieldProps } from "./date-field"
 export { Disclosure } from "./disclosure"
 export { FilePicker } from "./file-picker"
+export { Timeline, type TimelineItem, type TimelineTone } from "./timeline"

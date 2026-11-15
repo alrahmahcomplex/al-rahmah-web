@@ -3,10 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Button, Note, TextArea } from "@/components/kit"
 import { REOPENING_REASON_MAX, type ReopeningSource } from "@/lib/services/reopening-requests"
 
 import { raiseReopeningAction } from "../reopening-actions"
@@ -47,10 +44,12 @@ export function RequestReopeningForm({ leadId, source }: { leadId: string; sourc
   }
 
   return (
-    <form onSubmit={send} noValidate className="flex max-w-xl flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
-      <div className="grid gap-1.5">
-        <Label htmlFor={reasonId}>Why is the family back?</Label>
-        <Textarea
+    <form onSubmit={send} noValidate className="lr-form">
+      <div className="lr-field">
+        <label htmlFor={reasonId} className="lr-label">
+          Why is the family back?
+        </label>
+        <TextArea
           id={reasonId}
           value={reason}
           maxLength={REOPENING_REASON_MAX}
@@ -59,25 +58,25 @@ export function RequestReopeningForm({ leadId, source }: { leadId: string; sourc
             setReason(event.target.value)
             setMissing(false)
           }}
-          aria-invalid={missing || undefined}
+          invalid={missing}
           aria-describedby={missing ? `${hintId} ${errorId}` : hintId}
         />
-        <p id={hintId} className="text-xs text-muted-foreground">
+        <p id={hintId} className="lr-hint">
           Required. A Manager reads this before deciding.
         </p>
         {missing && (
-          <p id={errorId} role="alert" className="text-sm text-destructive">
+          <p id={errorId} role="alert" className="lr-error">
             Write why the family is back.
           </p>
         )}
       </div>
       {refusal && (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{refusal}</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">
+          {refusal}
+        </Note>
       )}
       <div>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" pending={pending}>
           {pending ? "Sending…" : "Send request"}
         </Button>
       </div>

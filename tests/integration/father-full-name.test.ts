@@ -116,6 +116,27 @@ describe("the three-level father's-name check", () => {
     expect(await match(b, a)).toBe(expected)
   })
 
+  // Completing a stored name with its middle name (#400): check-in accepts it
+  // and the sibling basis stays. Only the same first and last words, once
+  // normalized, with exactly one middle word added; anything else goes to the
+  // name question.
+  test.each([
+    ["Ali Mohamed", "ALI HASSAN MOHAMED", true],
+    ["  ali   mohamed. ", "Ali Hassan Mohamed", true],
+    ["Ali Hassan Mohamed", "Ali Hassan Mohamed", false],
+    ["Ali Hassan Mohamed", "Ali Mohamed", false],
+    ["Ali Mohamed", "Ali Hassan Omar Mohamed", false],
+    ["Ali Mohamed", "Ali Hassan Mohamedi", false],
+    ["Ali Mohamed", "Alli Hassan Mohamed", false],
+    ["Ali Mohamed", "Hassan Ali Mohamed", false],
+    ["Ali Mohamed", "Ali Mohamed Hassan", false],
+    ["Ali", "Ali Hassan", false],
+    [null, "Ali Hassan Mohamed", false],
+  ])("%s completed by %s is %s", async (stored, typed, expected) => {
+    const [row] = await owner<{ adds: boolean }>("select public.father_name_adds_middle($1, $2) as adds", [stored, typed])
+    expect(row.adds).toBe(expected)
+  })
+
   test("a missing name is neither a match nor a mismatch", async () => {
     expect(await match(null, "Hassan Ali")).toBeNull()
     expect(await match("Hassan Ali", "  ")).toBeNull()

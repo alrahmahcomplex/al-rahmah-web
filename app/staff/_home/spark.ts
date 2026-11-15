@@ -22,6 +22,20 @@ export function sparkShape(values: readonly number[]): SparkShape {
   const step = values.length > 1 ? SPARK_WIDTH / (values.length - 1) : 0
   const points = values.map((value, i) => [i * step, PAD + (SPARK_HEIGHT - 2 * PAD) * (1 - value / max)] as const)
 
+  const line = smoothLine(points)
+  const last = points[points.length - 1]
+  return {
+    line,
+    area: `${line} L${round(last[0])},${SPARK_HEIGHT} L0,${SPARK_HEIGHT} Z`,
+    dots: points.map(([x, y]) => ({ left: round((x / SPARK_WIDTH) * 100), top: round((y / SPARK_HEIGHT) * 100) })),
+  }
+}
+
+/**
+ * A smooth curve through the points that never overshoots between two of
+ * them (monotone cubic), as an SVG path starting with M.
+ */
+export function smoothLine(points: readonly (readonly [number, number])[]): string {
   // The slope at each point: flat at a peak or a valley, else the harmonic
   // mean of the slopes either side (Fritsch–Carlson).
   const slopes = points.map(([x, y], i) => {
@@ -41,10 +55,5 @@ export function sparkShape(values: readonly number[]): SparkShape {
     const dx = (bx - ax) / 3
     line += ` C${round(ax + dx)},${round(ay + slopes[i - 1] * dx)} ${round(bx - dx)},${round(by - slopes[i] * dx)} ${round(bx)},${round(by)}`
   }
-  const last = points[points.length - 1]
-  return {
-    line,
-    area: `${line} L${round(last[0])},${SPARK_HEIGHT} L0,${SPARK_HEIGHT} Z`,
-    dots: points.map(([x, y]) => ({ left: round((x / SPARK_WIDTH) * 100), top: round((y / SPARK_HEIGHT) * 100) })),
-  }
+  return line
 }

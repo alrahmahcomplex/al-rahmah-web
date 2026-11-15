@@ -5,11 +5,14 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { getSeatsByClass } from "@/lib/services/dashboard"
 import { countPendingDiscountRequests } from "@/lib/services/discounts"
 import { getOverdueCount } from "@/lib/services/follow-ups"
+import { getHomeChartCounts } from "@/lib/services/home-charts"
 import { countInterviewsByDay, countRegistrationsByDay } from "@/lib/services/home-stats"
 import { getMyNotices } from "@/lib/services/staff-admin"
 import { createClient } from "@/utils/supabase/server"
 
 import { defaultSeatsYear } from "./seats/format"
+import { ChartCard } from "./_home/chart-card"
+import { classesTab, monthsTab, seatsTab, sourcesTab, type ChartTab } from "./_home/charts"
 import { FindFamily } from "./_home/find-family"
 import { Notices } from "./_home/notices"
 import { mayCallBack, mayDecideDiscounts, mayOpenSeats, onlyFullClass, quickActions } from "./_home/quick-action-list"
@@ -43,9 +46,11 @@ const one = (value: string | string[] | undefined) => (typeof value === "string"
 
 // Home (#323): Today, Check-in and Register students in one page. The date,
 // the check-in bar beside Register students, then the two stat cards and the
-// quick actions in the right column. The chart card (#405) takes the left
-// column and the Activity log (#406) the space below; neither is built yet.
-// Every count is read only for someone who may open the page behind it.
+// quick actions in the right column; the chart card (#405) in the left
+// column. The Activity log (#406) takes the space below; it is not built yet.
+// Every count is read only for someone who may see it today: the
+// applications for leads.view, the seats for payments.view, as the
+// dashboard shows them.
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
   const staff = await requireStaff()
   const supabase = await createClient()
@@ -56,26 +61,37 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const week = pickedWeek(one(params.week), today)
 
   const canView = permissions.includes("leads.view")
+  const canSeeSeats = permissions.includes("payments.view")
   const canRegister = permissions.includes("leads.create") && permissions.includes("visits.record")
   const interviews = interviewRange(day ?? today)
   const applied = appliedRange(week, today)
 
-  const [notices, interviewCounts, appliedCounts, overdue, seats, discounts] = await Promise.all([
+  const [notices, interviewCounts, appliedCounts, overdue, seats, discounts, chartCounts] = await Promise.all([
     getMyNotices(supabase),
     canView ? countInterviewsByDay(supabase, interviews.from, interviews.to) : null,
     canView ? countRegistrationsByDay(supabase, applied.from, applied.to) : null,
     mayCallBack(permissions) ? getOverdueCount(supabase) : null,
-    mayOpenSeats(permissions) ? seatsOnOpening(today) : null,
+    canSeeSeats ? seatsOnOpening(today) : null,
     mayDecideDiscounts(permissions) ? countPendingDiscountRequests(supabase) : null,
+    canView ? getHomeChartCounts(supabase, Number(today.slice(0, 4))) : null,
   ])
 
   const actions = quickActions({
     permissions,
     overdue: overdue?.ok ? overdue.data : null,
-    fullClass: seats?.ok ? onlyFullClass(seats.data.classes) : null,
+    fullClass: mayOpenSeats(permissions) && seats?.ok ? onlyFullClass(seats.data.classes) : null,
     waitingDiscounts: discounts?.ok ? discounts.data : null,
   })
-  const statsFailed = (interviewCounts && !interviewCounts.ok) || (appliedCounts && !appliedCounts.ok)
+  const statsFailed =
+    (interviewCounts && !interviewCounts.ok) || (appliedCounts && !appliedCounts.ok) || (chartCounts && !chartCounts.ok) || (canSeeSeats && seats && !seats.ok)
+  const counts = chartCounts?.ok ? chartCounts.data : null
+  // v38 order; a tab with nothing to draw is left out.
+  const charts = [
+    counts && classesTab(counts),
+    counts && monthsTab(counts, today),
+    canSeeSeats && seats?.ok ? seatsTab(seats.data.classes) : null,
+    counts && sourcesTab(counts),
+  ].filter((tab): tab is ChartTab => !!tab)
 
   return (
     <div className="hm" data-rise="group">
@@ -93,7 +109,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         </div>
       )}
       <div className="hm-body">
-        <div className="hm-main" />
+        <div className="hm-main">{charts.length > 0 && <ChartCard tabs={charts} />}</div>
         <div className="hm-side">
           {interviewCounts?.ok && (
             <StatCard card={interviewCard(day, today, interviewCounts.data)} param="day" today={today} picked={day} words={DAY_WORDS} />

@@ -84,6 +84,12 @@
   --gf-scroll-thumb: #cbc5f6;
   /* a calendar day that may not be chosen (DESIGN.md, Inputs; #358) */
   --gf-day-off: #b6bdc9;
+  /* Home's charts (#405): the lighter steps of the one indigo hue, from
+     prototype v38: the ring's shades in turn, and a part still running */
+  --gf-chart-2: #4c44e6;
+  --gf-chart-3: #8f89f5;
+  --gf-chart-4: #c9c6ff;
+  --gf-chart-part: #b9b4ff;
 }
 html.rm {
   --gf-t-fast: 1ms;

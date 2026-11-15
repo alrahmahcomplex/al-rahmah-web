@@ -476,6 +476,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { permission: "'leads.view'" },
     agent: { returns: [false] },
   },
+  "public.home_chart_counts(year integer)": {
+    roles: ["authenticated"],
+    args: { year: "2026" },
+    agent: { refused: "forbidden" },
+  },
   "public.import_batch_importers(batch_ids uuid[])": {
     roles: ["authenticated"],
     args: {

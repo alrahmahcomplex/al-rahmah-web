@@ -1,13 +1,8 @@
-import { PhoneIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
-import { EmptyState } from "@/components/staff/empty-state"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { StatusChip } from "@/components/status-chip"
-import { Badge } from "@/components/ui/badge"
-import { buttonVariants } from "@/components/ui/button"
+import { Card, EmptyState, ListRow, Note, PageHeader, pageTitle, Pagination, StatusChip, Tag } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getFollowUpQueue, type FollowUpQueueItem, type FollowUpQueuePage, type FollowUpQueueSection } from "@/lib/services/follow-ups"
 import { createClient } from "@/utils/supabase/server"
@@ -15,17 +10,19 @@ import { createClient } from "@/utils/supabase/server"
 import { leadTabHref } from "../applicants/[id]/tabs"
 import { displayPhone } from "../re-applications/format"
 import { requireStaff } from "../session"
-import { lastContactText, rowDue, splitToday } from "./queue-format"
+import { followUpCount, lastContactText, rowDue, splitToday } from "./queue-format"
 import { followUpsHref, parseFollowUpSearch, type FollowUpSearch } from "./search-params"
+import "./follow-ups.css"
 
 export const metadata: Metadata = {
-  title: "Follow-ups · Al-Rahmah Complex",
+  title: pageTitle("Follow-ups"),
 }
 
 // The follow-up queue: Overdue, oldest first, then Upcoming, with today's
 // follow-ups under Today and later ones nearest first. Each section pages 50
 // rows at a time. A row opens the lead's Follow-ups panel, where staff who
-// may record follow-ups act; the queue itself has no actions.
+// may record follow-ups act; the queue itself has no actions. Drawn in the
+// new shell (#328).
 export default async function FollowUpsPage({
   searchParams,
 }: {
@@ -43,59 +40,62 @@ export default async function FollowUpsPage({
   const today = tanzaniaToday()
 
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="staff-heading">Follow-ups</h1>
-
-      <Section section="overdue" title="Overdue" result={overdue} search={search}>
-        {(page) =>
-          page.items.length === 0 ? (
-            <EmptyState
-              icon={PhoneIcon}
-              title={page.total === 0 ? "No follow-ups are overdue." : "This page is past the end of the list."}
-            />
-          ) : (
-            <Rows items={page.items} today={today} label="Overdue follow-ups" />
-          )
-        }
-      </Section>
-
-      <Section section="upcoming" title="Upcoming" result={upcoming} search={search}>
-        {(page) => {
-          if (page.items.length === 0) {
-            return (
+    <>
+      <PageHeader title="Follow-ups" />
+      <div className="fu-stack">
+        <Section section="overdue" title="Overdue" result={overdue} search={search}>
+          {(page) =>
+            page.items.length === 0 ? (
               <EmptyState
-                icon={PhoneIcon}
-                title={page.total === 0 ? "No follow-ups are coming up." : "This page is past the end of the list."}
+                illustration={page.total === 0 ? "done" : "search"}
+                title={page.total === 0 ? "No follow-ups are overdue." : "This page is past the end of the list."}
               />
+            ) : (
+              <Rows items={page.items} today={today} label="Overdue follow-ups" />
             )
           }
-          const { today: dueToday, later } = splitToday(page.items, today)
-          return (
-            <>
-              {dueToday.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h3 id="follow-ups-today" className="staff-section-heading">
-                    Today
-                  </h3>
-                  <Rows items={dueToday} today={today} labelledBy="follow-ups-today" />
-                </div>
-              )}
-              {later.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h3 id="follow-ups-later" className="staff-section-heading">
-                    Later
-                  </h3>
-                  <Rows items={later} today={today} labelledBy="follow-ups-later" />
-                </div>
-              )}
-            </>
-          )
-        }}
-      </Section>
-    </div>
+        </Section>
+
+        <Section section="upcoming" title="Upcoming" result={upcoming} search={search}>
+          {(page) => {
+            if (page.items.length === 0) {
+              return (
+                <EmptyState
+                  illustration={page.total === 0 ? "done" : "search"}
+                  title={page.total === 0 ? "No follow-ups are coming up." : "This page is past the end of the list."}
+                />
+              )
+            }
+            const { today: dueToday, later } = splitToday(page.items, today)
+            return (
+              <>
+                {dueToday.length > 0 && (
+                  <div className="fu-group">
+                    <h3 id="follow-ups-today" className="kit-sec-title">
+                      Today
+                    </h3>
+                    <Rows items={dueToday} today={today} labelledBy="follow-ups-today" />
+                  </div>
+                )}
+                {later.length > 0 && (
+                  <div className="fu-group">
+                    <h3 id="follow-ups-later" className="kit-sec-title">
+                      Later
+                    </h3>
+                    <Rows items={later} today={today} labelledBy="follow-ups-later" />
+                  </div>
+                )}
+              </>
+            )
+          }}
+        </Section>
+      </div>
+    </>
   )
 }
 
+// One section's card. Its title is the h2; how many it holds is written in
+// words under it (The One Pip Rule), not as a badge.
 function Section({
   section,
   title,
@@ -109,26 +109,33 @@ function Section({
   search: FollowUpSearch
   children: (page: FollowUpQueuePage) => React.ReactNode
 }) {
-  const headingId = `follow-ups-${section}`
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3">
-      <h2 id={headingId} className="flex items-center gap-2 staff-section-heading">
-        {title}
-        {result.ok && result.data.total > 0 && (
-          <Badge variant={section === "overdue" ? "destructive" : "secondary"}>{result.data.total}</Badge>
-        )}
-      </h2>
+    <Card
+      title={title}
+      titleId={`follow-ups-${section}`}
+      caption={result.ok && result.data.total > 0 ? followUpCount(result.data.total) : undefined}
+    >
       {!result.ok ? (
-        <Alert variant="destructive">
-          <AlertDescription>{title} follow-ups could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">
+          {title} follow-ups could not be loaded. Try again in a moment.
+        </Note>
       ) : (
         <>
           {children(result.data)}
-          <Pages section={section} title={title} page={result.data} search={search} />
+          <Pagination
+            className="fu-pages"
+            label={`${title} pages`}
+            page={result.data.page}
+            // A page past the end (rows moved since it was opened) still offers the way back.
+            pageCount={Math.max(result.data.pageCount, result.data.page)}
+            href={(each) => followUpsHref(search, { [section]: each })}
+            previousLabel="Previous page"
+            nextLabel="Next page"
+            pageLabel={(each) => `Page ${each}`}
+          />
         </>
       )}
-    </section>
+    </Card>
   )
 }
 
@@ -144,7 +151,7 @@ function Rows({
   labelledBy?: string
 }) {
   return (
-    <ul aria-label={label} aria-labelledby={labelledBy} className="flex flex-col divide-y rounded-xl ring-1 ring-foreground/10">
+    <ul aria-label={label} aria-labelledby={labelledBy} className="fu-list">
       {items.map((item) => (
         // A lead that needs a follow-up date has no follow-up yet, and shows
         // at most once.
@@ -155,79 +162,49 @@ function Rows({
 }
 
 // One follow-up, or a reopened lead that needs a follow-up date, dated from
-// its approval. The whole row opens the lead's Follow-ups panel; the phone
-// sits above that link so a tap on it calls the family.
+// its approval. The whole row opens the lead's Follow-ups panel (the name's
+// link covers it); the phone sits above that link so a tap on it calls the
+// family.
 function Row({ item, today }: { item: FollowUpQueueItem; today: string }) {
   const due = rowDue(item, today)
   return (
-    <li className="relative flex flex-col gap-2 p-4 text-sm hover:bg-slate-50 sm:flex-row sm:justify-between sm:gap-6">
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <Link
-            href={leadTabHref(item.lead.id, "follow-ups", "lead-follow-ups")}
-            className="font-medium text-slate-900 underline-offset-4 after:absolute after:inset-0 hover:underline"
-          >
-            {item.lead.studentName}
-          </Link>
-          <span className="font-mono text-xs text-muted-foreground">{item.lead.admissionNumber}</span>
-          <StatusChip status={item.lead.status} />
-        </p>
-        <p className="text-muted-foreground">
-          {item.lead.className} · {item.lead.enrollmentYear}
-        </p>
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          {item.kind === "needs_date" && <span className="text-muted-foreground">Reopened</span>}
-          <time dateTime={item.dueOn} className="font-medium text-slate-900">
-            {formatDate(item.dueOn)}
-          </time>
-          <Badge variant={due.overdue ? "destructive" : "outline"}>{due.text}</Badge>
-        </p>
-        {item.note && <p className="break-words whitespace-pre-line text-slate-900">{item.note}</p>}
-        <p className="text-xs text-muted-foreground">{lastContactText(item.lastContact)}</p>
-      </div>
-      <div className="flex shrink-0 flex-col gap-0.5 sm:items-end sm:text-right">
-        <p className="text-slate-900">{item.guardian.name}</p>
-        <a
-          href={`tel:${item.guardian.phone}`}
-          className="relative z-10 inline-flex min-h-8 items-center font-medium text-blue-600 underline-offset-4 hover:underline"
-        >
-          {displayPhone(item.guardian.phone)}
-        </a>
-      </div>
+    <li className="fu-row">
+      <ListRow
+        icon={item.kind === "needs_date" ? "reopen" : "followups"}
+        title={
+          <span className="fu-title">
+            <Link href={leadTabHref(item.lead.id, "follow-ups", "lead-follow-ups")} className="fu-open">
+              {item.lead.studentName}
+            </Link>
+            <span className="fu-number">{item.lead.admissionNumber}</span>
+            <StatusChip status={item.lead.status} />
+          </span>
+        }
+        caption={
+          <>
+            <span className="fu-line">
+              {item.lead.className} · {item.lead.enrollmentYear}
+            </span>
+            <span className="fu-line fu-due">
+              {item.kind === "needs_date" && <span>Reopened</span>}
+              <time dateTime={item.dueOn} className="fu-date">
+                {formatDate(item.dueOn)}
+              </time>
+              <Tag tone={due.overdue ? "bad" : "line"}>{due.text}</Tag>
+            </span>
+            {item.note && <span className="fu-line fu-note">{item.note}</span>}
+            <span className="fu-line">{lastContactText(item.lastContact)}</span>
+          </>
+        }
+        trailing={
+          <span className="fu-who">
+            <span className="fu-guardian">{item.guardian.name}</span>
+            <a href={`tel:${item.guardian.phone}`} className="fu-phone">
+              {displayPhone(item.guardian.phone)}
+            </a>
+          </span>
+        }
+      />
     </li>
-  )
-}
-
-function Pages({
-  section,
-  title,
-  page,
-  search,
-}: {
-  section: FollowUpQueueSection
-  title: string
-  page: FollowUpQueuePage
-  search: FollowUpSearch
-}) {
-  if (page.pageCount <= 1 && page.page === 1) return null
-  return (
-    <nav aria-label={`${title} pages`} className="flex items-center gap-3">
-      {page.page > 1 ? (
-        <Link
-          href={followUpsHref(search, { [section]: Math.min(page.page - 1, page.pageCount) })}
-          className={buttonVariants({ variant: "outline" })}
-        >
-          Previous
-        </Link>
-      ) : null}
-      <p className="text-sm text-muted-foreground">
-        Page {page.page} of {page.pageCount}
-      </p>
-      {page.page < page.pageCount ? (
-        <Link href={followUpsHref(search, { [section]: page.page + 1 })} className={buttonVariants({ variant: "outline" })}>
-          Next
-        </Link>
-      ) : null}
-    </nav>
   )
 }

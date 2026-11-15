@@ -61,11 +61,11 @@ test.describe("on a desktop", () => {
 
   test("moves between the new and the old shell", async ({ page }) => {
     await open(page, MANAGER, "/staff/reopenings")
-    await entry(page, "Interviews").click()
-    await expect(page).toHaveURL(/\/staff\/interviews$/)
+    await entry(page, "Reports").click()
+    await expect(page).toHaveURL(/\/staff\/reports$/)
     await expect(shell(page)).toHaveCount(0)
-    await expect(page.getByRole("heading", { level: 1, name: "Interviews" })).toBeVisible()
-    await expect(page.getByRole("banner")).toContainText("Interviews")
+    await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
+    await expect(page.getByRole("banner")).toContainText("Reports")
 
     await staffNav(page).getByRole("link", { name: /^Reopening requests/ }).click()
     await expect(page).toHaveURL(/\/staff\/reopenings$/)
@@ -238,10 +238,10 @@ test.describe("on a phone", () => {
     await expect(menu).toBeFocused()
 
     await menu.click()
-    await drawer.getByRole("link", { name: "Interviews", exact: true }).click()
-    await expect(page).toHaveURL(/\/staff\/interviews$/)
+    await drawer.getByRole("link", { name: "Reports", exact: true }).click()
+    await expect(page).toHaveURL(/\/staff\/reports$/)
     await expect(drawer).toHaveCount(0)
-    // Interviews keeps the old shell.
+    // Reports keeps the old shell.
     await expect(shell(page)).toHaveCount(0)
     await expect(staffNav(page).getByRole("link", { name: "Home" })).toBeVisible()
   })
@@ -297,8 +297,8 @@ test.describe("crossing between the shells by links", () => {
 
     await toggle(page).click()
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
-    await entry(page, "Interviews").click()
-    await expect(page).toHaveURL(/\/staff\/interviews$/)
+    await entry(page, "Reports").click()
+    await expect(page).toHaveURL(/\/staff\/reports$/)
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
 
     await page.getByRole("button", { name: "Expand sidebar" }).click()
@@ -313,7 +313,7 @@ test.describe("crossing between the shells by links", () => {
   test("a link from the old shell gives the new page's stage the focus; a fresh load does not", async ({ page }) => {
     await open(page, MANAGER, "/staff/reopenings")
     await expect(page.locator(".ns-scroll")).not.toBeFocused()
-    await page.goto("/staff/interviews")
+    await page.goto("/staff/reports")
     await staffNav(page).getByRole("link", { name: /^Reopening requests/ }).click()
     await expect(page).toHaveURL(/\/staff\/reopenings$/)
     await expect(page.locator(".ns-scroll")).toBeFocused()

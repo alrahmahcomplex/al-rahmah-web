@@ -5,14 +5,14 @@ import { expect, test } from "./staff-test"
 import { chooseOption } from "./kit-parts"
 
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
-import { getOverdueCount } from "@/lib/services/follow-ups"
 import { createLead } from "@/lib/services/leads"
 
-import { asSystem, secretClient, signedIn } from "../tests/support/db"
+import { asSystem, secretClient } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { axeProblems } from "./axe"
 import { signInOnce } from "./log-in"
 
-// The Follow-ups queue (#92): its sections in order with the nav badge,
+// The Follow-ups queue (#92): its sections in order, with no nav count,
 // recording a contact from a row, and the Accountant reading it. The tests
 // plant follow-ups older than any other, so their rows head Overdue whatever
 // else the database holds, and archive their leads afterwards.
@@ -66,26 +66,15 @@ const overdueList = (page: Page) => page.getByRole("list", { name: "Overdue foll
 const todayList = (page: Page) => page.getByRole("list", { name: "Today" })
 const laterList = (page: Page) => page.getByRole("list", { name: "Later" })
 
-test("the queue shows Overdue, then Today, then later follow-ups, with the overdue count on the nav", async ({ page }) => {
+test("the queue shows Overdue, then Today, then later follow-ups, with no count on the nav", async ({ page }) => {
   const late = await leadDueOn(addDays(today, -2000), "Ask about the school bus.")
   const dueToday = await leadDueOn(today)
 
   await signIn(page, ADMISSIONS)
   await page.goto("/staff/follow-ups")
 
-  // The badge shows the overdue count. Browser tests running alongside move
-  // that count too, so the page is reloaded until the two are read between
-  // such changes.
-  const staffNav = page.getByRole("navigation", { name: "Staff" })
-  const staff = await signedIn(ADMISSIONS)
-  await expect
-    .poll(async () => {
-      await page.reload()
-      const count = await getOverdueCount(staff)
-      if (!count.ok) return false
-      return (await staffNav.getByRole("link", { name: new RegExp(`^Follow-ups ?, ${count.data} overdue$`) }).count()) === 1
-    })
-    .toBe(true)
+  // The One Pip Rule: the sidebar entry is its label alone.
+  await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /^Follow-ups/ })).toHaveAccessibleName("Follow-ups")
 
   await expect(page.getByRole("heading", { level: 2 })).toHaveText([/^Overdue/, /^Upcoming/])
   await expect(page.locator("h2, h3")).toHaveText([/^Overdue/, /^Upcoming/, "Today", "Later"])
@@ -137,7 +126,7 @@ test("recording a contact from a queue row moves the row to Upcoming", async ({ 
       await expect(row).toContainText(`Last contact: SMS on ${formatDate(today)}`)
       break
     }
-    await expect(page.getByRole("navigation", { name: "Upcoming pages" }).getByRole("link", { name: "Next" })).toBeVisible()
+    await expect(page.getByRole("navigation", { name: "Upcoming pages" }).getByRole("link", { name: "Next page" })).toBeVisible()
   }
 })
 
@@ -155,3 +144,16 @@ test("the Accountant sees the queue, with no actions", async ({ page }) => {
   await expect(panel.getByLabel("Follow-up date")).toHaveText(formatDate(addDays(today, -1800)))
   await expect(panel.getByRole("button")).toHaveCount(0)
 })
+
+// Axe may report only the accepted white on orange, at the desktop and the
+// phone width (docs/agents/workflow.md, Axe scans).
+for (const width of [1280, 390]) {
+  test(`axe finds nothing on Follow-ups at ${width}px`, { tag: "@nightly" }, async ({ page }) => {
+    await leadDueOn(addDays(today, -1700), "Ask about the uniform.")
+    await page.setViewportSize({ width, height: 900 })
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/follow-ups")
+    await expect(overdueList(page).getByRole("listitem").first()).toBeVisible()
+    expect(await axeProblems(page)).toEqual([])
+  })
+}

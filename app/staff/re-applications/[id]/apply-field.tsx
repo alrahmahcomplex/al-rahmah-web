@@ -1,13 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useTransition } from "react"
-import { toast } from "sonner"
+import { useId, useState, useTransition } from "react"
 
-import { Button } from "@/components/ui/button"
+import { Button, FieldError, toast } from "@/components/kit"
 import type { ReApplicationField } from "@/lib/services/re-applications"
 
 import type { CorrectionOutcome } from "../../applicants/[id]/correction-outcome"
+import "../re-applications.css"
 import { applyAction } from "./apply-actions"
 
 const LOST_REQUEST: CorrectionOutcome = {
@@ -31,6 +31,7 @@ export function ApplyField({
 }) {
   const [outcome, setOutcome] = useState<CorrectionOutcome | null>(null)
   const [pending, startTransition] = useTransition()
+  const errorId = useId()
 
   function apply() {
     setOutcome(null)
@@ -41,30 +42,37 @@ export function ApplyField({
       } catch {
         answer = LOST_REQUEST
       }
-      if (answer.status === "saved") toast.success(`${label} applied to the application.`)
+      if (answer.status === "saved") toast(`${label} applied to the application.`, { tone: "good" })
       else setOutcome(answer)
     })
   }
 
+  const message =
+    outcome?.status === "refused" ? (
+      outcome.message
+    ) : outcome?.status === "duplicate" ? (
+      <>
+        That would make this student match{" "}
+        <Link href={outcome.href} className="ra-mono ra-error-link">
+          {outcome.admissionNumber}
+        </Link>
+        , already on file. Nothing was saved.
+      </>
+    ) : undefined
+
   return (
-    <div className="flex flex-col items-start gap-1">
-      <Button size="sm" variant="outline" onClick={apply} disabled={pending} aria-label={`Apply ${label}`}>
+    <div className="ra-apply">
+      <Button
+        size="small"
+        variant="ghost"
+        onClick={apply}
+        pending={pending}
+        aria-label={`Apply ${label}`}
+        aria-describedby={message ? errorId : undefined}
+      >
         {pending ? "Applying…" : "Apply"}
       </Button>
-      {outcome?.status === "refused" && (
-        <p role="alert" className="text-xs text-destructive">
-          {outcome.message}
-        </p>
-      )}
-      {outcome?.status === "duplicate" && (
-        <p role="alert" className="text-xs text-destructive">
-          That would make this student match{" "}
-          <Link href={outcome.href} className="font-mono underline underline-offset-4">
-            {outcome.admissionNumber}
-          </Link>
-          , already on file. Nothing was saved.
-        </p>
-      )}
+      {message && <FieldError id={errorId} message={message} alignStart />}
     </div>
   )
 }

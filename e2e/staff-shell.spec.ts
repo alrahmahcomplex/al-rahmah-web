@@ -123,10 +123,11 @@ test.describe("on a phone", () => {
     await expect(more.getByRole("link", { name: /^(Home|Applicants)$/ })).toHaveCount(0)
     await expect(sheet.getByRole("button", { name: "Sign out" })).toBeVisible()
 
-    await more.getByRole("link", { name: /^Follow-ups/ }).click()
-    await expect(page).toHaveURL(/\/staff\/follow-ups$/)
+    // Reports keeps the old shell, with its tab bar.
+    await more.getByRole("link", { name: "Reports" }).click()
+    await expect(page).toHaveURL(//staff/reports$/)
     await expect(sheet).toBeHidden()
-    await expect(page.getByRole("banner")).toContainText("Follow-ups")
+    await expect(page.getByRole("banner")).toContainText("Reports")
     await expect(tabs.getByRole("link", { name: "Applicants" })).not.toHaveAttribute("aria-current", "page")
   })
 })

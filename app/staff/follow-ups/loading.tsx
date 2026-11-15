@@ -1,18 +1,13 @@
-import { Bone, HeadingSkeleton, ListSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// Follow-ups: Overdue, then Upcoming, each a list of families to call.
+// Follow-ups while it opens: the header, then the Overdue and Upcoming cards.
 export default function Loading() {
   return (
-    <PageSkeleton label="follow-ups" className="gap-8">
-      <HeadingSkeleton width="w-36" />
-      <div className="flex flex-col gap-3">
-        <Bone className="h-5 w-24" />
-        <ListSkeleton rows={2} lines={4} />
-      </div>
-      <div className="flex flex-col gap-3">
-        <Bone className="h-5 w-24" />
-        <ListSkeleton rows={3} lines={4} />
-      </div>
-    </PageSkeleton>
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <span className="sr-only">Loading follow-ups…</span>
+      <SkeletonBlock width={200} height={32} />
+      <SkeletonBlock height={220} shape="card" />
+      <SkeletonBlock height={300} shape="card" />
+    </div>
   )
 }

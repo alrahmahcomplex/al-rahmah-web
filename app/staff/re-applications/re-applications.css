@@ -1,0 +1,34 @@
+/* Re-applications: the queue, one re-application and its comparison (DESIGN.md, Lists). Tokens only. */
+.ra-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ra-stack > .ra-stack { gap: 12px; }
+.ra-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ra-count { margin: 0; color: var(--gf-quiet); font-size: 14px; }
+.ra-back { align-self: flex-start; display: inline-block; margin-bottom: 10px; font-size: 13.5px; }
+
+.ra-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ra-nowrap { white-space: nowrap; }
+.ra-name { color: var(--gf-ink); font-weight: 600; overflow-wrap: anywhere; }
+.ra-mono { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ra-number {
+  color: var(--gf-indigo); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ra-number:focus-visible, .ra-error-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; border-radius: 4px; }
+.ra-error-link { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
+/* The header's lines: the student, then when the form arrived. */
+.ra-who { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; }
+.ra-arrived { display: block; margin-top: 6px; }
+
+.ra-text { margin: 8px 0 0; color: var(--gf-ink); font-size: 14.5px; }
+.ra-quiet { color: var(--gf-ink-soft); max-width: 62ch; }
+.ra-act { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px; }
+
+/* The comparison table. */
+.ra-compare { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.ra-compare .ra-text { margin: 0; }
+.ra-field { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 120px; }
+.ra-value { display: block; min-width: 140px; max-width: 36ch; overflow-wrap: anywhere; font-weight: 400; }
+.ra-value[data-differed] { font-weight: 600; }
+.ra-sub { display: block; margin-top: 2px; font-weight: 400; }
+.ra-apply { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 96px; }
+.ra-apply .kit-err p { font-size: 12.5px; max-width: 32ch; }

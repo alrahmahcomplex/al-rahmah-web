@@ -1,12 +1,7 @@
-import { ClipboardCheckIcon } from "lucide-react"
 import type { Metadata } from "next"
-import Link from "next/link"
 import { forbidden } from "next/navigation"
 
-import { EmptyState } from "@/components/staff/empty-state"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { buttonVariants } from "@/components/ui/button"
+import { ButtonLink, Card, EmptyState, FilterPills, Note, PageHeader, pageTitle, Pagination } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import type { InterviewFeeStatus } from "@/lib/services/interviews"
 import {
@@ -17,21 +12,21 @@ import {
   type InterviewResultFilter,
 } from "@/lib/services/interview-list"
 import { listReleaseStatus, type ReleaseStatus } from "@/lib/services/result-release"
-
-import { interviewRows } from "./rows"
-import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
-import { closedState } from "../applicants/[id]/closed-state"
 import { leadTabHref } from "../applicants/[id]/tabs"
+import { closedState } from "../applicants/[id]/closed-state"
 import { requireStaff } from "../session"
+import { InterviewsTable, type InterviewTableRow } from "./interviews-table"
+import { interviewRows } from "./rows"
 import { defaultInterviewYear, interviewsHref, parseInterviewSearch } from "./search-params"
+import "./interviews.css"
 
 export const metadata: Metadata = {
-  title: "Interviews · Al-Rahmah Complex",
+  title: pageTitle("Interviews"),
 }
 
-// Each filter group is a row of links, so a filter is a URL.
+// Each filter group is a row of link pills, so a filter is a URL.
 const RESULT_FILTERS: { value: InterviewResultFilter | undefined; label: string }[] = [
   { value: undefined, label: "Any result" },
   { value: "none", label: "No result yet" },
@@ -51,6 +46,8 @@ const RELEASE_FILTERS: { value: true | undefined; label: string }[] = [
   { value: true, label: "Ready to send" },
 ]
 
+// Every interview registration for an Enrollment year, by S/N, with the
+// filters as links. Drawn in the new shell (#328).
 export default async function InterviewsPage({
   searchParams,
 }: {
@@ -62,7 +59,14 @@ export default async function InterviewsPage({
   const supabase = await createClient()
   const asked = parseInterviewSearch(await searchParams)
   const years = await listInterviewYears(supabase)
-  if (!years.ok) return <Unavailable />
+  if (!years.ok) {
+    return (
+      <>
+        <PageHeader title="Interviews" />
+        <Unavailable />
+      </>
+    )
+  }
 
   const currentYear = Number(tanzaniaToday().slice(0, 4))
   const search: InterviewListSearch = {
@@ -81,80 +85,77 @@ export default async function InterviewsPage({
   // year links always say which one is open.
   const offered = [...new Set([...years.data, search.enrollmentYear])].sort((a, b) => a - b)
 
+  const groups = [
+    {
+      label: "Enrollment year",
+      options: offered.map((year) => ({
+        label: String(year),
+        // The filters carry over, so Not Paid stays Not Paid in another year.
+        href: interviewsHref(search, { enrollmentYear: year, page: 1 }),
+        current: year === search.enrollmentYear,
+      })),
+    },
+    {
+      label: "Result",
+      options: RESULT_FILTERS.map((filter) => ({
+        label: filter.label,
+        href: interviewsHref(search, { result: filter.value, page: 1 }),
+        current: filter.value === search.result,
+      })),
+    },
+    {
+      label: "Interview fee",
+      options: FEE_FILTERS.map((filter) => ({
+        label: filter.label,
+        href: interviewsHref(search, { feeStatus: filter.value, page: 1 }),
+        current: filter.value === search.feeStatus,
+      })),
+    },
+    {
+      label: "Result release",
+      options: RELEASE_FILTERS.map((filter) => ({
+        label: filter.label,
+        href: interviewsHref(search, { readyToSend: filter.value, page: 1 }),
+        current: filter.value === search.readyToSend,
+      })),
+    },
+  ]
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="staff-heading">Interviews</h1>
+    <>
+      <PageHeader title="Interviews" />
+      <div className="iv-stack">
+        <div className="iv-filters">
+          {groups.map((group) => (
+            <div key={group.label} className="iv-filter">
+              <p className="iv-filter-label" aria-hidden="true">
+                {group.label}
+              </p>
+              <FilterPills
+                label={group.label}
+                options={group.options.map(({ label, href }) => ({ label, href }))}
+                current={group.options.find((option) => option.current)?.href ?? null}
+                className="iv-pills"
+              />
+            </div>
+          ))}
+        </div>
 
-      <div className="flex flex-col gap-3">
-        <FilterGroup
-          label="Enrollment year"
-          options={offered.map((year) => ({
-            label: String(year),
-            // The filters carry over, so Not Paid stays Not Paid in another year.
-            href: interviewsHref(search, { enrollmentYear: year, page: 1 }),
-            current: year === search.enrollmentYear,
-          }))}
-        />
-        <FilterGroup
-          label="Result"
-          options={RESULT_FILTERS.map((filter) => ({
-            label: filter.label,
-            href: interviewsHref(search, { result: filter.value, page: 1 }),
-            current: filter.value === search.result,
-          }))}
-        />
-        <FilterGroup
-          label="Interview fee"
-          options={FEE_FILTERS.map((filter) => ({
-            label: filter.label,
-            href: interviewsHref(search, { feeStatus: filter.value, page: 1 }),
-            current: filter.value === search.feeStatus,
-          }))}
-        />
-        <FilterGroup
-          label="Result release"
-          options={RELEASE_FILTERS.map((filter) => ({
-            label: filter.label,
-            href: interviewsHref(search, { readyToSend: filter.value, page: 1 }),
-            current: filter.value === search.readyToSend,
-          }))}
-        />
+        {!results.ok || !statuses?.ok ? (
+          <Unavailable />
+        ) : (
+          <Results results={results.data} statuses={statuses.data} search={search} />
+        )}
       </div>
-
-      {!results.ok || !statuses?.ok ? (
-        <Unavailable />
-      ) : (
-        <Results results={results.data} statuses={statuses.data} search={search} />
-      )}
-    </div>
+    </>
   )
 }
 
 function Unavailable() {
   return (
-    <Alert variant="destructive">
-      <AlertDescription>Interviews could not be loaded. Try again in a moment.</AlertDescription>
-    </Alert>
-  )
-}
-
-function FilterGroup({ label, options }: { label: string; options: { label: string; href: string; current: boolean }[] }) {
-  return (
-    <nav aria-label={label} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-      <p className="w-32 shrink-0 text-sm text-muted-foreground">{label}</p>
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => (
-          <Link
-            key={option.href}
-            href={option.href}
-            aria-current={option.current ? "page" : undefined}
-            className={buttonVariants({ variant: option.current ? "default" : "outline", size: "sm" })}
-          >
-            {option.label}
-          </Link>
-        ))}
-      </div>
-    </nav>
+    <Note tone="bad" role="alert">
+      Interviews could not be loaded. Try again in a moment.
+    </Note>
   )
 }
 
@@ -178,116 +179,58 @@ function Results({
       ? "No interviews match these filters."
       : `No one is registered for interview for ${search.enrollmentYear} yet.`
 
+  const rows: InterviewTableRow[] = interviews.map((interview) => ({
+    id: interview.id,
+    serialNumber: interview.serialNumber,
+    admissionNumber: interview.lead.admissionNumber,
+    studentName: interview.lead.studentName,
+    leadHref: leadTabHref(interview.lead.id, "interview", "lead-interview"),
+    closed: interview.lead.closed ? { text: closedState(interview.lead), declined: interview.lead.status === "Declined" } : null,
+    className: interview.lead.className,
+    dayOrBoarding: interview.lead.dayOrBoarding,
+    result: interview.result,
+    score: interview.score,
+    feeStatus: interview.feeStatus,
+    sentOn: interview.sentOn,
+  }))
+
   return (
-    <section aria-label="Results" className="flex flex-col gap-3">
+    <section aria-label="Results" className="iv-stack">
       {total === 0 ? (
-        <EmptyState
-          role="status"
-          icon={ClipboardCheckIcon}
-          title={empty}
-          action={
-            filtered && (
-              <Link
-                href={interviewsHref({ enrollmentYear: search.enrollmentYear, page: 1 })}
-                className={buttonVariants({ variant: "outline" })}
-              >
-                Show every interview for {search.enrollmentYear}
-              </Link>
-            )
-          }
-        />
+        <Card role="status">
+          <EmptyState
+            illustration={onlyReady ? "done" : "search"}
+            title={empty}
+            action={
+              filtered && (
+                <ButtonLink href={interviewsHref({ enrollmentYear: search.enrollmentYear, page: 1 })} variant="ghost">
+                  Show every interview for {search.enrollmentYear}
+                </ButtonLink>
+              )
+            }
+          />
+        </Card>
       ) : (
-        <p className="text-sm text-muted-foreground" aria-live="polite">
+        <p className="iv-count" aria-live="polite">
           {`${total} ${total === 1 ? "interview" : "interviews"}`}
         </p>
       )}
 
-      {interviews.length > 0 && (
-        <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
-          <table aria-label={`Interviews for ${search.enrollmentYear}`} className="w-full min-w-[58rem] text-left text-sm">
-            <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-3 py-2 font-medium">S/N</th>
-                <th scope="col" className="px-3 py-2 font-medium">Admission Number</th>
-                <th scope="col" className="px-3 py-2 font-medium">Student</th>
-                <th scope="col" className="px-3 py-2 font-medium">Class</th>
-                <th scope="col" className="px-3 py-2 font-medium">Day or boarding</th>
-                <th scope="col" className="px-3 py-2 font-medium">Result</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Score</th>
-                <th scope="col" data-column="fee" className="px-3 py-2 font-medium">Interview fee</th>
-                <th scope="col" data-column="sent" className="px-3 py-2 font-medium">Result sent</th>
-              </tr>
-            </thead>
-            <tbody>
-              {interviews.map((interview) => (
-                <tr key={interview.id} className="border-b align-top last:border-b-0 hover:bg-slate-50">
-                  <td className="px-3 py-2 font-mono font-semibold text-slate-900">{interview.serialNumber}</td>
-                  <td className="px-3 py-2 font-mono whitespace-nowrap">{interview.lead.admissionNumber}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <Link
-                        href={leadTabHref(interview.lead.id, "interview", "lead-interview")}
-                        className={cn(
-                          "font-medium underline-offset-4 hover:underline",
-                          interview.lead.closed ? "text-muted-foreground" : "text-slate-900",
-                        )}
-                      >
-                        {interview.lead.studentName}
-                      </Link>
-                      {interview.lead.closed && (
-                        <Badge variant={interview.lead.status === "Declined" ? "destructive" : "outline"}>
-                          {closedState(interview.lead)}
-                        </Badge>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{interview.lead.className}</td>
-                  <td className="px-3 py-2">{interview.lead.dayOrBoarding}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    {interview.result === null ? (
-                      <span className="text-muted-foreground">No result yet</span>
-                    ) : (
-                      <span className={cn("font-medium", interview.result === "Passed" ? "text-emerald-700" : "text-slate-900")}>
-                        {interview.result}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {interview.score === null ? <span className="text-muted-foreground">–</span> : `${interview.score}%`}
-                  </td>
-                  <td data-column="fee" className="px-3 py-2">
-                    <Badge
-                      variant={interview.feeStatus === "Paid" ? "secondary" : "outline"}
-                      className={cn(interview.feeStatus === "Paid" && "bg-emerald-50 text-emerald-800")}
-                    >
-                      {interview.feeStatus}
-                    </Badge>
-                  </td>
-                  <td data-column="sent" className="px-3 py-2 whitespace-nowrap">{interview.sentOn}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {rows.length > 0 && (
+        <Card>
+          <InterviewsTable label={`Interviews for ${search.enrollmentYear}`} rows={rows} />
+        </Card>
       )}
 
-      {pageCount > 1 && (
-        <nav aria-label="Pages" className="flex items-center gap-3">
-          {page > 1 ? (
-            <Link href={interviewsHref(search, { page: page - 1 })} className={buttonVariants({ variant: "outline" })}>
-              Previous
-            </Link>
-          ) : null}
-          <p className="text-sm text-muted-foreground">
-            Page {page} of {pageCount}
-          </p>
-          {page < pageCount ? (
-            <Link href={interviewsHref(search, { page: page + 1 })} className={buttonVariants({ variant: "outline" })}>
-              Next
-            </Link>
-          ) : null}
-        </nav>
-      )}
+      <Pagination
+        label="Interview pages"
+        page={page}
+        pageCount={pageCount}
+        href={(each) => interviewsHref(search, { page: each })}
+        previousLabel="Previous page"
+        nextLabel="Next page"
+        pageLabel={(each) => `Page ${each}`}
+      />
     </section>
   )
 }

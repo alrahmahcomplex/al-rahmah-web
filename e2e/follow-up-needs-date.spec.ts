@@ -60,7 +60,7 @@ async function openOverdueWithReopened(page: Page) {
     // Wait for the page itself, not its loading skeleton, before counting.
     await expect(page.getByRole("heading", { name: "Follow-ups", level: 1 })).toBeVisible()
     if ((await reopenedRow(page).count()) > 0) return
-    const next = page.getByRole("navigation", { name: "Overdue pages" }).getByRole("link", { name: "Next" })
+    const next = page.getByRole("navigation", { name: "Overdue pages" }).getByRole("link", { name: "Next page" })
     if ((await next.count()) === 0) throw new Error(`${REOPENED.name} is not in Overdue`)
   }
 }
@@ -68,12 +68,6 @@ async function openOverdueWithReopened(page: Page) {
 test("the seeded reopened lead shows as Needs a follow-up date until a follow-up is scheduled", async ({ page }) => {
   await signIn(page, ADMISSIONS)
   await openOverdueWithReopened(page)
-
-  // The nav badge shows Overdue's count. Browser tests running alongside
-  // plant overdue follow-ups too, so the exact count is the integration
-  // tests' to check (tests/integration/follow-up-needs-date.test.ts).
-  const nav = page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /^Follow-ups/ })
-  await expect(nav).toHaveAccessibleName(/^Follow-ups ?, [1-9]\d* overdue$/)
 
   const row = reopenedRow(page)
   await expect(row).toHaveCount(1)
@@ -99,7 +93,7 @@ test("the seeded reopened lead shows as Needs a follow-up date until a follow-up
   for (let overdue = 1; ; overdue++) {
     await page.goto(`/staff/follow-ups?overdue=${overdue}`)
     await expect(reopenedRow(page)).toHaveCount(0)
-    const next = page.getByRole("navigation", { name: "Overdue pages" }).getByRole("link", { name: "Next" })
+    const next = page.getByRole("navigation", { name: "Overdue pages" }).getByRole("link", { name: "Next page" })
     if ((await next.count()) === 0) break
   }
 })

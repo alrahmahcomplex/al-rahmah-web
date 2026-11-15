@@ -6,6 +6,7 @@ import { expect, test } from "./staff-test"
 import { admissionYears } from "../lib/admission-form"
 import { secretClient } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
+import { axeProblems } from "./axe"
 import { signInOnce } from "./log-in"
 
 // Reviewing Re-applications (#77): the queue and its count, opening one, and
@@ -61,10 +62,14 @@ async function unreviewedInDatabase(): Promise<number> {
 const reApplicationsLink = (page: Page) =>
   page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /^Re-applications/ })
 
-async function navCount(page: Page): Promise<number> {
-  const name = (await reApplicationsLink(page).textContent()) ?? ""
-  const match = /(\d+)\s*unreviewed/.exec(name)
-  return match ? Number(match[1]) : 0
+// The queue says in words how many wait (The One Pip Rule: not on the nav).
+async function queueCount(page: Page): Promise<number> {
+  await page.goto("/staff/re-applications")
+  const counted = page.getByRole("main").getByText(/^\d+ unreviewed re-applications?$/)
+  const none = page.getByText("No re-applications wait for review.")
+  await expect(counted.or(none)).toBeVisible()
+  if (await none.isVisible()) return 0
+  return Number(/^\d+/.exec((await counted.textContent()) ?? "")![0])
 }
 
 test.describe("Re-applications", () => {
@@ -72,9 +77,10 @@ test.describe("Re-applications", () => {
     const mine = await reApplied()
     await signIn(page, ADMISSIONS)
 
-    // The count is the unreviewed re-applications, as the database holds them.
-    await expect.poll(async () => (await navCount(page)) === (await unreviewedInDatabase())).toBe(true)
     await reApplicationsLink(page).click()
+    await expect(page).toHaveURL(/\/staff\/re-applications$/)
+    // The count is the unreviewed re-applications, as the database holds them.
+    await expect.poll(async () => (await queueCount(page)) === (await unreviewedInDatabase())).toBe(true)
     await expect(page.getByRole("heading", { name: "Re-applications", exact: true })).toBeVisible()
     await expect(page.getByRole("link", { name: "Show reviewed" })).toBeVisible()
 
@@ -109,12 +115,16 @@ test.describe("Re-applications", () => {
 
     await expect(page.getByText(`Reviewed by ${ADMISSIONS.name}`)).toBeVisible()
     await expect(page.getByRole("button", { name: "Mark reviewed" })).toHaveCount(0)
-    await expect.poll(async () => (await navCount(page)) === (await unreviewedInDatabase())).toBe(true)
+    await expect.poll(async () => (await queueCount(page)) === (await unreviewedInDatabase())).toBe(true)
 
     // Off the queue, which holds it no more on any page: the newest is last.
     await reApplicationsLink(page).click()
-    const pages = /Page \d+ of (\d+)/.exec((await page.getByRole("main").textContent()) ?? "")
-    if (pages) await page.goto(`/staff/re-applications?page=${pages[1]}`)
+    await expect(page.getByRole("table", { name: "Re-applications" })).toBeVisible()
+    const pageLinks = page.getByRole("navigation", { name: "Re-application pages" }).getByRole("link", { name: /^Page \d+$/ })
+    if ((await pageLinks.count()) > 0) {
+      const last = /\d+/.exec((await pageLinks.last().getAttribute("aria-label")) ?? "")![0]
+      await page.goto(`/staff/re-applications?page=${last}`)
+    }
     await expect(page.getByRole("table", { name: "Re-applications" })).toBeVisible()
     await expect(page.getByRole("row", { name: new RegExp(mine.admissionNumber) })).toHaveCount(0)
 
@@ -132,8 +142,8 @@ test.describe("Re-applications", () => {
 
   test("the Accountant reads re-applications, on a closed lead too, with no Mark reviewed", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    await expect.poll(async () => (await navCount(page)) === (await unreviewedInDatabase())).toBe(true)
     await reApplicationsLink(page).click()
+    await expect.poll(async () => (await queueCount(page)) === (await unreviewedInDatabase())).toBe(true)
 
     const hamisi = page.getByRole("table", { name: "Re-applications" }).getByRole("row", { name: /ADMSN-90005/ })
     await hamisi.getByRole("link", { name: "ADMSN-90005" }).click()
@@ -147,3 +157,26 @@ test.describe("Re-applications", () => {
     await expect(page.getByRole("region", { name: "Re-applications" })).toContainText("Not reviewed")
   })
 })
+
+// Axe may report only the accepted white on orange, at the desktop and the
+// phone width (docs/agents/workflow.md, Axe scans): the queue, an open
+// lead's re-application with its Apply buttons, and a closed one's.
+for (const width of [1280, 390]) {
+  test(`axe finds nothing on Re-applications and a re-application at ${width}px`, { tag: "@nightly" }, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await signIn(page, ADMISSIONS)
+    await page.goto("/staff/re-applications")
+    const queue = page.getByRole("table", { name: "Re-applications" })
+    await expect(queue).toBeVisible()
+    expect(await axeProblems(page)).toEqual([])
+
+    await queue.getByRole("link", { name: "ADMSN-90301" }).click()
+    await expect(page.getByRole("table", { name: "Compared with the application" }).getByRole("button", { name: /^Apply/ }).first()).toBeVisible()
+    expect(await axeProblems(page)).toEqual([])
+
+    await page.goto("/staff/re-applications")
+    await queue.getByRole("link", { name: "ADMSN-90005" }).click()
+    await expect(page.getByRole("region", { name: "This application is Archived" })).toBeVisible()
+    expect(await axeProblems(page)).toEqual([])
+  })
+}

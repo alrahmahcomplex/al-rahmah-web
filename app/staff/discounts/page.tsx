@@ -58,6 +58,7 @@ export default async function DiscountRequestsPage() {
                       }
                       trailing={
                         <span className="dr-end">
+                          {!request.leadOpen && <Tag tone="line">Closed</Tag>}
                           <Tag tone="wait">{DISCOUNT_STATE_LABELS.pending}</Tag>
                           <ReviewDiscount
                             leadId={request.leadId}

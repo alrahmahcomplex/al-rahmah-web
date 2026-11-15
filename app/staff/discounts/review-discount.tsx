@@ -39,14 +39,16 @@ export function ReviewDiscount(props: ReviewDiscountProps) {
   const formId = useId()
   const refuseRef = useRef<HTMLButtonElement>(null)
 
+  // The sheet starts at the request each time it opens. Resetting on open,
+  // not on close, keeps the reason step drawn while the sheet slides out.
   function changeOpen(next: boolean) {
     if (pending) return
-    setOpen(next)
-    if (!next) {
+    if (next) {
       setRefusing(false)
       why.clearMissing()
       clearRefusal()
     }
+    setOpen(next)
   }
 
   function back() {
@@ -63,7 +65,6 @@ export function ReviewDiscount(props: ReviewDiscountProps) {
     if (!why.check()) return
     refuse(why.reason, () => {
       setOpen(false)
-      setRefusing(false)
       why.reset()
       toast(`Refused for ${studentName}. The desk can see it now.`)
     })

@@ -7,7 +7,7 @@
 .dr-why { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dr-by { flex: none; max-width: 100%; }
 
-.dr-end { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; flex: none; }
+.dr-end { display: flex; align-items: center; gap: 8px; flex: none; }
 
 .dr-review { display: flex; flex-direction: column; gap: 12px; }
 .dr-review .kit-kv { margin-block: 2px; }

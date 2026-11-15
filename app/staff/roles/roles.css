@@ -10,6 +10,14 @@
 /* The roles stay a list, as before; the line between rows moves to the items. */
 .ro-roles { margin: 0; padding: 0; list-style: none; }
 .ro-roles > li + li > .kit-row { border-top: 1px solid var(--gf-mist); }
+/* On a phone the roles are a strip that scrolls sideways, as before the redesign, so the chosen role's pane stays in view below it. */
+@media (max-width: 767px) {
+  .ro-roles { display: flex; gap: 4px; overflow-x: auto; overscroll-behavior-x: contain; }
+  .ro-roles > li { flex: none; }
+  .ro-roles > li + li > .kit-row { border-top: 0; }
+  .ro-roles .kit-row { padding: 8px 12px; }
+  .ro-roles .kit-row-title { white-space: nowrap; overflow-wrap: normal; }
+}
 .ro-role { display: flex; min-width: 0; flex: 1; flex-direction: column; }
 .ro-role > span:first-child { overflow-wrap: anywhere; }
 .ro-cap { color: var(--gf-quiet); font-size: 12.5px; font-weight: 400; }

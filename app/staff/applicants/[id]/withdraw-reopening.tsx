@@ -54,7 +54,7 @@ export function WithdrawReopening({ leadId, requestId }: { leadId: string; reque
         closeLabel="Close"
         foot={
           <>
-            <Button size="wide" onClick={withdraw}>
+            <Button variant="warn" size="wide" onClick={withdraw}>
               Withdraw request
             </Button>
             <Button variant="ghost" size="wide" onClick={() => setOpen(false)}>

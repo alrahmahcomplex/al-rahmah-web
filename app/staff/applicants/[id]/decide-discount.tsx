@@ -161,7 +161,7 @@ function RefuseDiscount({ leadId, requestId, studentName, admissionNumber, disco
         closeLabel="Close"
         foot={
           <>
-            <Button type="submit" form={formId} size="wide" pending={pending}>
+            <Button type="submit" form={formId} variant="bad" size="wide" pending={pending}>
               {pending ? "Refusing…" : "Refuse request"}
             </Button>
             <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} aria-disabled={pending || undefined}>

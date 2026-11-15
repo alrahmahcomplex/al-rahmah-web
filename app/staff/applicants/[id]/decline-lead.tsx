@@ -125,7 +125,7 @@ export function DeclineLead({ lead, reasons, open, onOpenChange: setOpen }: Decl
           </>
         ) : (
           <>
-            <Button size="wide" onClick={decline} pending={pending}>
+            <Button variant="bad" size="wide" onClick={decline} pending={pending}>
               {pending ? "Declining…" : "Decline application"}
             </Button>
             <Button variant="ghost" size="wide" onClick={() => setStep("choose")} aria-disabled={pending || undefined}>

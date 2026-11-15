@@ -435,7 +435,8 @@ html.rm .kit-cf { display: none; }
   font-size: 16px; text-align: left; cursor: pointer; user-select: none;
 }
 .kit-sel-v { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kit-sel[data-empty] .kit-sel-v { color: var(--gf-placeholder); }
+/* Slate Quiet, not the field placeholder grey: this is real text, so it must meet 4.5:1 on Paper (#414). */
+.kit-sel[data-empty] .kit-sel-v { color: var(--gf-quiet); }
 .kit-sel-chev { flex: none; color: var(--gf-indigo); stroke-width: 2.4; transition: transform var(--gf-t-med) var(--gf-ease-out); }
 .kit-sel[aria-expanded="true"] { border-color: var(--gf-indigo); box-shadow: 0 0 0 4px rgb(9 0 187 / 0.12); }
 .kit-sel[aria-expanded="true"] .kit-sel-chev { transform: rotate(180deg); }

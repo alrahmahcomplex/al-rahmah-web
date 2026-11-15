@@ -114,6 +114,17 @@ for (const width of [1280, 390]) {
     await more.getByRole("region", { name: "Popover" }).getByRole("button", { name: "New requests" }).click()
     await expect(page.getByRole("dialog", { name: "New requests" })).toBeVisible()
     expect(await axeProblems(page, '[role="dialog"]')).toEqual([])
+    await page.keyboard.press("Escape")
+    await expect(page.getByRole("dialog")).toHaveCount(0)
+
+    // #414: a choice list with nothing chosen shows its placeholder as text, closed and open.
+    const empty = page.getByRole("combobox", { name: "Payment type" })
+    await expect(empty).toHaveText(/Choose a type/)
+    expect(await axeProblems(page, '[data-kit-form="form-parts"] .kit-sel[data-empty]')).toEqual([])
+    await empty.click()
+    await expect(page.getByRole("listbox")).toBeVisible()
+    expect(await axeProblems(page, '[data-kit-form="form-parts"] .kit-sel[data-empty]')).toEqual([])
+    expect(await axeProblems(page, ".kit-sel-pop")).toEqual([])
   })
 }
 

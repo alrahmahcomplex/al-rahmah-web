@@ -15,7 +15,7 @@ export type CardProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
   titleId?: string
 }
 
-/** A resting white card: 24px corners, the 1.5px Indigo Line, the Card shadow. */
+/** A resting white card: 24px corners, the thin Indigo Line, the Card shadow. */
 export function Card({ title, caption, titleId, className, children, ...props }: CardProps) {
   const madeId = useId()
   const headingId = titleId ?? madeId

@@ -205,7 +205,7 @@ function AdjustForm({
       closeLabel="Close"
       foot={
         <>
-          <Button type="submit" form={formId} size="wide" pending={pending}>
+          <Button type="submit" form={formId} variant={voiding ? "bad" : "go"} size="wide" pending={pending}>
             {pending ? "Saving…" : voiding ? "Void payment" : "Save adjustment"}
           </Button>
           <Button variant="ghost" size="wide" onClick={onCancel} aria-disabled={pending || undefined}>

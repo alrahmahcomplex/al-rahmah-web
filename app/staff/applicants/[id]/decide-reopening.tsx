@@ -233,7 +233,7 @@ function RejectReopening({ leadId, requestId, studentName, admissionNumber }: De
         closeLabel="Close"
         foot={
           <>
-            <Button type="submit" form={formId} size="wide" pending={pending}>
+            <Button type="submit" form={formId} variant="bad" size="wide" pending={pending}>
               {pending ? "Rejecting…" : "Reject request"}
             </Button>
             <Button variant="ghost" size="wide" onClick={() => changeOpen(false)} aria-disabled={pending || undefined}>

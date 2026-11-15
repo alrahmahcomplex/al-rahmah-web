@@ -762,6 +762,8 @@ export type LeadListItem = {
   // Created by a student import.
   imported: boolean
   createdAt: string
+  // The parent or guardian's full name; null if it can't be read.
+  custodianName: string | null
 }
 
 export type LeadSearchResults = {
@@ -788,10 +790,11 @@ type LeadListRow = {
   initially_declined: boolean
   import_batch_id: string | null
   created_at: string
+  guardian_contacts: { full_name: string } | null
 }
 
 const LEAD_LIST_COLUMNS =
-  "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, initially_declined, import_batch_id, created_at"
+  "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, returning_family_joined, returning_family_reapplied, initially_declined, import_batch_id, created_at, guardian_contacts!guardian_contact_id (full_name)"
 
 // A page number past any real list. Larger ones would overflow the offset.
 export const LAST_PAGE = 10_000
@@ -885,6 +888,7 @@ export async function searchLeads(
         initiallyDeclined: row.initially_declined,
         imported: row.import_batch_id !== null,
         createdAt: row.created_at,
+        custodianName: row.guardian_contacts?.full_name ?? null,
       })),
     },
   }

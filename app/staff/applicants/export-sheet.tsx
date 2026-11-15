@@ -1,23 +1,14 @@
 "use client"
 
-import { DownloadIcon, LockIcon } from "lucide-react"
-import { useState, useTransition } from "react"
-import { toast } from "sonner"
+import { useId, useState, useTransition } from "react"
 
-import { PendingButton } from "@/components/staff/pending-button"
-import { SheetForm } from "@/components/staff/sheet-form"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
+import { Button, Checkbox, ChoiceTiles, Note, Select, Sheet, toast } from "@/components/kit"
 import type { LeadSearch } from "@/lib/services/leads"
 import type { ExportTier } from "@/lib/services/student-export"
 
 import { exportCounts, type ExportCounts } from "./export-actions"
 import type { ExportOptions } from "./export/options"
 import { EXPORT_PATH, exportParams, type ExportScope } from "./export-query"
-
-const SELECT_CLASS =
-  "h-10 w-full min-w-0 staff-touch:h-11 rounded-lg border border-input bg-transparent px-2 text-base outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
 
 const GROUPS: { tier: ExportTier; heading: string; locked: string }[] = [
   { tier: "view", heading: "Applicant", locked: "" },
@@ -132,129 +123,104 @@ export function ExportSheet({
       link.click()
       setTimeout(() => URL.revokeObjectURL(link.href), 60_000)
       const exported = Number(response.headers.get("X-Row-Count"))
-      toast.success(`Exported ${plural(exported, "applicant")}. Recorded in the audit history.`)
+      toast(`Exported ${plural(exported, "applicant")}. Recorded in the audit history.`)
       setOpen(false)
     })
   }
 
+  const formId = useId()
+  const scopeId = useId()
   return (
     <>
-      <Button type="button" variant="outline" onClick={() => openChange(true)}>
-        <DownloadIcon aria-hidden="true" />
+      <Button variant="ghost" size="small" onClick={() => openChange(true)}>
         Export
       </Button>
-      <SheetForm
+      <Sheet
         open={open}
         onOpenChange={openChange}
+        placement="side"
         title="Export applicants"
-        meta={<span>A CSV of the columns you choose. Each export is recorded.</span>}
-        form={{ action: EXPORT_PATH, method: "get", onSubmit: download }}
-        footerStart={
-          <span className="text-sm text-muted-foreground" aria-live="polite">
-            {rows === null ? plural(columns, "column") : `${plural(rows, "row")}, ${plural(columns, "column")}`}
-          </span>
-        }
-        footer={
-          <PendingButton type="submit" pending={downloading} pendingLabel="Preparing…" disabled={columns === 0}>
-            Download CSV
-          </PendingButton>
+        hint="A CSV of the columns you choose. Each export is recorded."
+        closeLabel="Close"
+        foot={
+          <>
+            <p className="ap-small" aria-live="polite">
+              {rows === null ? plural(columns, "column") : `${plural(rows, "row")}, ${plural(columns, "column")}`}
+            </p>
+            <Button type="submit" form={formId} size="wide" pending={downloading} disabled={!downloading && columns === 0}>
+              {downloading ? "Preparing…" : "Download CSV"}
+            </Button>
+          </>
         }
       >
-        {fields.map(([name, value], index) => (
-          <input key={`${name}-${index}`} type="hidden" name={name} value={value} />
-        ))}
+        <form id={formId} action={EXPORT_PATH} method="get" onSubmit={download} className="ap-form">
+          {fields.map(([name, value], index) => (
+            <input key={`${name}-${index}`} type="hidden" name={name} value={value} />
+          ))}
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="export-scope">Which applicants</Label>
-          <select
-            id="export-scope"
-            className={SELECT_CLASS}
-            value={scope === "year" ? `year-${year}` : scope}
-            onChange={(event) => {
-              const value = event.target.value
-              if (value.startsWith("year-")) {
-                setScope("year")
-                setYear(Number(value.slice(5)))
-              } else setScope(value as ExportScope)
-            }}
-          >
-            <option value="shown">The list as filtered now</option>
-            {years.map((each) => (
-              <option key={each} value={`year-${each}`}>
-                Enrollment year {each}
-              </option>
-            ))}
-            <option value="all">Every applicant</option>
-          </select>
-        </div>
-
-        <fieldset className="flex flex-col gap-2.5">
-          <legend className="mb-2.5 text-[13px] font-semibold text-muted-foreground">Columns</legend>
-          <div className="flex flex-col gap-2">
-            {options.presets.map((each) => (
-              <label
-                key={each.key}
-                className="flex cursor-pointer items-start gap-3 rounded-xl px-3.5 py-3 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 has-[:checked]:bg-blue-50 has-[:checked]:ring-blue-600"
-              >
-                <input
-                  type="radio"
-                  name="export-preset"
-                  form="none"
-                  value={each.key}
-                  checked={each.key === current.key}
-                  onChange={() => choosePreset(each.key)}
-                  className="mt-0.5 size-4 accent-blue-600"
-                />
-                <span className="flex flex-col">
-                  <span className="text-sm font-medium text-slate-900">{each.label}</span>
-                  <span className="mt-0.5 text-[12.5px] text-muted-foreground">{each.description}</span>
-                </span>
-              </label>
-            ))}
+          <div className="ap-field">
+            <label htmlFor={scopeId} className="ap-label">
+              Which applicants
+            </label>
+            <Select
+              id={scopeId}
+              value={scope === "year" ? `year-${year}` : scope}
+              onValueChange={(value) => {
+                if (value.startsWith("year-")) {
+                  setScope("year")
+                  setYear(Number(value.slice(5)))
+                } else setScope(value as ExportScope)
+              }}
+              options={[
+                { value: "shown", label: "The list as filtered now" },
+                ...years.map((each) => ({ value: `year-${each}`, label: `Enrollment year ${each}` })),
+                { value: "all", label: "Every applicant" },
+              ]}
+            />
           </div>
 
-          {custom && (
-            <div className="flex flex-col gap-1" role="group" aria-label="Choose columns">
-              {GROUPS.map((group) => {
-                if (!options.tiers[group.tier]) {
-                  return (
-                    <p key={group.tier} className="mt-2 flex items-start gap-2 rounded-xl bg-slate-50 px-3.5 py-3 text-[13px] text-muted-foreground">
-                      <LockIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          <ChoiceTiles
+            name="export-preset"
+            legend={<span className="ap-legend">Columns</span>}
+            value={current.key}
+            onChange={choosePreset}
+            options={options.presets.map((each) => ({ value: each.key, label: each.label, description: each.description }))}
+          >
+            {custom && (
+              <div className="ap-group" role="group" aria-label="Choose columns">
+                {GROUPS.map((group) =>
+                  !options.tiers[group.tier] ? (
+                    <Note key={group.tier}>
                       {group.locked}
-                    </p>
-                  )
-                }
-                return (
-                  <div key={group.tier} className="flex flex-col gap-0.5">
-                    <p className="px-2.5 pt-2.5 pb-0.5 text-xs font-semibold tracking-[0.06em] text-muted-foreground uppercase">{group.heading}</p>
-                    {options.choices
-                      .filter((choice) => choice.tier === group.tier)
-                      .map((choice) => (
-                        <label key={choice.key} className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm hover:bg-slate-50">
-                          <input
-                            type="checkbox"
-                            form="none"
+                    </Note>
+                  ) : (
+                    <div key={group.tier} className="ap-group">
+                      <p className="ap-group-title">{group.heading}</p>
+                      {options.choices
+                        .filter((choice) => choice.tier === group.tier)
+                        .map((choice) => (
+                          <Checkbox
+                            key={choice.key}
+                            label={choice.label}
                             checked={ticked.includes(choice.key)}
-                            onChange={(event) => toggle(choice.key, event.target.checked)}
-                            className="size-4 accent-blue-600"
+                            onCheckedChange={(on) => toggle(choice.key, on)}
                           />
-                          {choice.label}
-                        </label>
-                      ))}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </fieldset>
+                        ))}
+                    </div>
+                  ),
+                )}
+              </div>
+            )}
+          </ChoiceTiles>
 
-        {note && <p className="rounded-xl bg-slate-50 px-3.5 py-3 text-[13px] text-muted-foreground">{note}</p>}
-        {refusal && (
-          <Alert variant="destructive" role="alert">
-            <AlertDescription>{refusal}</AlertDescription>
-          </Alert>
-        )}
-      </SheetForm>
+          {note && <Note tone="wait">{note}</Note>}
+          {refusal && (
+            <Note tone="bad" role="alert">
+              {refusal}
+            </Note>
+          )}
+        </form>
+      </Sheet>
     </>
   )
 }

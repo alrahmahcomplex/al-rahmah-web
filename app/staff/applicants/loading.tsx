@@ -1,12 +1,14 @@
-import { HeadingSkeleton, PageSkeleton, TableSkeleton, ToolbarSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// Leads: the search box, the three filters, the list.
+// Applicants while it opens: the header, then the card with its pill row and
+// table.
 export default function Loading() {
   return (
-    <PageSkeleton label="applicants">
-      <HeadingSkeleton width="w-24" />
-      <ToolbarSkeleton search fields={3} />
-      <TableSkeleton rows={10} cols={6} />
-    </PageSkeleton>
+    <div role="status" aria-busy="true" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <span className="sr-only">Loading applicants…</span>
+      <SkeletonBlock width={200} height={32} />
+      <SkeletonBlock width="40%" height={16} />
+      <SkeletonBlock height={520} shape="card" />
+    </div>
   )
 }

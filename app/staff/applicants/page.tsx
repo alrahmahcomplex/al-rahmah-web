@@ -1,36 +1,24 @@
-import { SearchXIcon, UsersIcon } from "lucide-react"
 import type { Metadata } from "next"
-import Link from "next/link"
 import { forbidden } from "next/navigation"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { EmptyState } from "@/components/staff/empty-state"
-import { StatusChip } from "@/components/status-chip"
-import { Badge } from "@/components/ui/badge"
-import { buttonVariants } from "@/components/ui/button"
+import { ButtonLink, Card, Note, PageHeader, pageTitle } from "@/components/kit"
 import { enrollmentYears } from "@/lib/school-calendar"
 import { listGroupLinks } from "@/lib/services/group-links"
-import { searchLeads, type LeadSearchResults } from "@/lib/services/leads"
-import { listSeatPriorities, type LeadSeatPriority } from "@/lib/services/school-fee-payments"
+import { searchLeads } from "@/lib/services/leads"
+import { listSeatPriorities } from "@/lib/services/school-fee-payments"
 import { getStudentImport } from "@/lib/services/student-import"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../session"
+import { ApplicantsList } from "./applicants-list"
+import "./applicants.css"
 import { exportOptions } from "./export/options"
 import { ExportSheet } from "./export-sheet"
 import { ImportSheet } from "./import-sheet"
-import { LeadSearchBar } from "./lead-search-bar"
-import { leadsHref, parseLeadSearch } from "./search-params"
-import { SeatPriorityBadge } from "./seat-priority-badge"
+import { parseLeadSearch } from "./search-params"
 
 export const metadata: Metadata = {
-  title: "Applicants · Al-Rahmah Complex",
-}
-
-const EMPTY: Record<LeadSearchResults["mode"], string> = {
-  number: "No applicant with this Admission Number.",
-  name: "No applicant matches this name.",
-  list: "No applicants to show with these filters.",
+  title: pageTitle("Applicants"),
 }
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
@@ -39,7 +27,10 @@ const WHEN = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Africa/Dar_es_Salaam",
 })
 
-export default async function LeadsPage({
+// Every applicant, from Applied to Enrolled, in the new shell (#324,
+// prototype v38). The top bar's search searches here; a row opens the side
+// sheet, which links to the full record.
+export default async function ApplicantsPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
@@ -54,7 +45,7 @@ export default async function LeadsPage({
     listGroupLinks(supabase),
     search.importBatchId ? getStudentImport(supabase, search.importBatchId) : null,
   ])
-  // Only the earlier-link filter's choices: without them it offers just Any.
+  // Only the earlier-link filter's choices: without them it isn't offered.
   const groupYears = groupLinks.ok ? groupLinks.data.map((link) => link.year) : []
   // Seat priorities need payments.view. They only decorate the rows, so if
   // they can't be read the list still shows, without the column.
@@ -64,152 +55,62 @@ export default async function LeadsPage({
       : null
 
   const listSearch = { query: search.query, status: search.status, closure: search.closure, earlierLinkYear: search.earlierLinkYear, importBatchId: search.importBatchId }
+  // Starting a registration needs both permissions, as the database does.
+  const canRegister = staff.permissions.includes("leads.create") && staff.permissions.includes("visits.record")
+  const importLabel = !search.importBatchId
+    ? null
+    : batch?.ok && batch.data
+      ? `Applicants created by the import of ${batch.data.fileName} on ${WHEN.format(new Date(batch.data.importedAt))}${batch.data.importedBy ? ` by ${batch.data.importedBy}` : ""}`
+      : "Applicants created by an import that can't be found"
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="staff-heading">Applicants</h1>
-        <div className="flex flex-wrap gap-2">
-          {staff.permissions.includes("leads.import") && <ImportSheet staffName={staff.name} />}
-          <ExportSheet
-            options={exportOptions(staff)}
-            search={listSearch}
-            shownCount={results.ok ? results.data.total : null}
-            years={enrollmentYears()}
-          />
-        </div>
-      </div>
-      <LeadSearchBar search={search} groupYears={groupYears} />
-
-      {search.importBatchId && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md bg-slate-50 px-3 py-2 text-sm">
-          <p className="min-w-0 wrap-anywhere">
-            {batch?.ok && batch.data ? (
-              <>
-                Applicants created by the import of <span className="font-medium">{batch.data.fileName}</span> on{" "}
-                <time dateTime={batch.data.importedAt}>{WHEN.format(new Date(batch.data.importedAt))}</time>
-                {batch.data.importedBy ? ` by ${batch.data.importedBy}` : ""}
-              </>
-            ) : (
-              "Applicants created by an import that can't be found"
+    <>
+      <PageHeader
+        title="Applicants"
+        subtitle="Every student, from Applied to Enrolled."
+        actions={
+          <>
+            {staff.permissions.includes("leads.import") && <ImportSheet staffName={staff.name} />}
+            <ExportSheet
+              options={exportOptions(staff)}
+              search={listSearch}
+              shownCount={results.ok ? results.data.total : null}
+              years={enrollmentYears()}
+            />
+            {canRegister && (
+              <ButtonLink href="/staff/check-in/new" size="small" chevron>
+                Register students
+              </ButtonLink>
             )}
-          </p>
-          <Link href={leadsHref(search, { importBatchId: undefined, page: 1 })} className="font-medium text-slate-900 underline underline-offset-4">
-            Show every applicant
-          </Link>
-        </div>
-      )}
+          </>
+        }
+      />
 
       {!results.ok ? (
-        <Alert variant="destructive">
-          <AlertDescription>Applicants could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">
+          Applicants could not be loaded. Try again in a moment.
+        </Note>
       ) : (
-        <>
+        <div className="ap-page">
           {/* The list still works without the column, but staff are told it's missing. */}
           {priorities && !priorities.ok && (
-            <Alert variant="destructive">
-              <AlertDescription>Seat priority could not be loaded, so it isn&apos;t shown. Try again in a moment.</AlertDescription>
-            </Alert>
+            <Note tone="bad" role="alert">
+              Seat priority could not be loaded, so it isn&apos;t shown. Try again in a moment.
+            </Note>
           )}
-          <Results results={results.data} search={search} priorities={priorities?.ok ? priorities.data : null} />
-        </>
-      )}
-    </div>
-  )
-}
-
-function Results({
-  results,
-  search,
-  priorities,
-}: {
-  results: LeadSearchResults
-  search: ReturnType<typeof parseLeadSearch>
-  // By lead id; null hides the column.
-  priorities: Record<string, LeadSeatPriority> | null
-}) {
-  const { leads, total, page, pageCount, mode } = results
-  const summary =
-    mode === "list" ? `${total} ${total === 1 ? "applicant" : "applicants"}` : `${total} ${total === 1 ? "match" : "matches"}`
-
-  return (
-    <section aria-label="Results" className="flex flex-col gap-3">
-      {total === 0 ? (
-        <EmptyState role="status" icon={mode === "list" ? UsersIcon : SearchXIcon} title={EMPTY[mode]} />
-      ) : (
-        <p className="text-sm text-muted-foreground" aria-live="polite">
-          {summary}
-        </p>
-      )}
-
-      {leads.length > 0 && (
-        <div className="overflow-x-auto rounded-lg ring-1 ring-foreground/10">
-          <table aria-label="Applicants" className="w-full min-w-[44rem] text-left text-sm">
-            <thead className="border-b bg-slate-50 text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-3 py-2 font-medium">Admission Number</th>
-                <th scope="col" className="px-3 py-2 font-medium">Student</th>
-                <th scope="col" className="px-3 py-2 font-medium">Class</th>
-                <th scope="col" className="px-3 py-2 font-medium">Year</th>
-                <th scope="col" className="px-3 py-2 font-medium">Day or boarding</th>
-                <th scope="col" className="px-3 py-2 font-medium">Status</th>
-                {priorities && <th scope="col" className="px-3 py-2 font-medium">Seat priority</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => (
-                <tr key={lead.id} className="border-b last:border-b-0 hover:bg-slate-50">
-                  <td className="px-3 py-2 font-mono whitespace-nowrap">{lead.admissionNumber}</td>
-                  <td className="px-3 py-2">
-                    <Link
-                      href={`/staff/applicants/${lead.id}`}
-                      className="font-medium text-slate-900 underline-offset-4 hover:underline"
-                    >
-                      {lead.studentName}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-2 whitespace-nowrap">{lead.className}</td>
-                  <td className="px-3 py-2">{lead.enrollmentYear}</td>
-                  <td className="px-3 py-2">{lead.dayOrBoarding}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      <StatusChip status={lead.status} />
-                      {lead.closure && <StatusChip status={lead.closure} />}
-                      {lead.initiallyDeclined && <Badge variant="outline">Initially declined</Badge>}
-                      {lead.returningFamily && <Badge variant="outline">Returning family</Badge>}
-                      {lead.imported && <Badge variant="outline">Imported</Badge>}
-                    </div>
-                  </td>
-                  {priorities && (
-                    <td className="px-3 py-2">
-                      {priorities[lead.id] ? <SeatPriorityBadge priority={priorities[lead.id].priority} /> : null}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Card aria-label="Results">
+            <ApplicantsList
+              results={results.data}
+              search={search}
+              groupYears={groupYears}
+              priorities={
+                priorities?.ok ? Object.fromEntries(Object.entries(priorities.data).map(([id, each]) => [id, each.priority])) : null
+              }
+              importLabel={importLabel}
+            />
+          </Card>
         </div>
       )}
-
-      {pageCount > 1 && (
-        <nav aria-label="Pages" className="flex items-center gap-3">
-          {page > 1 ? (
-            <Link href={leadsHref(search, { page: page - 1 })} className={buttonVariants({ variant: "outline" })}>
-              Previous
-            </Link>
-          ) : null}
-          <p className="text-sm text-muted-foreground">
-            Page {page} of {pageCount}
-          </p>
-          {page < pageCount ? (
-            <Link href={leadsHref(search, { page: page + 1 })} className={buttonVariants({ variant: "outline" })}>
-              Next
-            </Link>
-          ) : null}
-        </nav>
-      )}
-    </section>
+    </>
   )
 }

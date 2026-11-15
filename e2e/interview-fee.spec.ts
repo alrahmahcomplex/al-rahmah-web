@@ -55,8 +55,9 @@ test.describe("the interview fee", () => {
     // Slice 2's lead search, as at the counter.
     await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Applicants" }).click()
     await page.getByLabel("Search applicants").fill(lead.admissionNumber)
-    await page.getByRole("button", { name: "Search" }).click()
-    await page.getByRole("link", { name: lead.name }).click()
+    await page.getByLabel("Search applicants").press("Enter")
+    await page.getByRole("row", { name: new RegExp(lead.name) }).click()
+    await page.getByRole("dialog", { name: lead.name }).getByRole("link", { name: "Open full record" }).click()
     await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
     await openLeadTab(page, "Interview")
 

@@ -1,11 +1,12 @@
 import { ButtonLink } from "@/components/kit"
-import { enrolsWithoutRetake, nextStep, nextStepText, releaseInput } from "@/lib/lead-next-step"
-import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { nextStepText } from "@/lib/lead-next-step"
+import { formatDate } from "@/lib/school-calendar"
 import type { Lead } from "@/lib/services/leads"
 import type { StaffMember } from "@/lib/services/staff-auth"
 
 import { LEAD_CARD } from "./lead-card"
-import { readFee, readFollowUps, readInterviews, readRegistration, readRelease, readReleaseStatus, readReopenings } from "./lead-reads"
+import { readFee } from "./lead-reads"
+import { readNextStep } from "./next-step-read"
 import { RecordVisit } from "./record-visit"
 import { LEAD_TABS, leadTabHref, type LeadTab } from "./tabs"
 
@@ -23,38 +24,7 @@ export async function NextStepCard({
   // The tab open below the card.
   tab: LeadTab
 }) {
-  const canSeeFee = staff.permissions.includes("payments.view")
-  const [interviews, registration, reopenings, release, fee, followUps] = await Promise.all([
-    readInterviews(lead.id),
-    readRegistration(lead.id),
-    readReopenings(lead.id),
-    readRelease(lead.id),
-    canSeeFee ? readFee(lead.id) : null,
-    readFollowUps(lead.id),
-  ])
-
-  // Once a result has gone, whether it changed since comes from the status
-  // every viewer reads, not only those who may send it (#248).
-  const sentFor = release.ok && release.data.latestRelease !== null ? release.data.interviewId : null
-  const status = sentFor ? await readReleaseStatus(sentFor) : null
-  const current = interviews.ok ? (interviews.data[0] ?? null) : null
-  const step = interviews.ok
-    ? nextStep({
-        status: lead.status,
-        closure: lead.closure,
-        interview: current && { feeStatus: current.feeStatus, amount: current.amount, result: current.result },
-        registration: registration.ok ? registration.data : null,
-        enrolWithoutRetake: reopenings.ok && enrolsWithoutRetake(reopenings.data.decided),
-        release: release.ok
-          ? releaseInput(release.data, status?.ok && sentFor ? (status.data.get(sentFor) ?? null) : null)
-          : null,
-        fee: fee?.ok && fee.data.kind === "fee" ? { priority: fee.data.priority } : null,
-        followUps: followUps.ok
-          ? { dueOn: followUps.data.open?.dueOn ?? null, needsDate: followUps.data.needsDate }
-          : null,
-        today: tanzaniaToday(),
-      })
-    : null
+  const step = await readNextStep(lead, staff.permissions.includes("payments.view") ? readFee(lead.id) : null)
   if (step?.kind === "closed") return null
 
   const text = step && nextStepText(step, formatDate)

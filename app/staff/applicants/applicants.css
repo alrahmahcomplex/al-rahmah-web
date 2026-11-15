@@ -1,0 +1,43 @@
+/* The Applicants list, its side sheet and its Import and Export sheets (#324),
+   on the kit's tokens. No hex values (scripts/design-lint.mjs). */
+
+.ap-page { display: flex; flex-direction: column; gap: 16px; }
+
+/* The pills, then the two lists and the chip, wrapping as one row. */
+.ap-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.ap-tools .kit-tools { margin-bottom: 0; }
+.ap-selects { display: flex; flex-wrap: wrap; gap: 8px; }
+.ap-selects > * { min-width: 200px; }
+.ap-chip-row { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.ap-chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; height: auto; min-height: 24px; }
+
+.ap-count { margin: 0 0 6px; font-size: 13px; color: var(--gf-quiet); }
+
+/* The Student cell: the name, the Admission Number under it. */
+.ap-who { display: flex; flex-direction: column; min-width: 10rem; }
+.ap-who small { font-weight: 400; font-size: 12.5px; color: var(--gf-quiet); }
+.ap-nowrap { white-space: nowrap; }
+.ap-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.ap-pages { margin-top: 16px; }
+
+.ap-quiet { margin: 0; font-size: 14px; line-height: 1.5; color: var(--gf-quiet); }
+
+/* Import and Export: the sheet's forms. */
+.ap-form { display: flex; flex-direction: column; gap: 18px; }
+.ap-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ap-label { font-size: 13px; font-weight: 600; color: var(--gf-ink); }
+.ap-legend { margin: 0 0 10px; padding: 0; font-size: 13px; font-weight: 600; color: var(--gf-ink); }
+.ap-group { display: flex; flex-direction: column; gap: 6px; }
+.ap-group-title { margin: 8px 0 2px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gf-quiet); }
+.ap-small { margin: 0; font-size: 13px; line-height: 1.45; color: var(--gf-quiet); }
+.ap-text { margin: 0; font-size: 14px; line-height: 1.5; color: var(--gf-ink); overflow-wrap: anywhere; }
+.ap-strong { font-weight: 600; color: var(--gf-ink); }
+.ap-lines { display: flex; flex-direction: column; gap: 2px; }
+
+/* The import's steps: Upload, Review, Done. */
+.ap-steps { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; font-weight: 500; color: var(--gf-quiet); }
+.ap-steps [aria-current="step"], .ap-steps .ap-past { color: var(--gf-indigo); font-weight: 600; }
+.ap-steps .ap-line { width: 16px; height: 1px; background: var(--gf-mist); }
+
+.ap-reason { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--gf-quiet); overflow-wrap: anywhere; }

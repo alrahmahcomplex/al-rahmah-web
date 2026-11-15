@@ -448,6 +448,8 @@ describe("an earlier link", () => {
     const listed = await searchLeads(staff, { earlierLinkYear: year, page: 1 })
     expect(listed.ok && listed.data.leads.map((lead) => lead.id)).toEqual([open.leadId])
     expect(listed.ok && listed.data.total).toBe(1)
+    // The list's Custodian column reads through this filter too (#324).
+    expect(listed.ok && listed.data.leads[0].custodianName).toBe("Invitation Parent")
   })
 })
 

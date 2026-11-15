@@ -56,12 +56,12 @@ async function family(year: number): Promise<string[]> {
   const admissions = await signedIn(ADMISSIONS)
   const ids: string[] = []
   let guardian: CreateLeadInput["guardian"] = {
-    contact: { fullName: `Lock Parent ${randomUUID().slice(0, 6)}`, relationship: "Mother", phone: `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },
+    contact: { fullName: `Order Parent ${randomUUID().slice(0, 6)}`, relationship: "Mother", phone: `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },
   }
   for (let i = 0; i < 2; i++) {
     const created = await createLead(admissions, {
       guardian,
-      student: { fullName: `Lock ${randomUUID().slice(0, 8)}`, className: "STD 2", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
+      student: { fullName: `Order ${randomUUID().slice(0, 8)}`, className: "STD 2", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
       start: { kind: "walk-in", visitDate: yesterday },
     })
     if (!created.ok) throw new Error(`setup failed: ${JSON.stringify(created.error)}`)
@@ -140,6 +140,13 @@ describe("setting Enrolled while grants resume", () => {
     expect(outcomes.sort()).toEqual(expected)
   }, 60_000)
 
+  // A smoke test of the real path. The import can't close the cycle above
+  // because every lead it sets Enrolled is one it inserted in its own
+  // transaction: the resume can't see that row, so it never waits on it. Here
+  // the import waits on the pause lock, and both finish. The family below has
+  // nothing to do with the imported lead (a new contact and phone); it only
+  // gives the resume a group to recompute. The import runs through PostgREST,
+  // whose statement timeout (8 s for authenticated) covers the whole resume.
   test("the real student import, against the kill-switch resume", async () => {
     const [first] = await family(await yearWithSchedule())
     const paid = await recordPayment(await signedIn(ACCOUNTANT), first, { type: "full_payment", amount: 2_000_000, paidOn: today }, randomUUID())
@@ -147,9 +154,9 @@ describe("setting Enrolled while grants resume", () => {
 
     const s = randomUUID().slice(0, 6)
     const header = "Student name,Class,Enrollment year,Day or boarding,Parent/guardian name,Relationship,Parent phone,WhatsApp,Visit date,Discount code,Status"
-    const file = `${header}\r\nLock Import ${s},STD 2,${thisYear + 1},Day,Mama Lock ${s},Mother,09${randomInt(10_000_000, 100_000_000)},,2026-09-01,,Enrolled\r\n`
+    const file = `${header}\r\nOrder Import ${s},STD 2,${thisYear + 1},Day,Mama Order ${s},Mother,09${randomInt(10_000_000, 100_000_000)},,2026-09-01,,Enrolled\r\n`
     const manager = await signedIn(MANAGER)
-    const checked = await checkStudentImportFile(manager, "lock.csv", new TextEncoder().encode(file))
+    const checked = await checkStudentImportFile(manager, "order.csv", new TextEncoder().encode(file))
     if (!checked.ok) throw new Error(JSON.stringify(checked.error))
 
     const result = await inRolledBackTransaction(async (resume) => {
@@ -188,7 +195,7 @@ describe("setting Enrolled while grants resume", () => {
       const creating = outcome(
         createLead(await signedIn(ADMISSIONS), {
           guardian: { contactId },
-          student: { fullName: `Lock ${randomUUID().slice(0, 8)}`, className: "STD 2", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
+          student: { fullName: `Order ${randomUUID().slice(0, 8)}`, className: "STD 2", enrollmentYear: thisYear + 1, dayOrBoarding: "Day" },
           start: { kind: "walk-in", visitDate: yesterday },
         }),
       )

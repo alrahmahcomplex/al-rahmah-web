@@ -250,12 +250,15 @@ test("no page or response before the finish carries an agent's code, and the fin
   for (const body of bodiesBefore) for (const code of codes) expect(body.includes(code), `a response before the finish carries ${code}`).toBe(false)
 
   finishing = true
+  // The Server Action's own answer, read as it arrives.
+  const answer = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/discount-code")
   await sendButton(page, "en").click()
+  const sent = await (await answer).text()
   await expect(page.getByRole("heading", { level: 1, name: WORDS.en.done })).toBeVisible()
   const own = (await page.locator("[data-own-code]").textContent())!.trim()
   expect(own).toMatch(CODE)
-  const bodiesAfter = await Promise.all(after)
-  expect(bodiesAfter.some((body) => body.includes(own))).toBe(true)
+  expect(sent, `the send's answer (${sent.length} characters) names the new code`).toContain(own)
+  const bodiesAfter = [sent, ...(await Promise.all(after))]
   for (const body of bodiesAfter) for (const code of codes) expect(body.includes(code), `the finish carries ${code}`).toBe(false)
 })
 

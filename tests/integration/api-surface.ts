@@ -1236,7 +1236,6 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
 export const RELATIONS: Record<string, RelationEntry> = {
   "public.admission_submissions": { authenticated: [], anon: [] },
   "public.agent_access_settings": { authenticated: [], anon: [] },
-  "public.agent_code_numbers": { authenticated: [], anon: [] },
   "public.agent_detached_logins": { authenticated: [], anon: [] },
   "public.agent_email_claims": { authenticated: [], anon: [] },
   "public.agent_events": { authenticated: [], anon: [] },

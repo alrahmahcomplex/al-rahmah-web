@@ -1,39 +1,34 @@
 -- Discount codes in the v38 format (#404): the agent's initials, a hyphen and
 -- the next number after the last generated code. ABC-123, then XYZ-124.
 --
--- - agent_code_numbers: one row, the number the last generated code ended
---   in. Only create_agent_record reads or writes it.
+-- - agent_code_numbers: a sequence, the numbers generated codes end in. Only
+--   create_agent_record takes from it. A sequence hands each caller its own
+--   number at once and never the same one twice, so creations at the same
+--   moment get different numbers without waiting for each other: no lock is
+--   held, and an agent import never holds up a sign-up. A number taken by a
+--   creation that then fails, or by a code that turns out to be taken, is
+--   not handed out again.
 -- - agent_code_number(code): the number a code ends in when it has the
 --   generated shape (1 to 3 letters, a hyphen, digits), else null.
--- - The counter starts at the number in the newest agent record's code in
---   that shape (by registered_at, retired records included), read once here.
---   With no such code it starts at 0, so the first code ends in 001.
+-- - The sequence starts after the number in the newest agent record's code
+--   in that shape (by registered_at, retired records included), read once
+--   here. With no such code the first code ends in 001.
 -- - create_agent_record, re-created with its signature and grants unchanged,
 --   generates every code without one given: the Discount code page's
---   sign-up, the Manager's Create agent and the agent import. It takes the
---   counter's row lock, which it holds to the end of the creating
---   transaction, so creations at the same moment wait for each other and get
---   different numbers. The lock comes after the phone and email locks, last
---   in the order every caller takes them, so it adds no deadlock.
--- - A code someone types, and the code Recreate keeps, leave the counter
---   alone. A generated code another record holds or held, or a lead carries,
---   is skipped: the number goes up by one until the code is free, and the
---   counter keeps the number used.
+--   sign-up, the Manager's Create agent and the agent import.
+-- - A code someone types, and the code Recreate keeps, take no number. A
+--   generated code another record holds or held, or a lead carries, is
+--   skipped: the next number is taken until the code is free.
 -- - The number has at least three digits; past 999 it prints in full
 --   (ABC-1000).
+-- - Supabase runs these statements one by one. A creation between the seed
+--   and the new create_agent_record gets an old random code, which the new
+--   one later skips if it ever meets it.
 
-create table public.agent_code_numbers (
-    -- One row only.
-    id boolean primary key default true check (id),
-    last_number bigint not null check (last_number >= 0)
-);
+create sequence public.agent_code_numbers as bigint minvalue 0 start with 1 no cycle;
 
--- Row level security with no policy: no client reads or writes it. The
--- security definer function below is its only user. Not agent data, so not
--- audited.
-alter table public.agent_code_numbers enable row level security;
-
-revoke all on public.agent_code_numbers from anon, authenticated, service_role;
+-- Not agent data, so not audited. No client may read it or take a number.
+revoke all on sequence public.agent_code_numbers from public, anon, authenticated, service_role;
 
 create function public.agent_code_number(code text)
 returns bigint
@@ -50,7 +45,7 @@ $$;
 revoke execute on function public.agent_code_number(text) from public, anon, authenticated, service_role;
 
 -- The number in the newest agent record's code in the generated shape, or 0.
--- The migration seeds the counter from it; the tests check the rule.
+-- The migration starts the sequence after it; the tests check the rule.
 create function public.last_agent_code_number()
 returns bigint
 language sql
@@ -69,11 +64,12 @@ $$;
 
 revoke execute on function public.last_agent_code_number() from public, anon, authenticated, service_role;
 
-insert into public.agent_code_numbers (last_number) values (public.last_agent_code_number());
+-- The next number is one more than this.
+select setval('public.agent_code_numbers', public.last_agent_code_number(), true);
 
 -- ---------------------------------------------------------------------------
 -- create_agent_record, as 20261121120100_agent_import.sql made it, with the
--- generated code taken from the counter instead of a random number.
+-- generated code's number taken from the sequence instead of at random.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.create_agent_record(
@@ -141,19 +137,15 @@ begin
         end if;
     else
         prefix := public.marketing_agent_code_prefix(draft.agent_name);
-        -- The last lock this function takes, held to the end of the
-        -- transaction: a creation alongside waits here, then reads the
-        -- number this one leaves.
-        select c.last_number into number from public.agent_code_numbers c where c.id for update;
     end if;
 
-    -- A generated code moves on one number at a time past codes already
-    -- used. The unique index catches a typed code committed alongside.
+    -- A generated code takes the next number until its code is free. The
+    -- unique index catches a typed code committed alongside.
     for attempt in 1..100 loop
         if draft.agent_code is not null then
             candidate := draft.agent_code;
         else
-            number := number + 1;
+            number := nextval('public.agent_code_numbers');
             candidate := prefix || '-' || lpad(number::text, greatest(3, char_length(number::text)), '0');
         end if;
         -- Skips the subtransaction below for a code already used.
@@ -170,9 +162,6 @@ begin
                 create_agent_record.new_user_id,
                 create_agent_record.batch_id
             );
-            if draft.agent_code is null then
-                update public.agent_code_numbers c set last_number = number where c.id;
-            end if;
             return query select new_id, true, null::uuid;
             return;
         exception when unique_violation then

@@ -5,22 +5,21 @@ import { describe, expect, test } from "vitest"
 import { inRolledBackTransaction, secretClient } from "../../support/db"
 
 // Discount codes in the v38 format (#404): the initials, a hyphen, and the
-// next number after the last generated code (ABC-123, then XYZ-124). One
-// counter row in agent_code_numbers holds the last number; create_agent_record
-// takes its row lock, so creations at the same moment get different numbers.
+// next number after the last generated code (ABC-123, then XYZ-124). The
+// numbers come from the sequence agent_code_numbers, so creations at the same
+// moment get different numbers without waiting for each other.
 //
-// The counter is shared by every agent creation, so these tests run in the
-// serial folder: setting it, or holding its lock to show a second sign-up
-// waiting, would otherwise hold up every file creating agents alongside. Each
-// test that sets it does so inside its own rolled-back transaction, at a
-// number far above any code other tests make, so the numbers it expects are
-// free.
+// A sequence's position is not rolled back with a transaction, so a test that
+// moves it puts it back afterwards (`atNumber`). That is safe only while no
+// other file creates agents, which is why these tests run in the serial
+// folder. Each moves it far above any code other tests make, so the numbers it
+// expects are free.
 
 function phone() {
   return `+2557${String(randomInt(10_000_000, 100_000_000))}`
 }
 
-// A number no code holds yet: far above the counter other tests move.
+// A number no code holds yet: far above any other test's.
 const farNumber = () => randomInt(500_000, 900_000_000)
 
 async function signUp(sql: Client, fullName: string, code: string | null = null) {
@@ -46,14 +45,38 @@ async function create(sql: Client, fullName: string, code: string | null = null)
   return rows[0].code
 }
 
-const setCounter = (sql: Client, n: number) => sql.query("update public.agent_code_numbers set last_number = $1", [n])
-const counter = async (sql: Client) => Number((await sql.query("select last_number from public.agent_code_numbers")).rows[0].last_number)
+type Position = { last_value: string; is_called: boolean }
+const position = async (sql: Client) => (await sql.query<Position>("select last_value, is_called from public.agent_code_numbers")).rows[0]
+
+// The last number taken from the sequence.
+async function counter(sql: Client) {
+  const at = await position(sql)
+  return Number(at.last_value) - (at.is_called ? 0 : 1)
+}
+
+const setCounter = (sql: Client, n: number) => sql.query("select setval('public.agent_code_numbers', $1, true)", [n])
+
+// Runs `work` in a rolled-back transaction with the sequence's last number
+// set to `n`, then puts the sequence back where it was.
+async function atNumber<T>(n: number, work: (sql: Client) => Promise<T>): Promise<T> {
+  const keeper = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+  await keeper.connect()
+  const was = await position(keeper)
+  try {
+    return await inRolledBackTransaction(async (sql) => {
+      await setCounter(sql, n)
+      return work(sql)
+    })
+  } finally {
+    await keeper.query("select setval('public.agent_code_numbers', $1, $2)", [was.last_value, was.is_called])
+    await keeper.end()
+  }
+}
 
 describe("the Discount code format", () => {
   test("a new code is the three initials and the next number after the last code: ABC-123, then XYZ-124", async () => {
     const n = farNumber()
-    await inRolledBackTransaction(async (sql) => {
-      await setCounter(sql, n)
+    await atNumber(n, async (sql) => {
       const first = await signUp(sql, "AMINA BAKARI CHANDE")
       expect(first).toMatchObject({ outcome: "registered", code: `ABC-${n + 1}` })
       const second = await signUp(sql, "XAVIER YUSUF ZUBERI")
@@ -63,9 +86,8 @@ describe("the Discount code format", () => {
   })
 
   test("the number has at least three digits, and prints in full past 999", async () => {
-    await inRolledBackTransaction(async (sql) => {
-      // Small numbers may be taken by seeded codes; a rare prefix keeps them free.
-      await setCounter(sql, 6)
+    // Small numbers may be taken by seeded codes; a rare prefix keeps them free.
+    await atNumber(6, async (sql) => {
       expect(await create(sql, "ZAWADI XENIA QUINN")).toMatch(/^ZXQ-0\d\d$/)
       await setCounter(sql, 999)
       expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-1000")
@@ -74,16 +96,14 @@ describe("the Discount code format", () => {
 
   test("the staff Create agent path gets the same format, and a two-name agent gets two initials", async () => {
     const n = farNumber()
-    await inRolledBackTransaction(async (sql) => {
-      await setCounter(sql, n)
+    await atNumber(n, async (sql) => {
       expect(await create(sql, "Juma Doe")).toBe(`JD-${n + 1}`)
     })
   })
 
-  test("a typed code leaves the counter alone; a generated code another record holds is skipped", async () => {
+  test("a typed code takes no number; a generated code another record holds is skipped", async () => {
     const n = farNumber()
-    await inRolledBackTransaction(async (sql) => {
-      await setCounter(sql, n)
+    await atNumber(n, async (sql) => {
       // Codes staff typed, or an import carried, with higher numbers.
       expect(await create(sql, "ZAWADI XENIA QUINN", `ZXQ-${n + 1}`)).toBe(`ZXQ-${n + 1}`)
       expect(await create(sql, "BAKARI ALI JUMA", `BAJ-${n + 3}`)).toBe(`BAJ-${n + 3}`)
@@ -91,7 +111,7 @@ describe("the Discount code format", () => {
 
       // The next ZXQ code would be n + 1, which is taken: it moves on to n + 2.
       expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${n + 2}`)
-      // BAJ at n + 3 is taken too: n + 4. The counter keeps the number used.
+      // BAJ at n + 3 is taken too: n + 4. Skipped numbers are not handed out again.
       expect(await create(sql, "BAKARI ALI JUMA")).toBe(`BAJ-${n + 4}`)
       expect(await counter(sql)).toBe(n + 4)
       // Another prefix carries on from there.
@@ -101,8 +121,7 @@ describe("the Discount code format", () => {
 
   test("a retired record's code is never generated again", async () => {
     const n = farNumber()
-    await inRolledBackTransaction(async (sql) => {
-      await setCounter(sql, n)
+    await atNumber(n, async (sql) => {
       const old = await create(sql, "ZAWADI XENIA QUINN")
       expect(old).toBe(`ZXQ-${n + 1}`)
       const { rows } = await sql.query<{ id: string }>("select id from public.marketing_agents where code = $1", [old])
@@ -114,7 +133,7 @@ describe("the Discount code format", () => {
 
   test("a generated code a lead already carries is skipped", async () => {
     const n = farNumber()
-    await inRolledBackTransaction(async (sql) => {
+    await atNumber(n, async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       // A copy of a seeded lead, on a free Admission Number, carrying the
       // code the next ZXQ agent would get.
@@ -128,12 +147,11 @@ describe("the Discount code format", () => {
         [`ZXQ-${n + 1}`],
       )
       expect(planted.rowCount).toBe(1)
-      await setCounter(sql, n)
       expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${n + 2}`)
     })
   })
 
-  test("two sign-ups at the same moment get different numbers: the second waits for the first", async () => {
+  test("two sign-ups at the same moment get different numbers, and neither waits for the other", async () => {
     const open = async () => {
       const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
       await sql.connect()
@@ -143,23 +161,17 @@ describe("the Discount code format", () => {
     const a = await open()
     const b = await open()
     try {
+      // The first is still open when the second signs up: the second gets
+      // its number at once, a different one.
       const first = await signUp(a, `Amina Bakari Concurrent${randomUUID().slice(0, 4)}`)
-      let secondDone = false
-      const second = signUp(b, `Xavier Yusuf Concurrent${randomUUID().slice(0, 4)}`).then((answer) => {
-        secondDone = true
-        return answer
-      })
-      // The first still holds the counter: the second can't have its number yet.
-      await new Promise((resolve) => setTimeout(resolve, 400))
-      expect(secondDone).toBe(false)
-      await a.query("commit")
-      const answer = await second
+      const second = await signUp(b, `Xavier Yusuf Concurrent${randomUUID().slice(0, 4)}`)
       await b.query("commit")
+      await a.query("commit")
 
       const number = (code: string) => Number(code.split("-")[1])
       expect(first.outcome).toBe("registered")
-      expect(answer.outcome).toBe("registered")
-      expect(number(answer.code)).toBeGreaterThan(number(first.code))
+      expect(second.outcome).toBe("registered")
+      expect(number(second.code)).toBeGreaterThan(number(first.code))
     } finally {
       await a.query("rollback").catch(() => {})
       await b.query("rollback").catch(() => {})
@@ -222,14 +234,26 @@ describe("the last number", () => {
     })
   })
 
-  test("the counter is one row no client can read or write", async () => {
+  test("no client role may read the sequence or take a number from it", async () => {
     await inRolledBackTransaction(async (sql) => {
-      expect(Number((await sql.query("select count(*) as n from public.agent_code_numbers")).rows[0].n)).toBe(1)
-      await expect(sql.query("insert into public.agent_code_numbers (id, last_number) values (false, 1)")).rejects.toThrow(/check/)
+      const { rows } = await sql.query(
+        `select r.role, has_sequence_privilege(r.role, 'public.agent_code_numbers', 'USAGE, SELECT, UPDATE') as allowed
+         from unnest(array['anon', 'authenticated', 'service_role']) as r(role)`,
+      )
+      expect(rows).toEqual([
+        { role: "anon", allowed: false },
+        { role: "authenticated", allowed: false },
+        { role: "service_role", allowed: false },
+      ])
+      // Nor PUBLIC, which every role inherits: no grant to it is left.
+      const toPublic = await sql.query(
+        `select count(*)::int as n
+         from pg_class c, aclexplode(coalesce(c.relacl, acldefault('S', c.relowner))) a
+         where c.oid = 'public.agent_code_numbers'::regclass and a.grantee = 0`,
+      )
+      expect(toPublic.rows[0].n).toBe(0)
     })
     const read = await secretClient().from("agent_code_numbers").select("*")
     expect(read.error).not.toBeNull()
-    const write = await secretClient().from("agent_code_numbers").update({ last_number: 0 }).eq("id", true)
-    expect(write.error).not.toBeNull()
   })
 })

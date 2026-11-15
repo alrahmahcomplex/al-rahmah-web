@@ -188,6 +188,8 @@ export function DiscountCodeForm({
   }
 
   function openStep(step: Step) {
+    // A tile picked a moment ago would otherwise move on over this choice.
+    window.clearTimeout(tileTimer.current)
     if (step === open) return
     // Leaving an answered step half-fixed would fold a wrong answer away.
     if (open !== "send" && answered.has(open)) {

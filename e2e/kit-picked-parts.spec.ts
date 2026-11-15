@@ -49,8 +49,12 @@ test("the code box adds its hyphen, and the full-name box asks for two names", a
   const card = await openKit(page, "Names and codes")
   const code = card.getByRole("textbox", { name: "Discount code" })
   await code.click()
-  await page.keyboard.type("aan1329")
+  await page.keyboard.type("aan132")
   await expect(code).toHaveValue("AAN-132")
+  // A two-letter code keeps its shape (#404).
+  await code.fill("")
+  await page.keyboard.type("jd123")
+  await expect(code).toHaveValue("JD-123")
 
   const who = card.getByRole("textbox", { name: "Their full name" })
   await who.click()

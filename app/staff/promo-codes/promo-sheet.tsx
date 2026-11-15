@@ -2,12 +2,11 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react"
 
-import { Button, Field, FieldError, Note as KitNote, Sheet } from "@/components/kit"
+import { Button, DateField, Disclosure, Field, FieldError, Note as KitNote, Sheet, toast } from "@/components/kit"
 import type { PromoCode, PromoState } from "@/lib/services/promo-codes"
 
 import { DiscountChip, DiscountImpact, Facts, LockedNote, MoneyField, Note, ReasonField, useImpact } from "../agents/discount-fields"
 import { AMOUNT_HINT, feeBecomes, LOCKED_NOTE, parseAmount, plural, REASON_MISSING, tzs } from "../agents/discount-outcome"
-import { DateField, Disclosure, toast } from "../agents/form-parts"
 import { checkPromoCode, createPromo, readPromoImpact, updatePromo } from "./actions"
 import {
   CODE_FIXED,
@@ -141,6 +140,8 @@ function EditablePromo({
   const [code, setCode] = useState("")
   const [typed, setTyped] = useState(String(promo?.amount ?? NEW_AMOUNT))
   const [endsOn, setEndsOn] = useState(promo?.endsOn ?? "")
+  // The date box holds text that is not a date: never saved (the part says why).
+  const [endsUnreadable, setEndsUnreadable] = useState(false)
   const [note, setNote] = useState(promo?.note ?? "")
   const [reason, setReason] = useState("")
   const [errors, setErrors] = useState<Errors>({})
@@ -173,7 +174,7 @@ function EditablePromo({
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (busy || !changed) return
+    if (busy || !changed || endsUnreadable) return
     const typedCode = typedPromoCode(code)
     const found: Errors = {
       name: name.trim() === "" ? NAME_MISSING : undefined,
@@ -290,14 +291,15 @@ function EditablePromo({
           />
           {compare && <Note tone={compare.tone}>{compare.text}</Note>}
         </div>
-        <Disclosure label="More options" open={Boolean(errors.endsOn || errors.note)}>
+        <Disclosure variant="boxed" label="More options" open={errors.endsOn || errors.note ? true : undefined}>
           <div className="ag-two">
             <EndsOnField
               id={`${ids}-ends`}
               value={endsOn}
               error={errors.endsOn}
-              onChange={(value) => {
+              onChange={(value, { unreadable }) => {
                 setEndsOn(value)
+                setEndsUnreadable(unreadable)
                 clear("endsOn")
               }}
             />
@@ -396,7 +398,17 @@ function TextField({
 }
 
 // The code's last day, or none: "YYYY-MM-DD", or "" for no end date.
-function EndsOnField({ id, value, onChange, error }: { id: string; value: string; onChange: (value: string) => void; error?: string }) {
+function EndsOnField({
+  id,
+  value,
+  onChange,
+  error,
+}: {
+  id: string
+  value: string
+  onChange: (value: string, change: { unreadable: boolean }) => void
+  error?: string
+}) {
   const described = [`${id}-help`, error ? `${id}-error` : null].filter(Boolean).join(" ")
   return (
     <div className="ag-field">

@@ -36,8 +36,16 @@ describe("the staff route map", () => {
     expect(Object.keys(ROUTE_LOOKS).filter((pattern) => !pages.has(pattern))).toEqual([])
   })
 
-  it("puts only the kit page, Reopening requests and the lead record in the new shell (#322, #325)", () => {
-    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual(["/staff/applicants/[id]", "/staff/kit", "/staff/reopenings"])
+  it("puts only the converted routes in the new shell (#322, #325, #330)", () => {
+    expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual([
+      "/staff/agents",
+      "/staff/agents/import",
+      "/staff/applicants/[id]",
+      "/staff/group-links",
+      "/staff/kit",
+      "/staff/promo-codes",
+      "/staff/reopenings",
+    ])
   })
 })
 

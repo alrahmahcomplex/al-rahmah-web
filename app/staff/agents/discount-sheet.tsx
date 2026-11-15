@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useOptimistic, useState, useTransition } from "react"
-import { Button, Note as KitNote, Section, Sheet } from "@/components/kit"
+import { Button, Note as KitNote, Section, Sheet, toast } from "@/components/kit"
 
 import { readAgentDiscountImpact, saveAgentDiscount } from "./discount-actions"
 import { DiscountChip, DiscountImpact, DiscountKindChoice, Facts, LockedNote, MoneyField, Note, ReasonField, useImpact, type ChipTone } from "./discount-fields"
@@ -17,7 +17,6 @@ import {
   tzs,
   type DiscountOutcome,
 } from "./discount-outcome"
-import { toast } from "./form-parts"
 
 export type DiscountAgent = {
   id: string

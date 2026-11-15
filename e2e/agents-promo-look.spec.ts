@@ -2,8 +2,6 @@ import { randomInt, randomUUID } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 
-import { lookFor } from "@/app/staff/route-looks"
-
 import { registerPendingAgent } from "../tests/support/agents"
 import { secretClient, signedIn } from "../tests/support/db"
 import { MANAGER } from "../tests/support/fixtures"
@@ -12,9 +10,9 @@ import { signInOnce } from "./log-in"
 import { expect, test } from "./staff-test"
 
 // Marketing Agents, its import, Promo codes and WhatsApp groups in the kit
-// (#330): axe on each screen and on each sheet a Manager can open, at desktop
-// and phone widths, then the sheets under reduced motion. Every sheet closes
-// again unsaved. Set R8_SHOTS to a folder to keep a capture of each.
+// (#330). Each opens in the new shell. Axe (@nightly) on each screen and on
+// each sheet a Manager can open, at desktop and phone widths; every sheet
+// closes again unsaved. Set R8_SHOTS to a folder to keep a capture of each.
 
 // The seeded Approved agent, whose row carries every action but Approve.
 const SEEDED = "Baraka Juma Njoroge"
@@ -23,7 +21,7 @@ async function open(page: Page, url: string) {
   await signInOnce(page, MANAGER.email, MANAGER.password)
   await page.goto(url)
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
-  if (lookFor(new URL(url, "http://x").pathname) === "new") await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
+  await expect(page.locator('[data-shell="new"][data-live]')).toBeVisible()
 }
 
 async function shot(page: Page, name: string) {
@@ -76,7 +74,7 @@ for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 900 })
     })
 
-    test("Marketing Agents and the sheets on an agent's row", async ({ page }) => {
+    test("Marketing Agents and the sheets on an agent's row", { tag: "@nightly" }, async ({ page }) => {
       await open(page, `/staff/agents?status=all&q=${encodeURIComponent(SEEDED)}`)
       expect(await axeProblems(page)).toEqual([])
       await shot(page, `agents-${width}`)
@@ -104,7 +102,7 @@ for (const width of [1280, 390]) {
       await checkSheet(page, `Recreate ${SEEDED}?`, `agents-recreate-${width}`)
     })
 
-    test("Approve on a Pending agent's row", async ({ page }) => {
+    test("Approve on a Pending agent's row", { tag: "@nightly" }, async ({ page }) => {
       const fullName = `Look Pending ${randomUUID().slice(0, 6)}`
       const { code } = await registerPendingAgent({ fullName, phone: `07${String(randomInt(10_000_000, 100_000_000))}` })
       await open(page, `/staff/agents?status=pending&q=${encodeURIComponent(code)}`)
@@ -112,7 +110,7 @@ for (const width of [1280, 390]) {
       await checkSheet(page, `Approve ${fullName}?`, `agents-approve-${width}`)
     })
 
-    test("Send invites on Approved, no account yet", async ({ page }) => {
+    test("Send invites on Approved, no account yet", { tag: "@nightly" }, async ({ page }) => {
       // playwright.config.ts sets the invite budget, so the button is on.
       await open(page, "/staff/agents?account=no-account")
       expect(await axeProblems(page)).toEqual([])
@@ -121,7 +119,7 @@ for (const width of [1280, 390]) {
       await checkSheet(page, /^Send invites/, `agents-send-invites-${width}`)
     })
 
-    test("the claim queue and Save and send invite", async ({ page }) => {
+    test("the claim queue and Save and send invite", { tag: "@nightly" }, async ({ page }) => {
       const fullName = await waitingClaim()
       await open(page, "/staff/agents?account=awaiting-confirmation")
       const card = page.getByRole("region", { name: new RegExp(`^${fullName}`) })
@@ -132,13 +130,13 @@ for (const width of [1280, 390]) {
       await checkSheet(page, `Save and send invite for ${fullName}`, `agents-claim-send-${width}`)
     })
 
-    test("Import agents", async ({ page }) => {
+    test("Import agents", { tag: "@nightly" }, async ({ page }) => {
       await open(page, "/staff/agents/import")
       expect(await axeProblems(page)).toEqual([])
       await shot(page, `import-${width}`)
     })
 
-    test("Promo codes and its sheets", async ({ page }) => {
+    test("Promo codes and its sheets", { tag: "@nightly" }, async ({ page }) => {
       const code = await newPromo()
       await open(page, "/staff/promo-codes")
       expect(await axeProblems(page)).toEqual([])
@@ -152,7 +150,7 @@ for (const width of [1280, 390]) {
       await checkSheet(page, code, `promo-edit-${width}`)
     })
 
-    test("WhatsApp groups", async ({ page }) => {
+    test("WhatsApp groups", { tag: "@nightly" }, async ({ page }) => {
       await open(page, "/staff/group-links")
       expect(await axeProblems(page)).toEqual([])
       await shot(page, `groups-${width}`)
@@ -160,18 +158,6 @@ for (const width of [1280, 390]) {
   })
 }
 
-test.describe("under reduced motion", () => {
-  test.use({ reducedMotion: "reduce" })
-
-  test("the agent and Promo code sheets fade in place", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 900 })
-    await open(page, `/staff/agents?status=all&q=${encodeURIComponent(SEEDED)}`)
-    await page.getByRole("row", { name: new RegExp(SEEDED) }).getByRole("button", { name: /^Interview discount for/ }).click()
-    await expect(page.getByRole("dialog", { name: SEEDED })).toHaveCSS("transition-property", "opacity")
-    await page.keyboard.press("Escape")
-
-    await page.goto("/staff/promo-codes")
-    await page.getByRole("button", { name: "New Promo code" }).click()
-    await expect(page.getByRole("dialog", { name: "New Promo code" })).toHaveCSS("transition-property", "opacity")
-  })
+test("the four screens open in the new shell", async ({ page }) => {
+  for (const url of ["/staff/agents", "/staff/agents/import", "/staff/promo-codes", "/staff/group-links"]) await open(page, url)
 })

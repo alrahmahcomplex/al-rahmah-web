@@ -2,12 +2,11 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Button, Card, Field, KeyValueList, Note, Sheet, Tag } from "@/components/kit"
+import { Button, Card, Field, KeyValueList, Note, Sheet, Tag, toast } from "@/components/kit"
 import type { QueueClaim, QueueEntry } from "@/lib/services/agent-email-claims"
 
 import { confirmAgentEmailClaim, rejectAgentEmailClaim } from "./claim-actions"
 import type { ClaimOutcome } from "./claim-outcome"
-import { toast } from "./form-parts"
 import "./agents.css"
 
 // The "Awaiting email confirmation" queue (#193): each agent with a claim

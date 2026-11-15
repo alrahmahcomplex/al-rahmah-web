@@ -123,8 +123,13 @@
 .ag-link-form { max-width: 36rem; gap: 10px; }
 
 .ag-soft { color: var(--gf-ink-soft); }
-/* The table's screen-reader-only words are absolutely placed: the scroll box
-   holds them, so they never widen a phone's page. */
-.ag-table .kit-tw { position: relative; }
 /* Quiet keys are too light on Lavender Whisper; an attempt's keys use Ink Soft. */
 .ag-claim-attempt .kit-kv dt { color: var(--gf-ink-soft); }
+/* "Agent status": links that wear the kit's filter pills (form-parts.tsx);
+   the chosen one takes the pressed pill's look. Goes with #419. */
+.ag-filters { margin-bottom: 0; }
+.ag-filters .kit-fpill { display: inline-flex; align-items: center; text-decoration: none; }
+.ag-filters .kit-fpill[aria-current="page"] {
+  background: var(--gf-indigo); border-color: var(--gf-indigo); color: var(--gf-paper);
+  font: italic 700 13.5px var(--font-exo), "Exo", system-ui, sans-serif;
+}

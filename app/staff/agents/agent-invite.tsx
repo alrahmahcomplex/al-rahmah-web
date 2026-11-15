@@ -2,12 +2,11 @@
 
 import { useId, useState, useTransition } from "react"
 
-import { Button, Field, Note, Sheet, Tag, TextLink } from "@/components/kit"
+import { Button, Field, Note, Sheet, Tag, TextLink, toast } from "@/components/kit"
 import type { AccountState } from "@/lib/services/agent-invites"
 
 import { saveMarketingAgentEmail, sendMarketingAgentInvite } from "./invite-actions"
 import { accountBadge } from "./invite-outcome"
-import { toast } from "./form-parts"
 import "./agents.css"
 
 type Agent = { id: string; fullName: string; code: string }

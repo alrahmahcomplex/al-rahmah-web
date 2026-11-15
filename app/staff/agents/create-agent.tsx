@@ -3,14 +3,13 @@
 import Link from "next/link"
 import { useCallback, useId, useRef, useState, useTransition, type ReactNode } from "react"
 
-import { Button, KeyValueList, Note, Sheet } from "@/components/kit"
+import { Button, KeyValueList, Note, Sheet, toast } from "@/components/kit"
 import type { AgentCheck, AgentConflict } from "@/lib/services/marketing-agents"
 
 import { checkNewMarketingAgent, createMarketingAgent, type AgentDraftInput } from "./actions"
 import { AgentFields } from "./agent-fields"
 import { AGENT_LOST, agentRecordHref, codeTakenLine, phoneTakenLine, retiredCodeLine, type DraftRefusal } from "./outcome"
 import { useRecreateForm, type RecreateParts } from "./recreate-agent"
-import { toast } from "./form-parts"
 import "./agents.css"
 
 const EMPTY: AgentDraftInput = { fullName: "", phone: "", whatsapp: "", email: "", code: "" }

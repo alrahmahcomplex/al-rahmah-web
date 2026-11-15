@@ -2,7 +2,7 @@
 
 import { useOptimistic, useState, useTransition } from "react"
 
-import { Button, Card, EmptyState, PageHeader, Table } from "@/components/kit"
+import { Button, Card, EmptyState, PageHeader, Table, toast } from "@/components/kit"
 import type { PromoCode, PromoState } from "@/lib/services/promo-codes"
 
 import { DiscountChip } from "../agents/discount-fields"
@@ -10,7 +10,6 @@ import { changePromoState } from "./actions"
 import { effectiveState, PROMO_LOST, promoAmountLine, promoStateChip, type PromoOutcome } from "./messages"
 import { PromoSheet } from "./promo-sheet"
 import "../agents/agents.css"
-import { toast } from "../agents/form-parts"
 
 // The Promo codes page below its heading line: New Promo code, the list,
 // and the sheet a row opens. Pause, Resume and End show on the row and in

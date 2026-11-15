@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useId, useState, useTransition, type ReactNode } from "react"
 
-import { Button, Note, Sheet } from "@/components/kit"
+import { Button, Checkbox, Note, Sheet, TextArea, toast } from "@/components/kit"
 import type { RecreatePreview } from "@/lib/services/marketing-agents"
 
 import { readRecreatePreview, recreateMarketingAgent, type AgentDraftInput } from "./actions"
 import { AgentFields } from "./agent-fields"
 import { FeeImpact } from "./fee-impact"
-import { Checkbox, TextArea, toast } from "./form-parts"
 import { samePersonLabel, STATUS_REASON_MAX, type DraftRefusal } from "./outcome"
 import "./agents.css"
 

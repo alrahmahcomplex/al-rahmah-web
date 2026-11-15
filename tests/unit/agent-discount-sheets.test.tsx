@@ -191,7 +191,7 @@ describe("the Promo code sheet", () => {
     const sheet = await screen.findByRole("dialog", { name: PROMO.code })
     await replace(user, within(sheet).getByLabelText("Amount off the TZS 50,000 fee"), "22000")
     await user.click(within(sheet).getByText("More options"))
-    await user.type(within(sheet).getByLabelText("Ends on"), "2026-12-31")
+    await user.type(within(sheet).getByLabelText("Ends on"), "31/12/2026")
     await user.type(within(sheet).getByLabelText("Reason"), "Longer campaign")
     await user.click(within(sheet).getByRole("button", { name: "Save" }))
 

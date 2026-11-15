@@ -3,13 +3,12 @@
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 
-import { Button, Note, Sheet } from "@/components/kit"
+import { Button, Note, Sheet, toast } from "@/components/kit"
 
 import { sendMarketingAgentInviteBatch } from "./invite-batch-actions"
 import type { BatchActionOutcome } from "./invite-batch-outcome"
 import { agentsHref } from "./search-params"
 import "./agents.css"
-import { toast } from "./form-parts"
 
 // Send invites on "Approved, no account yet" (#192). The dialog says what a
 // batch does and what today's budget allows; after it, the page shows the

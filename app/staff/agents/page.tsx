@@ -27,7 +27,7 @@ import { ClaimQueue } from "./claim-queue"
 import { CreateAgent } from "./create-agent"
 import { AgentsTable, type AgentRow } from "./agents-table"
 import type { DiscountAgent } from "./discount-sheet"
-import { Tabs } from "./form-parts"
+import { FilterLinks } from "./form-parts"
 import { SendInvites } from "./invite-batch"
 import { budgetLine } from "./invite-batch-outcome"
 import { InviteBatchReportPanel } from "./invite-batch-report"
@@ -222,13 +222,13 @@ export default async function MarketingAgentsPage({
           </p>
         </Form>
 
-        <Tabs label="Agent status" tabs={tabs} current={tabs.find((tab) => tab.current)?.href ?? null}>
+        <FilterLinks label="Agent status" links={tabs} current={tabs.find((tab) => tab.current)?.href ?? null}>
           {search.query && (
             <Link href={agentsHref(search, { query: undefined, page: 1 })} className="ag-link">
               Clear search
             </Link>
           )}
-        </Tabs>
+        </FilterLinks>
         {attention && <NeedsAttention attention={attention} pending={pendingCount?.ok ? pendingCount.data : null} />}
       </div>
 
@@ -429,7 +429,7 @@ function Results({
       )}
 
       {agents.length > 0 && (
-        <Card className="ag-table">
+        <Card>
           <AgentsTable
             rows={rows}
             canApprove={canApprove}

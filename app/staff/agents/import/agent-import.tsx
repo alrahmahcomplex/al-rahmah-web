@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react"
 
-import { Button, ButtonLink, Card, FilterPills, FinishedState, Note, Tag, TaskCard, type TagTone } from "@/components/kit"
+import { Button, ButtonLink, Card, FilePicker, FilterPills, FinishedState, Note, Tag, type TagTone, TaskCard } from "@/components/kit"
 import {
   AGENT_IMPORT_CLASSES,
   AGENT_IMPORT_COLUMNS,
@@ -18,7 +18,6 @@ import {
 } from "@/lib/agent-import"
 import { IMPORT_LIMITS, importFileMessage } from "@/lib/import"
 
-import { FilePicker } from "../form-parts"
 import { checkAgentImportUpload, confirmAgentImportRows } from "./actions"
 import { CHECK_LOST, CONFIRM_LOST, type ImportMessage } from "./messages"
 import "../agents.css"
@@ -189,7 +188,9 @@ function Upload({ onUpload, pending }: { onUpload: (form: FormData) => void; pen
             name="file"
             accept=".csv,text/csv"
             required
-            label="CSV file"
+            title="Drop the CSV here or choose a file"
+            chooseLabel="Choose file"
+            inputLabel="CSV file"
             hint="Up to 256 KB and 1,000 rows. Nothing is saved until you confirm."
           />
           <div>

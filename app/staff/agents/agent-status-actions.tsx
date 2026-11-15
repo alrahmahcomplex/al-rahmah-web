@@ -2,12 +2,11 @@
 
 import { useEffect, useId, useRef, useState, useTransition } from "react"
 
-import { Button, Note, Sheet } from "@/components/kit"
+import { Button, Note, Sheet, TextArea, toast } from "@/components/kit"
 import type { AgentStatusAction, FeeImpact as FeeImpactList } from "@/lib/services/marketing-agents"
 
 import { changeMarketingAgentStatus, readAgentFeeImpact } from "./actions"
 import { FeeImpact } from "./fee-impact"
-import { TextArea, toast } from "./form-parts"
 import "./agents.css"
 import { actionEffect, actionVerb, STATUS_LOST, STATUS_REASON_MAX } from "./outcome"
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useState, useTransition } from "react"
-import { Button, Card, Note, Sheet, TextLink } from "@/components/kit"
+import { Button, Card, Note, Sheet, TextLink, toast } from "@/components/kit"
 
 import { readStandardDiscountImpact, saveStandardDiscount } from "./discount-actions"
 import { DiscountImpact, MoneyField, ReasonField, useImpact } from "./discount-fields"
@@ -16,7 +16,6 @@ import {
   type DiscountOutcome,
 } from "./discount-outcome"
 import "./agents.css"
-import { toast } from "./form-parts"
 
 // The setting line above the Agents table: what every agent's code gives
 // unless the agent has an own amount, and how many Approved agents are on

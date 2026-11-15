@@ -2,10 +2,9 @@
 
 import { useState, useTransition } from "react"
 
-import { Button, Sheet } from "@/components/kit"
+import { Button, Sheet, toast } from "@/components/kit"
 
 import { approveMarketingAgent } from "./actions"
-import { toast } from "./form-parts"
 import "./agents.css"
 
 // The Approve button on a Pending agent's row. It asks the Manager to confirm

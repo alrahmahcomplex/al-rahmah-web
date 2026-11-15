@@ -2,12 +2,11 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
-import { ChoiceTiles, Field, FieldError, KeyValueList, Note as KitNote, Tag, type TagTone } from "@/components/kit"
+import { ChoiceTiles, Disclosure, Field, FieldError, KeyValueList, Note as KitNote, Tag, type TagTone } from "@/components/kit"
 
 import type { ImpactAnswer } from "./discount-actions"
 import { DISCOUNT_REASON_MAX, familyNotice, impactSummary, IMPACT_LOST, NO_IMPACT, PAID_KEEP, tzs } from "./discount-outcome"
 import type { ImpactState } from "./fee-impact"
-import { Disclosure } from "./form-parts"
 import "./agents.css"
 
 // The pieces the discount sheets share: the TZS amount field, the state
@@ -136,7 +135,7 @@ export function DiscountImpact({ impact }: { impact: ImpactState | null }) {
   const families = impact.families
   if (families.length === 0) return <Note>{NO_IMPACT}</Note>
   return (
-    <Disclosure label={impactSummary(families.length)}>
+    <Disclosure variant="boxed" label={impactSummary(families.length)}>
       <div className="ag-fold">
         <ul aria-label="Families not yet Paid" className="ag-families">
           {families.map((family) => (

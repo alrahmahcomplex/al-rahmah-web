@@ -198,7 +198,11 @@ html:has(.ns) body { background: var(--gf-paper); }
   content: ""; position: absolute; left: 6px; top: 22px; bottom: 22px; width: 2px; border-radius: 2px; background: var(--gf-indigo);
   opacity: 0; transition: opacity var(--gf-t-med) var(--gf-ease-out);
 }
-.ns-rz:hover::after, .ns-rz[data-drag]::after, .ns-rz:focus-visible::after { opacity: 0.45; }
+.ns-rz:hover::after, .ns-rz[data-drag]::after { opacity: 0.45; }
+/* Focus draws the line at --gf-focus-ring's 47% (#427): 3.16:1 on the Paper
+   frame and at least 3.08:1 on the stage's wash, where 45% gave 2.98:1 and
+   2.92:1. Only opacity changes, so the fade in and out stays smooth. */
+.ns-rz:focus-visible::after { opacity: 0.47; }
 
 /* ---------- the error, not-found and forbidden pages ---------- */
 .ns-state-act { display: flex; flex-wrap: wrap; gap: 10px; }

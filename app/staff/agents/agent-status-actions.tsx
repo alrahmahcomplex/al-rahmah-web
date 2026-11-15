@@ -39,9 +39,9 @@ function StatusAction({ agent, action }: { agent: Agent; action: AgentStatusActi
   const reasonRef = useRef<HTMLTextAreaElement>(null)
   const verb = actionVerb(action)
 
-  // The dialog focuses the reason on open, while the families are still loading.
-  // When the list arrives above it, the focused field is pushed below the
-  // scrolling body's edge, so bring it back into view.
+  // The reason can have focus while the families are still loading (Tab
+  // reaches it). When the list arrives above it, the focused field is pushed
+  // below the scrolling body's edge, so bring it back into view.
   useEffect(() => {
     const field = reasonRef.current
     if (impact.status !== "loading" && field && field === document.activeElement) {

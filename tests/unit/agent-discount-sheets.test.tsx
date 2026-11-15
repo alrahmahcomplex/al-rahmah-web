@@ -204,6 +204,20 @@ describe("the Promo code sheet", () => {
     )
   })
 
+  it("never saves while the last day holds text that is not a date", async () => {
+    const user = userEvent.setup()
+    render(promoSheet(PROMO))
+    const sheet = await screen.findByRole("dialog", { name: PROMO.code })
+    await replace(user, within(sheet).getByLabelText("Amount off the TZS 50,000 fee"), "22000")
+    await user.click(within(sheet).getByText("More options"))
+    await user.type(within(sheet).getByLabelText("Ends on"), "31/13/20")
+    await user.type(within(sheet).getByLabelText("Reason"), "Longer campaign")
+    await user.click(within(sheet).getByRole("button", { name: "Save" }))
+
+    await waitFor(() => expect(within(sheet).getByLabelText("Ends on")).toHaveAttribute("aria-invalid", "true"))
+    expect(actions.updatePromo).not.toHaveBeenCalled()
+  })
+
   it("shows the facts only to a role that cannot set discounts", async () => {
     render(promoSheet(PROMO, false))
     const sheet = await screen.findByRole("dialog", { name: PROMO.code })

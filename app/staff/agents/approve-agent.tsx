@@ -49,10 +49,19 @@ export function ApproveAgent({
         open={open}
         onOpenChange={setOpen}
         title={`Approve ${agent.fullName}?`}
+        // Both sentences are the dialog's description, as on main, so a screen
+        // reader hears the address the invite goes to before Approve.
         hint={
           <>
             Their code <span className="ag-mono ag-strong">{agent.code}</span> will give families the interview discount. Approval
-            can&apos;t be undone.
+            can&apos;t be undone.{" "}
+            {email ? (
+              <>
+                An invite to set a password goes to <span className="ag-strong">{email}</span>. Check it is theirs.
+              </>
+            ) : (
+              "They have no email, so no invite goes out. Tell them yourself, by WhatsApp or a call."
+            )}
           </>
         }
         closeLabel="Close"
@@ -67,15 +76,7 @@ export function ApproveAgent({
           </>
         }
       >
-        <p className="ag-p">
-          {email ? (
-            <>
-              An invite to set a password goes to <span className="ag-strong">{email}</span>. Check it is theirs.
-            </>
-          ) : (
-            "They have no email, so no invite goes out. Tell them yourself, by WhatsApp or a call."
-          )}
-        </p>
+        {null}
       </Sheet>
     </div>
   )

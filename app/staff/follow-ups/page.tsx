@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { forbidden } from "next/navigation"
 
-import { Card, EmptyState, ListRow, Note, PageHeader, pageTitle, Pagination, StatusChip, Tag } from "@/components/kit"
+import { ButtonLink, Card, EmptyState, ListRow, Note, PageHeader, pageTitle, Pagination, StatusChip, Tag } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getFollowUpQueue, type FollowUpQueueItem, type FollowUpQueuePage, type FollowUpQueueSection } from "@/lib/services/follow-ups"
 import { createClient } from "@/utils/supabase/server"
@@ -46,10 +46,7 @@ export default async function FollowUpsPage({
         <Section section="overdue" title="Overdue" result={overdue} search={search}>
           {(page) =>
             page.items.length === 0 ? (
-              <EmptyState
-                illustration={page.total === 0 ? "done" : "search"}
-                title={page.total === 0 ? "No follow-ups are overdue." : "This page is past the end of the list."}
-              />
+              <EmptyState illustration="done" title="No follow-ups are overdue." />
             ) : (
               <Rows items={page.items} today={today} label="Overdue follow-ups" />
             )
@@ -60,10 +57,7 @@ export default async function FollowUpsPage({
           {(page) => {
             if (page.items.length === 0) {
               return (
-                <EmptyState
-                  illustration={page.total === 0 ? "done" : "search"}
-                  title={page.total === 0 ? "No follow-ups are coming up." : "This page is past the end of the list."}
-                />
+                <EmptyState illustration="done" title="No follow-ups are coming up." />
               )
             }
             const { today: dueToday, later } = splitToday(page.items, today)
@@ -95,7 +89,9 @@ export default async function FollowUpsPage({
 }
 
 // One section's card. Its title is the h2; how many it holds is written in
-// words under it (The One Pip Rule), not as a badge.
+// words under it (The One Pip Rule), not as a badge. A page past the end
+// (rows moved since it was opened) says so and links back to the last page;
+// `children` draws only a page with rows, or the empty section.
 function Section({
   section,
   title,
@@ -119,6 +115,15 @@ function Section({
         <Note tone="bad" role="alert">
           {title} follow-ups could not be loaded. Try again in a moment.
         </Note>
+      ) : result.data.items.length === 0 && result.data.total > 0 ? (
+        <EmptyState
+          title="This page is past the end of the list."
+          action={
+            <ButtonLink href={followUpsHref(search, { [section]: Math.max(result.data.pageCount, 1) })} variant="ghost">
+              Previous page
+            </ButtonLink>
+          }
+        />
       ) : (
         <>
           {children(result.data)}
@@ -126,8 +131,7 @@ function Section({
             className="fu-pages"
             label={`${title} pages`}
             page={result.data.page}
-            // A page past the end (rows moved since it was opened) still offers the way back.
-            pageCount={Math.max(result.data.pageCount, result.data.page)}
+            pageCount={result.data.pageCount}
             href={(each) => followUpsHref(search, { [section]: each })}
             previousLabel="Previous page"
             nextLabel="Next page"

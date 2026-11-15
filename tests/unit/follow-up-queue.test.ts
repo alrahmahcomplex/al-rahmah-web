@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { followUpsHref, parseFollowUpSearch } from "@/app/staff/follow-ups/search-params"
-import { lastContactText, overdueText, rowDue, splitToday } from "@/app/staff/follow-ups/queue-format"
+import { followUpCount, lastContactText, overdueText, rowDue, splitToday } from "@/app/staff/follow-ups/queue-format"
 import { navFor, STAFF_NAV } from "@/app/staff/navigation"
 
 describe("parseFollowUpSearch", () => {
@@ -30,6 +30,11 @@ describe("the queue's wording", () => {
   it("says how many days a follow-up is overdue", () => {
     expect(overdueText(1)).toBe("Overdue by 1 day")
     expect(overdueText(12)).toBe("Overdue by 12 days")
+  })
+
+  it("writes a section's count in words under its title", () => {
+    expect(followUpCount(1)).toBe("1 follow-up")
+    expect(followUpCount(8)).toBe("8 follow-ups")
   })
 
   it("labels a row by how late it is, or as needing a follow-up date", () => {

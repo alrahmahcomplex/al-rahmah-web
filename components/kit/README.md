@@ -35,6 +35,7 @@ A converted staff screen uses only the kit. The old parts stay for screens that 
 | `ListRow` | hand-made rows |
 | `Table` | `ui/table` |
 | `KeyValueList`, `Section` | hand-made `dl` grids |
+| `Timeline` | a hand-made list of dated entries |
 | `Note` | `ui/alert` |
 | `EmptyState`, `LoadingState`, `FinishedState`, `FinishMark` | `staff/empty-state`, `staff/success-mark` on a finished task |
 | `SkeletonBlock` | `staff/page-skeleton`'s `Bone`, `ui/skeleton` |
@@ -168,7 +169,7 @@ export const metadata = { title: pageTitle("Applicants") }
 
 `PageHeader` is the page's one `h1`. A client part deeper down adds an action to its slot with `<PageActions>`. A `Card` with a title is a region named by it. `TaskCard` is the one lifted card on a page.
 
-`ListRow` is a link with `href`, a button with `onClick`, a plain row otherwise; `icon` draws the featured disc, `leading` takes a Line tag instead. `Table` takes `columns` (`header`, `cell`, `align: "end"` for money, `rowHeader` for the cell that names its row, such as a name) and `rows`; `onOpen` makes rows focusable, opened by click or Enter, named by `rowLabel`. `total` adds the bold total row. `KeyValueList` items take a `reason` line and `numeric`. `Section` heads a part of a card or sheet. `Note tone="info" | "good" | "wait" | "bad"` takes a `role`: `status` for news, `alert` for a failure. Each tone is a faint tint with a thin line in its own colour.
+`ListRow` is a link with `href`, a button with `onClick`, a plain row otherwise; `icon` draws the featured disc, `leading` takes a Line tag instead. `Table` takes `columns` (`header`, `cell`, `align: "end"` for money, `rowHeader` for the cell that names its row, such as a name) and `rows`; `onOpen` makes rows focusable, opened by click or Enter, named by `rowLabel`. `total` adds the bold total row. `KeyValueList` items take a `reason` line and `numeric`. `Section` heads a part of a card or sheet. `Timeline` lists what happened, newest first, as the prototype v38 Design system page draws it: each item has a `title`, a `meta` line (who and when), an optional `tone` (`ok` green, `wait` orange; indigo otherwise) and children below, such as the fields an edit changed; `label` names the list. `Note tone="info" | "good" | "wait" | "bad"` takes a `role`: `status` for news, `alert` for a failure. Each tone is a faint tint with a thin line in its own colour.
 
 ## States
 

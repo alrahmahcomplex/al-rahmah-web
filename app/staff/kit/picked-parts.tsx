@@ -3,7 +3,7 @@
 import { useId, useState, type FormEvent } from "react"
 
 import { CodeBox, FieldError, FullNameBox, hasTwoNames, PersonNameBoxes, StudentNameBoxes } from "@/components/guided-form"
-import { Accordion, AvatarGroup, Avatar, Button, Card, Pagination, RoundButton, StepSlider, TabSwitch, Tooltip, type AvatarTone } from "@/components/kit"
+import { Accordion, AvatarGroup, Avatar, Button, Card, Pagination, RoundButton, StepSlider, TabSwitch, Timeline, Tooltip, type AvatarTone, type TimelineItem } from "@/components/kit"
 
 // The parts the owner picked on prototype v38's Design system page (#402),
 // with the prototype's own example words. Nothing is saved.
@@ -26,6 +26,13 @@ const QUESTIONS = [
   ["When does the sibling discount start?", "As soon as the fathers’ names match. When they don’t, the Admissions Manager decides after seeing proof."],
   ["Can a fee be changed by hand?", "Yes, by staff who may record payments. Every change keeps its reason in the audit log."],
 ] as const
+// The prototype's Timeline example: newest first, green for done, orange for waiting.
+const HISTORY: TimelineItem[] = [
+  { key: 1, title: "Released the interview result", meta: "Rehema M. · Today 09:12", tone: "ok" },
+  { key: 2, title: "Recorded a payment of TZS 300,000", meta: "Example Staff One · Yesterday 16:40" },
+  { key: 3, title: "Asked for the sibling discount", meta: "Example Staff Two · 9 Nov 11:05", tone: "wait" },
+  { key: 4, title: "Application received", meta: "Admission form · 9 Nov 10:20" },
+]
 const TIPS = [
   ["filter", "Filter Visited applicants"],
   ["bell", "New requests"],
@@ -80,6 +87,11 @@ export function PickedPartsCards() {
 
       <Card title="Accordion: separate cards">
         <Accordion items={QUESTIONS.map(([title, answer]) => ({ title, content: <p>{answer}</p> }))} />
+      </Card>
+
+      <Card title="Timeline">
+        <Timeline label="History" items={HISTORY} />
+        <p className="kp-spec">What happened, newest first. A student’s history and the audit log use it.</p>
       </Card>
 
       <NamesCard />

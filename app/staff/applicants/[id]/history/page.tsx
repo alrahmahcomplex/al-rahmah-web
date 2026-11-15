@@ -1,9 +1,7 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { forbidden, notFound } from "next/navigation"
 
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { buttonVariants } from "@/components/ui/button"
+import { ButtonLink, Card, EmptyState, Note, PageHeader, pageTitle, Timeline } from "@/components/kit"
 import { getLeadHistory } from "@/lib/services/audit"
 import { getLeadFollowUps } from "@/lib/services/follow-ups"
 import { getLead } from "@/lib/services/leads"
@@ -11,10 +9,12 @@ import { getLeadImportMark } from "@/lib/services/student-import"
 import { createClient } from "@/utils/supabase/server"
 
 import { requireStaff } from "../../../session"
+import "../lead.css"
 import { describeLeadHistory, type DescribedEntry } from "./describe"
+import "./history.css"
 
 export const metadata: Metadata = {
-  title: "Application history · Al-Rahmah Complex",
+  title: pageTitle("Application history"),
 }
 
 // The school is in Tanzania, so times read in East Africa Time whatever the
@@ -52,68 +52,75 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
   )
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="staff-heading">History</h1>
-        {lead.ok && (
-          <p className="text-sm text-slate-900">
-            {lead.data.studentName} · <span className="font-mono font-semibold">{lead.data.admissionNumber}</span>
-          </p>
-        )}
-      </div>
+    <div className="lr-page">
+      <PageHeader
+        title="History"
+        subtitle={
+          lead.ok && (
+            <>
+              {lead.data.studentName} · <span className="lr-number">{lead.data.admissionNumber}</span>
+            </>
+          )
+        }
+      />
 
       {!lead.ok || !history.ok ? (
-        <Alert variant="destructive">
-          <AlertDescription>This application&apos;s history could not be loaded. Try again in a moment.</AlertDescription>
-        </Alert>
+        <Note tone="bad" role="alert">
+          This application&apos;s history could not be loaded. Try again in a moment.
+        </Note>
       ) : (
         <>
           {!followUps.ok && (
-            <Alert>
-              <AlertDescription>
-                The names of staff who made contacts could not be loaded, so some contact entries show an id. Reload to try again.
-              </AlertDescription>
-            </Alert>
+            <Note tone="wait" role="alert">
+              The names of staff who made contacts could not be loaded, so some contact entries show an id. Reload to try
+              again.
+            </Note>
           )}
-          <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }, importFile)} />
+          <Card className="lh-card">
+            <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }, importFile)} />
+          </Card>
         </>
       )}
 
       <div>
-        <Link href={`/staff/applicants/${id}`} className={buttonVariants({ variant: "outline" })}>
+        <ButtonLink href={`/staff/applicants/${id}`} variant="ghost">
           Back to the application
-        </Link>
+        </ButtonLink>
       </div>
     </div>
   )
 }
 
 function Entries({ entries }: { entries: DescribedEntry[] }) {
-  if (entries.length === 0) return <p className="text-sm text-muted-foreground">No changes yet.</p>
+  if (entries.length === 0) return <EmptyState title="No changes yet." />
 
   return (
-    <ol aria-label="History" className="flex max-w-2xl flex-col divide-y text-sm">
-      {entries.map((entry) => (
-        <li key={entry.id} className="flex flex-col gap-1 py-3">
-          <p>
-            <span className="font-medium">{entry.actor}</span> {entry.summary}
-            <time dateTime={entry.at} className="block text-xs text-muted-foreground sm:ml-2 sm:inline">
-              {WHEN.format(new Date(entry.at))}
-            </time>
-          </p>
-          {entry.note && <p className="text-xs text-slate-700">{entry.note}</p>}
-          {entry.changes.length > 0 && (
-            <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-              {entry.changes.map((change) => (
-                <li key={change.label} className="break-words">
-                  {change.label}: {change.from !== null && <>{change.from} → </>}
-                  <span className="text-foreground">{change.to}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </li>
-      ))}
-    </ol>
+    <Timeline
+      label="History"
+      items={entries.map((entry) => ({
+        key: entry.id,
+        title: (
+          <>
+            {entry.actor} {entry.summary}
+          </>
+        ),
+        meta: <time dateTime={entry.at}>{WHEN.format(new Date(entry.at))}</time>,
+        children: (
+          <>
+            {entry.note && <p className="lh-note">{entry.note}</p>}
+            {entry.changes.length > 0 && (
+              <ul className="lr-trail">
+                {entry.changes.map((change) => (
+                  <li key={change.label} className="lh-change">
+                    {change.label}: {change.from !== null && <>{change.from} → </>}
+                    <span className="lh-to">{change.to}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ),
+      }))}
+    />
   )
 }

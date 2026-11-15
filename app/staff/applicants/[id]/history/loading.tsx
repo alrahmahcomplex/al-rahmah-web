@@ -1,12 +1,20 @@
-import { Bone, HeadingSkeleton, ListSkeleton, PageSkeleton } from "@/components/staff/page-skeleton"
+import { SkeletonBlock } from "@/components/kit"
 
-// A lead's history: the heading with the student's name, then the entries.
+import "../lead.css"
+import "./history.css"
+
+// A lead's history while it opens: the heading with the student's name, the
+// card of entries, then the way back.
 export default function Loading() {
   return (
-    <PageSkeleton label="the history">
-      <HeadingSkeleton width="w-28" subline />
-      <ListSkeleton rows={6} lines={2} bare />
-      <Bone className="h-10 w-36" />
-    </PageSkeleton>
+    <div role="status" aria-busy="true" className="lr-page">
+      <span className="sr-only">Loading the history…</span>
+      <div className="flex flex-col gap-2.5">
+        <SkeletonBlock width={160} height={32} />
+        <SkeletonBlock width={260} height={16} className="max-w-full" />
+      </div>
+      <SkeletonBlock height={360} shape="card" className="lh-card" />
+      <SkeletonBlock width={208} height={44} shape="pill" />
+    </div>
   )
 }

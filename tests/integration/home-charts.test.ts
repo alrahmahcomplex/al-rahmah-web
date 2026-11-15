@@ -1,6 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto"
 
-import { beforeAll, describe, expect, test } from "vitest"
+import { beforeAll, describe, expect, test, vi } from "vitest"
 
 import { admissionYears, type AdmissionChild, type AdmissionForm } from "@/lib/admission-form"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
@@ -10,6 +10,8 @@ import { createLead, LEAD_CLASSES } from "@/lib/services/leads"
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn, unusedAdmissionNumber } from "../support/db"
 import { discountPhone, freshCode, leadWithCode } from "../support/discount-codes"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+
+vi.mock("server-only", () => ({}))
 
 // Home's chart counts (#405) against local Supabase. The test moves the leads
 // it makes into a year of its own in the 1900s, which no seed and no other

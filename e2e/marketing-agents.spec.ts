@@ -96,18 +96,10 @@ test.describe("Marketing Agents", () => {
     await expect(approved.getByRole("button", { name: /Approve/ })).toHaveCount(0)
   })
 
-  test("the Accountant reads every agent, with no Approve and no Pending count", async ({ page, allowConsoleError }) => {
-    allowConsoleError(
-      /^console\.error: Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/[^)]+\/staff\/no-such-page\)$/,
-      "the staff 404 may answer with a 404 status",
-    )
+  test("the Accountant reads every agent, with no Approve and no Pending count", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
-    // The old shell shows the Pending count to whoever may approve agents; the
-    // new shell shows no counts at all (#323). The Accountant opens no
-    // old-shell page from the sidebar, so look on the staff 404, which the old
-    // shell draws (the catch-all route).
-    await page.goto("/staff/no-such-page")
-    await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
+    // Every page the Accountant opens from the sidebar is in the new shell,
+    // which shows no counts to anyone (#323, #328): the entry is its label.
     await expect(agentsLink(page)).toHaveAccessibleName("Marketing Agents")
     await agentsLink(page).click()
 

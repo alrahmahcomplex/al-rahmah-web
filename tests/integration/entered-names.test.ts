@@ -130,15 +130,44 @@ describe("the Admission form in parts", () => {
     const recorded = await inRolledBackTransaction(
       async (sql) =>
         (
-          await sql.query<{ student_name: string; contact_name: string; differing_fields: string[] }>(
-            `select r.student_name, r.contact_name, r.differing_fields
+          await sql.query<{ student_name: string; father_full_name: string | null; contact_name: string; differing_fields: string[] }>(
+            `select r.student_name, r.father_full_name, r.contact_name, r.differing_fields
              from public.re_applications r join public.leads l on l.id = r.lead_id
              where l.admission_number = $1`,
             [first.data[0].admissionNumber],
           )
         ).rows,
     )
-    expect(recorded).toEqual([{ student_name: studentFullName(kid), contact_name: parent.fullName, differing_fields: [] }])
+    // The student's name leaves out the father's middle name, so the
+    // Re-application keeps his full name as sent.
+    expect(recorded).toEqual([
+      { student_name: studentFullName(kid), father_full_name: fatherFullName(kid), contact_name: parent.fullName, differing_fields: [] },
+    ])
+  })
+})
+
+describe("a Re-application in parts", () => {
+  test("a new father's middle name is kept on the Re-application, and the lead keeps its own", async () => {
+    const parent = partsParent()
+    const kid = studentParts()
+    const first = await submitAdmissionForm(secretClient(), form(parent, [partsChild(kid)]))
+    if (!first.ok) throw new Error(JSON.stringify(first.error))
+    // Same student name, same phone: only the father's middle name differs.
+    const changed = { ...kid, fatherMiddle: word() }
+    const again = await submitAdmissionForm(secretClient(), form(parent, [partsChild(changed)]))
+    if (!again.ok) throw new Error(JSON.stringify(again.error))
+    const sent = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query<{ father_full_name: string | null }>(
+            `select r.father_full_name from public.re_applications r join public.leads l on l.id = r.lead_id
+             where l.admission_number = $1`,
+            [first.data[0].admissionNumber],
+          )
+        ).rows,
+    )
+    expect(sent).toEqual([{ father_full_name: fatherFullName(changed) }])
+    expect((await namesOf(first.data[0].admissionNumber)).father_full_name).toBe(fatherFullName(kid))
   })
 })
 

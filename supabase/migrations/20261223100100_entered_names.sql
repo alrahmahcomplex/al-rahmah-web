@@ -2314,11 +2314,11 @@ begin
                    )
                    and not exists (
                        select 1
-                       from generate_subscripts(s_lead, 1) j
-                       join public.sibling_group_members m on m.lead_id = s_lead[j]
-                       where j <> i
+                       from generate_subscripts(s_lead, 1) as other(at_index)
+                       join public.sibling_group_members m on m.lead_id = s_lead[other.at_index]
+                       where other.at_index <> i
                          and m.group_id = member.group_id
-                         and public.father_name_match(s_father[j], s_father[i]) is distinct from 'same'
+                         and public.father_name_match(s_father[other.at_index], s_father[i]) is distinct from 'same'
                    )
                ) then
                 raise exception 'invalid'

@@ -105,7 +105,11 @@ function formChild(
 
 // A child already on file, written as the system actor, with or without an
 // answer and in any status: STD 3, Day, Mother.
-async function onFile(gender: StudentGender | null, status: "Visited" | "Declined" = "Visited") {
+async function onFile(
+  gender: StudentGender | null,
+  status: "Visited" | "Declined" = "Visited",
+  closure: "Inactive" | "Archived" | null = null,
+) {
   const parent: AdmissionParent = { fullName: "Mama Jinsia", relationship: "Mother", phone: phone() }
   const studentName = `Mtoto Jinsia ${randomUUID().slice(0, 8)}`
   const admissionNumber = await unusedAdmissionNumber()
@@ -118,8 +122,9 @@ async function onFile(gender: StudentGender | null, status: "Visited" | "Decline
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (
          admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-         status, visit_date, guardian_contact_id, declined_reason, status_before_decline, gender
-       ) values ($1, $2, 'STD 3', $3, 'Day', $4, '2026-09-01', $5, $6, $7, $8) returning id`,
+         status, visit_date, guardian_contact_id, declined_reason, status_before_decline, gender,
+         closure, closure_reason
+       ) values ($1, $2, 'STD 3', $3, 'Day', $4, '2026-09-01', $5, $6, $7, $8, $9, $10) returning id`,
       [
         admissionNumber,
         studentName,
@@ -129,6 +134,8 @@ async function onFile(gender: StudentGender | null, status: "Visited" | "Decline
         status === "Declined" ? "Family changed plans" : null,
         status === "Declined" ? "Visited" : null,
         gender,
+        closure,
+        closure === null ? null : "No longer pursuing admission",
       ],
     )
     return lead.rows[0].id
@@ -136,11 +143,13 @@ async function onFile(gender: StudentGender | null, status: "Visited" | "Decline
   return { id, admissionNumber, studentName, parent }
 }
 
-async function sendAgain(lead: Awaited<ReturnType<typeof onFile>>, gender: StudentGender) {
+async function sendAgain(lead: Awaited<ReturnType<typeof onFile>>, gender?: StudentGender) {
   const sent = await submitAdmissionForm(secretClient(), {
     submissionKey: randomUUID(),
     parent: lead.parent,
-    children: [{ fullName: lead.studentName, className: "STD 3", enrollmentYear: nextYear, dayOrBoarding: "Day", gender }],
+    children: [
+      { fullName: lead.studentName, className: "STD 3", enrollmentYear: nextYear, dayOrBoarding: "Day", ...(gender ? { gender } : {}) },
+    ],
   })
   if (!sent.ok) throw new Error(`form failed: ${JSON.stringify(sent.error)}`)
   // The child on file, not a new lead.
@@ -305,6 +314,40 @@ describe("a Re-application", () => {
       (await sql.query("select status, closure, declined_reason from public.leads where id = $1", [lead.id])).rows[0],
     )
     expect(after).toEqual(before)
+  })
+
+  test("fills it on a child already marked re-applied, as the public form, with the change in the history", async () => {
+    const lead = await onFile(null)
+    await sendAgain(lead)
+    const flagged = await inRolledBackTransaction(async (sql) =>
+      (await sql.query("select returning_family_reapplied as r from public.leads where id = $1", [lead.id])).rows[0].r,
+    )
+    expect(flagged).toBe(true)
+    expect(await genderOf(lead.id)).toBeNull()
+
+    await sendAgain(lead, "Girl")
+    expect(await genderOf(lead.id)).toBe("Girl")
+    const audit = await inRolledBackTransaction(async (sql) =>
+      (
+        await sql.query<{ actor_kind: string; actor_staff_id: string | null; old_gender: string | null; new_gender: string }>(
+          `select a.actor_kind, a.actor_staff_id, a.old_values ->> 'gender' as old_gender, a.new_values ->> 'gender' as new_gender
+           from public.audit_log a
+           where a.table_name = 'leads' and a.row_id = $1 and a.new_values ->> 'gender' is not null
+           order by a.created_at desc, a.id desc limit 1`,
+          [lead.id],
+        )
+      ).rows,
+    )
+    expect(audit).toEqual([{ actor_kind: "public_form", actor_staff_id: null, old_gender: null, new_gender: "Girl" }])
+  })
+
+  test.each(["Inactive", "Archived"] as const)("fills a missing answer on an %s child, and keeps its mark", async (closure) => {
+    const lead = await onFile(null, "Visited", closure)
+    await sendAgain(lead, "Boy")
+    const row = await inRolledBackTransaction(async (sql) =>
+      (await sql.query("select gender, closure, status from public.leads where id = $1", [lead.id])).rows[0],
+    )
+    expect(row).toEqual({ gender: "Boy", closure, status: "Visited" })
   })
 
   test("the closed-lead guard still refuses changing an answer on a Declined child", async () => {

@@ -23,6 +23,7 @@ import {
   MOST_STUDENTS,
   NO_SCHOOL_ASKED,
   onFileMatch,
+  otherFather,
   payload,
   people,
   relationshipLabel,
@@ -426,6 +427,10 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
             first={k > 0 && firstCustodian && firstCustodian.kind !== "same" ? { name: firstName(firstCustodian) } : null}
             saved={c}
             canCheck={canCheck}
+            otherFather={(() => {
+              const k = otherFather(a, h)
+              return k === null ? null : firstOf(studentName(a.students.find((s) => s.key === k)?.name))
+            })()}
             onDone={(custodian) =>
               answer(id, (x) => {
                 // Another person may hold other children on file: the on-file question is asked again.
@@ -566,7 +571,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       case "refused": {
         const who = outcome.student ? nameOf(outcome.student) : ""
         const what =
-          outcome.field === "phone" || outcome.field === "whatsapp"
+          outcome.reason === "father_names_differ"
+            ? `${who}’s father is another man, so the father can’t be the custodian of them all. Change the custodian`
+            : outcome.field === "phone" || outcome.field === "whatsapp"
             ? "One of the custodians’ phone numbers can’t be read. Check it"
             : outcome.field === "student_name" && outcome.reason === "repeated_on_form"
               ? `${who} is on this form twice. Remove one`

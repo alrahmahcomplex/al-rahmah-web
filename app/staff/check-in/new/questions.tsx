@@ -36,8 +36,8 @@ import { Icon } from "@/components/icons"
 import { STAFF_REMINDER } from "@/lib/referral-notice"
 import type { DayOrBoarding, LeadClass } from "@/lib/services/leads"
 
-import { useCodeLookup } from "../../applicants/[id]/referral-editor"
-import { usableCode } from "../../applicants/[id]/referral-outcome"
+import { lookUpReferralCode } from "../../applicants/[id]/referral-actions"
+import { usableCode, type ReferralLookup } from "../../applicants/[id]/referral-outcome"
 import { findCustodianFamily } from "./actions"
 import {
   CLASS_LEVELS,
@@ -514,6 +514,7 @@ export function CustodianQuestion({
   first,
   saved,
   canCheck,
+  otherFather,
   onDone,
 }: {
   id: string
@@ -524,6 +525,8 @@ export function CustodianQuestion({
   saved?: Custodian
   // Staff who may view leads get the number checked against families on file.
   canCheck: boolean
+  // A child here whose father is another man, by first name: then the father can't be everyone's custodian.
+  otherFather: string | null
   onDone: (c: Custodian) => void
 }) {
   const [dad, setDad] = useState(saved?.kind === "father")
@@ -560,6 +563,7 @@ export function CustodianQuestion({
     if (!reuse && !phoneOk(phone)) return setError("Type the mobile number in full, for example 0712 345 678.")
     if (!reuse && whatsapp.trim() && !phoneOk(whatsapp)) return setError("Type the WhatsApp number in full, or leave it empty.")
     if (dad) {
+      if (otherFather) return setError(`${otherFather}’s father is another man, so the father can’t be the custodian of them all. Turn off the switch and choose the custodian.`)
       if (!famSettled) return setError("Say whether it is the same person.")
       return onDone({ kind: "father", phone: phone.trim(), whatsapp: whatsapp.trim(), contact })
     }
@@ -761,10 +765,8 @@ export function BroughtQuestion({ id, who, people, saved, onDone }: { id: string
   )
 }
 
-function codeProblem(lookup: ReturnType<typeof useCodeLookup>): string {
+function codeProblem(lookup: ReferralLookup): string {
   switch (lookup.status) {
-    case "checking":
-      return "The code is still being checked. Wait a moment, then choose Continue again."
     case "unavailable":
       return "The code could not be checked just now. Try again, or choose No code and add it on the student’s record later."
     case "found":
@@ -780,14 +782,24 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
   const [typing, setTyping] = useState(has)
   const [code, setCode] = useState(has ? saved : "")
   const [error, setError] = useState("")
-  const lookup = useCodeLookup(code)
+  const [checking, setChecking] = useState(false)
   const errId = `${id}-error`
   const inputId = useId()
 
-  function submit(e: FormEvent) {
+  // Continue checks the code itself, so pressing it straight after typing waits for the answer.
+  async function submit(e: FormEvent) {
     e.preventDefault()
+    if (checking) return
     const v = formatCode(code)
     if (v.length < 3) return setError("Type the code, or choose No code.")
+    setChecking(true)
+    let lookup: ReferralLookup
+    try {
+      lookup = await lookUpReferralCode(v)
+    } catch {
+      lookup = { status: "unavailable" }
+    }
+    setChecking(false)
     const found = usableCode(lookup)
     if (!found) return setError(codeProblem(lookup))
     onDone(found.code)
@@ -828,7 +840,9 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
             <span data-notice-version="staff_reminder">{STAFF_REMINDER}</span>
           </Note>
           <FieldError id={errId} message={error} />
-          <ContinuePill type="submit">Continue</ContinuePill>
+          <ContinuePill type="submit" pending={checking}>
+            Continue
+          </ContinuePill>
         </GuidedReveal>
       </form>
     </>

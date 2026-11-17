@@ -5,6 +5,7 @@ import {
   feePreview,
   households,
   isEmpty,
+  otherFather,
   payload,
   people,
   savedFather,
@@ -132,7 +133,10 @@ describe("the save", () => {
       },
     )
     const out = payload(a, 2027)
-    expect(out.people).toEqual([{ phone: "0712 345 678", whatsapp: undefined }, { contactId: contact.id, alsoCheckPhones: ["0712 000 111"] }])
+    expect(out.people).toEqual([
+      { firstName: "JUMA", middleName: "SALIM", lastName: "MRISHO", phone: "0712 345 678", whatsapp: undefined },
+      { contactId: contact.id, alsoCheckPhones: ["0712 000 111"] },
+    ])
     expect(out.students.map((s) => s.custodian)).toEqual([
       { person: 1, father: true },
       { person: 1, father: true },
@@ -162,6 +166,15 @@ describe("the save", () => {
     expect(payload(a, 2027).students[1].nameAnswer).toEqual({ answer: "typo", spelling: "JUMA SALIM MRISHO" })
     expect(savedFather(a, 2)).toBe("JUMA SALIM MRISHO")
     expect(savedFather(a, 1)).toBe("JUMA SALIM MRISHO")
+    // The father as custodian is the right spelling's man, so both children share him.
+    const withFather: Answers = { ...a, custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" } } }
+    expect(payload(withFather, 2027).people).toEqual([{ firstName: "JUMA", middleName: "SALIM", lastName: "MRISHO", phone: "0712345678", whatsapp: undefined }])
+    expect(otherFather(withFather, households(withFather.students)[0])).toBeNull()
+  })
+
+  test("a requested sibling's father is another man", () => {
+    const a = form([student(1, "A", "JUMA SALIM MRISHO"), student(2, "B", "OMARI JUMA HASSAN", { sibling: { kind: "request", of: 1, note: "", requestId: "r", close: false } })])
+    expect(otherFather(a, households(a.students)[0])).toBe(2)
   })
 
   test("a Yes to a sibling on file links that lead and confirms its father's name", () => {

@@ -1,4 +1,4 @@
-import type { PersonName, StudentName } from "@/components/guided-form"
+import type { FatherName, PersonName, StudentName } from "@/components/guided-form"
 import { fatherNameMatch, normalizeFatherName } from "@/lib/father-name"
 import { BAND_CLASSES, FEE_BANDS, type FeeBand } from "@/lib/services/fees"
 import type {
@@ -207,6 +207,20 @@ export function sameFatherEarlier(students: readonly Student[], index: number): 
   return students.slice(0, index).filter((s) => fatherNameMatch(fatherName(s.name), own) === "same").map((s) => s.key)
 }
 
+/** The three names of the father a household's first student will hold once saved: from whichever student typed that spelling. */
+export function fatherParts(a: Answers, root: number): FatherName {
+  const want = normalizeFatherName(savedFather(a, root))
+  const from = a.students.find((s) => s.name && normalizeFatherName(fatherName(s.name)) === want) ?? a.students.find((s) => s.key === root)
+  const n = from?.name
+  return { fatherFirst: n?.fatherFirst ?? "", fatherMiddle: n?.fatherMiddle ?? "", fatherLast: n?.fatherLast ?? "" }
+}
+
+/** A student in this household whose father is another man: the father can't be the custodian of them all. */
+export function otherFather(a: Answers, h: Household): number | null {
+  const root = savedFather(a, h.root)
+  return h.members.find((k) => fatherNameMatch(savedFather(a, k), root) !== "same") ?? null
+}
+
 // ---------------------------------------------------------------------------
 // The custodians as people.
 // ---------------------------------------------------------------------------
@@ -241,7 +255,6 @@ export function people(a: Answers): { people: Person[]; personOf: Record<number,
   for (const h of households(a.students)) {
     const c = a.custodians[h.root]
     if (!c) continue
-    const root = a.students.find((s) => s.key === h.root)
     if (c.kind === "same") {
       const first = households(a.students)[0]
       if (first && personOf[first.root] !== undefined) personOf[h.root] = personOf[first.root]
@@ -250,8 +263,16 @@ export function people(a: Answers): { people: Person[]; personOf: Record<number,
     if (c.kind === "father" && !c.contact) {
       // Two households fathered by the same man on one phone are one person.
       const same = list.findIndex((p) => !("contactId" in p.payload) && digits(p.phone) === digits(c.phone))
+      // His three names are sent, so a typing-mistake sibling whose spelling the save corrects shares him.
+      const parts = fatherParts(a, h.root)
       personOf[h.root] =
-        same >= 0 ? same : add({ name: fatherName(root?.name), phone: c.phone, payload: { phone: c.phone, whatsapp: c.whatsapp.trim() || undefined } })
+        same >= 0
+          ? same
+          : add({
+              name: savedFather(a, h.root),
+              phone: c.phone,
+              payload: { firstName: parts.fatherFirst, middleName: parts.fatherMiddle, lastName: parts.fatherLast, phone: c.phone, whatsapp: c.whatsapp.trim() || undefined },
+            })
       continue
     }
     const contact = c.kind === "father" || c.kind === "known" ? c.contact : undefined

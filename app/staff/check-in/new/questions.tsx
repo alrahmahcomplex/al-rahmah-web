@@ -481,7 +481,7 @@ export function MismatchSheet({
 
 const childLine = (c: KnownContact["children"][number]) => `${c.studentName}, ${c.className}, ${c.status}`
 
-type Lookup = { phone: string; state: "checking" | "none" | "unavailable" } | { phone: string; state: "found"; contact: KnownContact }
+type Lookup = { phone: string; state: "checking" | "none" | "unavailable" } | { phone: string; state: "found"; contacts: KnownContact[] }
 
 /** Looks the custodian's number up once it is complete, after a short pause. */
 function useFamilyLookup(phone: string, whatsapp: string, enabled: boolean): Lookup | null {
@@ -495,7 +495,7 @@ function useFamilyLookup(phone: string, whatsapp: string, enabled: boolean): Loo
       let next: Lookup
       try {
         const r = await findCustodianFamily(phone, whatsapp.trim() || null)
-        next = r.status === "found" ? { phone: key, state: "found", contact: r.contacts[0] } : { phone: key, state: r.status === "unavailable" ? "unavailable" : "none" }
+        next = r.status === "found" ? { phone: key, state: "found", contacts: r.contacts } : { phone: key, state: r.status === "unavailable" ? "unavailable" : "none" }
       } catch {
         next = { phone: key, state: "unavailable" }
       }
@@ -535,7 +535,8 @@ export function CustodianQuestion({
   const [whatsapp, setWhatsapp] = useState(saved && saved.kind !== "same" ? saved.whatsapp : "")
   const [waOpen, setWaOpen] = useState(!!whatsapp)
   const savedContact = saved?.kind === "known" || saved?.kind === "father" ? saved.contact : undefined
-  const [fam, setFam] = useState<boolean | null>(saved ? (savedContact ? true : saved.kind === "new" || saved.kind === "father" ? false : null) : null)
+  // Which person on file staff said it is, by contact id, or "else" for someone else. A changed number asks again.
+  const [picked, setPicked] = useState<string | null>(saved ? (savedContact ? savedContact.id : saved.kind === "new" || saved.kind === "father" ? "else" : null) : null)
   const [name, setName] = useState<PersonName>(saved?.kind === "new" ? saved.name : EMPTY_PERSON)
   const [rel, setRel] = useState<RelationshipChoice | null>(saved && saved.kind !== "father" ? saved.relationship : null)
   const [desc, setDesc] = useState(saved && saved.kind !== "father" ? saved.description : "")
@@ -548,14 +549,14 @@ export function CustodianQuestion({
   const reuse = other && !!first && same === true
   const askPhone = dad || (other && (!first || same === false))
   const lookup = useFamilyLookup(phone, whatsapp, canCheck && askPhone)
-  const onFile = lookup?.state === "found" ? lookup.contact : undefined
-  const contact = onFile && fam === true ? onFile : undefined
-  const needName = other && !reuse && phoneOk(phone) && lookup?.state !== "checking" && (!onFile || fam === false)
+  const onFile = lookup?.state === "found" ? lookup.contacts : []
+  const contact = onFile.find((c) => c.id === picked)
+  const needName = other && !reuse && phoneOk(phone) && lookup?.state !== "checking" && (onFile.length === 0 || picked === "else")
   const nameOk = Object.values(name).every((v) => v.trim())
-  const relReady = other && (reuse || (!!onFile && fam === true) || (needName && nameOk))
+  const relReady = other && (reuse || !!contact || (needName && nameOk))
   const options: readonly RelationshipChoice[] = reuse ? SAME_RELATIONSHIPS : FIRST_RELATIONSHIPS
   const relOk = !!rel && options.includes(rel) && (rel !== "Other" || desc.trim().length > 0)
-  const famSettled = !onFile || fam !== null
+  const famSettled = onFile.length === 0 || picked === "else" || !!contact
   const ready = dad ? phoneOk(phone) && famSettled && lookup?.state !== "checking" : relReady && relOk
 
   function submit(e: FormEvent) {
@@ -586,7 +587,7 @@ export function CustodianQuestion({
           onCheckedChange={(on) => {
             setDad(on)
             setRel(null)
-            setFam(null)
+            setPicked(null)
             setSame(null)
             setError("")
             if (on) window.setTimeout(() => phoneRef.current?.focus(), 330)
@@ -621,11 +622,16 @@ export function CustodianQuestion({
             aria-describedby={errId}
             onChange={(e) => {
               setPhone(e.target.value)
-              setFam(null)
+              setPicked(null)
             }}
           />
           <GuidedReveal open={waOpen}>
-            <Field ref={waRef} icon="phone" inputMode="tel" placeholder="WhatsApp number" aria-label="WhatsApp number" autoComplete="off" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
+            <Field ref={waRef} icon="phone" inputMode="tel" placeholder="WhatsApp number" aria-label="WhatsApp number" autoComplete="off" value={whatsapp}
+              onChange={(e) => {
+                setWhatsapp(e.target.value)
+                setPicked(null)
+              }}
+            />
           </GuidedReveal>
           {!waOpen && (
             <TextLink
@@ -639,24 +645,36 @@ export function CustodianQuestion({
             </TextLink>
           )}
         </GuidedReveal>
-        <GuidedReveal open={askPhone && !!onFile}>
-          {onFile && (
+        <GuidedReveal open={askPhone && onFile.length > 0}>
+          {onFile.length === 1 ? (
             <Note>
-              This number is on file for <b>{onFile.fullName}</b>
-              {onFile.children.length === 0
+              This number is on file for <b>{onFile[0].fullName}</b>
+              {onFile[0].children.length === 0
                 ? ". "
-                : `, with ${onFile.children.length === 1 ? "one child" : `${onFile.children.length} children`} here: ${onFile.children.map(childLine).join("; ")}. `}
+                : `, with ${onFile[0].children.length === 1 ? "one child" : `${onFile[0].children.length} children`} here: ${onFile[0].children.map(childLine).join("; ")}. `}
               Ask if they are the same person.
             </Note>
+          ) : (
+            onFile.length > 1 && <Note>{`This number is on file for ${list(onFile.map((c) => c.fullName))}. Ask which one they are, if any.`}</Note>
           )}
           <ChoiceTiles
             name={`${id}-fam`}
-            layout="two"
+            layout={onFile.length === 1 ? "two" : "rows"}
             legend={<span className="sr-only">Is it the same person?</span>}
-            options={["Same person", "Someone else"].map((o) => ({ value: o, label: o }))}
-            value={fam === null ? null : fam ? "Same person" : "Someone else"}
+            options={
+              onFile.length === 1
+                ? [
+                    { value: onFile[0].id, label: "Same person" },
+                    { value: "else", label: "Someone else" },
+                  ]
+                : [
+                    ...onFile.map((c) => ({ value: c.id, label: c.fullName, description: c.children.length ? c.children.map(childLine).join("; ") : "No children here" })),
+                    { value: "else", label: "Someone else" },
+                  ]
+            }
+            value={picked !== null && (picked === "else" || contact) ? picked : null}
             onChange={(v) => {
-              setFam(v === "Same person")
+              setPicked(v)
               setRel(null)
             }}
           />

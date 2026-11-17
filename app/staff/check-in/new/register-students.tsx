@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 
 import { GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, ContinuePill, type ProgressGroup } from "@/components/guided-form"
 import { Button, ButtonLink, GuidedTask, Note, Sheet, TextLink, toast } from "@/components/kit"
@@ -14,6 +14,7 @@ import {
   fatherName,
   feeOf,
   feePreview,
+  feeSignature,
   firstOf,
   freshAnswers,
   households,
@@ -119,7 +120,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const [round, setRound] = useState(0)
   const [pending, setPending] = useState(false)
   const [failure, setFailure] = useState<ReactNode>(null)
-  const [onFileFees, setOnFileFees] = useState<Record<string, OnFileFee>>({})
+  // The fee and group of each child on file staff linked; null when it could not be read.
+  const [onFileFees, setOnFileFees] = useState<Record<string, OnFileFee | null>>({})
+  const asked = useRef(new Set<string>())
   const [startOver, setStartOver] = useState(false)
   const [typo, setTypo] = useState<{ key: number; of: number; pair: NamePair; clear: () => void } | null>(null)
   const [mismatch, setMismatch] = useState<{ key: number; of: number; pair: NamePair; close: boolean; clear: () => void } | null>(null)
@@ -135,18 +138,21 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     const frame = requestAnimationFrame(() => setInstant(false))
     return () => cancelAnimationFrame(frame)
   }, [instant])
-  // Children on file staff linked: their fee and group, for the fee step.
+  // Children on file staff linked: their fee and group, for the fee step. Each is read once.
+  const linkedAsks = (a: Answers) =>
+    households(a.students)
+      .filter((h) => a.onFile[h.root])
+      .map((h) => a.onFileAsks.find((q) => q.student === h.root) ?? onFileMatch(a, h.root))
+      .filter((q): q is OnFileAsk => !!q)
   useEffect(() => {
-    const wanted = households(answers.students)
-      .filter((h) => answers.onFile[h.root])
-      .map((h) => answers.onFileAsks.find((q) => q.student === h.root) ?? onFileMatch(answers, h.root))
-      .filter((q): q is OnFileAsk => !!q && !onFileFees[q.leadId])
-    for (const q of wanted) {
+    for (const q of linkedAsks(answers)) {
+      if (asked.current.has(q.leadId)) continue
+      asked.current.add(q.leadId)
       readOnFileSibling(q.leadId)
-        .then((info) => info && setOnFileFees((m) => ({ ...m, [q.leadId]: info })))
-        .catch(() => {})
+        .catch(() => null)
+        .then((info) => setOnFileFees((m) => ({ ...m, [q.leadId]: info })))
     }
-  }, [answers, onFileFees])
+  }, [answers])
 
   const later = (fn: () => void, ms: number) => {
     const id = window.setTimeout(() => {
@@ -181,6 +187,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setFinished(null)
     setFailure(null)
     setOnFileFees({})
+    asked.current.clear()
   }
 
   function removeStudent(key: number) {
@@ -490,16 +497,24 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
 
     for (const ask of a.onFileAsks.filter((q) => q.fromSave)) out.push(onFileStep(a, ask, finish))
 
+    // The fee step waits for every linked child on file, and its answer holds only for the preview shown.
+    const loading = linkedAsks(a).some((q) => !(q.leadId in onFileFees))
     const preview = feePreview(a, fees, defaultYear, onFileFees)
     if (preview) {
+      const shown = feeSignature(preview)
       out.push({
         id: "fees",
         group: 2,
         head: finish,
         label: mentionsSiblings(a, preview) ? "Fees and sibling discount" : "Fees",
-        done: !!a.feesChecked,
+        done: !loading && a.feesChecked === shown,
         summary: () => `${tzs(preview.total)} this year`,
-        body: () => <FeesQuestion answers={a} preview={preview} onOk={() => answer("fees", (x) => ({ ...x, feesChecked: true }))} />,
+        body: () =>
+          loading ? (
+            <Hint>Checking the fees…</Hint>
+          ) : (
+            <FeesQuestion answers={a} preview={preview} onOk={() => answer("fees", (x) => ({ ...x, feesChecked: shown }))} />
+          ),
       })
     }
 

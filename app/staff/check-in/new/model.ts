@@ -99,7 +99,8 @@ export type Answers = {
   onFile: Record<number, boolean>
   brought?: Brought
   code?: string
-  feesChecked?: true
+  // The fee preview staff accepted, as feeSignature() writes it: a different preview asks again.
+  feesChecked?: string
 }
 
 export const freshAnswers = (key: number): Answers => ({ students: [{ key }], custodians: {}, onFileAsks: [], onFile: {} })
@@ -372,7 +373,7 @@ export type FeePreview = { rows: FeeRow[]; total: number; together: boolean; enr
  * Enrolled at full or already pays full. A Sibling request waits for the
  * Admissions Manager, at the full fee for now. Null when a fee is unknown.
  */
-export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFileFees: Record<string, OnFileFee>): FeePreview | null {
+export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFileFees: Record<string, OnFileFee | null>): FeePreview | null {
   const rows: FeeRow[] = []
   let total = 0
   let together = false
@@ -392,7 +393,7 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
       return sib?.kind === "match" || sib?.kind === "typo"
     })
     const ask = a.onFileAsks.find((q) => q.student === h.root && a.onFile[h.root]) ?? (a.onFile[h.root] ? onFileMatch(a, h.root) : null)
-    const linked = ask ? onFileFees[ask.leadId] : undefined
+    const linked = (ask && onFileFees[ask.leadId]) || undefined
     const groupGives = linked && (linked.anchorName || linked.fullPayerName)
     let fullPayer: number | "on-file" | null = null
     if (!groupGives && (proven.length > 1 || linked)) {
@@ -438,22 +439,30 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
       const enrolled = linked.status === "Enrolled"
       if (enrolled) enrolledOnFile = linked.name
       const fee = linked.fee ?? 0
-      const onFileFull = fullPayer === "on-file"
-      rows.push({
-        key: `file:${linked.leadId}`,
-        name: linked.name,
-        detail: `${linked.className} · already ${linked.status}`,
-        fee,
-        off: 0,
-        why: enrolled ? "Fee kept · already Enrolled" : onFileFull ? "Pays full · highest fee" : "On file · its fee follows the rule",
-        tone: "plain",
-        pays: linked.pays ?? fee,
-        onFile: true,
-      })
+      // Not yet Enrolled, the child on file follows the rule too: it pays full when it is
+      // the group's payer, else it gets the 10% once a sibling joins.
+      let why = "Fee kept · already Enrolled"
+      let off = 0
+      let pays = linked.pays ?? fee
+      if (!enrolled) {
+        const payer = groupGives ? linked.fullPayerName : fullPayer === "on-file" ? linked.name : fullPayer === null ? null : studentName(a.students.find((x) => x.key === fullPayer)?.name)
+        if (payer === linked.name) {
+          why = "Pays full · highest fee"
+          pays = fee
+        } else if (payer) {
+          why = `Sibling 10% · ${firstOf(payer)} pays full`
+          off = 0.1
+          pays = fee * 0.9
+        }
+      }
+      rows.push({ key: `file:${linked.leadId}`, name: linked.name, detail: `${linked.className} · already ${linked.status}`, fee, off, why, tone: off ? "good" : "plain", pays, onFile: true })
     }
   }
   return { rows, total, together, enrolledOnFile }
 }
+
+/** What the fee step showed, so a preview that changes after it was accepted is asked again. */
+export const feeSignature = (p: FeePreview) => p.rows.map((r) => `${r.key}:${r.fee}:${r.off}:${r.why}`).join("|")
 
 /** The sibling discount is mentioned only when the family has more than one child, on this form or on file (v38). */
 export const mentionsSiblings = (a: Answers, preview: FeePreview | null) => a.students.length > 1 || !!preview?.rows.some((r) => r.onFile)

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest"
 import {
   comingIntake,
   feePreview,
+  feeSignature,
   households,
   broughtChoices,
   isEmpty,
@@ -108,6 +109,27 @@ describe("the fee step's preview", () => {
     expect(p.rows.map((r) => r.why)).toEqual(["Sibling 10% · SALMA is Enrolled", "Fee kept · already Enrolled"])
     expect(p.enrolledOnFile).toBe("SALMA JUMA MRISHO")
     expect(p.total).toBe(1_500_000 * 0.9)
+  })
+
+  test("a lone child on file, not yet Enrolled, gets the 10% when a dearer new sibling pays full", () => {
+    const a = form([student(1, "NEEMA", "JUMA SALIM MRISHO", { className: "FORM 1" })], {
+      onFileAsks: [{ student: 1, leadId: "L1", name: "SALMA JUMA MRISHO", admissionNumber: "ADMSN-1", father: "JUMA SALIM MRISHO", fromSave: true }],
+      onFile: { 1: true },
+    })
+    const p = feePreview(a, FEES, 2027, {
+      L1: { leadId: "L1", name: "SALMA JUMA MRISHO", className: "STD 4", status: "Visited", fee: 1_300_000, pays: 1_300_000, anchorName: null, fullPayerName: null },
+    })!
+    expect(p.rows.map((r) => [r.name, r.why, r.pays])).toEqual([
+      ["NEEMA JUMA MRISHO", "Pays full · highest fee", 1_500_000],
+      ["SALMA JUMA MRISHO", "Sibling 10% · NEEMA pays full", 1_300_000 * 0.9],
+    ])
+  })
+
+  test("a preview that changes after it was accepted is a different signature", () => {
+    const a = form([student(1, "NEEMA", "JUMA SALIM MRISHO"), student(2, "HAMISI", "JUMA SALIM MRISHO", { sibling: { kind: "match", of: 1 } })])
+    const before = feeSignature(feePreview(a, FEES, 2027, {})!)
+    const after = feeSignature(feePreview({ ...a, students: [a.students[0], { ...a.students[1], className: "FORM 1" }] }, FEES, 2027, {})!)
+    expect(after).not.toBe(before)
   })
 
   test("is left out when a year has no Fee schedule", () => {

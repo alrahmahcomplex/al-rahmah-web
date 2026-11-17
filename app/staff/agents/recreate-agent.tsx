@@ -91,7 +91,7 @@ export function useRecreateForm({
         setPreview(answer)
         if (answer.status === "ready" && !initial) {
           const agent = answer.preview.agent
-          setDraft({ fullName: agent.fullName, phone: agent.phone, whatsapp: agent.whatsapp ?? "", email: agent.email ?? "", code: agent.code })
+          setDraft({ fullName: agent.fullName, phone: agent.phone ?? "", whatsapp: agent.whatsapp ?? "", email: agent.email ?? "", code: agent.code })
         }
       })
       .catch(() => current && setPreview({ status: "refused", message: "The record could not be read just now. Try again in a moment." }))

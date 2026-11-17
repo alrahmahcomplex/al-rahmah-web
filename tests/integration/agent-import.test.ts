@@ -100,19 +100,23 @@ describe("Seam 1: the check screen classifies each row against the agents stored
     if (!retiredDone.ok) throw new Error("could not retire")
     const mobileHolder = await existingAgent()
     const newMobile = phone()
+    const noMobileCode = freshCode()
+    const storedNoMobileRow = await existingAgent()
 
     const checked = await check([
-      [freshCode(), "Neema Import", newMobile, "", ""], // 2 create
+      [freshCode(), "Neema Ali Import", newMobile, "", ""], // 2 create
       // Case and extra spaces never matter.
       [present.code.toLowerCase(), `  ${present.fullName.toUpperCase().replace(" ", "   ")} `, present.local, "", ""], // 3 present
       [noEmail.code, noEmail.fullName, noEmail.local, "", email()], // 4 email to add
       [hasEmail.code, hasEmail.fullName, hasEmail.local, "", email()], // 5 email differs
       [otherMobile.code, otherMobile.fullName, phone(), "", ""], // 6 mobile differs
-      [otherName.code, "Someone Else", phone(), "", ""], // 7 code exists
+      [otherName.code, "Someone Else Entirely", phone(), "", ""], // 7 code exists
       [retired.code, retired.fullName, phone(), "", ""], // 8 retired code
-      [freshCode(), "Rehema Import", mobileHolder.local, "", ""], // 9 mobile taken
-      [freshCode(), "Salma Import", phone(), "", MANAGER.email.toUpperCase()], // 10 email in use by staff
-      [freshCode(), "Tumaini Import", "", "", ""], // 11 mobile missing, the file's own check
+      [freshCode(), "Rehema Ali Import", mobileHolder.local, "", ""], // 9 mobile taken
+      [freshCode(), "Salma Ali Import", phone(), "", MANAGER.email.toUpperCase()], // 10 email in use by staff
+      [freshCode(), "Tumaini Import", "", "", ""], // 11 two names, the file's own check
+      [noMobileCode, "Zuhura Ali Import", "", "", ""], // 12 create, with no mobile (#463)
+      [storedNoMobileRow.code, storedNoMobileRow.fullName, "", "", ""], // 13 present: matched by code and name, no mobile given
     ])
 
     expect(rowAt(checked, 2)).toMatchObject({ class: "create", reason: null, normalized: { mobile: asE164(newMobile) } })
@@ -124,7 +128,9 @@ describe("Seam 1: the check screen classifies each row against the agents stored
     expect(rowAt(checked, 8)).toMatchObject({ class: "refused", reason: "Code belongs to a retired record (use Recreate)" })
     expect(rowAt(checked, 9)).toMatchObject({ class: "refused", reason: `Mobile already belongs to ${mobileHolder.fullName}, ${mobileHolder.code}` })
     expect(rowAt(checked, 10)).toMatchObject({ class: "refused", reason: "Email already in use" })
-    expect(rowAt(checked, 11)).toMatchObject({ class: "refused", reason: "Mobile missing", verdict: null })
+    expect(rowAt(checked, 11)).toMatchObject({ class: "refused", reason: "Needs three names", verdict: null })
+    expect(rowAt(checked, 12)).toMatchObject({ class: "create", reason: null, normalized: { mobile: null, whatsapp: null, email: null } })
+    expect(rowAt(checked, 13)).toMatchObject({ class: "present", agent: { id: storedNoMobileRow.id } })
 
     // The check saves nothing.
     expect(await agentsWithPhones([asE164(newMobile)])).toEqual([])
@@ -382,6 +388,62 @@ describe("Seam 1: confirming an import", () => {
     const present = await existingAgent()
     const checked = await check([[present.code, present.fullName, present.local, "", ""]])
     expect(await confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))).toEqual({ ok: false, error: { kind: "nothing-to-import" } })
+  })
+})
+
+describe("only three names and an ABC-123 code (#463)", () => {
+  test("an agent with no mobile, WhatsApp or email is imported by code and names alone", async () => {
+    const bare = { code: freshCode(), fullName: name("Zuhura Bare Import") }
+    const checked = await check([[bare.code, bare.fullName, "", "", ""]])
+    expect(rowAt(checked, 2)).toMatchObject({ class: "create" })
+    const done = await confirmAgentImport(await signedIn(MANAGER), confirmationOf(checked))
+    expect(done).toMatchObject({ ok: true, data: { kind: "imported", created: 1 } })
+    if (!done.ok || done.data.kind !== "imported") return
+
+    const stored = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query("select full_name, phone, whatsapp, email, status::text, import_batch_id from public.marketing_agents where code = $1", [
+            bare.code,
+          ])
+        ).rows,
+    )
+    expect(stored).toEqual([
+      { full_name: bare.fullName, phone: null, whatsapp: null, email: null, status: "Approved", import_batch_id: done.data.batchId },
+    ])
+    // The Agents list reads it with no mobile.
+    const listed = await listAgents(await signedIn(MANAGER), { importBatchId: done.data.batchId, page: 1 })
+    expect(listed.ok && listed.data.agents.map((agent) => [agent.code, agent.phone])).toEqual([[bare.code, null]])
+  })
+
+  test("every other way an agent is made still needs a mobile, and the table holds it", async () => {
+    const created = await createAgent(await signedIn(MANAGER), { fullName: name("Hamisi No Mobile"), phone: "", code: freshCode() })
+    expect(created).toMatchObject({ ok: false })
+    const direct = await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      return sql
+        .query("insert into public.marketing_agents (full_name, code) values ('Direct No Mobile', $1)", [freshCode()])
+        .then(() => "inserted", (error: Error) => error.message)
+    })
+    expect(direct).toMatch(/marketing_agents_phone_needed/)
+  })
+
+  test("the database refuses a row with fewer than three names or no code, whatever the browser sent", async () => {
+    const send = (row: Record<string, unknown>) =>
+      inRolledBackTransaction(async (sql) => {
+        const { rows: staff } = await sql.query<{ user_id: string }>("select user_id from public.staff_members where id = $1", [MANAGER.id])
+        await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: staff[0].user_id, role: "authenticated" })])
+        await sql.query("set local role authenticated")
+        return sql
+          .query("select public.check_agent_import($1::jsonb)", [
+            JSON.stringify([{ sheet_row: 2, code: freshCode(), full_name: "Asha Juma Ali", phone: null, whatsapp: null, email: null, ...row }]),
+          ])
+          .then(() => "checked", (error: { message: string; detail?: string }) => `${error.message} ${error.detail ?? ""}`)
+      })
+    expect(await send({})).toBe("checked")
+    expect(await send({ full_name: "Asha Juma" })).toMatch(/^invalid .*"field": "full_name"/)
+    expect(await send({ code: null })).toMatch(/^invalid .*"field": "code"/)
+    expect(await send({ code: "AJ-123" })).toMatch(/^invalid .*"field": "code"/)
   })
 })
 

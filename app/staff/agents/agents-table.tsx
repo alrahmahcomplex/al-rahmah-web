@@ -17,8 +17,9 @@ export type AgentRow = {
   id: string
   fullName: string
   code: string
-  phone: string
-  phoneShown: string
+  // Null for an agent an import made without a mobile (#463).
+  phone: string | null
+  phoneShown: string | null
   whatsappShown: string | null
   email: string | null
   // A code typed at sign-up and not used, already worded.
@@ -64,9 +65,13 @@ export function AgentsTable({
       header: "Phone",
       cell: (agent) => (
         <span className="ag-cell">
-          <a href={`tel:${agent.phone}`} className="ag-tel ag-nowrap">
-            {agent.phoneShown}
-          </a>
+          {agent.phone ? (
+            <a href={`tel:${agent.phone}`} className="ag-tel ag-nowrap">
+              {agent.phoneShown}
+            </a>
+          ) : (
+            <span className="ag-quiet ag-nowrap">No mobile</span>
+          )}
           {agent.whatsappShown && <small className="ag-nowrap">WhatsApp {agent.whatsappShown}</small>}
           {agent.email && <small>{agent.email}</small>}
         </span>

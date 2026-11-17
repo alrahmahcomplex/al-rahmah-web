@@ -22,8 +22,9 @@ export const AGENTS_PER_PAGE = 50
 export type MarketingAgent = {
   id: string
   fullName: string
-  // Normalized, such as +255700000401.
-  phone: string
+  // Normalized, such as +255700000401. Null only for an agent an import
+  // made without a mobile (#463).
+  phone: string | null
   whatsapp: string | null
   code: string
   status: AgentStatus
@@ -85,7 +86,7 @@ export type ApproveAgentError = "forbidden" | "not-found" | "no-change" | "unava
 type AgentRow = {
   id: string
   full_name: string
-  phone: string
+  phone: string | null
   whatsapp: string | null
   code: string
   status: AgentStatus
@@ -468,7 +469,7 @@ export type RecreateError =
   | { kind: "uncertain" }
 
 export type RecreatePreview = {
-  agent: { id: string; fullName: string; phone: string; whatsapp: string | null; email: string | null; code: string; retired: boolean }
+  agent: { id: string; fullName: string; phone: string | null; whatsapp: string | null; email: string | null; code: string; retired: boolean }
   // Every lead carrying the code: these follow it to the new record.
   studentCount: number
   // The families whose interview fee the Recreate moves.
@@ -610,7 +611,7 @@ function recreateRefusal(error: DbError, email: unknown = null): RecreateError |
 }
 
 type PreviewRow = {
-  agent: { id: string; full_name: string; phone: string; whatsapp: string | null; email: string | null; code: string; retired: boolean }
+  agent: { id: string; full_name: string; phone: string | null; whatsapp: string | null; email: string | null; code: string; retired: boolean }
   student_count: number
   families: FeeImpactRow[]
 }

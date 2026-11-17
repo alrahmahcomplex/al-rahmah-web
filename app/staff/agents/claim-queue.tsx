@@ -59,13 +59,22 @@ function ClaimCard({ entry, canApprove }: { entry: QueueEntry; canApprove: boole
       }
     >
       <div className="ag-card-body">
-        <Note tone="wait">
-          Phone {entry.fullName} on{" "}
-          <a href={`tel:${entry.phone}`} className="ag-link">
-            {displayPhone(entry.phone)}
-          </a>{" "}
-          to check this email is theirs.
-        </Note>
+        {entry.phone ? (
+          <Note tone="wait">
+            Phone {entry.fullName} on{" "}
+            <a href={`tel:${entry.phone}`} className="ag-link">
+              {displayPhone(entry.phone)}
+            </a>{" "}
+            to check this email is theirs.
+          </Note>
+        ) : (
+          // An agent imported with no mobile (#463): the number on a claim is
+          // the claimant's own, so calling it checks nothing.
+          <Note tone="wait">
+            {entry.fullName} has no mobile on record. The number on this claim was typed by the person claiming and isn&rsquo;t checked. Make
+            sure it&rsquo;s really {entry.fullName} before you confirm, for example by calling a number the school already has for them.
+          </Note>
+        )}
         {others > 0 && (
           <p className="ag-p ag-strong">
             {others} other {others === 1 ? "attempt" : "attempts"}: confirming one rejects the rest.
@@ -107,6 +116,8 @@ function ClaimRow({ entry, claim, canApprove }: { entry: QueueEntry; claim: Queu
         items={[
           { key: "Typed name", value: claim.fullName },
           { key: "Email", value: claim.email },
+          // What a claim on an agent imported with no mobile typed (#463).
+          ...(claim.phone ? [{ key: "Mobile", value: displayPhone(claim.phone) }] : []),
           { key: "Claimed", value: <time dateTime={claim.claimedAt}>{WHEN.format(new Date(claim.claimedAt))}</time> },
         ]}
       />

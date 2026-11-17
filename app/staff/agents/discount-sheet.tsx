@@ -22,7 +22,7 @@ export type DiscountAgent = {
   id: string
   fullName: string
   code: string
-  // The phone as shown, such as +255 712 000 401.
+  // The phone as shown, such as +255 712 000 401, or No mobile.
   phone: string
   status: { label: string; tone: ChipTone }
   studentCount: number

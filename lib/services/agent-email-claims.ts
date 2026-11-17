@@ -4,11 +4,13 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { emailTakenFrom, type EmailTaken } from "@/lib/email-in-use"
 
+import type { AgentRef } from "./marketing-agents"
 import type { Result } from "./result"
 
 // The Manager's "Awaiting email confirmation" queue (#193). A claim is an
 // email typed on the Discount code page for an existing record, by someone
-// who gave its code and mobile; nothing reaches the record until the Manager
+// who gave its code and mobile (or, for an agent imported with no mobile,
+// its code and three names, #463); nothing reaches the record until the Manager
 // phones the agent and confirms. The database checks the permission and
 // records every decision in agent_email_claims (append-only, audited).
 //
@@ -18,13 +20,15 @@ import type { Result } from "./result"
 // the invite with sendAgentInvite (agent-invites.ts), passing the saved
 // email as expectedEmail.
 
-export type QueueClaim = { id: string; fullName: string; email: string; claimedAt: string }
+// phone and whatsapp: what a claim on an agent imported with no mobile typed (#463).
+export type QueueClaim = { id: string; fullName: string; email: string; phone: string | null; whatsapp: string | null; claimedAt: string }
 
 export type QueueEntry = {
   agentId: string
-  // The stored record, beside each claim's typed name.
+  // The stored record, beside each claim's typed name. No mobile for an
+  // agent imported without one (#463).
   fullName: string
-  phone: string
+  phone: string | null
   code: string
   status: "Pending" | "Approved"
   // When the oldest waiting claim came in; the queue is oldest first.
@@ -36,11 +40,11 @@ export type QueueEntry = {
 type QueueRow = {
   agent_id: string
   full_name: string
-  phone: string
+  phone: string | null
   code: string
   status: "Pending" | "Approved"
   claimed_at: string
-  claims: { id: string; full_name: string; email: string; created_at: string }[]
+  claims: { id: string; full_name: string; email: string; phone: string | null; whatsapp: string | null; created_at: string }[]
 }
 
 export async function getEmailClaimQueue(supabase: SupabaseClient): Promise<Result<QueueEntry[], "forbidden" | "unavailable">> {
@@ -63,6 +67,8 @@ export async function getEmailClaimQueue(supabase: SupabaseClient): Promise<Resu
         id: claim.id,
         fullName: claim.full_name,
         email: claim.email,
+        phone: claim.phone ?? null,
+        whatsapp: claim.whatsapp ?? null,
         claimedAt: claim.created_at,
       })),
     })),
@@ -79,6 +85,8 @@ export type ClaimDecisionError =
   | { kind: "has-email" }
   | { kind: "already-joined" }
   | { kind: "email-invalid" }
+  // The mobile a claim typed went to another current agent before the confirm (#463).
+  | { kind: "phone-taken"; agent: AgentRef }
   | EmailTaken
   | { kind: "unavailable" }
 
@@ -104,6 +112,14 @@ async function decide(
     const refusal = REFUSALS[error.message]
     if (refusal) return { ok: false, error: refusal }
     if (error.message === "email_taken") return { ok: false, error: emailTakenFrom(error.details, email) }
+    if (error.message === "phone_taken") {
+      try {
+        const holder = JSON.parse(error.details ?? "") as { id: string; full_name: string; code: string; state: AgentRef["state"] }
+        return { ok: false, error: { kind: "phone-taken", agent: { id: holder.id, fullName: holder.full_name, code: holder.code, state: holder.state } } }
+      } catch {
+        return { ok: false, error: { kind: "unavailable" } }
+      }
+    }
     // 22P02: a malformed id is no claim. 42501: not granted, as for a visitor.
     if (error.code === "22P02") return { ok: false, error: { kind: "not-found" } }
     if (error.code === "42501") return { ok: false, error: { kind: "forbidden" } }

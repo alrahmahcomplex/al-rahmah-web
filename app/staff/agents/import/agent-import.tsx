@@ -160,7 +160,7 @@ function Upload({ onUpload, pending }: { onUpload: (form: FormData) => void; pen
           </div>
           <p className="ag-p">
             Its columns are {AGENT_IMPORT_COLUMNS.map((column) => column.header).join(", ")}. One agent per row. Keep each agent&rsquo;s
-            code exactly as they use it. Mobile is required; WhatsApp and Email may be left empty.
+            code exactly as they use it. Each agent needs their three names and a code like ABC-123. Mobile, WhatsApp and Email may be left empty.
           </p>
           <Note>
             <span className="ag-lines">
@@ -317,7 +317,7 @@ function RowCard({ row }: { row: AgentImportRow }) {
       </dl>
       {row.agent && (
         <p className="ag-small ag-quiet ag-wrap ag-gap-top">
-          Stored: {row.agent.fullName}, {row.agent.code}, {row.agent.phone}
+          Stored: {row.agent.fullName}, {row.agent.code}, {row.agent.phone ?? "no mobile"}
           {row.agent.email ? `, ${row.agent.email}` : ", no email"}
         </p>
       )}

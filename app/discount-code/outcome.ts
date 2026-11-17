@@ -12,6 +12,7 @@ export type DiscountCodeState =
   // Messages that keep the form, each with its own words.
   | { status: "code-needed" }
   | { status: "phone-mismatch" }
+  | { status: "name-mismatch" }
   | { status: "no-match" }
   | { status: "claim-waiting" }
   | { status: "invited" }

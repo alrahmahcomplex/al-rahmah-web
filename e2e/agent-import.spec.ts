@@ -174,3 +174,25 @@ test("a confirm whose answer never arrives asks to check the same file again, wh
   await expect(page.getByText(`Agents created by the import of ${file.name}`)).toBeVisible()
   await expect(page.getByRole("row", { name: new RegExp(file.first.fullName) })).toContainText("Approved")
 })
+
+test("an agent with only three names and a code is imported, and listed with no mobile (#463)", async ({ page }) => {
+  const tag = randomUUID().slice(0, 6)
+  const name = `agents-${tag}.csv`
+  const bare = { code: freshCode(), fullName: `Zuhura Bare ${tag}` }
+  await signIn(page, MANAGER)
+  await page.goto("/staff/agents/import")
+  await expect(
+    page.getByText("Each agent needs their three names and a code like ABC-123. Mobile, WhatsApp and Email may be left empty.", { exact: false }),
+  ).toBeVisible()
+  await upload(page, name, [
+    [bare.code, bare.fullName, "", "", ""],
+    [freshCode(), `Zuhura ${tag}`, "", "", ""],
+  ])
+  await expect(page.getByRole("heading", { name: `Check ${name}` })).toBeVisible()
+  await expect(page.getByRole("listitem", { name: "Row 3" })).toContainText("Needs three names")
+  await page.getByRole("button", { name: "Create 1 agent, skip 1 row" }).click()
+  await expect(page.getByText("1 agent created, Approved.")).toBeVisible()
+
+  await page.getByRole("link", { name: "See the agents this import created" }).click()
+  await expect(page.getByRole("row", { name: new RegExp(bare.fullName) })).toContainText("No mobile")
+})

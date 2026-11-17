@@ -215,7 +215,7 @@ test("Yes opens the code box, which adds the hyphen by itself", async ({ page })
   await expect(box).toHaveValue("AAN-132")
   await continueFrom(page, "en")
   await expect(sendButton(page, "en", true)).toBeVisible()
-  await expect(page.getByText("We match this code to your phone number. The school then confirms it.")).toBeVisible()
+  await expect(page.getByText("We match this code to your phone number or your names. The school then confirms it.")).toBeVisible()
 })
 
 test("no page or response before the finish carries an agent's code, and the finish carries only the person's own", async ({ page }) => {

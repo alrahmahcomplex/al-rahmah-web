@@ -45,7 +45,7 @@ export function accountFilterStates(filter: AccountFilter): readonly AccountStat
 type Row = {
   id: string
   full_name: string
-  phone: string
+  phone: string | null
   whatsapp: string | null
   code: string
   status: AgentStatus

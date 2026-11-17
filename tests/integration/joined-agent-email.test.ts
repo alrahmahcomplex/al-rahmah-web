@@ -147,7 +147,7 @@ describe("a joined agent who changed their email in Auth", () => {
     expect(preview.data.agent.email).toBe(agent.after)
 
     const { fullName, phone, email } = preview.data.agent
-    const done = await recreateAgent(await manager(), agent.id, { fullName, phone, email: email ?? "" }, "Name spelled wrong")
+    const done = await recreateAgent(await manager(), agent.id, { fullName, phone: phone ?? "", email: email ?? "" }, "Name spelled wrong")
     expect(done.ok).toBe(true)
     // The new record keeps the login, which still signs in at the new address.
     await signedIn({ email: agent.after, password: "fixture-password" })

@@ -35,15 +35,15 @@ describe("codes Excel has turned into numbers", () => {
   test("a code that is all digits with a decimal point or an exponent is flagged; any other code goes on to the code check", () => {
     const rows = screen(
       [
-        "123.0,Asha Juma,0712000002,,", // 2 flagged
-        "0.5,Asha Juma,0712000003,,", // 3 flagged
-        "1.2E+05,Asha Juma,0712000004,,", // 4 flagged
-        "12e3,Asha Juma,0712000005,,", // 5 flagged
-        "AJM.12,Asha Juma,0712000006,,", // 6 bad code
-        "A.1.2,Asha Juma,0712000007,,", // 7 bad code
-        "1.2.3,Asha Juma,0712000008,,", // 8 bad code
-        "12345,Asha Juma,0712000009,,", // 9 bad code
-        "AJM-12E3,Asha Juma,0712000010,,", // 10 bad code
+        "123.0,Asha Juma Ali,0712000002,,", // 2 flagged
+        "0.5,Asha Juma Ali,0712000003,,", // 3 flagged
+        "1.2E+05,Asha Juma Ali,0712000004,,", // 4 flagged
+        "12e3,Asha Juma Ali,0712000005,,", // 5 flagged
+        "AJM.12,Asha Juma Ali,0712000006,,", // 6 bad code
+        "A.1.2,Asha Juma Ali,0712000007,,", // 7 bad code
+        "1.2.3,Asha Juma Ali,0712000008,,", // 8 bad code
+        "12345,Asha Juma Ali,0712000009,,", // 9 bad code
+        "AJM-12E3,Asha Juma Ali,0712000010,,", // 10 bad code
       ].join("\n"),
     )
     for (const sheetRow of [2, 3, 4, 5]) {
@@ -90,14 +90,46 @@ describe("normalising, as the database does", () => {
   })
 
   test("keeps the original value beside the normalised one", () => {
-    const [row] = screen(" ajm-407 ,  Asha   Juma ,0712 345 678, 0712345678 , Asha@Example.TEST \n")
+    const [row] = screen(" ajm-407 ,  Asha   Juma  Ali ,0712 345 678, 0712345678 , Asha@Example.TEST \n")
     expect(row).toMatchObject({
       sheetRow: 2,
-      original: { code: " ajm-407 ", fullName: "  Asha   Juma ", mobile: "0712 345 678", whatsapp: " 0712345678 ", email: " Asha@Example.TEST " },
+      original: { code: " ajm-407 ", fullName: "  Asha   Juma  Ali ", mobile: "0712 345 678", whatsapp: " 0712345678 ", email: " Asha@Example.TEST " },
       // A WhatsApp number equal to the mobile is dropped, as the database stores it.
-      normalized: { code: "AJM-407", fullName: "Asha Juma", mobile: "+255712345678", whatsapp: null, email: "asha@example.test" },
+      normalized: { code: "AJM-407", fullName: "Asha Juma Ali", mobile: "+255712345678", whatsapp: null, email: "asha@example.test" },
       problem: null,
     })
+  })
+})
+
+describe("only three names and an ABC-123 code are needed (#463)", () => {
+  test("a row with no mobile, WhatsApp or email goes on to the database's check, with no mobile", () => {
+    const [row] = screen("raj-407,Rehema Ali Juma,,,\n")
+    expect(row.problem).toBeNull()
+    expect(row.normalized).toEqual({ code: "RAJ-407", fullName: "Rehema Ali Juma", mobile: null, whatsapp: null, email: null })
+  })
+
+  test("two rows with no mobile are not duplicates of each other", () => {
+    const rows = screen(["RAJ-407,Rehema Ali Juma,,,", "RAJ-408,Rashidi Ali Juma,,,"].join("\n"))
+    expect(rows.map((row) => row.problem)).toEqual([null, null])
+  })
+
+  test("a contact detail given is still read, and refused when it can't be", () => {
+    const rows = screen(["RAJ-407,Rehema Ali Juma,0712,,", "RAJ-408,Rashidi Ali Juma,,0712,", "RAJ-409,Riziki Ali Juma,,,not-an-email"].join("\n"))
+    expect(rows.map((row) => row.problem?.reason)).toEqual(["Unreadable mobile", "Unreadable WhatsApp", "Unreadable email"])
+  })
+
+  test.each([
+    ["one name", "RAJ-407,Rehema,0712000001,,", "Needs three names"],
+    ["two names", "RAJ-407,Rehema Juma,0712000001,,", "Needs three names"],
+    ["no code", ",Rehema Ali Juma,,,", "Bad code"],
+    ["a code of another shape", "RA-407,Rehema Ali Juma,,,", "Bad code"],
+    ["a code with four digits", "RAJ-4071,Rehema Ali Juma,,,", "Bad code"],
+  ])("refuses %s", (_, line, reason) => {
+    expect(screen(`${line}\n`)[0].problem).toEqual({ class: "refused", reason })
+  })
+
+  test("four names or more are fine", () => {
+    expect(screen("RAJ-407,Rehema Ali Juma Bin Salim,,,\n")[0].problem).toBeNull()
   })
 })
 
@@ -106,30 +138,30 @@ describe("what a file can be refused for on its own", () => {
     const rows = screen(
       [
         "AJM-001,,0712000001,,", // 2 missing name
-        "AJM_1,Asha Juma,0712000002,,", // 3 bad code
-        ",Asha Juma,0712000003,,", // 4 bad code (none)
-        "AJM-004,Asha Juma,,,", // 5 mobile missing
-        "AJM-005,Asha Juma,0712,,", // 6 unreadable mobile
-        "DUP-001,Asha Juma,0712000007,,", // 7 duplicate code
-        "dup-001 ,Baraka Ali,0712000008,,", // 8 duplicate code
-        "AJM-009,Asha Juma,0712000009,,", // 9 duplicate mobile
-        "AJM-010,Asha Juma,+255 712 000 009,,", // 10 duplicate mobile
-        "AJM-011,Asha Juma,7.12E+08,,", // 11 flagged
-        "AJM-012,Asha Juma,712000012.0,,", // 12 flagged
-        "1.2E+05,Asha Juma,0712000013,,", // 13 flagged
-        "AJM-014,Asha Juma,0712000014,0712,", // 14 unreadable WhatsApp
-        "AJM-015,Asha Juma,0712000015,,not-an-email", // 15 unreadable email
-        "AJM-016,Asha Juma,0712000016,,same@example.test", // 16 duplicate email
-        "AJM-017,Asha Juma,0712000017,,SAME@example.test", // 17 duplicate email
+        "AJM_1,Asha Juma Ali,0712000002,,", // 3 bad code
+        ",Asha Juma Ali,0712000003,,", // 4 bad code (none)
+        "AJM-004,Asha Juma,,,", // 5 two names
+        "AJM-005,Asha Juma Ali,0712,,", // 6 unreadable mobile
+        "DUP-001,Asha Juma Ali,0712000007,,", // 7 duplicate code
+        "dup-001 ,Baraka Ali Musa,0712000008,,", // 8 duplicate code
+        "AJM-009,Asha Juma Ali,0712000009,,", // 9 duplicate mobile
+        "AJM-010,Asha Juma Ali,+255 712 000 009,,", // 10 duplicate mobile
+        "AJM-011,Asha Juma Ali,7.12E+08,,", // 11 flagged
+        "AJM-012,Asha Juma Ali,712000012.0,,", // 12 flagged
+        "1.2E+05,Asha Juma Ali,0712000013,,", // 13 flagged
+        "AJM-014,Asha Juma Ali,0712000014,0712,", // 14 unreadable WhatsApp
+        "AJM-015,Asha Juma Ali,0712000015,,not-an-email", // 15 unreadable email
+        "AJM-016,Asha Juma Ali,0712000016,,same@example.test", // 16 duplicate email
+        "AJM-017,Asha Juma Ali,0712000017,,SAME@example.test", // 17 duplicate email
         `AJM-018,${"A".repeat(101)},0712000018,,`, // 18 name too long
-        "AJM-019,Asha Juma,0712000019,,", // 19 fine
-        "DUP-001,Chausiku,0712000020,,", // 20 duplicate code
+        "AJM-019,Asha Juma Ali,0712000019,,", // 19 fine
+        "DUP-001,Chausiku Ali Musa,0712000020,,", // 20 duplicate code
       ].join("\n"),
     )
     expect(reasonOf(rows, 2)).toEqual({ class: "refused", reason: "Missing name" })
     expect(reasonOf(rows, 3)).toEqual({ class: "refused", reason: "Bad code" })
     expect(reasonOf(rows, 4)).toEqual({ class: "refused", reason: "Bad code" })
-    expect(reasonOf(rows, 5)).toEqual({ class: "refused", reason: "Mobile missing" })
+    expect(reasonOf(rows, 5)).toEqual({ class: "refused", reason: "Needs three names" })
     expect(reasonOf(rows, 6)).toEqual({ class: "refused", reason: "Unreadable mobile" })
     expect(reasonOf(rows, 7)).toEqual({ class: "refused", reason: "Duplicate code in file (rows 7, 8, 20)" })
     expect(reasonOf(rows, 8)).toEqual({ class: "refused", reason: "Duplicate code in file (rows 7, 8, 20)" })
@@ -157,16 +189,16 @@ const AGENT = { id: "agent-1", fullName: "Asha Juma", code: "AJM-001", phone: "+
 function checked(verdicts: Record<number, AgentVerdict>) {
   const rows = screen(
     [
-      "AJM-001,Asha Juma,0712000001,,", // 2
-      "AJM-002,Baraka Ali,0712000002,,", // 3
-      "AJM-003,Chausiku,0712000003,,", // 4
-      "AJM-004,Dotto,0712000004,,", // 5
-      "AJM-005,Eliya,0712000005,,", // 6
-      "AJM-006,Fatma,0712000006,,", // 7
-      "AJM-007,Gift,0712000007,,", // 8
-      "AJM-008,Halima,0712000008,,", // 9
-      "AJM-009,Idd,0712000009,,", // 10
-      ",Bad Code,0712000010,,", // 11
+      "AJM-001,Asha Juma Ali,0712000001,,", // 2
+      "AJM-002,Baraka Ali Musa,0712000002,,", // 3
+      "AJM-003,Chausiku Ali Musa,0712000003,,", // 4
+      "AJM-004,Dotto Ali Musa,0712000004,,", // 5
+      "AJM-005,Eliya Ali Musa,0712000005,,", // 6
+      "AJM-006,Fatma Ali Musa,0712000006,,", // 7
+      "AJM-007,Gift Ali Musa,0712000007,,", // 8
+      "AJM-008,Halima Ali Musa,0712000008,,", // 9
+      "AJM-009,Idd Ali Musa,0712000009,,", // 10
+      ",Bad Code Here,0712000010,,", // 11
     ].join("\n"),
   )
   return applyAgentVerdicts(rows, new Map(Object.entries(verdicts).map(([row, verdict]) => [Number(row), verdict])))
@@ -226,15 +258,15 @@ describe("reading the database's verdict on each row", () => {
 
 describe("the refused-rows file", () => {
   test("holds the refused and flagged rows as uploaded, with each reason and sheet row, guarded against formulas", () => {
-    const rows = screen(["AJM-001,=HYPERLINK(1),0712000001,,", "AJM-002,Baraka,7.12E+08,,", "AJM-003,Chausiku,0712000003,,"].join("\n"))
+    const rows = screen(["AJM-001,=HYPERLINK(1) Ali Juma,0712000001,,", "AJM-002,Baraka Ali Musa,7.12E+08,,", "AJM-003,Chausiku Ali Musa,0712000003,,"].join("\n"))
     const all = applyAgentVerdicts(rows, new Map([[2, { verdict: "create" } as const], [4, { verdict: "retired_code" } as const]]))
     expect(refusedAgentRowsCsv(all)).toBe(
       "Code,Full name,Mobile,WhatsApp,Email,Reason,Sheet row\r\n" +
-        "AJM-002,Baraka,7.12E+08,,,Looks like an Excel number,3\r\n" +
-        "AJM-003,Chausiku,0712000003,,,Code belongs to a retired record (use Recreate),4\r\n",
+        "AJM-002,Baraka Ali Musa,7.12E+08,,,Looks like an Excel number,3\r\n" +
+        "AJM-003,Chausiku Ali Musa,0712000003,,,Code belongs to a retired record (use Recreate),4\r\n",
     )
     const injected = applyAgentVerdicts(rows, new Map([[2, { verdict: "retired_code" } as const], [4, { verdict: "create" } as const]]))
-    expect(refusedAgentRowsCsv(injected)).toContain("AJM-001,'=HYPERLINK(1),0712000001,,,Code belongs to a retired record (use Recreate),2\r\n")
+    expect(refusedAgentRowsCsv(injected)).toContain("AJM-001,'=HYPERLINK(1) Ali Juma,0712000001,,,Code belongs to a retired record (use Recreate),2\r\n")
   })
 })
 

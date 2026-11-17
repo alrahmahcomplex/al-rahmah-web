@@ -266,3 +266,44 @@ test.describe("the Manager's queue", () => {
     expect(await invitesTo(typo)).toBe(0)
   })
 })
+
+// An agent imported with only three names and a code (#463).
+async function importedWithoutMobile() {
+  const letter = () => String.fromCharCode(65 + randomInt(0, 26))
+  const code = `E${letter()}${letter()}-${randomInt(100, 1000)}`
+  const fullName = `Zuhura Dai ${letter()}${letter()}${letter()}${letter()}`
+  const manager = await signedIn(MANAGER)
+  const row = { sheet_row: 2, code, full_name: fullName, phone: null, whatsapp: null, email: null }
+  const checked = await manager.rpc("check_agent_import", { rows: [row] })
+  if (checked.error) throw new Error(checked.error.message)
+  const expected = (checked.data as { verdict: unknown }[])[0].verdict
+  const done = await manager.rpc("confirm_agent_import", { file_name: `agents-${randomUUID().slice(0, 8)}.csv`, row_count: 1, rows: [{ ...row, expected }] })
+  if (done.error || (done.data as { outcome: string }).outcome !== "imported") throw new Error(JSON.stringify(done.error ?? done.data))
+  return { code, fullName }
+}
+
+test.describe("claiming an agent imported with no mobile (#463)", () => {
+  test("other names are refused; the right names claim it, and the queue shows the mobile they typed", async ({ page, browser }) => {
+    const agent = await importedWithoutMobile()
+    const number = phone()
+    const address = email("imported")
+    const visitor = await browser.newPage({ viewport: PHONE_WIDTH })
+    await send(visitor, { name: "Mtu Mwingine Kabisa", phone: number, email: address, code: agent.code, hasCode: true })
+    await expect(notice(visitor)).toHaveText("Hatukuweza kulinganisha code na majina yako. Yahakiki, au piga simu ofisini.")
+    await send(visitor, { name: agent.fullName, phone: number, email: address, code: agent.code, hasCode: true })
+    await expect(visitor.getByRole("heading", { level: 1, name: t.claimDone })).toBeVisible()
+    await visitor.close()
+
+    await signInManager(page)
+    await page.goto("/staff/agents?status=all")
+    await page.getByRole("link", { name: /^Awaiting email confirmation/ }).click()
+    const card = queueCard(page, agent.fullName)
+    const shown = `+255 ${number.slice(1, 4)} ${number.slice(4, 7)} ${number.slice(7)}`
+    // The number is the claimant's own: the card doesn't offer it as the way to check.
+    await expect(card).toContainText(`${agent.fullName} has no mobile on record.`)
+    await expect(card).not.toContainText(`Phone ${agent.fullName} on`)
+    await expect(card).toContainText(`Mobile${shown}`)
+    await card.getByRole("button", { name: `Confirm ${address} for ${agent.fullName}` }).click()
+    await expect(page.getByText(`Email confirmed for ${agent.fullName}.`, { exact: false })).toBeVisible()
+  })
+})

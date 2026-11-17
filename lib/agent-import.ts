@@ -35,7 +35,7 @@ export const AGENT_IMPORT_CLASSES = ["create", "present", "email-to-add", "email
 export type AgentImportClass = (typeof AGENT_IMPORT_CLASSES)[number]
 
 // A stored agent the database's verdict names.
-export type ImportAgentRef = { id: string; fullName: string; code: string; phone: string; email: string | null }
+export type ImportAgentRef = { id: string; fullName: string; code: string; phone: string | null; email: string | null }
 
 // The database's verdict on a row that passed the file's own checks.
 export type AgentVerdict =
@@ -111,9 +111,9 @@ function looksLikeExcelNumber(raw: string): boolean {
 export const AGENT_REASONS = {
   flagged: "Looks like an Excel number",
   missingName: "Missing name",
+  needsThreeNames: "Needs three names",
   nameTooLong: "Name too long",
   badCode: "Bad code",
-  mobileMissing: "Mobile missing",
   unreadableMobile: "Unreadable mobile",
   unreadableWhatsapp: "Unreadable WhatsApp",
   unreadableEmail: "Unreadable email",
@@ -133,7 +133,8 @@ export function screenAgentRows(records: readonly ImportRecord<AgentImportKey>[]
   const rows = records.map((record) => {
     const { cells } = record
     const fullName = normalizeName(cells.fullName)
-    const mobile = normalizeAgentPhone(cells.mobile)
+    // The mobile is optional (#463): empty is none.
+    const mobile = cells.mobile.trim() === "" ? null : normalizeAgentPhone(cells.mobile)
     let whatsapp = cells.whatsapp.trim() === "" ? null : normalizeAgentPhone(cells.whatsapp)
     if (whatsapp !== null && whatsapp === mobile) whatsapp = null
     const normalized: AgentImportValues = {
@@ -158,9 +159,9 @@ export function screenAgentRows(records: readonly ImportRecord<AgentImportKey>[]
       problem = { class: "flagged", reason: AGENT_REASONS.flagged }
     } else if (n.fullName === null || n.fullName.length < 2) problem = refused(AGENT_REASONS.missingName)
     else if (n.fullName.length > 100) problem = refused(AGENT_REASONS.nameTooLong)
+    else if (n.fullName.split(" ").length < 3) problem = refused(AGENT_REASONS.needsThreeNames)
     else if (n.code === null) problem = refused(AGENT_REASONS.badCode)
-    else if (o.mobile.trim() === "") problem = refused(AGENT_REASONS.mobileMissing)
-    else if (n.mobile === null) problem = refused(AGENT_REASONS.unreadableMobile)
+    else if (o.mobile.trim() !== "" && n.mobile === null) problem = refused(AGENT_REASONS.unreadableMobile)
     else if (o.whatsapp.trim() !== "" && normalizeAgentPhone(o.whatsapp) === null) problem = refused(AGENT_REASONS.unreadableWhatsapp)
     else if (o.email.trim() !== "" && n.email === null) problem = refused(AGENT_REASONS.unreadableEmail)
     else if (codes.has(sheetRow)) problem = refused(AGENT_REASONS.duplicateCode(codes.get(sheetRow)!))

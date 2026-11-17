@@ -144,7 +144,7 @@ export const COPY: Record<Language, Copy> = {
       before: "Code yako ya Punguzo itaanza na ",
       after: ", herufi za kwanza za majina yako matatu. Utaiona code yote kwenye ukurasa unaofuata.",
     },
-    claimNote: "Tunalinganisha code hii na namba yako ya simu. Kisha shule inaithibitisha.",
+    claimNote: "Tunalinganisha code hii na namba yako ya simu au majina yako. Kisha shule inaithibitisha.",
     change: { name: "Badilisha Jina", phone: "Badilisha Namba", email: "Badilisha Barua pepe", hasCode: "Badilisha Jibu", code: "Badilisha Code" },
     signInPrompt: "Umeshaweka nenosiri?",
     signIn: "Ingia",
@@ -164,6 +164,7 @@ export const COPY: Record<Language, Copy> = {
     messages: {
       "code-needed": "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.",
       "phone-mismatch": "Hatukuweza kulinganisha code na namba hii. Zihakiki, au piga simu ofisini.",
+      "name-mismatch": "Hatukuweza kulinganisha code na majina yako. Yahakiki, au piga simu ofisini.",
       "no-match": "Hatukupata code hii. Ihakiki, au piga simu ofisini.",
       "claim-waiting": "Tumepokea ombi lako; shule itathibitisha.",
       invited: "Tumekutumia barua pepe. Angalia spam, au tumia 'Tuma kiungo kipya'.",
@@ -240,7 +241,7 @@ export const COPY: Record<Language, Copy> = {
       before: "Your Discount code will start with ",
       after: ", the first letters of your three names. You see the whole code on the next screen.",
     },
-    claimNote: "We match this code to your phone number. The school then confirms it.",
+    claimNote: "We match this code to your phone number or your names. The school then confirms it.",
     change: { name: "Change Name", phone: "Change Number", email: "Change Email", hasCode: "Change Answer", code: "Change Code" },
     signInPrompt: "Already set a password?",
     signIn: "Sign in",
@@ -261,6 +262,7 @@ export const COPY: Record<Language, Copy> = {
       "code-needed":
         "This number already has a Discount code. Answer Yes to 'Do you already have a Discount code?' and type it, or call the office.",
       "phone-mismatch": "We couldn't match the code with this number. Check both, or call the office.",
+      "name-mismatch": "We couldn't match the code with your names. Check both, or call the office.",
       "no-match": "We couldn't find this code. Check it, or call the office.",
       "claim-waiting": "We have your request; the school will confirm it.",
       invited: "We have sent you an email. Check spam, or use 'Send a new link'.",

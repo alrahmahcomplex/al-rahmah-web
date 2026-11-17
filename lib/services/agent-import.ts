@@ -56,7 +56,7 @@ export type AgentImportBatch = {
 }
 
 type DbError = { message: string; code?: string; details?: string | null }
-type DbAgent = { id: string; full_name: string; code: string; phone: string; email: string | null }
+type DbAgent = { id: string; full_name: string; code: string; phone: string | null; email: string | null }
 type DbVerdict = { verdict: AgentVerdict["verdict"]; agent?: DbAgent }
 
 function verdictFromDb(row: DbVerdict): AgentVerdict {

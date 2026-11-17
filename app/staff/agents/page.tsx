@@ -74,6 +74,9 @@ const EMPTY: Record<AgentFilter, string> = {
   all: "No Marketing Agents have registered yet.",
 }
 
+// An agent an import made without a mobile (#463).
+const NO_MOBILE = "No mobile"
+
 // A phone stored as +255700000401 shown as +255 700 000 401.
 function displayPhone(phone: string) {
   const match = /^\+255(\d{3})(\d{3})(\d{3})$/.exec(phone)
@@ -390,7 +393,7 @@ function Results({
       fullName: agent.fullName,
       code: agent.code,
       phone: agent.phone,
-      phoneShown: displayPhone(agent.phone),
+      phoneShown: agent.phone ? displayPhone(agent.phone) : null,
       whatsappShown: agent.whatsapp ? displayPhone(agent.whatsapp) : null,
       email: invite?.email ?? null,
       typedCode: typedCodeNote(signUpNotes?.get(agent.id)),
@@ -473,7 +476,7 @@ function discountAgent(agent: Agent): DiscountAgent {
     id: agent.id,
     fullName: agent.fullName,
     code: agent.code,
-    phone: displayPhone(agent.phone),
+    phone: agent.phone ? displayPhone(agent.phone) : NO_MOBILE,
     status,
     studentCount: agent.leadCount,
     interviewDiscount: agent.interviewDiscount,

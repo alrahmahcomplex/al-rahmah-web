@@ -1,8 +1,11 @@
 import type { Permission } from "@/lib/permissions"
-import type { InterviewFeeStatus, InterviewResult, RegistrationKind } from "@/lib/services/interviews"
+import type { LeadFollowUps } from "@/lib/services/follow-ups"
+import type { InterviewFeeStatus, InterviewResult, LeadInterview, RegistrationKind } from "@/lib/services/interviews"
+import type { LeadFee } from "@/lib/services/lead-fees"
 import type { LeadClosure, LeadStatus } from "@/lib/services/leads"
-import type { ReopeningState } from "@/lib/services/reopening-requests"
+import type { LeadReopenings, ReopeningState } from "@/lib/services/reopening-requests"
 import type { ReleaseBlocker, ReleaseStatus, ResultReleaseView } from "@/lib/services/result-release"
+import type { Result } from "@/lib/services/result"
 import type { SeatPriority } from "@/lib/services/school-fee-payments"
 
 // The one thing that should happen next on a lead, read from its lifecycle
@@ -97,6 +100,58 @@ export function releaseInput(
     blocked: view.blocked,
     sent,
     changedSinceSent: sent && (status?.changedSinceSent ?? view.changedSinceSent),
+  }
+}
+
+// The per-lead reads a next step is worked out from, one service call each.
+// The record page passes its cached reads, so the panels share them; the
+// tests pass the services themselves.
+export type NextStepReaders = {
+  interviews: (leadId: string) => Promise<Result<LeadInterview[], unknown>>
+  registration: (leadId: string) => Promise<Result<RegistrationKind | null, unknown>>
+  reopenings: (leadId: string) => Promise<Result<LeadReopenings, unknown>>
+  release: (leadId: string) => Promise<Result<ResultReleaseView, unknown>>
+  releaseStatus: (interviewId: string) => Promise<Result<Map<string, ReleaseStatus>, unknown>>
+  followUps: (leadId: string) => Promise<Result<LeadFollowUps, unknown>>
+}
+
+// One lead's NextStepInput from its own reads: what the record's Next step
+// card and the Applicants side sheet decide from. Null when the interviews
+// can't be read, so the step can't be worked out. `feeRead` is the caller's
+// read of the fee, so a caller that shows the fee too reads it once; null for
+// staff who may not view payments. The Applicants list reads the same inputs
+// for a whole page at once (lib/services/lead-next-steps.ts).
+export async function readNextStepInput(
+  read: NextStepReaders,
+  lead: { id: string; status: LeadStatus; closure: LeadClosure | null },
+  feeRead: Promise<Result<LeadFee, unknown>> | null,
+  today: string,
+): Promise<NextStepInput | null> {
+  const [interviews, registration, reopenings, release, fee, followUps] = await Promise.all([
+    read.interviews(lead.id),
+    read.registration(lead.id),
+    read.reopenings(lead.id),
+    read.release(lead.id),
+    feeRead,
+    read.followUps(lead.id),
+  ])
+  if (!interviews.ok) return null
+
+  // Once a result has gone, whether it changed since comes from the status
+  // every viewer reads, not only those who may send it (#248).
+  const sentFor = release.ok && release.data.latestRelease !== null ? release.data.interviewId : null
+  const status = sentFor ? await read.releaseStatus(sentFor) : null
+  const current = interviews.data[0] ?? null
+  return {
+    status: lead.status,
+    closure: lead.closure,
+    interview: current && { feeStatus: current.feeStatus, amount: current.amount, result: current.result },
+    registration: registration.ok ? registration.data : null,
+    enrolWithoutRetake: reopenings.ok && enrolsWithoutRetake(reopenings.data.decided),
+    release: release.ok ? releaseInput(release.data, status?.ok && sentFor ? (status.data.get(sentFor) ?? null) : null) : null,
+    fee: fee?.ok && fee.data.kind === "fee" ? { priority: fee.data.priority } : null,
+    followUps: followUps.ok ? { dueOn: followUps.data.open?.dueOn ?? null, needsDate: followUps.data.needsDate } : null,
+    today,
   }
 }
 

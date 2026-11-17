@@ -85,6 +85,7 @@ test.describe("the Applicants screen", () => {
     await page.keyboard.press("Enter")
     const sheet = page.getByRole("dialog", { name: "Baraka Fixture" })
     await expect(sheet.getByText(/^Next step: .+\.$/)).toBeVisible()
+    const said = (await sheet.getByText(/^Next step: .+\.$/).textContent())!.replace(/^Next step: (.+)\.$/, "$1")
     // Staff who may view payments see the School fee; those who may record one get a link to the record's School fee tab.
     await expect(sheet.getByRole("heading", { name: "School fee" })).toBeVisible()
     await expect(sheet.getByRole("heading", { name: "Custodian" })).toBeVisible()
@@ -96,6 +97,8 @@ test.describe("the Applicants screen", () => {
     await page.keyboard.press("Escape")
     await expect(sheet).toBeHidden()
     await expect(row).toBeFocused()
+    // The row's Next step column says what the sheet said (#415).
+    await expect(row.getByRole("cell", { name: said, exact: true })).toBeVisible()
   })
 
   test("Record payment shows only to staff who may record one, and only on an open application", async ({ page }) => {

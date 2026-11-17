@@ -17,6 +17,8 @@
 .ap-who { display: flex; flex-direction: column; min-width: 10rem; }
 .ap-who small { font-weight: 400; font-size: 12.5px; color: var(--kit-quiet, var(--gf-quiet)); }
 .ap-nowrap { white-space: nowrap; }
+/* The next step wraps to a few lines, not a word a line, when the table scrolls on a phone. */
+.ap-step { display: block; min-width: 12rem; }
 .ap-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 
 .ap-pages { margin-top: 16px; }

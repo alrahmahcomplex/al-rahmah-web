@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden, notFound } from "next/navigation"
 
 import { ButtonLink, Card, Note, PageHeader, pageTitle, Timeline } from "@/components/kit"
 import { getLeadHistory } from "@/lib/services/audit"
@@ -8,6 +7,8 @@ import { getLead } from "@/lib/services/leads"
 import { getLeadImportMark } from "@/lib/services/student-import"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../../../forbidden"
+import StaffNotFound from "../../../not-found"
 import { requireStaff } from "../../../session"
 import "../lead.css"
 import { describeLeadHistory, type DescribedEntry } from "./describe"
@@ -30,7 +31,7 @@ const WHEN = new Intl.DateTimeFormat("en-GB", {
 // For the Super Admin alone (#237).
 export default async function LeadHistoryPage({ params }: { params: Promise<{ id: string }> }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("audit.view")) forbidden()
+  if (!staff.permissions.includes("audit.view")) return <StaffForbidden />
 
   const { id } = await params
   const supabase = await createClient()
@@ -43,7 +44,7 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
   // The file an imported lead came from; without it the line still says the
   // import created the lead.
   const importFile = importMark.ok ? (importMark.data.batch?.fileName ?? null) : null
-  if (!lead.ok && lead.error === "not-found") notFound()
+  if (!lead.ok && lead.error === "not-found") return <StaffNotFound />
   // Who made each recorded contact, by name alongside the contacts' names.
   const contactedBy = Object.fromEntries(
     (followUps.ok ? followUps.data.records : []).flatMap((record) =>

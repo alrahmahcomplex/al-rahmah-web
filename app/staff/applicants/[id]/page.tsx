@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden, notFound } from "next/navigation"
 
 import { ButtonLink, Note, pageTitle } from "@/components/kit"
 import { declinedReasonsFor, marksAllowed } from "@/lib/services/lead-closure"
@@ -8,6 +7,8 @@ import { getLeadImportMark } from "@/lib/services/student-import"
 import { getLeadStatusSince } from "@/lib/services/system-audit"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../../forbidden"
+import StaffNotFound from "../../not-found"
 import { requireStaff } from "../../session"
 import { ClosedLeadBanner } from "./closed-lead-banner"
 import { LEAD_CARD } from "./lead-card"
@@ -32,7 +33,7 @@ export default async function LeadPage({
   searchParams: Promise<{ tab?: string | string[] }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const [{ id }, { tab: tabParam }] = await Promise.all([params, searchParams])
   const tab = leadTab(tabParam)
@@ -42,7 +43,7 @@ export default async function LeadPage({
     getLeadStatusSince(supabase, id),
     getLeadImportMark(supabase, id),
   ])
-  if (!lead.ok && lead.error === "not-found") notFound()
+  if (!lead.ok && lead.error === "not-found") return <StaffNotFound />
   if (!lead.ok) {
     return (
       <Note tone="bad" role="alert">This application could not be loaded. Try again in a moment.</Note>

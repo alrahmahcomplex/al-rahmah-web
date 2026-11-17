@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { Note, PageHeader, pageTitle } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
@@ -7,6 +6,7 @@ import { getHighestAgentDiscount } from "@/lib/services/discount-codes"
 import { listPromoCodes } from "@/lib/services/promo-codes"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { PromoCodes } from "./promo-codes"
 import "../agents/agents.css"
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 // creates and changes them.
 export default async function PromoCodesPage() {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
   const canManage = staff.permissions.includes("discount_codes.manage")
 
   const supabase = await createClient()

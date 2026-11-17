@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { forbidden } from "next/navigation"
 
 import { ButtonLink, Card, EmptyState, ListRow, Note, PageHeader, pageTitle, Pagination, StatusChip, Tag } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
@@ -9,6 +8,7 @@ import { createClient } from "@/utils/supabase/server"
 
 import { leadTabHref } from "../applicants/[id]/tabs"
 import { displayPhone } from "../re-applications/format"
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { followUpCount, lastContactText, rowDue, splitToday } from "./queue-format"
 import { followUpsHref, parseFollowUpSearch, type FollowUpSearch } from "./search-params"
@@ -29,7 +29,7 @@ export default async function FollowUpsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const search = parseFollowUpSearch(await searchParams)
   const supabase = await createClient()

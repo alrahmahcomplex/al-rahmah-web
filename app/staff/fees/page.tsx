@@ -1,11 +1,12 @@
 import type { Metadata } from "next"
-import { forbidden, redirect } from "next/navigation"
+import { redirect } from "next/navigation"
 
 import { Button, Card, EmptyState, Field, FieldError, ListRow, Note, PageHeader, pageTitle } from "@/components/kit"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { listFeeSchedules } from "@/lib/services/fees"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { formatShillings } from "./format"
 import {
@@ -26,7 +27,7 @@ export const metadata: Metadata = {
 // may set the amounts. Drawn in the new shell (#329).
 export default async function FeeSchedulesPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
   const staff = await requireStaff()
-  if (!canReadFeeSchedule(staff.permissions)) forbidden()
+  if (!canReadFeeSchedule(staff.permissions)) return <StaffForbidden />
   const canEdit = canEditFeeAmounts(staff.permissions)
 
   // The New schedule form asks for a year, then opens that year's page.

@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { enrollmentYears, tanzaniaToday } from "@/lib/school-calendar"
 
+import StaffForbidden from "../../forbidden"
 import { requireStaff } from "../../session"
 import { NewStudentForm } from "./new-student-form"
 
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default async function NewStudentPage() {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.create") || !staff.permissions.includes("visits.record")) forbidden()
+  if (!staff.permissions.includes("leads.create") || !staff.permissions.includes("visits.record")) return <StaffForbidden />
 
   return (
     <NewStudentForm

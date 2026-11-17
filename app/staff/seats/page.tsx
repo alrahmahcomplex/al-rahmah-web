@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { Card, Note, PageHeader, pageTitle, Tabs } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
@@ -8,6 +7,7 @@ import { getSeats } from "@/lib/services/seats"
 import { createClient } from "@/utils/supabase/server"
 
 import { parseScheduleYear } from "../fees/years"
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { defaultSeatsYear } from "./format"
 import { RankedClass } from "./ranked-class"
@@ -28,7 +28,7 @@ const yearHref = (year: number) => `/staff/seats?year=${year}`
 // shell (#329).
 export default async function SeatsPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("academic_years.manage")) forbidden()
+  if (!staff.permissions.includes("academic_years.manage")) return <StaffForbidden />
 
   if (!staff.permissions.includes("payments.view")) {
     return (

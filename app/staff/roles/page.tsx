@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getStaffAdminHistory, getStaffAndRoles } from "@/lib/services/staff-admin"
 import { managesStaff } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { History } from "./history"
 import { RolePane } from "./role-pane"
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 export default async function StaffAndRolesPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
   const staff = await requireStaff()
   // The Super Admin, and holders of a role that manages other roles' staff (#241).
-  if (!managesStaff(staff)) forbidden()
+  if (!managesStaff(staff)) return <StaffForbidden />
   const viewer: Viewer = { id: staff.id, superAdmin: staff.superAdmin, managedRoleIds: staff.managedRoleIds }
 
   const supabase = await createClient()

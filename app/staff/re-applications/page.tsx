@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { ButtonLink, Card, EmptyState, Note, PageHeader, pageTitle, Pagination } from "@/components/kit"
 import { listReApplications, type ReApplicationList } from "@/lib/services/re-applications"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { differingText, when } from "./format"
 import { ReApplicationsTable, type ReApplicationRow } from "./re-applications-table"
@@ -24,7 +24,7 @@ export default async function ReApplicationsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const search = parseReApplicationSearch(await searchParams)
   const results = await listReApplications(await createClient(), search)

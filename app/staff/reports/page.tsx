@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { Dashboard } from "./_dashboard/dashboard"
 
@@ -20,7 +20,7 @@ export default async function ReportsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("reports.view")) forbidden()
+  if (!staff.permissions.includes("reports.view")) return <StaffForbidden />
 
   const supabase = await createClient()
 

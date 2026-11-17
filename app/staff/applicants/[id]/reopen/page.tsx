@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden, notFound } from "next/navigation"
 
 import { ButtonLink, Card, Note, pageTitle } from "@/components/kit"
 import { getLead, isClosed, type Lead } from "@/lib/services/leads"
@@ -7,6 +6,8 @@ import { getLeadReopenings, type ReopeningSource } from "@/lib/services/reopenin
 import type { StaffMember } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../../../forbidden"
+import StaffNotFound from "../../../not-found"
 import { requireStaff } from "../../../session"
 import "../lead.css"
 import { LeadSummary } from "./lead-summary"
@@ -29,12 +30,12 @@ export default async function ReopenLeadPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const { id } = await params
   const source = reopeningSourceOf((await searchParams).source)
   const lead = await getLead(await createClient(), id)
-  if (!lead.ok && lead.error === "not-found") notFound()
+  if (!lead.ok && lead.error === "not-found") return <StaffNotFound />
   if (!lead.ok) {
     return (
       <Note tone="bad" role="alert">

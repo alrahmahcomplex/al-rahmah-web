@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { Card, EmptyState, ListRow, Note, PageHeader, pageTitle, Tag } from "@/components/kit"
 import { listPendingDiscountRequests } from "@/lib/services/discounts"
@@ -8,6 +7,7 @@ import { createClient } from "@/utils/supabase/server"
 import { canDecideDiscount, DISCOUNT_STATE_LABELS, discountLabel } from "../applicants/[id]/discount-outcome"
 import { dayOf } from "../applicants/[id]/reopening-outcome"
 import { leadTabHref } from "../applicants/[id]/tabs"
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { ReviewDiscount } from "./review-discount"
 import "./discounts.css"
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 // opens a review sheet with the decision (#327). Drawn in the new shell.
 export default async function DiscountRequestsPage() {
   const staff = await requireStaff()
-  if (!canDecideDiscount(staff.permissions)) forbidden()
+  if (!canDecideDiscount(staff.permissions)) return <StaffForbidden />
 
   const requests = await listPendingDiscountRequests(await createClient())
 

@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { forbidden, notFound } from "next/navigation"
 
 import { ButtonLink, Card, Note, PageHeader, pageTitle } from "@/components/kit"
 import { getLead, isClosed, listContactChildren, type Lead } from "@/lib/services/leads"
@@ -11,6 +10,8 @@ import { createClient } from "@/utils/supabase/server"
 
 import { closedState } from "../../applicants/[id]/closed-state"
 import { canRaiseReopening } from "../../applicants/[id]/reopening-outcome"
+import StaffForbidden from "../../forbidden"
+import StaffNotFound from "../../not-found"
 import { requireStaff } from "../../session"
 import { differingText, when } from "../format"
 import { LeadBadges } from "../lead-badges"
@@ -30,12 +31,12 @@ export const metadata: Metadata = {
 // closed one offers Request reopening instead. Drawn in the new shell (#328).
 export default async function ReApplicationPage({ params }: { params: Promise<{ id: string }> }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const { id } = await params
   const supabase = await createClient()
   const reApplication = await getReApplication(supabase, id)
-  if (!reApplication.ok && reApplication.error === "not-found") notFound()
+  if (!reApplication.ok && reApplication.error === "not-found") return <StaffNotFound />
   if (!reApplication.ok) {
     return (
       <>

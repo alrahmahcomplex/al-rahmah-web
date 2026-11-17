@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { cookies } from "next/headers"
 
 import { MotionProvider } from "@/components/motion-provider"
@@ -10,6 +11,10 @@ import { requireStaff } from "./session"
 import { parseSidebarCookies, SIDEBAR_RAIL_COOKIE, SIDEBAR_WIDTH_COOKIE } from "./shell-cookies"
 import { StaffShell } from "./shell-switch"
 import type { ShellBell, ShellItem } from "./shell-types"
+
+// Kept out of search results. The not-found and forbidden notices are drawn by
+// the pages themselves, so Next.js no longer marks them (#437, #441).
+export const metadata: Metadata = { robots: { index: false } }
 
 // Signs the staff member in, reads what the shells need (the entries they
 // may see, the counts, the sidebar cookies) and hands it to the client

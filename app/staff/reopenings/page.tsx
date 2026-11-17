@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { Card, EmptyState, Note, PageHeader, pageTitle } from "@/components/kit"
 import { listPendingReopeningRequests } from "@/lib/services/lead-closure"
@@ -8,6 +7,7 @@ import { createClient } from "@/utils/supabase/server"
 import { canDecideReopening } from "../applicants/[id]/reopening-decision-outcome"
 import { SOURCE_LABELS } from "../applicants/[id]/reopening-outcome"
 import { when } from "../re-applications/format"
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { RequestsTable, type RequestRow } from "./requests-table"
 
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 // forbidden and nothing here could be decided. Drawn in the new shell (#322).
 export default async function ReopeningRequestsPage() {
   const staff = await requireStaff()
-  if (!canDecideReopening(staff.permissions) || !staff.permissions.includes("leads.view")) forbidden()
+  if (!canDecideReopening(staff.permissions) || !staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const requests = await listPendingReopeningRequests(await createClient())
 

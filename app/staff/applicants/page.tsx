@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { ButtonLink, Card, Note, PageHeader, pageTitle } from "@/components/kit"
 import { nextStep, nextStepText } from "@/lib/lead-next-step"
@@ -11,6 +10,7 @@ import { listSeatPriorities } from "@/lib/services/school-fee-payments"
 import { getStudentImport } from "@/lib/services/student-import"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { ApplicantsList } from "./applicants-list"
 import "./applicants.css"
@@ -38,7 +38,7 @@ export default async function ApplicantsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const search = parseLeadSearch(await searchParams)
   const supabase = await createClient()

@@ -8,7 +8,9 @@ const TITLE = "Not available to your role"
 const TEXT = "Your role doesn't include this page. Ask an Admissions Manager if you need it."
 
 // Shown inside the staff layout when someone's role does not include the
-// permission a page needs, in the look of the shell around it.
+// permission a page needs, in the look of the shell around it. A staff page
+// returns it rather than calling forbidden(), which fails its streamed loading
+// boundary (#441).
 export default function StaffForbidden() {
   return (
     <NoticeByLook

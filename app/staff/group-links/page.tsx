@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { forbidden } from "next/navigation"
 import { Button, Card, EmptyState, Field, Note, PageHeader, pageTitle } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { countInvitedFamilies } from "@/lib/services/group-invitations"
 import { listGroupLinks } from "@/lib/services/group-links"
 import { createClient } from "@/utils/supabase/server"
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { familiesInvitedText, familiesWarning } from "./families-text"
 import { LinkForm } from "./link-form"
@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: pageTitle("WhatsApp groups") }
 
 export default async function GroupLinksPage({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
   const { year: requested } = await searchParams
   const year = requested === undefined ? Number(tanzaniaToday().slice(0, 4)) + 1 : /^2\d{3}$/.test(requested) ? Number(requested) : null
   const supabase = await createClient()

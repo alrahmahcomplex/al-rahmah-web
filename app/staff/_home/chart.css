@@ -82,8 +82,7 @@
 .hm-ch-arc { fill: none; stroke-width: 18; }
 .hm-ch-total { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
 .hm-ch-total b { font: italic 800 34px/1 var(--font-exo), "Exo", system-ui, sans-serif; color: var(--gf-indigo); }
-/* v38's --gf-quiet reads about 4.5:1 on the ring's shadow inside the hole; ink-soft keeps it clear. */
-.hm-ch-total small { font-size: 12px; color: var(--gf-ink-soft); }
+.hm-ch-total small { font-size: 12px; color: var(--gf-quiet); }
 .hm-ch-legend { display: flex; flex-direction: column; gap: 4px; min-width: 220px; margin: 0; padding: 0; list-style: none; }
 .hm-ch-legend li {
   display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 40px; align-items: center; gap: 10px; padding: 7px 10px;

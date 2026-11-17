@@ -95,11 +95,16 @@ test.describe("finding a family from the search bar", () => {
 })
 
 test.describe("Register students and the old links", () => {
-  test("Register students opens today's New Student form", async ({ page }) => {
+  test("Register students opens in place on Home, and Home goes back", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await page.getByRole("link", { name: "Register students" }).click()
     await expect(page).toHaveURL(/\/staff\/check-in\/new$/)
-    await expect(page.getByRole("heading", { name: "Who is the parent or guardian?", level: 1 })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Register students", level: 1 })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "What is the student’s name?" })).toBeVisible()
+    // Home stays the current page in the sidebar.
+    await expect(staffNav(page).getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page")
+    await page.getByRole("main").getByRole("link", { name: "Home", exact: true }).click()
+    await expect(page).toHaveURL(/\/staff$/)
   })
 
   test("Home is the first sidebar entry, and an old Check-in link lands on Home", async ({ page }) => {

@@ -36,8 +36,10 @@
 --   leads.view and agents.approve agent_claim: the claim queue reads under
 --                                leads.view and only agents.approve confirms,
 --                                so v38 shows it to the Manager only
--- A caller without leads.view is refused (`not_permitted`), and so is anyone who is not a signed-in staff member:
--- has_permission is false for agents, deactivated staff and retired roles.
+-- A caller without leads.view is refused (`not_permitted`), and so is
+-- anyone who is not a signed-in staff member: has_permission is false for
+-- agents, deactivated staff and retired roles. Each branch still tests its
+-- own flag, so a branch added later can't skip its check.
 --
 -- It is security definer because rows carry staff names, which
 -- staff_members' policies hide from other staff, and Admission forms, which
@@ -141,8 +143,8 @@ begin
 
     -- Results to send: of an open lead's interviews with a result and the fee
     -- Paid, the ones interview_release_status calls ready (the lead's current
-    -- interview, never sent or changed since). It refuses callers without
-    -- leads.view, so it is asked only for those who have it.
+    -- interview, never sent or changed since). Asked only under sees_leads,
+    -- like every branch, though a caller without it is refused above.
     if sees_leads then
         select coalesce(jsonb_agg(jsonb_build_object(
                    'interview_id', st.interview_id,

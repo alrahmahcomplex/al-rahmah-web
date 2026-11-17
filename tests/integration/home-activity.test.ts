@@ -230,8 +230,11 @@ describe("what each role sees", () => {
   test("the Accountant sees payments and leads but no claims", async () => {
     const feeLead = await payableLead()
     const paymentId = await pay(feeLead, 400_000)
+    const callLead = await walkIn()
+    const followUpId = await overdueFollowUp(callLead, "Ask about the uniform.")
     const seen = await activityAs(ACCOUNTANT.id)
     expect(mine(seen, [paymentId])).toHaveLength(1)
+    expect(mine(seen, [followUpId])).toMatchObject([{ kind: "call_back" }])
     expect(seen.rows.some((row) => row.kind === "agent_claim")).toBe(false)
   })
 

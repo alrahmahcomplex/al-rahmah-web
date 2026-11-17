@@ -100,6 +100,52 @@ describe("getHomeActivity", () => {
     })
   })
 
+  it("maps every kind's fields from the database's names", async () => {
+    const lead = { lead_id: "l2", admission_number: "ADMSN-22222", student_name: "AMANI DAUDI PETRO", class_name: "KG 2" }
+    const mapped = { leadId: "l2", admissionNumber: "ADMSN-22222", studentName: "AMANI DAUDI PETRO", className: "KG 2" }
+    const at = "2026-11-15T06:00:00+00:00"
+    const rows = [
+      { kind: "expected", id: "s1", at, all_day: true, sent_on: "2026-11-09", children: [lead] },
+      { kind: "new_application", id: "l2", at, ...lead, referral_code: "AAN-132", status: "Visited", closure: null },
+      { kind: "result_ready", id: "i1", at, ...lead, interview_date: "2026-11-14", result: "Passed", score: "78.5", changed_since_sent: true },
+      { kind: "discount_request", id: "r1", at, ...lead, discount: "sibling", note: "Birth certificates on Thursday.", requested_by: "Example Staff One" },
+      { kind: "agent_claim", id: "a1", at, agent_id: "a1", full_name: "MWALIMU EXAMPLE THREE", code: "MET-123", claims: "2" },
+      { kind: "re_application", id: "x1", at, ...lead, asked_class: "FORM 1", differing_fields: ["class_name"] },
+      {
+        kind: "call_back",
+        id: "f1",
+        at,
+        ...lead,
+        due_on: "2026-11-06",
+        note: null,
+        custodian_name: "DAUDI PETRO AMANI",
+        relationship: "Other",
+        relationship_description: "Uncle",
+      },
+    ]
+    const { supabase } = client({ data: { total: rows.length, rows } })
+    const result = await getHomeActivity(supabase, 1)
+    expect(result.ok && result.data.rows).toEqual([
+      { kind: "expected", id: "s1", at, sentOn: "2026-11-09", children: [mapped] },
+      { kind: "new_application", id: "l2", at, ...mapped, referralCode: "AAN-132", status: "Visited", closure: null },
+      { kind: "result_ready", id: "i1", at, ...mapped, interviewDate: "2026-11-14", result: "Passed", score: 78.5, changedSinceSent: true },
+      { kind: "discount_request", id: "r1", at, ...mapped, discount: "sibling", note: "Birth certificates on Thursday.", requestedBy: "Example Staff One" },
+      { kind: "agent_claim", id: "a1", at, agentId: "a1", fullName: "MWALIMU EXAMPLE THREE", code: "MET-123", claims: 2 },
+      { kind: "re_application", id: "x1", at, ...mapped, askedClass: "FORM 1", differingFields: ["class_name"] },
+      {
+        kind: "call_back",
+        id: "f1",
+        at,
+        ...mapped,
+        dueOn: "2026-11-06",
+        note: null,
+        custodianName: "DAUDI PETRO AMANI",
+        relationship: "Other",
+        relationshipDescription: "Uncle",
+      },
+    ])
+  })
+
   it("leaves out a kind it does not know", async () => {
     const { supabase } = client({ data: { total: 2, rows: [{ kind: "later_kind", id: "x", at: "2026-11-15T05:00:00Z" }, FEE] } })
     const result = await getHomeActivity(supabase, 1)

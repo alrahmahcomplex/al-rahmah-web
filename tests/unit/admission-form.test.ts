@@ -146,7 +146,7 @@ describe("reading the posted Admission form", () => {
     ["text that isn't JSON", "{"],
     ["a child that isn't an object", JSON.stringify(form({ children: ["Zawadi"] }))],
     ["a year sent as text", JSON.stringify(form({ children: [{ ...CHILD, className: "STD 2", enrollmentYear: "2027", dayOrBoarding: "Day" }] }))],
-    ["a name far too long", JSON.stringify(form({ parent: { ...PARENT, firstName: "x".repeat(201), relationship: "Mother", phone: "0700000900" } }))],
+    ["a name far too long", JSON.stringify(form({ parent: { ...PARENT, firstName: "x".repeat(1001), relationship: "Mother", phone: "0700000900" } }))],
     // The live form's one box went with #403: only the parts are read now.
     ["the custodian's name in one box", JSON.stringify(form({ parent: { fullName: "Amina Hassani Fixture", relationship: "Mother", phone: "0700000900" } }))],
     ["the student's name in one box", JSON.stringify(form({ children: [{ fullName: "Zawadi Juma Fixture", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }] }))],
@@ -204,6 +204,17 @@ describe("names sent in their parts (#400)", () => {
     expect(parse(form({ parent: { ...parent, [key]: "" }, children: [child] }))).toEqual({
       ok: false,
       error: { field: "contact_name", child: null, part },
+    })
+  })
+
+  it("names a part too long on its box rather than refusing the form", () => {
+    expect(parse(form({ parent, children: [{ ...child, fatherMiddle: "A".repeat(201) }] }))).toEqual({
+      ok: false,
+      error: { field: "student_name", child: 0, part: "father_middle" },
+    })
+    expect(parse(form({ parent: { ...parent, lastName: "B".repeat(201) }, children: [child] }))).toEqual({
+      ok: false,
+      error: { field: "contact_name", child: null, part: "contact_last_name" },
     })
   })
 

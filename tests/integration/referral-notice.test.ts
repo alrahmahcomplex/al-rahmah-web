@@ -29,6 +29,11 @@ function child(): AdmissionChild {
   return { fullName: `Notice Pupil ${randomUUID().slice(0, 8)}`, className: "STD 4", enrollmentYear: nextYear, dayOrBoarding: "Day" }
 }
 
+// Letters only: a name part holds no digits.
+function letters(n = 8): string {
+  return Array.from(randomUUID().replace(/-/g, "").slice(0, n), (c) => String.fromCharCode(65 + (parseInt(c, 16) % 26))).join("")
+}
+
 function form(overrides: Partial<AdmissionForm> = {}): AdmissionForm {
   return {
     submissionKey: randomUUID(),
@@ -94,12 +99,20 @@ describe("the notice version on leads the Admission form creates", () => {
   test("a page from the build before #282 that posts form_v1 keeps its code and records no version", async () => {
     // Through the same parser the Server Action uses: this server shows
     // form_v2, so it vouches for no other notice.
-    const posted = { ...form({ children: [child(), child()], discountCode: APPROVED }), noticeVersion: FORM_NOTICE_V1_VERSION }
+    // Names in their parts, as the page posts them since #403.
+    const pupil = () => ({ firstName: letters(), fatherFirst: "NOTICE", fatherMiddle: "BABA", fatherLast: "MZAZI", className: "STD 4", enrollmentYear: nextYear, dayOrBoarding: "Day" })
+    const posted = {
+      submissionKey: randomUUID(),
+      parent: { firstName: "NOTICE", middleName: "MAMA", lastName: "MZAZI", relationship: "Mother", phone: `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },
+      children: [pupil(), pupil()],
+      discountCode: APPROVED,
+      noticeVersion: FORM_NOTICE_V1_VERSION,
+    }
     const parsed = parseAdmissionForm(JSON.stringify(posted), admissionYears())
     if (!parsed.ok) throw new Error(`parse failed: ${JSON.stringify(parsed.error)}`)
     expect((await submitAdmissionForm(secretClient(), parsed.data)).ok).toBe(true)
 
-    for (const c of posted.children) {
+    for (const c of parsed.data.children) {
       expect(await leadOf(c.fullName)).toMatchObject({ code: APPROVED, version: null })
     }
   })

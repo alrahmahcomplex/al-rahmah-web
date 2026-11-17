@@ -846,13 +846,20 @@ export function AdmissionFormSteps({
       const firstOne = children.slice(0, problem.child).find((child) => childNameKey(studentName(child)) === key) ?? children[problem.child]
       return copy.duplicateChild(studentName(firstOne))
     }
-    // A box left empty, which the page found itself.
-    if (!problem.server && problem.part && field === "student_name") return copy.studentNameMissing
-    if (!problem.server && problem.part && field === "contact_name") return copy.custodianNameMissing
+    // A box left empty, which the page found itself. A box too long takes the field's own words.
+    if (!problem.server && problem.part) {
+      const held = field === "student_name" && problem.child !== null ? children[problem.child] : parent
+      const box = (held as Record<string, unknown> | undefined)?.[boxOf(problem.part)]
+      const empty = typeof box !== "string" || box.trim() === ""
+      if (empty && field === "student_name") return copy.studentNameMissing
+      if (empty && field === "contact_name") return copy.custodianNameMissing
+    }
     return copy.problems[field]
   }
   // The boxes a name problem marks: the parts it names, or all of them.
   const namesInvalid = (field: "student_name" | "contact_name", childIndex: number | null) => {
+    // The same student twice is the whole name: every box is marked.
+    if (field === "student_name" && problems.some((shown) => shown.field === "duplicate_child" && shown.child === childIndex)) return "all" as const
     const found = problems.filter((shown) => shown.field === field && (field === "contact_name" || shown.child === childIndex))
     if (found.length === 0) return null
     if (found.some((shown) => !shown.part)) return "all" as const

@@ -35,6 +35,8 @@ type Common<V> = {
   invalid?: Partial<Record<keyof V, boolean>>
   /** Every box is required unless this is false. */
   required?: boolean
+  /** The longest each box takes, when there is a limit. */
+  maxLength?: number
   disabled?: boolean
   "aria-describedby"?: string
   /** Names the group, such as the open question's title. */
@@ -129,6 +131,7 @@ function NameBoxGroup<K extends string>({ boxes, heading, ...props }: Common<Rec
         aria-describedby={props["aria-describedby"]}
         invalid={props.invalid?.[b.key]}
         required={props.required ?? true}
+        maxLength={props.maxLength}
         disabled={props.disabled}
         autoComplete="off"
         autoCapitalize="characters"

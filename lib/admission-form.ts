@@ -76,6 +76,14 @@ export function childNameKey(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLowerCase()
 }
 
+// The longest name part the form takes, as its other text fields.
+export const MAX_NAME_PART = 200
+
+// A name part is typed, and no longer than the form takes.
+function namePartFits(part: string): boolean {
+  return part.trim() !== "" && part.length <= MAX_NAME_PART
+}
+
 // Every problem with the parent's details, in the order the fields show, so
 // the page can name them all at once. The server names only the first.
 export function parentProblems(parent: AdmissionParent): FieldProblem[] {
@@ -83,7 +91,7 @@ export function parentProblems(parent: AdmissionParent): FieldProblem[] {
   const parts = parent.nameParts
   if (parts) {
     for (const [key, part] of PERSON_PARTS) {
-      if (!parts[key].trim()) problems.push({ field: "contact_name", child: null, part })
+      if (!namePartFits(parts[key])) problems.push({ field: "contact_name", child: null, part })
     }
   } else if (!parent.fullName.trim()) problems.push({ field: "contact_name", child: null })
   if (!(RELATIONSHIPS as readonly string[]).includes(parent.relationship)) {
@@ -107,7 +115,7 @@ export function childrenProblems(children: AdmissionChild[], years: readonly num
   const seen = new Set<string>()
   for (const [index, child] of children.entries()) {
     const parts = child.nameParts
-    const missing = parts ? STUDENT_PARTS.filter(([key]) => !parts[key].trim()).map(([, part]) => part) : []
+    const missing = parts ? STUDENT_PARTS.filter(([key]) => !namePartFits(parts[key])).map(([, part]) => part) : []
     const named = parts ? missing.length === 0 : child.fullName.trim() !== ""
     if (parts) for (const part of missing) problems.push({ field: "student_name", child: index, part })
     else if (!named) problems.push({ field: "student_name", child: index })
@@ -157,7 +165,10 @@ function nameOf<K extends string>(value: Record<string, unknown>, keys: readonly
   if ("fullName" in value) return null
   const parts = {} as Record<K, string>
   for (const key of keys) {
-    const part = text(value[key])
+    // Read past the limit, so a part too long is named on its box rather
+    // than refused as an unreadable form.
+    const raw = value[key]
+    const part = typeof raw === "string" && raw.length <= MAX_NAME_PART * 5 ? raw : null
     if (part === null) return null
     parts[key] = part.trim()
   }

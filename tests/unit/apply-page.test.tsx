@@ -487,6 +487,11 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await user.type(nameBox("en"), "zawadi juma omari mfano")
     await user.click(open().getByRole("button", { name: "Continue" }))
     expect(open().getByText("ZAWADI JUMA MFANO is on this form twice. Remove one, or correct the name.")).toBeInTheDocument()
+    for (const box of ["Student's name", "First name", "Middle name", "Last name"]) {
+      expect(open().getByRole("textbox", { name: box })).toHaveAttribute("aria-invalid", "true")
+    }
+    // Each box takes at most 200 characters, as the form's other fields.
+    expect(nameBox("en")).toHaveAttribute("maxlength", "200")
   })
 
   it("stops adding students at eight", async () => {

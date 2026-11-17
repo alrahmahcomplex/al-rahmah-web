@@ -28,7 +28,7 @@ import {
   SwitchRow,
 } from "@/components/guided-form"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
-import type { FormField, NamePart } from "@/lib/admission-form"
+import { MAX_NAME_PART, type FormField, type NamePart } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
 import { STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
 import { FORM_NOTICE, FORM_NOTICE_VERSION } from "@/lib/referral-notice"
@@ -326,6 +326,7 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
               aria-labelledby={titleId}
               aria-describedby={`h-${id} e-${id}`}
               labels={copy.names}
+              maxLength={MAX_NAME_PART}
               value={{ firstName: child.firstName, fatherFirst: child.fatherFirst, fatherMiddle: child.fatherMiddle, fatherLast: child.fatherLast }}
               invalid={boxesInvalid(p.namesInvalid("student_name", index), STUDENT_BOXES)}
               onChange={(name) => p.on.child(child.card, name)}
@@ -454,6 +455,7 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
                 aria-labelledby={titleId}
                 aria-describedby="h-parent-name e-parent-name"
                 labels={copy.names}
+                maxLength={MAX_NAME_PART}
                 value={{ firstName: parent.firstName, middleName: parent.middleName, lastName: parent.lastName }}
                 invalid={boxesInvalid(p.namesInvalid("contact_name", null), PERSON_BOXES)}
                 onChange={(name) => p.on.parent(name)}

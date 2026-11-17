@@ -31,10 +31,10 @@ function phone() {
 }
 const asE164 = (local: string) => `+255${local.slice(1)}`
 
-// A code no record holds: three letters and five digits.
+// An ABC-123 code no record is likely to hold: I, two letters and three digits.
 function freshCode() {
   const letter = () => String.fromCharCode(65 + randomInt(0, 26))
-  return `I${letter()}${letter()}-${randomInt(10_000, 100_000)}`
+  return `I${letter()}${letter()}-${randomInt(100, 1000)}`
 }
 
 const tag = () => randomUUID().slice(0, 8)
@@ -511,18 +511,30 @@ describe("an import and a Recreate at once", () => {
 
 describe("confirm at 1,000 rows", () => {
   test("runs as one statement within the statement timeout the API gives a signed-in session", async () => {
-    const stem = `${String.fromCharCode(65 + randomInt(0, 26))}${String.fromCharCode(65 + randomInt(0, 26))}${randomInt(100, 1000)}`
     const base = randomInt(10_000_000, 90_000_000)
-    const rows = Array.from({ length: 1000 }, (_, i) => ({
-      sheet_row: i + 2,
-      code: `Q${stem}-${i}`,
-      full_name: `Timing Agent ${stem} ${i}`,
-      phone: `+2557${String(base + i).padStart(8, "0")}`,
-      whatsapp: null,
-      email: `timing-${stem.toLowerCase()}-${i}@example.test`,
-    }))
 
     const timing = await inRolledBackTransaction(async (sql) => {
+      // A code is ABC-123, so 1,000 codes take every number of one set of
+      // letters: three letters no agent code, Promo code or lead uses yet.
+      const { rows: free } = await sql.query<{ stem: string }>(
+        `select c.stem from (
+           select chr(65 + floor(random() * 26)::int) || chr(65 + floor(random() * 26)::int) || chr(65 + floor(random() * 26)::int) as stem
+           from generate_series(1, 200)
+         ) c
+         where not exists (select 1 from public.marketing_agents a where left(a.code, 3) = c.stem)
+           and not exists (select 1 from public.promo_codes p where left(p.code, 3) = c.stem)
+           and not exists (select 1 from public.leads l where left(l.referral_code, 3) = c.stem)
+         limit 1`,
+      )
+      const stem = free[0].stem
+      const rows = Array.from({ length: 1000 }, (_, i) => ({
+        sheet_row: i + 2,
+        code: `${stem}-${String(i).padStart(3, "0")}`,
+        full_name: `Timing Agent ${stem} ${i}`,
+        phone: `+2557${String(base + i).padStart(8, "0")}`,
+        whatsapp: null,
+        email: `timing-${stem.toLowerCase()}-${i}@example.test`,
+      }))
       const timeout = (
         await sql.query<{ setting: string }>(
           "select split_part(c, '=', 2) as setting from pg_roles r, unnest(r.rolconfig) c where r.rolname = 'authenticated' and c like 'statement_timeout=%'",

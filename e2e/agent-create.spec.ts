@@ -59,7 +59,7 @@ async function retire(agentId: string) {
 
 function freshCode() {
   const letter = () => String.fromCharCode(65 + randomInt(0, 26))
-  return `E${letter()}${letter()}-${randomInt(10_000, 100_000)}`
+  return `E${letter()}${letter()}-${randomInt(100, 1000)}`
 }
 
 test.describe("adding an agent", () => {

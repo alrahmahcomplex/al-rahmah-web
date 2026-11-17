@@ -260,7 +260,7 @@ describe("sending an invite", () => {
       await sql.query("select public.set_audit_actor('system')")
       const { rows } = await sql.query<{ id: string }>(
         "insert into public.marketing_agents (full_name, phone, code, email) values ('Pending Invitee', $1, $2, $3) returning id",
-        [`+2557${randomInt(10_000_000, 99_999_999)}`, `PND-${randomInt(1000, 9999)}`, email("pending")],
+        [`+2557${randomInt(10_000_000, 99_999_999)}`, `PND-${randomInt(100, 1000)}`, email("pending")],
       )
       await sql.query("set local role authenticated")
       return sql.query("select * from public.prepare_agent_invite($1)", [rows[0].id])
@@ -367,7 +367,7 @@ describe("account state", () => {
       await sql.query("select public.set_audit_actor('system')")
       const { rows } = await sql.query<{ id: string }>(
         "insert into public.marketing_agents (full_name, phone, code, email) values ('Pending State', $1, $2, $3) returning id",
-        [`+2557${randomInt(10_000_000, 99_999_999)}`, `PNS-${randomInt(1000, 9999)}`, email("pending-state")],
+        [`+2557${randomInt(10_000_000, 99_999_999)}`, `PNS-${randomInt(100, 1000)}`, email("pending-state")],
       )
       return (await sql.query("select public.account_state(a) as state from public.marketing_agents a where a.id = $1", [rows[0].id])).rows[0]
     })
@@ -421,7 +421,7 @@ describe("the Agents screen's account-state filters", () => {
     const bytes = new TextEncoder().encode(
       toCsv([
         ["Code", "Full name", "Mobile", "WhatsApp", "Email"],
-        [`IFL-${randomInt(10_000, 100_000)}`, `${stem} Imported`, phone(), "", email("imported")],
+        [`IFL-${randomInt(100, 1000)}`, `${stem} Imported`, phone(), "", email("imported")],
       ]),
     )
     const checked = await checkAgentImportFile(await manager(), file, bytes)

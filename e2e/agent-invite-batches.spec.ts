@@ -27,7 +27,7 @@ async function importAgents(emails: (string | null)[]): Promise<{ importBatchId:
   const stem = `Batch ${randomUUID().slice(0, 8)}`
   const rows = emails.map((email, i) => ({
     sheet_row: i + 2,
-    code: `EBT-${randomInt(10_000, 100_000)}${i}`,
+    code: `E${String.fromCharCode(65 + randomInt(0, 26), 65 + randomInt(0, 26))}-${randomInt(100, 900) + i}`,
     full_name: `${stem} Agent ${i + 1}`,
     phone: `+2557${String(randomInt(10_000_000, 100_000_000))}`,
     whatsapp: null,

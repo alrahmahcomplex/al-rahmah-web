@@ -369,7 +369,7 @@ describe("partial uniqueness", () => {
         await sql.query("insert into public.marketing_agents (full_name, phone, code) values ('Duplicate', $1, $2)", [number, code])
       })
     await expect(insert(agent.code, asE164(phone()))).rejects.toThrow(/duplicate key/)
-    await expect(insert(`ZZ-${randomInt(1000, 10000)}`, agent.phone)).rejects.toThrow(/duplicate key/)
+    await expect(insert(`ZZZ-${randomInt(100, 1000)}`, agent.phone)).rejects.toThrow(/duplicate key/)
 
     await asSystem((sql) => changeStatus(sql, agent.id, "retired"))
     await expect(insert(agent.code, agent.phone)).resolves.toBeUndefined()

@@ -23,9 +23,12 @@ function client(known: Record<string, Answer>, asked: string[] = []): SupabaseCl
 }
 
 describe("the code without the box's hyphen", () => {
-  it("is there only for one to three letters, a hyphen and digits", () => {
+  it("is there only for three letters, a hyphen and a digit", () => {
     expect(withoutBoxHyphen("EID-2026")).toBe("EID2026")
-    expect(withoutBoxHyphen("AB-12")).toBe("AB12")
+    expect(withoutBoxHyphen("ABC-1X")).toBe("ABC1X")
+    expect(withoutBoxHyphen("AB-12")).toBeNull()
+    expect(withoutBoxHyphen("AS-135")).toBeNull()
+    expect(withoutBoxHyphen("EID2026")).toBeNull()
     expect(withoutBoxHyphen("KARIBU2026")).toBeNull()
     expect(withoutBoxHyphen("SAVE10")).toBeNull()
     expect(withoutBoxHyphen("2026")).toBeNull()

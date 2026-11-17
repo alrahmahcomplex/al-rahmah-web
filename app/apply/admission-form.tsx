@@ -10,7 +10,7 @@ import { usePageLanguage } from "@/components/page-language"
 import { admissionYears, childNameKey, MAX_CHILDREN, type FieldProblem, type FormField, type NamePart } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
 import { formatCount, shownApplicationCount } from "@/lib/live-apply"
-import { discountCodeCookie, DISCOUNT_CODE_COOKIE, initialDiscountCode, normalizeDiscountCode, STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
+import { discountCodeCookie, initialDiscountCode, normalizeDiscountCode, rememberedDiscountCode, STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
 import { FORM_NOTICE_VERSION } from "@/lib/referral-notice"
 import { tanzaniaToday } from "@/lib/school-calendar"
 
@@ -193,11 +193,7 @@ function browserCalendar(): AdmissionCalendar {
 
 // The Discount code the browser remembers from the latest Referral link.
 function rememberedCode(): string | undefined {
-  const prefix = `${DISCOUNT_CODE_COOKIE}=`
-  return document.cookie
-    .split("; ")
-    .find((part) => part.startsWith(prefix))
-    ?.slice(prefix.length)
+  return rememberedDiscountCode(document.cookie)
 }
 
 export function AdmissionFormSteps({

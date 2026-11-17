@@ -129,7 +129,7 @@ describe("the sign-up form", () => {
   test("2. the mobile has a code but the box isn't ticked: nothing is created", async () => {
     const agent = await existingAgent()
     expect(await outcome({ phone: agent.phone })).toEqual({ kind: "code_needed" })
-    expect(await outcome({ phone: agent.phone, code: "ZZ-999" })).toEqual({ kind: "code_needed" })
+    expect(await outcome({ phone: agent.phone, code: "ZZZ-999" })).toEqual({ kind: "code_needed" })
     expect(await agentsWithPhone(agent.phone)).toHaveLength(1)
     expect(await claimsOf(agent.id)).toEqual([])
   })
@@ -148,7 +148,7 @@ describe("the sign-up form", () => {
   test("4. the box is ticked and nothing matches, switched-off and retired agents included: nothing is created", async () => {
     const before = Number((await db<{ n: string }>("select count(*) as n from public.agent_events where kind = 'claim' and result = 'no_match'", []))[0].n)
     const unknown = phone()
-    expect(await outcome({ phone: unknown, hasCode: true, code: `NO-${randomInt(1000, 9999)}` })).toEqual({ kind: "no_match" })
+    expect(await outcome({ phone: unknown, hasCode: true, code: `NOX-${randomInt(100, 1000)}` })).toEqual({ kind: "no_match" })
     expect(await agentsWithPhone(unknown)).toEqual([])
 
     const manager = await signedIn(MANAGER)
@@ -267,7 +267,7 @@ describe("the sign-up form", () => {
     expect(agent).toMatchObject({ full_name: who.fullName, status: "Pending", email: who.email, typed_code: null })
     expect(done.kind === "registered" && done.code).toBe(agent.code)
 
-    const free = `FR-${randomInt(1000, 9999)}${randomInt(10, 99)}`
+    const free = `FRX-${randomInt(100, 1000)}`
     const adopted = await outcome({ phone: phone(), code: free.toLowerCase() })
     expect(adopted).toMatchObject({ kind: "registered", code: free })
   })

@@ -215,7 +215,7 @@ describe("checking a Discount code", () => {
 
   it("looks up a value that isn't a code as no code", async () => {
     stubs.estimate.mockResolvedValue({ ok: true, data: { state: "unknown", amount: 50000 } })
-    expect(await checkDiscountCode("<b>nope</b>")).toEqual({ status: "unknown", amount: 50000 })
+    expect(await checkDiscountCode("kodi ya €")).toEqual({ status: "unknown", amount: 50000 })
     expect(stubs.estimate).toHaveBeenCalledWith({ secret: "client" }, "")
   })
 

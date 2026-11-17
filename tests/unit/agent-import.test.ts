@@ -32,24 +32,24 @@ function screen(body: string) {
 const reasonOf = (rows: ReturnType<typeof screen>, sheetRow: number) => rows.find((row) => row.sheetRow === sheetRow)?.problem
 
 describe("codes Excel has turned into numbers", () => {
-  test("a code that is all digits with a decimal point or an exponent is flagged; dotted codes with letters, and plain digits, are kept", () => {
+  test("a code that is all digits with a decimal point or an exponent is flagged; any other code goes on to the code check", () => {
     const rows = screen(
       [
         "123.0,Asha Juma,0712000002,,", // 2 flagged
         "0.5,Asha Juma,0712000003,,", // 3 flagged
         "1.2E+05,Asha Juma,0712000004,,", // 4 flagged
         "12e3,Asha Juma,0712000005,,", // 5 flagged
-        "AJM.12,Asha Juma,0712000006,,", // 6 kept
-        "A.1.2,Asha Juma,0712000007,,", // 7 kept
-        "1.2.3,Asha Juma,0712000008,,", // 8 kept
-        "12345,Asha Juma,0712000009,,", // 9 kept
-        "AJM-12E3,Asha Juma,0712000010,,", // 10 kept
+        "AJM.12,Asha Juma,0712000006,,", // 6 bad code
+        "A.1.2,Asha Juma,0712000007,,", // 7 bad code
+        "1.2.3,Asha Juma,0712000008,,", // 8 bad code
+        "12345,Asha Juma,0712000009,,", // 9 bad code
+        "AJM-12E3,Asha Juma,0712000010,,", // 10 bad code
       ].join("\n"),
     )
     for (const sheetRow of [2, 3, 4, 5]) {
       expect(reasonOf(rows, sheetRow)).toEqual({ class: "flagged", reason: "Looks like an Excel number" })
     }
-    for (const sheetRow of [6, 7, 8, 9, 10]) expect(reasonOf(rows, sheetRow)).toBeNull()
+    for (const sheetRow of [6, 7, 8, 9, 10]) expect(reasonOf(rows, sheetRow)).toEqual({ class: "refused", reason: "Bad code" })
   })
 })
 
@@ -77,7 +77,11 @@ describe("normalising, as the database does", () => {
   test.each([
     [" ajm-407 ", "AJM-407"],
     ["AJM -407", "AJM-407"],
-    ["a.b-1", "A.B-1"],
+    ["ajm407", null],
+    ["AJM--407", null],
+    ["AJ-407", null],
+    ["AJM-4071", null],
+    ["a.b-1", null],
     ["AJM_407", null],
     ["ß-1", null],
     ["ABCDEFGHIJKLMNOPQRSTU", null],
@@ -101,25 +105,25 @@ describe("what a file can be refused for on its own", () => {
   test("each reason, worded as the ticket gives it", () => {
     const rows = screen(
       [
-        "AJM-1,,0712000001,,", // 2 missing name
+        "AJM-001,,0712000001,,", // 2 missing name
         "AJM_1,Asha Juma,0712000002,,", // 3 bad code
         ",Asha Juma,0712000003,,", // 4 bad code (none)
-        "AJM-4,Asha Juma,,,", // 5 mobile missing
-        "AJM-5,Asha Juma,0712,,", // 6 unreadable mobile
-        "DUP-1,Asha Juma,0712000007,,", // 7 duplicate code
-        "dup-1 ,Baraka Ali,0712000008,,", // 8 duplicate code
-        "AJM-9,Asha Juma,0712000009,,", // 9 duplicate mobile
-        "AJM-10,Asha Juma,+255 712 000 009,,", // 10 duplicate mobile
-        "AJM-11,Asha Juma,7.12E+08,,", // 11 flagged
-        "AJM-12,Asha Juma,712000012.0,,", // 12 flagged
+        "AJM-004,Asha Juma,,,", // 5 mobile missing
+        "AJM-005,Asha Juma,0712,,", // 6 unreadable mobile
+        "DUP-001,Asha Juma,0712000007,,", // 7 duplicate code
+        "dup-001 ,Baraka Ali,0712000008,,", // 8 duplicate code
+        "AJM-009,Asha Juma,0712000009,,", // 9 duplicate mobile
+        "AJM-010,Asha Juma,+255 712 000 009,,", // 10 duplicate mobile
+        "AJM-011,Asha Juma,7.12E+08,,", // 11 flagged
+        "AJM-012,Asha Juma,712000012.0,,", // 12 flagged
         "1.2E+05,Asha Juma,0712000013,,", // 13 flagged
-        "AJM-14,Asha Juma,0712000014,0712,", // 14 unreadable WhatsApp
-        "AJM-15,Asha Juma,0712000015,,not-an-email", // 15 unreadable email
-        "AJM-16,Asha Juma,0712000016,,same@example.test", // 16 duplicate email
-        "AJM-17,Asha Juma,0712000017,,SAME@example.test", // 17 duplicate email
-        `AJM-18,${"A".repeat(101)},0712000018,,`, // 18 name too long
-        "AJM-19,Asha Juma,0712000019,,", // 19 fine
-        "DUP-1,Chausiku,0712000020,,", // 20 duplicate code
+        "AJM-014,Asha Juma,0712000014,0712,", // 14 unreadable WhatsApp
+        "AJM-015,Asha Juma,0712000015,,not-an-email", // 15 unreadable email
+        "AJM-016,Asha Juma,0712000016,,same@example.test", // 16 duplicate email
+        "AJM-017,Asha Juma,0712000017,,SAME@example.test", // 17 duplicate email
+        `AJM-018,${"A".repeat(101)},0712000018,,`, // 18 name too long
+        "AJM-019,Asha Juma,0712000019,,", // 19 fine
+        "DUP-001,Chausiku,0712000020,,", // 20 duplicate code
       ].join("\n"),
     )
     expect(reasonOf(rows, 2)).toEqual({ class: "refused", reason: "Missing name" })
@@ -144,24 +148,24 @@ describe("what a file can be refused for on its own", () => {
   })
 
   test("a row with a name of one letter has no name", () => {
-    expect(reasonOf(screen("AJM-1,A,0712000001,,\n"), 2)).toEqual({ class: "refused", reason: "Missing name" })
+    expect(reasonOf(screen("AJM-001,A,0712000001,,\n"), 2)).toEqual({ class: "refused", reason: "Missing name" })
   })
 })
 
-const AGENT = { id: "agent-1", fullName: "Asha Juma", code: "AJM-1", phone: "+255712000001", email: null }
+const AGENT = { id: "agent-1", fullName: "Asha Juma", code: "AJM-001", phone: "+255712000001", email: null }
 
 function checked(verdicts: Record<number, AgentVerdict>) {
   const rows = screen(
     [
-      "AJM-1,Asha Juma,0712000001,,", // 2
-      "AJM-2,Baraka Ali,0712000002,,", // 3
-      "AJM-3,Chausiku,0712000003,,", // 4
-      "AJM-4,Dotto,0712000004,,", // 5
-      "AJM-5,Eliya,0712000005,,", // 6
-      "AJM-6,Fatma,0712000006,,", // 7
-      "AJM-7,Gift,0712000007,,", // 8
-      "AJM-8,Halima,0712000008,,", // 9
-      "AJM-9,Idd,0712000009,,", // 10
+      "AJM-001,Asha Juma,0712000001,,", // 2
+      "AJM-002,Baraka Ali,0712000002,,", // 3
+      "AJM-003,Chausiku,0712000003,,", // 4
+      "AJM-004,Dotto,0712000004,,", // 5
+      "AJM-005,Eliya,0712000005,,", // 6
+      "AJM-006,Fatma,0712000006,,", // 7
+      "AJM-007,Gift,0712000007,,", // 8
+      "AJM-008,Halima,0712000008,,", // 9
+      "AJM-009,Idd,0712000009,,", // 10
       ",Bad Code,0712000010,,", // 11
     ].join("\n"),
   )
@@ -190,7 +194,7 @@ describe("reading the database's verdict on each row", () => {
     expect(row(6)).toMatchObject({ class: "mobile-differs", reason: "Mobile differs (not changed)" })
     expect(row(7)).toMatchObject({ class: "refused", reason: "Code exists as Asha Juma" })
     expect(row(8)).toMatchObject({ class: "refused", reason: "Code belongs to a retired record (use Recreate)" })
-    expect(row(9)).toMatchObject({ class: "refused", reason: "Mobile already belongs to Asha Juma, AJM-1" })
+    expect(row(9)).toMatchObject({ class: "refused", reason: "Mobile already belongs to Asha Juma, AJM-001" })
     expect(row(10)).toMatchObject({ class: "refused", reason: "Email already in use" })
     expect(row(11)).toMatchObject({ class: "refused", reason: "Bad code", verdict: null })
   })
@@ -222,15 +226,15 @@ describe("reading the database's verdict on each row", () => {
 
 describe("the refused-rows file", () => {
   test("holds the refused and flagged rows as uploaded, with each reason and sheet row, guarded against formulas", () => {
-    const rows = screen(["AJM-1,=HYPERLINK(1),0712000001,,", "AJM-2,Baraka,7.12E+08,,", "AJM-3,Chausiku,0712000003,,"].join("\n"))
+    const rows = screen(["AJM-001,=HYPERLINK(1),0712000001,,", "AJM-002,Baraka,7.12E+08,,", "AJM-003,Chausiku,0712000003,,"].join("\n"))
     const all = applyAgentVerdicts(rows, new Map([[2, { verdict: "create" } as const], [4, { verdict: "retired_code" } as const]]))
     expect(refusedAgentRowsCsv(all)).toBe(
       "Code,Full name,Mobile,WhatsApp,Email,Reason,Sheet row\r\n" +
-        "AJM-2,Baraka,7.12E+08,,,Looks like an Excel number,3\r\n" +
-        "AJM-3,Chausiku,0712000003,,,Code belongs to a retired record (use Recreate),4\r\n",
+        "AJM-002,Baraka,7.12E+08,,,Looks like an Excel number,3\r\n" +
+        "AJM-003,Chausiku,0712000003,,,Code belongs to a retired record (use Recreate),4\r\n",
     )
     const injected = applyAgentVerdicts(rows, new Map([[2, { verdict: "retired_code" } as const], [4, { verdict: "create" } as const]]))
-    expect(refusedAgentRowsCsv(injected)).toContain("AJM-1,'=HYPERLINK(1),0712000001,,,Code belongs to a retired record (use Recreate),2\r\n")
+    expect(refusedAgentRowsCsv(injected)).toContain("AJM-001,'=HYPERLINK(1),0712000001,,,Code belongs to a retired record (use Recreate),2\r\n")
   })
 })
 
@@ -244,9 +248,9 @@ describe("confirming and coming back changed", () => {
       fileName: "agents.csv",
       rowCount: 4,
       rows: [
-        { sheetRow: 2, normalized: expect.objectContaining({ code: "AJM-1", mobile: "+255712000001" }), verdict: { verdict: "create" } },
-        { sheetRow: 3, normalized: expect.objectContaining({ code: "AJM-2" }), verdict: { verdict: "email_to_add", agent: AGENT } },
-        { sheetRow: 4, normalized: expect.objectContaining({ code: "AJM-3" }), verdict: { verdict: "present", agent: AGENT } },
+        { sheetRow: 2, normalized: expect.objectContaining({ code: "AJM-001", mobile: "+255712000001" }), verdict: { verdict: "create" } },
+        { sheetRow: 3, normalized: expect.objectContaining({ code: "AJM-002" }), verdict: { verdict: "email_to_add", agent: AGENT } },
+        { sheetRow: 4, normalized: expect.objectContaining({ code: "AJM-003" }), verdict: { verdict: "present", agent: AGENT } },
       ],
     })
   })
@@ -254,7 +258,7 @@ describe("confirming and coming back changed", () => {
   test("a changed row is reclassified and marked; the rest are unmarked", () => {
     const changed = withChanges(rows, [{ sheetRow: 2, verdict: { verdict: "mobile_taken", agent: AGENT } }])
     expect(changed.map((row) => [row.sheetRow, row.class, row.changed, row.reason])).toEqual([
-      [2, "refused", true, "Mobile already belongs to Asha Juma, AJM-1"],
+      [2, "refused", true, "Mobile already belongs to Asha Juma, AJM-001"],
       [3, "email-to-add", false, null],
       [4, "present", false, null],
       [11, "refused", false, "Bad code"],

@@ -84,12 +84,14 @@ describe("reading the Discount code registration", () => {
 })
 
 describe("the initials a new code starts with", () => {
-  it("are the first letters of the first three names, as the database takes them", () => {
+  it("are three letters: the first letters of the first three names, then the name's next unused letters, then X, as the database takes them", () => {
     expect(agentCodePrefix(agentFullName(NAMES))).toBe("RAJ")
     expect(agentCodePrefix(agentFullName({ firstName: "amina", middleName: "hassan", lastName: "bin salim" }))).toBe("AHB")
-    expect(agentCodePrefix("JOHN DOE")).toBe("JD")
-    expect(agentCodePrefix("ÉMILE ALI JUMA")).toBe("AJ")
-    expect(agentCodePrefix("")).toBe("AR")
+    expect(agentCodePrefix("JOHN DOE")).toBe("JDO")
+    expect(agentCodePrefix("MADONNA")).toBe("MAD")
+    expect(agentCodePrefix("ÉMILE ALI JUMA")).toBe("AJM")
+    expect(agentCodePrefix("JO")).toBe("JOX")
+    expect(agentCodePrefix("")).toBe("XXX")
   })
 })
 

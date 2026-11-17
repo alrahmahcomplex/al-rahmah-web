@@ -198,7 +198,7 @@ describe("apply_form_discount_code", () => {
     await submitAdmissionForm(secretClient(), sent)
     const lead = await leadIdOf(sent.children[0].fullName)
 
-    expect(await applyFormDiscountCode(secretClient(), lead, "ABC_123!", null)).toEqual({ ok: false, error: "invalid" })
+    expect(await applyFormDiscountCode(secretClient(), lead, "KODI€", null)).toEqual({ ok: false, error: "invalid" })
     expect(await applyFormDiscountCode(secretClient(), lead, "   ", null)).toEqual({ ok: false, error: "invalid" })
     expect(await codeOf(sent.children[0].fullName)).toBeNull()
   })

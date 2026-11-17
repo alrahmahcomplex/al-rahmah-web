@@ -19,6 +19,13 @@ export function freshCode(prefix = "T"): string {
   return `${prefix}${randomUUID().replace(/-/g, "").slice(0, 9).toUpperCase()}`
 }
 
+// An agent's code, ABC-123, no record is likely to hold: `first`, two random
+// letters and three digits.
+export function freshAgentCode(first = "T"): string {
+  const letter = () => String.fromCharCode(65 + randomInt(0, 26))
+  return `${first}${letter()}${letter()}-${randomInt(100, 1000)}`
+}
+
 // A Visited lead carrying `code`, on a contact of its own, written as the
 // system.
 export async function leadWithCode(code: string | null, name = `Punguzo ${randomUUID().slice(0, 8)}`): Promise<string> {

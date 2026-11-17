@@ -122,7 +122,7 @@ test.describe("the Discount code page's answers", () => {
   })
 
   test("4. nothing matches, a switched-off code included", async ({ page }) => {
-    await send(page, { name: "Zawadi Hakuna Kitu", phone: phone(), email: email("four"), code: `NO-${randomInt(1000, 9999)}`, hasCode: true })
+    await send(page, { name: "Zawadi Hakuna Kitu", phone: phone(), email: email("four"), code: `NOX-${randomInt(100, 1000)}`, hasCode: true })
     await expect(notice(page)).toHaveText("Hatukupata code hii. Ihakiki, au piga simu ofisini.")
 
     const off = await existingAgent()

@@ -1,5 +1,7 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js"
 
+import { boxHyphenTwin } from "@/lib/discount-code-rules"
+
 import type { AgentStatus } from "./marketing-agents"
 import type { Result } from "./result"
 
@@ -274,13 +276,14 @@ export async function estimateDiscountCode(
   return { ok: true, data: { state: data.state, amount: data.amount } }
 }
 
-// The Discount code box adds a hyphen between one to three letters and the
-// digits after them (formatCode, components/guided-form/typing.ts), so an
-// agent code typed as AAN132 reads AAN-132. Promo codes never hold a hyphen,
-// so a Promo code of that shape, EID2026, arrives as EID-2026. This is the
-// code without the box's hyphen, or null when the code isn't that shape.
+// The Discount code box adds a hyphen between three letters and the digit
+// after them (formatCode, components/guided-form/typing.ts), so an agent code
+// typed as AAN132 reads AAN-132, and a Promo code of that shape, EID2026,
+// arrives as EID-2026. This is the code without that hyphen, or null when the
+// code isn't that shape. The database keeps the two apart: no two codes,
+// agent or Promo, differ only by that hyphen (discount_code_key).
 export function withoutBoxHyphen(code: string): string | null {
-  return /^[A-Z]{1,3}-[0-9]+$/.test(code) ? code.replace("-", "") : null
+  return code.charAt(3) === "-" ? boxHyphenTwin(code) : null
 }
 
 // What a code typed on the Admission form means, and the code to keep for

@@ -19,19 +19,38 @@ export const DISCOUNT_CODE_MAX_AGE = 30 * 24 * 60 * 60
 export const STANDARD_INTERVIEW_FEE = 50000
 
 // A code as the database normalizes it (normalize_referral_code): every
-// space removed, uppercased, then 1 to 20 letters A to Z, digits, `-` and
-// `.`. Null for anything else, which is not a code.
+// space removed, uppercased, then 1 to 20 printable characters, `!` to `~`
+// (letters, digits and symbols such as `-` and `$`). Null for anything else,
+// which is not a code.
 export function normalizeDiscountCode(value: unknown): string | null {
   if (typeof value !== "string") return null
   const code = value.replace(/\s/g, "").toUpperCase()
-  return /^[A-Z0-9.-]{1,20}$/.test(code) ? code : null
+  return /^[!-~]{1,20}$/.test(code) ? code : null
 }
 
 // The Set-Cookie value the form writes when it opens from a Referral link.
-// Not HttpOnly, since the page writes it; Secure on https.
+// Not HttpOnly, since the page writes it; Secure on https. The code is
+// percent-encoded, since a code may hold `;`, `,` or `=`; read it back with
+// rememberedDiscountCode.
 export function discountCodeCookie(code: string, { secure }: { secure: boolean }): string {
-  const cookie = `${DISCOUNT_CODE_COOKIE}=${code}; Max-Age=${DISCOUNT_CODE_MAX_AGE}; Path=/; SameSite=Lax`
+  const cookie = `${DISCOUNT_CODE_COOKIE}=${encodeURIComponent(code)}; Max-Age=${DISCOUNT_CODE_MAX_AGE}; Path=/; SameSite=Lax`
   return secure ? `${cookie}; Secure` : cookie
+}
+
+// The remembered code in a Cookie header (`document.cookie`), decoded, or
+// undefined when there is none or it can't be read.
+export function rememberedDiscountCode(cookieHeader: string): string | undefined {
+  const prefix = `${DISCOUNT_CODE_COOKIE}=`
+  const value = cookieHeader
+    .split("; ")
+    .find((part) => part.startsWith(prefix))
+    ?.slice(prefix.length)
+  if (value === undefined) return undefined
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return undefined
+  }
 }
 
 // Where the Discount code field starts: the link's code, then the remembered

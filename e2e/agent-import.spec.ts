@@ -26,7 +26,7 @@ function mobile() {
 
 function freshCode() {
   const letter = () => String.fromCharCode(65 + randomInt(0, 26))
-  return `M${letter()}${letter()}-${randomInt(10_000, 100_000)}`
+  return `M${letter()}${letter()}-${randomInt(100, 1000)}`
 }
 
 const HEADER = ["Code", "Full name", "Mobile", "WhatsApp", "Email"]

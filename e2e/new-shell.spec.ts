@@ -81,8 +81,7 @@ test.describe("on a desktop", () => {
     await expect(page).toHaveURL(/\/staff\/applicants\?q=Asha$/)
   })
 
-  test("the toggle folds the sidebar to its icons, for both shells, across a reload", async ({ page, allowConsoleError }) => {
-    allowConsoleError(/^console\.error: Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/[^)]+\/staff\/no-such-page\)$/, "the staff 404 may answer with a 404 status")
+  test("the toggle folds the sidebar to its icons, for both shells, across a reload", async ({ page }) => {
     await open(page, ADMISSIONS, "/staff/kit")
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "true")
     await toggle(page).click()

@@ -1,8 +1,8 @@
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
-import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { logIn, signInOnce } from "./log-in"
 
 // The shell around every staff page (#225): the grouped sidebar and its rail,
 // and the phone's tab bar with its More sheet. Most routes are in the new
@@ -36,7 +36,6 @@ async function signIn(page: Page, person: FixtureStaff) {
 
 // An address no page answers: the staff 404, inside the old shell.
 const UNKNOWN = "/staff/no-such-page"
-const UNKNOWN_404 = /^console\.error: Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/[^)]+\/staff\/no-such-page\)$/
 
 const sidebar = (page: Page) => page.getByRole("complementary", { name: "Sidebar" })
 const staffNav = (page: Page) => page.getByRole("navigation", { name: "Staff" })
@@ -66,8 +65,7 @@ test.describe("on a desktop", () => {
     await expect(page.getByRole("banner")).toContainText("Staff and roles")
   })
 
-  test("Admissions Staff see Admissions, Referrals and Fee schedule, and no Admin group", async ({ page, allowConsoleError }) => {
-    allowConsoleError(UNKNOWN_404, "the staff 404 may answer with a 404 status")
+  test("Admissions Staff see Admissions, Referrals and Fee schedule, and no Admin group", async ({ page }) => {
     await logIn(page, ADMISSIONS.email, ADMISSIONS.password)
     await expect(page).toHaveURL(/\/staff$/)
     await page.goto(UNKNOWN)
@@ -81,6 +79,20 @@ test.describe("on a desktop", () => {
     await expect(nav.getByText("Admin", { exact: true })).toHaveCount(0)
     await expect(nav.getByRole("link", { name: /^(Seats|Discount requests|Reopening requests|Reports|Staff and roles)/ })).toHaveCount(0)
   })
+
+  // #437: leaving the staff 404 for another page reported React error #419,
+  // for every role. The console guard fails the test on any page error.
+  for (const person of [ACCOUNTANT, MANAGER, ADMISSIONS]) {
+    test(`the staff 404 opens and is left with no page errors, as ${person.roleName}`, async ({ page }) => {
+      await signInOnce(page, person.email, person.password)
+      await expect(page).toHaveURL(/\/staff$/)
+      await page.goto(UNKNOWN)
+      await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
+      await page.getByRole("button", { name: "Back to the staff area" }).click()
+      await expect(page).toHaveURL(/\/staff$/)
+      await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toHaveCount(0)
+    })
+  }
 
   test("the rail survives a navigation and a reload", async ({ page }) => {
     await signIn(page, MANAGER)

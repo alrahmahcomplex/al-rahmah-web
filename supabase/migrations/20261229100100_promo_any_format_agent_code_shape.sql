@@ -11,10 +11,11 @@
 --   key can't both be reached. Agent codes and Promo codes are unique by
 --   key across both tables: the triggers lock and compare keys, and a
 --   unique index holds it among Promo codes.
--- - Promo codes: 1 to 20 printable characters, never in the agent shape
---   ABC-123, and never three letters followed by two or more hyphens,
---   which the box shortens to one (ABC--1 to ABC-1), so the form could not
---   find them.
+-- - Promo codes: 1 to 15 printable characters in any shape, an agent's
+--   ABC-123 included (owner, 2026-11-17), as long as no agent code has the
+--   same key. Never three letters followed by two or more hyphens, which
+--   the box shortens to one (ABC--1 to ABC-1), so the form could not find
+--   them.
 -- - Agent codes: every new code, typed or generated, is exactly three
 --   letters, a hyphen and three digits. agent_draft refuses a typed code of
 --   another shape as `invalid` on the code, and a trigger refuses any other
@@ -81,7 +82,7 @@ revoke execute on function public.is_agent_code_shape(text) from public, anon, a
 alter table public.promo_codes drop constraint promo_codes_code_check;
 alter table public.promo_codes add constraint promo_codes_code_check check (
     code = public.normalize_referral_code(code)
-    and not public.is_agent_code_shape(code)
+    and char_length(code) <= 15
     and code !~ '^[A-Z]{3}-{2,}'
 );
 
@@ -192,7 +193,7 @@ declare
     moved uuid[];
 begin
     if clean_code is null
-       or public.is_agent_code_shape(clean_code)
+       or char_length(clean_code) > 15
        or clean_code ~ '^[A-Z]{3}-{2,}' then
         raise exception 'invalid' using detail = jsonb_build_object('field', 'code')::text;
     end if;

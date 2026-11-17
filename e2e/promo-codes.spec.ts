@@ -27,7 +27,7 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-// A code of its own, never in an agent's ABC-123 shape.
+// A code of its own.
 function newCode(): string {
   return `PR${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
 }
@@ -132,9 +132,9 @@ test.describe("Promo codes", () => {
     await page.getByRole("button", { name: "New Promo code" }).click()
     const sheet = page.getByRole("dialog", { name: "New Promo code" })
     await sheet.getByLabel("Name").fill(`Any format ${randomUUID().slice(0, 6)}`)
-    // An agent's shape is the one shape a Promo code can't take.
-    await sheet.getByLabel("Code parents type").fill("abc-123")
-    await expect(sheet.getByText("Up to 20 letters, numbers or symbols, and not in an agent’s ABC-123 shape.")).toBeVisible()
+    // Three letters and two hyphens is the one shape a Promo code can't take.
+    await sheet.getByLabel("Code parents type").fill("abc--1")
+    await expect(sheet.getByText("Up to 15 letters, numbers or symbols.", { exact: true })).toBeVisible()
     await sheet.getByLabel("Code parents type").fill(code.toLowerCase())
     await expect(sheet.getByText(`${code} is available.`)).toBeVisible()
     await sheet.getByLabel("Amount off the TZS 50,000 fee").fill("20000")

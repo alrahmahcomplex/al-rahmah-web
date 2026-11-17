@@ -1,7 +1,7 @@
 import type { ChipTone } from "../agents/discount-fields"
 import { discountRefusal, plural, tzs } from "../agents/discount-outcome"
 
-import { cleanDiscountCode, isPromoCode } from "@/lib/discount-code-rules"
+import { cleanDiscountCode, isPromoCode, PROMO_CODE_MAX_LENGTH } from "@/lib/discount-code-rules"
 import type { DiscountWriteError } from "@/lib/services/discount-codes"
 import type { PromoEffectiveState, PromoState, PromoWriteError } from "@/lib/services/promo-codes"
 
@@ -54,9 +54,9 @@ export type CodeCheck =
   | { status: "taken"; code: string; by: "promo-code" | "agent" }
   | { status: "unavailable" }
 
-export const CODE_HELP = "Any letters, numbers or symbols, up to 20."
+export const CODE_HELP = `Any letters, numbers or symbols, up to ${PROMO_CODE_MAX_LENGTH}.`
 export const CODE_FIXED = "A code cannot be changed once created."
-export const CODE_INVALID = "Up to 20 letters, numbers or symbols, and not in an agent’s ABC-123 shape."
+export const CODE_INVALID = `Up to ${PROMO_CODE_MAX_LENGTH} letters, numbers or symbols.`
 
 // The line under Code while it is typed, and whether it is a problem.
 export function codeCheckLine(check: CodeCheck): { text: string; problem: boolean } {

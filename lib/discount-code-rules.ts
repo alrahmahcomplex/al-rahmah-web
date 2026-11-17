@@ -6,6 +6,9 @@
 /** The longest code the database reads. */
 export const DISCOUNT_CODE_MAX_LENGTH = 20
 
+/** The longest Promo code (owner, 2026-11-17). The database holds the same limit. */
+export const PROMO_CODE_MAX_LENGTH = 15
+
 /** An agent's code: three letters, a hyphen and three digits. */
 export const AGENT_CODE_PATTERN = /^[A-Z]{3}-[0-9]{3}$/
 
@@ -15,12 +18,14 @@ export function cleanDiscountCode(typed: string): string {
 }
 
 /**
- * Whether a cleaned code can be a Promo code: 1 to 20 printable characters
- * in any mix, never in the agent shape ABC-123, and never three letters and
- * two or more hyphens, which the Admission form's box shortens to one.
+ * Whether a cleaned code can be a Promo code: 1 to PROMO_CODE_MAX_LENGTH
+ * printable characters in any mix and any shape, an agent's ABC-123
+ * included, but never three letters and two or more hyphens, which the
+ * Admission form's box shortens to one. No agent code may share its key
+ * (boxHyphenTwin); the database checks that.
  */
 export function isPromoCode(code: string): boolean {
-  return /^[!-~]{1,20}$/.test(code) && !AGENT_CODE_PATTERN.test(code) && !/^[A-Z]{3}-{2,}/.test(code)
+  return code.length >= 1 && code.length <= PROMO_CODE_MAX_LENGTH && /^[!-~]+$/.test(code) && !/^[A-Z]{3}-{2,}/.test(code)
 }
 
 /**

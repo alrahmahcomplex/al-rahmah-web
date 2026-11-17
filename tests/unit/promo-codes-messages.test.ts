@@ -44,9 +44,9 @@ describe("the Promo codes page's words", () => {
   })
 
   it("says whether a typed code is free, and who holds it when it isn't", () => {
-    expect(codeCheckLine({ status: "empty" })).toEqual({ text: "Any letters, numbers or symbols, up to 20.", problem: false })
+    expect(codeCheckLine({ status: "empty" })).toEqual({ text: "Any letters, numbers or symbols, up to 15.", problem: false })
     expect(codeCheckLine({ status: "unreadable" })).toEqual({
-      text: "Up to 20 letters, numbers or symbols, and not in an agent’s ABC-123 shape.",
+      text: "Up to 15 letters, numbers or symbols.",
       problem: false,
     })
     expect(codeCheckLine({ status: "available", code: "INSTA26" })).toEqual({ text: "INSTA26 is available.", problem: false })

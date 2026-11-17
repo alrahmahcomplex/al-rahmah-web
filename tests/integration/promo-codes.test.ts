@@ -89,7 +89,7 @@ describe("creating a Promo code", () => {
   test("refuses a bad code, name, amount, a past last day and a code already used", async () => {
     const manager = await signedIn(MANAGER)
     const base = { name: "Good", code: freshCode("B"), amount: 5000, endsOn: null, note: null }
-    for (const code of ["", "ABC-123", "abc -123", "ABC--1", "1".repeat(21), "KODI€"]) {
+    for (const code of ["", "ABC--1", "abc --1", "1".repeat(16), "KODI€"]) {
       expect(await createPromoCode(manager, { ...base, code })).toEqual({ ok: false, error: "invalid-code" })
     }
     expect(await createPromoCode(manager, { ...base, name: " " })).toEqual({ ok: false, error: "invalid-name" })
@@ -102,8 +102,8 @@ describe("creating a Promo code", () => {
 })
 
 describe("one code namespace", () => {
-  // An agent's code is ABC-123 and a Promo code never is, so the two meet
-  // only as twins across the hyphen: ABC123 is ABC-123 (#462).
+  // A code and its twin across the box's hyphen are one code: ABC123 is
+  // ABC-123 (#462).
   test("a Promo code may not take an agent's code or its twin, current or retired", async () => {
     const code = freshAgentCode("A")
     const manager = await signedIn(MANAGER)
@@ -115,8 +115,8 @@ describe("one code namespace", () => {
       code,
     })
     expect((agent.data as { outcome: string }).outcome).toBe("created")
-    expect(await createPromoCode(manager, { name: "Clash", code, amount: 5000, endsOn: null, note: null })).toEqual({ ok: false, error: "invalid-code" })
-    expect(await checkPromoCodeAvailable(manager, code)).toEqual({ ok: true, data: { kind: "invalid" } })
+    expect(await createPromoCode(manager, { name: "Clash", code, amount: 5000, endsOn: null, note: null })).toEqual({ ok: false, error: "code-taken" })
+    expect(await checkPromoCodeAvailable(manager, code)).toEqual({ ok: true, data: { kind: "agent", code } })
     const twin = code.replace("-", "")
     expect(await createPromoCode(manager, { name: "Clash", code: twin, amount: 5000, endsOn: null, note: null })).toEqual({ ok: false, error: "code-taken" })
     expect(await checkPromoCodeAvailable(manager, twin)).toEqual({ ok: true, data: { kind: "agent", code: twin } })
@@ -164,7 +164,7 @@ describe("one code namespace", () => {
     })
     expect(await checkPromoCodeAvailable(manager, freshCode("F"))).toMatchObject({ ok: true, data: { kind: "available" } })
     expect(await checkPromoCodeAvailable(manager, "kodi€")).toEqual({ ok: true, data: { kind: "invalid" } })
-    expect(await checkPromoCodeAvailable(manager, "ABC-123")).toEqual({ ok: true, data: { kind: "invalid" } })
+    expect(await checkPromoCodeAvailable(manager, "ABC--1")).toEqual({ ok: true, data: { kind: "invalid" } })
   })
 })
 
@@ -176,7 +176,7 @@ describe("Promo codes in any format (#462)", () => {
       [`$ave${tag}`, `$AVE${tag}`],
       [`as-${tag}`, `AS-${tag}`],
       [`50% off ${tag}`, `50%OFF${tag}`],
-      [`${tag}!#&=;,'"<>/.:?@[]{}|~`.slice(0, 20), `${tag}!#&=;,'"<>/.:?@[]{}|~`.slice(0, 20)],
+      [`${tag}!#&=;,'"<>/.:?@[]{}|~`.slice(0, 15), `${tag}!#&=;,'"<>/.:?@[]{}|~`.slice(0, 15)],
     ]) {
       const made = await createPromoCode(await signedIn(MANAGER), { name: `Any ${typed}`, code: typed, amount: 1000, endsOn: null, note: null })
       expect(made).toMatchObject({ ok: true, data: { code: stored } })
@@ -205,6 +205,23 @@ describe("Promo codes in any format (#462)", () => {
     const hyphened = `${promo.code.slice(0, 3)}-${promo.code.slice(3)}`
     expect(await checkPromoCodeAvailable(manager, hyphened)).toMatchObject({ ok: true, data: { kind: "promo-code", code: hyphened } })
     expect(await createPromoCode(manager, { name: "Promo twin", code: hyphened, amount: 1000, endsOn: null, note: null })).toEqual({
+      ok: false,
+      error: "code-taken",
+    })
+  })
+})
+
+describe("a Promo code may take an agent's shape (owner, 2026-11-17)", () => {
+  test("a free ABC-123 is a Promo code, and then no agent may take it or its twin", async () => {
+    const manager = await signedIn(MANAGER)
+    const code = freshAgentCode("P")
+    expect(await checkPromoCodeAvailable(manager, code)).toEqual({ ok: true, data: { kind: "available", code } })
+    const promo = await newPromo(1000, code)
+    expect(promo.code).toBe(code)
+    const draft = { full_name: `Shape Twin ${randomUUID().slice(0, 6)}`, phone: discountPhone(), whatsapp: "", email: "", code }
+    expect((await manager.rpc("create_marketing_agent", draft)).error?.message).toBe("code_taken")
+    // Its twin is a Promo code's twin too.
+    expect(await createPromoCode(manager, { name: "Twin", code: code.replace("-", ""), amount: 1000, endsOn: null, note: null })).toEqual({
       ok: false,
       error: "code-taken",
     })

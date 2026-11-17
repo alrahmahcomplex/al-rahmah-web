@@ -26,7 +26,7 @@ function formLookups(shown: string): string[] {
 }
 
 describe("what can be a Promo code", () => {
-  it.each(["SAVE10", "KARIBU2026", "AS-135", "$AVE", "EID2026", "EID-2026", "X", "50%OFF!", "A.B-1", "ABC1234", "ABC-1", "ABCD-123", "AB-123", "1".repeat(20)])(
+  it.each(["SAVE10", "KARIBU2026", "AS-135", "$AVE", "EID2026", "EID-2026", "X", "50%OFF!", "A.B-1", "ABC1234", "ABC-1", "ABCD-123", "AB-123", "ABC-123", "1".repeat(15)])(
     "takes %s",
     (code) => {
       expect(isPromoCode(code)).toBe(true)
@@ -35,10 +35,9 @@ describe("what can be a Promo code", () => {
 
   it.each([
     ["", "empty"],
-    ["ABC-123", "an agent's shape"],
     ["ABC--1", "three letters and two hyphens"],
     ["ABC--", "three letters and two hyphens"],
-    ["1".repeat(21), "21 characters"],
+    ["1".repeat(16), "16 characters"],
     ["KODI€", "a symbol outside ! to ~"],
     ["SAVE 10", "a space"],
   ])("refuses %j (%s)", (code) => {
@@ -62,7 +61,7 @@ describe("the twin across the box's hyphen", () => {
 })
 
 describe("every Promo code that can be created can be typed on the Admission form", () => {
-  const promos = ["SAVE10", "KARIBU2026", "AS-135", "$AVE", "EID2026", "EID-2026", "ABC1X", "ABC-", "ABC-$", "A", "ABC" + "1".repeat(17), "ABC-" + "1".repeat(16), "ABCD-1"]
+  const promos = ["SAVE10", "KARIBU2026", "AS-135", "$AVE", "EID2026", "EID-2026", "ABC1X", "ABC-", "ABC-$", "A", "ABC" + "1".repeat(12), "ABC-" + "1".repeat(11), "ABCD-1"]
 
   it.each(promos)("%s, typed key by key in any case, is found", (promo) => {
     expect(isPromoCode(promo)).toBe(true)

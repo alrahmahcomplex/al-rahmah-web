@@ -9,13 +9,13 @@ import type { FeeImpactFamily } from "./marketing-agents"
 import type { Result } from "./result"
 
 // Promo codes: school codes with a name and an amount off the interview fee,
-// never tied to an agent and never carrying commission. A code is 1 to 20
-// letters, digits or symbols in any mix (isPromoCode), never in the agent
-// shape ABC-123, unique across agent codes and Promo codes (ABC123 and
-// ABC-123 count as one), and never changes. Active gives the discount;
-// Paused gives nothing until resumed; Ended is final; an Active code past its
-// last day reads as Expired. Writes need discount_codes.manage, which the
-// database checks itself. A Paid fee keeps its amount.
+// never tied to an agent and never carrying commission. A code is 1 to 15
+// letters, digits or symbols in any mix and shape (isPromoCode), unique
+// across agent codes and Promo codes (ABC123 and ABC-123 count as one), and
+// never changes. Active gives the discount; Paused gives nothing until
+// resumed; Ended is final; an Active code past its last day reads as
+// Expired. Writes need discount_codes.manage, which the database checks
+// itself. A Paid fee keeps its amount.
 
 export type PromoState = "active" | "paused" | "ended"
 export type PromoEffectiveState = PromoState | "expired"

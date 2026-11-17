@@ -177,6 +177,15 @@ describe("a new child's answer", () => {
     expect(await Promise.all(ids.map(genderOf))).toEqual(["Girl", "Boy", null])
   })
 
+  test("the Admission form refuses an answer other than Boy or Girl as a malformed form", async () => {
+    const sent = await submitAdmissionForm(secretClient(), {
+      submissionKey: randomUUID(),
+      parent: parentOf(),
+      children: [{ ...formChild(nextYear), gender: "Other" as StudentGender }],
+    })
+    expect(sent).toEqual({ ok: false, error: { kind: "invalid", field: "payload", child: null } })
+  })
+
   test("a form sent before the question has the same retry key as before", async () => {
     // A retry of a form sent just before the release carries no answer; its
     // key must still match, so it replays instead of being refused.

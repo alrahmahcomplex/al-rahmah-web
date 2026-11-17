@@ -9,7 +9,8 @@ const TEXT = "The link may be wrong or out of date. Check the address, or go bac
 
 // Shown inside the staff layout when a page or record is not there, such as a
 // lead link with a wrong id, in the look of the shell around it. Built like
-// the forbidden page beside it.
+// the forbidden page beside it. A staff page returns it rather than calling
+// notFound(), which fails its streamed loading boundary (#437, #441).
 export default function StaffNotFound() {
   return (
     <NoticeByLook

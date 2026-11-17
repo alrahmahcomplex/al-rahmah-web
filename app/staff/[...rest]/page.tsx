@@ -1,10 +1,5 @@
-import type { Metadata } from "next"
-
 import StaffNotFound from "../not-found"
 import { requireStaff } from "../session"
-
-// Kept out of search results, as Next.js marks a streamed not-found.
-export const metadata: Metadata = { robots: { index: false } }
 
 // Any address under /staff that no page answers. Signed-in staff get the
 // staff 404 inside the shell; everyone else is sent to sign in first, as on

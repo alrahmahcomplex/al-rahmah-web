@@ -1,11 +1,12 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { forbidden, notFound } from "next/navigation"
 
 import { Card, Note, PageHeader, pageTitle } from "@/components/kit"
 import { getFeeSchedule } from "@/lib/services/fees"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../../forbidden"
+import StaffNotFound from "../../not-found"
 import { requireStaff } from "../../session"
 import { AcademicYearEditor } from "../academic-year-editor"
 import { AcademicYearView } from "../academic-year-view"
@@ -32,12 +33,12 @@ export const metadata: Metadata = {
 // Drawn in the new shell (#329).
 export default async function FeeSchedulePage({ params }: { params: Promise<{ year: string }> }) {
   const staff = await requireStaff()
-  if (!canReadFeeSchedule(staff.permissions)) forbidden()
+  if (!canReadFeeSchedule(staff.permissions)) return <StaffForbidden />
   const canEdit = canEditFeeAmounts(staff.permissions)
   const canSetYear = canEditAcademicYear(staff.permissions)
 
   const year = parseScheduleYear((await params).year)
-  if (year === null) notFound()
+  if (year === null) return <StaffNotFound />
 
   // The schedule needs payments.view; without it the database would return
   // nothing and the page would wrongly say the year has no schedule.

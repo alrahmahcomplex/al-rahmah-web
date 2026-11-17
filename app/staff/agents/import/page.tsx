@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { forbidden } from "next/navigation"
 
 import { Card, PageHeader, pageTitle } from "@/components/kit"
 import { listAgentImports } from "@/lib/services/agent-import"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../../forbidden"
 import { requireStaff } from "../../session"
 import { AgentImport } from "./agent-import"
 import "../agents.css"
@@ -24,7 +24,7 @@ const WHEN = new Intl.DateTimeFormat("en-GB", {
 // the refused rows. Earlier imports link to the agents each created.
 export default async function AgentImportPage() {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("agents.approve")) forbidden()
+  if (!staff.permissions.includes("agents.approve")) return <StaffForbidden />
   const imports = await listAgentImports(await createClient(), 10)
 
   return (

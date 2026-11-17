@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 import Form from "next/form"
 import Link from "next/link"
-import { forbidden } from "next/navigation"
 import type { ReactNode } from "react"
 
 import { Button, ButtonLink, Card, EmptyState, Field, FilterPills, Note, PageHeader, pageTitle } from "@/components/kit"
@@ -21,6 +20,7 @@ import { getAgentAccountCounts, getAgentInvites, type AgentInviteNote } from "@/
 import { getPendingAgentCount, listAgents, type AgentFilter, type AgentList } from "@/lib/services/marketing-agents"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { AgentAccessBanner } from "./access-banner"
 import { ClaimQueue } from "./claim-queue"
@@ -86,7 +86,7 @@ export default async function MarketingAgentsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
   const canApprove = staff.permissions.includes("agents.approve")
   const canManageDiscounts = staff.permissions.includes("discount_codes.manage")
 

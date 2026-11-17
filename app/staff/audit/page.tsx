@@ -1,7 +1,6 @@
 import { ScrollTextIcon } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
-import { forbidden } from "next/navigation"
 
 import { EmptyState } from "@/components/staff/empty-state"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -21,6 +20,7 @@ import {
 } from "@/lib/services/system-audit"
 import { createClient } from "@/utils/supabase/server"
 
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 
 export const metadata: Metadata = {
@@ -43,12 +43,12 @@ const AREA_LABELS = Object.fromEntries(AUDIT_AREAS.map((area) => [area.value, ar
 // administration, newest first. The Super Admin's alone (#237).
 export default async function AuditPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("audit.view")) forbidden()
+  if (!staff.permissions.includes("audit.view")) return <StaffForbidden />
 
   const filters = auditFilters(await searchParams)
   const supabase = await createClient()
   const [page, actors] = await Promise.all([getAuditPage(supabase, filters), getAuditActors(supabase)])
-  if (!page.ok && page.error === "forbidden") forbidden()
+  if (!page.ok && page.error === "forbidden") return <StaffForbidden />
 
   return (
     <div className="flex flex-col gap-6">

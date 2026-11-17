@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { forbidden } from "next/navigation"
 
 import { ButtonLink, Card, EmptyState, FilterPills, Note, PageHeader, pageTitle, Pagination } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
@@ -16,6 +15,7 @@ import { createClient } from "@/utils/supabase/server"
 
 import { leadTabHref } from "../applicants/[id]/tabs"
 import { closedState } from "../applicants/[id]/closed-state"
+import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { InterviewsTable, type InterviewTableRow } from "./interviews-table"
 import { interviewRows } from "./rows"
@@ -54,7 +54,7 @@ export default async function InterviewsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const staff = await requireStaff()
-  if (!staff.permissions.includes("leads.view")) forbidden()
+  if (!staff.permissions.includes("leads.view")) return <StaffForbidden />
 
   const supabase = await createClient()
   const asked = parseInterviewSearch(await searchParams)

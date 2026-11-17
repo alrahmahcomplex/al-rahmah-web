@@ -4,8 +4,8 @@ import { LANGUAGE_STATE_PREFIX, languageStateRewrites } from "./lib/language-sta
 
 const nextConfig: NextConfig = {
   experimental: {
-    // Lets staff pages call forbidden() for someone whose role lacks the
-    // permission a page needs.
+    // Makes app/staff/forbidden.tsx a forbidden() boundary. Staff pages return
+    // that page themselves rather than calling forbidden() (#441).
     authInterrupts: true,
   },
   async headers() {

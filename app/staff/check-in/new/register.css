@@ -1,8 +1,8 @@
 /* Register students (#308), measured from prototype v38. Tokens only. */
 
 .rs-page { display: flex; flex-direction: column; gap: 0; min-width: 0; }
-.rs-home { align-self: flex-start; margin-bottom: 14px; }
-.rs-page > header, .rs-page .kit-ph { text-align: center; }
+/* "‹ Home" (v38 .home-back): the outlined pill on white. */
+.rs-home { align-self: flex-start; margin-bottom: 14px; min-height: 40px; padding: 0 14px 0 8px; background: var(--gf-paper); }
 
 .rs-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .rs-centre { margin: 0; text-align: center; }

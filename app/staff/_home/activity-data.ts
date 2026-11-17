@@ -18,6 +18,14 @@ export function fullClassesFor(permissions: readonly Permission[], classes: read
   return mayOpenSeats(permissions) && classes ? fullClasses(classes) : []
 }
 
+/**
+ * Whether Home shows the log at all: every kind but the full classes needs
+ * leads.view, and the full classes go to staff who may open Seats.
+ */
+export function mayReadActivity(permissions: readonly Permission[]): boolean {
+  return permissions.includes("leads.view") || mayOpenSeats(permissions)
+}
+
 /** One page of the log, each row as this staff member sees it. */
 export async function activityScreenPage(
   supabase: SupabaseClient,

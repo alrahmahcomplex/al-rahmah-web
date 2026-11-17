@@ -10,7 +10,7 @@ import { countInterviewsByDay, countRegistrationsByDay } from "@/lib/services/ho
 import { getMyNotices } from "@/lib/services/staff-admin"
 import { createClient } from "@/utils/supabase/server"
 
-import { fullClassesFor } from "./_home/activity-data"
+import { fullClassesFor, mayReadActivity } from "./_home/activity-data"
 import { ActivityLog, ActivitySkeleton } from "./_home/activity-log"
 import { ChartCard } from "./_home/chart-card"
 import { classesTab, monthsTab, seatsTab, sourcesTab, type ChartTab } from "./_home/charts"
@@ -114,7 +114,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           <QuickActions actions={actions} />
         </div>
       </div>
-      {canView && (
+      {mayReadActivity(permissions) && (
         <Suspense fallback={<ActivitySkeleton />}>
           <ActivityLog permissions={permissions} today={today} full={fullClassesFor(permissions, seats?.ok ? seats.data.classes : null)} />
         </Suspense>

@@ -23,15 +23,29 @@ const sheetTime = (time: string) => (/^\d\d:\d\d$/.test(time) ? `Today ${time}` 
  */
 export function ActivityList({ first }: { first: ActivityScreenPage }) {
   const [shown, setShown] = useState(first)
+  const [from, setFrom] = useState(first)
   const [open, setOpen] = useState<ActivityView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  // Home read the log again (an action revalidated it, or the page was
+  // refreshed): show the new first page, as a reload would.
+  if (from !== first) {
+    setFrom(first)
+    setShown(first)
+    setOpen(null)
+    setError(null)
+  }
 
   function goTo(page: number) {
     setError(null)
     startTransition(async () => {
       try {
-        const outcome = await loadActivityPage(page)
+        let outcome = await loadActivityPage(page)
+        // The log shrank since this page was drawn: go to its new last page.
+        if (outcome.status === "ok" && outcome.page.total > 0 && outcome.page.page > outcome.page.pageCount) {
+          outcome = await loadActivityPage(outcome.page.pageCount)
+        }
         if (outcome.status === "ok") setShown(outcome.page)
         else setError(outcome.message)
       } catch {
@@ -39,6 +53,9 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
       }
     })
   }
+
+  // Nothing is left in the log: the card goes, as it does on a day with none.
+  if (shown.total === 0) return null
 
   const facts = (row: ActivityView): KeyValueItem[] => [
     { key: "Who", value: row.who },

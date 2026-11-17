@@ -80,11 +80,13 @@ revoke execute on function public.is_agent_code_shape(text) from public, anon, a
 -- ---------------------------------------------------------------------------
 
 alter table public.promo_codes drop constraint promo_codes_code_check;
-alter table public.promo_codes add constraint promo_codes_code_check check (
+-- IS TRUE: a code normalize_referral_code can't read gives null, which a
+-- plain check would let through.
+alter table public.promo_codes add constraint promo_codes_code_check check ((
     code = public.normalize_referral_code(code)
     and char_length(code) <= 15
     and code !~ '^[A-Z]{3}-{2,}'
-);
+) is true);
 
 create unique index promo_codes_code_key_idx on public.promo_codes (public.discount_code_key(code));
 create index marketing_agents_code_key_idx on public.marketing_agents (public.discount_code_key(code));
@@ -171,6 +173,28 @@ create trigger refuse_agent_code_shape
     before insert or update of code on public.marketing_agents
     for each row
     execute function public.refuse_agent_code_shape();
+
+-- The triggers above check every new code by key. Codes stored before them
+-- must not share a key either: an agent's ABC-123 and a Promo code's ABC123
+-- would leave one of them unreachable from the form. The share locks wait
+-- for any write still running under the old triggers, then hold the tables
+-- still while they are compared. Hosted held no agent record and no Promo
+-- code on 2026-11-17; if a pair exists by merge time the migration stops
+-- here, naming it, for staff to resolve before it runs again.
+do $$
+declare
+    pair record;
+begin
+    lock table public.promo_codes, public.marketing_agents in share mode;
+    select p.code as promo_code, a.code as agent_code into pair
+    from public.promo_codes p
+    join public.marketing_agents a on public.discount_code_key(a.code) = public.discount_code_key(p.code)
+    limit 1;
+    if found then
+        raise exception 'discount_code_key_clash' using detail = format('Promo code %s and agent code %s share a key', pair.promo_code, pair.agent_code);
+    end if;
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- create_promo_code, as 20261204130300_discount_code_writes.sql made it,

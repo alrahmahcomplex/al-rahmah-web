@@ -124,6 +124,26 @@ describe("the Discount code format", () => {
     })
   })
 
+  test("a free number is still found when other creations take the numbers it would have tried", async () => {
+    await atNumber(farNumber(), async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(
+        `insert into public.marketing_agents (full_name, phone, code)
+         select 'Taken Prefix', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || lpad(k::text, 3, '0')
+         from generate_series(1, 999) k where k <> 500`,
+        [randomInt(0, 90_000_000)],
+      )
+      // Stepping 999 at a time, as if other creations took every number in
+      // between, the sequence offers the same taken number 999 times over.
+      await sql.query("alter sequence public.agent_code_numbers increment by 999")
+      try {
+        expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-500")
+      } finally {
+        await sql.query("alter sequence public.agent_code_numbers increment by 1")
+      }
+    })
+  })
+
   test("every set of initials has 999 codes; when all are taken, the creation is refused", async () => {
     await atNumber(farNumber(), async (sql) => {
       await sql.query("select public.set_audit_actor('system')")

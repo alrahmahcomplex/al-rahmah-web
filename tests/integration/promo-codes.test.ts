@@ -183,6 +183,18 @@ describe("Promo codes in any format (#462)", () => {
     }
   })
 
+  test("the table itself refuses a code that isn't one, even from the database owner", async () => {
+    for (const code of ["", "KODI€", "save 10", "1".repeat(16), "ABC--1"]) {
+      const answer = await inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        return sql
+          .query("insert into public.promo_codes (code, name, amount) values ($1, 'Direct', 1000)", [code])
+          .then(() => "inserted", (error: Error) => error.message)
+      })
+      expect(answer, code).toMatch(/promo_codes_code_check/)
+    }
+  })
+
   test("ABC123 and ABC-123 are one code: a Promo code can't be an agent code's twin, nor another Promo code's", async () => {
     const manager = await signedIn(MANAGER)
     const agentCode = freshAgentCode("W")

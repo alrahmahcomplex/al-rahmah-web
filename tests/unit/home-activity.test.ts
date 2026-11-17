@@ -123,6 +123,13 @@ describe("getHomeActivity", () => {
     expect(await getHomeActivity(supabase, 1)).toEqual({ ok: false, error: "unavailable" })
   })
 
+  it("asks no page beyond the last, so the offset fits the database's integer", async () => {
+    const { supabase, rpc } = client({ data: { total: 3, rows: [] } })
+    const result = await getHomeActivity(supabase, 214_748_366)
+    expect(rpc).toHaveBeenCalledWith("home_activity", { row_offset: 999_990, row_limit: 10 })
+    expect(result).toEqual({ ok: true, data: { rows: [], total: 3, page: 100_000, pageCount: 1 } })
+  })
+
   it("reads an unreadable page as the first", async () => {
     const { supabase, rpc } = client({ data: { total: 0, rows: [] } })
     await getHomeActivity(supabase, Number.NaN)

@@ -15,6 +15,9 @@ import type { PaymentType } from "./school-fee-payments"
 // open Seats, and go first. Both are paged together, ten rows a page.
 
 export const ACTIVITY_PER_PAGE = 10
+// The highest page asked for. Far beyond any real log, and its offset stays
+// inside the database's integer.
+export const ACTIVITY_LAST_PAGE = 100_000
 
 export type ActivityLead = {
   leadId: string
@@ -197,7 +200,7 @@ export async function getHomeActivity(
   page: number,
   full: readonly FullClass[] = [],
 ): Promise<Result<ActivityPage, "forbidden" | "unavailable">> {
-  const shownPage = Number.isInteger(page) && page >= 1 ? page : 1
+  const shownPage = Number.isInteger(page) && page >= 1 ? Math.min(page, ACTIVITY_LAST_PAGE) : 1
   const window = activityWindow(shownPage, full.length)
   const { data, error } = await supabase.rpc("home_activity", { row_offset: window.offset, row_limit: window.limit })
 

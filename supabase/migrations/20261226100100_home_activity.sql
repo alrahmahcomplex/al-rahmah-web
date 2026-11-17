@@ -348,7 +348,7 @@ begin
             jsonb_agg(
                 jsonb_build_object('kind', o.kind, 'id', o.id, 'all_day', o.all_day, 'at', o.at) || o.body
                 order by o.position
-            ) filter (where o.position > row_offset and o.position <= row_offset + row_limit),
+            ) filter (where o.position > row_offset and o.position <= row_offset::bigint + row_limit),
             '[]'::jsonb
         )
     )

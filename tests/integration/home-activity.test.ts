@@ -426,6 +426,13 @@ describe("pages", () => {
     }
   })
 
+  test("an offset at the top of the integer range gives an empty page with the total", async () => {
+    const { data, error } = await (await signedIn(MANAGER)).rpc("home_activity", { row_offset: 2_147_483_647, row_limit: 100 })
+    expect(error).toBeNull()
+    expect(data).toMatchObject({ rows: [] })
+    expect((data as { total: number }).total).toBeGreaterThanOrEqual(0)
+  })
+
   test("the service reads one page of ten with the total", async () => {
     const page = await getHomeActivity(await signedIn(MANAGER), 1)
     if (!page.ok) throw new Error(page.error)

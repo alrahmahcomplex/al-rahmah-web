@@ -161,6 +161,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   // What the form holds now, for an answer that arrives after a read or a sheet.
   const latest = useRef({ answers, onFileFees })
   const reading = useRef(new Set<string>())
+  // The latest pick on each student's on-file question: a read that comes back after another pick is ignored.
+  const picks = useRef(new Map<number, { leadId: string; yes: boolean }>())
   const [sheetRound, setSheetRound] = useState(0)
   const [timers] = useState(() => new Set<number>())
 
@@ -228,6 +230,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setOnFileFees({})
     asked.current.clear()
     reading.current.clear()
+    picks.current.clear()
     setSheetRound((r) => r + 1)
   }
 
@@ -291,8 +294,13 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
    */
   function pickOnFile(ask: OnFileAsk, yes: boolean, clear: () => void) {
     const id = `f${ask.student}`
-    if (!yes) return later(() => answer(id, (x) => withOnFile(x, ask.student, { leadId: ask.leadId, yes: false })), PICK_MS)
-    if (locked || reading.current.has(ask.leadId)) return
+    if (locked) return
+    picks.current.set(ask.student, { leadId: ask.leadId, yes })
+    if (!yes)
+      return later(() => {
+        if (picks.current.get(ask.student)?.yes === false) answer(id, (x) => withOnFile(x, ask.student, { leadId: ask.leadId, yes: false }))
+      }, PICK_MS)
+    if (reading.current.has(ask.leadId)) return
     reading.current.add(ask.leadId)
     asked.current.add(ask.leadId)
     readOnFileSibling(ask.leadId)
@@ -301,6 +309,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         reading.current.delete(ask.leadId)
         const read = r?.status === "read" ? r.fee : null
         setOnFileFees((m) => ({ ...m, [ask.leadId]: read ?? "failed" }))
+        // Staff chose No, another child, or started over while the group was read: that choice stands.
+        const last = picks.current.get(ask.student)
+        if (!last?.yes || last.leadId !== ask.leadId) return
         // Unread, the Yes is kept as it was given: the fee step stops until the read works, and this question opens again if a sheet is needed.
         if (read) nextOnFile({ from: "pick", ask, read, links: {} }, clear)
         else answer(id, (x) => withOnFile(x, ask.student, { leadId: ask.leadId, yes: true }))

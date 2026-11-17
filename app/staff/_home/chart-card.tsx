@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react"
 
 import { Card, Table, TabSwitch, TextLink } from "@/components/kit"
 
@@ -34,7 +34,7 @@ export function ChartCard({ tabs }: { tabs: ChartTab[] }) {
 function ChartPanel({ tab }: { tab: ChartTab }) {
   const [open, setOpen] = useState(false)
   const tableId = useId()
-  const { box, tipRef, shown, mark, hide } = useChartTip()
+  const { box, tipRef, shown, mark, hide, keep } = useChartTip()
   return (
     <div className="hm-ch" ref={box} onKeyDown={(event) => event.key === "Escape" && hide()}>
       <div className="hm-ch-h">
@@ -51,7 +51,7 @@ function ChartPanel({ tab }: { tab: ChartTab }) {
         {open && <NumbersTable tab={tab} />}
       </div>
       {shown && (
-        <span ref={tipRef} className="hm-ch-tip" aria-hidden="true" style={{ left: shown.x, top: shown.y }}>
+        <span ref={tipRef} className="hm-ch-tip" aria-hidden="true" style={{ left: shown.x, top: shown.y }} onMouseEnter={keep} onMouseLeave={hide}>
           <b className="kit-num">{shown.number}</b>
           <small>{shown.words}</small>
         </span>
@@ -70,20 +70,32 @@ type Mark = (key: string, tip: Tip) => {
 }
 
 // The tooltip sits over the mark's anchor (its dot, or the mark itself),
-// kept inside the card.
+// kept inside the card. Leaving a mark hides it a moment later, so the
+// pointer can move onto the tooltip and keep it (WCAG 1.4.13).
 function useChartTip() {
   const box = useRef<HTMLDivElement>(null)
   const tipRef = useRef<HTMLSpanElement>(null)
+  const leaving = useRef<number | undefined>(undefined)
   const [shown, setShown] = useState<ShownTip | null>(null)
+  const keep = () => window.clearTimeout(leaving.current)
 
   const show = (key: string, tip: Tip, element: HTMLElement) => {
+    keep()
     const frame = box.current?.getBoundingClientRect()
     if (!frame) return
     const anchor = element.querySelector<HTMLElement>("[data-anchor]") ?? element
     const rect = anchor.getBoundingClientRect()
     setShown({ ...tip, key, x: rect.left - frame.left + rect.width / 2, y: rect.top - frame.top })
   }
-  const hide = () => setShown(null)
+  const hide = () => {
+    keep()
+    setShown(null)
+  }
+  const hideSoon = () => {
+    keep()
+    leaving.current = window.setTimeout(() => setShown(null), 150)
+  }
+  useEffect(() => keep, [])
 
   useLayoutEffect(() => {
     const tip = tipRef.current
@@ -98,11 +110,11 @@ function useChartTip() {
     tabIndex: 0,
     "data-on": shown?.key === key ? "" : undefined,
     onMouseEnter: (event) => show(key, tip, event.currentTarget),
-    onMouseLeave: hide,
+    onMouseLeave: hideSoon,
     onFocus: (event) => show(key, tip, event.currentTarget),
     onBlur: hide,
   })
-  return { box, tipRef, shown, mark, hide }
+  return { box, tipRef, shown, mark, hide, keep }
 }
 
 const spoken = (tip: Tip) => `${tip.number}, ${tip.words}`

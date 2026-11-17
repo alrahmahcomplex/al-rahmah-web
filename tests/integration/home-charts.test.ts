@@ -14,8 +14,10 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 vi.mock("server-only", () => ({}))
 
 // Home's chart counts (#405) against local Supabase. The test moves the leads
-// it makes into a year of its own in the 1900s, which no seed and no other
-// test uses, and reads only that year.
+// it makes into a year of its own in 1963–1997, which no seed and no other
+// test uses, and reads only that year. Each lead is placed at a time of day
+// in Tanzania, which the database turns into an instant itself, so no UTC
+// offset is written here.
 
 const [, nextYear] = admissionYears()
 // The seeded Approved agent's code.
@@ -23,10 +25,10 @@ const AGENT_CODE = "BJN-402"
 
 let year: number
 
-// A year in 1902–1998 with no lead in it, nor in the years either side.
+// A year in 1963–1997 with no lead in it, nor in the years either side.
 async function emptyYear(): Promise<number> {
   for (;;) {
-    const candidate = 1902 + randomInt(0, 97)
+    const candidate = 1963 + randomInt(0, 35)
     const taken = await inRolledBackTransaction(async (sql) => {
       const { rows } = await sql.query<{ n: number }>(
         `select count(*)::int as n from public.leads
@@ -94,8 +96,20 @@ async function imported(): Promise<string> {
   })
 }
 
-async function moveTo(leadId: string, createdAt: string) {
-  await asSystem((sql) => sql.query("update public.leads set created_at = $2 where id = $1", [leadId, createdAt]))
+// Places the lead at a Tanzania date and time: [year, month, day, hour, minute].
+async function moveTo(leadId: string, [y, m, d, h, min]: [number, number, number, number, number]) {
+  await asSystem((sql) =>
+    sql.query("update public.leads set created_at = make_timestamptz($2, $3, $4, $5, $6, 0, 'Africa/Dar_es_Salaam') where id = $1", [leadId, y, m, d, h, min]),
+  )
+}
+
+// Writes as the database owner under another audit actor, as the form's
+// later steps (a re-application, a family match) do.
+async function asActor<T>(actor: "public_form", work: (sql: Parameters<Parameters<typeof asSystem>[0]>[0]) => Promise<T>): Promise<T> {
+  return asSystem(async (sql) => {
+    await sql.query("select public.set_audit_actor($1)", [actor])
+    return work(sql)
+  })
 }
 
 async function countsAs(person: { email: string; password: string }): Promise<HomeChartCounts> {
@@ -109,6 +123,7 @@ const nonZero = (rows: { count: number }[], key: (row: never) => string) =>
 
 beforeAll(async () => {
   year = await emptyYear()
+  console.info(`home-charts: planted in ${year}`)
   const promo = freshCode("C")
   await asSystem((sql) => sql.query("insert into public.promo_codes (code, name, amount) values ($1, 'Chart promo', 5000)", [promo]))
 
@@ -120,32 +135,41 @@ beforeAll(async () => {
   const importedLead = await imported()
   const nextYearLead = await atDesk("FORM 2")
   const lastYearLead = await atDesk("FORM 3")
+  // Registered at the desk, then touched by the form: still the desk.
+  const deskThenForm = await atDesk("KG 1")
+  await asActor("public_form", (sql) => sql.query("update public.leads set returning_family_reapplied = true where id = $1", [deskThenForm]))
+  // A Promo code on a form lead, and an agent's code on a desk lead: the code decides.
+  const formPromo = await fromForm("KG 2")
+  const deskAgent = await atDesk("KG 1")
+  await asSystem(async (sql) => {
+    await sql.query("update public.leads set referral_code = $2 where id = $1", [formPromo, promo])
+    await sql.query("update public.leads set referral_code = $2 where id = $1", [deskAgent, AGENT_CODE])
+  })
 
-  // 08:00 on 1 January in Tanzania is 05:00 UTC.
-  await moveTo(formPlain, `${year}-01-01T05:00:00Z`)
-  await moveTo(formAgent, `${year}-03-10T09:00:00Z`)
-  await moveTo(deskPlain, `${year}-03-20T09:00:00Z`)
-  await moveTo(deskPromo, `${year}-07-04T09:00:00Z`)
-  // 23:59 on 31 December in Tanzania, 20:59 UTC.
-  await moveTo(systemPlain, `${year}-12-31T20:59:00Z`)
-  await moveTo(importedLead, `${year}-05-05T09:00:00Z`)
-  // 00:00 on 1 January of the next year in Tanzania, 21:00 UTC the day before.
-  await moveTo(nextYearLead, `${year}-12-31T21:00:00Z`)
-  // 23:59 on 31 December of the year before.
-  await moveTo(lastYearLead, `${year - 1}-12-31T20:59:00Z`)
+  await moveTo(formPlain, [year, 1, 1, 0, 0])
+  await moveTo(formAgent, [year, 3, 10, 9, 0])
+  await moveTo(deskPlain, [year, 3, 20, 9, 0])
+  await moveTo(deskThenForm, [year, 2, 2, 9, 0])
+  await moveTo(formPromo, [year, 2, 28, 23, 59])
+  await moveTo(deskPromo, [year, 7, 4, 9, 0])
+  await moveTo(deskAgent, [year, 8, 1, 0, 0])
+  await moveTo(systemPlain, [year, 12, 31, 23, 59])
+  await moveTo(importedLead, [year, 5, 5, 9, 0])
+  await moveTo(nextYearLead, [year + 1, 1, 1, 0, 0])
+  await moveTo(lastYearLead, [year - 1, 12, 31, 23, 59])
 })
 
 describe("home_chart_counts", () => {
   test("counts this year's applications by month, in Tanzania time", async () => {
     const counts = await countsAs(MANAGER)
-    expect(counts.months).toEqual([1, 0, 2, 0, 0, 0, 1, 0, 0, 0, 0, 1])
-    expect(counts.total).toBe(5)
+    expect(counts.months).toEqual([1, 2, 2, 0, 0, 0, 1, 1, 0, 0, 0, 1])
+    expect(counts.total).toBe(8)
   })
 
   test("counts them by their current class, every class listed", async () => {
     const counts = await countsAs(MANAGER)
     expect(counts.classes.map((row) => row.className)).toEqual([...LEAD_CLASSES])
-    expect(nonZero(counts.classes, (row: { className: string }) => row.className)).toEqual({ "STD 2": 1, "STD 3": 2, "STD 4": 2 })
+    expect(nonZero(counts.classes, (row: { className: string }) => row.className)).toEqual({ "KG 1": 2, "KG 2": 1, "STD 2": 1, "STD 3": 2, "STD 4": 2 })
   })
 
   test("sorts them by source: a Promo code, an agent's code, the Admission form, or the desk", async () => {
@@ -153,10 +177,11 @@ describe("home_chart_counts", () => {
     expect(counts.sources.map((row) => row.source)).toEqual([...APPLICATION_SOURCES])
     expect(nonZero(counts.sources, (row: { source: string }) => row.source)).toEqual({
       admission_form: 1,
-      agent_code: 1,
-      promo_code: 1,
-      // One registered by staff, one written by the system: neither is the form.
-      walk_in: 2,
+      // From the form and from the desk.
+      agent_code: 2,
+      promo_code: 2,
+      // Registered by staff (one later touched by the form) or written by the system: never the form.
+      walk_in: 3,
     })
   })
 

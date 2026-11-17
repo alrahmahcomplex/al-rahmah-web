@@ -52,19 +52,19 @@ beforeEach(() => {
 })
 
 describe("registerFamily", () => {
-  it("refuses a role without payments.view, as the page does, and saves nothing", async () => {
-    stubs.allowed.mockResolvedValue(staff(["leads.create", "visits.record"]))
+  it.each([["payments.view"], ["leads.edit"]])("refuses a role without %s, as the page does, and saves nothing", async (missing) => {
+    stubs.allowed.mockResolvedValue(staff(["leads.create", "visits.record", "payments.view", "leads.edit"].filter((p) => p !== missing)))
     expect(await registerFamily(form())).toEqual({ status: "forbidden" })
     expect(stubs.register).not.toHaveBeenCalled()
   })
 
-  it("saves for a role with all three permissions", async () => {
-    stubs.allowed.mockResolvedValue(staff(["leads.create", "visits.record", "payments.view"]))
+  it("saves for a role with all four permissions", async () => {
+    stubs.allowed.mockResolvedValue(staff(["leads.create", "visits.record", "payments.view", "leads.edit"]))
     expect(await registerFamily(form())).toMatchObject({ status: "created", students: [{ admissionNumber: "ADMSN-1" }] })
   })
 
   it.each([["previousSchool"], ["siblingOf"], ["nameAnswer"], ["broughtBy"], ["custodian"]])("refuses %s posted as null, without throwing", async (field) => {
-    stubs.allowed.mockResolvedValue(staff(["leads.create", "visits.record", "payments.view"]))
+    stubs.allowed.mockResolvedValue(staff(["leads.create", "visits.record", "payments.view", "leads.edit"]))
     expect(await registerFamily(form({ [field]: null }))).toEqual({ status: "refused", field: null })
     expect(stubs.register).not.toHaveBeenCalled()
   })

@@ -13,4 +13,4 @@ bump: minor
 ### IMPROVED
 
 - Register students opens from Home in the new look, with a Home button back. "Back to Check-in" on an application now reads "Back to Home".
-- Register students needs permission to view school-fee payments, as well as to create applicants and record visits.
+- Register students needs permission to view school-fee payments and to edit applicants, as well as to create applicants and record visits, so whoever registers can finish the form.

@@ -1,10 +1,11 @@
 import type { Permission } from "@/lib/permissions"
 
 /**
- * Register students needs the fees too (owner, 2026-11-17): a role that can
- * register can read the Fee schedule, so the fee step always has its numbers.
- * Home shows the button, and the page opens, only with all three.
+ * Who may register students (owner, 2026-11-17): whoever registers must be
+ * able to finish the form. payments.view reads the Fee schedule for the fee
+ * step; leads.edit links siblings and puts on the Discount code. Home shows
+ * the button, and the page opens and saves, only with all four.
  */
-export const REGISTER_PERMISSIONS = ["leads.create", "visits.record", "payments.view"] as const satisfies readonly Permission[]
+export const REGISTER_PERMISSIONS = ["leads.create", "visits.record", "payments.view", "leads.edit"] as const satisfies readonly Permission[]
 
 export const mayRegister = (permissions: readonly string[]) => REGISTER_PERMISSIONS.every((p) => permissions.includes(p))

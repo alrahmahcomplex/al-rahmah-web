@@ -1,4 +1,4 @@
-import { SkeletonBlock } from "@/components/kit"
+import { Bento, SkeletonBlock } from "@/components/kit"
 
 import "../lead.css"
 
@@ -18,10 +18,10 @@ export default function Loading() {
         </div>
       </div>
       <SkeletonBlock height={260} shape="card" />
-      <div className="lr-grid">
+      <Bento columns={2}>
         <SkeletonBlock height={220} shape="card" />
-        <SkeletonBlock height={180} shape="card" />
-      </div>
+        <SkeletonBlock height={220} shape="card" />
+      </Bento>
       <SkeletonBlock width={232} height={44} shape="pill" />
     </div>
   )

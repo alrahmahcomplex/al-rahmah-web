@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 
+import { Bento } from "@/components/kit"
 import type { Lead } from "@/lib/services/leads"
 
 import { CardHeading, LEAD_CARD } from "../lead-card"
@@ -17,7 +18,7 @@ export function LeadSummary({ lead, nextStep }: { lead: Lead; nextStep?: ReactNo
 
       {nextStep}
 
-      <div className="lr-grid">
+      <Bento columns={2}>
         <section aria-labelledby="lead-student" className={LEAD_CARD}>
           <CardHeading id="lead-student" title="Student" />
           <Details rows={studentRows(lead)} />
@@ -26,7 +27,7 @@ export function LeadSummary({ lead, nextStep }: { lead: Lead; nextStep?: ReactNo
           <CardHeading id="lead-parent" title="Parent or guardian" />
           <Details rows={parentRows(lead)} />
         </section>
-      </div>
+      </Bento>
     </>
   )
 }

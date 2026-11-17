@@ -6,6 +6,7 @@ import { ProgressBar, type ProgressGroup } from "@/components/guided-form/progre
 import { Icon, ICONS, type IconName } from "@/components/icons"
 import { Illustration, type IllustrationName } from "@/components/illustrations"
 import {
+  Bento,
   Button,
   ButtonLink,
   Card,
@@ -38,7 +39,7 @@ import { FormPartsCard, ListInPopoverCard } from "./form-parts"
 import { GuidedDemo } from "./guided-demo"
 import "./kit-page.css"
 import { OverlayCards } from "./overlays"
-import { PickedPartsCards } from "./picked-parts"
+import { NamesCard, PickedPartsCards } from "./picked-parts"
 
 // The approved prototype's "Design system" page (version 13), rebuilt with
 // the kit, card for card; then the kit's other pieces, filled with the
@@ -124,165 +125,169 @@ function DesignSystem({ tab, today }: { tab: string; today: string }) {
   }
 
   return (
-    <div className="kp-ds" data-part="design-system" data-rise="group">
-      <Card title="Icons: one colour at rest, two in use" className="kp-full">
-        <p className="kp-spec">
-          Set 1 · Two lines: the main shape in indigo, its detail in orange when hovered or current. One colour at rest. 24px grid, 2px round stroke. Hover them.
-        </p>
-        <div className="kp-icg" data-icons="hover">
-          {ICON_NAMES.map((name) => (
-            <span key={name} title={name} data-icon-host="">
-              <Icon name={name} />
-              <small>{name}</small>
-            </span>
-          ))}
-        </div>
-        <div className="kp-rowx kp-icsz" data-icons="featured">
-          {([16, 20, 24] as const).map((size) => (
-            <span key={size}>
-              <Icon name="applicants" size={size} featured />
-              <small>{size}px</small>
-            </span>
-          ))}
-        </div>
-        <p className="kp-spec">16 in small buttons and rows, 20 in buttons and fields, 24 on their own.</p>
-      </Card>
+    <div className="kp-part" data-part="design-system">
+      <Bento className="kp-ds" data-rise="group">
+        <Card title="Icons: one colour at rest, two in use" data-bento="full">
+          <p className="kp-spec">
+            Set 1 · Two lines: the main shape in indigo, its detail in orange when hovered or current. One colour at rest. 24px grid, 2px round stroke. Hover them.
+          </p>
+          <div className="kp-icg" data-icons="hover">
+            {ICON_NAMES.map((name) => (
+              <span key={name} title={name} data-icon-host="">
+                <Icon name={name} />
+                <small>{name}</small>
+              </span>
+            ))}
+          </div>
+          <div className="kp-rowx kp-icsz" data-icons="featured">
+            {([16, 20, 24] as const).map((size) => (
+              <span key={size}>
+                <Icon name="applicants" size={size} featured />
+                <small>{size}px</small>
+              </span>
+            ))}
+          </div>
+          <p className="kp-spec">16 in small buttons and rows, 20 in buttons and fields, 24 on their own.</p>
+        </Card>
 
-      <Card title="Illustrations" className="kp-full">
-        <p className="kp-spec">
-          C · Soft circle, for empty lists, loading and longer work: each picture sits on a lavender circle with white fills and one peach highlight. Line drawings in
-          our colours, never isometric. The loading and working pictures move until the wait is over.
-        </p>
-        <div className="kp-ilg">
-          {ILLUSTRATIONS.map(({ name, kind, title, caption }) => (
-            <figure key={name} className="kp-ilt">
-              <Illustration name={name} size={132} />
-              <figcaption>
-                <Tag tone={KIND_TONE[kind]}>{kind}</Tag>
-                <b>{title}</b>
-                <small>{caption}</small>
-              </figcaption>
-            </figure>
-          ))}
-        </div>
-      </Card>
+        <Card title="Illustrations" data-bento="full">
+          <p className="kp-spec">
+            C · Soft circle, for empty lists, loading and longer work: each picture sits on a lavender circle with white fills and one peach highlight. Line drawings in
+            our colours, never isometric. The loading and working pictures move until the wait is over.
+          </p>
+          <div className="kp-ilg">
+            {ILLUSTRATIONS.map(({ name, kind, title, caption }) => (
+              <figure key={name} className="kp-ilt">
+                <Illustration name={name} size={132} />
+                <figcaption>
+                  <Tag tone={KIND_TONE[kind]}>{kind}</Tag>
+                  <b>{title}</b>
+                  <small>{caption}</small>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </Card>
 
-      <Card title="Colour">
-        <div className="kp-sw">
-          {SWATCHES.map(([name, token]) => (
-            <Swatch key={token} name={name} token={token} />
-          ))}
-        </div>
-        <p className="kp-spec">
-          Page background: the lavender wash, <code>135deg</code> from a fainter Whisper through a third of Mist to white.
-        </p>
-      </Card>
+        <Card title="Colour">
+          <div className="kp-sw">
+            {SWATCHES.map(([name, token]) => (
+              <Swatch key={token} name={name} token={token} />
+            ))}
+          </div>
+          <p className="kp-spec">
+            Page background: the lavender wash, <code>135deg</code> from a fainter Whisper through a third of Mist to white.
+          </p>
+        </Card>
 
-      <Card title="Type">
-        <div className="kp-question">Mwanafunzi anaitwa nani?</div>
-        <p className="kp-spec">
-          Headings and questions: <code>Exo 800 italic</code>. Buttons and the current tab: <code>Exo 600–700 italic</code>. Exo is never upright.
-        </p>
-        <p className="kp-reading">Reading text, tables and what people type are Geist, upright, so long names stay easy to read.</p>
-      </Card>
+        <Card title="Type">
+          <div className="kp-question">Mwanafunzi anaitwa nani?</div>
+          <p className="kp-spec">
+            Headings and questions: <code>Exo 800 italic</code>. Buttons and the current tab: <code>Exo 600–700 italic</code>. Exo is never upright.
+          </p>
+          <p className="kp-reading">Reading text, tables and what people type are Geist, upright, so long names stay easy to read.</p>
+        </Card>
 
-      <Card title="Buttons">
-        <Button size="wide" chevron>
-          Continue
-        </Button>
-        <Button variant="ghost" size="wide" icon="plus">
-          Yes, add a student
-        </Button>
-        <div className="kp-rowx">
-          <Button size="small">Find</Button>
-          <Button variant="ghost" size="small">
-            Review
+        <Card title="Buttons">
+          <Button size="wide" chevron>
+            Continue
           </Button>
-          <RoundButton icon="back" label="Back" />
-          <RoundButton icon="reset" label="Start over" />
-          <RoundButton icon="menu" label="Menu" />
-        </div>
-        <Button variant="bad" size="wide">
-          Yes, clear the form
-        </Button>
-        <div className="kp-rowx">
-          <Button variant="bad" size="small">
-            Decline application
+          <Button variant="ghost" size="wide" icon="plus">
+            Yes, add a student
           </Button>
-          <Button variant="warn" size="small">
-            Withdraw request
+          <div className="kp-rowx">
+            <Button size="small">Find</Button>
+            <Button variant="ghost" size="small">
+              Review
+            </Button>
+            <RoundButton icon="back" label="Back" />
+            <RoundButton icon="reset" label="Start over" />
+            <RoundButton icon="menu" label="Menu" />
+          </div>
+          <Button variant="bad" size="wide">
+            Yes, clear the form
           </Button>
-        </div>
-        <p className="kp-spec">
-          One orange button per screen: the next step. Everything else is outlined; only the orange action is ever filled. A red outline closes or removes; a dark
-          orange outline is a step back that can be undone.
-        </p>
-      </Card>
+          <div className="kp-rowx">
+            <Button variant="bad" size="small">
+              Decline application
+            </Button>
+            <Button variant="warn" size="small">
+              Withdraw request
+            </Button>
+          </div>
+          <p className="kp-spec">
+            One orange button per screen: the next step. Everything else is outlined; only the orange action is ever filled. A red outline closes or removes; a dark
+            orange outline is a step back that can be undone.
+          </p>
+        </Card>
 
-      <Card title="Fields">
-        <Field placeholder="Student’s full name" aria-label="Example field" />
-        <Field icon="phone" placeholder="0712 345 678" aria-label="Example phone field" />
-        <Field defaultValue="Not a name" invalid aria-label="Example field with an error" aria-describedby="kp-field-error" />
-        <FieldError id="kp-field-error" alignStart message="Type the full name, at least two names." />
-      </Card>
+        <Card title="Fields">
+          <Field placeholder="Student’s full name" aria-label="Example field" />
+          <Field icon="phone" placeholder="0712 345 678" aria-label="Example phone field" />
+          <Field defaultValue="Not a name" invalid aria-label="Example field with an error" aria-describedby="kp-field-error" />
+          <FieldError id="kp-field-error" alignStart message="Type the full name, at least two names." />
+        </Card>
 
-      <Card title="Selectors">
-        <DefaultTile label="FORM 1" tagline="Most parents choose" pressed={popPressed} onClick={() => setPopPressed((p) => !p)} />
-        <ChoiceTiles
-          name="kp-seg"
-          layout="four"
-          big
-          legend={<span className="sr-only">Example class</span>}
-          options={["STD 5", "STD 6", "STD 7", "FORM 2"].map((c) => ({ value: c, label: c }))}
-          value={cls}
-          onChange={setCls}
-        />
-        <ChoiceTiles
-          name="kp-row"
-          legend={<span className="sr-only">Example sibling choice</span>}
-          options={[
-            { value: "sibling", label: "Sibling of Neema", description: "Father: Juma Salim Mrisho" },
-            { value: "none", label: "Not a sibling", description: "A relative’s or a friend’s child" },
-          ]}
-          value={sibling}
-          onChange={setSibling}
-        />
-      </Card>
+        <Card title="Selectors">
+          <DefaultTile label="FORM 1" tagline="Most parents choose" pressed={popPressed} onClick={() => setPopPressed((p) => !p)} />
+          <ChoiceTiles
+            name="kp-seg"
+            layout="four"
+            big
+            legend={<span className="sr-only">Example class</span>}
+            options={["STD 5", "STD 6", "STD 7", "FORM 2"].map((c) => ({ value: c, label: c }))}
+            value={cls}
+            onChange={setCls}
+          />
+          <ChoiceTiles
+            name="kp-row"
+            legend={<span className="sr-only">Example sibling choice</span>}
+            options={[
+              { value: "sibling", label: "Sibling of Neema", description: "Father: Juma Salim Mrisho" },
+              { value: "none", label: "Not a sibling", description: "A relative’s or a friend’s child" },
+            ]}
+            value={sibling}
+            onChange={setSibling}
+          />
+        </Card>
+      </Bento>
 
-      <FormPartsCard tab={tab} today={today} />
+      <Bento className="kp-ds" data-rise="group">
+        <FormPartsCard tab={tab} today={today} />
 
-      <Card title="Stepper: chip bar">
-        <ProgressBar
-          className="kp-static"
-          groups={groups}
-          activeGroup={activeGroup}
-          canBack
-          onBack={() => {}}
-          labels={{ back: "Back", reset: "Start over" }}
-          status=""
-        />
-        <Button variant="ghost" size="small" onClick={play} style={{ alignSelf: "flex-start" }}>
-          Play it
-        </Button>
-        <p className="kp-spec">
-          Chips fill one by one. A finished group closes into one bar, light runs through it, a green tick lands and the number cheers. Folds take{" "}
-          <code>300ms</code> on <code>cubic-bezier(0.16, 1, 0.3, 1)</code>.
-        </p>
-      </Card>
+        <Card title="Stepper: chip bar">
+          <ProgressBar
+            className="kp-static"
+            groups={groups}
+            activeGroup={activeGroup}
+            canBack
+            onBack={() => {}}
+            labels={{ back: "Back", reset: "Start over" }}
+            status=""
+          />
+          <Button variant="ghost" size="small" onClick={play} style={{ alignSelf: "flex-start" }}>
+            Play it
+          </Button>
+          <p className="kp-spec">
+            Chips fill one by one. A finished group closes into one bar, light runs through it, a green tick lands and the number cheers. Folds take{" "}
+            <code>300ms</code> on <code>cubic-bezier(0.16, 1, 0.3, 1)</code>.
+          </p>
+        </Card>
 
-      <Card title="Cards and chips">
-        <div className="kp-rowx">
-          {(["Applied", "Visited", "Interviewed", "Enrolled", "Declined"] as LeadStatus[]).map((s) => (
-            <StatusChip key={s} status={s} />
-          ))}
-          <Tag tone="wait">Waiting</Tag>
-        </div>
-        <p className="kp-spec">
-          White card, <code>0.75px</code> indigo line at 22%, a soft indigo shadow. Only the card that holds the task is lifted.
-        </p>
-        <Note tone="good">Fathers’ names match. The 10% sibling discount applies by itself.</Note>
-        <Note tone="wait">Fathers’ names don’t match. Ask for proof.</Note>
-      </Card>
+        <Card title="Cards and chips">
+          <div className="kp-rowx">
+            {(["Applied", "Visited", "Interviewed", "Enrolled", "Declined"] as LeadStatus[]).map((s) => (
+              <StatusChip key={s} status={s} />
+            ))}
+            <Tag tone="wait">Waiting</Tag>
+          </div>
+          <p className="kp-spec">
+            White card, <code>0.75px</code> indigo line at 22%, a soft indigo shadow. Only the card that holds the task is lifted.
+          </p>
+          <Note tone="good">Fathers’ names match. The 10% sibling discount applies by itself.</Note>
+          <Note tone="wait">Fathers’ names don’t match. Ask for proof.</Note>
+        </Card>
+      </Bento>
     </div>
   )
 }
@@ -350,231 +355,239 @@ function MorePieces({ linkFilter }: { linkFilter: string }) {
   const current = APPLICANTS.find((a) => a.number === picked) ?? APPLICANTS[0]
 
   return (
-    <div className="kp-ds" data-part="more" data-rise="group">
-      <Card title="Page header" className="kp-full">
-        <PageHeader
-          level={2}
-          title="Applicants"
-          subtitle="Every student, from Applied to Enrolled."
-          actions={
-            <Button size="small" chevron>
-              Register students
-            </Button>
-          }
-        />
-      </Card>
-
-      <Card title="Filter pills and table" className="kp-full">
-        <FilterPills label="Filter by status" options={FILTERS.map((f) => ({ value: f, label: f }))} value={filter} onChange={setFilter}>
-          <Tag tone="line">Previous school not known yet</Tag>
-          <TextLink onClick={() => setFilter("All")}>Clear</TextLink>
-        </FilterPills>
-        {rows.length > 0 ? (
-          <Table
-            label="Applicants"
-            rows={rows}
-            rowKey={(a) => a.number}
-            rowLabel={(a) => a.name}
-            onOpen={(a) => setPicked(a.number)}
-            columns={[
-              {
-                header: "Student",
-                cell: (a) => (
-                  <>
-                    <b>{a.name}</b>
-                    <small>{a.number}</small>
-                  </>
-                ),
-              },
-              { header: "Class", cell: (a) => a.cls },
-              { header: "Custodian", cell: (a) => a.custodian },
-              { header: "Status", cell: (a) => <StatusChip status={a.status} /> },
-              { header: "Next step", cell: (a) => a.next },
-            ]}
-          />
-        ) : (
-          <EmptyState title="No applicant matches" hint="Clear the filter to see everyone." />
-        )}
-        <FilterPills
-          label="Filter by status, as links"
-          className="kp-links"
-          options={FILTERS.map((f) => ({ label: f, href: filterHref(f) }))}
-          current={filterHref(FILTERS.includes(linkFilter) ? linkFilter : "All")}
-          scroll={false}
-        />
-      </Card>
-
-      <Card title="Table" className="kp-full">
-        <Table
-          label="Fee schedule"
-          rows={FEE_SCHEDULE}
-          rowKey={(r) => r[0]}
-          columns={[
-            { header: "Class", cell: (r) => <b>{r[0]}</b> },
-            { header: "Day", cell: (r) => r[1], align: "end" },
-            { header: "Boarding", cell: (r) => r[2], align: "end" },
-            { header: "Minimum deposit", cell: (r) => r[3], align: "end" },
-          ]}
-        />
-      </Card>
-
-      <Card title="List row" className="kp-full">
-        {DISCOUNT_REQUESTS.map((d) => (
-          <ListRow
-            key={d.name}
-            icon="discounts"
-            title={`${d.name} · ${d.kind}`}
-            caption={`${d.why} · ${d.by}`}
-            trailing={
-              <>
-                <Tag tone="wait">Waiting</Tag>
-                <Button variant="ghost" size="small">
-                  Review
-                </Button>
-              </>
+    <div className="kp-part" data-part="more">
+      <Bento className="kp-ds" data-rise="group">
+        <Card title="Page header" data-bento="full">
+          <PageHeader
+            level={2}
+            title="Applicants"
+            subtitle="Every student, from Applied to Enrolled."
+            actions={
+              <Button size="small" chevron>
+                Register students
+              </Button>
             }
           />
-        ))}
-        {CAMPUS.map((c) => (
-          <ListRow
-            key={c.name}
-            leading={<Tag tone="line">{c.when}</Tag>}
-            title={c.name}
-            caption={c.about}
-            trailing={<StatusChip status={c.status} />}
-            onClick={c.checkIn ? () => {} : undefined}
+        </Card>
+
+        <Card title="Filter pills and table" data-bento="full">
+          <FilterPills label="Filter by status" options={FILTERS.map((f) => ({ value: f, label: f }))} value={filter} onChange={setFilter}>
+            <Tag tone="line">Previous school not known yet</Tag>
+            <TextLink onClick={() => setFilter("All")}>Clear</TextLink>
+          </FilterPills>
+          {rows.length > 0 ? (
+            <Table
+              label="Applicants"
+              rows={rows}
+              rowKey={(a) => a.number}
+              rowLabel={(a) => a.name}
+              onOpen={(a) => setPicked(a.number)}
+              columns={[
+                {
+                  header: "Student",
+                  cell: (a) => (
+                    <>
+                      <b>{a.name}</b>
+                      <small>{a.number}</small>
+                    </>
+                  ),
+                },
+                { header: "Class", cell: (a) => a.cls },
+                { header: "Custodian", cell: (a) => a.custodian },
+                { header: "Status", cell: (a) => <StatusChip status={a.status} /> },
+                { header: "Next step", cell: (a) => a.next },
+              ]}
+            />
+          ) : (
+            <EmptyState title="No applicant matches" hint="Clear the filter to see everyone." />
+          )}
+          <FilterPills
+            label="Filter by status, as links"
+            className="kp-links"
+            options={FILTERS.map((f) => ({ label: f, href: filterHref(f) }))}
+            current={filterHref(FILTERS.includes(linkFilter) ? linkFilter : "All")}
+            scroll={false}
           />
-        ))}
-      </Card>
+        </Card>
 
-      <Card title="Sections and key-value list">
-        <ApplicantDetail a={current} />
-        <div className="kp-tints">
-          {TINTS.map(([surface, name]) => (
-            <div key={surface} data-surface={surface}>
-              <KeyValueList items={[{ key: name, value: FEE_SCHEDULE[0][1], reason: "Full fee", numeric: true }]} />
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Chips">
-        <div className="kp-rowx">
-          {(["Applied", "Visited", "Interviewed", "Enrolled", "Declined", "Inactive", "Archived"] as const).map((s) => (
-            <StatusChip key={s} status={s} />
-          ))}
-        </div>
-        <div className="kp-rowx">
-          <Tag tone="wait">Waiting</Tag>
-          <Tag tone="ok">Paid</Tag>
-          <Tag tone="bad">Overdue</Tag>
-          <Tag tone="line">Tomorrow</Tag>
-          <Tag tone="wait">Not known yet</Tag>
-        </div>
-      </Card>
-
-      <Card title="Button states">
-        <div className="kp-rowx">
-          <Button
-            pending={finding}
-            chevron
-            onClick={() => {
-              setFinding(true)
-              timer.current = window.setTimeout(() => setFinding(false), 1500)
-            }}
-          >
-            {finding ? "Finding the family…" : "Find the family"}
-          </Button>
-          <ButtonLink href="/staff/applicants" size="small" chevron>
-            Open Applicants
-          </ButtonLink>
-          <Button disabled chevron>
-            Continue
-          </Button>
-        </div>
-        <div className="kp-rowx">
-          <RoundButton icon="bell" label="New requests" size={40} />
-          <RoundButton icon="x" label="Close" size={36} />
-          <TextLink>Edit</TextLink>
-          <TextLink>Add</TextLink>
-          <TextLink>Clear</TextLink>
-        </div>
-      </Card>
-
-      <Card title="Compact and search fields">
-        <Field size="compact" icon="search" alignStart placeholder="Admission Number, e.g. DMSN-90005" aria-label="Admission Number" />
-        <Field size="search" icon="search" placeholder="Search a name or Admission Number" aria-label="Search applicants" />
-      </Card>
-
-      <Card title="Chip buttons">
-        <ChipButtons label="What kind of payment is it?" options={PAYMENT_KINDS.map((k) => ({ value: k, label: k }))} value={payment} onChange={setPayment} />
-      </Card>
-
-      <Card title="Note">
-        <Note>Next step: Release the result.</Note>
-        <Note tone="good">The 10% sibling discount is on 2 students.</Note>
-        <Note tone="wait" icon="info">
-          Sent from the Admission form. Check-in fills in the missing answers.
-        </Note>
-        <Note tone="bad">The payment form could not open. Check your connection and try again.</Note>
-      </Card>
-
-      <Card title="Empty state">
-        <EmptyState
-          title="No applicant matches"
-          hint="Clear the filter to see everyone."
-          action={
-            <Button variant="ghost" size="small">
-              Clear the filter
-            </Button>
-          }
-        />
-        <EmptyState illustration="done" title="All caught up" hint="New work shows up here." />
-        <EmptyState illustration="oops" title="Something went wrong" hint="Your answers are kept." action={<Button size="small">Try again</Button>} />
-      </Card>
-
-      <Card title="Loading state">
-        <LoadingState label="Finding the family…" />
-        <LoadingState illustration="sending" label="Sending invites…" />
-      </Card>
-
-      <Card title="Skeleton">
-        <div className="kp-skel">
-          <SkeletonBlock width="60%" height={28} />
-          <SkeletonBlock width="85%" height={14} />
-          <SkeletonBlock width={140} height={36} shape="pill" />
-          <SkeletonBlock height={120} shape="card" />
-        </div>
-      </Card>
-
-      <Card title="Task card and finished state" className="kp-full">
-        <TaskCard className="kp-task">
-          <FinishedState
-            title="2 students registered"
-            hint="Give the family these Admission Numbers."
-            results={[
-              { label: "Bakari Rashidi Kombo Said", value: "DMSN-90013" },
-              { label: "Latifa Omari Juma Hassan", value: "DMSN-90014" },
+        <Card title="Table" data-bento="full">
+          <Table
+            label="Fee schedule"
+            rows={FEE_SCHEDULE}
+            rowKey={(r) => r[0]}
+            columns={[
+              { header: "Class", cell: (r) => <b>{r[0]}</b> },
+              { header: "Day", cell: (r) => r[1], align: "end" },
+              { header: "Boarding", cell: (r) => r[2], align: "end" },
+              { header: "Minimum deposit", cell: (r) => r[3], align: "end" },
             ]}
-          >
-            <Note tone="wait">1 discount request waits for the Admissions Manager. Remind the family to bring proof.</Note>
-            <Button size="wide" chevron>
+          />
+        </Card>
+
+        <Card title="List row" data-bento="full">
+          {DISCOUNT_REQUESTS.map((d) => (
+            <ListRow
+              key={d.name}
+              icon="discounts"
+              title={`${d.name} · ${d.kind}`}
+              caption={`${d.why} · ${d.by}`}
+              trailing={
+                <>
+                  <Tag tone="wait">Waiting</Tag>
+                  <Button variant="ghost" size="small">
+                    Review
+                  </Button>
+                </>
+              }
+            />
+          ))}
+          {CAMPUS.map((c) => (
+            <ListRow
+              key={c.name}
+              leading={<Tag tone="line">{c.when}</Tag>}
+              title={c.name}
+              caption={c.about}
+              trailing={<StatusChip status={c.status} />}
+              onClick={c.checkIn ? () => {} : undefined}
+            />
+          ))}
+        </Card>
+
+        <Card title="Sections and key-value list">
+          <ApplicantDetail a={current} />
+          <div className="kp-tints">
+            {TINTS.map(([surface, name]) => (
+              <div key={surface} data-surface={surface}>
+                <KeyValueList items={[{ key: name, value: FEE_SCHEDULE[0][1], reason: "Full fee", numeric: true }]} />
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Chips">
+          <div className="kp-rowx">
+            {(["Applied", "Visited", "Interviewed", "Enrolled", "Declined", "Inactive", "Archived"] as const).map((s) => (
+              <StatusChip key={s} status={s} />
+            ))}
+          </div>
+          <div className="kp-rowx">
+            <Tag tone="wait">Waiting</Tag>
+            <Tag tone="ok">Paid</Tag>
+            <Tag tone="bad">Overdue</Tag>
+            <Tag tone="line">Tomorrow</Tag>
+            <Tag tone="wait">Not known yet</Tag>
+          </div>
+        </Card>
+
+        <Card title="Button states">
+          <div className="kp-rowx">
+            <Button
+              pending={finding}
+              chevron
+              onClick={() => {
+                setFinding(true)
+                timer.current = window.setTimeout(() => setFinding(false), 1500)
+              }}
+            >
+              {finding ? "Finding the family…" : "Find the family"}
+            </Button>
+            <ButtonLink href="/staff/applicants" size="small" chevron>
               Open Applicants
+            </ButtonLink>
+            <Button disabled chevron>
+              Continue
             </Button>
-            <Button variant="ghost" size="wide">
-              Register another family
-            </Button>
-          </FinishedState>
-        </TaskCard>
-      </Card>
+          </div>
+          <div className="kp-rowx">
+            <RoundButton icon="bell" label="New requests" size={40} />
+            <RoundButton icon="x" label="Close" size={36} />
+            <TextLink>Edit</TextLink>
+            <TextLink>Add</TextLink>
+            <TextLink>Clear</TextLink>
+          </div>
+        </Card>
 
-      <Card title="Guided form" className="kp-full">
-        <GuidedDemo />
-      </Card>
+        <Card title="Compact and search fields">
+          <Field size="compact" icon="search" alignStart placeholder="Admission Number, e.g. DMSN-90005" aria-label="Admission Number" />
+          <Field size="search" icon="search" placeholder="Search a name or Admission Number" aria-label="Search applicants" />
+        </Card>
 
-      <PickedPartsCards />
-      <OverlayCards />
-      <ListInPopoverCard />
+        <Card title="Chip buttons">
+          <ChipButtons label="What kind of payment is it?" options={PAYMENT_KINDS.map((k) => ({ value: k, label: k }))} value={payment} onChange={setPayment} />
+        </Card>
+
+        <Card title="Note">
+          <Note>Next step: Release the result.</Note>
+          <Note tone="good">The 10% sibling discount is on 2 students.</Note>
+          <Note tone="wait" icon="info">
+            Sent from the Admission form. Check-in fills in the missing answers.
+          </Note>
+          <Note tone="bad">The payment form could not open. Check your connection and try again.</Note>
+        </Card>
+
+        <Card title="Empty state">
+          <EmptyState
+            title="No applicant matches"
+            hint="Clear the filter to see everyone."
+            action={
+              <Button variant="ghost" size="small">
+                Clear the filter
+              </Button>
+            }
+          />
+          <EmptyState illustration="done" title="All caught up" hint="New work shows up here." />
+          <EmptyState illustration="oops" title="Something went wrong" hint="Your answers are kept." action={<Button size="small">Try again</Button>} />
+        </Card>
+
+        <Card title="Loading state">
+          <LoadingState label="Finding the family…" />
+          <LoadingState illustration="sending" label="Sending invites…" />
+        </Card>
+
+        <Card title="Skeleton">
+          <div className="kp-skel">
+            <SkeletonBlock width="60%" height={28} />
+            <SkeletonBlock width="85%" height={14} />
+            <SkeletonBlock width={140} height={36} shape="pill" />
+            <SkeletonBlock height={120} shape="card" />
+          </div>
+        </Card>
+      </Bento>
+
+      <Bento className="kp-ds" data-rise="group">
+        <Card title="Task card and finished state" data-bento="full">
+          <TaskCard className="kp-task">
+            <FinishedState
+              title="2 students registered"
+              hint="Give the family these Admission Numbers."
+              results={[
+                { label: "Bakari Rashidi Kombo Said", value: "DMSN-90013" },
+                { label: "Latifa Omari Juma Hassan", value: "DMSN-90014" },
+              ]}
+            >
+              <Note tone="wait">1 discount request waits for the Admissions Manager. Remind the family to bring proof.</Note>
+              <Button size="wide" chevron>
+                Open Applicants
+              </Button>
+              <Button variant="ghost" size="wide">
+                Register another family
+              </Button>
+            </FinishedState>
+          </TaskCard>
+        </Card>
+
+        <Card title="Guided form" data-bento="full">
+          <GuidedDemo />
+        </Card>
+
+        <PickedPartsCards />
+      </Bento>
+
+      <Bento className="kp-ds" data-rise="group">
+        <NamesCard />
+        <OverlayCards />
+        <ListInPopoverCard />
+      </Bento>
     </div>
   )
 }

@@ -77,7 +77,7 @@ function DiscountReviews() {
   }
 
   return (
-    <Card title="Sheet" className="kp-full">
+    <Card title="Sheet" data-bento="full">
       {DISCOUNT_REQUESTS.map((d, i) => {
         const result = decided[d.name]
         return (
@@ -441,7 +441,7 @@ function ApplicantSheets() {
   )
 
   return (
-    <Card title="Side sheet" className="kp-full">
+    <Card title="Side sheet" data-bento="full">
       <Table
         label="Applicants"
         rows={apps}

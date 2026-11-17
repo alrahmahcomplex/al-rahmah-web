@@ -4,9 +4,9 @@ import "@/components/kit/kit.css"
 
 import "./lead.css"
 
-// Every panel on the lead page sits in one of these kit cards, two to a row on
-// wide screens. A panel with nothing to show renders nothing, and its empty
-// card is hidden.
+// Every panel on the lead page sits in one of these kit cards, two to a row in
+// the kit's Bento grid when there is room. A panel with nothing to show
+// renders nothing, and its empty card is hidden.
 export const LEAD_CARD = "kit-card lr-card"
 
 // A card's heading, with its one action, such as Edit, on the right.

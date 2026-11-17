@@ -1,4 +1,4 @@
-import { SkeletonBlock } from "@/components/kit"
+import { Bento, SkeletonBlock } from "@/components/kit"
 
 import "./kit-page.css"
 
@@ -9,10 +9,10 @@ export default function Loading() {
       <span className="sr-only">Loading Design system…</span>
       <SkeletonBlock width={260} height={32} />
       <SkeletonBlock width="70%" height={16} />
-      <div className="kp-ds" style={{ marginTop: 14 }}>
+      <Bento style={{ marginTop: 14 }}>
         <SkeletonBlock height={220} shape="card" />
         <SkeletonBlock height={220} shape="card" />
-      </div>
+      </Bento>
     </div>
   )
 }

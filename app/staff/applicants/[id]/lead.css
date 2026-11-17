@@ -17,11 +17,6 @@
 
 /* ---------- page and cards ---------- */
 .lr-page { display: flex; flex-direction: column; gap: 24px; }
-.lr-grid { display: grid; gap: 24px; align-items: start; }
-@media (min-width: 1000px) {
-  .lr-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .lr-grid > .lr-wide { grid-column: 1 / -1; }
-}
 .lr-card { display: flex; flex-direction: column; gap: 14px; }
 .lr-card:empty { display: none; }
 .lr-card-head { display: flex; min-height: 28px; align-items: center; justify-content: space-between; gap: 12px; }

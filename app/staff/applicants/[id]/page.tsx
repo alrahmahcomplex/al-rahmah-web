@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { ButtonLink, Note, pageTitle } from "@/components/kit"
+import { Bento, ButtonLink, Note, pageTitle } from "@/components/kit"
 import { declinedReasonsFor, marksAllowed } from "@/lib/services/lead-closure"
 import { getLead, isClosed } from "@/lib/services/leads"
 import { getLeadImportMark } from "@/lib/services/student-import"
@@ -86,15 +86,15 @@ export default async function LeadPage({
 
       <LeadTabs leadId={lead.data.id} tab={tab} />
 
-      <div className="lr-grid">
+      <Bento columns={2}>
         {LEAD_PANELS.filter((panel) => panel.tab === tab && (open || panel.readOnlyWhenClosed)).map(
           ({ key, wide, Panel }) => (
-            <div key={key} className={wide ? `${LEAD_CARD} lr-wide` : LEAD_CARD}>
+            <div key={key} className={LEAD_CARD} data-bento={wide ? "full" : undefined}>
               <Panel lead={lead.data} staff={staff} open={open} />
             </div>
           ),
         )}
-      </div>
+      </Bento>
 
       <div>
         <ButtonLink href="/staff/check-in" variant="ghost">

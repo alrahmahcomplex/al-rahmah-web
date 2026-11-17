@@ -91,7 +91,7 @@
 .hm-ch-legend li[data-on] { background: var(--gf-whisper); }
 .hm-ch-legend i { width: 12px; height: 12px; border-radius: 4px; }
 .hm-ch-legend b { font-weight: 600; }
-.hm-ch-legend small { color: var(--gf-quiet); text-align: right; }
+.hm-ch-legend small { color: var(--gf-quiet-on-tint); text-align: right; }
 :is(.hm-ch-arc, .hm-ch-legend i)[data-shade="0"] { stroke: var(--gf-indigo); background: var(--gf-indigo); }
 :is(.hm-ch-arc, .hm-ch-legend i)[data-shade="1"] { stroke: var(--gf-chart-2); background: var(--gf-chart-2); }
 :is(.hm-ch-arc, .hm-ch-legend i)[data-shade="2"] { stroke: var(--gf-chart-3); background: var(--gf-chart-3); }
@@ -105,7 +105,7 @@
 .hm-ch-tip b { display: block; font-weight: 700; font-size: 14px; line-height: 1.2; color: var(--gf-indigo-night); }
 .hm-ch-tip small { display: block; margin-top: 2px; font-size: 11.5px; font-weight: 500; color: var(--gf-quiet); }
 
-.hm-ch :is([data-on], .hm-ch-hits span, .hm-ch-bar, .hm-ch-track, .hm-ch-legend li):focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); }
+.hm-ch :is([data-on], .hm-ch-hits span, .hm-ch-bar, .hm-ch-track, .hm-ch-legend li):focus-visible { outline: 3px solid var(--gf-focus-ring); }
 
 @media (max-width: 560px) {
   .hm-ch-tabs .kit-track-tab { font-size: 11.5px; padding: 0 2px; }

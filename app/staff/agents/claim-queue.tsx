@@ -42,8 +42,6 @@ export function ClaimQueue({ entries, canApprove }: { entries: QueueEntry[]; can
 
 function ClaimCard({ entry, canApprove }: { entry: QueueEntry; canApprove: boolean }) {
   const others = entry.claims.length - 1
-  // An agent imported with no mobile (#463): the number the oldest claim typed.
-  const phone = entry.phone ?? entry.claims[0]?.phone ?? null
   return (
     <Card
       title={
@@ -61,13 +59,20 @@ function ClaimCard({ entry, canApprove }: { entry: QueueEntry; canApprove: boole
       }
     >
       <div className="ag-card-body">
-        {phone && (
+        {entry.phone ? (
           <Note tone="wait">
             Phone {entry.fullName} on{" "}
-            <a href={`tel:${phone}`} className="ag-link">
-              {displayPhone(phone)}
+            <a href={`tel:${entry.phone}`} className="ag-link">
+              {displayPhone(entry.phone)}
             </a>{" "}
             to check this email is theirs.
+          </Note>
+        ) : (
+          // An agent imported with no mobile (#463): the number on a claim is
+          // the claimant's own, so calling it checks nothing.
+          <Note tone="wait">
+            {entry.fullName} has no mobile on record. The number on this claim was typed by the person claiming and isn&rsquo;t checked. Make
+            sure it&rsquo;s really {entry.fullName} before you confirm, for example by calling a number the school already has for them.
           </Note>
         )}
         {others > 0 && (

@@ -299,7 +299,9 @@ test.describe("claiming an agent imported with no mobile (#463)", () => {
     await page.getByRole("link", { name: /^Awaiting email confirmation/ }).click()
     const card = queueCard(page, agent.fullName)
     const shown = `+255 ${number.slice(1, 4)} ${number.slice(4, 7)} ${number.slice(7)}`
-    await expect(card).toContainText(`Phone ${agent.fullName} on ${shown}`)
+    // The number is the claimant's own: the card doesn't offer it as the way to check.
+    await expect(card).toContainText(`${agent.fullName} has no mobile on record.`)
+    await expect(card).not.toContainText(`Phone ${agent.fullName} on`)
     await expect(card).toContainText(`Mobile${shown}`)
     await card.getByRole("button", { name: `Confirm ${address} for ${agent.fullName}` }).click()
     await expect(page.getByText(`Email confirmed for ${agent.fullName}.`, { exact: false })).toBeVisible()

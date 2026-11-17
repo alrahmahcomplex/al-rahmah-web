@@ -807,4 +807,51 @@ begin
 end;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- agent_import_verdicts, as 20261229100100_promo_any_format_agent_code_shape.sql
+-- made it, where a row's mobile for an agent stored with none reads as
+-- mobile_differs (not changed) instead of already present.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.agent_import_verdicts(rows jsonb)
+returns table (sheet_row integer, verdict jsonb)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select r.sheet_row,
+        case
+            when public.promo_code_holds_key(r.code)
+                then jsonb_build_object('verdict', 'promo_code')
+            when holder.id is not null then
+                case
+                    when lower(regexp_replace(btrim(holder.full_name), '\s+', ' ', 'g')) <> lower(r.full_name)
+                        then jsonb_build_object('verdict', 'code_exists', 'agent', public.agent_import_ref(holder))
+                    -- A mobile in the row that isn't the stored one, none stored
+                    -- included: the import never changes or fills a mobile.
+                    when r.phone is not null and holder.phone is distinct from r.phone
+                        then jsonb_build_object('verdict', 'mobile_differs', 'agent', public.agent_import_ref(holder))
+                    when r.email is null or r.email = holder.email
+                        then jsonb_build_object('verdict', 'present', 'agent', public.agent_import_ref(holder))
+                    when holder.email is not null
+                        then jsonb_build_object('verdict', 'email_differs', 'agent', public.agent_import_ref(holder))
+                    when public.agent_email_taken(r.email)
+                        then jsonb_build_object('verdict', 'email_taken')
+                    else jsonb_build_object('verdict', 'email_to_add', 'agent', public.agent_import_ref(holder))
+                end
+            when public.agent_code_issued(r.code) then jsonb_build_object('verdict', 'retired_code')
+            when phone_holder.id is not null
+                then jsonb_build_object('verdict', 'mobile_taken', 'agent', public.agent_import_ref(phone_holder))
+            when public.agent_email_taken(r.email) then jsonb_build_object('verdict', 'email_taken')
+            else jsonb_build_object('verdict', 'create')
+        end
+    from public.agent_import_rows(agent_import_verdicts.rows) r
+    left join lateral (select h.* from public.agent_for_code(r.code) h) holder on true
+    left join lateral (
+        select a.* from public.marketing_agents a where a.phone = r.phone and a.retired_at is null
+    ) phone_holder on true
+    order by r.sheet_row;
+$$;
+
 select set_config('audit.actor_kind', '', true);

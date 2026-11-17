@@ -428,6 +428,35 @@ describe("only three names and an ABC-123 code (#463)", () => {
     expect(direct).toMatch(/marketing_agents_phone_needed/)
   })
 
+  test("a mobile for an agent stored with none reads as differing, and is not saved", async () => {
+    const bare = { code: freshCode(), fullName: name("Zuhura Again Import") }
+    const first = await check([[bare.code, bare.fullName, "", "", ""]])
+    expect(await confirmAgentImport(await signedIn(MANAGER), confirmationOf(first))).toMatchObject({ ok: true })
+    const local = phone()
+    const again = await check([[bare.code, bare.fullName, local, "", ""]])
+    expect(rowAt(again, 2)).toMatchObject({ class: "mobile-differs", reason: "Mobile differs (not changed)" })
+    expect(await agentsWithPhones([asE164(local)])).toEqual([])
+  })
+
+  test("only the Manager's confirm of a claim may fill an empty mobile", async () => {
+    const bare = { code: freshCode(), fullName: name("Zuhura Guard Import") }
+    expect(await confirmAgentImport(await signedIn(MANAGER), confirmationOf(await check([[bare.code, bare.fullName, "", "", ""]])))).toMatchObject({
+      ok: true,
+    })
+    const fill = (setting: string | null) =>
+      inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        const { rows } = await sql.query<{ id: string }>("select id from public.marketing_agents where code = $1", [bare.code])
+        if (setting !== null) await sql.query("select set_config('app.agent_fill_mobile', $1, true)", [setting === "self" ? rows[0].id : setting])
+        return sql
+          .query("update public.marketing_agents set phone = $1 where id = $2", [asE164(phone()), rows[0].id])
+          .then(() => "filled", (error: Error) => error.message)
+      })
+    expect(await fill(null)).toBe("agent_locked")
+    expect(await fill(randomUUID())).toBe("agent_locked")
+    expect(await fill("self")).toBe("filled")
+  })
+
   test("the database refuses a row with fewer than three names or no code, whatever the browser sent", async () => {
     const send = (row: Record<string, unknown>) =>
       inRolledBackTransaction(async (sql) => {

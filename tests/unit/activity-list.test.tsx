@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import type { ReactNode } from "react"
 import { flushSync } from "react-dom"
 import { createRoot } from "react-dom/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -9,9 +10,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const { load } = vi.hoisted(() => ({ load: vi.fn() }))
 vi.mock("@/app/staff/_home/activity-actions", () => ({ loadActivityPage: load }))
+// The kit's sheet stays on screen for its way out, which jsdom doesn't show.
+// This stand-in always draws what it is given and says whether it is open.
+vi.mock("@/components/kit", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/kit")>()),
+  Sheet: ({ open, title, hint, foot, children }: { open: boolean; title: ReactNode; hint?: ReactNode; foot?: ReactNode; children: ReactNode }) => (
+    <div data-testid="sheet" data-open={String(open)}>
+      <h3>{title}</h3>
+      <p>{hint}</p>
+      {children}
+      {foot}
+    </div>
+  ),
+}))
 
 import type { ActivityView } from "@/app/staff/_home/activity"
-import { mayReadActivity, type ActivityScreenPage } from "@/app/staff/_home/activity-data"
+import { fullClassesFor, mayReadActivity, type ActivityScreenPage } from "@/app/staff/_home/activity-data"
+import type { ClassSeatFigures } from "@/lib/services/dashboard"
 import { ActivityList } from "@/app/staff/_home/activity-list"
 
 const row = (who: string): ActivityView => ({
@@ -134,7 +149,41 @@ describe("the Activity log card", () => {
   })
 })
 
+describe("the side sheet", () => {
+  it("opens on a row, and keeps its words while it closes", () => {
+    render(<ActivityList first={page(["FIRST"])} />)
+    const sheet = screen.getByTestId("sheet")
+    expect(sheet).toHaveAttribute("data-open", "false")
+    fireEvent.click(rowFor("FIRST")!)
+    expect(sheet).toHaveAttribute("data-open", "true")
+    expect(sheet).toHaveTextContent("Today · FIRST · father of AMANI")
+    expect(sheet).toHaveTextContent("Due today.")
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }))
+    expect(sheet).toHaveAttribute("data-open", "false")
+    // On its way out it still holds the row it showed.
+    expect(sheet).toHaveTextContent("Call back")
+    expect(sheet).toHaveTextContent("Due today.")
+  })
+
+  it("closes when Home reads the log again", () => {
+    const view = render(<ActivityList first={page(["FIRST"])} />)
+    fireEvent.click(rowFor("FIRST")!)
+    expect(screen.getByTestId("sheet")).toHaveAttribute("data-open", "true")
+    view.rerender(<ActivityList first={page(["FRESH"])} />)
+    expect(screen.getByTestId("sheet")).toHaveAttribute("data-open", "false")
+  })
+})
+
 describe("who sees the card", () => {
+  it("names full classes only for staff who may open Seats", () => {
+    const full = [{ className: "STD 6", dayOrBoarding: "Day", seats: 35, taken: 35 }] as ClassSeatFigures[]
+    expect(fullClassesFor(["payments.view", "academic_years.manage"], full)).toEqual([{ className: "STD 6", taken: 35, seats: 35 }])
+    expect(fullClassesFor(["leads.view", "payments.view"], full)).toEqual([])
+    expect(fullClassesFor(["academic_years.manage"], full)).toEqual([])
+    expect(fullClassesFor(["payments.view", "academic_years.manage"], null)).toEqual([])
+  })
+
   it("staff who may view applicants, or who may open Seats", () => {
     expect(mayReadActivity(["leads.view"])).toBe(true)
     expect(mayReadActivity(["payments.view", "academic_years.manage"])).toBe(true)

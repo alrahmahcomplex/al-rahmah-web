@@ -31,6 +31,68 @@ describe("the time column", () => {
   })
 })
 
+describe("a button shows only with the permission its step needs", () => {
+  // Everyone here may view applicants; only the named permission differs.
+  const VIEWER: Permission[] = ["leads.view", "payments.view"]
+  const cases: { name: string; row: ActivityRow; needs: Permission }[] = [
+    {
+      name: "Call the family",
+      row: { kind: "new_application", id: "l1", at: AT, ...LEAD, referralCode: null, status: "Applied", closure: null },
+      needs: "follow_ups.record",
+    },
+    {
+      name: "Confirm the code",
+      row: { kind: "agent_claim", id: "a1", at: AT, agentId: "a1", fullName: "MWALIMU EXAMPLE THREE", code: "MET-123", claims: 1 },
+      needs: "agents.approve",
+    },
+    {
+      name: "Review",
+      row: { kind: "re_application", id: "x1", at: AT, ...LEAD, askedClass: "FORM 1", differingFields: ["class_name"] },
+      needs: "leads.edit",
+    },
+    {
+      name: "Call",
+      row: {
+        kind: "call_back",
+        id: "f1",
+        at: AT,
+        ...LEAD,
+        dueOn: TODAY,
+        note: null,
+        custodianName: "DAUDI PETRO AMANI",
+        relationship: "Father",
+        relationshipDescription: null,
+      },
+      needs: "follow_ups.record",
+    },
+    {
+      name: "Check in",
+      row: { kind: "expected", id: "s1", at: AT, sentOn: "2026-11-09", children: [LEAD] },
+      needs: "visits.record",
+    },
+    {
+      name: "Release the result",
+      row: { kind: "result_ready", id: "i1", at: AT, ...LEAD, interviewDate: TODAY, result: "Passed", score: 78, changedSinceSent: false },
+      needs: "results.send",
+    },
+    {
+      name: "Approve or refuse",
+      row: { kind: "discount_request", id: "r1", at: AT, ...LEAD, discount: "staff_child", note: "Staff ID seen.", requestedBy: null },
+      needs: "discounts.approve",
+    },
+  ]
+
+  for (const { name, row, needs } of cases) {
+    it(`${name}: with ${needs}, and not without it`, () => {
+      expect(activityView(row, as([...VIEWER, needs])).action?.label).toBe(name)
+      expect(activityView(row, as(VIEWER)).action).toBeNull()
+      // Every other permission the log reads, but not this one.
+      const others = [...OFFICER, ...MANAGER, ...ACCOUNTANT].filter((permission) => permission !== needs)
+      expect(activityView(row, as(others)).action).toBeNull()
+    })
+  }
+})
+
 describe("what each row says", () => {
   it("lists names with and", () => {
     expect(listed(["YUSUF"])).toBe("YUSUF")

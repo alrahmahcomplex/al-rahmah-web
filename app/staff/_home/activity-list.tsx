@@ -29,7 +29,12 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
     shown: first,
     error: null,
   })
-  const [open, setOpen] = useState<ActivityView | null>(null)
+  // The row in the side sheet, kept after it closes so the sheet slides away
+  // with its words still in it.
+  const [sheet, setSheet] = useState<{ row: ActivityView | null; open: boolean }>({ row: null, open: false })
+  const openSheet = (row: ActivityView) => setSheet({ row, open: true })
+  const closeSheet = () => setSheet((now) => ({ ...now, open: false }))
+  const open = sheet.row
   const [pending, startTransition] = useTransition()
   // The newest page asked for. Only its answer may replace the rows.
   const asked = useRef(0)
@@ -38,7 +43,7 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
   // refreshed): show the new first page, as a reload would.
   if (view.from !== first) {
     setView({ from: first, shown: first, error: null })
-    setOpen(null)
+    closeSheet()
   }
   const { shown, error } = view
 
@@ -87,7 +92,7 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
       </div>
       <ol className="al" aria-busy={pending || undefined}>
         {shown.rows.map((row) => (
-          <li key={row.key} className="al-r" onClick={() => setOpen(row)}>
+          <li key={row.key} className="al-r" onClick={() => openSheet(row)}>
             <span className="al-t">{row.time}</span>
             <span className="al-i">
               <span className="al-ico">
@@ -100,7 +105,7 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
               aria-label={`${row.task}, ${whoLine(row)}. Open the details`}
               onClick={(event) => {
                 event.stopPropagation()
-                setOpen(row)
+                openSheet(row)
               }}
             >
               <b>{row.task}</b>
@@ -132,9 +137,9 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
         </Note>
       )}
       <Sheet
-        open={open !== null}
+        open={sheet.open}
         onOpenChange={(next) => {
-          if (!next) setOpen(null)
+          if (!next) closeSheet()
         }}
         placement="side"
         title={open?.task ?? ""}
@@ -148,7 +153,7 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
                   {open.action.label}
                 </ButtonLink>
               )}
-              <Button variant="ghost" size="wide" onClick={() => setOpen(null)}>
+              <Button variant="ghost" size="wide" onClick={closeSheet}>
                 Close
               </Button>
             </>

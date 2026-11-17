@@ -225,7 +225,8 @@ export function otherFather(a: Answers, h: Household): number | null {
 // The custodians as people.
 // ---------------------------------------------------------------------------
 
-export type Person = { name: string; phone: string; payload: RegistrationPerson }
+// `father`: a new person who is a household's father, named from the students.
+export type Person = { name: string; phone: string; father?: boolean; payload: RegistrationPerson }
 
 export function relationshipOf(choice: RelationshipChoice, description: string): { relationship: Relationship; relationshipDescription?: string } {
   if (choice === "Mother" || choice === "Guardian") return { relationship: choice }
@@ -261,8 +262,12 @@ export function people(a: Answers): { people: Person[]; personOf: Record<number,
       continue
     }
     if (c.kind === "father" && !c.contact) {
-      // Two households fathered by the same man on one phone are one person.
-      const same = list.findIndex((p) => !("contactId" in p.payload) && digits(p.phone) === digits(c.phone))
+      // Two households fathered by the same man on one phone are one person. Only the
+      // same father's name on the same phone: any other adult with that phone stays a
+      // person of their own, and the save refuses the shared number.
+      const same = list.findIndex(
+        (p) => p.father && fatherNameMatch(p.name, savedFather(a, h.root)) === "same" && digits(p.phone) === digits(c.phone),
+      )
       // His three names are sent, so a typing-mistake sibling whose spelling the save corrects shares him.
       const parts = fatherParts(a, h.root)
       personOf[h.root] =
@@ -270,6 +275,7 @@ export function people(a: Answers): { people: Person[]; personOf: Record<number,
           ? same
           : add({
               name: savedFather(a, h.root),
+              father: true,
               phone: c.phone,
               payload: { firstName: parts.fatherFirst, middleName: parts.fatherMiddle, lastName: parts.fatherLast, phone: c.phone, whatsapp: c.whatsapp.trim() || undefined },
             })
@@ -292,6 +298,11 @@ export function people(a: Answers): { people: Person[]; personOf: Record<number,
     }
   }
   return { people: list, personOf }
+}
+
+/** "Who brought the students": each custodian once by name, keeping their place in `people()`, which the save reads. */
+export function broughtChoices(list: readonly Person[]): { name: string; person: number }[] {
+  return list.map((p, person) => ({ name: p.name, person })).filter((p, i, all) => all.findIndex((q) => q.name === p.name) === i)
 }
 
 // ---------------------------------------------------------------------------

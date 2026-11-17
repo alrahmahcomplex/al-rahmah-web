@@ -20,6 +20,7 @@ import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
 import type { KnownContact, OnFileFee } from "./model"
+import { mayRegister } from "./permissions"
 
 // Register students (#308): the form's three calls. Server Actions take input
 // from anyone who can post to them, so each shape is checked here; the
@@ -28,10 +29,11 @@ import type { KnownContact, OnFileFee } from "./model"
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const str = (v: unknown, max = 200): v is string => typeof v === "string" && v.length <= max
 const optStr = (v: unknown, max = 200) => v === undefined || v === null || str(v, max)
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
 const whole = (v: unknown, lo: number, hi: number): v is number => Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi
 
 function isPerson(p: RegistrationPerson): boolean {
-  if (!p || typeof p !== "object") return false
+  if (!isObject(p)) return false
   if ("contactId" in p) {
     return str(p.contactId) && UUID.test(p.contactId) && (p.alsoCheckPhones === undefined || (Array.isArray(p.alsoCheckPhones) && p.alsoCheckPhones.length <= 2 && p.alsoCheckPhones.every((x) => str(x, 40))))
   }
@@ -39,10 +41,12 @@ function isPerson(p: RegistrationPerson): boolean {
 }
 
 function isStudent(s: RegistrationStudent, people: number, students: number): boolean {
-  if (!s || typeof s !== "object") return false
+  if (!isObject(s)) return false
   const c = s.custodian
+  if (!isObject(c)) return false
+  if ([s.previousSchool, s.siblingOf, s.nameAnswer, s.broughtBy].some((v) => v !== undefined && !isObject(v))) return false
   const custodian =
-    !!c && whole(c.person, 1, people) && ("father" in c ? c.father === true : (RELATIONSHIPS as readonly string[]).includes(c.relationship) && optStr(c.relationshipDescription, 60))
+    whole(c.person, 1, people) && ("father" in c ? c.father === true : (RELATIONSHIPS as readonly string[]).includes(c.relationship) && optStr(c.relationshipDescription, 60))
   const school =
     s.previousSchool === undefined ||
     ("notKnown" in s.previousSchool ? s.previousSchool.notKnown === true : str(s.previousSchool.name) && ["private", "public"].includes(s.previousSchool.type) && str(s.previousSchool.region, 60))
@@ -103,6 +107,8 @@ export async function registerFamily(form: RegisterFamilyForm): Promise<Register
   const supabase = await createClient()
   const allowed = await requirePermission(supabase, "leads.create")
   if (!allowed.ok) return { status: allowed.error === "forbidden" ? "forbidden" : "unavailable" }
+  // The page's rule holds here too: registering needs the fees as well (owner, 2026-11-17).
+  if (!mayRegister(allowed.data.permissions)) return { status: "forbidden" }
 
   const result = await registerStudents(supabase, { visitDate, people, students })
   if (!result.ok) {

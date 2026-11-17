@@ -23,6 +23,8 @@ import {
   MOST_STUDENTS,
   NO_SCHOOL_ASKED,
   onFileMatch,
+  rootOf,
+  broughtChoices,
   otherFather,
   payload,
   people,
@@ -234,11 +236,14 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     if (value === "none") return later(() => setSibling(key, { kind: "none" }), PICK_MS)
     const of = Number(value)
     const mine = answers.students.find((s) => s.key === key)
-    const theirs = answers.students.find((s) => s.key === of)
+    // The database compares with the father its group counts by: the household's first
+    // student's, so a student waiting on a Sibling request is never the one compared.
+    const counted = rootOf(answers.students, of)
+    const theirs = answers.students.find((s) => s.key === counted)
     if (!mine || !theirs) return
     const pair: NamePair = {
       mine: { first: firstOf(studentName(mine.name)), father: fatherName(mine.name) },
-      theirs: { first: firstOf(studentName(theirs.name)), father: savedFather(answers, of) },
+      theirs: { first: firstOf(studentName(theirs.name)), father: savedFather(answers, counted) },
     }
     const tier = fatherNameMatch(pair.mine.father, pair.theirs.father)
     if (tier === "same") {
@@ -436,7 +441,10 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
                 // Another person may hold other children on file: the on-file question is asked again.
                 const onFile = { ...x.onFile }
                 delete onFile[h.root]
-                return { ...x, custodians: { ...x.custodians, [h.root]: custodian }, onFile, brought: undefined, feesChecked: undefined }
+                const custodians = { ...x.custodians, [h.root]: custodian }
+                // A new first custodian: "the same person as before" now means someone else, so it is asked again.
+                if (k === 0) for (const [root, c] of Object.entries(custodians)) if (c.kind === "same") delete custodians[Number(root)]
+                return { ...x, custodians, onFile, brought: undefined, feesChecked: undefined }
               })
             }
           />
@@ -461,7 +469,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         <BroughtQuestion
           id="rs-brought"
           who={n > 1 ? "the students" : firstOf(studentName(a.students[0]?.name))}
-          people={adults.filter((p, i) => adults.findIndex((q) => q.name === p.name) === i)}
+          people={broughtChoices(adults)}
           saved={a.brought}
           onDone={(brought) => answer("brought", (x) => ({ ...x, brought }))}
         />
@@ -573,7 +581,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         const what =
           outcome.reason === "father_names_differ"
             ? `${who}’s father is another man, so the father can’t be the custodian of them all. Change the custodian`
-            : outcome.field === "phone" || outcome.field === "whatsapp"
+            : (outcome.field === "phone" || outcome.field === "whatsapp") && outcome.reason === "repeated_on_form"
+              ? "Two different custodians on this form have the same phone number. Change one of them"
+              : outcome.field === "phone" || outcome.field === "whatsapp"
             ? "One of the custodians’ phone numbers can’t be read. Check it"
             : outcome.field === "student_name" && outcome.reason === "repeated_on_form"
               ? `${who} is on this form twice. Remove one`
@@ -716,7 +726,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       return s?.className && s.board ? feeOf(fees, yearOf(answers.students, i, defaultYear), s.className, s.board) : null
     }
     const a = fee(mismatch.key)
-    const b = fee(mismatch.of)
+    const b = fee(rootOf(answers.students, mismatch.of))
     if (a === null || b === null) return null
     return a <= b ? mismatch.pair.mine.first : mismatch.pair.theirs.first
   })()

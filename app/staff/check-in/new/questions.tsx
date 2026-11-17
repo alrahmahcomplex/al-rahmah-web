@@ -714,7 +714,7 @@ export function OnFileQuestion({ id, first, onFileName, admissionNumber, father,
   )
 }
 
-export function BroughtQuestion({ id, who, people, saved, onDone }: { id: string; who: string; people: { name: string }[]; saved?: Brought; onDone: (b: Brought) => void }) {
+export function BroughtQuestion({ id, who, people, saved, onDone }: { id: string; who: string; people: { name: string; person: number }[]; saved?: Brought; onDone: (b: Brought) => void }) {
   const savedElse = saved?.who === "else" ? saved : undefined
   const [value, setValue] = useState<string | null>(saved ? (saved.who === "else" ? "else" : String(saved.person)) : null)
   const [name, setName] = useState(savedElse?.name ?? "")
@@ -745,7 +745,7 @@ export function BroughtQuestion({ id, who, people, saved, onDone }: { id: string
           </>
         }
         options={[
-          ...people.map((p, i) => ({ value: String(i), label: p.name, description: "A custodian" })),
+          ...people.map((p) => ({ value: String(p.person), label: p.name, description: "A custodian" })),
           { value: "else", label: "Someone else", description: "A relative, a neighbour or a driver" },
         ]}
         value={value}

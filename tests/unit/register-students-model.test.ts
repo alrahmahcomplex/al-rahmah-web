@@ -4,6 +4,7 @@ import {
   comingIntake,
   feePreview,
   households,
+  broughtChoices,
   isEmpty,
   otherFather,
   payload,
@@ -194,6 +195,40 @@ describe("the save", () => {
       },
     })
     expect(people(a).people).toHaveLength(1)
+  })
+})
+
+describe("who is the same person (review of #457)", () => {
+  test("a father shares a person only with the same father on the same phone, never with another adult who has that phone", () => {
+    const a = form([student(1, "A", "JUMA SALIM MRISHO"), student(2, "B", "OMARI JUMA HASSAN", { sibling: { kind: "none" } })], {
+      custodians: {
+        1: { kind: "new", name: { firstName: "ASHA", middleName: "ALI", lastName: "SAID" }, phone: "0712345678", whatsapp: "", relationship: "Mother", description: "" },
+        2: { kind: "father", phone: "0712 345 678", whatsapp: "" },
+      },
+    })
+    const { people: list, personOf } = people(a)
+    expect(list).toHaveLength(2)
+    expect(personOf[2]).toBe(1)
+    expect(payload(a, 2027).students[1].custodian).toEqual({ person: 2, father: true })
+  })
+
+  test("two households fathered by the same man on one phone share him", () => {
+    const a = form([student(1, "A", "JUMA SALIM MRISHO"), student(2, "B", "JUMA SALIM MRISHO", { sibling: { kind: "none" } })], {
+      custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" }, 2: { kind: "father", phone: "0712 345 678", whatsapp: "" } },
+    })
+    expect(people(a).people).toHaveLength(1)
+  })
+
+  test("brought-by choices keep each person's place in the list the save reads", () => {
+    const list = [
+      { name: "ASHA ALI SAID", phone: "1", payload: { phone: "1" } },
+      { name: "ASHA ALI SAID", phone: "2", payload: { phone: "2" } },
+      { name: "NEEMA OMARI HASSAN", phone: "3", payload: { phone: "3" } },
+    ]
+    expect(broughtChoices(list)).toEqual([
+      { name: "ASHA ALI SAID", person: 0 },
+      { name: "NEEMA OMARI HASSAN", person: 2 },
+    ])
   })
 })
 

@@ -278,6 +278,60 @@ test.describe("registering a family", () => {
   })
 })
 
+test.describe("answers that depend on others", () => {
+  test.describe.configure({ timeout: 120_000 })
+
+  test("a student linked to one who waits on a Sibling request is compared with the family's own father", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await start(page)
+    const [juma, omari] = [father(), father()]
+    const [a, b, c] = [word("AMANI"), word("BAKARI"), word("CHAUSIKU")]
+    await student(page, a, juma, "FORM 1", "Day")
+    await another(page)
+    await student(page, b, omari, "FORM 1", "Day")
+    await pick(page, new RegExp(`^Sibling of ${full(a, juma)}`))
+    await page.getByRole("dialog", { name: "The fathers’ names don’t match" }).getByRole("button", { name: "Request the discount" }).click()
+    await another(page)
+    await student(page, c, omari, "FORM 1", "Day")
+    // The same father as B, but B's group counts by A's father: a request again, never a match.
+    await pick(page, new RegExp(`^Yes, sibling of ${full(b, omari)}`))
+    const sheet = page.getByRole("dialog", { name: "The fathers’ names don’t match" })
+    await expect(sheet).toContainText(juma.join(" "))
+    await expect(sheet).toContainText(omari.join(" "))
+  })
+
+  test("a new first custodian asks again who \"the same person as before\" is", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await start(page)
+    const [one, two] = [father(), father()]
+    const [a, b] = [word("AMANI"), word("BAKARI")]
+    await student(page, a, one, "FORM 1", "Day")
+    await another(page)
+    await student(page, b, two, "FORM 1", "Day")
+    await pick(page, /^Not a sibling/)
+    await go(page, "No, go to custodians").click()
+    await fatherCustodian(page, phone())
+    await pick(page, new RegExp(`^${one.join(" ")}`))
+    await pick(page, "Uncle")
+    await go(page, "Continue").click()
+    await expect(page.getByRole("heading", { name: new RegExp(`^Who brought`) })).toBeVisible()
+
+    // The first custodian becomes someone else: B's answer named the old one, so B is asked again.
+    await page.getByRole("button", { name: new RegExp(`^Change Custodian of ${a}$`) }).click()
+    const step = open(page)
+    await step.getByRole("switch", { name: "The father is the custodian" }).click()
+    await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(phone())
+    await expect(step.locator(".kit-rv[data-open]").getByRole("textbox", { name: "First name" })).toBeVisible()
+    await step.getByRole("textbox", { name: "First name" }).fill("mwajuma")
+    await step.getByRole("textbox", { name: "Middle name" }).fill("said")
+    await step.getByRole("textbox", { name: "Last name" }).fill("kombo")
+    await pick(page, "Mother")
+    await go(page, "Continue").click()
+    await expect(open(page).getByRole("heading", { name: `Who is the custodian of ${b}?` })).toBeVisible()
+    await expect(open(page).getByRole("radio", { name: /^MWAJUMA SAID KOMBO/ })).toBeAttached()
+  })
+})
+
 test.describe("starting over", () => {
   test("an empty form has nothing to clear; with answers it asks first", async ({ page }) => {
     await signIn(page, ADMISSIONS)

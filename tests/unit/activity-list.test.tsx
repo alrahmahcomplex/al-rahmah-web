@@ -45,6 +45,32 @@ describe("the Activity log card", () => {
     expect(rowFor("OLD CALLER")).toBeNull()
   })
 
+  it("keeps the fresh rows when a page asked for before the fresh read answers late", async () => {
+    let answer: (value: unknown) => void = () => {}
+    load.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+    const view = render(<ActivityList first={page(["FIRST"], { total: 11 })} />)
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+    view.rerender(<ActivityList first={page(["FRESH"], { total: 11 })} />)
+    answer({ status: "ok", page: page(["STALE PAGE TWO"], { total: 11, page: 2 }) })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(rowFor("FRESH")).not.toBeNull()
+    expect(rowFor("STALE PAGE TWO")).toBeNull()
+  })
+
+  it("shows the page asked for last when two answers arrive out of order", async () => {
+    let first: (value: unknown) => void = () => {}
+    load.mockReturnValueOnce(new Promise((resolve) => (first = resolve)))
+    load.mockResolvedValueOnce({ status: "ok", page: page(["PAGE TWO"], { total: 21, page: 2 }) })
+    render(<ActivityList first={page(["FIRST"], { total: 21 })} />)
+    fireEvent.click(screen.getByRole("button", { name: /^3$/ }))
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+    await waitFor(() => expect(rowFor("PAGE TWO")).not.toBeNull())
+    first({ status: "ok", page: page(["PAGE THREE"], { total: 21, page: 3 }) })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(rowFor("PAGE TWO")).not.toBeNull()
+    expect(rowFor("PAGE THREE")).toBeNull()
+  })
+
   it("goes to the new last page when the log shrank under the page asked for", async () => {
     load.mockResolvedValueOnce({ status: "ok", page: page([], { total: 1, page: 2 }) })
     load.mockResolvedValueOnce({ status: "ok", page: page(["LAST LEFT"], { total: 1, page: 1 }) })

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 
 import { Icon } from "@/components/icons"
 import { Button, ButtonLink, Card, KeyValueList, Note, Pagination, Sheet, type KeyValueItem } from "@/components/kit"
@@ -27,6 +27,13 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
   const [open, setOpen] = useState<ActivityView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  // Only the newest page asked for, from the first page now on screen, may
+  // replace the rows: an older answer that arrives late is dropped.
+  const asked = useRef(0)
+  const firstNow = useRef(first)
+  useEffect(() => {
+    firstNow.current = first
+  }, [first])
 
   // Home read the log again (an action revalidated it, or the page was
   // refreshed): show the new first page, as a reload would.
@@ -39,17 +46,21 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
 
   function goTo(page: number) {
     setError(null)
+    const ticket = ++asked.current
+    const base = first
+    const current = () => ticket === asked.current && firstNow.current === base
     startTransition(async () => {
       try {
         let outcome = await loadActivityPage(page)
         // The log shrank since this page was drawn: go to its new last page.
-        if (outcome.status === "ok" && outcome.page.total > 0 && outcome.page.page > outcome.page.pageCount) {
+        if (current() && outcome.status === "ok" && outcome.page.total > 0 && outcome.page.page > outcome.page.pageCount) {
           outcome = await loadActivityPage(outcome.page.pageCount)
         }
+        if (!current()) return
         if (outcome.status === "ok") setShown(outcome.page)
         else setError(outcome.message)
       } catch {
-        setError(LOST_REQUEST)
+        if (current()) setError(LOST_REQUEST)
       }
     })
   }

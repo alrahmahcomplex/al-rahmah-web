@@ -29,7 +29,9 @@ export type LeadPanel = {
   key: string
   // The tab the panel shows on.
   tab: LeadTab
-  // Takes a whole row of the two-column grid.
+  // Takes a whole row of the two-column grid. Keep wide panels before or after
+  // a tab's other panels, never between them: the Bento grid counts its last
+  // row from the narrow panels only, so a wide one in the middle leaves a hole.
   wide?: true
   Panel: (props: LeadPanelProps) => ReactNode | Promise<ReactNode>
   // A closed lead is read-only, so the page leaves a panel off it unless the

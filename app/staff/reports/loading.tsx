@@ -15,7 +15,7 @@ export default function Loading() {
         {Array.from({ length: 5 }, (_, index) => (
           <SkeletonBlock key={index} height={168} shape="card" className="rp-tile" />
         ))}
-        <SkeletonBlock height={520} shape="card" className="rp-side" />
+        <SkeletonBlock height={532} shape="card" className="rp-side" />
         <SkeletonBlock height={300} shape="card" className="rp-wide" />
       </div>
     </div>

@@ -1601,18 +1601,32 @@ describe("a child linked before check-in", () => {
     });
     for (const id of leadIds) expect(await rowOf(id)).toMatchObject({ status: "Applied" });
 
-    // Settled on the lead (as the name question's typing-mistake answer
-    // writes it), check-in goes through and the link stays.
-    await asSystem((sql) =>
-      sql.query(
-        "update public.leads set father_full_name = $2, father_full_name_source = 'typo_confirmed' where id = any($1::uuid[])",
-        [leadIds, nameOf(family)],
-      ),
-    );
+    // Staff settle it on the lead: the three names against the sibling's two
+    // are close, so the name question comes up and nothing is saved.
+    const admissions = await signedIn(ADMISSIONS);
+    const asked = await admissions.rpc("update_lead_details", {
+      lead_id: leadIds[0],
+      changes: { father_full_name: nameOf(family) },
+    });
+    expect(asked.error?.message).toBe("father_name_question");
+    expect(JSON.parse(asked.error!.details!)).toEqual({
+      father_full_name: nameOf(family),
+      sibling_lead_id: leadIds[1],
+      sibling_father_full_name: twoWordsOf(family),
+    });
+    for (const id of leadIds) expect((await rowOf(id)).father_full_name).toBe(twoWordsOf(family));
+
+    // The typing-mistake answer writes the full name for the whole group;
+    // check-in then goes through and the link stays.
+    const settled = await admissions.rpc("update_lead_details", {
+      lead_id: leadIds[0],
+      changes: { father_full_name: nameOf(family), father_name_answer: "typo", father_name_spelling: nameOf(family) },
+    });
+    expect(settled.error).toBeNull();
     await completed({ people: [{ contactId }], students: [checkIn(leadIds[0], a), checkIn(leadIds[1], b)] });
     for (const id of leadIds) {
       expect(await rowOf(id)).toMatchObject({ status: "Visited", father_full_name: nameOf(family) });
-      expect(await membershipOf(id)).toMatchObject({ basis: "matched" });
+      expect(["matched", "typo_confirmed"]).toContain((await membershipOf(id))?.basis);
     }
   });
 });

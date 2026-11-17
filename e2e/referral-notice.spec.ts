@@ -84,33 +84,6 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-test.describe("the reminder for staff", () => {
-  test("New Student shows the reminder once a code is typed, and the lead records it", async ({ page }) => {
-    await signIn(page, ADMISSIONS)
-    await page.goto("/staff/check-in/new")
-    await page.getByLabel("Full name").fill(`Parent ${randomUUID().slice(0, 6)}`)
-    await page.getByLabel("Phone", { exact: true }).fill(`0 7${String(randomInt(0, 100_000_000)).padStart(8, "0")}`)
-    await page.getByRole("button", { name: "Continue" }).click()
-    const child = `Child ${randomUUID().slice(0, 6)}`
-    await page.getByLabel("Student's full name").fill(child)
-    await page.getByRole("radio", { name: "STD 3" }).click()
-    await page.getByRole("radio", { name: nextYear }).click()
-    await page.getByRole("radio", { name: "Day", exact: true }).click()
-
-    const code = page.getByLabel("Referral code (optional)")
-    const reminder = page.getByText(STAFF_REMINDER)
-    await expect(reminder).toHaveCount(0)
-    await code.fill("bjn-402")
-    await expect(reminder).toBeVisible()
-    await expect(page.getByText(/^Baraka Juma Njoroge · /)).toBeVisible()
-
-    await page.getByRole("button", { name: "Continue to review" }).click()
-    await page.getByRole("button", { name: "Register student" }).click()
-    await expect(page.getByRole("heading", { name: `${child} is registered` })).toBeVisible()
-    expect(await noticeVersionOf(child)).toBe("staff_reminder")
-  })
-})
-
 test("the lead's Referral code editor shows the reminder once a code is typed", async ({ page }) => {
   const pupil = `Pupil ${randomUUID().slice(0, 6)}`
   const created = await createLead(secretClient(), {

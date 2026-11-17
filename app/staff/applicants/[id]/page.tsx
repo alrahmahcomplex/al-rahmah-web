@@ -97,8 +97,8 @@ export default async function LeadPage({
       </Bento>
 
       <div>
-        <ButtonLink href="/staff/check-in" variant="ghost">
-          Back to Check-in
+        <ButtonLink href="/staff" variant="ghost">
+          Back to Home
         </ButtonLink>
       </div>
     </div>

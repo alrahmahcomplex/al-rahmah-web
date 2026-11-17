@@ -1284,6 +1284,27 @@ export async function findFamilyByPhone(
   }
 }
 
+// The father's full name each of these leads holds, by lead id, for the
+// Register students form's on-file sibling question (#308). Row-level
+// security answers only staff who may view leads; a lead with no father's
+// name is left out.
+export async function getFathersOfLeads(
+  supabase: SupabaseClient,
+  leadIds: string[],
+): Promise<Result<Record<string, string>, "unavailable">> {
+  if (leadIds.length === 0) return { ok: true, data: {} }
+  const { data, error } = await supabase.from("leads").select("id, father_full_name").in("id", leadIds)
+  if (error) {
+    console.error("Could not read the fathers' names of leads", error)
+    return { ok: false, error: "unavailable" }
+  }
+  const fathers: Record<string, string> = {}
+  for (const row of data as { id: string; father_full_name: string | null }[]) {
+    if (row.father_full_name) fathers[row.id] = row.father_full_name
+  }
+  return { ok: true, data: fathers }
+}
+
 // ---------------------------------------------------------------------------
 // The Family link on the lead screen: which Family a lead belongs to, and
 // settling an unconfirmed match the Admission form left. Each write is a

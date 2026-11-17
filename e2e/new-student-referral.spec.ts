@@ -1,89 +1,90 @@
-import { randomInt, randomUUID } from "node:crypto"
+import { randomInt } from "node:crypto"
 
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
+import { inRolledBackTransaction } from "../tests/support/db"
 import { ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
 import { openLeadHistoryAsSuperAdmin } from "./super-admin"
 import { signInOnce } from "./log-in"
 
-// A Referral code entered at New Student (#81). Every run invents its own
-// child and phone number; the codes are slice 4's seeded agents.
+// A Discount code entered on Register students (#81, #308). Every run invents
+// its own names and phone number; the codes are slice 4's seeded agents.
 
 async function signIn(page: Page, person: FixtureStaff) {
   await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-async function toStudentStep(page: Page) {
-  await page.goto("/staff/check-in/new")
-  await page.getByLabel("Full name").fill(`Parent ${randomUUID().slice(0, 6)}`)
-  await page.getByLabel("Phone", { exact: true }).fill(`0 7${String(randomInt(0, 100_000_000)).padStart(8, "0")}`)
-  await page.getByRole("button", { name: "Continue" }).click()
-  await expect(page.getByRole("heading", { name: "Who is the student?", level: 1 })).toBeVisible()
+const letters = (n: number) => Array.from({ length: n }, () => String.fromCharCode(65 + randomInt(0, 26))).join("")
+const open = (page: Page) => page.locator(".gf-step.gf-open")
+const go = (page: Page, name: string | RegExp) => open(page).getByRole("button", { name, exact: typeof name === "string" })
 
-  const child = `Child ${randomUUID().slice(0, 6)}`
-  await page.getByLabel("Student's full name").fill(child)
-  await page.getByRole("radio", { name: "STD 3" }).click()
-  await page.getByRole("radio", { name: String(new Date().getFullYear() + 1) }).click()
-  await page.getByRole("radio", { name: "Day", exact: true }).click()
-  return child
+/** One FORM 1 student, the father as custodian, brought by him: on to the Discount code. Returns the student's full name. */
+async function toCodeStep(page: Page) {
+  const [first, f, m, l] = [`AMANI${letters(4)}`, `JUMA${letters(4)}`, `SALIM${letters(4)}`, `MRISHO${letters(4)}`]
+  await page.goto("/staff/check-in/new")
+  const step = open(page)
+  await step.getByRole("textbox", { name: "Student’s name" }).fill(first)
+  await step.getByRole("textbox", { name: "First name" }).fill(f)
+  await step.getByRole("textbox", { name: "Middle name" }).fill(m)
+  await step.getByRole("textbox", { name: "Last name" }).fill(l)
+  await go(page, "Continue").click()
+  await go(page, /FORM 1/).click()
+  await open(page).getByRole("radio", { name: "Day" }).check()
+  await go(page, "Not known yet").click()
+  await go(page, "No, go to custodians").click()
+  await open(page).getByRole("switch", { name: "The father is the custodian" }).click()
+  await open(page).getByRole("textbox", { name: "Custodian’s mobile number" }).fill(`07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`)
+  await go(page, "Continue").click()
+  await open(page).getByRole("radio", { name: new RegExp(`^${f} ${m} ${l}`) }).check()
+  await expect(page.getByRole("heading", { name: "Does the family have a Discount code?" })).toBeVisible()
+  return `${first} ${f} ${l}`
 }
 
-test.describe("a Referral code at New Student", () => {
-  test("Admissions Staff register a walk-in with a seeded agent's code and see it on the lead", async ({ page }) => {
+test.describe("a Discount code on Register students", () => {
+  test("a seeded agent's code goes on the new student, with the staff reminder", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    const child = await toStudentStep(page)
+    const child = await toCodeStep(page)
 
-    // The agent is named as the code is typed, however it is typed, with the
-    // fee the family will pay, from interview_discount().
-    const code = page.getByLabel("Referral code (optional)")
-    await code.fill(" bjn -402")
-    await expect(page.getByText("Baraka Juma Njoroge · interview fee becomes TZS 40,000")).toBeVisible()
-    await page.getByRole("button", { name: "Continue to review" }).click()
+    await go(page, "They have a code").click()
+    await open(page).getByRole("textbox", { name: "Discount code" }).fill("bjn402")
+    await expect(open(page).getByRole("textbox", { name: "Discount code" })).toHaveValue("BJN-402")
+    await expect(open(page).getByText("Tell the family: the person who gave them this code will see this student's admission progress.")).toBeVisible()
+    await go(page, "Continue").click()
+    await expect(page.getByText("BJN-402 · family told who sees the progress")).toBeVisible()
+    await go(page, "Looks right").click()
+    await go(page, "Register 1 student").click()
+    await expect(page.getByRole("heading", { name: "1 student registered" })).toBeVisible()
+    await expect(page.getByText("The Discount code wasn’t saved")).toHaveCount(0)
+    // The reminder was shown, so the lead records that the family was told (#182).
+    const version = await inRolledBackTransaction(async (sql) => (await sql.query("select referral_notice_version as v from public.leads where student_name = $1", [child])).rows)
+    expect(version).toEqual([{ v: "staff_reminder" }])
 
-    // The review shows the code and the agent's name.
-    await expect(page.getByRole("heading", { name: "Check and register", level: 1 })).toBeVisible()
-    const student = page.getByRole("region", { name: "Student" })
-    await expect(student).toContainText("Referral codeBJN-402")
-    await expect(student).toContainText("Marketing AgentBaraka Juma Njoroge")
-
-    await page.getByRole("button", { name: "Register student" }).click()
-    await expect(page.getByRole("heading", { name: `${child} is registered` })).toBeVisible()
-    await expect(page.getByText("the referral code wasn't saved")).toHaveCount(0)
-
-    // The lead carries the code.
-    await page.getByRole("link", { name: `Open ${child}` }).click()
+    await page.getByRole("link", { name: "Open Applicants" }).click()
+    await page.goto(`/staff/applicants?q=${encodeURIComponent(child)}`)
+    await page.getByRole("row", { name: new RegExp(child) }).first().click()
     const panel = page.getByRole("region", { name: "Referral code" })
     await expect(panel.getByLabel("Code", { exact: true })).toHaveText("BJN-402")
-    await expect(panel).toContainText("Marketing Agent: Baraka Juma Njoroge")
-    await expect(panel.getByLabel("Expected interview fee")).toHaveText("TZS 40,000")
 
-    // Its history shows the staff member who added it.
     await openLeadHistoryAsSuperAdmin(page)
     const entries = page.getByRole("list", { name: "History" }).locator(":scope > li")
     await expect(entries.filter({ hasText: "added a Referral code" })).toContainText(ADMISSIONS.name)
-    await expect(entries.filter({ hasText: "added a Referral code" })).toContainText("BJN-402")
   })
 
-  test("a code no agent holds is refused on the student step", async ({ page }) => {
+  test("a code nobody holds is refused until it is corrected or No code is chosen", async ({ page }) => {
     await signIn(page, ADMISSIONS)
-    await toStudentStep(page)
-
-    const code = page.getByLabel("Referral code (optional)")
-    await code.fill("nope-404")
-    await expect(page.getByText("No Marketing Agent or Promo code has this code.")).toBeVisible()
-    await expect(code).toHaveAttribute("aria-invalid", "true")
-
-    // Review stays on the student step until the code is corrected or cleared.
-    await page.getByRole("button", { name: "Continue to review" }).click()
-    await expect(page.getByRole("heading", { name: "Who is the student?", level: 1 })).toBeVisible()
-    await expect(page.getByText("Correct it, or clear the field to register without one.")).toBeVisible()
-    await expect(code).toBeFocused()
-
-    await code.fill("")
-    await page.getByRole("button", { name: "Continue to review" }).click()
-    await expect(page.getByRole("heading", { name: "Check and register", level: 1 })).toBeVisible()
-    await expect(page.getByRole("region", { name: "Student" })).not.toContainText("Referral code")
+    await toCodeStep(page)
+    await go(page, "They have a code").click()
+    await open(page).getByRole("textbox", { name: "Discount code" }).fill("NOP-404")
+    // The lookup runs after a short pause; Continue waits for it.
+    await expect
+      .poll(async () => {
+        await go(page, "Continue").click()
+        return open(page).getByText("No Marketing Agent or Promo code has this code. Correct it, or choose No code.").isVisible()
+      })
+      .toBe(true)
+    await go(page, /NO CODE/).click()
+    await expect(page.getByText("No code", { exact: true })).toBeVisible()
   })
 })

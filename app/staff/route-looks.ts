@@ -22,7 +22,7 @@ export const ROUTE_LOOKS = {
   "/staff/applicants/[id]/reopen": "new",
   "/staff/audit": "new",
   "/staff/check-in": "legacy",
-  "/staff/check-in/new": "legacy",
+  "/staff/check-in/new": "new",
   "/staff/discounts": "new",
   "/staff/fees": "new",
   "/staff/fees/[year]": "new",

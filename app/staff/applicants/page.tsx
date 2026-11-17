@@ -11,6 +11,7 @@ import { getStudentImport } from "@/lib/services/student-import"
 import { createClient } from "@/utils/supabase/server"
 
 import StaffForbidden from "../forbidden"
+import { mayRegister } from "../check-in/new/permissions"
 import { requireStaff } from "../session"
 import { ApplicantsList } from "./applicants-list"
 import "./applicants.css"
@@ -73,7 +74,7 @@ export default async function ApplicantsPage({
 
   const listSearch = { query: search.query, status: search.status, closure: search.closure, earlierLinkYear: search.earlierLinkYear, importBatchId: search.importBatchId }
   // Starting a registration needs both permissions, as the database does.
-  const canRegister = staff.permissions.includes("leads.create") && staff.permissions.includes("visits.record")
+  const canRegister = mayRegister(staff.permissions)
   const importLabel = !search.importBatchId
     ? null
     : batch?.ok && batch.data

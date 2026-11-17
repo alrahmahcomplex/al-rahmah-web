@@ -58,8 +58,8 @@ export default async function ReopenLeadPage({
           {source === "lead" ? "Back to the application" : "Open the application"}
         </ButtonLink>
         {source !== "lead" && (
-          <ButtonLink href="/staff/check-in" variant="ghost">
-            Back to Check-in
+          <ButtonLink href="/staff" variant="ghost">
+            Back to Home
           </ButtonLink>
         )}
       </div>

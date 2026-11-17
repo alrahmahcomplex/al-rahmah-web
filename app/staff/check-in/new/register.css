@@ -1,0 +1,51 @@
+/* Register students (#308), measured from prototype v38. Tokens only. */
+
+.rs-page { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.rs-home { align-self: flex-start; margin-bottom: 14px; }
+.rs-page > header, .rs-page .kit-ph { text-align: center; }
+
+.rs-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rs-centre { margin: 0; text-align: center; }
+.rs-nk { align-self: center; min-height: 44px; padding: 0 14px; }
+
+/* The folded name: the father's full name under the student's. */
+.rs-fa { display: block; font-weight: 400; font-size: 13px; line-height: 1.3; color: var(--kit-quiet, var(--gf-quiet)); }
+.rs-live { min-height: 21px; overflow-wrap: anywhere; }
+.rs-live:empty { display: none; }
+.rs-live b { color: var(--gf-ink); font-weight: 600; letter-spacing: 0.02em; }
+
+/* "Joining in 2027 · Change Year", as the Admission form shows the year. */
+.rs-year { display: flex; align-items: center; gap: 10px; border-radius: 18px; background: var(--gf-whisper); padding: 10px 10px 10px 16px; text-align: left; font-size: 15px; color: var(--gf-indigo-night); --kit-quiet: var(--gf-quiet-on-tint); }
+.rs-year > svg { flex: none; color: var(--gf-indigo); }
+.rs-year > span { min-width: 0; }
+.rs-year > .kit-link { margin-left: auto; }
+@media (max-width: 380px) { .rs-year { flex-wrap: wrap; justify-content: center; } .rs-year > .kit-link { margin-left: 0; } }
+
+/* The class sheet: three levels, then the level's classes. */
+.rs-classes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; min-height: 204px; align-content: start; padding-top: 14px; }
+.rs-classes[data-n="4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rs-class { min-height: 56px; border-radius: 16px; border: var(--gf-stroke) solid var(--gf-line); background: var(--gf-paper); font: inherit; font-weight: 700; font-size: 17px; color: var(--gf-ink); cursor: pointer;
+  transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med), color var(--gf-t-med), transform var(--gf-t-fast); }
+.rs-class:hover { border-color: var(--gf-line-strong); background: var(--gf-whisper); }
+.rs-class:active { transform: scale(0.96); }
+.rs-class:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
+.rs-class[aria-pressed="true"] { background: var(--gf-indigo); border-color: var(--gf-indigo); color: var(--gf-paper); }
+
+/* "The father is the custodian": the switch in an outlined row. */
+.rs-swrow { padding: 14px 16px; border: var(--gf-stroke) solid var(--gf-line); border-radius: 20px; background: var(--gf-paper); text-align: left; transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med); }
+.rs-swrow:hover { background: var(--gf-chrome); --kit-quiet: var(--gf-quiet-on-tint); }
+.rs-swrow:has([data-checked]) { border-color: var(--gf-indigo); background: var(--gf-whisper); --kit-quiet: var(--gf-quiet-on-tint); }
+.rs-swrow .kit-tick-t > span { font-weight: 600; font-size: 16px; }
+.rs-swrow .kit-tick-t small { letter-spacing: 0.02em; overflow-wrap: anywhere; }
+
+/* Two fathers' names side by side. */
+.rs-cmp { display: grid; grid-template-columns: 1fr 1fr; border-radius: 20px; border: var(--gf-stroke) solid var(--gf-indigo); overflow: hidden; text-align: center; }
+.rs-cmp div { padding: 12px 10px; min-width: 0; }
+.rs-cmp div + div { border-left: var(--gf-stroke) dashed var(--gf-line-strong); }
+.rs-cmp small { display: block; font-size: 13px; color: var(--gf-ink-soft); }
+.rs-cmp b { font-size: 16px; overflow-wrap: anywhere; }
+
+/* The fee table sits inside the card's column. */
+.rs-fees { margin: 0; text-align: left; font-size: 13.5px; }
+.rs-fees th b, .rs-fees td b { display: block; font-weight: 600; }
+.rs-fees small { display: block; color: var(--kit-quiet, var(--gf-quiet)); font-size: 12.5px; font-weight: 400; }

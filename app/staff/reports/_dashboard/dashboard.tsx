@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { getLeadsByClass, getMetricCount, getSeatsByClass, listEnrollmentYears, type DashboardMetric } from "@/lib/services/dashboard"
 
+import "../reports.css"
+
 import { parsePanelFilters, parseSeatsYear } from "./filters"
 import { LeadsByClassTable } from "./leads-by-class"
 import { DashboardPanel } from "./panel"
@@ -51,11 +53,11 @@ export async function Dashboard({
   const enrollmentYears = years.ok ? years.data : []
 
   return (
-    <section aria-labelledby="dashboard-heading" className="flex flex-col gap-3">
-      <h2 id="dashboard-heading" className="staff-section-heading">
+    <section aria-labelledby="dashboard-heading" className="rp-dash">
+      <h2 id="dashboard-heading" className="kit-sec-title">
         Dashboard
       </h2>
-      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="rp-grid">
         {tiles.map((tile) => (
           <DashboardPanel
             key={tile.key}
@@ -66,14 +68,14 @@ export async function Dashboard({
             searchParams={query}
           >
             {tile.count.ok ? (
-              <div className="flex flex-col">
-                <p className="text-3xl font-semibold tabular-nums text-slate-900" data-testid={`${tile.key}-count`}>
+              <div>
+                <p className="rp-count" data-testid={`${tile.key}-count`}>
                   {tile.count.data.toLocaleString("en-GB")}
                 </p>
-                <p className="text-xs text-muted-foreground">{tile.counts}</p>
+                <p className="rp-cap">{tile.counts}</p>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">This count could not be loaded. Try again in a moment.</p>
+              <p className="rp-err">This count could not be loaded. Try again in a moment.</p>
             )}
           </DashboardPanel>
         ))}
@@ -84,12 +86,12 @@ export async function Dashboard({
           filters={classFilters}
           enrollmentYears={enrollmentYears}
           searchParams={query}
-          className="lg:col-start-3 lg:row-span-3 lg:row-start-1"
+          className="rp-side"
         >
           {byClass.ok ? (
             <LeadsByClassTable counts={byClass.data} />
           ) : (
-            <p className="text-sm text-muted-foreground">These counts could not be loaded. Try again in a moment.</p>
+            <p className="rp-err">These counts could not be loaded. Try again in a moment.</p>
           )}
         </DashboardPanel>
         {/* Left out for staff who may not view payments. */}
@@ -97,7 +99,7 @@ export async function Dashboard({
           <SeatsByClassPanel
             seats={seats}
             canOpenSeats={canOpenSeats}
-            className="sm:col-span-2 lg:col-span-3"
+            className="rp-wide"
           />
         )}
       </div>

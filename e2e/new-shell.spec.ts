@@ -6,10 +6,14 @@ import { axeProblems } from "./axe"
 import { logIn, signInOnce, signOut } from "./log-in"
 import { expect, test } from "./staff-test"
 
-// The new staff shell (#322), on the first routes it holds: Home, the kit
-// page and Reopening requests. Every other route keeps the old shell
-// (e2e/staff-shell.spec.ts). Both shells keep the same contract: a
-// navigation landmark named "Staff" and the page's main.
+// The new staff shell (#322). Every page with a sidebar entry is drawn in it
+// now; the old shell (e2e/staff-shell.spec.ts) is left only on the staff 404.
+// Both shells keep the same contract: a navigation landmark named "Staff" and
+// the page's main.
+
+// An address no page answers: the staff 404, the only page the old shell
+// still draws (the catch-all route).
+const UNKNOWN = "/staff/no-such-page"
 
 const MANAGER_ENTRIES = [
   "Home",
@@ -61,11 +65,10 @@ test.describe("on a desktop", () => {
 
   test("moves between the new and the old shell", async ({ page }) => {
     await open(page, MANAGER, "/staff/reopenings")
-    await entry(page, "Reports").click()
-    await expect(page).toHaveURL(/\/staff\/reports$/)
+    // No sidebar entry leads to the old shell any more (#331); the staff 404 is its last page.
+    await page.goto(UNKNOWN)
     await expect(shell(page)).toHaveCount(0)
-    await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
-    await expect(page.getByRole("banner")).toContainText("Reports")
+    await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
 
     await staffNav(page).getByRole("link", { name: /^Reopening requests/ }).click()
     await expect(page).toHaveURL(/\/staff\/reopenings$/)
@@ -94,7 +97,7 @@ test.describe("on a desktop", () => {
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
     await expect(handle(page)).toHaveCount(0)
     // The staff 404 (the catch-all route) is still drawn in the old shell.
-    await page.goto("/staff/no-such-page")
+    await page.goto(UNKNOWN)
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
     await page.getByRole("button", { name: "Expand sidebar" }).click()
 
@@ -241,9 +244,7 @@ test.describe("on a phone", () => {
     await drawer.getByRole("link", { name: "Reports", exact: true }).click()
     await expect(page).toHaveURL(/\/staff\/reports$/)
     await expect(drawer).toHaveCount(0)
-    // Reports keeps the old shell.
-    await expect(shell(page)).toHaveCount(0)
-    await expect(staffNav(page).getByRole("link", { name: "Home" })).toBeVisible()
+    await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
   })
 
   test("Sign out from the person pill ends the session", async ({ page }) => {
@@ -297,8 +298,8 @@ test.describe("crossing between the shells by links", () => {
 
     await toggle(page).click()
     await expect(toggle(page)).toHaveAttribute("aria-pressed", "false")
-    await entry(page, "Reports").click()
-    await expect(page).toHaveURL(/\/staff\/reports$/)
+    // No link leads into the old shell any more (#331), so this way goes by address.
+    await page.goto(UNKNOWN)
     await expect(page.getByRole("button", { name: "Expand sidebar" })).toBeVisible()
 
     await page.getByRole("button", { name: "Expand sidebar" }).click()
@@ -313,7 +314,7 @@ test.describe("crossing between the shells by links", () => {
   test("a link from the old shell gives the new page's stage the focus; a fresh load does not", async ({ page }) => {
     await open(page, MANAGER, "/staff/reopenings")
     await expect(page.locator(".ns-scroll")).not.toBeFocused()
-    await page.goto("/staff/reports")
+    await page.goto(UNKNOWN)
     await staffNav(page).getByRole("link", { name: /^Reopening requests/ }).click()
     await expect(page).toHaveURL(/\/staff\/reopenings$/)
     await expect(page.locator(".ns-scroll")).toBeFocused()

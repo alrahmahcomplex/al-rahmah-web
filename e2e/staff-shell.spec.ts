@@ -5,11 +5,9 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/sup
 import { logIn, signInOnce } from "./log-in"
 
 // The shell around every staff page (#225): the grouped sidebar and its rail,
-// and the phone's tab bar with its More sheet. Most routes are in the new
-// shell now (#323, #324, #328), so the Manager's tests start on Reports,
-// which keeps the old one. Admissions Staff reach no old-shell route from the
-// sidebar any more, so their test reads the sidebar on the staff 404, which
-// the old shell draws (the catch-all route).
+// and the phone's tab bar with its More sheet. Every page with a sidebar entry
+// is in the new shell now (#323, #324, #328, #331), so these tests read the
+// old shell on the staff 404, which it still draws (the catch-all route).
 
 const MANAGER_ENTRIES = [
   "Home",
@@ -27,15 +25,16 @@ const MANAGER_ENTRIES = [
   "Staff and roles",
 ]
 
+// An address no page answers: the staff 404, inside the old shell.
+const UNKNOWN = "/staff/no-such-page"
+
+// Signs in and opens the staff 404, the old shell's last page.
 async function signIn(page: Page, person: FixtureStaff) {
   await logIn(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
-  await page.goto("/staff/reports")
-  await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
+  await page.goto(UNKNOWN)
+  await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
 }
-
-// An address no page answers: the staff 404, inside the old shell.
-const UNKNOWN = "/staff/no-such-page"
 
 const sidebar = (page: Page) => page.getByRole("complementary", { name: "Sidebar" })
 const staffNav = (page: Page) => page.getByRole("navigation", { name: "Staff" })
@@ -56,13 +55,12 @@ test.describe("on a desktop", () => {
     await expect(nav.getByText("Front desk", { exact: true })).toHaveCount(0)
     await expect(nav.getByRole("link", { name: /^(Today|Check-in|Register a student)/ })).toHaveCount(0)
 
-    await expect(entry(page, "Reports")).toHaveAttribute("aria-current", "page")
-    await expect(page.getByRole("banner")).toContainText("Reports")
+    // The 404 is no entry's page.
+    await expect(nav.locator('[aria-current="page"]')).toHaveCount(0)
     await entry(page, "Staff and roles").click()
     await expect(page).toHaveURL(/\/staff\/roles$/)
+    await expect(page.getByRole("heading", { level: 1, name: "Staff and roles" })).toBeVisible()
     await expect(entry(page, "Staff and roles")).toHaveAttribute("aria-current", "page")
-    await expect(entry(page, "Reports")).not.toHaveAttribute("aria-current", "page")
-    await expect(page.getByRole("banner")).toContainText("Staff and roles")
   })
 
   test("Admissions Staff see Admissions, Referrals and Fee schedule, and no Admin group", async ({ page }) => {
@@ -104,13 +102,14 @@ test.describe("on a desktop", () => {
     await collapse.click()
     await expect(expand).toBeVisible()
     // The labels fold away, but every link keeps its name, and a tooltip shows it.
-    // Staff and roles is still drawn in the old shell, whose rail this is.
     await expect(entry(page, "Staff and roles")).toBeVisible()
     await entry(page, "Staff and roles").hover()
     await expect(page.locator("[data-slot=tooltip-content]")).toHaveText("Staff and roles")
 
-    await entry(page, "Staff and roles").click()
-    await expect(page).toHaveURL(/\/staff\/roles$/)
+    // Away and back to the old shell's only page: the rail is still folded.
+    await page.goto("/staff")
+    await page.goto(UNKNOWN)
+    await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
     await expect(expand).toBeVisible()
 
     await page.reload()
@@ -132,7 +131,7 @@ test.describe("on a phone", () => {
     await expect(sidebar(page)).toBeHidden()
     const tabs = staffNav(page)
     await expect(tabs.getByRole("link")).toHaveText(["Home", "Applicants"])
-    // Reports is behind More, so no tab is the current page.
+    // The 404 is no tab's page.
     await expect(tabs.getByRole("link", { name: "Applicants" })).not.toHaveAttribute("aria-current", "page")
 
     await tabs.getByRole("button", { name: "More" }).click()
@@ -145,11 +144,9 @@ test.describe("on a phone", () => {
     await expect(more.getByRole("link", { name: /^(Home|Applicants)$/ })).toHaveCount(0)
     await expect(sheet.getByRole("button", { name: "Sign out" })).toBeVisible()
 
-    // Staff and roles keeps the old shell, with its tab bar.
     await more.getByRole("link", { name: "Staff and roles" }).click()
     await expect(page).toHaveURL(/\/staff\/roles$/)
     await expect(sheet).toBeHidden()
-    await expect(page.getByRole("banner")).toContainText("Staff and roles")
-    await expect(tabs.getByRole("link", { name: "Applicants" })).not.toHaveAttribute("aria-current", "page")
+    await expect(page.getByRole("heading", { level: 1, name: "Staff and roles" })).toBeVisible()
   })
 })

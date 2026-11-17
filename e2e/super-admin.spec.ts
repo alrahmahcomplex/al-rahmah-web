@@ -3,6 +3,7 @@ import { expect, test } from "./staff-test"
 
 import { MANAGER, SUPER_ADMIN, type FixtureStaff } from "../tests/support/fixtures"
 import { signInAsSuperAdmin } from "./super-admin"
+import { chooseOption } from "./kit-parts"
 import { logIn } from "./log-in"
 
 // The Super Admin (#237): signs in, reads the system audit, and administers
@@ -23,8 +24,8 @@ test("the Super Admin signs in, reads the audit and filters it", async ({ page }
   await expect(page.getByRole("list", { name: "Audit entries" }).locator(":scope > li").first()).toBeVisible()
 
   // The migration created the role as the system, in staff administration.
-  await page.getByLabel("Who").selectOption("system")
-  await page.getByLabel("Area").selectOption("staff_admin")
+  await chooseOption(page.getByRole("combobox", { name: "Who" }), "System")
+  await chooseOption(page.getByRole("combobox", { name: "Area" }), "Staff administration")
   await page.getByLabel("Record").fill(SUPER_ADMIN.roleId)
   await page.getByRole("button", { name: "Apply" }).click()
   await expect(page).toHaveURL(/area=staff_admin/)
@@ -48,7 +49,8 @@ test("the Super Admin's Roles tab lists every other role and person, never their
   await expect(rail.locator('a[href="/staff/roles?role=7e000000-0000-4000-8000-000000000002"]')).toBeVisible()
   await expect(rail.getByText("Super Admin", { exact: true })).toHaveCount(0)
   await expect(rail).not.toContainText("Your role")
-  await expect(page.getByText(SUPER_ADMIN.email)).toHaveCount(0)
+  // History stays folded here; the kit keeps its entries in the page, hidden, until it opens (#331).
+  await expect(page.getByText(SUPER_ADMIN.email).filter({ visible: true })).toHaveCount(0)
   await expect(page.getByRole("checkbox", { name: "See the full audit history" })).toHaveCount(0)
 
   // The history is theirs.

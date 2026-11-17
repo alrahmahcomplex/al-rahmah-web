@@ -1,0 +1,30 @@
+/* Audit: the filters, then the entries in one card (DESIGN.md, Inputs and Lists). */
+.au-page { display: flex; flex-direction: column; gap: 16px; }
+.au-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 16px; }
+.au-filters label { display: block; margin-bottom: 6px; font-size: 12.5px; font-weight: 600; color: var(--gf-ink-soft); }
+.au-w-date { width: 160px; }
+.au-w-who { width: 224px; }
+.au-w-area { width: 192px; }
+.au-w-record { width: 256px; }
+.au-actions { display: flex; gap: 8px; }
+@media (max-width: 640px) {
+  .au-filters > div { width: 100%; }
+}
+.au-total { margin: 0; color: var(--gf-quiet); font-size: 13px; }
+
+.au-list { margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.au-entry { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; }
+.au-entry + .au-entry { border-top: 1px solid var(--gf-mist); }
+.au-entry:first-child { padding-top: 0; }
+.au-entry:last-child { padding-bottom: 0; }
+.au-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; }
+.au-actor { font-weight: 600; }
+.au-number { color: var(--gf-indigo); font-size: 12.5px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; font-variant-numeric: tabular-nums; border-radius: 4px; }
+.au-number:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.au-when { color: var(--gf-quiet); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.au-record { margin: 0; color: var(--gf-quiet); font-size: 12.5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.au-changes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; color: var(--gf-quiet); font-size: 12.5px; }
+.au-changes li { overflow-wrap: anywhere; }
+.au-to { color: var(--gf-ink); }
+
+.au-pages { display: flex; align-items: center; gap: 12px; font-size: 14px; }

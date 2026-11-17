@@ -258,5 +258,14 @@ for (const [label, size] of [
     await page.setViewportSize(size)
     await signIn(page, MANAGER)
     expect(await axeProblems(page)).toEqual([])
+
+    // Each chart tab, with its numbers open.
+    const charts = page.getByRole("region", { name: "Charts" })
+    for (const name of ["Classes", "Months", "Seats", "Sources"]) {
+      await charts.getByRole("tab", { name }).click()
+      await charts.getByRole("button", { name: "See the numbers" }).click()
+      await expect(charts.getByRole("table", { name: `${name}: the numbers` })).toBeVisible()
+      expect(await axeProblems(page, ".hm-chart"), name).toEqual([])
+    }
   })
 }

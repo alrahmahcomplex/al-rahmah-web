@@ -251,6 +251,15 @@ describe("the staff register RPC", () => {
     }
   })
 
+  test("a part with no letter in it is refused as missing", async () => {
+    for (const mark of [".", " - ", "'"]) {
+      expect(await register([{ ...personParts(), phone: phone() }], [student({ fatherMiddle: mark })])).toMatchObject({
+        ok: false,
+        error: { kind: "invalid", field: "father_middle", student: 1 },
+      })
+    }
+  })
+
   test("who brought them: at least two names, stored in capitals", async () => {
     expect(
       await register([{ ...personParts(), phone: phone() }], [student({ broughtBy: { name: "  Juma  " } })]),

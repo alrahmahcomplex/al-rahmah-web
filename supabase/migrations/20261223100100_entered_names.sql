@@ -31,14 +31,13 @@
 --    father's full name as sent (re_applications.father_full_name), since
 --    the student's name leaves out his middle name; it never reaches the
 --    lead, and comparing it on screen is a later ticket.
---    Check-in (complete_admission_visit) of a child linked by its father's
---    name may complete a stored two-word name with one middle name
---    (father_name_adds_middle) when no name-mate holds a third name and
---    every name-mate on the form is typed the same
---    (father_name_mates_agree). Only check-in, under a transaction-local
---    flag, keeps the basis through the father's-name trigger; every other
---    writer is checked as before. The same-father question on register and
---    check-in also fires for a completion of an on-file name.
+--    Check-in of a child linked by its father's name still refuses a typed
+--    name that is not `same` as the stored one (`linked_member`), even when
+--    it only adds the middle name to a two-word name from today's one-box
+--    form. Staff settle it on the lead, through the name question. A rule
+--    that let check-in complete such names was tried and dropped: it left
+--    groups with short and full names side by side, which later links,
+--    merges and typo answers could join without a question.
 -- 5. Who brought the students: one box, at least two names, in capitals.
 -- 6. The student import stores new rows' student and guardian names in
 --    capitals. Its father's name is still taken from the student's name:
@@ -53,10 +52,9 @@
 --
 -- Rollback: a new migration putting back the functions as 20261216100100,
 -- 20261217100100, 20261211100100, 20261022300200, 20261123400100,
--- 20261207130100, 20261210100100 and 20261214100200 made them, and dropping
--- name_part, registration_person_name, father_name_adds_middle and
--- father_name_mates_agree. The enum value and the Re-application column can
--- stay.
+-- 20261207130100 and 20261210100100 made them, and dropping
+-- name_part and registration_person_name. The enum value and the
+-- Re-application column can stay.
 
 -- Its own statement: a value added to an enum can be used only once the
 -- statement that added it has committed. Nothing below uses it before the
@@ -73,14 +71,16 @@ begin
     -- -----------------------------------------------------------------------
 
     -- A name part as typed: trimmed, inner whitespace one space, in
-    -- capitals; empty when nothing is left. Internal.
+    -- capitals; empty when nothing is left or it holds no letter, so "." or
+    -- "-" never stands in for a required name. Internal.
     create function public.name_part(part text)
     returns text
     language sql
     immutable
     set search_path = ''
     as $fn$
-        select upper(public.clean_name_part(name_part.part));
+        select case when cleaned ~ '[[:alpha:]]' then cleaned end
+        from (select upper(public.clean_name_part(name_part.part)) as cleaned) part;
     $fn$;
 
     revoke execute on function public.name_part(text) from public, anon, authenticated, service_role;
@@ -168,61 +168,6 @@ begin
     $fn$;
 
     revoke execute on function public.registration_person_name(jsonb, integer) from public, anon, authenticated, service_role;
-
-    -- father_name_adds_middle(stored, typed): the stored name has exactly
-    -- two words, and the typed one is those two with one middle word added
-    -- between them, once both are normalized: "ALI HASSAN MOHAMED" typed for
-    -- a stored "Ali Mohamed". A middle name of two words ("ABDUL KARIM")
-    -- makes four, which is not a completion. An older or imported father's
-    -- name, taken from the student's name, has no middle name, and typing
-    -- the three boxes completes it rather than changing it (#400). Internal.
-    create function public.father_name_adds_middle(stored text, typed text)
-    returns boolean
-    language plpgsql
-    immutable
-    set search_path = ''
-    as $fn$
-    declare
-        s text[] := string_to_array(public.normalize_father_name(father_name_adds_middle.stored), ' ');
-        t text[] := string_to_array(public.normalize_father_name(father_name_adds_middle.typed), ' ');
-    begin
-        if s is null or t is null or cardinality(s) <> 2 or cardinality(t) <> 3 then
-            return false;
-        end if;
-        return t[1] = s[1] and t[3] = s[2];
-    end;
-    $fn$;
-
-    revoke execute on function public.father_name_adds_middle(text, text) from public, anon, authenticated, service_role;
-
-    -- father_name_mates_agree(group_id, lead_id, stored, typed): no
-    -- name-mate of the lead holds a third name. A name-mate is another member
-    -- of its group that counts by its father's name (matched or
-    -- typo_confirmed, not legacy) whose name is the lead's stored two-word
-    -- name or a completion of it. It agrees when it still holds the stored
-    -- name or already holds the typed one. Siblings with other names (a
-    -- granted or waiting sibling, a cousin) are not name-mates. Check-in
-    -- only (#400). Internal.
-    create function public.father_name_mates_agree(group_id uuid, lead_id uuid, stored text, typed text)
-    returns boolean
-    language sql
-    stable
-    set search_path = ''
-    as $fn$
-        select not exists (
-            select 1
-            from public.sibling_group_members m
-            join public.leads l on l.id = m.lead_id
-            where m.group_id = father_name_mates_agree.group_id
-              and not m.legacy
-              and m.basis in ('matched', 'typo_confirmed')
-              and m.lead_id <> father_name_mates_agree.lead_id
-              and public.father_name_adds_middle(father_name_mates_agree.stored, l.father_full_name)
-              and public.father_name_match(l.father_full_name, father_name_mates_agree.typed) is distinct from 'same'
-        );
-    $fn$;
-
-    revoke execute on function public.father_name_mates_agree(uuid, uuid, text, text) from public, anon, authenticated, service_role;
 
     -- -----------------------------------------------------------------------
     -- Who brought the students.
@@ -1007,62 +952,6 @@ begin
     grant execute on function public.record_re_application(uuid, uuid, jsonb) to service_role;
 
     -- -----------------------------------------------------------------------
-    -- A father's name completed with its middle name.
-    -- -----------------------------------------------------------------------
-
-    -- sibling_check_on_father_name_change, as 20261214100200 made it, now
-    -- also leaving a member alone when check-in completes its two-word
-    -- father's name with a middle name, under the transaction-local
-    -- app.sibling_father_completion that only complete_admission_visit sets,
-    -- around its own detail updates, after checking the group. Same trigger.
-    create or replace function public.sibling_check_on_father_name_change()
-    returns trigger
-    language plpgsql
-    security definer
-    set search_path = ''
-    as $fn$
-    declare
-        member public.sibling_group_members;
-        checked record;
-        next_basis text;
-    begin
-        if public.father_name_match(old.father_full_name, new.father_full_name) = 'same' then
-            return null;
-        end if;
-        select * into member from public.sibling_group_members m where m.lead_id = new.id;
-        if member.group_id is null or member.legacy or member.basis not in ('matched', 'typo_confirmed') then
-            return null;
-        end if;
-        if coalesce(current_setting('app.sibling_typo_group', true), '') = member.group_id::text then
-            return null;
-        end if;
-        -- Check-in completing a two-word name with its middle name, which it
-        -- has already checked against the group (#400): the basis stays.
-        -- Every other writer goes through the check below as before.
-        if coalesce(current_setting('app.sibling_father_completion', true), '') = 'on'
-           and public.father_name_adds_middle(old.father_full_name, new.father_full_name) then
-            return null;
-        end if;
-
-        select * into checked from public.sibling_name_check(new.id, new.father_full_name, member.group_id);
-        if checked.verdict is null then
-            return null;
-        end if;
-        next_basis := case when checked.verdict = 'same' then member.basis else 'request_needed' end;
-        if next_basis is distinct from member.basis then
-            update public.sibling_group_members m
-            set basis = next_basis, cause = 'father_name', updated_at = now()
-            where m.id = member.id;
-            perform public.recompute_sibling_group(member.group_id, 'sibling');
-            perform public.withdraw_stale_sibling_requests(array[new.id]);
-        end if;
-        return null;
-    end;
-    $fn$;
-
-    revoke execute on function public.sibling_check_on_father_name_change() from public, anon, authenticated, service_role;
-
-    -- -----------------------------------------------------------------------
     -- The student import.
     -- -----------------------------------------------------------------------
 
@@ -1685,9 +1574,7 @@ begin
             from public.leads l
             where l.guardian_contact_id = any (existing)
               and l.status <> 'Declined' and l.closure is null
-              and (public.normalize_father_name(l.father_full_name) = public.normalize_father_name(s_father[i])
-                   -- An on-file name with no middle name, completed here (#400).
-                   or public.father_name_adds_middle(l.father_full_name, s_father[i]))
+              and public.normalize_father_name(l.father_full_name) = public.normalize_father_name(s_father[i])
               and not exists (
                   select 1 from generate_subscripts(s_sib_lead, 1) x
                   where s_comp[x] = s_comp[i] and s_sib_lead[x] = l.id
@@ -2310,29 +2197,7 @@ begin
                     using detail = jsonb_build_object('student', i, 'field', 'sibling_of', 'reason', 'already_linked')::text;
             end if;
             if s_linked[i] and member.basis in ('matched', 'typo_confirmed')
-               and public.father_name_match(lead.father_full_name, s_father[i]) is distinct from 'same'
-               -- Completing a stored two-word name with its middle name is
-               -- not a change of father (#400), when no name-mate holds a
-               -- third name (father_name_mates_agree) and every name-mate
-               -- on this form is typed the same. Anything else is the name
-               -- question on the lead, so no fee moves here.
-               and not (
-                   public.father_name_adds_middle(lead.father_full_name, s_father[i])
-                   and public.father_name_mates_agree(member.group_id, lead.id, lead.father_full_name, s_father[i])
-                   and not exists (
-                       select 1
-                       from generate_subscripts(s_lead, 1) as other(at_index)
-                       join public.sibling_group_members m on m.lead_id = s_lead[other.at_index]
-                       join public.leads l on l.id = m.lead_id
-                       where other.at_index <> i
-                         and m.group_id = member.group_id
-                         and not m.legacy
-                         and m.basis in ('matched', 'typo_confirmed')
-                         and (public.father_name_match(l.father_full_name, lead.father_full_name) = 'same'
-                              or public.father_name_adds_middle(lead.father_full_name, l.father_full_name))
-                         and public.father_name_match(s_father[other.at_index], s_father[i]) is distinct from 'same'
-                   )
-               ) then
+               and public.father_name_match(lead.father_full_name, s_father[i]) is distinct from 'same' then
                 raise exception 'invalid'
                     using detail = jsonb_build_object('student', i, 'field', 'father_full_name', 'reason', 'linked_member')::text;
             end if;
@@ -2421,9 +2286,7 @@ begin
                   )
               and l.id <> all (s_lead)
               and l.status <> 'Declined' and l.closure is null
-              and (public.normalize_father_name(l.father_full_name) = public.normalize_father_name(s_father[i])
-                   -- An on-file name with no middle name, completed here (#400).
-                   or public.father_name_adds_middle(l.father_full_name, s_father[i]))
+              and public.normalize_father_name(l.father_full_name) = public.normalize_father_name(s_father[i])
               and not exists (
                   select 1 from generate_subscripts(s_sib_lead, 1) x
                   where s_comp[x] = s_comp[i] and s_sib_lead[x] = l.id
@@ -2491,10 +2354,7 @@ begin
                 where not m.sibling_choice_made;
             end loop;
 
-            -- The details staff confirmed or completed, and the visit. A
-            -- completed father's name passed the name-mates check above, so
-            -- the father's-name trigger keeps its basis (#400).
-            perform set_config('app.sibling_father_completion', 'on', true);
+            -- The details staff confirmed or completed, and the visit.
             for i in 1..n loop
                 select * into lead from public.leads l where l.id = s_lead[i];
                 update public.leads l
@@ -2517,7 +2377,6 @@ begin
                     visit_date = complete_admission_visit.visited_on
                 where l.id = s_lead[i];
             end loop;
-            perform set_config('app.sibling_father_completion', '', true);
 
             -- Every child leaves its Family's legacy group before any link,
             -- so the links alone make the groups: two pairs of siblings on

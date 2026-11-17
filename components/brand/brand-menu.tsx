@@ -132,7 +132,7 @@ export function BrandMenu({ language, labels, onClearForm, buttonRef, returnTo }
                   lang={lang}
                   aria-pressed={current}
                   className={cn(
-                    "min-h-11 flex-1 rounded-full px-3.5 font-exo text-sm font-bold italic transition-colors outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40",
+                    "min-h-11 flex-1 rounded-full px-3.5 font-exo text-sm font-bold italic transition-colors outline-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)",
                     current ? "bg-blue-600 text-white" : "text-blue-600 hover:bg-blue-50",
                   )}
                 >
@@ -155,7 +155,7 @@ export function BrandMenu({ language, labels, onClearForm, buttonRef, returnTo }
                   <button
                     ref={clearNo}
                     type="button"
-                    className="min-h-11 flex-1 rounded-full border-[1.5px] border-blue-600/22 bg-white text-sm font-semibold text-blue-600 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
+                    className="min-h-11 flex-1 rounded-full border-[1.5px] border-blue-600/22 bg-white text-sm font-semibold text-blue-600 outline-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
                     onClick={() => {
                       setConfirming(false)
                       requestAnimationFrame(() => clearItem.current?.focus())
@@ -179,7 +179,7 @@ export function BrandMenu({ language, labels, onClearForm, buttonRef, returnTo }
               <button
                 ref={clearItem}
                 type="button"
-                className="flex min-h-11 w-full items-center gap-2.5 rounded-[14px] border-0 bg-transparent px-3 text-left text-[15px] font-semibold text-[#c81e1e] outline-none hover:bg-red-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+                className="flex min-h-11 w-full items-center gap-2.5 rounded-[14px] border-0 bg-transparent px-3 text-left text-[15px] font-semibold text-[#c81e1e] outline-none hover:bg-red-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
                 onClick={() => {
                   setConfirming(true)
                   requestAnimationFrame(() => clearNo.current?.focus())

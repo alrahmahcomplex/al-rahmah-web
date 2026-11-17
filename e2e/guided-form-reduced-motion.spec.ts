@@ -37,10 +37,10 @@ for (const viewport of [
     await page.goto("/apply")
 
     const q = openApplyQuestion(page)
-    await expect(q.getByRole("textbox")).toBeVisible()
+    await expect(q.getByRole("textbox", { name: APPLY.sw.studentBox })).toBeVisible()
     expect((await q.boundingBox())?.height).toBeGreaterThan(50)
 
-    await q.getByRole("textbox").fill(family().child)
+    await q.getByRole("textbox", { name: APPLY.sw.studentBox }).fill(family().childTyped)
     await q.getByRole("button", { name: APPLY.sw.continue }).click()
     await expect(openApplyQuestion(page).getByRole("button", { name: APPLY.sw.chooseOther })).toBeVisible()
     expect(errors).toEqual([])

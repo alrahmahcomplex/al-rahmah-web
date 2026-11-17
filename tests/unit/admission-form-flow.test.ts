@@ -1,12 +1,26 @@
 import { describe, expect, it } from "vitest"
 
 import { EMPTY_PARENT, type ChildDraft } from "@/app/apply/draft"
-import { defaultYear, firstOpenable, furthest, keyToParam, order, paramToKey, restoreDone, stepProblems, yearOf, type StepKey } from "@/app/apply/flow"
+import {
+  defaultYear,
+  firstOpenable,
+  furthest,
+  keyToParam,
+  order,
+  paramToKey,
+  restoreDone,
+  stepProblems,
+  wireChild,
+  wireParent,
+  yearOf,
+  type StepKey,
+} from "@/app/apply/flow"
 
 const YEARS = [2026, 2027] as const
-const neema: ChildDraft = { card: 3, fullName: "Neema Mfano", className: "FORM 1", enrollmentYear: 2027, dayOrBoarding: "Day" }
-const juma: ChildDraft = { card: 5, fullName: "Juma Mfano", className: "", enrollmentYear: null, dayOrBoarding: "" }
-const parent = { fullName: "Asha Mfano", relationship: "Mother", relationshipDescription: "", phone: "0712 345 678", whatsapp: "" }
+const father = { fatherFirst: "SALIM", fatherMiddle: "OMARI", fatherLast: "MFANO" }
+const neema: ChildDraft = { card: 3, firstName: "NEEMA", ...father, className: "FORM 1", enrollmentYear: 2027, dayOrBoarding: "Day" }
+const juma: ChildDraft = { card: 5, firstName: "JUMA", ...father, className: "", enrollmentYear: null, dayOrBoarding: "" }
+const parent = { ...EMPTY_PARENT, firstName: "ASHA", middleName: "ALI", lastName: "MFANO", relationship: "Mother", phone: "0712 345 678" }
 
 describe("the Admission form's order of questions", () => {
   it("asks each student's name, class and Day or Boarding, then another student, the custodian, the code, the fee and the send", () => {
@@ -50,10 +64,56 @@ describe("answers after a reload", () => {
   })
 
   it("reopens a question whose answer was emptied", () => {
-    const entries = { parent: EMPTY_PARENT, children: [{ ...neema, fullName: " " }], discountCode: "" }
+    const entries = { parent: EMPTY_PARENT, children: [{ ...neema, fatherMiddle: " " }], discountCode: "" }
     const done = new Set<StepKey>(["name:3", "class:3"])
     expect(firstOpenable(entries, done, YEARS)).toBe("name:3")
-    expect(stepProblems("name:3", entries, YEARS)).toEqual([{ field: "student_name", child: 0 }])
+    expect(stepProblems("name:3", entries, YEARS)).toEqual([{ field: "student_name", child: 0, part: "father_middle" }])
+  })
+})
+
+describe("the names the page sends (the names contract, #400)", () => {
+  it("sends each student's own name and the father's three, never a full name", () => {
+    expect(wireChild(neema)).toEqual({
+      firstName: "NEEMA",
+      fatherFirst: "SALIM",
+      fatherMiddle: "OMARI",
+      fatherLast: "MFANO",
+      className: "FORM 1",
+      enrollmentYear: 2027,
+      dayOrBoarding: "Day",
+    })
+  })
+
+  it("sends the custodian's three names", () => {
+    expect(wireParent(parent, [neema])).toEqual({
+      firstName: "ASHA",
+      middleName: "ALI",
+      lastName: "MFANO",
+      relationship: "Mother",
+      relationshipDescription: undefined,
+      phone: "0712 345 678",
+      whatsapp: undefined,
+    })
+  })
+
+  it("with the father switch on, sends the first student's father as the custodian, relationship Father", () => {
+    const switched = { ...parent, fatherCustodian: true, relationship: "Mother" }
+    const second = { ...neema, card: 9, fatherFirst: "HAMISI", fatherMiddle: "BAKARI", fatherLast: "JUMA" }
+    expect(wireParent(switched, [neema, second])).toMatchObject({ firstName: "SALIM", middleName: "OMARI", lastName: "MFANO", relationship: "Father" })
+  })
+
+  it("asks no custodian names and no relationship while the father is the custodian", () => {
+    const entries = { parent: { ...EMPTY_PARENT, fatherCustodian: true, relationship: "Father", phone: "0712 345 678" }, children: [neema], discountCode: "" }
+    expect(stepProblems("pname", entries, YEARS)).toEqual([])
+    expect(stepProblems("rel", entries, YEARS)).toEqual([])
+  })
+
+  it("names each empty custodian box", () => {
+    const entries = { parent: { ...parent, middleName: "", lastName: " " }, children: [neema], discountCode: "" }
+    expect(stepProblems("pname", entries, YEARS)).toEqual([
+      { field: "contact_name", child: null, part: "contact_middle_name" },
+      { field: "contact_name", child: null, part: "contact_last_name" },
+    ])
   })
 })
 

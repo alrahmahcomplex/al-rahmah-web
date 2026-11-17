@@ -3,9 +3,10 @@ import userEvent from "@testing-library/user-event"
 import { forwardRef, useImperativeHandle, type ImgHTMLAttributes } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const stubs = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), refresh: vi.fn(), token: "fake-token" }))
+const stubs = vi.hoisted(() => ({ submit: vi.fn(), check: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), refresh: vi.fn(), toast: vi.fn(), token: "fake-token" }))
 
 vi.mock("server-only", () => ({}))
+vi.mock("sonner", () => ({ toast: stubs.toast }))
 vi.mock("@/lib/office", () => ({ OFFICE_PHONE: "+255 700 000 001" }))
 // The page is built once per language state and served to every visitor, so
 // it reads nothing from the request: any read of the cookies fails this test.
@@ -69,6 +70,7 @@ beforeEach(() => {
   stubs.reset.mockReset()
   stubs.reveal.mockReset().mockReturnValue(false)
   stubs.refresh.mockReset()
+  stubs.toast.mockReset()
   stubs.token = "fake-token"
 })
 
@@ -84,9 +86,11 @@ const W = {
     day: "Kutwa",
     no: "Hapana, endelea",
     yes: "Ndiyo, ongeza mwanafunzi",
-    pname: "Jina lako kamili ni nani?",
+    pname: "Msimamizi ni nani?",
+    student: "Jina la mwanafunzi",
+    first: "Jina la kwanza",
     mother: "Mama",
-    phone: "Namba yako ya simu ni ipi?",
+    phone: "Namba ya simu ya msimamizi ni ipi?",
     next: "Endelea",
     skip: "Ruka, sina code",
     send: "Tuma maombi",
@@ -97,9 +101,11 @@ const W = {
     day: "Day",
     no: "No, continue",
     yes: "Yes, add a student",
-    pname: "What is your full name?",
+    pname: "Who is the custodian?",
+    student: "Student's name",
+    first: "First name",
     mother: "Mother",
-    phone: "What is your phone number?",
+    phone: "What is the custodian's phone number?",
     next: "Continue",
     skip: "Skip, no code",
     send: "Send application",
@@ -117,6 +123,15 @@ async function waitForQuestion(name: string | RegExp) {
   await waitFor(() => expect(open().getByRole("heading", { name })).toBeInTheDocument())
 }
 
+// Every student on these forms has the same father: his three names follow
+// the student's own name, and Space moves on through the boxes.
+const FATHER = "Juma Ali Mfano"
+
+/** The open question's first name box: the student's, or the custodian's First name. */
+function nameBox(lang: "sw" | "en", which: "student" | "first" = "student") {
+  return open().getByRole("textbox", { name: W[lang][which] })
+}
+
 async function pickClass(user: User, className: string, lang: "sw" | "en") {
   await user.click(open().getByRole("button", { name: W[lang].other }))
   const sheet = await screen.findByRole("dialog")
@@ -124,7 +139,7 @@ async function pickClass(user: User, className: string, lang: "sw" | "en") {
 }
 
 async function answerStudent(user: User, name: string, lang: "sw" | "en", { className = "STD 2", day = true } = {}) {
-  await user.type(open().getByRole("textbox"), name)
+  await user.type(nameBox(lang), `${name} ${FATHER}`)
   await user.click(open().getByRole("button", { name: W[lang].next }))
   await pickClass(user, className, lang)
   await waitFor(() => expect(open().getByRole("radio", { name: new RegExp(W[lang].day) })).toBeInTheDocument())
@@ -134,7 +149,7 @@ async function answerStudent(user: User, name: string, lang: "sw" | "en", { clas
 
 async function answerCustodian(user: User, lang: "sw" | "en") {
   await waitForQuestion(W[lang].pname)
-  await user.type(open().getByRole("textbox"), "Amina Mfano")
+  await user.type(nameBox(lang, "first"), "Amina Hassani Mfano")
   await user.click(open().getByRole("button", { name: W[lang].next }))
   await user.click(open().getByRole("radio", { name: W[lang].mother }))
   await waitForQuestion(W[lang].phone)
@@ -144,7 +159,7 @@ async function answerCustodian(user: User, lang: "sw" | "en") {
 
 /** One student, no code, through to the send question. */
 async function fillToSend(user: User, lang: "sw" | "en" = "en") {
-  await answerStudent(user, "Zawadi Mfano", lang)
+  await answerStudent(user, "Zawadi", lang)
   await waitFor(() => expect(open().getByRole("button", { name: W[lang].no })).toBeInTheDocument())
   await user.click(open().getByRole("button", { name: W[lang].no }))
   await answerCustodian(user, lang)
@@ -172,6 +187,10 @@ function openedFromLink(code: string) {
 function remembered(code: string) {
   document.cookie = `discount_code=${code}; Path=/`
 }
+
+// A draft's names, in the boxes' shape.
+const DRAFT_PARENT = { firstName: "ASHA", middleName: "ALI", lastName: "MFANO", fatherCustodian: false }
+const DRAFT_CHILD = { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO" }
 
 function renderPage(state: "first" | "sw" | "en") {
   return ApplyPage({ params: Promise.resolve({ state }) })
@@ -236,9 +255,10 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     const user = userEvent.setup()
     render(form("sw"))
 
-    await user.type(open().getByRole("textbox"), "Neema Mfano")
+    await user.type(nameBox("sw"), "Neema Salim Omari Mfano")
+    expect(open().getByText("SALIM", { exact: false, selector: "b" })).toHaveTextContent("NEEMA SALIM MFANO")
     await user.click(open().getByRole("button", { name: "Endelea" }))
-    await waitForQuestion("Neema anaomba darasa gani?")
+    await waitForQuestion("NEEMA anaomba darasa gani?")
     expect(screen.getByRole("heading", { level: 3, name: "Mwanafunzi" })).toBeInTheDocument()
     expect(screen.getByText("Jina kamili la mwanafunzi")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Jina" })).toBeInTheDocument()
@@ -246,7 +266,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(open().getByText(String(DEFAULT_YEAR))).toBeInTheDocument()
 
     await user.click(open().getByRole("button", { name: /FORM 1/ }))
-    await waitForQuestion("Neema atakuwa wa kutwa au bweni?")
+    await waitForQuestion("NEEMA atakuwa wa kutwa au bweni?")
     expect(screen.getByText(`FORM 1 · ${DEFAULT_YEAR}`)).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Darasa" })).toBeInTheDocument()
 
@@ -257,15 +277,17 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(buttons).toEqual(["Ndiyo, ongeza mwanafunzi", "Hapana, endelea"])
 
     await user.click(open().getByRole("button", { name: "Hapana, endelea" }))
-    await waitForQuestion("Jina lako kamili ni nani?")
+    await waitForQuestion("Msimamizi ni nani?")
     expect(screen.getByRole("heading", { level: 3, name: "Msimamizi" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Badilisha Taarifa, Neema Mfano" })).toBeInTheDocument()
-    await user.type(open().getByRole("textbox"), "Asha Mfano")
+    expect(screen.getByRole("button", { name: "Badilisha Taarifa, NEEMA SALIM MFANO" })).toBeInTheDocument()
+    expect(open().getByText("Mtu anayemlea NEEMA na kulipa ada ya shule.")).toBeInTheDocument()
+    expect(open().getByRole("switch", { name: /Baba ndiye msimamizi/ })).not.toBeChecked()
+    await user.type(nameBox("sw", "first"), "Asha Ali Mfano")
     await user.click(open().getByRole("button", { name: "Endelea" }))
-    await waitForQuestion("Wewe ni nani kwa Neema?")
+    await waitForQuestion("ASHA MFANO ni nani kwa NEEMA?")
     expect(open().getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["Mama", "Baba", "Mlezi", "Mwingine"])
     await user.click(open().getByRole("radio", { name: "Mama" }))
-    await waitForQuestion("Namba yako ya simu ni ipi?")
+    await waitForQuestion("Namba ya simu ya msimamizi ni ipi?")
     await user.type(open().getByRole("textbox"), "0712 345 678")
     await user.click(open().getByRole("button", { name: "Namba yangu ya WhatsApp ni tofauti" }))
     await user.type(screen.getByLabelText(/Namba ya WhatsApp/), "0754 000 111")
@@ -290,47 +312,77 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
   it("reopens a folded answer, folds it again on Continue and returns to the first unanswered question", async () => {
     const user = userEvent.setup()
     render(form("en"))
-    await answerStudent(user, "Zawadi Mfano", "en")
+    await answerStudent(user, "Zawadi", "en")
     await user.click(open().getByRole("button", { name: "No, continue" }))
-    await waitForQuestion("What is your full name?")
+    await waitForQuestion("Who is the custodian?")
 
-    await user.click(screen.getByRole("button", { name: "Change Details, Zawadi Mfano" }))
+    await user.click(screen.getByRole("button", { name: "Change Details, ZAWADI JUMA MFANO" }))
     await user.click(screen.getByRole("button", { name: "Change Name" }))
     await waitForQuestion("What is the student's name?")
-    const field = open().getByRole("textbox")
-    expect(field).toHaveFocus()
+    const field = nameBox("en")
+    await waitFor(() => expect(field).toHaveFocus())
     await user.clear(field)
-    await user.type(field, "Zawadi Juma")
+    await user.type(field, "Rehema")
     await user.click(open().getByRole("button", { name: "Continue" }))
-    await waitForQuestion("What is your full name?")
-    expect(screen.getByText(/Zawadi Juma/)).toBeInTheDocument()
+    await waitForQuestion("Who is the custodian?")
+    expect(screen.getByText(/REHEMA JUMA MFANO/)).toBeInTheDocument()
   })
 
-  it("Back opens the question before, and Start over shows only on the first, empty question", async () => {
+  it("Back opens the question before, and Start over shows on the first question only, answered or not", async () => {
     const user = userEvent.setup()
     render(form("en"))
     expect(screen.getByRole("button", { name: "Start over" })).toBeInTheDocument()
     expect(document.querySelector('button[aria-label="Back"]')).toHaveAttribute("aria-hidden", "true")
 
-    await user.type(open().getByRole("textbox"), "Zawadi Mfano")
+    await user.type(nameBox("en"), `Zawadi ${FATHER}`)
     await user.click(open().getByRole("button", { name: "Continue" }))
-    await waitForQuestion("Which class is Zawadi applying for?")
+    await waitForQuestion("Which class is ZAWADI applying for?")
+    expect(document.querySelector('button[aria-label="Start over"]')).toHaveAttribute("aria-hidden", "true")
     await user.click(screen.getByRole("button", { name: "Back" }))
     await waitForQuestion("What is the student's name?")
-    expect(open().getByRole("textbox")).toHaveValue("Zawadi Mfano")
-    expect(document.querySelector('button[aria-label="Start over"]')).toHaveAttribute("aria-hidden", "true")
+    expect(nameBox("en")).toHaveValue("ZAWADI")
+    expect(screen.getByRole("button", { name: "Start over" })).toBeInTheDocument()
   })
 
-  it("Start over and the menu's Clear the whole form empty the form and its draft", async () => {
+  it("Start over on an empty form says there is nothing to clear", async () => {
     const user = userEvent.setup()
     render(form("en"))
-    await user.type(open().getByRole("textbox"), "Zawadi Mfano")
+    await user.click(screen.getByRole("button", { name: "Start over" }))
+    expect(stubs.toast).toHaveBeenCalledWith("Nothing to clear yet. The form is empty.")
+    expect(screen.queryByRole("dialog")).toBeNull()
+  })
+
+  it("Start over with answers asks first, keeps them on No and clears them on Yes", async () => {
+    const user = userEvent.setup()
+    render(form("sw"))
+    await user.type(nameBox("sw"), "Neema")
+    await waitFor(() => expect(window.sessionStorage.length).toBe(1))
+
+    await user.click(screen.getByRole("button", { name: "Anza upya" }))
+    let sheet = await screen.findByRole("dialog", { name: "Uanze upya?" })
+    expect(within(sheet).getByText("Hili haliwezi kurudishwa. Utaanza tena kutoka swali la kwanza.")).toBeInTheDocument()
+    await user.click(within(sheet).getByRole("button", { name: "Hapana, acha majibu yangu" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(nameBox("sw")).toHaveValue("NEEMA")
+
+    await user.click(screen.getByRole("button", { name: "Anza upya" }))
+    sheet = await screen.findByRole("dialog", { name: "Uanze upya?" })
+    await user.click(within(sheet).getByRole("button", { name: "Ndiyo, futa fomu" }))
+    await waitFor(() => expect(nameBox("sw")).toHaveValue(""))
+    expect(window.sessionStorage.length).toBe(0)
+    expect(stubs.toast).toHaveBeenCalledWith("Fomu imeanza upya.")
+  })
+
+  it("the menu's Clear the whole form empties the form and its draft", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await user.type(nameBox("en"), "Zawadi Mfano")
     await waitFor(() => expect(window.sessionStorage.length).toBe(1))
 
     await user.click(screen.getByRole("button", { name: "Menu" }))
     await user.click(screen.getByRole("button", { name: "Clear the whole form" }))
     await user.click(screen.getByRole("button", { name: "Yes, clear" }))
-    await waitFor(() => expect(open().getByRole("textbox")).toHaveValue(""))
+    await waitFor(() => expect(nameBox("en")).toHaveValue(""))
     expect(window.sessionStorage.length).toBe(0)
     await waitFor(() => expect(screen.getByText("The form is cleared. Start again.")).toBeInTheDocument())
   })
@@ -339,11 +391,17 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     const user = userEvent.setup()
     render(form("en"))
 
+    await user.type(nameBox("en"), "Zawadi Juma")
     await user.click(open().getByRole("button", { name: "Continue" }))
-    expect(open().getByText("Enter the student's full name.")).toBeInTheDocument()
-    await waitFor(() => expect(open().getByRole("textbox")).toHaveFocus())
-    await user.type(open().getByRole("textbox"), "Zawadi Mfano")
-    expect(screen.queryByText("Enter the student's full name.")).not.toBeInTheDocument()
+    const missing = "Type the student's name and all three of the father's names."
+    expect(open().getByText(missing)).toBeInTheDocument()
+    // The empty boxes are marked, and the first of them takes focus.
+    expect(open().getByRole("textbox", { name: "Middle name" })).toHaveAttribute("aria-invalid", "true")
+    expect(open().getByRole("textbox", { name: "Last name" })).toHaveAttribute("aria-invalid", "true")
+    expect(open().getByRole("textbox", { name: "First name" })).not.toHaveAttribute("aria-invalid", "true")
+    await waitFor(() => expect(open().getByRole("textbox", { name: "Middle name" })).toHaveFocus())
+    await user.type(open().getByRole("textbox", { name: "Middle name" }), "Ali Mfano")
+    expect(screen.queryByText(missing)).not.toBeInTheDocument()
     await user.click(open().getByRole("button", { name: "Continue" }))
     await pickClass(user, "STD 2", "en")
     await waitForQuestion(/day scholar/)
@@ -352,22 +410,26 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(open().getByText("Choose day or boarding.")).toBeInTheDocument()
     await user.click(open().getByRole("radio", { name: /Day/ }))
     await user.click(await screen.findByRole("button", { name: "No, continue" }))
-    await waitForQuestion("What is your full name?")
-    await user.type(open().getByRole("textbox"), "Amina Mfano")
+    await waitForQuestion("Who is the custodian?")
+    await user.type(nameBox("en", "first"), "Amina")
     await user.click(open().getByRole("button", { name: "Continue" }))
+    expect(open().getByText("Type all three of the custodian's names, or turn on the switch if it is the father.")).toBeInTheDocument()
+    await user.type(open().getByRole("textbox", { name: "Middle name" }), "Hassani Mfano")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Who is AMINA MFANO to ZAWADI?")
     await user.click(open().getByRole("radio", { name: "Other" }))
     await user.click(open().getByRole("button", { name: "Continue" }))
     expect(open().getByText("Describe your relationship to the student.")).toBeInTheDocument()
     await user.type(open().getByLabelText("Describe your relationship to the student"), "Aunt")
     await user.click(open().getByRole("button", { name: "Continue" }))
-    await waitForQuestion("What is your phone number?")
+    await waitForQuestion("What is the custodian's phone number?")
     expect(screen.getByText("Other: Aunt")).toBeInTheDocument()
   })
 
   it("offers every class by level, and this year and next", async () => {
     const user = userEvent.setup()
     render(form("sw"))
-    await user.type(open().getByRole("textbox"), "Neema Mfano")
+    await user.type(nameBox("sw"), `Neema ${FATHER}`)
     await user.click(open().getByRole("button", { name: "Endelea" }))
     await user.click(open().getByRole("button", { name: "Chagua darasa lingine" }))
     const sheet = await screen.findByRole("dialog", { name: "Chagua darasa" })
@@ -390,47 +452,56 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
   it("adds a second student with its label, copies Day or Boarding, asks about the students, and removes one", async () => {
     const user = userEvent.setup()
     render(form("sw"))
-    await answerStudent(user, "Neema Mfano", "sw")
+    await answerStudent(user, "Neema", "sw")
     await user.click(await screen.findByRole("button", { name: "Ndiyo, ongeza mwanafunzi" }))
 
     await waitForQuestion("Mwanafunzi wa pili anaitwa nani?")
     expect(screen.getByText("Mwanafunzi wa pili")).toBeInTheDocument()
     expect(screen.getByRole("heading", { level: 3, name: "Wanafunzi" })).toBeInTheDocument()
-    await answerStudent(user, "Juma Mfano", "sw", { day: false })
+    // The second student's father boxes start empty (lead, 2026-11-17).
+    expect(open().getByRole("textbox", { name: "Jina la kwanza" })).toHaveValue("")
+    await answerStudent(user, "Baraka", "sw", { day: false })
     // Juma's Day or Boarding started as Neema's.
     await waitFor(() => expect(open().getByRole("heading", { name: "Unaomba kwa mwanafunzi mwingine pia?" })).toBeInTheDocument())
     await user.click(open().getByRole("button", { name: "Hapana, endelea" }))
-    await waitForQuestion("Jina lako kamili ni nani?")
-    await user.type(open().getByRole("textbox"), "Asha Mfano")
+    await waitForQuestion("Msimamizi ni nani?")
+    expect(open().getByText("Mtu anayewalea wanafunzi na kulipa ada ya shule.")).toBeInTheDocument()
+    await user.type(nameBox("sw", "first"), "Asha Ali Mfano")
     await user.click(open().getByRole("button", { name: "Endelea" }))
-    await waitForQuestion("Wewe ni nani kwa wanafunzi hawa?")
+    await waitForQuestion("ASHA MFANO ni nani kwa wanafunzi hawa?")
 
-    await user.click(screen.getByRole("button", { name: "Badilisha Taarifa, Juma Mfano" }))
+    await user.click(screen.getByRole("button", { name: "Badilisha Taarifa, BARAKA JUMA MFANO" }))
     expect(screen.getByText("Kutwa", { selector: ".gf-sum-w span" })).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Ondoa Juma Mfano" }))
-    await waitFor(() => expect(screen.queryByText(/Juma Mfano/)).not.toBeInTheDocument())
+    await user.click(screen.getByRole("button", { name: "Ondoa BARAKA JUMA MFANO" }))
+    await waitFor(() => expect(screen.queryByText(/BARAKA/)).not.toBeInTheDocument())
     expect(screen.getByRole("heading", { level: 3, name: "Mwanafunzi" })).toBeInTheDocument()
-    expect(open().getByRole("heading", { name: "Wewe ni nani kwa Neema?" })).toBeInTheDocument()
+    expect(open().getByRole("heading", { name: "ASHA MFANO ni nani kwa NEEMA?" })).toBeInTheDocument()
   })
 
   it("refuses the same student twice, naming them", async () => {
     const user = userEvent.setup()
     render(form("en"))
-    await answerStudent(user, "Zawadi Mfano", "en")
+    await answerStudent(user, "Zawadi", "en")
     await user.click(await screen.findByRole("button", { name: "Yes, add a student" }))
-    await user.type(open().getByRole("textbox"), "  zawadi MFANO ")
+    // The father's middle name is not part of the student's name.
+    await user.type(nameBox("en"), "zawadi juma omari mfano")
     await user.click(open().getByRole("button", { name: "Continue" }))
-    expect(open().getByText("Zawadi Mfano is on this form twice. Remove one, or correct the name.")).toBeInTheDocument()
+    expect(open().getByText("ZAWADI JUMA MFANO is on this form twice. Remove one, or correct the name.")).toBeInTheDocument()
+    for (const box of ["Student's name", "First name", "Middle name", "Last name"]) {
+      expect(open().getByRole("textbox", { name: box })).toHaveAttribute("aria-invalid", "true")
+    }
+    // Each box takes at most 200 characters, as the form's other fields.
+    expect(nameBox("en")).toHaveAttribute("maxlength", "200")
   })
 
   it("stops adding students at eight", async () => {
     const user = userEvent.setup()
     render(form("en"))
     for (let n = 1; n <= 8; n++) {
-      await answerStudent(user, `Mwanafunzi ${n} Mfano`, "en")
+      await answerStudent(user, `Pupil${n}`, "en")
       if (n < 8) await user.click(await screen.findByRole("button", { name: "Yes, add a student" }))
     }
-    await waitForQuestion("What is your full name?")
+    await waitForQuestion("Who is the custodian?")
     expect(screen.getByText("You can apply for up to 8 students on one form.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Yes, add a student" })).not.toBeInTheDocument()
   })
@@ -448,24 +519,28 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(sent.get("cf-turnstile-response")).toBe("fake-token")
     const body = sentBody()
     expect(body.submissionKey).toMatch(/^[0-9a-f-]{36}$/)
-    expect(body.parent).toEqual({ fullName: "Amina Mfano", relationship: "Mother", phone: "0700 000 900" })
-    expect(body.children).toEqual([{ fullName: "Zawadi Mfano", className: "STD 2", enrollmentYear: DEFAULT_YEAR, dayOrBoarding: "Day" }])
+    // The names in their parts, as the names contract on #400 asks.
+    expect(body.parent).toEqual({ firstName: "AMINA", middleName: "HASSANI", lastName: "MFANO", relationship: "Mother", phone: "0700 000 900" })
+    expect(body.children).toEqual([
+      { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO", className: "STD 2", enrollmentYear: DEFAULT_YEAR, dayOrBoarding: "Day" },
+    ])
     expect(body.discountCode).toBeUndefined()
 
-    finish({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
+    finish({ status: "confirmed", children: [{ fullName: "ZAWADI JUMA MFANO", admissionNumber: "ADMSN-40719" }] })
     expect(await screen.findByRole("heading", { name: "Maombi yamepokelewa!" })).toBeInTheDocument()
     expect(screen.getByText("Namba ya Udahili")).toBeInTheDocument()
     expect(screen.getByText("ADMSN-40719")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Nakili ADMSN-40719" })).toBeInTheDocument()
     expect(screen.getByText(/Hifadhi namba hii/)).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /\+255 700 000 001/ })).toHaveAttribute("href", "tel:+255700000001")
-    // The progress bar goes, and no offer shows without a discount.
-    expect(document.querySelector('button[aria-label="Rudi"]')).toBeNull()
+    // The progress bar stays full, with Start over and no Back; no offer shows without a discount.
+    expect(document.querySelector('button[aria-label="Rudi"]')).toHaveAttribute("aria-hidden", "true")
+    expect(screen.getByRole("button", { name: "Anza upya" })).toBeInTheDocument()
     expect(screen.queryByText(/Ofa hii ni ya muda maalumu/)).not.toBeInTheDocument()
     expect(window.sessionStorage.length).toBe(0)
 
     await user.click(screen.getByRole("button", { name: "Jaza fomu nyingine" }))
-    expect(open().getByRole("textbox")).toHaveValue("")
+    expect(nameBox("sw")).toHaveValue("")
 
     // A new form gets a new key.
     stubs.submit.mockResolvedValue({ status: "unavailable" })
@@ -488,7 +563,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await send(user, "Tuma maombi")
     expect(await screen.findByRole("alert")).toHaveTextContent(text)
     expect(stubs.reset).toHaveBeenCalledTimes(1)
-    expect(screen.getByText("Amina Mfano")).toBeInTheDocument()
+    expect(screen.getByText("AMINA HASSANI MFANO")).toBeInTheDocument()
 
     await send(user, "Tuma maombi")
     await waitFor(() => expect(stubs.submit).toHaveBeenCalledTimes(2))
@@ -510,9 +585,9 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     window.sessionStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
-        parent: { fullName: "Asha Mfano", relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
-        children: [{ fullName: "Zawadi Mfano", className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
+        version: 3,
+        parent: { ...DRAFT_PARENT, relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
+        children: [{ ...DRAFT_CHILD, className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
         discountCode: "BJN-402",
         linkCode: "",
         done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code", "fee"],
@@ -546,7 +621,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
   it("says on the fee question that nothing is paid on the form", async () => {
     const user = userEvent.setup()
     render(form("sw"))
-    await answerStudent(user, "Zawadi Mfano", "sw")
+    await answerStudent(user, "Zawadi", "sw")
     await waitFor(() => expect(open().getByRole("button", { name: W.sw.no })).toBeInTheDocument())
     await user.click(open().getByRole("button", { name: W.sw.no }))
     await answerCustodian(user, "sw")
@@ -562,7 +637,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await fillToSend(user)
 
     await send(user, "Send application")
-    await waitForQuestion("What is your phone number?")
+    await waitForQuestion("What is the custodian's phone number?")
     expect(open().getByText(/We couldn't read that phone number/)).toBeInTheDocument()
     expect(open().getByRole("textbox")).toHaveValue("0700 000 900")
     expect(stubs.reset).toHaveBeenCalled()
@@ -576,7 +651,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await fillToSend(user)
 
     await send(user, "Send application")
-    await waitForQuestion("Which class is Zawadi applying for?")
+    await waitForQuestion("Which class is ZAWADI applying for?")
     expect(open().getByText("That year no longer takes applications. Choose another year.")).toBeInTheDocument()
     expect(open().getAllByRole("radio")).toHaveLength(2)
     expect(open().getAllByRole("radio").map((radio) => radio.closest("label")?.textContent)).toEqual(next.map((year) => expect.stringContaining(String(year))))
@@ -605,15 +680,15 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
 
     await send(user, "Send application")
     expect(await screen.findByRole("alert")).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Change Details, Zawadi Mfano" }))
+    await user.click(screen.getByRole("button", { name: "Change Details, ZAWADI JUMA MFANO" }))
     await user.click(screen.getAllByRole("button", { name: "Change Name" })[0])
-    await user.type(open().getByRole("textbox"), " Edited")
+    await user.type(nameBox("en"), "H")
     await user.click(open().getByRole("button", { name: "Continue" }))
     await waitFor(() => expect(open().getByRole("button", { name: "Send application" })).toBeInTheDocument())
     await send(user, "Send application")
 
     await waitFor(() => expect(stubs.submit).toHaveBeenCalledTimes(2))
-    expect(sentBody(1).children[0].fullName).toBe("Zawadi Mfano Edited")
+    expect(sentBody(1).children[0].firstName).toBe("ZAWADIH")
     expect(sentBody(1).submissionKey).toBe(sentBody(0).submissionKey)
   })
 
@@ -643,7 +718,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await user.click(screen.getByRole("button", { name: "Yes, clear" }))
     answer({ status: "confirmed", children: [{ fullName: "Zawadi Mfano", admissionNumber: "ADMSN-40719" }] })
 
-    await waitFor(() => expect(open().getByRole("textbox")).toBeInTheDocument())
+    await waitFor(() => expect(nameBox("en")).toBeInTheDocument())
     expect(screen.queryByRole("heading", { name: "Application received!" })).toBeNull()
   })
 
@@ -656,6 +731,95 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await send(user, "Send application")
     expect(await screen.findByText("26-0042")).toBeInTheDocument()
     expect(screen.getByText(/not every student on it was received/)).toBeInTheDocument()
+  })
+
+  it("with the father switch on, skips the relationship, names the father on the phone question and sends him as the custodian", async () => {
+    stubs.submit.mockResolvedValue({ status: "unavailable" })
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await waitForQuestion("Who is the custodian?")
+    const father = open().getByRole("switch", { name: /The father is the custodian/ })
+    expect(father).toHaveAccessibleDescription(/JUMA ALI MFANO/)
+
+    await user.click(father)
+    await waitForQuestion("What is JUMA's phone number?")
+    expect(open().getByText(/the father\. The relationship is set to Father\./)).toHaveTextContent("Custodian: JUMA ALI MFANO, the father.")
+    expect(document.querySelector("#step-pname .gf-sum-w")).toHaveTextContent("JUMA ALI MFANO · Father")
+    expect(screen.queryByRole("button", { name: "Change Relationship" })).toBeNull()
+
+    await user.type(open().getByRole("textbox"), "0700 000 900")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await user.click(open().getByRole("button", { name: "Skip, no code" }))
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await send(user, "Send application")
+    await waitFor(() => expect(stubs.submit).toHaveBeenCalled())
+    expect(sentBody().parent).toEqual({ firstName: "JUMA", middleName: "ALI", lastName: "MFANO", relationship: "Father", phone: "0700 000 900" })
+
+    // Back from the phone goes to the custodian, past the skipped relationship.
+    await user.click(screen.getByRole("button", { name: "Change Number" }))
+    await user.click(screen.getByRole("button", { name: "Back" }))
+    await waitForQuestion("Who is the custodian?")
+    // Off again: the name boxes open and the relationship is asked again.
+    await user.click(open().getByRole("switch", { name: /The father is the custodian/ }))
+    await waitFor(() => expect(nameBox("en", "first")).toHaveFocus())
+    await user.type(nameBox("en", "first"), "Amina Hassani Mfano")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Who is AMINA MFANO to ZAWADI?")
+    expect(open().getByRole("radio", { name: "Father" })).not.toBeChecked()
+  })
+
+  it("turning the father switch off and on answers the relationship at once, so a Change link during the pause never strands the form", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await answerCustodian(user, "en")
+    await waitForQuestion("Have a discount code?")
+
+    // The pause before moving on is real here (no reduced motion).
+    document.documentElement.classList.remove("rm")
+    await user.click(screen.getAllByRole("button", { name: "Change Name" }).at(-1)!)
+    await waitForQuestion("Who is the custodian?")
+    const father = open().getByRole("switch", { name: /The father is the custodian/ })
+    await user.click(father)
+    await user.click(father)
+    await user.click(father)
+    // Within the pause: go and change the phone, then come back on Continue.
+    await user.click(screen.getByRole("button", { name: "Change Number" }))
+    await waitForQuestion("What is JUMA's phone number?")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Have a discount code?")
+  })
+
+  it("opens the father's box when the database refuses the custodian's name with the switch on", async () => {
+    stubs.submit.mockResolvedValue({ status: "invalid", field: "contact_name", child: null, part: "contact_middle_name" })
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await waitForQuestion("Who is the custodian?")
+    await user.click(open().getByRole("switch", { name: /The father is the custodian/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+    await user.type(open().getByRole("textbox"), "0700 000 900")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await user.click(open().getByRole("button", { name: "Skip, no code" }))
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await send(user, "Send application")
+
+    await waitForQuestion("What is the student's name?")
+    expect(open().getByRole("textbox", { name: "Middle name" })).toHaveAttribute("aria-invalid", "true")
+    expect(open().getByRole("textbox", { name: "Last name" })).not.toHaveAttribute("aria-invalid", "true")
+  })
+
+  it("reads the student's full name out as the boxes fill", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await user.type(nameBox("en"), `Zawadi ${FATHER}`)
+    const line = open().getByText("Student's full name:", { exact: false })
+    expect(line).toHaveAttribute("aria-live", "polite")
+    expect(line).toHaveTextContent("ZAWADI JUMA MFANO")
   })
 
   it.each(["sw", "en"] as const)("never says agent, referral, wakala, idhini or mtoto in %s", async (language) => {
@@ -713,7 +877,7 @@ describe("the admission years of a cached copy", { timeout: 30_000 }, () => {
     await fillToSend(user)
 
     await send(user, "Send application")
-    await waitForQuestion("Which class is Zawadi applying for?")
+    await waitForQuestion("Which class is ZAWADI applying for?")
     const tiles = open()
       .getAllByRole("radio")
       .map((radio) => radio.closest("label")?.textContent ?? "")
@@ -726,7 +890,7 @@ describe("the admission years of a cached copy", { timeout: 30_000 }, () => {
 
 describe("the Discount code question", { timeout: 30_000 }, () => {
   async function toCode(user: User, lang: "sw" | "en" = "en") {
-    await answerStudent(user, "Zawadi Mfano", lang)
+    await answerStudent(user, "Zawadi", lang)
     await user.click(await screen.findByRole("button", { name: W[lang].no }))
     await answerCustodian(user, lang)
     await waitForQuestion(lang === "en" ? "Have a discount code?" : "Una code ya punguzo?")
@@ -747,9 +911,9 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     window.sessionStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        version: 2,
-        parent: { fullName: "Asha Mfano", relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
-        children: [{ fullName: "Zawadi Mfano", className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
+        version: 3,
+        parent: { ...DRAFT_PARENT, relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
+        children: [{ ...DRAFT_CHILD, className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
         discountCode: "BJN-402",
         linkCode: "",
         done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code"],
@@ -842,14 +1006,27 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     expect(screen.getByText(/· not recognised/)).toBeInTheDocument()
   })
 
-  it("names a value that isn't a code under the field, and won't send it", async () => {
+  it("keeps only what a code can hold, in capitals", async () => {
     const user = userEvent.setup()
     render(form("en"))
     await toCode(user)
     await user.type(open().getByLabelText(/Discount code/), "not a code!")
-    await user.click(open().getByRole("button", { name: "Continue" }))
-    expect(open().getByText(/A discount code has only letters, numbers/)).toBeInTheDocument()
-    expect(stubs.check).not.toHaveBeenCalled()
+    expect(open().getByLabelText(/Discount code/)).toHaveValue("NOTACODE")
+  })
+
+  it.each([
+    ["aan132", "AAN-132"],
+    ["eid2026", "EID-2026"],
+    ["karibu2026", "KARIBU2026"],
+  ])("adds the hyphen by itself: %s reads %s, and is checked as it reads", async (typed, shown) => {
+    stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
+    const user = userEvent.setup()
+    render(form("en"))
+    await toCode(user)
+    await user.type(open().getByLabelText(/Discount code/), typed)
+    expect(open().getByLabelText(/Discount code/)).toHaveValue(shown)
+    await user.click(open().getByRole("button", { name: "Check Discount" }))
+    await waitFor(() => expect(stubs.check).toHaveBeenCalledWith(shown))
   })
 
   it("brings the fee down for a confirmed code, opens the offer sheet, and sends the code with the notice version", async () => {

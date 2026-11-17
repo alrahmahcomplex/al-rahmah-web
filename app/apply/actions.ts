@@ -6,7 +6,7 @@ import { admissionContact, admissionYears, parseAdmissionForm } from "@/lib/admi
 import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { normalizeDiscountCode } from "@/lib/referral-link"
 import { submitAdmissionForm as saveAdmissionForm } from "@/lib/services/admission-form"
-import { estimateDiscountCode } from "@/lib/services/referral"
+import { estimateFormDiscountCode } from "@/lib/services/referral"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
@@ -67,7 +67,13 @@ export async function submitAdmissionForm(
   if (saved.ok) return { status: "confirmed", children: saved.data }
   switch (saved.error.kind) {
     case "invalid":
-      return { status: "invalid", field: saved.error.field, child: saved.error.child, ...calendarFor(saved.error.field) }
+      return {
+        status: "invalid",
+        field: saved.error.field,
+        child: saved.error.child,
+        ...(saved.error.part ? { part: saved.error.part } : {}),
+        ...calendarFor(saved.error.field),
+      }
     case "already-sent":
       return { status: "already-sent", children: saved.error.children, complete: saved.error.complete }
     case "unavailable":
@@ -97,7 +103,7 @@ export async function checkDiscountCode(code: unknown): Promise<DiscountCodeChec
 
   let estimate
   try {
-    estimate = await estimateDiscountCode(supabase, normalized ?? "")
+    estimate = await estimateFormDiscountCode(supabase, normalized ?? "")
   } catch (error) {
     console.error("Discount code check failed", error)
     return { status: "unavailable" }

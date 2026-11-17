@@ -1,4 +1,4 @@
-import type { FormField } from "@/lib/admission-form"
+import type { FormField, NamePart } from "@/lib/admission-form"
 
 // What the Admission form is told after it sends. Small and stable: no raw
 // error ever reaches the page.
@@ -13,7 +13,8 @@ export type AdmissionFormState =
   | { status: "check-failed" }
   // A refused year comes with the server's years, so the form can offer
   // them without a fresh render of its cached page.
-  | { status: "invalid"; field: FormField; child: number | null; calendar?: AdmissionCalendar }
+  // A refused name names its box with `part`.
+  | { status: "invalid"; field: FormField; child: number | null; part?: NamePart; calendar?: AdmissionCalendar }
   | { status: "unavailable" }
 
 // The years a parent may pick and the coming intake, in Tanzania time.

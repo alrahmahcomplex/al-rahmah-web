@@ -263,15 +263,69 @@ export type DiscountCodeEstimate = { state: "approved" | "pending" | "switched_o
 export async function estimateDiscountCode(
   supabase: SupabaseClient,
   code: string,
+  { signal }: { signal?: AbortSignal } = {},
 ): Promise<Result<DiscountCodeEstimate, "unavailable">> {
-  const { data, error } = await supabase
-    .rpc("discount_code_estimate", { code })
-    .single<{ state: DiscountCodeEstimate["state"]; amount: number }>()
+  const query = supabase.rpc("discount_code_estimate", { code })
+  const { data, error } = await (signal ? query.abortSignal(signal) : query).single<{ state: DiscountCodeEstimate["state"]; amount: number }>()
   if (error) {
     console.error("Could not estimate a Discount code", error)
     return { ok: false, error: "unavailable" }
   }
   return { ok: true, data: { state: data.state, amount: data.amount } }
+}
+
+// The Discount code box adds a hyphen between one to three letters and the
+// digits after them (formatCode, components/guided-form/typing.ts), so an
+// agent code typed as AAN132 reads AAN-132. Promo codes never hold a hyphen,
+// so a Promo code of that shape, EID2026, arrives as EID-2026. This is the
+// code without the box's hyphen, or null when the code isn't that shape.
+export function withoutBoxHyphen(code: string): string | null {
+  return /^[A-Z]{1,3}-[0-9]+$/.test(code) ? code.replace("-", "") : null
+}
+
+// What a code typed on the Admission form means, and the code to keep for
+// it. Looked up as typed first, so an agent code stays as it is; when nothing
+// holds it and the hyphen may be the box's, the code without the hyphen is
+// looked up, and kept when something holds that one (#403). `code` is
+// normalized (normalizeDiscountCode). Secret key only.
+export async function estimateFormDiscountCode(
+  supabase: SupabaseClient,
+  code: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<Result<DiscountCodeEstimate & { code: string }, "unavailable">> {
+  const typed = await estimateDiscountCode(supabase, code, options)
+  if (!typed.ok) return typed
+  const plain = typed.data.state === "unknown" ? withoutBoxHyphen(code) : null
+  if (!plain) return { ok: true, data: { ...typed.data, code } }
+  const other = await estimateDiscountCode(supabase, plain, options)
+  if (!other.ok) return other
+  return { ok: true, data: other.data.state === "unknown" ? { ...typed.data, code } : { ...other.data, code: plain } }
+}
+
+// How long sending the Admission form waits for that lookup.
+export const FORM_CODE_LOOKUP_MS = 2000
+
+// The code the Admission form keeps on its leads: the typed code, or the
+// Promo code it names without the box's hyphen. Only a code of that shape is
+// looked up, for at most FORM_CODE_LOOKUP_MS, so a stalled read never holds
+// up an application. A lookup that can't run or doesn't answer in time keeps
+// the code as typed, for staff to fix from the lead's Referral code panel, as
+// with any code nobody holds.
+export async function formDiscountCodeToKeep(supabase: SupabaseClient, code: string, waitMs = FORM_CODE_LOOKUP_MS): Promise<string> {
+  if (!withoutBoxHyphen(code)) return code
+  const deadline = new AbortController()
+  const timer = setTimeout(() => deadline.abort(), waitMs)
+  try {
+    const found = await Promise.race([
+      estimateFormDiscountCode(supabase, code, { signal: deadline.signal }),
+      new Promise<null>((resolve) => deadline.signal.addEventListener("abort", () => resolve(null))),
+    ])
+    return found?.ok ? found.data.code : code
+  } catch {
+    return code
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 // How long a read of the interview discount waits before giving up.

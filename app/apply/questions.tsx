@@ -6,6 +6,7 @@ import type { ReactElement, ReactNode } from "react"
 import {
   ChangeLink,
   ChoiceTiles,
+  CodeBox,
   ContinuePill,
   DefaultTile,
   FieldError,
@@ -18,20 +19,25 @@ import {
   NoticeBox,
   OfferNote,
   OfferPill,
+  PersonNameBoxes,
   PriceAnchor,
   QuestionTitle,
+  Reveal,
+  StudentNameBoxes,
   SummaryRow,
+  SwitchRow,
 } from "@/components/guided-form"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
-import type { FormField } from "@/lib/admission-form"
+import { MAX_NAME_PART, type FormField, type NamePart } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
 import { STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
 import { FORM_NOTICE, FORM_NOTICE_VERSION } from "@/lib/referral-notice"
+import { namePart } from "@/lib/names"
 import { DAY_OR_BOARDING, RELATIONSHIPS, type DayOrBoarding, type Relationship } from "@/lib/services/leads"
 
 import type { ChangeWord, FormCopy } from "./copy"
 import type { ChildDraft, ParentDraft } from "./draft"
-import { firstName, parseKey, STUDENT_KINDS, studentKey, yearOf, type StepKey } from "./flow"
+import { custodianName, fatherName, firstName, parseKey, skipped, STUDENT_KINDS, studentKey, studentName, switchFather, yearOf, type StepKey } from "./flow"
 import type { DiscountCodeCheck } from "./outcome"
 
 // The Admission form's stack: group titles, one question open at a time, and
@@ -67,6 +73,8 @@ export type QuestionsProps = {
   whatsappOn: boolean
   /** The problem to show under a field, or null. */
   message: (field: FormField, child?: number | null) => string | null
+  /** The name boxes to mark red for a name problem: the parts it names, or every box. */
+  namesInvalid: (field: "student_name" | "contact_name", child: number | null) => ReadonlySet<NamePart> | "all" | null
   codeAnswer: DiscountCodeCheck | null
   codeChecking: boolean
   feeEach: number
@@ -82,6 +90,8 @@ export type QuestionsProps = {
     change: (key: StepKey) => void
     child: (card: number, change: Partial<Omit<ChildDraft, "card">>, commitAfter?: boolean) => void
     parent: (change: Partial<ParentDraft>) => void
+    // "The father is the custodian" turned on or off.
+    fatherSwitch: (on: boolean) => void
     // A tap on a choice answers the question, even on the one already picked.
     tapChoice: (key: StepKey, event: React.MouseEvent) => void
     code: (value: string) => void
@@ -111,7 +121,7 @@ export function questionItems(p: QuestionsProps): ReactElement[] {
     if (!keys.some(visible)) return
     const complete = keys.every((key) => done.has(key))
     const compact = complete && !keys.includes(open) && !p.expanded.has(child.card) && !(index === n - 1 && open === "more")
-    const label = firstName(child.fullName) || copy.student(index + 1)
+    const label = firstName(child) || copy.student(index + 1)
     if (compact) {
       items.push(
         <GuidedNote key={`cs:${child.card}`}>
@@ -119,14 +129,14 @@ export function questionItems(p: QuestionsProps): ReactElement[] {
             icon={<User className="size-4" aria-hidden />}
             value={
               <>
-                {child.fullName.trim()}{" "}
+                {studentName(child)}{" "}
                 <span className="font-normal text-slate-500">
                   · {child.className} · {yearOf(children, index, p.defaultYear)} · {copy.dayOrBoarding[child.dayOrBoarding as DayOrBoarding]}
                 </span>
               </>
             }
             action={
-              <ChangeLink aria-expanded={false} aria-label={`${copy.change.kid}, ${child.fullName.trim()}`} onClick={() => p.on.expand(child.card)}>
+              <ChangeLink aria-expanded={false} aria-label={`${copy.change.kid}, ${studentName(child)}`} onClick={() => p.on.expand(child.card)}>
                 {copy.change.kid}
               </ChangeLink>
             }
@@ -142,7 +152,7 @@ export function questionItems(p: QuestionsProps): ReactElement[] {
             <h3 id={`kh-${child.card}`} tabIndex={-1} className="m-0 min-w-0 text-[15px] font-semibold text-slate-800 [overflow-wrap:anywhere] outline-none">
               {label}
             </h3>
-            <ChangeLink className="ml-auto text-slate-600" aria-label={copy.removeNamed(child.fullName.trim() || copy.student(index + 1))} onClick={() => p.on.removeStudent(child.card)}>
+            <ChangeLink className="ml-auto text-slate-600" aria-label={copy.removeNamed(studentName(child) || copy.student(index + 1))} onClick={() => p.on.removeStudent(child.card)}>
               {copy.removeStudent}
             </ChangeLink>
           </div>
@@ -160,7 +170,7 @@ export function questionItems(p: QuestionsProps): ReactElement[] {
     )
   }
   if (visible("pname")) items.push(<GuidedHead key="h:parent">{copy.parentBlock}</GuidedHead>)
-  for (const key of ["pname", "rel", "phone"] as const) if (visible(key)) items.push(step(p, key))
+  for (const key of ["pname", "rel", "phone"] as const) if (visible(key) && !skipped(key, p.parent)) items.push(step(p, key))
   if (visible("code")) items.push(<GuidedHead key="h:interview">{copy.sections[2]}</GuidedHead>)
   for (const key of ["code", "fee", "send"] as const) if (visible(key)) items.push(step(p, key))
   return items
@@ -184,7 +194,7 @@ function step(p: QuestionsProps, key: StepKey): ReactElement {
 function changeLink(p: QuestionsProps, key: StepKey, word: ChangeWord) {
   const { card } = parseKey(key)
   const index = p.children.findIndex((child) => child.card === card)
-  const who = index >= 0 && p.children.length > 1 ? firstName(p.children[index].fullName) || p.copy.student(index + 1) : null
+  const who = index >= 0 && p.children.length > 1 ? firstName(p.children[index]) || p.copy.student(index + 1) : null
   return (
     <ChangeLink aria-label={who ? `${p.copy.change[word]}, ${who}` : undefined} onClick={() => p.on.change(key)}>
       {p.copy.change[word]}
@@ -199,7 +209,7 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
   const child = p.children[index]
   switch (kind) {
     case "name":
-      return <SummaryRow label={copy.studentName} value={child.fullName.trim()} action={changeLink(p, key, "name")} />
+      return <SummaryRow label={copy.studentName} value={studentName(child)} action={changeLink(p, key, "name")} />
     case "class":
       return <SummaryRow label={copy.className} value={`${child.className} · ${yearOf(p.children, index, p.defaultYear)}`} action={changeLink(p, key, "class")} />
     case "board":
@@ -217,7 +227,21 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
         />
       )
     case "pname":
-      return <SummaryRow label={copy.parentName} value={parent.fullName.trim()} action={changeLink(p, key, "pname")} />
+      return (
+        <SummaryRow
+          label={copy.parentName}
+          value={
+            parent.fatherCustodian ? (
+              <>
+                {fatherName(p.children)} <span className="font-normal text-slate-500">· {copy.relationships.Father}</span>
+              </>
+            ) : (
+              custodianName(parent, p.children)
+            )
+          }
+          action={changeLink(p, key, "pname")}
+        />
+      )
     case "rel":
       return (
         <SummaryRow
@@ -289,25 +313,33 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
     case "name": {
       const id = `student-name-${child.card}`
       const error = p.message("student_name", index) ?? p.message("duplicate_child", index)
+      const full = studentName(child)
       return (
         <>
-          <QuestionTitle id={titleId} htmlFor={id}>
-            {copy.studentNameQ(index + 1)}
-          </QuestionTitle>
+          <QuestionTitle id={titleId}>{copy.studentNameQ(index + 1)}</QuestionTitle>
           <div className="flex flex-col gap-2">
-            <Hint id={`h-${id}`}>{copy.studentNameHint}</Hint>
-            <FieldInput
+            <Hint id={`h-${id}`} className="-mt-2 text-center">
+              {copy.studentNameHint}
+            </Hint>
+            <StudentNameBoxes
               id={id}
-              data-field="student_name"
-              value={child.fullName}
-              maxLength={200}
-              autoComplete="off"
-              autoCapitalize="words"
-              enterKeyHint="next"
-              invalid={Boolean(error)}
+              aria-labelledby={titleId}
               aria-describedby={`h-${id} e-${id}`}
-              onChange={(event) => p.on.child(child.card, { fullName: event.target.value })}
+              labels={copy.names}
+              maxLength={MAX_NAME_PART}
+              value={{ firstName: child.firstName, fatherFirst: child.fatherFirst, fatherMiddle: child.fatherMiddle, fatherLast: child.fatherLast }}
+              invalid={boxesInvalid(p.namesInvalid("student_name", index), STUDENT_BOXES)}
+              onChange={(name) => p.on.child(child.card, name)}
             />
+            <Hint className="gf-full-line text-center" aria-live="polite">
+              {full ? (
+                <>
+                  {copy.fullNameLine} <b>{full}</b>
+                </>
+              ) : (
+                "\u00a0"
+              )}
+            </Hint>
             <FieldError id={`e-${id}`} message={error} />
           </div>
           {next()}
@@ -321,7 +353,7 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
       const yearsId = `years-${child.card}`
       return (
         <div role="group" aria-labelledby={titleId} className="flex flex-col gap-4">
-          <QuestionTitle id={titleId}>{copy.classQ(firstName(child.fullName))}</QuestionTitle>
+          <QuestionTitle id={titleId}>{copy.classQ(firstName(child))}</QuestionTitle>
           <div className="flex items-center gap-2.5 rounded-[18px] bg-blue-50 py-2.5 pr-2.5 pl-4 text-left text-[15px] text-blue-950 max-[380px]:flex-wrap max-[380px]:justify-center">
             <CalendarDays className="size-5 flex-none text-blue-600" aria-hidden />
             <span id={`yl-${child.card}`} className="min-w-0">
@@ -371,11 +403,11 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
           <div onClick={(event) => p.on.tapChoice(key, event)}>
           <ChoiceTiles
             name={`board-${child.card}`}
-            legend={<QuestionTitle id={titleId}>{copy.boardingQ(firstName(child.fullName))}</QuestionTitle>}
+            legend={<QuestionTitle id={titleId}>{copy.boardingQ(firstName(child))}</QuestionTitle>}
             options={DAY_OR_BOARDING.map((value) => ({
               value,
               label: copy.dayOrBoarding[value],
-              description: fromBefore && picked === value && before ? copy.sameAs(firstName(before.fullName)) : copy.dayOrBoardingHint[value],
+              description: fromBefore && picked === value && before ? copy.sameAs(firstName(before)) : copy.dayOrBoardingHint[value],
             }))}
             value={picked || null}
             describedBy={`e-board-${child.card}`}
@@ -402,24 +434,33 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
       )
     case "pname": {
       const error = p.message("contact_name")
+      const one = children.length === 1 ? firstName(children[0]) : null
       return (
         <>
-          <QuestionTitle id={titleId} htmlFor="parent-name">
-            {copy.parentNameQ}
-          </QuestionTitle>
-          <div className="flex flex-col gap-2">
-            <FieldInput
-              id="parent-name"
-              data-field="contact_name"
-              value={parent.fullName}
-              maxLength={200}
-              autoComplete="name"
-              autoCapitalize="words"
-              enterKeyHint="next"
-              invalid={Boolean(error)}
-              aria-describedby="e-parent-name"
-              onChange={(event) => p.on.parent({ fullName: event.target.value })}
+          <QuestionTitle id={titleId}>{copy.custodianQ}</QuestionTitle>
+          <div className="flex flex-col gap-3.5">
+            <Hint id="h-parent-name" className="-mt-2 text-center">
+              {copy.custodianHint(one)}
+            </Hint>
+            <SwitchRow
+              id="father-custodian"
+              label={copy.fatherIsCustodian}
+              detail={fatherName(children)}
+              checked={parent.fatherCustodian}
+              onCheckedChange={p.on.fatherSwitch}
             />
+            <Reveal open={!parent.fatherCustodian} id="custodian-names">
+              <PersonNameBoxes
+                id="parent-name"
+                aria-labelledby={titleId}
+                aria-describedby="h-parent-name e-parent-name"
+                labels={copy.names}
+                maxLength={MAX_NAME_PART}
+                value={{ firstName: parent.firstName, middleName: parent.middleName, lastName: parent.lastName }}
+                invalid={boxesInvalid(p.namesInvalid("contact_name", null), PERSON_BOXES)}
+                onChange={(name) => p.on.parent(name)}
+              />
+            </Reveal>
             <FieldError id="e-parent-name" message={error} />
           </div>
           {next()}
@@ -428,13 +469,15 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
     }
     case "rel": {
       const error = p.message("relationship") ?? p.message("relationship_description")
-      const one = children.length === 1 ? firstName(children[0].fullName) : null
+      const one = children.length === 1 ? firstName(children[0]) : null
+      // The custodian's first and last names, as v38 asks the question.
+      const custodian = [parent.firstName, parent.lastName].map(namePart).filter(Boolean).join(" ")
       return (
         <>
           <div onClick={(event) => p.on.tapChoice(key, event)}>
           <ChoiceTiles
             name="relationship"
-            legend={<QuestionTitle id={titleId}>{children.length > 1 ? copy.relQMany : copy.relQ(one)}</QuestionTitle>}
+            legend={<QuestionTitle id={titleId}>{children.length > 1 ? copy.relQMany(custodian) : copy.relQ(custodian, one)}</QuestionTitle>}
             layout="four"
             options={RELATIONSHIPS.map((value) => ({ value, label: copy.relationships[value] }))}
             value={parent.relationship || null}
@@ -471,10 +514,11 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
       return (
         <>
           <QuestionTitle id={titleId} htmlFor="phone">
-            {copy.phoneQ}
+            {copy.phoneQ(parent.fatherCustodian ? namePart(switchFather(children).firstName) || null : null)}
           </QuestionTitle>
           <div className="flex flex-col gap-2">
             <Hint id="h-phone">{copy.phoneHint}</Hint>
+            {parent.fatherCustodian && <FatherNote copy={copy} father={fatherName(children)} />}
             <FieldInput
               id="phone"
               data-field="phone"
@@ -535,7 +579,7 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
             <ul className="m-0 mt-1.5 mb-2.5 list-none p-0 tabular-nums">
               {children.map((c) => (
                 <li key={c.card} className="flex justify-between gap-3 border-b border-blue-100 py-2 text-[15px]">
-                  <span className="min-w-0 [overflow-wrap:anywhere]">{c.fullName.trim()}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{studentName(c)}</span>
                   <span className="flex-none font-semibold whitespace-nowrap">
                     {discounted && (
                       <>
@@ -649,19 +693,16 @@ function codeBody(p: QuestionsProps, next: (label?: string) => ReactElement, tit
           {copy.codeLabel} <span className="font-normal text-slate-500">({copy.optional})</span>
         </label>
         <div className="flex gap-2 max-[380px]:flex-wrap">
-          <FieldInput
+          {/* Adds the hyphen by itself (AAN132 becomes AAN-132), prototype v38. */}
+          <CodeBox
             id="discount-code"
             data-field="discount_code"
-            className="min-w-0 flex-1 uppercase"
+            className="min-w-0 flex-1"
             value={p.discountCode}
-            maxLength={40}
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
             enterKeyHint="done"
             invalid={Boolean(error)}
             aria-describedby={`e-discount-code code-notes${filled ? " discount-code-holder-notice" : ""}`}
-            onChange={(event) => p.on.code(event.target.value)}
+            onValueChange={p.on.code}
             onBlur={p.on.codeBlur}
           />
           <ContinuePill variant="ghost" className="min-h-13 w-auto flex-none rounded-full px-[18px] text-base max-[380px]:w-full" onClick={p.on.codeCheck}>
@@ -683,4 +724,39 @@ function codeBody(p: QuestionsProps, next: (label?: string) => ReactElement, tit
       {next(filled ? copy.continue : copy.codeSkip)}
     </>
   )
+}
+
+function FatherNote({ copy, father }: { copy: FormCopy; father: string }) {
+  const note = copy.fatherNote(father)
+  return (
+    <NoticeBox tone="good">
+      {note.before}
+      <b>{note.name}</b>
+      {note.after}
+    </NoticeBox>
+  )
+}
+
+const STUDENT_BOXES = ["firstName", "fatherFirst", "fatherMiddle", "fatherLast"] as const
+const PERSON_BOXES = ["firstName", "middleName", "lastName"] as const
+
+// The box each refused part names, in either group.
+const BOX_OF: Record<NamePart, string> = {
+  first_name: "firstName",
+  father_first: "fatherFirst",
+  father_middle: "fatherMiddle",
+  father_last: "fatherLast",
+  contact_first_name: "firstName",
+  contact_middle_name: "middleName",
+  contact_last_name: "lastName",
+}
+
+export function boxOf(part: NamePart): string {
+  return BOX_OF[part]
+}
+
+function boxesInvalid<K extends string>(marked: ReadonlySet<NamePart> | "all" | null, boxes: readonly K[]): Partial<Record<K, boolean>> | undefined {
+  if (!marked) return undefined
+  const named = marked === "all" ? null : new Set([...marked].map(boxOf))
+  return Object.fromEntries(boxes.map((box) => [box, named === null || named.has(box)])) as Partial<Record<K, boolean>>
 }

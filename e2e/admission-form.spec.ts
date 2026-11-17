@@ -7,6 +7,7 @@ import {
   fillForm,
   fillParent,
   fillStudent,
+  nameBox,
   openQuestion,
   tile,
   PHONE_WIDTH,
@@ -49,23 +50,108 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
 
     await page.getByRole("button", { name: t.again }).click()
     await expectQuestion(page, t.studentName)
-    await expect(openQuestion(page).getByRole("textbox")).toHaveValue("")
+    await expect(nameBox(page, lang)).toHaveValue("")
   })
 }
+
+test("the names go in boxes: Space moves on, a paste spreads, Backspace goes back, and the full name shows as it is typed", async ({ page, context }) => {
+  await setLanguageCookie(context, "en")
+  await page.goto("/apply")
+  const q = openQuestion(page)
+  const box = (name: string) => q.getByRole("textbox", { name, exact: true })
+
+  await box("Student's name").pressSequentially("neema salim")
+  await expect(box("Student's name")).toHaveValue("NEEMA")
+  await expect(box("First name")).toHaveValue("SALIM")
+  await expect(box("First name")).toBeFocused()
+  await box("First name").press("Space")
+  await box("Middle name").pressSequentially("omari mfano")
+  await expect(box("Last name")).toHaveValue("MFANO")
+  await expect(q.getByText("Student's full name:")).toContainText("NEEMA SALIM MFANO")
+  await box("Last name").fill("")
+  await box("Last name").press("Backspace")
+  await expect(box("Middle name")).toBeFocused()
+
+  await q.getByRole("button", { name: "Continue" }).click()
+  await expect(q.getByText("Type the student's name and all three of the father's names.")).toBeVisible()
+  await expect(box("Last name")).toHaveAttribute("aria-invalid", "true")
+  await expect(box("Last name")).toBeFocused()
+})
+
+test("The father is the custodian: the relationship is Father, the phone question names him, and he is sent as the custodian", async ({ page, context }) => {
+  const who = family()
+  await setLanguageCookie(context, "en")
+  await page.goto("/apply")
+  await fillStudent(page, "en", who.childTyped, nextYear)
+  await openQuestion(page).getByRole("button", { name: WORDS.en.noMore }).click()
+  await expectQuestion(page, WORDS.en.parentName)
+
+  const father = openQuestion(page).getByRole("switch", { name: WORDS.en.fatherSwitch })
+  await expect(openQuestion(page).getByText(who.father, { exact: true })).toBeVisible()
+  await father.check()
+  await expectQuestion(page, `What is ${who.father.split(" ")[0]}'s phone number?`)
+  await expect(openQuestion(page).getByText(`Custodian: ${who.father}, the father. The relationship is set to Father.`)).toBeVisible()
+  await expect(page.getByRole("button", { name: "Change Relationship" })).toHaveCount(0)
+  await expect(page.getByText(`${who.father} · Father`)).toBeVisible()
+
+  await openQuestion(page).getByLabel(/phone number/).fill(who.phone)
+  await openQuestion(page).getByRole("button", { name: "Continue" }).click()
+  await toSend(page, "en")
+  await send(page, "en")
+  await expect(page.getByRole("heading", { name: WORDS.en.done })).toBeVisible()
+  await expect(page.getByText(who.child, { exact: true })).toBeVisible()
+})
+
+test("Start over on the first question: nothing to clear on an empty form, and with answers it asks first", async ({ page, context }) => {
+  await setLanguageCookie(context, "sw")
+  await page.goto("/apply")
+  await page.getByRole("button", { name: WORDS.sw.reset }).click()
+  await expect(page.getByText("Hakuna cha kufuta bado. Fomu iko tupu.")).toBeVisible()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+
+  await nameBox(page, "sw").fill("NEEMA")
+  await page.getByRole("button", { name: WORDS.sw.reset }).click()
+  const sheet = page.getByRole("dialog", { name: "Uanze upya?" })
+  await expect(sheet.getByText("Hili haliwezi kurudishwa. Utaanza tena kutoka swali la kwanza.")).toBeVisible()
+  await sheet.getByRole("button", { name: "Hapana, acha majibu yangu" }).click()
+  await expect(sheet).toHaveCount(0)
+  await expect(nameBox(page, "sw")).toHaveValue("NEEMA")
+
+  await page.getByRole("button", { name: WORDS.sw.reset }).click()
+  await page.getByRole("dialog", { name: "Uanze upya?" }).getByRole("button", { name: "Ndiyo, futa fomu" }).click()
+  await expect(page.getByText("Fomu imeanza upya.")).toBeVisible()
+  await expect(nameBox(page, "sw")).toHaveValue("")
+  expect(await page.evaluate(() => window.sessionStorage.length)).toBe(0)
+})
+
+test("Start over on the finished screen opens a new form at once", async ({ page, context }) => {
+  const who = family()
+  await setLanguageCookie(context, "en")
+  await page.goto("/apply")
+  await fillForm(page, "en", who, nextYear)
+  await send(page, "en")
+  await expect(page.getByRole("heading", { name: WORDS.en.done })).toBeVisible()
+
+  await page.getByRole("button", { name: WORDS.en.reset }).click()
+  await expect(page.getByText("A new form is ready.")).toBeVisible()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await expectQuestion(page, WORDS.en.studentName)
+  await expect(nameBox(page, "en")).toHaveValue("")
+})
 
 test("switching language mid-form keeps every entry", async ({ page, context }) => {
   const who = family()
   await setLanguageCookie(context, "sw")
   await page.goto("/apply")
-  await fillStudent(page, "sw", who.child, nextYear)
+  await fillStudent(page, "sw", who.childTyped, nextYear)
   await openQuestion(page).getByRole("button", { name: WORDS.sw.noMore }).click()
-  await openQuestion(page).getByRole("textbox").fill(who.parent)
+  await nameBox(page, "sw", "first").fill(who.parent)
 
   await page.getByRole("button", { name: "Menyu" }).click()
   await page.getByRole("button", { name: "English" }).click()
   await expect(page.getByRole("main")).toHaveAttribute("lang", "en")
   await expectQuestion(page, WORDS.en.parentName)
-  await expect(openQuestion(page).getByRole("textbox")).toHaveValue(who.parent)
+  await expect(nameBox(page, "en", "first")).toHaveValue(who.parent.split(" ")[0])
   await expect(page.getByText(`STD 3 · ${nextYear} · Boarding`)).toBeVisible()
 
   await page.keyboard.press("Escape")
@@ -88,15 +174,16 @@ test("Continue names what is missing, and Other asks for a description", async (
   const q = openQuestion(page)
 
   await q.getByRole("button", { name: "Endelea" }).click()
-  await expect(q.getByText("Andika jina kamili la mwanafunzi.")).toBeVisible()
-  await expect(q.getByRole("textbox")).toBeFocused()
+  await expect(q.getByText("Andika jina la mwanafunzi na majina yote matatu ya baba.")).toBeVisible()
+  await expect(nameBox(page, "sw")).toBeFocused()
 
-  await fillStudent(page, "sw", who.child, nextYear)
+  await fillStudent(page, "sw", who.childTyped, nextYear)
   await q.getByRole("button", { name: WORDS.sw.noMore }).click()
   await expectQuestion(page, WORDS.sw.parentName)
   await q.getByRole("button", { name: "Endelea" }).click()
-  await expect(q.getByText("Andika jina kamili la msimamizi.")).toBeVisible()
-  await q.getByRole("textbox").fill(who.parent)
+  await expect(q.getByText("Andika majina yote matatu ya msimamizi, au washa kitufe kama ni baba.")).toBeVisible()
+  await expect(nameBox(page, "sw", "first")).toBeFocused()
+  await nameBox(page, "sw", "first").fill(who.parent)
   await q.getByRole("button", { name: "Endelea" }).click()
 
   await tile(q, WORDS.sw.other).click()
@@ -142,31 +229,36 @@ test("a folded answer reopens with its Badilisha link, and Continue returns to t
   await expectQuestion(page, WORDS.sw.fee)
 })
 
-test("Start over sits on the first question, and Clear the whole form asks before emptying the form", async ({ page, context }) => {
+test("Start over sits on the first question, Back takes its place after, and Clear the whole form asks before emptying the form", async ({ page, context }) => {
   const who = family()
   await setLanguageCookie(context, "sw")
   await page.goto("/apply")
   await expect(page.getByRole("button", { name: WORDS.sw.reset })).toBeVisible()
-  await fillStudent(page, "sw", who.child, nextYear)
+  await fillStudent(page, "sw", who.childTyped, nextYear)
   await expect(page.getByRole("button", { name: WORDS.sw.reset })).toHaveCount(0)
   await expect(page.getByRole("button", { name: WORDS.sw.back })).toBeVisible()
+  // Back on the first question again: Start over comes back, with the answers kept.
+  await page.getByRole("button", { name: "Badilisha Jina" }).click()
+  await expectQuestion(page, WORDS.sw.studentName)
+  await expect(page.getByRole("button", { name: WORDS.sw.reset })).toBeVisible()
+  await expect(page.getByRole("button", { name: WORDS.sw.back })).toHaveCount(0)
 
   await page.getByRole("button", { name: "Menyu" }).click()
   await page.getByRole("button", { name: "Futa fomu yote" }).click()
   await expect(page.getByText("Futa majibu yote?")).toBeVisible()
   await page.getByRole("button", { name: "Ndiyo, futa" }).click()
   await expectQuestion(page, WORDS.sw.studentName)
-  await expect(openQuestion(page).getByRole("textbox")).toHaveValue("")
+  await expect(nameBox(page, "sw")).toHaveValue("")
   expect(await page.evaluate(() => window.sessionStorage.length)).toBe(0)
   await page.reload()
-  await expect(openQuestion(page).getByRole("textbox")).toHaveValue("")
+  await expect(nameBox(page, "sw")).toHaveValue("")
 })
 
 test("a tap on Other opens its description instead of folding the question", async ({ page, context }) => {
   const who = family()
   await setLanguageCookie(context, "en")
   await page.goto("/apply")
-  await fillStudent(page, "en", who.child, nextYear)
+  await fillStudent(page, "en", who.childTyped, nextYear)
   await openQuestion(page).getByRole("button", { name: WORDS.en.noMore }).click()
   await fillParent(page, "en", who)
   await page.getByRole("button", { name: "Change Relationship" }).click()

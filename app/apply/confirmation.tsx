@@ -81,7 +81,7 @@ export function Confirmation({
         href={`https://wa.me/?text=${encodeURIComponent(copy.whatsappText(lines))}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex min-h-16 w-full items-center justify-center gap-2 rounded-[24px] border-[1.5px] border-blue-600/45 px-6 font-exo text-lg font-semibold text-blue-600 italic no-underline outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-[0.96]"
+        className="inline-flex min-h-16 w-full items-center justify-center gap-2 rounded-[24px] border-[1.5px] border-blue-600/45 px-6 font-exo text-lg font-semibold text-blue-600 italic no-underline outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.96]"
       >
         <MessageCircle className="size-5" aria-hidden />
         {copy.whatsappSelf}
@@ -99,7 +99,7 @@ export function Confirmation({
         <p className="m-0 text-sm text-slate-600">{copy.call}</p>
         <a
           href={`tel:${officePhone.replaceAll(" ", "")}`}
-          className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold text-blue-600 italic outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+          className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold text-blue-600 italic outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
         >
           <Phone className="size-5" strokeWidth={2} aria-hidden />
           {officePhone}

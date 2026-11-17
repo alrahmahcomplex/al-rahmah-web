@@ -14,25 +14,59 @@ import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS } from "@/lib/services/lea
 // it would with no draft at all.
 
 export const DRAFT_KEY = "al-rahmah:admission-form-draft"
-// 2: adds `done`, for the one-question-at-a-time form.
-const VERSION = 2
+// 2: adds `done`, for the one-question-at-a-time form. 3: names in their
+// boxes and the father switch (prototype v38, #403). A version 2 draft comes
+// back with its names empty, so the form opens on the first name again and
+// keeps the other answers.
+const VERSION = 3
+const NAMELESS_VERSION = 2
 const MAX_TEXT = 200
 
-export type ParentDraft = { fullName: string; relationship: string; relationshipDescription: string; phone: string; whatsapp: string }
+// The custodian's three names, unless `fatherCustodian` says the first
+// student's father is the custodian: then they stay as typed but are not sent.
+export type ParentDraft = {
+  firstName: string
+  middleName: string
+  lastName: string
+  fatherCustodian: boolean
+  relationship: string
+  relationshipDescription: string
+  phone: string
+  whatsapp: string
+}
 // `card` is the card's own id, so a removed card takes its entries with it.
-export type ChildDraft = { card: number; fullName: string; className: string; enrollmentYear: number | null; dayOrBoarding: string }
+// The student's own name and the father's three (the names contract, #400).
+export type ChildDraft = {
+  card: number
+  firstName: string
+  fatherFirst: string
+  fatherMiddle: string
+  fatherLast: string
+  className: string
+  enrollmentYear: number | null
+  dayOrBoarding: string
+}
 
 // `linkCode` is the Referral link's code the page opened with when the draft
 // was written (empty without one), so a reload of the same link keeps the
 // parent's own edit to the code and a different link replaces it.
 export type Draft = { parent: ParentDraft; children: ChildDraft[]; discountCode: string; linkCode: string; done: string[] }
 
-export const EMPTY_PARENT: ParentDraft = { fullName: "", relationship: "", relationshipDescription: "", phone: "", whatsapp: "" }
+export const EMPTY_PARENT: ParentDraft = {
+  firstName: "",
+  middleName: "",
+  lastName: "",
+  fatherCustodian: false,
+  relationship: "",
+  relationshipDescription: "",
+  phone: "",
+  whatsapp: "",
+}
 
 // `card` counts up within one form from 1, the same on the server and in the
 // browser, so the field ids built from it match when the page hydrates.
 export function emptyChild(card: number): ChildDraft {
-  return { card, fullName: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
+  return { card, firstName: "", fatherFirst: "", fatherMiddle: "", fatherLast: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
 }
 
 // A question's name in the draft: a student's (`class-3`) or the form's own.
@@ -69,11 +103,17 @@ export function parseDraft(raw: string | null, years: readonly number[]): Draft 
   }
   if (!value || typeof value !== "object") return null
   const { version, parent, children, discountCode, linkCode, done } = value as Record<string, unknown>
-  if (version !== VERSION) return null
+  if (version !== VERSION && version !== NAMELESS_VERSION) return null
+  // A version 2 draft's one-box names don't split into the boxes reliably.
+  const named = version === VERSION
 
   const p = parent && typeof parent === "object" ? (parent as Record<string, unknown>) : {}
+  const name = (value: unknown) => (named ? text(value) : "")
   const cleanParent: ParentDraft = {
-    fullName: text(p.fullName),
+    firstName: name(p.firstName),
+    middleName: name(p.middleName),
+    lastName: name(p.lastName),
+    fatherCustodian: named && p.fatherCustodian === true,
     relationship: oneOf(p.relationship, RELATIONSHIPS),
     relationshipDescription: text(p.relationshipDescription),
     phone: text(p.phone),
@@ -86,7 +126,10 @@ export function parseDraft(raw: string | null, years: readonly number[]): Draft 
     const year = typeof c.enrollmentYear === "number" && years.includes(c.enrollmentYear) ? c.enrollmentYear : null
     return {
       card: index + 1,
-      fullName: text(c.fullName),
+      firstName: name(c.firstName),
+      fatherFirst: name(c.fatherFirst),
+      fatherMiddle: name(c.fatherMiddle),
+      fatherLast: name(c.fatherLast),
       className: oneOf(c.className, LEAD_CLASSES),
       enrollmentYear: year,
       dayOrBoarding: oneOf(c.dayOrBoarding, DAY_OR_BOARDING),
@@ -112,9 +155,10 @@ export function readDraft(years: readonly number[]): Draft | null {
 // Referral link, which the page fills in on its own.
 export function isEmptyDraft(draft: Draft): boolean {
   const { parent, children } = draft
-  const parentEmpty = Object.values(parent).every((value) => value === "")
+  const parentEmpty = Object.values(parent).every((value) => value === "" || value === false)
   const childrenEmpty = children.every(
-    (child) => !child.fullName && !child.className && child.enrollmentYear === null && !child.dayOrBoarding,
+    (child) =>
+      !child.firstName && !child.fatherFirst && !child.fatherMiddle && !child.fatherLast && !child.className && child.enrollmentYear === null && !child.dayOrBoarding,
   )
   return parentEmpty && childrenEmpty
 }
@@ -133,8 +177,11 @@ export function writeDraft(draft: Draft) {
       JSON.stringify({
         version: VERSION,
         parent,
-        children: children.map(({ fullName, className, enrollmentYear, dayOrBoarding }) => ({
-          fullName,
+        children: children.map(({ firstName, fatherFirst, fatherMiddle, fatherLast, className, enrollmentYear, dayOrBoarding }) => ({
+          firstName,
+          fatherFirst,
+          fatherMiddle,
+          fatherLast,
           className,
           enrollmentYear,
           dayOrBoarding,

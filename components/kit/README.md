@@ -10,7 +10,7 @@ Import from `@/components/kit`. Every piece, in every state, is on the kit page,
 .ag-read { background: var(--gf-whisper); --kit-quiet: var(--gf-quiet-on-tint); }
 ```
 
-**Focus ring.** Every kit control's ring is 3px of `--gf-focus-ring`, 2px out (3.16:1 on Paper, 3.07:1 on Lavender Whisper), and so are the guided form's parts on staff screens (`ChoiceTiles`, the `GuidedTask` controls), through `kit.css`. A screen's own focusable part uses the same token.
+**Focus ring.** Every kit control's ring is 3px of `--gf-focus-ring`, 2px out (3.16:1 on Paper, 3.07:1 on Lavender Whisper), and so are the guided form's parts (`ChoiceTiles`, the `GuidedTask` controls), from `guided-form.css`, on staff and public pages alike. A screen's own focusable part uses the same token.
 
 ## Use this, not that
 

@@ -34,7 +34,7 @@ vi.mock("@/lib/services/admission-form", () => ({
 }))
 
 vi.mock("@/lib/services/referral", () => ({
-  estimateDiscountCode: (...args: unknown[]) => {
+  estimateFormDiscountCode: (...args: unknown[]) => {
     calls.order.push("estimate")
     return stubs.estimate(...args)
   },
@@ -47,6 +47,10 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 const [thisYear] = admissionYears()
 const KEY = "3f2b7c1e-8d4a-4b6f-9a0e-1c2d3e4f5a6b"
 
+const PARENT = { firstName: "Amina", middleName: "Hassani", lastName: "Fixture" }
+const FATHER = { fatherFirst: "Juma", fatherMiddle: "Ali", fatherLast: "Fixture" }
+const child = (firstName: string) => ({ firstName, ...FATHER, className: "STD 2", enrollmentYear: thisYear, dayOrBoarding: "Day" })
+
 function posted(overrides: Record<string, unknown> = {}) {
   const data = new FormData()
   data.set("cf-turnstile-response", "token-from-widget")
@@ -54,8 +58,8 @@ function posted(overrides: Record<string, unknown> = {}) {
     "form",
     JSON.stringify({
       submissionKey: KEY,
-      parent: { fullName: "Amina Fixture", relationship: "Mother", phone: "0700 000 900" },
-      children: [{ fullName: "Zawadi Fixture", className: "STD 2", enrollmentYear: thisYear, dayOrBoarding: "Day" }],
+      parent: { ...PARENT, relationship: "Mother", phone: "0700 000 900" },
+      children: [child("Zawadi")],
       ...overrides,
     }),
   )
@@ -91,8 +95,16 @@ describe("sending the Admission form", () => {
       { secret: "client" },
       {
         submissionKey: KEY,
-        parent: { fullName: "Amina Fixture", relationship: "Mother", phone: "0700 000 900" },
-        children: [{ fullName: "Zawadi Fixture", className: "STD 2", enrollmentYear: thisYear, dayOrBoarding: "Day" }],
+        parent: { fullName: "AMINA HASSANI FIXTURE", nameParts: PARENT, relationship: "Mother", phone: "0700 000 900" },
+        children: [
+          {
+            fullName: "ZAWADI JUMA FIXTURE",
+            nameParts: { firstName: "Zawadi", ...FATHER },
+            className: "STD 2",
+            enrollmentYear: thisYear,
+            dayOrBoarding: "Day",
+          },
+        ],
       },
     )
   })
@@ -110,13 +122,13 @@ describe("sending the Admission form", () => {
   })
 
   it("validates after both checks and names the field, writing nothing", async () => {
-    const state = await send(posted({ parent: { fullName: "", relationship: "Mother", phone: "0700000900" } }))
-    expect(state).toEqual({ status: "invalid", field: "contact_name", child: null })
+    const state = await send(posted({ parent: { ...PARENT, lastName: "", relationship: "Mother", phone: "0700000900" } }))
+    expect(state).toEqual({ status: "invalid", field: "contact_name", child: null, part: "contact_last_name" })
     expect(calls.order).toEqual(["rate-limit", "turnstile"])
   })
 
   it("refuses an enrollment year that is no longer on offer, on its child card", async () => {
-    const children = [{ fullName: "Z", className: "STD 2", enrollmentYear: thisYear - 1, dayOrBoarding: "Day" }]
+    const children = [{ ...child("Z"), enrollmentYear: thisYear - 1 }]
     // With the server's years, so the cached page can offer them in place.
     const years = [thisYear, thisYear + 1]
     expect(await send(posted({ children }))).toEqual({
@@ -129,27 +141,21 @@ describe("sending the Admission form", () => {
   })
 
   it("refuses a ninth child and the same child twice before saving anything", async () => {
-    const child = (fullName: string) => ({ fullName, className: "STD 2", enrollmentYear: thisYear, dayOrBoarding: "Day" })
     const nine = Array.from({ length: 9 }, (_, i) => child(`Pupil ${i + 1}`))
     expect(await send(posted({ children: nine }))).toEqual({ status: "invalid", field: "children", child: null })
 
-    const twice = [child("Zawadi Fixture"), child("Baraka Fixture"), child(" zawadi  fixture ")]
+    const twice = [child("Zawadi"), child("Baraka"), child(" zawadi ")]
     expect(await send(posted({ children: twice }))).toEqual({ status: "invalid", field: "duplicate_child", child: 2 })
     expect(stubs.save).not.toHaveBeenCalled()
   })
 
   it("sends eight children in form order and confirms every one", async () => {
-    const eight = Array.from({ length: 8 }, (_, i) => ({
-      fullName: `Pupil ${i + 1}`,
-      className: "STD 2",
-      enrollmentYear: thisYear,
-      dayOrBoarding: "Day",
-    }))
-    const numbers = eight.map((c, i) => ({ fullName: c.fullName, admissionNumber: `ADMSN-4072${i}` }))
+    const eight = Array.from({ length: 8 }, (_, i) => child(`Pupil${i + 1}`))
+    const numbers = eight.map((c, i) => ({ fullName: `${c.firstName.toUpperCase()} JUMA FIXTURE`, admissionNumber: `ADMSN-4072${i}` }))
     stubs.save.mockResolvedValue({ ok: true, data: numbers })
 
     expect(await send(posted({ children: eight }))).toEqual({ status: "confirmed", children: numbers })
-    expect(stubs.save.mock.calls[0][1].children).toEqual(eight)
+    expect(stubs.save.mock.calls[0][1].children.map((c: { fullName: string }) => c.fullName)).toEqual(numbers.map((n) => n.fullName))
   })
 
   it("passes on the database refusing the same child twice, on its card", async () => {

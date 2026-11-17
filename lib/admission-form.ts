@@ -11,10 +11,10 @@ import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, type NewContact, type New
 
 export const MAX_CHILDREN = 8
 
-// A name is sent either in its parts (prototype v38, #400) or in the one box
-// of the live form. With parts, `fullName` is the name they build, in
-// capitals, as the database stores it. The one box goes once #403 moves the
-// page to parts.
+// A name comes in its parts (prototype v38, #400); `fullName` is the name
+// they build, in capitals, as the database stores it. The page sends only
+// parts since #403 and parseAdmissionForm refuses the old one box. The
+// service still takes `fullName` alone, for tests that build forms directly.
 export type AdmissionParent = NewContact & { nameParts?: PersonNameParts }
 export type AdmissionChild = NewStudent & { nameParts?: StudentNameParts }
 
@@ -76,6 +76,14 @@ export function childNameKey(name: string): string {
   return name.trim().replace(/\s+/g, " ").toLowerCase()
 }
 
+// The longest name part the form takes, as its other text fields.
+export const MAX_NAME_PART = 200
+
+// A name part is typed, and no longer than the form takes.
+function namePartFits(part: string): boolean {
+  return part.trim() !== "" && part.length <= MAX_NAME_PART
+}
+
 // Every problem with the parent's details, in the order the fields show, so
 // the page can name them all at once. The server names only the first.
 export function parentProblems(parent: AdmissionParent): FieldProblem[] {
@@ -83,7 +91,7 @@ export function parentProblems(parent: AdmissionParent): FieldProblem[] {
   const parts = parent.nameParts
   if (parts) {
     for (const [key, part] of PERSON_PARTS) {
-      if (!parts[key].trim()) problems.push({ field: "contact_name", child: null, part })
+      if (!namePartFits(parts[key])) problems.push({ field: "contact_name", child: null, part })
     }
   } else if (!parent.fullName.trim()) problems.push({ field: "contact_name", child: null })
   if (!(RELATIONSHIPS as readonly string[]).includes(parent.relationship)) {
@@ -107,7 +115,7 @@ export function childrenProblems(children: AdmissionChild[], years: readonly num
   const seen = new Set<string>()
   for (const [index, child] of children.entries()) {
     const parts = child.nameParts
-    const missing = parts ? STUDENT_PARTS.filter(([key]) => !parts[key].trim()).map(([, part]) => part) : []
+    const missing = parts ? STUDENT_PARTS.filter(([key]) => !namePartFits(parts[key])).map(([, part]) => part) : []
     const named = parts ? missing.length === 0 : child.fullName.trim() !== ""
     if (parts) for (const part of missing) problems.push({ field: "student_name", child: index, part })
     else if (!named) problems.push({ field: "student_name", child: index })
@@ -149,20 +157,18 @@ function optionalText(value: unknown): string | undefined | null {
   return text(value)
 }
 
-// A name in its parts, each trimmed, when the object sends any of them; the
-// one box otherwise. Sending both, or a part that isn't text, is `null`.
-function nameOf<K extends string>(
-  value: Record<string, unknown>,
-  keys: readonly K[],
-): { parts: Record<K, string> } | { fullName: string } | null {
-  if (!keys.some((key) => key in value)) {
-    const fullName = text(value.fullName)
-    return fullName === null ? null : { fullName: fullName.trim() }
-  }
+// A name in its parts, each trimmed. The page sends only parts since #403:
+// the live form's one box (`fullName`), sending both, or a part that isn't
+// text is `null`. The service still takes a one-box name, for the tests that
+// build forms directly.
+function nameOf<K extends string>(value: Record<string, unknown>, keys: readonly K[]): { parts: Record<K, string> } | null {
   if ("fullName" in value) return null
   const parts = {} as Record<K, string>
   for (const key of keys) {
-    const part = text(value[key])
+    // Read past the limit, so a part too long is named on its box rather
+    // than refused as an unreadable form.
+    const raw = value[key]
+    const part = typeof raw === "string" && raw.length <= MAX_NAME_PART * 5 ? raw : null
     if (part === null) return null
     parts[key] = part.trim()
   }
@@ -201,11 +207,11 @@ export function parseAdmissionForm(
     return { ok: false, error: payload }
   }
   const cleanParent: AdmissionParent = {
-    fullName: "parts" in parentName ? personFullName(parentName.parts) : parentName.fullName,
+    fullName: personFullName(parentName.parts),
+    nameParts: parentName.parts,
     relationship: relationship as AdmissionParent["relationship"],
     phone: phone.trim(),
   }
-  if ("parts" in parentName) cleanParent.nameParts = parentName.parts
   if (relationship === "Other" && description?.trim()) cleanParent.relationshipDescription = description.trim()
   if (whatsapp?.trim()) cleanParent.whatsapp = whatsapp.trim()
 
@@ -220,14 +226,13 @@ export function parseAdmissionForm(
     if (name === null || className === null || dayOrBoarding === null || typeof c.enrollmentYear !== "number") {
       return { ok: false, error: payload }
     }
-    const cleanChild: AdmissionChild = {
-      fullName: "parts" in name ? studentFullName(name.parts) : name.fullName,
+    cleanChildren.push({
+      fullName: studentFullName(name.parts),
+      nameParts: name.parts,
       className: className as AdmissionChild["className"],
       enrollmentYear: c.enrollmentYear,
       dayOrBoarding: dayOrBoarding as AdmissionChild["dayOrBoarding"],
-    }
-    if ("parts" in name) cleanChild.nameParts = name.parts
-    cleanChildren.push(cleanChild)
+    })
   }
 
   const problem = parentProblem(cleanParent) ?? childrenProblem(cleanChildren, years)

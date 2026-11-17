@@ -4,7 +4,7 @@ import { createHash } from "node:crypto"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { AdmissionChild, AdmissionForm, ChildField, ParentField } from "@/lib/admission-form"
+import type { AdmissionChild, AdmissionForm, AdmissionParent, ChildField, NamePart, ParentField } from "@/lib/admission-form"
 
 import { applyFormDiscountCode } from "./referral"
 import type { Result } from "./result"
@@ -38,6 +38,11 @@ import type { Result } from "./result"
 // and stays out of the submission key's hash, so a retry from a page loaded
 // before or after a deploy that changed the notice is the same send.
 //
+// Names come in their parts (prototype v38, #400) or in the live form's one
+// box; the database builds and stores the full names from the parts. A part
+// it refuses comes back as the child's `student_name` or the parent's
+// `contact_name`, with `part` naming the box.
+//
 // Takes the secret-key client (utils/supabase/public-form.ts): only the
 // secret key may use the Admission form start.
 
@@ -50,7 +55,7 @@ export type AdmissionFormError =
   // A field the database refused. `child` is the child card for a child's
   // field, null for the parent's. `duplicate_child` is a child the form
   // already named on an earlier card.
-  | { kind: "invalid"; field: ParentField | ChildField | "discount_code"; child: number | null }
+  | { kind: "invalid"; field: ParentField | ChildField | "discount_code"; child: number | null; part?: NamePart }
   // This submission key already created children, from an earlier send of
   // the form before the parent edited it. Those children, in form order, and
   // whether they are every child that send carried.
@@ -64,11 +69,14 @@ type ChildRow =
 const PARENT_FIELDS = new Set<string>(["contact_name", "relationship", "relationship_description", "phone", "whatsapp"])
 const CHILD_FIELDS = new Set<string>(["student_name", "class_name", "enrollment_year", "day_or_boarding", "duplicate_child"])
 const FORM_FIELDS = new Set<string>(["discount_code"])
+const PARENT_PARTS = new Set<string>(["contact_first_name", "contact_middle_name", "contact_last_name"])
+const CHILD_PARTS = new Set<string>(["first_name", "father_first", "father_middle", "father_last"])
 
 // What the submission key is checked against: the form exactly as validated,
 // in a fixed key order. The Discount code joins it only when there is one, so
-// a form without a code hashes as it did before codes existed.
-function payloadHash({ parent, children, discountCode }: Pick<AdmissionForm, "parent" | "children" | "discountCode">): string {
+// a form without a code hashes as it did before codes existed, and a name's
+// parts only when it came in parts, so a one-box form hashes as before #400.
+export function payloadHash({ parent, children, discountCode }: Pick<AdmissionForm, "parent" | "children" | "discountCode">): string {
   const canonical = JSON.stringify({
     ...(discountCode ? { discountCode } : {}),
     parent: [
@@ -77,20 +85,44 @@ function payloadHash({ parent, children, discountCode }: Pick<AdmissionForm, "pa
       parent.relationshipDescription ?? null,
       parent.phone,
       parent.whatsapp ?? null,
+      ...(parent.nameParts ? [[parent.nameParts.firstName, parent.nameParts.middleName, parent.nameParts.lastName]] : []),
     ],
-    children: children.map((c) => [c.fullName, c.className, c.enrollmentYear, c.dayOrBoarding]),
+    children: children.map((c) => [
+      c.fullName,
+      c.className,
+      c.enrollmentYear,
+      c.dayOrBoarding,
+      ...(c.nameParts
+        ? [[c.nameParts.firstName, c.nameParts.fatherFirst, c.nameParts.fatherMiddle, c.nameParts.fatherLast]]
+        : []),
+    ]),
   })
   return createHash("sha256").update(canonical).digest("hex")
 }
 
 function studentDetails(child: AdmissionChild, discountCode: string | undefined) {
+  const parts = child.nameParts
   return {
-    full_name: child.fullName,
+    ...(parts
+      ? {
+          first_name: parts.firstName,
+          father_first: parts.fatherFirst,
+          father_middle: parts.fatherMiddle,
+          father_last: parts.fatherLast,
+        }
+      : { full_name: child.fullName }),
     class_name: child.className,
     enrollment_year: child.enrollmentYear,
     day_or_boarding: child.dayOrBoarding,
     ...(discountCode ? { discount_code: discountCode } : {}),
   }
+}
+
+function contactName(parent: AdmissionParent) {
+  const parts = parent.nameParts
+  return parts
+    ? { first_name: parts.firstName, middle_name: parts.middleName, last_name: parts.lastName }
+    : { full_name: parent.fullName }
 }
 
 function fieldOf(details: string | null | undefined): string | null {
@@ -124,7 +156,7 @@ export async function submitAdmissionForm(
   const { submissionKey, parent, children, discountCode, noticeVersion } = form
   const hash = payloadHash(form)
   const newContact = {
-    full_name: parent.fullName,
+    ...contactName(parent),
     relationship: parent.relationship,
     relationship_description: parent.relationshipDescription ?? null,
     phone: parent.phone,
@@ -149,6 +181,16 @@ export async function submitAdmissionForm(
       }
       if (error.message === "invalid") {
         const field = fieldOf(error.details)
+        if (field && PARENT_PARTS.has(field)) {
+          return { ok: false, error: { kind: "invalid", field: "contact_name", child: null, part: field as NamePart } }
+        }
+        if (field && CHILD_PARTS.has(field)) {
+          return { ok: false, error: { kind: "invalid", field: "student_name", child: index, part: field as NamePart } }
+        }
+        // The father's three names together are too long.
+        if (field === "father_full_name") {
+          return { ok: false, error: { kind: "invalid", field: "student_name", child: index } }
+        }
         if (field && PARENT_FIELDS.has(field)) {
           return { ok: false, error: { kind: "invalid", field: field as ParentField, child: null } }
         }

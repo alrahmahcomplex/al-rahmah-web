@@ -103,6 +103,14 @@ describe("the three-level father's-name check", () => {
     ["Ali Hassan Mohamed", "Ali Hasan", "different"],
     ["Hassan Ali Mohamed", "Ali Mohamed", "different"],
     ["Ali Hassan Mohamed Juma", "Ali Hassan", "different"],
+    // One extra middle word, first and last kept (#400): an older or
+    // imported father's name has no middle name.
+    ["ALI MOHAMED", "ALI HASSAN MOHAMED", "close"],
+    ["Ali Mohamed", "ALI HASSAN MOHAMED", "close"],
+    ["Ali Hassan Juma", "Ali Hassan Mohamed Juma", "close"],
+    ["Ali Juma", "Ali Hassan Mohamed Juma", "different"],
+    ["Ali Mohamed", "Ali Hassan Mohamedi", "different"],
+    ["Ali", "Ali Hassan", "different"],
   ])("%s against %s is %s", async (a, b, expected) => {
     expect(await match(a, b)).toBe(expected)
     expect(await match(b, a)).toBe(expected)

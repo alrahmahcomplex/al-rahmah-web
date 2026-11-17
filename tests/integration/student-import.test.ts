@@ -49,6 +49,9 @@ async function existingLead(name: string, phone: string): Promise<{ leadId: stri
 type LeadRow = {
   id: string
   student_name: string
+  father_full_name: string | null
+  father_full_name_source: string | null
+  guardian_name: string
   class_name: string
   status: string
   visit_date: string | null
@@ -73,7 +76,7 @@ type LeadRow = {
 async function leadsOfBatch(batchId: string): Promise<Map<string, LeadRow>> {
   return inRolledBackTransaction(async (sql) => {
     const { rows } = await sql.query<LeadRow>(
-      `select l.id, l.student_name, l.class_name::text, l.status::text, to_char(l.visit_date, 'YYYY-MM-DD') as visit_date,
+      `select l.id, l.student_name, l.father_full_name, l.father_full_name_source::text, g.full_name as guardian_name, l.class_name::text, l.status::text, to_char(l.visit_date, 'YYYY-MM-DD') as visit_date,
               l.day_or_boarding::text, l.referral_code, l.import_batch_id, l.enrolled_by_import, l.imported_as_enrolled,
               l.declined_reason::text, l.declined_explanation, l.status_before_decline::text, l.returning_family_joined,
               l.guardian_contact_id, g.relationship::text, g.relationship_description, g.pending_family_match_id, g.origin::text,
@@ -160,9 +163,29 @@ describe("importing a workbook", () => {
 
     const leads = await leadsOfBatch(batchId)
     expect(leads.size).toBe(8)
-    expect(leads.get("Applied Kid")).toMatchObject({ status: "Applied", visit_date: null, class_name: "STD 1", day_or_boarding: "Day", origin: "front_desk" })
-    expect(leads.get("Visited Kid")).toMatchObject({ status: "Visited", visit_date: "2026-09-05", day_or_boarding: "Boarding", relationship: "Father" })
-    expect(leads.get("Interviewed Kid")).toMatchObject({
+    // New rows are stored in capitals (#400). The sheet has no father's
+    // middle name, so the father's name is the words after the first, as
+    // before. The lead and the contact already on file keep their names.
+    const S = s.toUpperCase()
+    expect(leads.get("APPLIED KID")).toMatchObject({
+      student_name: `APPLIED KID ${S}`,
+      father_full_name: `KID ${S}`,
+      father_full_name_source: "derived",
+      guardian_name: `MAMA A ${S}`,
+    })
+    const onFile = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query<{ student_name: string; full_name: string }>(
+            "select l.student_name, g.full_name from public.leads l join public.guardian_contacts g on g.id = l.guardian_contact_id where l.id = $1",
+            [known.leadId],
+          )
+        ).rows[0],
+    )
+    expect(onFile).toEqual({ student_name: `Existing Child ${s}`, full_name: "Mzazi Aliyepo" })
+    expect(leads.get("APPLIED KID")).toMatchObject({ status: "Applied", visit_date: null, class_name: "STD 1", day_or_boarding: "Day", origin: "front_desk" })
+    expect(leads.get("VISITED KID")).toMatchObject({ status: "Visited", visit_date: "2026-09-05", day_or_boarding: "Boarding", relationship: "Father" })
+    expect(leads.get("INTERVIEWED KID")).toMatchObject({
       status: "Interviewed",
       class_name: "FORM 1",
       pre_form_one: true,
@@ -170,7 +193,7 @@ describe("importing a workbook", () => {
       relationship_description: "Aunt",
       interviews: [{ fee_status: "Not Paid", result: null, import_batch_id: batchId }],
     })
-    expect(leads.get("Contracted Kid")).toMatchObject({
+    expect(leads.get("CONTRACTED KID")).toMatchObject({
       status: "Enrolled",
       enrolled_by_import: true,
       imported_as_enrolled: true,
@@ -179,23 +202,23 @@ describe("importing a workbook", () => {
       relationship_description: "Parent/guardian",
       interviews: [{ fee_status: "Not Paid", result: null, import_batch_id: batchId }],
     })
-    expect(leads.get("Declined Kid")).toMatchObject({
+    expect(leads.get("DECLINED KID")).toMatchObject({
       status: "Declined",
       declined_reason: "Other",
       declined_explanation: "Imported from the workbook",
       status_before_decline: "Applied",
       interviews: [],
     })
-    expect(leads.get("Sibling Kid")?.guardian_contact_id).toBe(leads.get("Applied Kid")?.guardian_contact_id)
-    expect(leads.get("New Sibling")).toMatchObject({ pending_family_match_id: known.contactId, returning_family_joined: true })
-    expect(leads.get("Code Kid")?.referral_code).toBe(`NOBODY${s.toUpperCase()}`)
+    expect(leads.get("SIBLING KID")?.guardian_contact_id).toBe(leads.get("APPLIED KID")?.guardian_contact_id)
+    expect(leads.get("NEW SIBLING")).toMatchObject({ pending_family_match_id: known.contactId, returning_family_joined: true })
+    expect(leads.get("CODE KID")?.referral_code).toBe(`NOBODY${s.toUpperCase()}`)
 
     // The batch, for the Done step and each lead's history line.
     expect(await getStudentImport(await signedIn(ADMISSIONS), batchId)).toEqual({
       ok: true,
       data: expect.objectContaining({ fileName, importedBy: MANAGER.name, rowCount: 10, createdCount: 8, skippedCount: 2 }),
     })
-    expect(await getLeadImportMark(await signedIn(ADMISSIONS), leads.get("Contracted Kid")!.id)).toEqual({
+    expect(await getLeadImportMark(await signedIn(ADMISSIONS), leads.get("CONTRACTED KID")!.id)).toEqual({
       ok: true,
       data: { batch: expect.objectContaining({ id: batchId }), enrolledByImport: true },
     })
@@ -359,7 +382,7 @@ describe("numbers a sibling row links", () => {
     if (!confirmed.ok || confirmed.data.kind !== "imported") throw new Error(JSON.stringify(confirmed))
     expect(confirmed.data).toMatchObject({ created: 3, skipped: 0 })
     const leads = await leadsOfBatch(confirmed.data.batchId)
-    expect(leads.get("Asha Mfano")?.guardian_contact_id).toBe(leads.get("Baraka Mfano")?.guardian_contact_id)
+    expect(leads.get("ASHA MFANO")?.guardian_contact_id).toBe(leads.get("BARAKA MFANO")?.guardian_contact_id)
   })
 
   test("a child on file under a sibling row's WhatsApp is already on file, not a new application", async () => {

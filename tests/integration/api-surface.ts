@@ -837,9 +837,9 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: {
       visited_on: "current_date",
-      people: `'[{"full_name": "Sample Parent", "phone": "0689999001"}]'::jsonb`,
+      people: `'[{"first_name": "Sample", "middle_name": "Api", "last_name": "Parent", "phone": "0689999001"}]'::jsonb`,
       students: `jsonb_build_array(jsonb_build_object(
-        'first_name', 'Sample', 'fathers_name', 'Pupil', 'last_name', 'Surface',
+        'first_name', 'Sample', 'father_first', 'Pupil', 'father_middle', 'Api', 'father_last', 'Surface',
         'class_name', 'KG 1', 'enrollment_year', extract(year from public.tanzania_today())::int + 1,
         'day_or_boarding', 'Day', 'custodian', jsonb_build_object('person', 1, 'relationship', 'Mother')))`,
     },
@@ -857,7 +857,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       people: `'[{"contact_id": "c0a70000-0000-4000-8000-000000000305"}]'::jsonb`,
       students: `jsonb_build_array(jsonb_build_object(
         'lead_id', '1ead0000-0000-4000-8000-000000000305',
-        'first_name', 'Sample', 'fathers_name', 'Pupil', 'last_name', 'Surface',
+        'first_name', 'Sample', 'father_first', 'Pupil', 'father_middle', 'Api', 'father_last', 'Surface',
         'custodian', jsonb_build_object('person', 1, 'relationship', 'Mother')))`,
     },
     agent: { refused: "not_permitted" },

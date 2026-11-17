@@ -6,6 +6,7 @@ import { describe, expect, onTestFinished, test, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { fatherFullName, studentFullName } from "@/lib/names";
 import { tanzaniaToday } from "@/lib/school-calendar";
 import { submitAdmissionForm } from "@/lib/services/admission-form";
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees";
@@ -96,13 +97,19 @@ const word = () =>
     .slice(0, 6)
     .padEnd(6, "c")}`;
 
-type Father = { fathersName: string; lastName: string; surname: string };
+type Father = { fatherFirst: string; fatherMiddle: string; fatherLast: string };
 const fatherParts = (): Father => ({
-  fathersName: word(),
-  lastName: word(),
-  surname: word(),
+  fatherFirst: word(),
+  fatherMiddle: word(),
+  fatherLast: word(),
 });
-const nameOf = (f: Father) => `${f.fathersName} ${f.lastName} ${f.surname}`;
+// The father's full name as stored: all three of his names, in capitals.
+const nameOf = (f: Father) =>
+  fatherFullName({ firstName: "", ...f });
+// The student's full name as stored: the student's name and the father's
+// first and last names, in capitals.
+const studentNameOf = (c: { first: string; father: Father }) =>
+  studentFullName({ firstName: c.first, ...c.father });
 
 type FormChild = { first: string; father: Father; className: LeadClass };
 const child = (father: Father, className: LeadClass = "KG 1"): FormChild => ({
@@ -119,9 +126,15 @@ async function applied(
 ) {
   const sent = await submitAdmissionForm(secretClient(), {
     submissionKey: randomUUID(),
-    parent: { fullName: `Form Parent ${word()}`, relationship, phone: phone() },
+    parent: {
+      fullName: "",
+      nameParts: { firstName: "Form", middleName: "Parent", lastName: word() },
+      relationship,
+      phone: phone(),
+    },
     children: children.map((c) => ({
-      fullName: `${c.first} ${nameOf(c.father)}`,
+      fullName: studentNameOf(c),
+      nameParts: { firstName: c.first, ...c.father },
       className: c.className,
       enrollmentYear: year,
       dayOrBoarding: "Day" as const,
@@ -360,7 +373,7 @@ describe("check-in of an Admission form family", () => {
     const students = await completed({
       people: [
         { contactId },
-        { fullName: `Aunt ${word()}`, phone: auntsPhone },
+        { firstName: "Aunt", middleName: "Of", lastName: word(), phone: auntsPhone },
       ],
       students: [
         checkIn(leadIds[0], dear, {
@@ -413,7 +426,7 @@ describe("check-in of an Admission form family", () => {
       guardian_contact_id: contactId,
     });
     expect(r1).toMatchObject({
-      brought_by_name: "Uncle Brought",
+      brought_by_name: "UNCLE BROUGHT",
       custodian_relationship: "Mother",
     });
     expect(r2.guardian_contact_id).not.toBe(contactId);
@@ -501,11 +514,11 @@ describe("check-in of an Admission form family", () => {
   test("a question after a custodian move saves nothing: no new person, no move", async () => {
     const year = await registrationYear();
     const family = {
-      fathersName: "Abdallah",
-      lastName: word(),
-      surname: word(),
+      fatherFirst: "Abdallah",
+      fatherMiddle: word(),
+      fatherLast: word(),
     };
-    const typo = { ...family, fathersName: "Abdalla" };
+    const typo = { ...family, fatherFirst: "Abdalla" };
     const kids = [child(family), child(typo)];
     const { leadIds, contactId } = await applied(kids, year);
     const fathersPhone = phone();
@@ -651,7 +664,7 @@ describe("check-in of an Admission form family", () => {
         },
       },
       student: {
-        fullName: `${kid.first} ${nameOf(kid.father)}`,
+        fullName: studentNameOf(kid).toLowerCase(),
         className: "KG 1",
         enrollmentYear: year,
         dayOrBoarding: "Day",
@@ -756,22 +769,22 @@ describe("check-in of an Admission form family", () => {
     expect(await rowOf(leadIds[0])).toMatchObject({ status: "Visited" });
   });
 
-  test("the four name fields correct the stored name and the father's full name", async () => {
+  test("the name parts correct the stored name and the father's full name", async () => {
     const year = await registrationYear();
     const typed = child(fatherParts());
     const { leadIds, contactId } = await applied([typed], year);
     const corrected = {
       ...typed,
-      father: { ...typed.father, surname: word() },
+      father: { ...typed.father, fatherLast: word() },
     };
     await completed({
       people: [{ contactId }],
       students: [checkIn(leadIds[0], corrected)],
     });
     expect(await rowOf(leadIds[0])).toMatchObject({
-      student_name: `${typed.first} ${nameOf(corrected.father)}`,
+      student_name: studentNameOf(corrected),
       father_full_name: nameOf(corrected.father),
-      father_full_name_source: "derived",
+      father_full_name_source: "entered",
     });
   });
 });
@@ -962,11 +975,11 @@ describe("refusals and questions", () => {
   test("close fathers' names ask one question; a typing mistake answer links them", async () => {
     const year = await registrationYear();
     const family = {
-      fathersName: "Mohamed",
-      lastName: word(),
-      surname: word(),
+      fatherFirst: "Mohamed",
+      fatherMiddle: word(),
+      fatherLast: word(),
     };
-    const typo = { ...family, fathersName: "Mohammed" };
+    const typo = { ...family, fatherFirst: "Mohammed" };
     const [a, b] = [child(family), child(typo)];
     const { leadIds, contactId } = await applied([a, b], year);
     const asked = await complete({
@@ -1057,7 +1070,7 @@ describe("refusals of the call", () => {
         },
       },
       student: {
-        fullName: `${a.first} ${nameOf(a.father)}`,
+        fullName: studentNameOf(a).toLowerCase(),
         className: "KG 1",
         enrollmentYear: year,
         dayOrBoarding: "Day",
@@ -1300,17 +1313,17 @@ describe("app.sibling_defer_contact_recompute", () => {
       {
         lead_id: leadIds[0],
         first_name: kids[0].first,
-        fathers_name: family.fathersName,
-        last_name: family.lastName,
-        surname: family.surname,
+        father_first: family.fatherFirst,
+        father_middle: family.fatherMiddle,
+        father_last: family.fatherLast,
         custodian: { person: 1, father: true },
       },
       {
         lead_id: leadIds[1],
         first_name: kids[1].first,
-        fathers_name: family.fathersName,
-        last_name: family.lastName,
-        surname: family.surname,
+        father_first: family.fatherFirst,
+        father_middle: family.fatherMiddle,
+        father_last: family.fatherLast,
         custodian: { person: 1, father: true },
         sibling_of: { student: 1 },
       },
@@ -1513,7 +1526,7 @@ describe("a child linked before check-in", () => {
       ok: false,
       error: {
         kind: "invalid",
-        field: "fathers_name",
+        field: "father_full_name",
         student: 2,
         person: undefined,
         reason: "linked_member",
@@ -1523,6 +1536,98 @@ describe("a child linked before check-in", () => {
       status: "Applied",
       father_full_name: nameOf(family),
     });
+  });
+
+  // Two children from today's one-box form, so each father's name is the
+  // student's name after its first word, with no middle name, linked by
+  // that name (basis matched). Form children are legacy members of their
+  // Family's group, so the link confirms the on-file sibling's name.
+  async function oneBoxForm(kids: FormChild[]) {
+    const year = await registrationYear();
+    const sent = await submitAdmissionForm(secretClient(), {
+      submissionKey: randomUUID(),
+      parent: { fullName: `One Box ${word()}`, relationship: "Mother", phone: phone() },
+      children: kids.map((c) => ({
+        fullName: `${c.first} ${c.father.fatherFirst} ${c.father.fatherLast}`,
+        className: c.className,
+        enrollmentYear: year,
+        dayOrBoarding: "Day" as const,
+      })),
+    });
+    if (!sent.ok) throw new Error(`form failed: ${JSON.stringify(sent.error)}`);
+    const rows = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query<{ id: string; guardian_contact_id: string; father_full_name: string }>(
+            "select id, guardian_contact_id, father_full_name from public.leads where admission_number = any($1::text[]) order by array_position($1::text[], admission_number)",
+            [sent.data.map((o) => o.admissionNumber)],
+          )
+        ).rows,
+    );
+    expect(rows.map((r) => r.father_full_name)).toEqual(kids.map((c) => `${c.father.fatherFirst} ${c.father.fatherLast}`));
+    return { leadIds: rows.map((r) => r.id), contactId: rows[0].guardian_contact_id };
+  }
+
+  const twoWordsOf = (f: Father) => `${f.fatherFirst} ${f.fatherLast}`;
+
+  async function linkedOneBoxPair(count = 2) {
+    const family = fatherParts();
+    const kids = Array.from({ length: count }, () => child(family));
+    const [a, b] = kids;
+    const { leadIds, contactId } = await oneBoxForm(kids);
+    const twoWords = twoWordsOf(family);
+    for (const [index, leadId] of leadIds.slice(1).entries()) {
+      // The first link confirms the legacy sibling's name; after it the
+      // first child is in a group of its own and needs none.
+      const linked = await linkSibling(await signedIn(ADMISSIONS), {
+        leadId,
+        siblingOfLeadId: leadIds[0],
+        ...(index === 0 ? { siblingFatherFullName: twoWords } : {}),
+      });
+      expect(linked).toMatchObject({ ok: true, data: { basis: "matched" } });
+    }
+    return { a, b, kids, family, leadIds, contactId };
+  }
+
+  test("a linked sibling from the one-box form is refused at check-in with its father's middle name added, until staff settle the name", async () => {
+    const { a, b, family, leadIds, contactId } = await linkedOneBoxPair();
+    // The stored name has two words; three typed names are not the same
+    // name, so check-in refuses as before (#400).
+    expect(
+      await complete({ people: [{ contactId }], students: [checkIn(leadIds[0], a), checkIn(leadIds[1], b)] }),
+    ).toEqual({
+      ok: false,
+      error: { kind: "invalid", field: "father_full_name", student: 1, person: undefined, reason: "linked_member" },
+    });
+    for (const id of leadIds) expect(await rowOf(id)).toMatchObject({ status: "Applied" });
+
+    // Staff settle it on the lead: the three names against the sibling's two
+    // are close, so the name question comes up and nothing is saved.
+    const admissions = await signedIn(ADMISSIONS);
+    const asked = await admissions.rpc("update_lead_details", {
+      lead_id: leadIds[0],
+      changes: { father_full_name: nameOf(family) },
+    });
+    expect(asked.error?.message).toBe("father_name_question");
+    expect(JSON.parse(asked.error!.details!)).toEqual({
+      father_full_name: nameOf(family),
+      sibling_lead_id: leadIds[1],
+      sibling_father_full_name: twoWordsOf(family),
+    });
+    for (const id of leadIds) expect((await rowOf(id)).father_full_name).toBe(twoWordsOf(family));
+
+    // The typing-mistake answer writes the full name for the whole group;
+    // check-in then goes through and the link stays.
+    const settled = await admissions.rpc("update_lead_details", {
+      lead_id: leadIds[0],
+      changes: { father_full_name: nameOf(family), father_name_answer: "typo", father_name_spelling: nameOf(family) },
+    });
+    expect(settled.error).toBeNull();
+    await completed({ people: [{ contactId }], students: [checkIn(leadIds[0], a), checkIn(leadIds[1], b)] });
+    for (const id of leadIds) {
+      expect(await rowOf(id)).toMatchObject({ status: "Visited", father_full_name: nameOf(family) });
+      expect(["matched", "typo_confirmed"]).toContain((await membershipOf(id))?.basis);
+    }
   });
 });
 
@@ -1587,9 +1692,9 @@ describe("two check-ins on one group at the same time", () => {
         {
           lead_id: leadId,
           first_name: c.first,
-          fathers_name: c.father.fathersName,
-          last_name: c.father.lastName,
-          surname: c.father.surname,
+          father_first: c.father.fatherFirst,
+          father_middle: c.father.fatherMiddle,
+          father_last: c.father.fatherLast,
           custodian: { person: 1, relationship: "Mother" },
           sibling_of: { lead_id: other.leadIds[0] },
         },

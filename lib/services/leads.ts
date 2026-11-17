@@ -169,20 +169,22 @@ export async function createLead(
 export const MAX_STUDENTS_PER_FORM = 8
 
 // An adult on the form: a person on file that staff confirmed is the same
-// person (the stored details are kept), or a new one. A new person's name may
-// be left out when a student says the father is the custodian: the person
-// then takes that father's full name.
+// person (the stored details are kept), or a new one. A new person's name is
+// three parts, all required, stored in capitals (#400). All three may be left
+// out when a student says the father is the custodian: the person then takes
+// that father's full name.
 export type RegistrationPerson =
   | { contactId: string; alsoCheckPhones?: string[] }
-  | { fullName?: string; phone: string; whatsapp?: string }
+  | { firstName?: string; middleName?: string; lastName?: string; phone: string; whatsapp?: string }
 
 export type RegistrationStudent = {
-  // The four name fields. The student's name is all four; the father's full
-  // name is the three after the first.
+  // The student's own name and the father's three names, all required and
+  // stored in capitals (#400). The student's full name is firstName,
+  // fatherFirst and fatherLast; the father's full name is all three of his.
   firstName: string
-  fathersName: string
-  lastName: string
-  surname?: string
+  fatherFirst: string
+  fatherMiddle: string
+  fatherLast: string
   className: LeadClass
   enrollmentYear: number
   dayOrBoarding: DayOrBoarding
@@ -249,8 +251,13 @@ export type RegistrationInvalidField =
   | "student"
   | "also_check_phones"
   | "first_name"
-  | "fathers_name"
-  | "last_name"
+  | "father_first"
+  | "father_middle"
+  | "father_last"
+  | "father_full_name"
+  | "contact_first_name"
+  | "contact_middle_name"
+  | "contact_last_name"
   | "custodian"
   | "brought_by"
   | "brought_by_name"
@@ -273,7 +280,8 @@ export type RegisterStudentsError =
   | { kind: "forbidden" }
   // `student` or `person` names who it is about; `reason` says more for some
   // fields (`too_many`, `repeated_on_form`, `unused`, `not_found`,
-  // `father_names_differ`, `merge_needs_match`, `refused_request`).
+  // `father_names_differ`, `merge_needs_match`, `refused_request`, `one_name`
+  // for brought_by_name, `name_parts` for a one-box contact_name).
   | { kind: "invalid"; field: RegistrationInvalidField | null; student?: number; person?: number; reason?: string }
   // An on-file sibling is Declined or has a closure mark.
   | { kind: "lead-closed"; student?: number }
@@ -337,16 +345,22 @@ function questionOf(row: Record<string, unknown>): RegistrationQuestion {
 
 function personPayload(person: RegistrationPerson) {
   if ("contactId" in person) return { contact_id: person.contactId, also_check_phones: person.alsoCheckPhones ?? null }
-  return { full_name: person.fullName ?? null, phone: person.phone, whatsapp: person.whatsapp ?? null }
+  return {
+    first_name: person.firstName ?? null,
+    middle_name: person.middleName ?? null,
+    last_name: person.lastName ?? null,
+    phone: person.phone,
+    whatsapp: person.whatsapp ?? null,
+  }
 }
 
 function studentPayload(student: RegistrationStudent) {
   const { custodian, previousSchool, siblingOf, nameAnswer } = student
   return {
     first_name: student.firstName,
-    fathers_name: student.fathersName,
-    last_name: student.lastName,
-    surname: student.surname ?? null,
+    father_first: student.fatherFirst,
+    father_middle: student.fatherMiddle,
+    father_last: student.fatherLast,
     class_name: student.className,
     enrollment_year: student.enrollmentYear,
     day_or_boarding: student.dayOrBoarding,
@@ -470,9 +484,9 @@ export async function registerStudents(
 export type CheckInStudent = Pick<
   RegistrationStudent,
   | "firstName"
-  | "fathersName"
-  | "lastName"
-  | "surname"
+  | "fatherFirst"
+  | "fatherMiddle"
+  | "fatherLast"
   | "custodian"
   | "broughtBy"
   | "previousSchool"
@@ -498,7 +512,7 @@ export type CompleteAdmissionVisitError =
   | Exclude<RegisterStudentsError, { kind: "invalid" }>
   // `lead_id` reasons: `not_admission_form`, `other_submission`,
   // `not_found`, `repeated_on_form`. `sibling_of` adds `already_linked`;
-  // `fathers_name` adds `linked_member`.
+  // `father_full_name` adds `linked_member`.
   | { kind: "invalid"; field: RegistrationInvalidField | "lead_id" | null; student?: number; person?: number; reason?: string }
   // The child's visit is recorded already.
   | { kind: "not-applied"; student?: number }

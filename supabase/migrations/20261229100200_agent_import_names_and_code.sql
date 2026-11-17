@@ -372,18 +372,29 @@ begin
     end if;
 
     -- A generated code takes the next number, 001 to 999 and round again,
-    -- until its code is free. A typed code is tried once, and either saves
-    -- or raises. The unique index catches a code committed alongside.
+    -- until its code is free. Other creations take numbers from the same
+    -- sequence meanwhile, so after 999 tries the free numbers left for these
+    -- letters are looked for directly, lowest first; none left is
+    -- `no_free_code`. A typed code is tried once, and either saves or
+    -- raises. The unique index catches a code committed alongside.
     loop
         if draft.agent_code is not null then
             candidate := draft.agent_code;
-        else
+        elsif tries < 999 then
             tries := tries + 1;
-            if tries > 999 then
-                raise exception 'no_free_code' using detail = prefix;
-            end if;
             number := (nextval('public.agent_code_numbers') - 1) % 999 + 1;
             candidate := prefix || '-' || lpad(number::text, 3, '0');
+        else
+            select c.code into candidate
+            from (select prefix || '-' || lpad(g::text, 3, '0') as code from generate_series(1, 999) g) c
+            where not public.agent_code_issued(c.code)
+              and not exists (select 1 from public.leads l where l.referral_code in (c.code, public.discount_code_key(c.code)))
+              and not public.promo_code_holds_key(c.code)
+            order by c.code
+            limit 1;
+            if candidate is null then
+                raise exception 'no_free_code' using detail = prefix;
+            end if;
         end if;
         -- Skips the subtransaction below for a code already used.
         continue when draft.agent_code is null
@@ -417,8 +428,382 @@ begin
             if draft.agent_code is not null then
                 raise exception 'code_taken' using detail = draft.agent_code;
             end if;
+        when raise_exception then
+            -- refuse_agent_code_taken: a Promo code with this key committed
+            -- after the check. A generated code moves on to the next number.
+            if sqlerrm <> 'code_taken' or draft.agent_code is not null then
+                raise;
+            end if;
         end;
     end loop;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Claiming an imported agent's code (#463, owner 2026-11-17). On the
+-- Discount code page "Do you already have a Discount code? Yes" claims an
+-- agent by code. An agent imported with no mobile is matched by code and
+-- three names instead of by phone, and the mobile typed must belong to no
+-- current agent. The claim keeps the mobile and WhatsApp typed; the
+-- Manager's confirm stores them on the record with the email, only into an
+-- empty mobile, and refuses with `phone_taken` if another current agent has
+-- the mobile by then.
+-- ---------------------------------------------------------------------------
+
+alter table public.agent_events drop constraint agent_events_result_check;
+alter table public.agent_events
+    add constraint agent_events_result_check check (
+        (kind in ('invite', 'reset') and result in (
+            'started', 'sent', 'rate_limited', 'smtp_error', 'rejected_address', 'other_error', 'access_off'
+        ))
+        or (kind = 'claim' and result in ('no_match', 'phone_mismatch', 'name_mismatch'))
+    );
+-- A refused claim keeps no typed value; only no_match names no agent.
+alter table public.agent_events drop constraint agent_events_claim_check;
+alter table public.agent_events
+    add constraint agent_events_claim_check check (
+        kind <> 'claim' or (email is null and (result in ('phone_mismatch', 'name_mismatch')) = (agent_id is not null))
+    );
+
+alter table public.agent_email_claims
+    add column phone text check (phone = public.normalize_phone(phone)),
+    add column whatsapp text check (whatsapp = public.normalize_phone(whatsapp)),
+    add constraint agent_email_claims_contact_on_claim check ((phone is null and whatsapp is null) or claim_id is null);
+
+-- ---------------------------------------------------------------------------
+-- The agent guard, as 20261121120100_agent_import.sql made it, letting
+-- decide_agent_email_claim fill an empty mobile once.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.guard_marketing_agent_change()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+    writer text := case when current_user not in ('authenticated', 'anon')
+        then coalesce(current_setting('app.agent_status_change', true), '') else '' end;
+    -- decide_agent_email_claim fills an imported agent's empty mobile.
+    filling text := case when current_user not in ('authenticated', 'anon')
+        then coalesce(current_setting('app.agent_fill_mobile', true), '') else '' end;
+begin
+    if tg_op = 'INSERT' then
+        if new.retired_at is not null or new.switched_off_at is not null then
+            raise exception 'agent_status_cached';
+        end if;
+        return new;
+    end if;
+
+    if (new.retired_at is distinct from old.retired_at or new.switched_off_at is distinct from old.switched_off_at)
+       and (writer is distinct from old.id::text or old.retired_at is not null) then
+        raise exception 'agent_status_cached';
+    end if;
+    if old.retired_at is not null then
+        raise exception 'agent_locked';
+    end if;
+    if new.code is distinct from old.code
+       or (new.phone is distinct from old.phone
+           and not (old.phone is null and new.phone is not null and filling = old.id::text))
+       or new.registered_at is distinct from old.registered_at
+       or new.import_batch_id is distinct from old.import_batch_id then
+        raise exception 'agent_locked';
+    end if;
+    if old.status = 'Approved'
+       and (new.status is distinct from old.status
+            or new.approved_at is distinct from old.approved_at
+            or new.approved_by is distinct from old.approved_by) then
+        raise exception 'agent_locked';
+    end if;
+    return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- sign_up_marketing_agent, as 20261127120700_agent_email_claims.sql made it,
+-- matching an agent with no mobile by code and names.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.sign_up_marketing_agent(
+    full_name text, phone text, whatsapp text, email text, has_code boolean, code text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    draft record;
+    by_phone public.marketing_agents;
+    by_code public.marketing_agents;
+    agent public.marketing_agents;
+    waiting public.agent_email_claims;
+    made record;
+    adopt boolean;
+begin
+    if auth.role() is distinct from 'service_role' then
+        raise exception 'not_permitted';
+    end if;
+    -- Each RPC is its own transaction, so the actor is set here.
+    perform public.set_audit_actor('public_form', null);
+
+    select * into draft
+    from public.agent_draft(
+        sign_up_marketing_agent.full_name, sign_up_marketing_agent.phone, sign_up_marketing_agent.whatsapp,
+        sign_up_marketing_agent.email, sign_up_marketing_agent.code
+    );
+    if draft.agent_email is null then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'email')::text;
+    end if;
+    if coalesce(sign_up_marketing_agent.has_code, false) and draft.agent_code is null then
+        raise exception 'invalid' using detail = jsonb_build_object('field', 'code')::text;
+    end if;
+
+    if not (select a.enabled from public.agent_access() a) then
+        return jsonb_build_object('outcome', 'access_off');
+    end if;
+
+    -- The lock create_agent_record takes, so two sends with one phone wait
+    -- for each other and the second sees what the first did.
+    perform pg_advisory_xact_lock(hashtextextended('agent-phone:' || draft.agent_phone, 0));
+    select * into by_phone from public.marketing_agents a where a.phone = draft.agent_phone and a.retired_at is null;
+
+    if coalesce(sign_up_marketing_agent.has_code, false) then
+        select * into by_code from public.agent_for_code(draft.agent_code);
+        if not found or by_code.switched_off_at is not null then
+            insert into public.agent_events (kind, result) values ('claim', 'no_match');
+            return jsonb_build_object('outcome', 'no_match');
+        end if;
+        if by_code.phone is null then
+            -- An agent imported with no mobile (#463): the code and the three
+            -- names identify them, and the mobile typed must be nobody's.
+            if lower(regexp_replace(btrim(by_code.full_name), '\s+', ' ', 'g')) <> lower(draft.agent_name) then
+                insert into public.agent_events (agent_id, kind, result) values (by_code.id, 'claim', 'name_mismatch');
+                return jsonb_build_object('outcome', 'name_mismatch');
+            end if;
+            if by_phone.id is not null then
+                insert into public.agent_events (agent_id, kind, result) values (by_code.id, 'claim', 'phone_mismatch');
+                return jsonb_build_object('outcome', 'phone_mismatch');
+            end if;
+        elsif by_phone.id is distinct from by_code.id then
+            insert into public.agent_events (agent_id, kind, result) values (by_code.id, 'claim', 'phone_mismatch');
+            return jsonb_build_object('outcome', 'phone_mismatch');
+        end if;
+
+        -- Two claims on one agent wait for each other here.
+        select * into agent from public.marketing_agents a where a.id = by_code.id for update;
+        -- Switched off or retired while this waited for the row.
+        if agent.retired_at is not null or agent.switched_off_at is not null then
+            insert into public.agent_events (kind, result) values ('claim', 'no_match');
+            return jsonb_build_object('outcome', 'no_match');
+        end if;
+        if agent.user_id is not null and public.agent_joined(agent.user_id) then
+            return jsonb_build_object('outcome', 'joined');
+        end if;
+        if agent.email is not null then
+            if public.agent_invite_sent_at(agent.id, agent.email) is not null then
+                return jsonb_build_object('outcome', 'invited');
+            end if;
+            return jsonb_build_object('outcome', 'claim_waiting');
+        end if;
+
+        select * into waiting from public.agent_open_claims(agent.id) c where c.email = draft.agent_email limit 1;
+        if found then
+            if waiting.full_name = draft.agent_name then
+                return jsonb_build_object('outcome', 'claimed', 'code', agent.code);
+            end if;
+            return jsonb_build_object('outcome', 'claim_waiting');
+        end if;
+
+        if public.agent_email_taken(draft.agent_email)
+           or exists (select 1 from auth.users u where lower(u.email) = draft.agent_email) then
+            return jsonb_build_object('outcome', 'email_unusable');
+        end if;
+
+        if exists (select 1 from public.agent_open_claims(agent.id)) then
+            insert into public.agent_email_claims (agent_id, outcome, full_name, email, phone, whatsapp)
+            values (agent.id, 'competing', draft.agent_name, draft.agent_email,
+                    case when agent.phone is null then draft.agent_phone end,
+                    case when agent.phone is null then draft.agent_whatsapp end);
+            return jsonb_build_object('outcome', 'claim_waiting');
+        end if;
+        insert into public.agent_email_claims (agent_id, outcome, full_name, email, phone, whatsapp)
+        values (agent.id, 'pending', draft.agent_name, draft.agent_email,
+                case when agent.phone is null then draft.agent_phone end,
+                case when agent.phone is null then draft.agent_whatsapp end);
+        return jsonb_build_object('outcome', 'claimed', 'code', agent.code);
+    end if;
+
+    if by_phone.id is not null then
+        if by_phone.switched_off_at is null and by_phone.full_name = draft.agent_name then
+            -- A joined agent's email lives in Auth: the stored copy isn't read.
+            if by_phone.user_id is not null and public.agent_joined(by_phone.user_id) then
+                return jsonb_build_object('outcome', 'joined');
+            end if;
+            if by_phone.email is not distinct from draft.agent_email then
+                if public.agent_invite_sent_at(by_phone.id, by_phone.email) is not null then
+                    return jsonb_build_object('outcome', 'invited');
+                end if;
+                return jsonb_build_object('outcome', 'registered', 'code', by_phone.code, 'email', by_phone.email);
+            end if;
+        end if;
+        return jsonb_build_object('outcome', 'code_needed');
+    end if;
+
+    if public.agent_email_taken(draft.agent_email)
+       or exists (select 1 from auth.users u where lower(u.email) = draft.agent_email) then
+        return jsonb_build_object('outcome', 'email_unusable');
+    end if;
+
+    adopt := draft.agent_code is not null
+        and not public.agent_code_issued(draft.agent_code)
+        and not exists (select 1 from public.leads l where l.referral_code = draft.agent_code);
+
+    begin
+        select * into made
+        from public.create_agent_record(
+            draft.agent_name, draft.agent_phone, draft.agent_whatsapp, draft.agent_email,
+            case when adopt then draft.agent_code end,
+            'Pending', null
+        );
+    exception when raise_exception then
+        -- guard_login, or a creation alongside that took the email first.
+        if sqlerrm = 'email_taken' then
+            return jsonb_build_object('outcome', 'email_unusable');
+        end if;
+        raise;
+    end;
+
+    if draft.agent_code is not null and not adopt then
+        update public.marketing_agents a set typed_code = draft.agent_code where a.id = made.agent_id;
+    end if;
+
+    select * into agent from public.marketing_agents a where a.id = made.agent_id;
+    return jsonb_build_object('outcome', 'registered', 'code', agent.code, 'email', agent.email);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- agent_email_claim_queue, as 20261127120700_agent_email_claims.sql made it,
+-- with each claim's mobile and WhatsApp.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.agent_email_claim_queue()
+returns table (
+    agent_id uuid,
+    full_name text,
+    phone text,
+    code text,
+    status public.marketing_agent_status,
+    claimed_at timestamptz,
+    claims jsonb
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+    if not public.has_permission('leads.view') then
+        raise exception 'not_permitted';
+    end if;
+    return query
+        select a.id, a.full_name, a.phone, a.code, a.status, min(c.created_at), jsonb_agg(
+            jsonb_build_object('id', c.id, 'full_name', c.full_name, 'email', c.email, 'phone', c.phone, 'whatsapp', c.whatsapp, 'created_at', c.created_at)
+            order by c.created_at, c.id
+        )
+        from public.marketing_agents a
+        cross join lateral public.agent_open_claims(a.id) c
+        where a.retired_at is null and a.switched_off_at is null and a.email is null
+        group by a.id
+        order by min(c.created_at), a.id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- decide_agent_email_claim, as 20261127120700_agent_email_claims.sql made it,
+-- filling an imported agent's empty mobile on confirm.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.decide_agent_email_claim(claim_id uuid, decision text, email text)
+returns table (decided_agent_id uuid, saved_email text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+    claim public.agent_email_claims;
+    agent public.marketing_agents;
+    address text;
+    manager uuid := public.current_staff_id();
+    holder public.marketing_agents;
+begin
+    if not public.has_permission('agents.approve') then
+        raise exception 'not_permitted';
+    end if;
+    if decide_agent_email_claim.decision is null or decide_agent_email_claim.decision not in ('confirm', 'reject') then
+        raise exception 'invalid';
+    end if;
+
+    select * into claim from public.agent_email_claims c
+    where c.id = decide_agent_email_claim.claim_id and c.claim_id is null;
+    if not found then
+        raise exception 'not_found';
+    end if;
+    -- A claim carrying a mobile takes its lock first, the order creation and
+    -- Recreate take them in.
+    if claim.phone is not null then
+        perform pg_advisory_xact_lock(hashtextextended('agent-phone:' || claim.phone, 0));
+    end if;
+    -- Decisions on one agent wait for each other here.
+    select * into agent from public.marketing_agents a where a.id = claim.agent_id for update;
+    if exists (select 1 from public.agent_email_claims d where d.claim_id = claim.id) then
+        raise exception 'already_decided';
+    end if;
+
+    if decide_agent_email_claim.decision = 'reject' then
+        insert into public.agent_email_claims (agent_id, claim_id, outcome, decided_by)
+        values (agent.id, claim.id, 'rejected', manager);
+        return query select agent.id, null::text;
+        return;
+    end if;
+
+    if agent.retired_at is not null then
+        raise exception 'retired';
+    end if;
+    if agent.switched_off_at is not null then
+        raise exception 'switched_off';
+    end if;
+    if agent.email is not null then
+        raise exception 'has_email';
+    end if;
+    -- An agent imported with no mobile takes the mobile and WhatsApp the
+    -- claim typed (#463), unless another current agent has that mobile now.
+    -- A stored mobile is never changed.
+    if agent.phone is null and claim.phone is not null then
+        select * into holder from public.marketing_agents a where a.phone = claim.phone and a.retired_at is null;
+        if found then
+            raise exception 'phone_taken' using detail = public.agent_ref(holder)::text;
+        end if;
+    end if;
+    address := coalesce(nullif(lower(btrim(coalesce(decide_agent_email_claim.email, ''))), ''), claim.email);
+    perform 1 from public.set_marketing_agent_email(agent.id, address);
+    if agent.phone is null and claim.phone is not null then
+        perform set_config('app.agent_fill_mobile', agent.id::text, true);
+        update public.marketing_agents a
+        set phone = claim.phone,
+            whatsapp = coalesce(a.whatsapp, nullif(claim.whatsapp, claim.phone))
+        where a.id = agent.id;
+        perform set_config('app.agent_fill_mobile', '', true);
+    end if;
+
+    insert into public.agent_email_claims (agent_id, claim_id, outcome, email, decided_by)
+    values (agent.id, claim.id, 'confirmed', address, manager);
+    insert into public.agent_email_claims (agent_id, claim_id, outcome, decided_by)
+    select agent.id, o.id, 'auto_rejected', manager
+    from public.agent_open_claims(agent.id) o
+    where o.id <> claim.id;
+
+    return query select agent.id, address;
 end;
 $$;
 

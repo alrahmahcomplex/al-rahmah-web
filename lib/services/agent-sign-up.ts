@@ -33,6 +33,8 @@ export type SignUpOutcome =
   | { kind: "code_needed" }
   // Box ticked: the code's record has another phone.
   | { kind: "phone_mismatch" }
+  // The code's agent was imported with no mobile, and the names typed are not theirs (#463).
+  | { kind: "name_mismatch" }
   // Box ticked: no current record holds the code (or it is switched off).
   | { kind: "no_match" }
   // A claim is already waiting, or the record's email awaits its invite.
@@ -68,6 +70,7 @@ function outcomeOf(row: Row | null): SignUpOutcome | null {
       return row.code ? { kind: "claimed", code: row.code } : null
     case "code_needed":
     case "phone_mismatch":
+    case "name_mismatch":
     case "no_match":
     case "claim_waiting":
     case "invited":

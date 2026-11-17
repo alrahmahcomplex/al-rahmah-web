@@ -13,6 +13,7 @@ import type { DiscountCodeState } from "./outcome"
 const MESSAGES: Record<Exclude<SignUpOutcome["kind"], "registered" | "claimed">, DiscountCodeState> = {
   code_needed: { status: "code-needed" },
   phone_mismatch: { status: "phone-mismatch" },
+  name_mismatch: { status: "name-mismatch" },
   no_match: { status: "no-match" },
   claim_waiting: { status: "claim-waiting" },
   invited: { status: "invited" },

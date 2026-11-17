@@ -4,6 +4,7 @@ import type { AgentInviteError, SentInvite } from "@/lib/services/agent-invites"
 import type { Result } from "@/lib/services/result"
 
 import { inviteOutcome } from "./invite-outcome"
+import { phoneTakenLine } from "./outcome"
 
 // The Agents screen's words for the "Awaiting email confirmation" queue
 // (#193). Confirming stands whatever the invite email does, as approving
@@ -11,7 +12,7 @@ import { inviteOutcome } from "./invite-outcome"
 
 export type ClaimOutcome = { status: "done"; message: string } | { status: "refused"; message: string }
 
-const REFUSALS: Record<Exclude<ClaimDecisionError["kind"], "email-taken">, string> = {
+const REFUSALS: Record<Exclude<ClaimDecisionError["kind"], "email-taken" | "phone-taken">, string> = {
   forbidden: "You don't have permission to decide email claims.",
   "not-found": "This claim could not be found. Reload the page.",
   "already-decided": "This claim was already decided. Reload the page.",
@@ -25,6 +26,7 @@ const REFUSALS: Record<Exclude<ClaimDecisionError["kind"], "email-taken">, strin
 
 export function claimRefusal(error: ClaimDecisionError | { kind: "signed-out" }): string {
   if (error.kind === "signed-out") return "Your session has ended. Sign in again, then try again."
+  if (error.kind === "phone-taken") return phoneTakenLine(error.agent)
   if (error.kind !== "email-taken") return REFUSALS[error.kind]
   return emailTakenMessage(error)
 }

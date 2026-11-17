@@ -42,6 +42,8 @@ export function ClaimQueue({ entries, canApprove }: { entries: QueueEntry[]; can
 
 function ClaimCard({ entry, canApprove }: { entry: QueueEntry; canApprove: boolean }) {
   const others = entry.claims.length - 1
+  // An agent imported with no mobile (#463): the number the oldest claim typed.
+  const phone = entry.phone ?? entry.claims[0]?.phone ?? null
   return (
     <Card
       title={
@@ -59,13 +61,15 @@ function ClaimCard({ entry, canApprove }: { entry: QueueEntry; canApprove: boole
       }
     >
       <div className="ag-card-body">
-        <Note tone="wait">
-          Phone {entry.fullName} on{" "}
-          <a href={`tel:${entry.phone}`} className="ag-link">
-            {displayPhone(entry.phone)}
-          </a>{" "}
-          to check this email is theirs.
-        </Note>
+        {phone && (
+          <Note tone="wait">
+            Phone {entry.fullName} on{" "}
+            <a href={`tel:${phone}`} className="ag-link">
+              {displayPhone(phone)}
+            </a>{" "}
+            to check this email is theirs.
+          </Note>
+        )}
         {others > 0 && (
           <p className="ag-p ag-strong">
             {others} other {others === 1 ? "attempt" : "attempts"}: confirming one rejects the rest.
@@ -107,6 +111,8 @@ function ClaimRow({ entry, claim, canApprove }: { entry: QueueEntry; claim: Queu
         items={[
           { key: "Typed name", value: claim.fullName },
           { key: "Email", value: claim.email },
+          // What a claim on an agent imported with no mobile typed (#463).
+          ...(claim.phone ? [{ key: "Mobile", value: displayPhone(claim.phone) }] : []),
           { key: "Claimed", value: <time dateTime={claim.claimedAt}>{WHEN.format(new Date(claim.claimedAt))}</time> },
         ]}
       />

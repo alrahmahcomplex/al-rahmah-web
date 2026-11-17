@@ -353,7 +353,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(code).toHaveValue("AAN-132")
     await next(user, "en")
     expect(screen.getByRole("button", { name: WORDS.en.sendClaim })).toBeInTheDocument()
-    expect(screen.getByText("We match this code to your phone number. The school then confirms it.")).toBeInTheDocument()
+    expect(screen.getByText("We match this code to your phone number or your names. The school then confirms it.")).toBeInTheDocument()
 
     // Changing the answer to No drops the code box and its code.
     await user.click(screen.getByRole("button", { name: "Change Answer" }))

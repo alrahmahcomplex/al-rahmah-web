@@ -3,6 +3,7 @@ import { randomInt, randomUUID } from "node:crypto"
 import type { Client } from "pg"
 import { describe, expect, onTestFinished, test } from "vitest"
 
+import { onFileQuestion, payload, type Answers, type OnFileFee, type OnFileLink } from "@/app/staff/check-in/new/model"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
@@ -10,6 +11,7 @@ import { declineLead } from "@/lib/services/lead-closure"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import {
   createLead,
+  getFathersOfLeads,
   LEAD_CLASSES,
   registerStudents,
   updateGuardianContact,
@@ -19,6 +21,7 @@ import {
   type RegistrationStudent,
 } from "@/lib/services/leads"
 import { recordPayment } from "@/lib/services/school-fee-payments"
+import { explainSiblingGroup } from "@/lib/services/sibling-counts"
 import { editSiblingFee, linkSibling } from "@/lib/services/sibling-groups"
 import { decideSiblingRequest, requestSiblingDiscount } from "@/lib/services/sibling-requests"
 
@@ -770,6 +773,127 @@ describe("siblings on file", () => {
     expect(newcomer.sibling).toMatchObject({ basis: "matched" })
     expect(await membershipOf(refused)).toMatchObject({ basis: "refused" })
     expect((await storedResultOf(refused)).result).not.toBe("ten")
+  })
+})
+
+// #308 review round 5: the Register students form sends what its own model
+// builds. These feed that payload to the save for a child on file whose group
+// counts by another father's name, which the child itself waits on.
+describe("the form's own payload, for a child on file that waits on a Sibling request", () => {
+  // One new child with the waiting child's father's name, and Yes to that child.
+  function yesTo(waiting: string, father: Father, links?: Record<number, OnFileLink>): Answers {
+    return {
+      students: [{ key: 1, name: { firstName: word(), ...father }, className: "KG 1", board: "Day" }],
+      custodians: {
+        1: { kind: "new", name: { firstName: "Register", middleName: "Parent", lastName: word() }, phone: phone(), whatsapp: "", relationship: "Mother", description: "" },
+      },
+      onFileAsks: [{ student: 1, leadId: waiting, name: "ON FILE", admissionNumber: "ADMSN-00000", father: nameOf(father), fromSave: true }],
+      onFile: { 1: { leadId: waiting, yes: true, ...(links ? { links } : {}) } },
+    }
+  }
+
+  // What readOnFileSibling gives the form, from the same two reads.
+  async function readOf(leadId: string): Promise<OnFileFee> {
+    const admissions = await signedIn(ADMISSIONS)
+    const explained = await explainSiblingGroup(admissions, leadId)
+    if (!explained.ok) throw new Error(`no group: ${explained.error}`)
+    const members = explained.data.members
+    const fathers = await getFathersOfLeads(admissions, members.map((m) => m.leadId))
+    if (!fathers.ok) throw new Error("no fathers")
+    const self = members.find((m) => m.leadId === leadId)!
+    const counts = (basis: string | null) => basis === "matched" || basis === "typo_confirmed" || basis === "granted"
+    return {
+      leadId,
+      name: self.studentName,
+      className: self.className,
+      status: self.status,
+      fee: null,
+      pays: null,
+      anchorName: null,
+      fullPayerName: null,
+      groupId: explained.data.groupId,
+      father: fathers.data[leadId] ?? null,
+      counted: members
+        .filter((m) => m.leadId !== leadId && !m.legacy && counts(m.basis))
+        .map((m) => ({ leadId: m.leadId, name: m.studentName, father: fathers.data[m.leadId] })),
+      selfCounts: !self.legacy && counts(self.basis),
+      mayPayFull: false,
+    }
+  }
+
+  async function save(a: Answers, year: number, reads: Record<string, OnFileFee> = {}) {
+    return register(payload(a, year, reads))
+  }
+
+  test("different names: a plain Yes is asked for a note, and the form's request answer saves as a Sibling request", async () => {
+    const year = await registrationYear()
+    const [theirs, ours] = [fatherParts(), fatherParts()]
+    const counted = await onFile(nameOf(theirs), "STD 2")
+    const waiting = await onFile(nameOf(ours), "KG 1")
+    expect(await linkSibling(await signedIn(ADMISSIONS), { leadId: waiting, siblingOfLeadId: counted })).toMatchObject({
+      ok: true,
+      data: { kind: "linked", basis: "request_needed" },
+    })
+
+    // A Yes with no answer: the save compares with the counting member, not with the child that waits.
+    expect(await save(yesTo(waiting, ours), year)).toMatchObject({
+      ok: true,
+      data: { kind: "questions", questions: [{ kind: "request-note", student: 1, siblingLeadId: waiting }] },
+    })
+
+    // The form reads the group and asks the same thing before it saves.
+    const reads = { [waiting]: await readOf(waiting) }
+    expect(reads[waiting]).toMatchObject({ selfCounts: false, counted: [{ leadId: counted, father: nameOf(theirs) }] })
+    expect(onFileQuestion(yesTo(waiting, ours), reads, 1)).toMatchObject({ student: 1, compared: { tier: "different", theirs: nameOf(theirs) } })
+
+    const requestId = randomUUID()
+    const answered = yesTo(waiting, ours, { 1: { kind: "request", note: "", requestId, close: false, against: nameOf(theirs) } })
+    expect(onFileQuestion(answered, reads, 1)).toBeNull()
+    const saved = await save(answered, year, reads)
+    if (!saved.ok || saved.data.kind !== "created") throw new Error(`not created: ${JSON.stringify(saved)}`)
+    const [newcomer] = saved.data.students
+    expect(newcomer.sibling).toMatchObject({ basis: "request_needed" })
+    expect(await membershipOf(newcomer.leadId)).toMatchObject({ basis: "request_needed", sibling_of_lead_id: waiting })
+    const request = await inRolledBackTransaction(async (sql) =>
+      (await sql.query("select state, kind, lead_id, note from public.discount_requests where request_id = $1", [requestId])).rows[0],
+    )
+    expect(request).toMatchObject({ state: "pending", kind: "sibling", lead_id: newcomer.leadId, note: "Fathers' names don't match." })
+    expect(await feeOf(newcomer.leadId)).toMatchObject({ discount: null })
+  })
+
+  test("close names: a plain Yes is asked one name or two, and the form's typing-mistake answer saves the child as a sibling", async () => {
+    const year = await registrationYear()
+    const ours = fatherParts()
+    const theirs: Father = { ...ours, fatherLast: `${ours.fatherLast}a` }
+    const counted = await onFile(nameOf(theirs), "STD 2")
+    const waiting = await onFile(nameOf(ours), "KG 1")
+    // The child on file was called another man's child: it waits on a request.
+    expect(await linkSibling(await signedIn(ADMISSIONS), { leadId: waiting, siblingOfLeadId: counted, answer: "different" })).toMatchObject({
+      ok: true,
+      data: { kind: "linked", basis: "request_needed" },
+    })
+
+    expect(await save(yesTo(waiting, ours), year)).toMatchObject({
+      ok: true,
+      data: {
+        kind: "questions",
+        questions: [{ kind: "name", student: 1, fatherFullName: nameOf(ours), siblingFatherFullName: nameOf(theirs), siblingLeadId: counted }],
+      },
+    })
+
+    const reads = { [waiting]: await readOf(waiting) }
+    expect(onFileQuestion(yesTo(waiting, ours), reads, 1)).toMatchObject({ student: 1, compared: { tier: "close", theirs: nameOf(theirs) } })
+
+    const answered = yesTo(waiting, ours, { 1: { kind: "typo", spelling: nameOf(theirs), against: nameOf(theirs) } })
+    expect(onFileQuestion(answered, reads, 1)).toBeNull()
+    const saved = await save(answered, year, reads)
+    if (!saved.ok || saved.data.kind !== "created") throw new Error(`not created: ${JSON.stringify(saved)}`)
+    const [newcomer] = saved.data.students
+    expect(newcomer.sibling).toMatchObject({ basis: "typo_confirmed" })
+    // The right spelling is on the new child, and on the waiting child that held the replaced one.
+    expect((await rowOf(newcomer.leadId)).father_full_name).toBe(nameOf(theirs))
+    expect((await rowOf(waiting)).father_full_name).toBe(nameOf(theirs))
+    expect(await membershipOf(waiting)).toMatchObject({ basis: "request_needed" })
   })
 })
 

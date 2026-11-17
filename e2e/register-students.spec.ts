@@ -195,6 +195,65 @@ test.describe("registering a family", () => {
     expect(await siblingResult(full(b, two))).toMatchObject({ rel: "Mother", brought: "REHEMA SAID", result: "none" })
   })
 
+  test("Yes to a child on file that waits on a Sibling request asks about the father its family counts by, and saves as a request", async ({ page }) => {
+    await signIn(page, ADMISSIONS)
+    await start(page)
+    const [one, two] = [father(), father()]
+    const [a, b, c] = [word("BAKARI"), word("LATIFA"), word("CHAUSIKU")]
+    const mum = [word("MWAJUMA"), word("SAID"), word("KOMBO")]
+    const number = phone()
+
+    // On file: B waits on a Sibling request in A's family, which counts by A's father.
+    await student(page, a, one, "FORM 1", "Day")
+    await another(page)
+    await student(page, b, two, "FORM 1", "Day")
+    await pick(page, new RegExp(`^Sibling of ${full(a, one)}`))
+    await page.getByRole("dialog", { name: "The fathers’ names don’t match" }).getByRole("button", { name: "Request the discount" }).click()
+    await go(page, "No, go to custodians").click()
+    const first = open(page)
+    await first.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
+    await expect(first.locator(".kit-rv[data-open]").getByRole("textbox", { name: "First name" })).toBeVisible()
+    await first.getByRole("textbox", { name: "First name" }).fill(mum[0])
+    await first.getByRole("textbox", { name: "Middle name" }).fill(mum[1])
+    await first.getByRole("textbox", { name: "Last name" }).fill(mum[2])
+    await pick(page, "Mother")
+    await go(page, "Continue").click()
+    await pick(page, new RegExp(`^${mum.join(" ")}`))
+    await finish(page, 2)
+    await expect(page.getByRole("heading", { name: "2 students registered" })).toBeVisible({ timeout: 15_000 })
+
+    // A new child with B's father's name, under the same mother.
+    await page.getByRole("button", { name: "Register another family" }).click()
+    await student(page, c, two, "FORM 1", "Day")
+    await go(page, "No, go to custodians").click()
+    const step = open(page)
+    await step.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
+    await expect(step.getByText(`This number is on file for ${mum.join(" ")}`)).toBeVisible()
+    await pick(page, "Same person", step)
+    await pick(page, "Mother")
+    await go(page, "Continue").click()
+
+    await expect(page.getByRole("heading", { name: `${c} and ${b} have the same father’s name. Are they siblings?` })).toBeVisible()
+    await pick(page, new RegExp(`^Yes, sibling of ${full(b, two)}`))
+    // B's own name is the same, but B does not count yet: the save compares with A's father.
+    const sheet = page.getByRole("dialog", { name: "The fathers’ names don’t match" })
+    await expect(sheet).toContainText(one.join(" "))
+    await expect(sheet).toContainText(two.join(" "))
+    await sheet.getByRole("button", { name: "Request the discount" }).click()
+    await expect(page.getByText(/different fathers’ names, discount requested/)).toBeVisible()
+    await pick(page, new RegExp(`^${mum.join(" ")}`))
+    await go(page, /NO CODE/).click()
+    const fees = open(page).getByRole("table")
+    await expect(fees.getByRole("row", { name: new RegExp(full(c, two)) })).toContainText("10% requested · waits for the Manager")
+    await expect(fees.getByRole("row", { name: new RegExp(full(b, two)) })).toContainText("Fee kept")
+    await go(page, "Looks right").click()
+    await go(page, "Register 1 student").click()
+
+    await expect(page.getByRole("heading", { name: "1 student registered" })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText("1 discount request waits for the Admissions Manager. Remind the family to bring proof.")).toBeVisible()
+    expect(await siblingResult(full(c, two))).toMatchObject({ rel: "Mother", result: "none" })
+  })
+
   test("a failed save keeps the answers; registering again names the student already on file", async ({ page, allowConsoleError }) => {
     allowConsoleError(/^console\.error: Failed to load resource: net::ERR_FAILED \(http:\/\/[^)]+\/staff\/check-in\/new\)$/, "this test drops the save")
     await signIn(page, ADMISSIONS)

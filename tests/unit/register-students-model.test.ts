@@ -9,6 +9,8 @@ import {
   isEmpty,
   linking,
   onFileAnswer,
+  onFileLinks,
+  onFileQuestion,
   otherFather,
   payload,
   people,
@@ -23,6 +25,7 @@ import {
   type BandFees,
   type FeeTable,
   type KnownContact,
+  type OnFileFee,
   type Student,
 } from "@/app/staff/check-in/new/model"
 
@@ -49,6 +52,23 @@ const student = (key: number, first: string, father: string, more: Partial<Stude
   ...more,
 })
 const form = (students: Student[], more: Partial<Answers> = {}): Answers => ({ students, custodians: {}, onFileAsks: [], onFile: {}, ...more })
+// A child on file as the form reads it: in no sibling group yet, and free to be the full payer.
+const onFileFee = (more: Partial<OnFileFee> = {}): OnFileFee => ({
+  leadId: "L1",
+  name: "SALMA JUMA MRISHO",
+  className: "STD 4",
+  status: "Visited",
+  fee: 1_300_000,
+  pays: 1_300_000,
+  anchorName: null,
+  fullPayerName: null,
+  groupId: null,
+  father: "JUMA SALIM MRISHO",
+  counted: [],
+  selfCounts: true,
+  mayPayFull: true,
+  ...more,
+})
 
 describe("the year a student joins", () => {
   test("is the coming intake: this year before April, next year from April", () => {
@@ -153,7 +173,7 @@ describe("the fee step's preview", () => {
         onFile: { 1: { leadId: "L1", yes: true } },
         ...more,
       }),
-    fees: { L1: { leadId: "L1", name: "SALMA JUMA MRISHO", className: "STD 4", status: "Visited", fee, pays: fee, anchorName: null, fullPayerName: null } },
+    fees: { L1: onFileFee({ fee, pays: fee }) },
   })
 
   test("a child on file with the same fee wins the tie: it is older, so it pays full", () => {
@@ -192,9 +212,7 @@ describe("the fee step's preview", () => {
       onFileAsks: [{ student: 1, leadId: "L1", name: "SALMA JUMA MRISHO", admissionNumber: "ADMSN-1", father: "JUMA SALIM MRISHO", fromSave: true }],
       onFile: { 1: { leadId: "L1", yes: true } },
     })
-    const p = feePreview(a, FEES, 2027, {
-      L1: { leadId: "L1", name: "SALMA JUMA MRISHO", className: "STD 4", status: "Enrolled", fee: 1_300_000, pays: 1_300_000, anchorName: "SALMA JUMA MRISHO", fullPayerName: null },
-    })!
+    const p = feePreview(a, FEES, 2027, { L1: onFileFee({ status: "Enrolled", anchorName: "SALMA JUMA MRISHO", mayPayFull: false }) })!
     expect(p.rows.map((r) => r.why)).toEqual(["Sibling 10% · SALMA is Enrolled", "Fee kept · already Enrolled"])
     expect(p.enrolledOnFile).toBe("SALMA JUMA MRISHO")
     expect(p.total).toBe(1_500_000 * 0.9)
@@ -205,9 +223,7 @@ describe("the fee step's preview", () => {
       onFileAsks: [{ student: 1, leadId: "L1", name: "SALMA JUMA MRISHO", admissionNumber: "ADMSN-1", father: "JUMA SALIM MRISHO", fromSave: true }],
       onFile: { 1: { leadId: "L1", yes: true } },
     })
-    const p = feePreview(a, FEES, 2027, {
-      L1: { leadId: "L1", name: "SALMA JUMA MRISHO", className: "STD 4", status: "Visited", fee: 1_300_000, pays: 1_300_000, anchorName: null, fullPayerName: null },
-    })!
+    const p = feePreview(a, FEES, 2027, { L1: onFileFee() })!
     expect(p.rows.map((r) => [r.name, r.why, r.pays])).toEqual([
       ["NEEMA JUMA MRISHO", "Pays full · highest fee", 1_500_000],
       ["SALMA JUMA MRISHO", "Sibling 10% · NEEMA pays full", 1_300_000 * 0.9],
@@ -513,7 +529,7 @@ describe("children on file (review round 3)", () => {
     const a = form(students, { custodians: { 1: known(holder("c2", [Y])), 2: mother }, onFile: { 2: { leadId: "X", yes: true } } })
     expect(onFileAnswer(a, 2)).toBeUndefined()
     expect(payload(a, 2027).students[1].siblingOf).toBeUndefined()
-    const fee = { leadId: "Y", name: Y.studentName, className: "STD 4", status: "Enrolled", fee: 1_300_000, pays: 1_300_000, anchorName: Y.studentName, fullPayerName: null }
+    const fee = onFileFee({ leadId: "Y", name: Y.studentName, status: "Enrolled", anchorName: Y.studentName, father: OMARI, mayPayFull: false })
     expect(feePreview(a, FEES, 2027, { Y: fee, X: { ...fee, leadId: "X" } })!.rows.map((r) => r.why)).toEqual(["No discount", "No discount"])
   })
 
@@ -539,6 +555,163 @@ describe("children on file (review round 3)", () => {
     expect(onFileAnswer({ ...withSalimu, onFile: { 1: { leadId: "U", yes: true } } }, 1)).toBeUndefined()
     const withSalim = form(typo, { custodians: { 1: known(holder("c1", [child("S", "SALMA JUMA MRISHO", SALIM)])) }, onFile: { 1: { leadId: "S", yes: true } } })
     expect(payload(withSalim, 2027).students[0]).toMatchObject({ siblingOf: { leadId: "S" }, siblingFatherFullName: SALIM })
+  })
+})
+
+describe("a child on file's sibling group (review round 5)", () => {
+  const SALIM = "JUMA SALIM MRISHO"
+  const SALIMU = "JUMA SALIMU MRISHO"
+  const OMARI = "OMARI JUMA HASSAN"
+  const contact: KnownContact = {
+    id: "c1",
+    fullName: "MWAJUMA SAID KOMBO",
+    phone: "+255712000111",
+    whatsapp: null,
+    children: [{ id: "X", admissionNumber: "ADMSN-X", studentName: "SALMA JUMA MRISHO", className: "STD 4", status: "Visited", closure: null, fatherFullName: SALIM }],
+  }
+  const known: Answers["custodians"][number] = { kind: "known", contact, phone: "0712000111", whatsapp: "", relationship: "Mother", description: "" }
+  // SALMA waits on a Sibling request in a group that counts by REHEMA's father.
+  const pending = (father: string) => onFileFee({ leadId: "X", groupId: "G", counted: [{ leadId: "Y", name: "REHEMA OMARI HASSAN", father }], selfCounts: false, mayPayFull: false })
+  const request = (requestId: string, against = OMARI, note = "") => ({ kind: "request" as const, note, requestId, close: false, against })
+  // The first student's household answered Yes to SALMA, with these sheet answers.
+  const yes = (students: Student[], links?: NonNullable<Answers["onFile"][number]["links"]>): Answers =>
+    form(students, { custodians: { 1: known }, onFile: { 1: { leadId: "X", yes: true, ...(links ? { links } : {}) } } })
+  const neema = [student(1, "NEEMA", SALIM)]
+
+  test("a Yes is compared with the name the child's group counts by, never with a child that waits on a Sibling request", () => {
+    const a = yes(neema)
+    const reads = { X: pending(OMARI) }
+    const compared = { tier: "different", with: null, theirs: OMARI, onFile: "REHEMA OMARI HASSAN", father: SALIM }
+    expect(linking(a.students, onFileLinks(a, reads)).onFile.get(1)).toEqual(compared)
+    expect(onFileQuestion(a, reads, 1)).toEqual({ student: 1, compared })
+    // Until staff answer, NEEMA is linked to nobody: no 10% on a guess.
+    expect(linking(a.students, onFileLinks(a, reads)).basis.get(1)).toBeUndefined()
+    // In no group, or counted by its group, the child itself is compared: the same name, and nothing to ask.
+    expect(onFileQuestion(a, { X: onFileFee({ leadId: "X" }) }, 1)).toBeNull()
+    expect(onFileQuestion(a, { X: { ...pending(OMARI), selfCounts: true } }, 1)).toBeNull()
+  })
+
+  test("a different name is a Sibling request: the note and the request go with the link to the child on file", () => {
+    const reads = { X: pending(OMARI) }
+    const a = yes(neema, { 1: request("r-1", OMARI, " Proof is coming. ") })
+    expect(onFileQuestion(a, reads, 1)).toBeNull()
+    expect(payload(a, 2027, reads).students[0]).toMatchObject({
+      siblingOf: { leadId: "X" },
+      siblingFatherFullName: SALIM,
+      nameAnswer: { answer: "different" },
+      requestNote: "Proof is coming.",
+      requestId: "r-1",
+    })
+    expect(payload(yes(neema, { 1: request("r-1") }), 2027, reads).students[0].requestNote).toBe("Fathers' names don't match.")
+    // NEEMA waits for the Manager, and the child on file keeps the fee it has.
+    expect(feePreview(a, FEES, 2027, reads)!.rows.map((r) => [r.name, r.why, r.pays])).toEqual([
+      ["NEEMA JUMA MRISHO", "10% requested · waits for the Manager", 1_400_000],
+      ["SALMA JUMA MRISHO", "Fee kept", 1_300_000],
+    ])
+    // An answer given about another name is no answer.
+    expect(onFileQuestion(yes(neema, { 1: request("r-1", SALIMU) }), reads, 1)).not.toBeNull()
+  })
+
+  test("a close name asks one name or two: a typing mistake sends its spelling, two names send a request", () => {
+    const reads = { X: pending(SALIMU) }
+    expect(onFileQuestion(yes(neema), reads, 1)).toMatchObject({ student: 1, compared: { tier: "close", theirs: SALIMU } })
+
+    const typo = yes(neema, { 1: { kind: "typo", spelling: SALIMU, against: SALIMU } })
+    expect(onFileQuestion(typo, reads, 1)).toBeNull()
+    const sent = payload(typo, 2027, reads).students[0]
+    expect(sent).toMatchObject({ siblingOf: { leadId: "X" }, nameAnswer: { answer: "typo", spelling: SALIMU } })
+    expect(sent.requestNote).toBeUndefined()
+    expect(linking(typo.students, onFileLinks(typo, reads)).basis.get(1)).toBe("typo_confirmed")
+    // A spelling that is neither name would be refused by the save: asked again.
+    expect(onFileQuestion(yes(neema, { 1: { kind: "typo", spelling: OMARI, against: SALIMU } }), reads, 1)).not.toBeNull()
+
+    const two = yes(neema, { 1: { ...request("r-2", SALIMU), close: true } })
+    expect(onFileQuestion(two, reads, 1)).toBeNull()
+    expect(payload(two, 2027, reads).students[0]).toMatchObject({ nameAnswer: { answer: "different" }, requestNote: "Fathers' names don't match.", requestId: "r-2" })
+  })
+
+  test("each sibling linked to that student is compared with the group's name too, and asked in turn", () => {
+    const two = [...neema, student(2, "HAMISI", SALIM, { sibling: { kind: "match", of: 1, seen: [1] } })]
+    const reads = { X: pending(OMARI) }
+    // NEEMA waits on a request, so HAMISI is not compared with her: the group still counts by REHEMA's father.
+    expect(onFileQuestion(yes(two, { 1: request("r-1") }), reads, 1)).toMatchObject({ student: 2, compared: { tier: "different", theirs: OMARI, onFile: "REHEMA OMARI HASSAN" } })
+    const both = yes(two, { 1: request("r-1"), 2: request("r-2") })
+    expect(onFileQuestion(both, reads, 1)).toBeNull()
+    expect(payload(both, 2027, reads).students[1]).toMatchObject({
+      siblingOf: { student: 1 },
+      nameAnswer: { answer: "different" },
+      requestNote: "Fathers' names don't match.",
+      requestId: "r-2",
+    })
+    expect(feePreview(both, FEES, 2027, reads)!.rows.map((r) => r.why)).toEqual([
+      "10% requested · waits for the Manager",
+      "10% requested · waits for the Manager",
+      "Fee kept",
+    ])
+
+    // A typing mistake that takes the group's spelling: NEEMA's record now holds it, so HAMISI's name is close to hers.
+    const close = { X: pending(SALIMU) }
+    expect(onFileQuestion(yes(two, { 1: { kind: "typo", spelling: SALIMU, against: SALIMU } }), close, 1)).toMatchObject({ student: 2, compared: { tier: "close", theirs: SALIMU } })
+    // One that keeps NEEMA's spelling corrects the group instead: HAMISI's name is the same there, and nothing is asked.
+    const kept = yes(two, { 1: { kind: "typo", spelling: SALIM, against: SALIMU } })
+    expect(onFileQuestion(kept, close, 1)).toBeNull()
+    expect(payload(kept, 2027, close).students[1]).toMatchObject({ siblingOf: { student: 1 } })
+    expect(payload(kept, 2027, close).students[1].nameAnswer).toBeUndefined()
+  })
+
+  test("an answer to a question the save itself asked is sent as given, whatever the form read of the group", () => {
+    // The form read SALMA as in no group and asked nothing; the save then asked for a Sibling request.
+    const reads = { X: onFileFee({ leadId: "X" }) }
+    const a = yes(neema, { 1: { ...request("r-9"), fromSave: true } })
+    expect(onFileQuestion(a, reads, 1)).toBeNull()
+    expect(payload(a, 2027, reads).students[0]).toMatchObject({ siblingOf: { leadId: "X" }, requestNote: "Fathers' names don't match.", requestId: "r-9" })
+    expect(feePreview(a, FEES, 2027, reads)!.rows[0].why).toBe("10% requested · waits for the Manager")
+  })
+
+  test("two households linked to the same child on file are one group, with one full payer between them", () => {
+    // HAMISI has the same father's name and his own household: staff said he is not NEEMA's sibling, then Yes to SALMA for both.
+    const students = [...neema, student(2, "HAMISI", SALIM, { className: "FORM 1", board: "Boarding", sibling: { kind: "none", seen: [1] } })]
+    const a = form(students, {
+      custodians: { 1: known, 2: { kind: "same", relationship: "Uncle", description: "" } },
+      onFile: { 1: { leadId: "X", yes: true }, 2: { leadId: "X", yes: true } },
+    })
+    const reads = { X: onFileFee({ leadId: "X" }) }
+    const link = linking(a.students, onFileLinks(a, reads))
+    expect(link.group.get(1)).toBe(link.group.get(2))
+    const p = feePreview(a, FEES, 2027, reads)!
+    expect(p.rows.map((r) => [r.key, r.why, r.pays])).toEqual([
+      ["1", "Sibling 10% · same father", 1_400_000 * 0.9],
+      ["2", "Pays full · highest fee", 3_000_000],
+      ["file:X", "Sibling 10% · HAMISI pays full", 1_300_000 * 0.9],
+    ])
+    expect(p.total).toBe(1_400_000 * 0.9 + 3_000_000)
+    // The dearest of them all on file pays full, and both new students get the 10%.
+    const dear = feePreview(a, FEES, 2027, { X: onFileFee({ leadId: "X", fee: 3_500_000, pays: 3_500_000 }) })!
+    expect(dear.rows.map((r) => r.why)).toEqual(["Sibling 10% · same father", "Sibling 10% · same father", "Pays full · highest fee"])
+  })
+
+  test("a child on file the database may not choose is never the full payer, and keeps the fee it has", () => {
+    // SALMA's fee is the highest, but she holds a larger discount (or a manual or fixed result): half of TZS 1,600,000.
+    const held = onFileFee({ leadId: "X", fee: 1_600_000, pays: 800_000, mayPayFull: false })
+    const p = feePreview(yes(neema), FEES, 2027, { X: held })!
+    expect(p.rows.map((r) => [r.name, r.why, r.off, r.pays])).toEqual([
+      ["NEEMA JUMA MRISHO", "Pays full · highest fee", 0, 1_400_000],
+      ["SALMA JUMA MRISHO", "Fee kept", 0, 800_000],
+    ])
+    expect(p.total).toBe(1_400_000)
+    // Free to be chosen, she pays full and NEEMA gets the 10%.
+    const free = feePreview(yes(neema), FEES, 2027, { X: { ...held, pays: 1_600_000, mayPayFull: true } })!
+    expect(free.rows.map((r) => [r.why, r.pays])).toEqual([
+      ["Sibling 10% · same father", 1_400_000 * 0.9],
+      ["Pays full · highest fee", 1_600_000],
+    ])
+    // Two new siblings beside her: the tie between them stands, and her fee is still kept.
+    const pair = [...neema, student(2, "HAMISI", SALIM, { sibling: { kind: "match", of: 1, seen: [1] } })]
+    expect(feePreview(yes(pair), FEES, 2027, { X: held })!.rows.map((r) => [r.why, r.pays])).toEqual([
+      ["Equal fees · one pays full, one gets 10%", 1_400_000 * 0.9],
+      ["Equal fees · one pays full, one gets 10%", 1_400_000 * 0.9],
+      ["Fee kept", 800_000],
+    ])
   })
 })
 

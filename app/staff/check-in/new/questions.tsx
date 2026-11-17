@@ -704,10 +704,27 @@ export function CustodianQuestion({
   )
 }
 
-export function OnFileQuestion({ id, first, onFileName, admissionNumber, father, saved, onPick }: { id: string; first: string; onFileName: string; admissionNumber: string; father: string; saved?: boolean; onPick: (yes: boolean) => void }) {
+export function OnFileQuestion({
+  id,
+  first,
+  onFileName,
+  admissionNumber,
+  father,
+  saved,
+  onPick,
+}: {
+  id: string
+  first: string
+  onFileName: string
+  admissionNumber: string
+  father: string
+  saved?: boolean
+  // A Yes may wait on a sheet: `clear` puts the choice back when the sheet is closed without an answer.
+  onPick: (yes: boolean, clear: () => void) => void
+}) {
   const savedValue = saved === undefined ? undefined : saved ? "yes" : "no"
   const [value, setValue] = useState<string | null>(savedValue ?? null)
-  const pick = (v: string) => onPick(v === "yes")
+  const pick = (v: string) => onPick(v === "yes", () => setValue(savedValue ?? null))
   return (
     <div onClick={again(savedValue, pick)}>
       <ChoiceTiles

@@ -25,10 +25,15 @@ import {
   MOST_STUDENTS,
   NO_SCHOOL_ASKED,
   onFileAnswer,
+  onFileAsk,
+  onFileLinks,
   onFileMatch,
+  onFileQuestion,
+  rootOf,
   settled,
   withCustodian,
   withName,
+  withOnFile,
   withoutStudent,
   withSibling,
   broughtChoices,
@@ -45,6 +50,7 @@ import {
   type FeeTable,
   type OnFileAsk,
   type OnFileFee,
+  type OnFileLink,
   type SiblingAnswer,
   type Student,
 } from "./model"
@@ -73,6 +79,8 @@ import {
 
 const GROUPS = ["Students", "Custodians", "Finish"]
 const RESET_MS = 460
+// One sheet closes before the next opens.
+const SHEET_MS = 380
 const FINISH_MS = 950
 const KEPT = "Your answers are kept on this computer, so you don’t need to type them again."
 
@@ -80,6 +88,23 @@ type Head = { key: string; title: string; remove?: number }
 type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; summary: () => ReactNode; body: () => ReactNode }
 
 type Finished = Extract<RegisterFamilyOutcome, { status: "created" }> & { names: string[]; unknownSchools: number }
+
+/** A question the save asked about a student joining a child on file's group, as one of the two sheets shows it. */
+type SaveQuestion = { key: number; root: number; leadId: string; tier: "close" | "different"; pair: NamePair }
+
+/**
+ * A sheet about a child on file's group, not about a student on the form.
+ * `pick`: staff answered Yes to the child, and the answers wait here until the household needs no more.
+ * `save`: the save asked, so each answer is kept as it is given and the next question opens.
+ */
+type FileSheet =
+  | { from: "pick"; ask: OnFileAsk; read: OnFileFee; links: Record<number, OnFileLink> }
+  | { from: "save"; root: number; leadId: string; rest: SaveQuestion[] }
+
+/** An open sheet: about a sibling on the form (`of`, compared with the student `counted`), or about a group on file. */
+type SheetAsk = { key: number; pair: NamePair; clear: () => void } & ({ of: number; counted: number | null; seen: number[]; file?: undefined } | { file: FileSheet })
+
+const readFees = (m: Record<string, OnFileFee | "failed">) => Object.fromEntries(Object.entries(m).filter((e): e is [string, OnFileFee] => e[1] !== "failed"))
 
 export type RegisterStudentsProps = {
   staffId: string
@@ -131,9 +156,11 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const [onFileFees, setOnFileFees] = useState<Record<string, OnFileFee | "failed">>({})
   const asked = useRef(new Set<string>())
   const [startOver, setStartOver] = useState(false)
-  const [typo, setTypo] = useState<{ key: number; of: number; counted: number; pair: NamePair; seen: number[]; clear: () => void } | null>(null)
-  // `counted`: the student whose father's name this one was compared with.
-  const [mismatch, setMismatch] = useState<{ key: number; of: number; counted: number; pair: NamePair; close: boolean; seen: number[]; clear: () => void } | null>(null)
+  const [typo, setTypo] = useState<SheetAsk | null>(null)
+  const [mismatch, setMismatch] = useState<(SheetAsk & { close: boolean }) | null>(null)
+  // What the form holds now, for an answer that arrives after a read or a sheet.
+  const latest = useRef({ answers, onFileFees })
+  const reading = useRef(new Set<string>())
   const [sheetRound, setSheetRound] = useState(0)
   const [timers] = useState(() => new Set<number>())
 
@@ -141,6 +168,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     if (!finished) saveDraft(staffId, answers)
   }, [answers, staffId, finished])
   useEffect(() => () => timers.forEach((t) => window.clearTimeout(t)), [timers])
+  useEffect(() => {
+    latest.current = { answers, onFileFees }
+  }, [answers, onFileFees])
   useEffect(() => {
     if (!instant) return
     const frame = requestAnimationFrame(() => setInstant(false))
@@ -197,6 +227,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setFailure(null)
     setOnFileFees({})
     asked.current.clear()
+    reading.current.clear()
     setSheetRound((r) => r + 1)
   }
 
@@ -245,6 +276,90 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     }
   }
 
+  // A sheet about a group on file. Each question opens a fresh one.
+  function openFileSheet(key: number, pair: NamePair, tier: "close" | "different", file: FileSheet, clear: () => void) {
+    setSheetRound((r) => r + 1)
+    if (tier === "close") setTypo({ key, pair, clear, file })
+    else setMismatch({ key, pair, close: false, clear, file })
+  }
+
+  /**
+   * Yes to a child on file. Its group may count by another father's name (the child itself may wait on a
+   * Sibling request there), and the save compares each student of the household with that name. So the
+   * group is read first, and every question the save would ask is asked here, on the sheets a sibling on
+   * the form gets. The Yes is kept once none is left.
+   */
+  function pickOnFile(ask: OnFileAsk, yes: boolean, clear: () => void) {
+    const id = `f${ask.student}`
+    if (!yes) return later(() => answer(id, (x) => withOnFile(x, ask.student, { leadId: ask.leadId, yes: false })), PICK_MS)
+    if (locked || reading.current.has(ask.leadId)) return
+    reading.current.add(ask.leadId)
+    asked.current.add(ask.leadId)
+    readOnFileSibling(ask.leadId)
+      .catch(() => null)
+      .then((r) => {
+        reading.current.delete(ask.leadId)
+        const read = r?.status === "read" ? r.fee : null
+        setOnFileFees((m) => ({ ...m, [ask.leadId]: read ?? "failed" }))
+        // Unread, the Yes is kept as it was given: the fee step stops until the read works, and this question opens again if a sheet is needed.
+        if (read) nextOnFile({ from: "pick", ask, read, links: {} }, clear)
+        else answer(id, (x) => withOnFile(x, ask.student, { leadId: ask.leadId, yes: true }))
+      })
+  }
+
+  function nextOnFile(flow: Extract<FileSheet, { from: "pick" }>, clear: () => void) {
+    const { ask, read, links } = flow
+    const now = latest.current
+    const given = { leadId: ask.leadId, yes: true, ...(Object.keys(links).length > 0 ? { links } : {}) }
+    const q = onFileQuestion(withOnFile(now.answers, ask.student, given), { ...readFees(now.onFileFees), [ask.leadId]: read }, ask.student)
+    if (!q) {
+      answer(`f${ask.student}`, (x) => withOnFile(x, ask.student, given))
+      if (Object.keys(links).length === 0) toast("Same father’s name. The 10% sibling discount applies.")
+      return
+    }
+    const mine = now.answers.students.find((s) => s.key === q.student)
+    const theirs = q.compared.onFile ?? studentName(now.answers.students.find((s) => s.key === q.compared.with)?.name)
+    const pair: NamePair = {
+      mine: { first: firstOf(studentName(mine?.name)), father: fatherName(mine?.name) },
+      theirs: { first: firstOf(theirs), father: q.compared.theirs },
+    }
+    openFileSheet(q.student, pair, q.compared.tier === "close" ? "close" : "different", flow, clear)
+  }
+
+  /** A sheet about a group on file answered. `none` is "They are not siblings". */
+  function fileAnswered(sheet: SheetAsk & { file: FileSheet }, link: OnFileLink | "none") {
+    const file = sheet.file
+    const root = file.from === "pick" ? file.ask.student : file.root
+    const leadId = file.from === "pick" ? file.ask.leadId : file.leadId
+    if (link === "none") {
+      // Said of the household's first student, it answers the question about the child on file. Said of a
+      // sibling linked to that student, it answers nothing here, and the question stays open.
+      if (sheet.key === root) answer(`f${root}`, (x) => withOnFile(x, root, { leadId, yes: false }))
+      else sheet.clear()
+      return
+    }
+    if (file.from === "pick") {
+      const next = { ...file, links: { ...file.links, [sheet.key]: link } }
+      later(() => nextOnFile(next, sheet.clear), SHEET_MS)
+      return
+    }
+    answer(`f${root}`, (x) => withOnFile(x, root, { leadId, yes: true, links: { ...x.onFile[root]?.links, [sheet.key]: { ...link, fromSave: true } } }))
+    if (file.rest.length > 0) later(() => openSaveQuestions(file.rest), SHEET_MS)
+  }
+
+  function openSaveQuestions([q, ...rest]: SaveQuestion[]) {
+    const who = firstOf(studentName(latest.current.answers.students.find((s) => s.key === q.key)?.name))
+    // Closed without an answer, the save would only ask again: say what is still open.
+    const unanswered = () => setFailure(needsChecking([who]))
+    openFileSheet(q.key, q.pair, q.tier, { from: "save", root: q.root, leadId: q.leadId, rest }, unanswered)
+  }
+
+  const needsChecking = (who: string[]) => (
+    <>
+      <b>Nothing was saved.</b> {`The sibling answers for ${list([...new Set(who)])} need checking. Change them, then press the button again.`} {KEPT}
+    </>
+  )
+
   const steps = buildSteps(answers)
   const firstOpen = steps.findIndex((s) => !s.done)
   const visible = steps.slice(0, firstOpen < 0 ? steps.length : firstOpen + 1).filter((s) => !s.silent)
@@ -258,6 +373,10 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     const n = a.students.length
     const link = linking(a.students)
     const father = (key: number) => link.fathers.get(key) ?? ""
+    const read = readFees(onFileFees)
+    // The household whose Yes to a child on file still needs a sheet answer, now that the child's group is read.
+    const fileAsk = linking(a.students, onFileLinks(a, read)).ask
+    const fileOpen = fileAsk ? rootOf(a.students, fileAsk.student) : null
     let head: Head = { key: "s", title: "Student 1" }
     a.students.forEach((s, i) => {
       const sid = `s${s.key}`
@@ -433,7 +552,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         ),
       })
       const ask = canLink && c ? (a.onFileAsks.find((q) => q.student === h.root && !q.fromSave) ?? onFileMatch(a, h.root)) : null
-      if (ask) out.push(onFileStep(a, ask, custodiansHead))
+      if (ask) out.push(onFileStep(a, ask, custodiansHead, fileOpen))
     })
 
     out.push({
@@ -470,14 +589,13 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       })
     }
 
-    for (const ask of a.onFileAsks.filter((q) => q.fromSave)) out.push(onFileStep(a, ask, finish))
+    for (const ask of a.onFileAsks.filter((q) => q.fromSave)) out.push(onFileStep(a, ask, finish, fileOpen))
 
     // The fee step waits for every linked child on file, and its answer holds only for the preview shown.
     // A fee that could not be read stops it: the preview would be a guess.
     const reads = linkedOnFile(a).map((q) => onFileFees[q.leadId])
     const unread = reads.includes("failed")
     const loading = reads.some((r) => r === undefined)
-    const read = Object.fromEntries(Object.entries(onFileFees).filter((e): e is [string, OnFileFee] => e[1] !== "failed"))
     const preview = feePreview(a, fees, defaultYear, read)
     if (preview) {
       const shown = feeSignature(preview)
@@ -511,17 +629,20 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     return out
   }
 
-  function onFileStep(a: Answers, ask: OnFileAsk, head: Head): Step {
+  // `open`: the household whose Yes still needs a sheet answer.
+  function onFileStep(a: Answers, ask: OnFileAsk, head: Head, open: number | null): Step {
     const s = a.students.find((x) => x.key === ask.student)
     const id = `f${ask.student}`
     const saved = onFileAnswer(a, ask.student)
+    const how = a.onFile[ask.student]?.links?.[ask.student]?.kind
+    const why = how === "typo" ? "typing mistake fixed, same father, 10% applies" : how === "request" ? "different fathers’ names, discount requested" : "same father’s name"
     return {
       id,
       group: head.key === "g1" ? 1 : 2,
       head,
       label: `Sibling on file of ${firstOf(studentName(s?.name))}`,
-      done: saved !== undefined,
-      summary: () => (saved ? `Sibling of ${ask.name} · same father’s name` : "Not a sibling"),
+      done: saved !== undefined && !(saved && open === ask.student),
+      summary: () => (saved ? `Sibling of ${ask.name} · ${why}` : "Not a sibling"),
       body: () => (
         <OnFileQuestion
           id={`rs-${id}`}
@@ -530,12 +651,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           admissionNumber={ask.admissionNumber}
           father={ask.father}
           saved={saved}
-          onPick={(yes) =>
-            later(() => {
-              answer(id, (x) => ({ ...x, onFile: { ...x.onFile, [ask.student]: { leadId: ask.leadId, yes } }, feesChecked: undefined }))
-              if (yes) toast("Same father’s name. The 10% sibling discount applies.")
-            }, PICK_MS)
-          }
+          onPick={(yes, clear) => pickOnFile(ask, yes, clear)}
         />
       ),
     }
@@ -601,25 +717,55 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     }
   }
 
-  function askFromSave(questions: RegistrationQuestion[]) {
+  /**
+   * The save's questions the form can ask. A child on file with the same father's name becomes a step.
+   * A name or a Sibling request about a household staff linked to a child on file opens the sheet a
+   * sibling on the form gets. Null when a question is neither.
+   */
+  function askFromSave(questions: RegistrationQuestion[]): { asks: OnFileAsk[]; sheets: SaveQuestion[] } | null {
     const asks: OnFileAsk[] = []
+    const sheets: SaveQuestion[] = []
+    const students = answers.students
+    const read = readFees(onFileFees)
+    const link = linking(students, onFileLinks(answers, read))
     for (const q of questions) {
-      if (q.kind !== "same-father" || !("otherLeadId" in q)) continue
-      const s = answers.students[q.student - 1]
-      if (!s) continue
-      const child = Object.values(answers.custodians)
-        .flatMap((c) => (c.kind === "father" || c.kind === "known" ? (c.contact?.children ?? []) : []))
-        .find((x) => x.id === q.otherLeadId)
-      asks.push({ student: s.key, leadId: q.otherLeadId, name: child?.studentName ?? q.otherAdmissionNumber, admissionNumber: q.otherAdmissionNumber, father: fatherName(s.name), fromSave: true })
+      const s = students[q.student - 1]
+      if (!s) return null
+      if (q.kind === "same-father") {
+        if (!("otherLeadId" in q)) return null
+        const child = Object.values(answers.custodians)
+          .flatMap((c) => (c.kind === "father" || c.kind === "known" ? (c.contact?.children ?? []) : []))
+          .find((x) => x.id === q.otherLeadId)
+        asks.push({ student: s.key, leadId: q.otherLeadId, name: child?.studentName ?? q.otherAdmissionNumber, admissionNumber: q.otherAdmissionNumber, father: fatherName(s.name), fromSave: true })
+        continue
+      }
+      const root = rootOf(students, s.key)
+      const file = onFileAnswer(answers, root) === true ? onFileAsk(answers, root) : null
+      if (!file || (q.kind !== "name" && q.kind !== "request-note")) return null
+      const group = read[file.leadId]
+      const first = firstOf(studentName(s.name))
+      if (q.kind === "name") {
+        // The database names the member it compared: a student here, or a member of the child on file's group.
+        const theirs = "siblingStudent" in q ? studentName(students[q.siblingStudent - 1]?.name) : (group?.counted.find((m) => m.leadId === q.siblingLeadId)?.name ?? file.name)
+        sheets.push({ key: s.key, root, leadId: file.leadId, tier: "close", pair: { mine: { first, father: q.fatherFullName }, theirs: { first: firstOf(theirs), father: q.siblingFatherFullName } } })
+        continue
+      }
+      // A request's question names nobody: the sheet shows the name the form's own reading of the group compares.
+      const c = s.key === root ? link.onFile.get(s.key) : s.sibling && s.sibling.kind !== "none" ? link.compared.get(s.key)?.get(s.sibling.of) : undefined
+      const theirs =
+        c && c.tier !== "same"
+          ? { first: firstOf(c.onFile ?? studentName(students.find((x) => x.key === c.with)?.name)), father: c.theirs }
+          : { first: firstOf(file.name), father: group?.father ?? file.father }
+      sheets.push({ key: s.key, root, leadId: file.leadId, tier: "different", pair: { mine: { first, father: fatherName(s.name) }, theirs } })
     }
-    return asks
+    return { asks, sheets }
   }
 
   function submit() {
     if (locked) return
     setPending(true)
     setFailure(null)
-    const { people: adults, students } = payload(answers, defaultYear)
+    const { people: adults, students } = payload(answers, defaultYear, readFees(onFileFees))
     const code = answers.code && answers.code !== "none" ? answers.code : null
     registerFamily({ visitDate: today, people: adults, students, code })
       .then((outcome) => {
@@ -632,17 +778,14 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           return
         }
         if (outcome.status === "questions") {
-          const asks = askFromSave(outcome.questions)
-          if (asks.length === outcome.questions.length && asks.length > 0) {
-            setAnswers((a) => ({ ...a, onFileAsks: [...a.onFileAsks.filter((q) => !asks.some((x) => x.student === q.student)), ...asks], feesChecked: undefined }))
+          const shown = outcome.questions.length > 0 ? askFromSave(outcome.questions) : null
+          if (shown) {
+            const { asks, sheets } = shown
+            if (asks.length > 0) setAnswers((a) => ({ ...a, onFileAsks: [...a.onFileAsks.filter((q) => !asks.some((x) => x.student === q.student)), ...asks], feesChecked: undefined }))
+            if (sheets.length > 0) openSaveQuestions(sheets)
             return
           }
-          const who = outcome.questions.map((q) => firstOf(nameOf(q.student)))
-          setFailure(
-            <>
-              <b>Nothing was saved.</b> {`The sibling answers for ${list([...new Set(who)])} need checking. Change them, then press the button again.`} {KEPT}
-            </>,
-          )
+          setFailure(needsChecking(outcome.questions.map((q) => firstOf(nameOf(q.student)))))
           return
         }
         setFailure(failureFor(outcome))
@@ -715,7 +858,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const g = groups[activeGroup]
   const n = answers.students.length
   const lowerFee = (() => {
-    if (!mismatch) return null
+    // Known for two students on the form only: a member on file's fee is not read.
+    if (!mismatch || mismatch.file || mismatch.counted === null) return null
     const fee = (key: number) => {
       const i = answers.students.findIndex((s) => s.key === key)
       const s = answers.students[i]
@@ -824,14 +968,15 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           if (!t) return
           setTypo(null)
           if (v === "different") {
-            window.setTimeout(() => {
+            later(() => {
               setSheetRound((r) => r + 1)
-              setSheetRound((r) => r + 1)
-              setMismatch({ key: t.key, of: t.of, counted: t.counted, pair: t.pair, close: true, seen: t.seen, clear: t.clear })
-            }, 380)
+              setMismatch({ ...t, close: true })
+            }, SHEET_MS)
             return
           }
-          setSibling(t.key, { kind: "typo", of: t.of, spelling: v === "mine" ? t.pair.mine.father : t.pair.theirs.father, against: t.pair.theirs.father, seen: t.seen })
+          const spelling = v === "mine" ? t.pair.mine.father : t.pair.theirs.father
+          if (t.file) fileAnswered(t, { kind: "typo", spelling, against: t.pair.theirs.father })
+          else setSibling(t.key, { kind: "typo", of: t.of, spelling, against: t.pair.theirs.father, seen: t.seen })
           toast("Saved as one name. They are siblings, and the 10% sibling discount applies.")
         }}
       />
@@ -848,14 +993,17 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           const m = mismatch
           if (!m) return
           setMismatch(null)
-          setSibling(m.key, { kind: "request", of: m.of, note: note.trim(), requestId: crypto.randomUUID(), close: m.close, against: m.pair.theirs.father, seen: m.seen })
+          const request = { kind: "request" as const, note: note.trim(), requestId: crypto.randomUUID(), close: m.close, against: m.pair.theirs.father }
+          if (m.file) fileAnswered(m, request)
+          else setSibling(m.key, { ...request, of: m.of, seen: m.seen })
           toast("Request sent to the Admissions Manager. Reason: fathers’ names don’t match.")
         }}
         onNotSiblings={() => {
           const m = mismatch
           if (!m) return
           setMismatch(null)
-          setSibling(m.key, { kind: "none", seen: m.seen })
+          if (m.file) fileAnswered(m, "none")
+          else setSibling(m.key, { kind: "none", seen: m.seen })
         }}
       />
       <span className="sr-only" aria-live="polite">

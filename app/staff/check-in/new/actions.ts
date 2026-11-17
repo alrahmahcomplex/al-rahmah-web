@@ -1,5 +1,6 @@
 "use server"
 
+import { fatherNameMatch } from "@/lib/father-name"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import {
   DAY_OR_BOARDING,
@@ -212,7 +213,14 @@ export async function findCustodianFamily(phone: string, whatsapp: string | null
 // Unavailable: the group or the fee could not be read, so the fee step has nothing to show for this child.
 export type OnFileSiblingOutcome = { status: "read"; fee: OnFileFee } | { status: "unavailable" }
 
-/** A child on file staff linked a student to: its fee and who in its group gives the 10%, for the fee step. */
+/** sibling_basis_counts in the database: a member waiting on a Sibling request, or refused, does not count. */
+const basisCounts = (basis: string | null) => basis === "matched" || basis === "typo_confirmed" || basis === "granted"
+
+/**
+ * A child on file staff may link a student to, as the save will find it: its
+ * fee, who in its group gives the 10%, the fathers' names a new sibling is
+ * compared with, and whether it may be the full payer.
+ */
 export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOutcome> {
   if (!str(leadId) || !UUID.test(leadId)) return { status: "unavailable" }
   const supabase = await createClient()
@@ -225,11 +233,31 @@ export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOu
   const members = explained.data.members
   const self = members.find((m) => m.leadId === leadId)
   if (!self) return { status: "unavailable" }
+  // Without the fathers' names the form can't tell which question the save will ask, so it doesn't guess.
+  const fathers = await getFathersOfLeads(supabase, members.map((m) => m.leadId))
+  if (!fathers.ok) return { status: "unavailable" }
   const name = (id: string | null) => members.find((m) => m.leadId === id)?.studentName ?? null
   const counting = (id: string | null) => {
     const m = members.find((x) => x.leadId === id)
     return !!m && m.leadOpen && m.status !== "Declined"
   }
+
+  // What link_sibling_locked compares a new sibling's father's name with (sibling_name_check): the members
+  // the group counts by, lowest lead id first, and the child itself when it counts.
+  const inGroup = explained.data.groupId !== null
+  const father = fathers.data[leadId] ?? null
+  const counted = members
+    .filter((m) => inGroup && m.leadId !== leadId && !m.legacy && basisCounts(m.basis) && !!fathers.data[m.leadId])
+    .map((m) => ({ leadId: m.leadId, name: m.studentName, father: fathers.data[m.leadId] }))
+    .sort((a, b) => (a.leadId < b.leadId ? -1 : 1))
+  // In no group it joins as matched. A member under the old family rule is checked as it is linked: it counts
+  // when the group has no name to check against, or one of them is its own.
+  const selfCounts =
+    !inGroup || (self.legacy ? counted.length === 0 || counted.some((m) => fatherNameMatch(father, m.father) === "same") : basisCounts(self.basis))
+  // choose_full_payer's own conditions for a member it ranks.
+  const mayPayFull =
+    selfCounts && self.leadOpen && self.status !== "Enrolled" && self.status !== "Declined" && self.source !== "manual" && self.lockedResult === null && self.largerDiscount === null
+
   return {
     status: "read",
     fee: {
@@ -241,6 +269,11 @@ export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOu
       pays: fee.data.kind === "fee" ? fee.data.schoolFee : null,
       anchorName: explained.data.anchors.length > 0 ? name(explained.data.anchors[0]) : self.status === "Enrolled" && self.result !== "ten" ? self.studentName : null,
       fullPayerName: counting(explained.data.fullPayerLeadId) ? name(explained.data.fullPayerLeadId) : null,
+      groupId: explained.data.groupId,
+      father,
+      counted,
+      selfCounts,
+      mayPayFull,
     },
   }
 }

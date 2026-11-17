@@ -57,6 +57,7 @@ export function ReferralEditor({
     <div className="lr-card">
       {editing ? (
         <CodeForm
+          leadId={leadId}
           current={current?.code ?? null}
           pending={pending}
           onSave={(code) => send(code, () => setEditing(false))}
@@ -131,18 +132,20 @@ export function ReferralEditor({
 }
 
 function CodeForm({
+  leadId,
   current,
   pending,
   onSave,
   onCancel,
 }: {
+  leadId: string
   current: string | null
   pending: boolean
   onSave: (code: string) => void
   onCancel: () => void
 }) {
   const [typed, setTyped] = useState(current ?? "")
-  const lookup = useCodeLookup(typed)
+  const lookup = useCodeLookup(typed, leadId)
   const found = usableCode(lookup)
   const unchanged = found !== null && found.code === current
 
@@ -202,8 +205,8 @@ function CodeForm({
 
 // Looks the typed code up once typing pauses. A slower answer to an earlier
 // code never replaces the answer to the latest one. New Student's Referral
-// code field uses it too.
-export function useCodeLookup(typed: string): ReferralLookup {
+// code field uses it too, with no `leadId`, since its application is new.
+export function useCodeLookup(typed: string, leadId?: string): ReferralLookup {
   const [lookup, setLookup] = useState<{ typed: string; result: ReferralLookup } | null>(null)
   const latest = useRef(typed)
 
@@ -213,14 +216,14 @@ export function useCodeLookup(typed: string): ReferralLookup {
     const timer = setTimeout(async () => {
       let result: ReferralLookup
       try {
-        result = await lookUpReferralCode(typed)
+        result = await lookUpReferralCode(typed, leadId)
       } catch {
         result = { status: "unavailable" }
       }
       if (latest.current === typed) setLookup({ typed, result })
     }, LOOKUP_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [typed])
+  }, [typed, leadId])
 
   if (typed.trim() === "") return { status: "empty" }
   if (!lookup || lookup.typed !== typed) return { status: "checking" }

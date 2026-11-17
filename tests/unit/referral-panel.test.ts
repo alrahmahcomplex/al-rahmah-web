@@ -148,6 +148,15 @@ describe("the Referral code panel's words", () => {
     )
   })
 
+  it("says a Promo code typed onto an application sent before it was created gives nothing (#471)", () => {
+    expect(referralLookupNote({ status: "found", code: promoCode({ amountOff: 0, sentBeforeCode: true }) })).toBe(
+      "Instagram ad · Promo code, Active · no discount: application sent before the Promo code was created. No Marketing Agent. No commission.",
+    )
+    expect(referralLookupNote({ status: "found", code: promoCode({ sentBeforeCode: false }) })).toBe(
+      "Instagram ad · Promo code, Active · TZS 25,000 off. No Marketing Agent. No commission.",
+    )
+  })
+
   it("takes any code but a retired agent record's", () => {
     expect(usableCode({ status: "found", code: promoCode({ state: "paused", amountOff: 0 }) })?.code).toBe("INSTA26")
     expect(usableCode({ status: "found", code: agentCode({ state: "pending", amountOff: 0 }) })?.code).toBe("BJN-402")

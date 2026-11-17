@@ -17,6 +17,8 @@
 -- lead: a Promo code the lead doesn't qualify for takes nothing off, and
 -- says so in sent_before_code. lead_interview_discount, the fee
 -- (expected_interview_amount) and the export's interview fee read it.
+-- find_lead_discount_code(lead_id, typed_code) is find_discount_code for a
+-- code typed onto an existing application, for the Referral code editor.
 -- unpaid_promo_leads(promo) is the leads a Promo code change moves:
 -- create_promo_code's back-fill now reaches imported records only, and the
 -- impact preview and the edit and state counts leave out early leads.
@@ -161,6 +163,40 @@ begin
     amount := public.interview_fee(false) - off;
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- find_lead_discount_code: find_discount_code for a code typed onto an
+-- existing application, so the Referral code editor states what the code
+-- would take off that application. No row for a code nobody ever held, or
+-- for a lead the caller can't see. Staff who may view leads, and the secret
+-- key.
+-- ---------------------------------------------------------------------------
+
+create function public.find_lead_discount_code(lead_id uuid, typed_code text)
+returns table (
+    kind text,
+    code text,
+    holder_name text,
+    state text,
+    amount_off integer,
+    agent_id uuid,
+    promo_code_id uuid,
+    sent_before_code boolean
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+    select d.kind, d.code, d.holder_name, d.state, d.amount_off, d.agent_id, d.promo_code_id, d.sent_before_code
+    from public.leads l
+    cross join lateral public.lead_code_discount(find_lead_discount_code.typed_code, l.created_at, l.import_batch_id is not null) d
+    where l.id = find_lead_discount_code.lead_id
+      and (public.has_permission('leads.view') or auth.role() is not distinct from 'service_role');
+$$;
+
+revoke execute on function public.find_lead_discount_code(uuid, text) from public, anon;
+grant execute on function public.find_lead_discount_code(uuid, text) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- The leads a Promo code change moves: those carrying the code, their fee

@@ -134,8 +134,12 @@ export const RETIRED_CODE_NOTE = "This code belongs to a retired Marketing Agent
 
 // What a found Promo code says: "Instagram ad · Promo code, Active ·
 // TZS 25,000 off. No Marketing Agent. No commission."
-export function promoCodeNote(code: Pick<FoundDiscountCode, "holderName" | "state" | "amountOff">): string {
-  const off = code.amountOff > 0 ? `${formatTzs(code.amountOff)} off` : "no discount"
+export function promoCodeNote(code: Pick<FoundDiscountCode, "holderName" | "state" | "amountOff" | "sentBeforeCode">): string {
+  const off = code.sentBeforeCode
+    ? "no discount: application sent before the Promo code was created"
+    : code.amountOff > 0
+      ? `${formatTzs(code.amountOff)} off`
+      : "no discount"
   return `${code.holderName} · Promo code, ${promoStateLabel(code.state)} · ${off}. ${PROMO_NO_AGENT}`
 }
 

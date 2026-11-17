@@ -506,6 +506,17 @@ describe("only applications sent after the code was created get its discount (#4
     const later = await leadWithCode(code)
     expect(await getLeadReferral(admissions, later)).toMatchObject({ ok: true, data: { amount: 25000, amountOff: 25000, sentBeforeCode: false } })
 
+    // The Referral code editor's lookup states the same for each application.
+    expect(await findDiscountCode(admissions, code.toLowerCase(), { leadId: early })).toEqual({
+      ok: true,
+      data: expect.objectContaining({ kind: "promo", code, state: "active", amountOff: 0, sentBeforeCode: true }),
+    })
+    expect(await findDiscountCode(admissions, code, { leadId: later })).toEqual({
+      ok: true,
+      data: expect.objectContaining({ kind: "promo", code, amountOff: 25000, sentBeforeCode: false }),
+    })
+    expect(await findDiscountCode(await signedIn(await createThrowawayStaff([])), code, { leadId: early })).toEqual({ ok: true, data: null })
+
     // Every change counts and lists only the later application.
     const manager = await signedIn(MANAGER)
     expect(await getPromoCodeImpact(manager, promo.id, { state: "paused" })).toEqual({

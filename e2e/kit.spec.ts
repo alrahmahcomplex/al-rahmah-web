@@ -454,9 +454,10 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
   await expect(question("Register 2 students?")).toBeFocused()
   await open.getByRole("button", { name: "Register 2 students" }).click()
   // Once Register is pressed, the answers can't change on the way to the finished screen.
-  // `force` presses at once: waiting for the folding page to hold still can outlast the
-  // 950 ms before the finished screen, and the cheer below with it (#459).
-  await card.getByRole("button", { name: "Remove Hamisi Juma Salim" }).click({ force: true })
+  // The click goes straight to Remove, whose handler refuses once Register is pressed: waiting
+  // for the folding page to hold still can outlast the 950 ms before the finished screen, and
+  // the cheer below with it (#459).
+  await card.getByRole("button", { name: "Remove Hamisi Juma Salim" }).dispatchEvent("click")
 
   // The last group cheers before the Finished screen takes its place (950ms).
   await expect(bar.locator('[data-group="2"] .gf-gn.gf-cheer')).toHaveCount(1, { timeout: 800 })

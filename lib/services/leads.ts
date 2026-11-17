@@ -31,6 +31,9 @@ export type Relationship = (typeof RELATIONSHIPS)[number]
 export const DAY_OR_BOARDING = ["Day", "Boarding"] as const
 export type DayOrBoarding = (typeof DAY_OR_BOARDING)[number]
 
+export const STUDENT_GENDERS = ["Boy", "Girl"] as const
+export type StudentGender = (typeof STUDENT_GENDERS)[number]
+
 export type LeadStatus = "Applied" | "Visited" | "Interviewed" | "Enrolled" | "Declined"
 export type LeadClosure = "Inactive" | "Archived"
 
@@ -48,6 +51,9 @@ export type NewStudent = {
   className: LeadClass
   enrollmentYear: number
   dayOrBoarding: DayOrBoarding
+  // Boy or girl (#449). Left out by a form that does not ask it yet; the
+  // lead then has no answer until staff add one.
+  gender?: StudentGender
 }
 
 export type CreateLeadInput = {
@@ -128,6 +134,7 @@ export async function createLead(
       class_name: student.className,
       enrollment_year: student.enrollmentYear,
       day_or_boarding: student.dayOrBoarding,
+      ...(student.gender ? { gender: student.gender } : {}),
     },
     visited_on: start.kind === "walk-in" ? start.visitDate : null,
     // Sent only when given, so every other call still matches the function
@@ -188,6 +195,8 @@ export type RegistrationStudent = {
   className: LeadClass
   enrollmentYear: number
   dayOrBoarding: DayOrBoarding
+  // Boy or girl (#449). At check-in, left out keeps the family's answer.
+  gender?: StudentGender
   // The custodian, by person number, and who they are to this child. With
   // `father`, the father is the main custodian: the relationship is Father.
   custodian:
@@ -260,6 +269,7 @@ export type RegistrationInvalidField =
   | "contact_last_name"
   | "custodian"
   | "brought_by"
+  | "gender"
   | "brought_by_name"
   | "brought_by_phone"
   | "brought_by_relationship"
@@ -364,6 +374,7 @@ function studentPayload(student: RegistrationStudent) {
     class_name: student.className,
     enrollment_year: student.enrollmentYear,
     day_or_boarding: student.dayOrBoarding,
+    ...(student.gender ? { gender: student.gender } : {}),
     custodian:
       "father" in custodian
         ? { person: custodian.person, father: true }
@@ -489,6 +500,7 @@ export type CheckInStudent = Pick<
   | "fatherLast"
   | "custodian"
   | "broughtBy"
+  | "gender"
   | "previousSchool"
   | "siblingOf"
   | "notASibling"
@@ -1006,7 +1018,8 @@ function given(values: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined))
 }
 
-// Corrects the student's name, class, enrollment year or Day or boarding.
+// Corrects the student's name, class, enrollment year, Day or boarding, or
+// Boy or girl (which can be given or changed, never cleared).
 // Needs leads.edit. A new name that would match another lead under the
 // duplicate rule is refused as `duplicate`, with that lead.
 export async function updateLeadDetails(
@@ -1022,6 +1035,7 @@ export async function updateLeadDetails(
         class_name: changes.className,
         enrollment_year: changes.enrollmentYear,
         day_or_boarding: changes.dayOrBoarding,
+        gender: changes.gender,
       }),
     }),
     "correct a lead's details",

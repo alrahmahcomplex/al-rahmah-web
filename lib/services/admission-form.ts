@@ -95,6 +95,8 @@ export function payloadHash({ parent, children, discountCode }: Pick<AdmissionFo
       ...(c.nameParts
         ? [[c.nameParts.firstName, c.nameParts.fatherFirst, c.nameParts.fatherMiddle, c.nameParts.fatherLast]]
         : []),
+      // Only when given, so a form sent before the question keeps its key.
+      ...(c.gender ? [{ gender: c.gender }] : []),
     ]),
   })
   return createHash("sha256").update(canonical).digest("hex")
@@ -114,6 +116,7 @@ function studentDetails(child: AdmissionChild, discountCode: string | undefined)
     class_name: child.className,
     enrollment_year: child.enrollmentYear,
     day_or_boarding: child.dayOrBoarding,
+    ...(child.gender ? { gender: child.gender } : {}),
     ...(discountCode ? { discount_code: discountCode } : {}),
   }
 }

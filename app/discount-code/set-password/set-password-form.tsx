@@ -125,7 +125,7 @@ function PasswordInput({
             onClick={toggle.onToggle}
             aria-label={shown ? toggle.hide : toggle.show}
             aria-pressed={shown}
-            className="absolute inset-y-0 right-1 my-auto grid size-11 place-items-center rounded-full text-slate-500 outline-none hover:text-slate-700 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+            className="absolute inset-y-0 right-1 my-auto grid size-11 place-items-center rounded-full text-slate-500 outline-none hover:text-slate-700 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
           >
             {shown ? <EyeOff className="size-5" strokeWidth={1.75} aria-hidden /> : <Eye className="size-5" strokeWidth={1.75} aria-hidden />}
           </button>

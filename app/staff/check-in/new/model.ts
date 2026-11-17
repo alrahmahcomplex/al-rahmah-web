@@ -125,19 +125,50 @@ export const digits = (v: string) => v.replace(/\D/g, "")
 export const phoneOk = (v: string) => digits(v).length >= 10
 export const count = (n: number) => `${n} ${n === 1 ? "student" : "students"}`
 
-/** The father's name the student's record will hold once saved: a typing-mistake answer puts the right spelling on both. */
-export function savedFather(a: Answers, key: number): string {
-  const s = a.students.find((x) => x.key === key)
-  const own = fatherName(s?.name)
-  for (const other of a.students) {
-    const sib = other.sibling
+/**
+ * The father's name each student's record will hold once saved, as the
+ * database writes it: a typing-mistake answer puts the right spelling on every
+ * member of that household holding the replaced one, in the order the
+ * students are linked. A household counts by its first student's name.
+ */
+export function savedFathers(a: Answers): Map<number, string> {
+  const out = new Map(a.students.map((s) => [s.key, fatherName(s.name)]))
+  const norm = (v: string | undefined) => normalizeFatherName(v)
+  for (const s of a.students) {
+    const sib = s.sibling
     if (sib?.kind !== "typo") continue
-    const ends = [other.key, sib.of]
-    if (!ends.includes(key)) continue
-    const replaced = other.key === key ? fatherName(a.students.find((x) => x.key === sib.of)?.name) : fatherName(other.name)
-    if (normalizeFatherName(own) !== normalizeFatherName(sib.spelling) && normalizeFatherName(replaced) === normalizeFatherName(sib.spelling)) return sib.spelling
+    const root = rootOf(a.students, s.key)
+    const members = households(a.students).find((h) => h.root === root)?.members ?? []
+    const mine = out.get(s.key)
+    const replaced = norm(mine) === norm(sib.spelling) ? out.get(root) : mine
+    for (const m of members) if (norm(out.get(m)) === norm(replaced)) out.set(m, sib.spelling)
   }
-  return own
+  return out
+}
+
+export const savedFather = (a: Answers, key: number) => savedFathers(a).get(key) ?? ""
+
+/**
+ * An answer that changes what later answers were compared with: the students'
+ * sibling answers built on it (later members of the same household) are asked
+ * again, and so is everything after the students: the custodians, children on
+ * file, who brought them and the fees.
+ */
+export function withoutDependents(a: Answers, key: number, own: boolean): Answers {
+  const at = a.students.findIndex((s) => s.key === key)
+  const root = rootOf(a.students, key)
+  const household = households(a.students).find((h) => h.root === root)?.members ?? [key]
+  const later = new Set(household.filter((k) => a.students.findIndex((s) => s.key === k) > at))
+  if (own) later.add(key)
+  return {
+    ...a,
+    students: a.students.map((s) => (later.has(s.key) && s.sibling && s.sibling.kind !== "none" ? { ...s, sibling: undefined } : s)),
+    custodians: {},
+    onFile: {},
+    onFileAsks: [],
+    brought: undefined,
+    feesChecked: undefined,
+  }
 }
 
 // ---------------------------------------------------------------------------

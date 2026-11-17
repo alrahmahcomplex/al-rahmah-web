@@ -8,6 +8,7 @@ import {
   broughtChoices,
   isEmpty,
   otherFather,
+  withoutDependents,
   payload,
   people,
   savedFather,
@@ -251,6 +252,34 @@ describe("who is the same person (review of #457)", () => {
       { name: "ASHA ALI SAID", person: 0 },
       { name: "NEEMA OMARI HASSAN", person: 2 },
     ])
+  })
+})
+
+describe("answers built on other answers (review round 2)", () => {
+  test("a typing mistake fixed through one student corrects the whole household, as the database does", () => {
+    const a = form([
+      student(1, "A", "JUMA SALIM MRISHO"),
+      student(2, "B", "JUMA SALIM MRISHO", { sibling: { kind: "match", of: 1 } }),
+      student(3, "C", "JUMA SALIMU MRISHO", { sibling: { kind: "typo", of: 2, spelling: "JUMA SALIMU MRISHO" } }),
+    ])
+    expect([1, 2, 3].map((k) => savedFather(a, k))).toEqual(["JUMA SALIMU MRISHO", "JUMA SALIMU MRISHO", "JUMA SALIMU MRISHO"])
+  })
+
+  test("a changed answer asks again the later answers of its household, and the custodians, but leaves other households alone", () => {
+    const a = form(
+      [
+        student(1, "A", "JUMA SALIM MRISHO"),
+        student(2, "B", "OMARI JUMA HASSAN", { sibling: { kind: "none" } }),
+        student(3, "C", "OMARI JUMA HASSAN", { sibling: { kind: "match", of: 2 } }),
+        student(4, "D", "JUMA SALIM MRISHO", { sibling: { kind: "match", of: 1 } }),
+      ],
+      { custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" } }, brought: { who: "person", person: 0 }, feesChecked: "x" },
+    )
+    const b = withoutDependents(a, 2, false)
+    expect(b.students.map((s) => s.sibling?.kind)).toEqual([undefined, "none", undefined, "match"])
+    expect(b.custodians).toEqual({})
+    expect(b.brought).toBeUndefined()
+    expect(b.feesChecked).toBeUndefined()
   })
 })
 

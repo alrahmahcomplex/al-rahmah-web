@@ -25,6 +25,7 @@ import {
   NO_SCHOOL_ASKED,
   onFileMatch,
   rootOf,
+  withoutDependents,
   broughtChoices,
   otherFather,
   payload,
@@ -211,32 +212,22 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     toast("Student removed. Check the custodians again.")
   }
 
-  // A father's name that changes asks the sibling questions built on it again.
+  // A father's name that changes asks again every answer built on it.
   function setName(key: number, name: Student["name"]) {
     answer(`s${key}.name`, (a) => {
       const old = a.students.find((s) => s.key === key)
       const changed = old?.name !== undefined && fatherNameMatch(fatherName(old.name), fatherName(name)) !== "same"
-      const students = a.students.map((s) => {
-        if (s.key === key) return { ...s, name, sibling: changed ? undefined : s.sibling }
-        if (changed && s.sibling && s.sibling.kind !== "none" && s.sibling.of === key) return { ...s, sibling: undefined }
-        return s
-      })
-      return changed
-        ? { ...a, students, feesChecked: undefined, onFile: {}, onFileAsks: a.onFileAsks.filter((q) => q.student !== key) }
-        : { ...a, students }
+      const before = changed ? withoutDependents(a, key, true) : a
+      return { ...before, students: before.students.map((s) => (s.key === key ? { ...s, name } : s)) }
     })
   }
 
+  // A new sibling answer changes the households: what was built on the old one is asked again.
   function setSibling(key: number, sibling: SiblingAnswer) {
-    answer(`s${key}.sib`, (a) => ({
-      ...a,
-      feesChecked: undefined,
-      // The households change, so their custodians are asked again.
-      custodians: {},
-      onFile: {},
-      brought: undefined,
-      students: a.students.map((s) => (s.key === key ? { ...s, sibling } : s)),
-    }))
+    answer(`s${key}.sib`, (a) => {
+      const before = withoutDependents(a, key, false)
+      return { ...before, students: before.students.map((s) => (s.key === key ? { ...s, sibling } : s)) }
+    })
   }
 
   function pickSibling(key: number, value: string, clear: () => void) {

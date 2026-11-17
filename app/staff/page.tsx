@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 
 import { Note, pageTitle } from "@/components/kit"
 import { tanzaniaToday } from "@/lib/school-calendar"
-import { getSeatsByClass } from "@/lib/services/dashboard"
 import { countPendingDiscountRequests } from "@/lib/services/discounts"
 import { getOverdueCount } from "@/lib/services/follow-ups"
 import { getHomeChartCounts } from "@/lib/services/home-charts"
@@ -10,7 +10,8 @@ import { countInterviewsByDay, countRegistrationsByDay } from "@/lib/services/ho
 import { getMyNotices } from "@/lib/services/staff-admin"
 import { createClient } from "@/utils/supabase/server"
 
-import { defaultSeatsYear } from "./seats/format"
+import { fullClassesFor } from "./_home/activity-data"
+import { ActivityLog, ActivitySkeleton } from "./_home/activity-log"
 import { ChartCard } from "./_home/chart-card"
 import { classesTab, monthsTab, seatsTab, sourcesTab, type ChartTab } from "./_home/charts"
 import { FindFamily } from "./_home/find-family"
@@ -18,6 +19,7 @@ import { Notices } from "./_home/notices"
 import { mayCallBack, mayDecideDiscounts, mayOpenSeats, onlyFullClass, quickActions } from "./_home/quick-action-list"
 import { QuickActions } from "./_home/quick-actions"
 import { RegisterButton } from "./_home/register-button"
+import { seatsOnOpening } from "./_home/seats-on-opening"
 import { StatCard } from "./_home/stat-card"
 import { appliedCard, appliedRange, homeDate, interviewCard, interviewRange, pickedDay, pickedWeek } from "./_home/stats"
 import { requireStaff } from "./session"
@@ -31,23 +33,14 @@ const REGISTER_HREF = "/staff/check-in/new"
 const DAY_WORDS = { pick: "Open the calendar", choose: "Choose a date", close: "Close", reset: "Back to today" }
 const WEEK_WORDS = { pick: "Show another week", choose: "Choose a week", close: "Close", reset: "Back to this week" }
 
-// The seats in the year the Seats screen opens on, so the caption names a
-// class in the year the link shows.
-async function seatsOnOpening(today: string) {
-  const supabase = await createClient()
-  const latest = await getSeatsByClass(supabase)
-  if (!latest.ok) return latest
-  const opening = defaultSeatsYear(latest.data.years, today)
-  return opening === null || opening === latest.data.year ? latest : getSeatsByClass(supabase, opening)
-}
-
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 const one = (value: string | string[] | undefined) => (typeof value === "string" ? value : undefined)
 
 // Home (#323): Today, Check-in and Register students in one page. The date,
 // the check-in bar beside Register students, then the two stat cards and the
 // quick actions in the right column; the chart card (#405) in the left
-// column. The Activity log (#406) takes the space below; it is not built yet.
+// column. The Activity log (#406) takes the full width below, loading on its
+// own so the rest of Home never waits for it.
 // Every count is read only for someone who may see it today: the
 // applications for leads.view, the seats for payments.view, as the
 // dashboard shows them.
@@ -71,7 +64,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     canView ? countInterviewsByDay(supabase, interviews.from, interviews.to) : null,
     canView ? countRegistrationsByDay(supabase, applied.from, applied.to) : null,
     mayCallBack(permissions) ? getOverdueCount(supabase) : null,
-    canSeeSeats ? seatsOnOpening(today) : null,
+    canSeeSeats ? seatsOnOpening(supabase, today) : null,
     mayDecideDiscounts(permissions) ? countPendingDiscountRequests(supabase) : null,
     canView ? getHomeChartCounts(supabase, Number(today.slice(0, 4))) : null,
   ])
@@ -121,6 +114,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           <QuickActions actions={actions} />
         </div>
       </div>
+      {canView && (
+        <Suspense fallback={<ActivitySkeleton />}>
+          <ActivityLog permissions={permissions} today={today} full={fullClassesFor(permissions, seats?.ok ? seats.data.classes : null)} />
+        </Suspense>
+      )}
     </div>
   )
 }

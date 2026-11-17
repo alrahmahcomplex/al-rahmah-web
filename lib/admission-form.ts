@@ -11,10 +11,10 @@ import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, type NewContact, type New
 
 export const MAX_CHILDREN = 8
 
-// A name is sent either in its parts (prototype v38, #400) or in the one box
-// of the live form. With parts, `fullName` is the name they build, in
-// capitals, as the database stores it. The one box goes once #403 moves the
-// page to parts.
+// A name comes in its parts (prototype v38, #400); `fullName` is the name
+// they build, in capitals, as the database stores it. The page sends only
+// parts since #403 and parseAdmissionForm refuses the old one box. The
+// service still takes `fullName` alone, for tests that build forms directly.
 export type AdmissionParent = NewContact & { nameParts?: PersonNameParts }
 export type AdmissionChild = NewStudent & { nameParts?: StudentNameParts }
 
@@ -149,16 +149,11 @@ function optionalText(value: unknown): string | undefined | null {
   return text(value)
 }
 
-// A name in its parts, each trimmed, when the object sends any of them; the
-// one box otherwise. Sending both, or a part that isn't text, is `null`.
-function nameOf<K extends string>(
-  value: Record<string, unknown>,
-  keys: readonly K[],
-): { parts: Record<K, string> } | { fullName: string } | null {
-  if (!keys.some((key) => key in value)) {
-    const fullName = text(value.fullName)
-    return fullName === null ? null : { fullName: fullName.trim() }
-  }
+// A name in its parts, each trimmed. The page sends only parts since #403:
+// the live form's one box (`fullName`), sending both, or a part that isn't
+// text is `null`. The service still takes a one-box name, for the tests that
+// build forms directly.
+function nameOf<K extends string>(value: Record<string, unknown>, keys: readonly K[]): { parts: Record<K, string> } | null {
   if ("fullName" in value) return null
   const parts = {} as Record<K, string>
   for (const key of keys) {
@@ -201,11 +196,11 @@ export function parseAdmissionForm(
     return { ok: false, error: payload }
   }
   const cleanParent: AdmissionParent = {
-    fullName: "parts" in parentName ? personFullName(parentName.parts) : parentName.fullName,
+    fullName: personFullName(parentName.parts),
+    nameParts: parentName.parts,
     relationship: relationship as AdmissionParent["relationship"],
     phone: phone.trim(),
   }
-  if ("parts" in parentName) cleanParent.nameParts = parentName.parts
   if (relationship === "Other" && description?.trim()) cleanParent.relationshipDescription = description.trim()
   if (whatsapp?.trim()) cleanParent.whatsapp = whatsapp.trim()
 
@@ -220,14 +215,13 @@ export function parseAdmissionForm(
     if (name === null || className === null || dayOrBoarding === null || typeof c.enrollmentYear !== "number") {
       return { ok: false, error: payload }
     }
-    const cleanChild: AdmissionChild = {
-      fullName: "parts" in name ? studentFullName(name.parts) : name.fullName,
+    cleanChildren.push({
+      fullName: studentFullName(name.parts),
+      nameParts: name.parts,
       className: className as AdmissionChild["className"],
       enrollmentYear: c.enrollmentYear,
       dayOrBoarding: dayOrBoarding as AdmissionChild["dayOrBoarding"],
-    }
-    if ("parts" in name) cleanChild.nameParts = name.parts
-    cleanChildren.push(cleanChild)
+    })
   }
 
   const problem = parentProblem(cleanParent) ?? childrenProblem(cleanChildren, years)

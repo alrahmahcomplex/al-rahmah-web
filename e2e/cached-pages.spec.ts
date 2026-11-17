@@ -89,20 +89,20 @@ test.describe("pages served from a prerendered copy", () => {
     await page.getByRole("button", { name: "Endelea kwa Kiswahili" }).click()
     await expect(page.getByText("Karibu!")).toBeHidden({ timeout: 10_000 })
 
-    const field = page.getByRole("textbox", { name: "Mwanafunzi anaitwa nani?" })
-    await field.fill("Neema Mfano")
+    const field = page.getByRole("textbox", { name: "Jina la mwanafunzi" })
+    await field.fill("NEEMA")
     await field.evaluate((input) => (input.dataset.mark = "same"))
 
     for (const [lang, label, question, title] of [
-      ["en", "English", "What is the student's name?", "Admission Form · Al-Rahmah Complex"],
-      ["sw", "Kiswahili", "Mwanafunzi anaitwa nani?", "Fomu ya Udahili · Al-Rahmah Complex"],
+      ["en", "English", "Student's name", "Admission Form · Al-Rahmah Complex"],
+      ["sw", "Kiswahili", "Jina la mwanafunzi", "Fomu ya Udahili · Al-Rahmah Complex"],
     ] as const) {
       // The menu stays open after a switch.
       if (await page.locator(".gf-menu").isHidden()) await page.locator("button.gf-menubtn").click()
       await page.locator(".gf-menu").getByRole("button", { name: label }).click()
       await expect(page.getByRole("main")).toHaveAttribute("lang", lang)
       const input = page.getByRole("textbox", { name: question })
-      await expect(input).toHaveValue("Neema Mfano")
+      await expect(input).toHaveValue("NEEMA")
       // The same element: React didn't remount the form.
       await expect(input).toHaveAttribute("data-mark", "same")
       await expect(page).toHaveTitle(title)

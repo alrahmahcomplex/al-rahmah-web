@@ -3,7 +3,7 @@
 import { CalendarDays, CircleAlert, Clock, User } from "lucide-react"
 import { useState, type KeyboardEvent } from "react"
 
-import { BottomSheet, ContinuePill } from "@/components/guided-form"
+import { BottomSheet, ContinuePill, Hint, NoticeBox } from "@/components/guided-form"
 import { cn } from "@/lib/utils"
 
 import type { FormCopy } from "./copy"
@@ -68,7 +68,7 @@ export function ClassSheet({ copy, open, picked, onPick, onClose }: { copy: Form
             onKeyDown={onTabKey}
             onClick={() => setChosen(l.id)}
             className={cn(
-              "relative z-[1] min-h-11 rounded-full border-0 bg-transparent text-[15px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-blue-600/40",
+              "relative z-[1] min-h-11 rounded-full border-0 bg-transparent text-[15px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)",
               l.id === level ? "text-white" : "text-blue-600",
             )}
           >
@@ -87,7 +87,7 @@ export function ClassSheet({ copy, open, picked, onPick, onClose }: { copy: Form
                 setChosen(null)
                 onPick(className)
               }}
-              className="min-h-14 rounded-2xl border-[1.5px] border-blue-600/22 bg-white px-1 text-[17px] font-bold text-slate-800 outline-none transition hover:border-blue-600/45 hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-[0.96] aria-pressed:border-blue-600 aria-pressed:bg-blue-600 aria-pressed:text-white max-[330px]:text-[15px]"
+              className="min-h-14 rounded-2xl border-[1.5px] border-blue-600/22 bg-white px-1 text-[17px] font-bold text-slate-800 outline-none transition hover:border-blue-600/45 hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.96] aria-pressed:border-blue-600 aria-pressed:bg-blue-600 aria-pressed:text-white max-[330px]:text-[15px]"
             >
               {className}
             </button>
@@ -147,6 +147,32 @@ export function OfferSheet({
         </li>
       </ul>
       <ContinuePill onClick={onClose}>{words.ok}</ContinuePill>
+    </BottomSheet>
+  )
+}
+
+/**
+ * Start over on a form with answers (prototype v38): it asks first, with the
+ * outlined red "Yes, clear the form" and "No, keep my answers".
+ */
+export function StartOverSheet({ copy, open, onClose, onClear }: { copy: FormCopy; open: boolean; onClose: () => void; onClear: () => void }) {
+  const words = copy.startOverSheet
+  return (
+    <BottomSheet open={open} onClose={onClose} title={words.title} closeLabel={words.close}>
+      <div className="flex flex-col gap-3">
+        <Hint>{words.body}</Hint>
+        <NoticeBox tone="bad">{words.warning}</NoticeBox>
+        <button
+          type="button"
+          className="inline-flex min-h-13 w-full items-center justify-center rounded-full border-[1.5px] border-[#c81e1e] bg-white px-6 font-exo text-lg font-semibold text-[#c81e1e] italic outline-none hover:bg-red-50 focus-visible:ring-3 focus-visible:ring-red-700/70 active:scale-[0.97]"
+          onClick={onClear}
+        >
+          {words.yes}
+        </button>
+        <ContinuePill variant="ghost" onClick={onClose}>
+          {words.no}
+        </ContinuePill>
+      </div>
     </BottomSheet>
   )
 }

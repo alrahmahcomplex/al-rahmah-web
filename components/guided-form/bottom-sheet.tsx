@@ -112,7 +112,7 @@ export function BottomSheet({ open, onClose, title, closeLabel, children }: Bott
             type="button"
             aria-label={closeLabel}
             onClick={() => close.current()}
-            className="ml-auto grid size-11 flex-none place-items-center rounded-full border-0 bg-blue-50 text-blue-600 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-[0.94]"
+            className="ml-auto grid size-11 flex-none place-items-center rounded-full border-0 bg-blue-50 text-blue-600 outline-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.94]"
           >
             <Icon name="x" />
           </button>

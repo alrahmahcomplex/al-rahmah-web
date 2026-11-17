@@ -124,3 +124,18 @@ test("an unrecognised code never stops the form", async ({ page, context }) => {
   await send(page, "en")
   await expect(page.getByRole("heading", { name: WORDS.en.done })).toBeVisible()
 })
+
+test("the code box adds the hyphen by itself, and the code typed without it is the agent's", async ({ page, context }) => {
+  await setLanguageCookie(context, "en")
+  await page.goto("/apply")
+  await toReview(page, "en")
+  const code = field(page, "en")
+  await code.pressSequentially("bjn402")
+  await expect(code).toHaveValue("BJN-402")
+  await openQuestion(page).getByRole("button", { name: "Check Discount" }).click()
+  await expect(page.getByText("Well done! You save TZS 10,000 for each student.")).toBeVisible()
+  // A Promo code's shape (four letters or more, then digits) stays as typed.
+  await code.fill("")
+  await code.pressSequentially("karibu2026")
+  await expect(code).toHaveValue("KARIBU2026")
+})

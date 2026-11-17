@@ -1,12 +1,13 @@
 "use client"
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react"
+import { toast } from "sonner"
 
 import { BrandTopBar } from "@/components/brand"
 import { buzz, GuidedStack, ProgressBar, prefersReducedMotion, revealStep } from "@/components/guided-form"
 import type { TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import { usePageLanguage } from "@/components/page-language"
-import { admissionYears, childNameKey, MAX_CHILDREN, type FieldProblem, type FormField } from "@/lib/admission-form"
+import { admissionYears, childNameKey, MAX_CHILDREN, type FieldProblem, type FormField, type NamePart } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
 import { formatCount, shownApplicationCount } from "@/lib/live-apply"
 import { discountCodeCookie, DISCOUNT_CODE_COOKIE, initialDiscountCode, normalizeDiscountCode, STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
@@ -16,10 +17,8 @@ import { tanzaniaToday } from "@/lib/school-calendar"
 import { checkDiscountCode, submitAdmissionForm } from "./actions"
 import { Confirmation } from "./confirmation"
 import { COPY } from "./copy"
-import { clearDraft, emptyChild, EMPTY_PARENT, readDraft, writeDraft, type ChildDraft, type ParentDraft } from "./draft"
+import { clearDraft, emptyChild, EMPTY_PARENT, isEmptyDraft, readDraft, writeDraft, type ChildDraft, type ParentDraft } from "./draft"
 import {
-  asChild,
-  asParent,
   defaultYear as defaultYearFor,
   firstOpenable,
   furthest,
@@ -28,17 +27,21 @@ import {
   paramToKey,
   parseKey,
   restoreDone,
+  skipped,
   stepForProblem,
   stepProblems,
   STUDENT_KINDS,
   studentKey,
+  studentName,
+  wireChild,
+  wireParent,
   yearOf,
   type StepKey,
 } from "./flow"
 import { useLiveApply } from "./live"
 import type { AdmissionCalendar, AdmissionFormState, DiscountCodeCheck } from "./outcome"
-import { questionItems, stepId } from "./questions"
-import { ClassSheet, OfferSheet } from "./sheets"
+import { boxOf, questionItems, stepId } from "./questions"
+import { ClassSheet, OfferSheet, StartOverSheet } from "./sheets"
 
 // The Admission form, one question at a time (concept C). Answered questions
 // fold into a line with a "Badilisha …" link; Continue on a reopened question
@@ -58,11 +61,17 @@ import { ClassSheet, OfferSheet } from "./sheets"
 type Shown = FieldProblem & { server: boolean }
 type Notice = "check-pending" | "rate-limited" | "check-failed" | "unavailable" | null
 type FormState = { parent: ParentDraft; children: ChildDraft[]; discountCode: string; done: ReadonlySet<StepKey>; open: StepKey }
-type Sheet = { kind: "class"; card: number } | { kind: "offer" } | null
+type Sheet = { kind: "class"; card: number } | { kind: "offer" } | { kind: "start-over" } | null
 type Outcome = { fullName: string; admissionNumber: string }
 
 // How long Continue on the Discount code question waits for the code check.
 const CODE_WAIT_MS = 6000
+
+// How long "The father is the custodian" waits before moving on, as v38 does.
+const SWITCH_PAUSE_MS = 700
+
+const STUDENT_BOXES = ["firstName", "fatherFirst", "fatherMiddle", "fatherLast"] as const
+const PERSON_BOXES = ["firstName", "middleName", "lastName"] as const
 
 // Marks a history entry this form pushed.
 const PUSHED = "admissionFormQ"
@@ -102,13 +111,22 @@ function urlKey(children: readonly ChildDraft[]): StepKey {
   return removed && last ? studentKey(removed[1] as "name" | "class" | "board", last.card) : order(children)[0]
 }
 
+// The name box a problem should take focus in: the part it names, else the
+// first empty box, else the first.
+function nameBox(base: string, part: NamePart | undefined, boxes: readonly string[], values: object | undefined): string {
+  const held = values as Record<string, unknown> | undefined
+  const box = part ? boxOf(part) : (boxes.find((key) => !String(held?.[key] ?? "").trim()) ?? boxes[0])
+  return `#${base}-${box}`
+}
+
 // Where focus goes for a problem.
-function problemSelector({ field, child }: FieldProblem, children: readonly ChildDraft[]): string {
+function problemSelector({ field, child, part }: FieldProblem, children: readonly ChildDraft[], parent: ParentDraft): string {
   const card = child === null ? null : (children[child]?.card ?? null)
   switch (field) {
     case "student_name":
+      return nameBox(`student-name-${card}`, part, STUDENT_BOXES, child === null ? undefined : children[child])
     case "duplicate_child":
-      return `#student-name-${card}`
+      return `#student-name-${card}-firstName`
     case "class_name":
       return `#${stepId(studentKey("class", card ?? 0))} .gf-pop`
     case "enrollment_year":
@@ -116,7 +134,7 @@ function problemSelector({ field, child }: FieldProblem, children: readonly Chil
     case "day_or_boarding":
       return `input[name="board-${card}"]`
     case "contact_name":
-      return "#parent-name"
+      return parent.fatherCustodian ? "#father-custodian" : nameBox("parent-name", part, PERSON_BOXES, parent)
     case "relationship":
       return 'input[name="relationship"]'
     case "relationship_description":
@@ -139,7 +157,10 @@ function focusIn(root: ParentNode, selector: string): boolean {
 }
 
 const PROBLEM_FIELDS: Record<string, readonly FormField[]> = {
-  fullName: ["student_name", "duplicate_child"],
+  firstName: ["student_name", "duplicate_child"],
+  fatherFirst: ["student_name", "duplicate_child"],
+  fatherMiddle: ["student_name", "duplicate_child"],
+  fatherLast: ["student_name", "duplicate_child"],
   className: ["class_name"],
   enrollmentYear: ["enrollment_year"],
   dayOrBoarding: ["day_or_boarding"],
@@ -236,6 +257,8 @@ export function AdmissionFormSteps({
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const doneHeading = useRef<HTMLHeadingElement>(null)
   const lastPointer = useRef(0)
+  // The pause after the father switch turns on, before the form moves on.
+  const switchTimer = useRef<number | undefined>(undefined)
   // The code nobody has that Continue has already stopped on once.
   const stoppedFor = useRef<string | null>(null)
   // The questions this page has history entries for, in history order, and
@@ -283,7 +306,9 @@ export function AdmissionFormSteps({
     }
     const done = draft ? restoreDone(draft.done, entries, years) : new Set<StepKey>()
     const first = firstOpenable(entries, done, years)
-    const want = paramToKey(new URLSearchParams(window.location.search).get("q"), entries.children)
+    const asked = paramToKey(new URLSearchParams(window.location.search).get("q"), entries.children)
+    // The relationship question is skipped while the father is the custodian.
+    const want = asked && skipped(asked, entries.parent) ? "pname" : asked
     const keys = order(entries.children)
     const open = want && keys.indexOf(want) <= keys.indexOf(first) ? want : first
     if (draft) lastCard.current = draft.children.length
@@ -342,7 +367,8 @@ export function AdmissionFormSteps({
     function onPopState() {
       if (confirmed) return
       const f = formRef.current
-      const want = urlKey(f.children)
+      const asked = urlKey(f.children)
+      const want = skipped(asked, f.parent) ? "pname" : asked
       const keys = order(f.children)
       const first = firstOpenable(f, f.done, years)
       const target = keys.includes(want) && keys.indexOf(want) <= keys.indexOf(first) ? want : first
@@ -372,7 +398,7 @@ export function AdmissionFormSteps({
       setProblems(shown)
       reveal(shown)
       if (target !== f.open) setForm({ ...f, open: target })
-      else if (shown[0]) focusSoon(problemSelector(shown[0], f.children))
+      else if (shown[0]) focusSoon(problemSelector(shown[0], f.children, f.parent))
     }
     window.addEventListener("popstate", onPopState)
     return () => window.removeEventListener("popstate", onPopState)
@@ -425,7 +451,7 @@ export function AdmissionFormSteps({
     setProblems(shown)
     reveal(shown)
     const f = formRef.current
-    if (f.open === key && shown[0]) focusSoon(problemSelector(shown[0], f.children))
+    if (f.open === key && shown[0]) focusSoon(problemSelector(shown[0], f.children, f.parent))
     show({ ...f, open: key }, "replace")
   }
 
@@ -434,7 +460,7 @@ export function AdmissionFormSteps({
     setProblems(shown)
     reveal(shown)
     buzz()
-    if (shown[0]) focusSoon(problemSelector(shown[0], formRef.current.children))
+    if (shown[0]) focusSoon(problemSelector(shown[0], formRef.current.children, formRef.current.parent))
   }
 
   // Clears the problems a change fixes, and any the server named.
@@ -447,9 +473,13 @@ export function AdmissionFormSteps({
   function onOpened(li: HTMLLIElement) {
     const f = formRef.current
     const first = problemsRef.current[0]
-    const focused = first ? focusIn(li, problemSelector(first, f.children)) : false
+    const focused = first ? focusIn(li, problemSelector(first, f.children, f.parent)) : false
     if (!focused) {
-      const field = li.querySelector<HTMLInputElement>('.gf-fold input:not([type="radio"]):not(#discount-code)')
+      // The first empty text box that shows, else the first that shows.
+      const boxes = [...li.querySelectorAll<HTMLInputElement>('.gf-fold input:not([type="radio"]):not([type="checkbox"]):not(#discount-code)')].filter(
+        (input) => !input.closest("[inert]"),
+      )
+      const field = boxes.find((input) => !input.value) ?? boxes[0]
       const title = li.querySelector<HTMLElement>(".gf-fold h2")
       ;(field ?? title)?.focus({ preventScroll: true })
     }
@@ -538,6 +568,8 @@ export function AdmissionFormSteps({
     }
     const latest = formRef.current
     const done = new Set(latest.done).add(key)
+    // With the father as custodian the relationship is Father: answered too.
+    if (key === "pname" && latest.parent.fatherCustodian) done.add("rel")
     const nextChildren = children === f.children ? latest.children : children
     setProblems([])
     setExpanded(new Set())
@@ -563,8 +595,9 @@ export function AdmissionFormSteps({
   function goBack() {
     const f = formRef.current
     const keys = order(f.children)
-    const at = keys.indexOf(f.open)
+    let at = keys.indexOf(f.open)
     if (at <= 0) return
+    while (at > 1 && skipped(keys[at - 1], f.parent)) at -= 1
     const target = keys[at - 1]
     setInteracted(true)
     setNotice(null)
@@ -609,12 +642,37 @@ export function AdmissionFormSteps({
     const f = formRef.current
     setForm({ ...f, parent: { ...f.parent, ...change } })
     const fields = new Set<FormField>()
-    if ("fullName" in change) fields.add("contact_name")
+    if ("firstName" in change || "middleName" in change || "lastName" in change || "fatherCustodian" in change) fields.add("contact_name")
     if ("relationship" in change) fields.add("relationship").add("relationship_description")
     if ("relationshipDescription" in change) fields.add("relationship_description")
     if ("phone" in change) fields.add("phone")
     if ("whatsapp" in change) fields.add("whatsapp")
     clearProblems((shown) => fields.has(shown.field))
+  }
+
+  // "The father is the custodian": on, the relationship is Father and the form
+  // moves on to the phone after a moment; off, the name boxes open again and
+  // the relationship question comes back, empty if it was Father.
+  function fatherSwitch(on: boolean) {
+    window.clearTimeout(switchTimer.current)
+    const f = formRef.current
+    const parent: ParentDraft = on
+      ? { ...f.parent, fatherCustodian: true, relationship: "Father", relationshipDescription: "" }
+      : { ...f.parent, fatherCustodian: false, relationship: f.parent.relationship === "Father" ? "" : f.parent.relationship }
+    const done = new Set(f.done)
+    if (!on) done.delete("rel")
+    setForm({ ...f, parent, done })
+    clearProblems((shown) => shown.field === "contact_name" || shown.field === "relationship" || shown.field === "relationship_description")
+    if (on) switchTimer.current = window.setTimeout(() => void commit("pname"), prefersReducedMotion() ? 0 : SWITCH_PAUSE_MS)
+    else focusSoon(`#parent-name-${PERSON_BOXES.find((key) => !parent[key].trim()) ?? "firstName"}`)
+  }
+
+  // Start over, on the first question: a toast on an empty form, the sheet otherwise.
+  function askStartOver() {
+    const f = formRef.current
+    const empty = f.done.size === 0 && f.discountCode === startingCode && isEmptyDraft({ parent: f.parent, children: f.children, discountCode: "", linkCode: "", done: [] })
+    if (empty) toast(copy.nothingToClear)
+    else setSheet({ kind: "start-over" })
   }
 
   function addStudent() {
@@ -650,6 +708,7 @@ export function AdmissionFormSteps({
   // form with the page's own code, and no draft.
   function restart(message: string | null) {
     round.current += 1
+    window.clearTimeout(switchTimer.current)
     clearDraft()
     lastCard.current += 1
     const children = [emptyChild(lastCard.current)]
@@ -670,7 +729,7 @@ export function AdmissionFormSteps({
     window.history.replaceState(null, "", urlFor(open, children))
     window.scrollTo({ top: 0 })
     if (message) announce(message)
-    focusSoon(`#student-name-${lastCard.current}`)
+    focusSoon(`#student-name-${lastCard.current}-firstName`)
   }
 
   function onSend(formElement: HTMLFormElement) {
@@ -695,8 +754,8 @@ export function AdmissionFormSteps({
       "form",
       JSON.stringify({
         submissionKey,
-        parent: asParent(f.parent),
-        children: f.children.map(asChild),
+        parent: wireParent(f.parent, f.children),
+        children: f.children.map(wireChild),
         discountCode: code || undefined,
         // The field has a value, so the code-holder notice is showing.
         noticeVersion: code ? FORM_NOTICE_VERSION : undefined,
@@ -762,11 +821,21 @@ export function AdmissionFormSteps({
     if (problem.server && field === "phone") return copy.problems.phone_unreadable
     if (problem.server && field === "enrollment_year") return copy.problems.year_closed
     if (field === "duplicate_child" && problem.child !== null && children[problem.child]) {
-      const key = childNameKey(children[problem.child].fullName)
-      const firstOne = children.slice(0, problem.child).find((child) => childNameKey(child.fullName) === key) ?? children[problem.child]
-      return copy.duplicateChild(firstOne.fullName.trim().replace(/\s+/g, " "))
+      const key = childNameKey(studentName(children[problem.child]))
+      const firstOne = children.slice(0, problem.child).find((child) => childNameKey(studentName(child)) === key) ?? children[problem.child]
+      return copy.duplicateChild(studentName(firstOne))
     }
+    // A box left empty, which the page found itself.
+    if (!problem.server && problem.part && field === "student_name") return copy.studentNameMissing
+    if (!problem.server && problem.part && field === "contact_name") return copy.custodianNameMissing
     return copy.problems[field]
+  }
+  // The boxes a name problem marks: the parts it names, or all of them.
+  const namesInvalid = (field: "student_name" | "contact_name", childIndex: number | null) => {
+    const found = problems.filter((shown) => shown.field === field && (field === "contact_name" || shown.child === childIndex))
+    if (found.length === 0) return null
+    if (found.some((shown) => !shown.part)) return "all" as const
+    return new Set(found.map((shown) => shown.part as NamePart))
   }
   const unplaced = problems.find((shown) => stepForProblem(shown, children) === null)
   const noticeText = notice
@@ -808,16 +877,32 @@ export function AdmissionFormSteps({
       <h1 className="sr-only">{copy.title}</h1>
       <section className="rounded-[32px] bg-white px-5 py-6 shadow-[0_30px_80px_-15px] shadow-blue-600/25 sm:rounded-[40px] sm:px-7 sm:py-8 max-[330px]:rounded-[26px] max-[330px]:px-3">
         {confirmed ? (
-          <Confirmation
-            copy={copy}
-            outcomes={confirmed.outcomes}
-            alreadySent={alreadySent}
-            officePhone={officePhone}
-            headingRef={doneHeading}
-            savedTotal={confirmed.saved}
-            applications={applications}
-            onAgain={() => restart(null)}
-          />
+          <>
+            {/* Every group full; Start over opens a new form at once (v38). */}
+            <ProgressBar
+              groups={groups.map((group) => ({ ...group, done: group.steps, current: -1 }))}
+              activeGroup={3}
+              canBack={false}
+              onBack={() => {}}
+              canReset
+              onReset={() => {
+                restart(null)
+                toast(copy.newFormToast)
+              }}
+              labels={{ back: copy.back, reset: copy.reset }}
+              status={copy.progressFinished}
+            />
+            <Confirmation
+              copy={copy}
+              outcomes={confirmed.outcomes}
+              alreadySent={alreadySent}
+              officePhone={officePhone}
+              headingRef={doneHeading}
+              savedTotal={confirmed.saved}
+              applications={applications}
+              onAgain={() => restart(null)}
+            />
+          </>
         ) : (
           <>
             <ProgressBar
@@ -826,8 +911,8 @@ export function AdmissionFormSteps({
               whoLabel={who}
               canBack={at > 0}
               onBack={goBack}
-              canReset={at <= 0 && done.size === 0}
-              onReset={() => restart(copy.resetDone)}
+              canReset={at <= 0}
+              onReset={askStartOver}
               labels={{ back: copy.back, reset: copy.reset }}
               status={status}
             />
@@ -838,7 +923,8 @@ export function AdmissionFormSteps({
               }}
               onKeyDown={(event) => {
                 const target = event.target as HTMLElement
-                if (event.key !== "Enter" || !(target instanceof HTMLInputElement) || target.type === "radio") return
+                // A name box's Enter moves to the next box (it prevents the default).
+                if (event.key !== "Enter" || event.defaultPrevented || !(target instanceof HTMLInputElement) || target.type === "radio" || target.type === "checkbox") return
                 event.preventDefault()
                 void commit(formRef.current.open)
               }}
@@ -864,6 +950,7 @@ export function AdmissionFormSteps({
                   yearOpen,
                   whatsappOn,
                   message,
+                  namesInvalid,
                   codeAnswer: answer,
                   codeChecking: currentCode !== null && checking.has(currentCode),
                   feeEach,
@@ -879,6 +966,7 @@ export function AdmissionFormSteps({
                     change,
                     child: updateChild,
                     parent: updateParent,
+                    fatherSwitch,
                     tapChoice,
                     code: (value) => {
                       setForm({ ...formRef.current, discountCode: value })
@@ -930,6 +1018,15 @@ export function AdmissionFormSteps({
           if (!classCard) return
           setSheet(null)
           updateChild(classCard.card, { className }, true)
+        }}
+      />
+      <StartOverSheet
+        copy={copy}
+        open={sheet?.kind === "start-over"}
+        onClose={() => setSheet(null)}
+        onClear={() => {
+          restart(null)
+          toast(copy.resetDone)
         }}
       />
       <OfferSheet

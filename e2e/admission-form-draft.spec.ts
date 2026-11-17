@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { expectQuestion, family, fillForm, fillParent, fillStudent, openQuestion, PHONE_WIDTH, send, toCode, toSend, setLanguageCookie, WORDS } from "./admission-form"
+import { expectQuestion, family, fillForm, fillParent, fillStudent, nameBox, openQuestion, PHONE_WIDTH, send, toCode, toSend, setLanguageCookie, WORDS } from "./admission-form"
 
 // The Admission form's history entries and its sessionStorage draft (#255):
 // the phone's Back and Forward move between questions, a reload keeps the
@@ -20,8 +20,9 @@ test.beforeEach(async ({ context }) => {
 test("Back, Forward and reload keep every entry, and a confirmed send clears them", async ({ page }) => {
   const who = family()
   const ref = `MJ-${who.phone.slice(-6)}`
+  const own = who.child.split(" ")[0]
   await page.goto(`/apply?ref=${ref}`)
-  await openQuestion(page).getByRole("textbox").fill(who.child)
+  await nameBox(page, "sw").fill(who.childTyped)
   await openQuestion(page).getByRole("button", { name: t.continue }).click()
   await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
   await expect(page).toHaveURL(`/apply?ref=${ref}&q=class-1`)
@@ -29,7 +30,7 @@ test("Back, Forward and reload keep every entry, and a confirmed send clears the
   await page.goBack()
   await expectQuestion(page, t.studentName)
   await expect(page).toHaveURL(`/apply?ref=${ref}`)
-  await expect(openQuestion(page).getByRole("textbox")).toHaveValue(who.child)
+  await expect(nameBox(page, "sw")).toHaveValue(own)
 
   await page.goForward()
   await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
@@ -41,7 +42,7 @@ test("Back, Forward and reload keep every entry, and a confirmed send clears the
   // The form's own Back steps back through history, so Forward still works.
   await page.getByRole("button", { name: t.back }).click()
   await expectQuestion(page, t.studentName)
-  await expect(openQuestion(page).getByRole("textbox")).toHaveValue(who.child)
+  await expect(nameBox(page, "sw")).toHaveValue(own)
   await page.goForward()
   await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
 
@@ -68,13 +69,13 @@ test("Back, Forward and reload keep every entry, and a confirmed send clears the
 
   await page.reload()
   await expectQuestion(page, t.studentName)
-  await expect(openQuestion(page).getByRole("textbox")).toHaveValue("")
+  await expect(nameBox(page, "sw")).toHaveValue("")
 })
 
 test("switching language on a later question keeps the form's Back in history", async ({ page }) => {
   const who = family()
   await page.goto("/apply")
-  await fillStudent(page, "sw", who.child, nextYear)
+  await fillStudent(page, "sw", who.childTyped, nextYear)
   await page.getByRole("button", { name: "Menyu" }).click()
   await page.getByRole("button", { name: "English" }).click()
   await expectQuestion(page, WORDS.en.another)

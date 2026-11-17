@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { AdmissionChild, AdmissionForm, AdmissionParent, ChildField, NamePart, ParentField } from "@/lib/admission-form"
 
-import { applyFormDiscountCode } from "./referral"
+import { applyFormDiscountCode, formDiscountCodeToKeep } from "./referral"
 import type { Result } from "./result"
 
 // The Admission form's writes. Each child becomes an Applied lead through
@@ -153,8 +153,11 @@ export async function submitAdmissionForm(
   supabase: SupabaseClient,
   form: AdmissionForm,
 ): Promise<Result<ChildOutcome[], AdmissionFormError>> {
-  const { submissionKey, parent, children, discountCode, noticeVersion } = form
+  const { submissionKey, parent, children, noticeVersion } = form
+  // The hash takes the code as sent, so a retry is the same send whatever the
+  // lookup below finds; the leads keep a Promo code without the box's hyphen.
   const hash = payloadHash(form)
+  const discountCode = form.discountCode ? await formDiscountCodeToKeep(supabase, form.discountCode) : undefined
   const newContact = {
     ...contactName(parent),
     relationship: parent.relationship,

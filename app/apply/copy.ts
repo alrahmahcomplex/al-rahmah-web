@@ -27,6 +27,11 @@ type Copy = {
   reset: string
   resetDone: string
   cleared: string
+  // Start over (prototype v38): the sheet with answers, the toasts.
+  startOverSheet: { title: string; body: string; warning: string; yes: string; no: string; close: string }
+  nothingToClear: string
+  newFormToast: string
+  progressFinished: string
   continue: string
   change: Record<ChangeWord, string>
   // Students.
@@ -34,6 +39,9 @@ type Copy = {
   studentName: string
   studentNameQ: (n: number) => string
   studentNameHint: string
+  // The name boxes' placeholders, which are also their names for a screen reader.
+  names: { first: string; middle: string; last: string; student: string; father: string }
+  fullNameLine: string
   classQ: (name: string) => string
   className: string
   popular: string
@@ -60,16 +68,19 @@ type Copy = {
   maxChildren: (max: number) => string
   // The custodian.
   parentBlock: string
-  parentNameQ: string
+  custodianQ: string
+  custodianHint: (student: string | null) => string
+  fatherIsCustodian: string
   parentName: string
-  relQ: (name: string | null) => string
-  relQMany: string
+  relQ: (custodian: string, student: string | null) => string
+  relQMany: (custodian: string) => string
   relName: string
   relationships: Record<Relationship, string>
   relDescribe: string
-  phoneQ: string
+  phoneQ: (father: string | null) => string
   phone: string
   phoneHint: string
+  fatherNote: (father: string) => { before: string; name: string; after: string }
   whatsappDifferent: string
   whatsapp: string
   optional: string
@@ -112,6 +123,9 @@ type Copy = {
   sending: string
   // Problems and notices.
   problems: Record<FormField | "phone_unreadable" | "year_closed", string>
+  // A name box left empty.
+  studentNameMissing: string
+  custodianNameMissing: string
   duplicateChild: (name: string) => string
   checkPending: string
   rateLimited: string
@@ -149,6 +163,17 @@ export const COPY: Record<Language, Copy> = {
     reset: "Anza upya",
     resetDone: "Fomu imeanza upya.",
     cleared: "Fomu imefutwa. Anza upya.",
+    startOverSheet: {
+      title: "Uanze upya?",
+      body: "Kila ulichoandika kwenye fomu hii kitafutwa.",
+      warning: "Hili haliwezi kurudishwa. Utaanza tena kutoka swali la kwanza.",
+      yes: "Ndiyo, futa fomu",
+      no: "Hapana, acha majibu yangu",
+      close: "Funga",
+    },
+    nothingToClear: "Hakuna cha kufuta bado. Fomu iko tupu.",
+    newFormToast: "Fomu mpya iko tayari.",
+    progressFinished: "Imetumwa.",
     continue: "Endelea",
     change: {
       name: "Badilisha Jina",
@@ -165,6 +190,8 @@ export const COPY: Record<Language, Copy> = {
     studentName: "Jina kamili la mwanafunzi",
     studentNameQ: (n) => (n === 1 ? "Mwanafunzi anaitwa nani?" : `Mwanafunzi wa ${ORDINALS_SW[n - 1]} anaitwa nani?`),
     studentNameHint: "Kama lilivyo kwenye cheti cha kuzaliwa.",
+    names: { first: "Jina la kwanza", middle: "Jina la kati", last: "Jina la mwisho", student: "Jina la mwanafunzi", father: "Jina la baba" },
+    fullNameLine: "Jina kamili la mwanafunzi:",
     classQ: (name) => (name ? `${name} anaomba darasa gani?` : "Anaomba darasa gani?"),
     className: "Darasa analoomba",
     popular: "Wazazi wengi huchagua",
@@ -190,16 +217,20 @@ export const COPY: Record<Language, Copy> = {
     removeNamed: (name) => `Ondoa ${name}`,
     maxChildren: (max) => `Unaweza kuomba kwa wanafunzi hadi ${max} kwenye fomu moja.`,
     parentBlock: "Msimamizi",
-    parentNameQ: "Jina lako kamili ni nani?",
+    custodianQ: "Msimamizi ni nani?",
+    custodianHint: (student) =>
+      student ? `Mtu anayemlea ${student} na kulipa ada ya shule.` : "Mtu anayewalea wanafunzi na kulipa ada ya shule.",
+    fatherIsCustodian: "Baba ndiye msimamizi",
     parentName: "Jina kamili la msimamizi",
-    relQ: (name) => (name ? `Wewe ni nani kwa ${name}?` : "Uhusiano wako na mwanafunzi"),
-    relQMany: "Wewe ni nani kwa wanafunzi hawa?",
+    relQ: (custodian, student) => `${custodian || "Msimamizi"} ni nani kwa ${student || "mwanafunzi"}?`,
+    relQMany: (custodian) => `${custodian || "Msimamizi"} ni nani kwa wanafunzi hawa?`,
     relName: "Uhusiano na mwanafunzi",
     relationships: { Mother: "Mama", Father: "Baba", Guardian: "Mlezi", Other: "Mwingine" },
     relDescribe: "Eleza uhusiano wako na mwanafunzi",
-    phoneQ: "Namba yako ya simu ni ipi?",
+    phoneQ: (father) => (father ? `Namba ya simu ya ${father} ni ipi?` : "Namba ya simu ya msimamizi ni ipi?"),
     phone: "Namba ya simu",
-    phoneHint: "Ofisi ya udahili itakupigia kwa namba hii.",
+    phoneHint: "Ofisi ya udahili itapiga simu kwa namba hii.",
+    fatherNote: (father) => ({ before: "Msimamizi: ", name: father, after: ", baba. Uhusiano umewekwa kuwa Baba." }),
     whatsappDifferent: "Namba yangu ya WhatsApp ni tofauti",
     whatsapp: "Namba ya WhatsApp",
     optional: "si lazima",
@@ -262,6 +293,8 @@ export const COPY: Record<Language, Copy> = {
       submission_key: "Maombi yamebadilika tangu ulipotuma mara ya kwanza. Bonyeza Tuma maombi tena.",
       payload: "Hatukuweza kusoma fomu. Pakia ukurasa upya kisha ujaribu tena.",
     },
+    studentNameMissing: "Andika jina la mwanafunzi na majina yote matatu ya baba.",
+    custodianNameMissing: "Andika majina yote matatu ya msimamizi, au washa kitufe kama ni baba.",
     duplicateChild: (name) => `${name} yupo mara mbili kwenye fomu hii. Ondoa mmoja, au sahihisha jina.`,
     checkPending: "Subiri ukaguzi wa usalama ukamilike, kisha utume.",
     rateLimited: "Umejaribu mara nyingi mno. Subiri dakika chache kisha ujaribu tena. Majibu yako bado yapo.",
@@ -301,6 +334,17 @@ export const COPY: Record<Language, Copy> = {
     reset: "Start over",
     resetDone: "The form has started over.",
     cleared: "The form is cleared. Start again.",
+    startOverSheet: {
+      title: "Start over?",
+      body: "Everything typed on this form will be cleared.",
+      warning: "This can't be undone. You start again from the first question.",
+      yes: "Yes, clear the form",
+      no: "No, keep my answers",
+      close: "Close",
+    },
+    nothingToClear: "Nothing to clear yet. The form is empty.",
+    newFormToast: "A new form is ready.",
+    progressFinished: "Sent.",
     continue: "Continue",
     change: {
       name: "Change Name",
@@ -317,6 +361,8 @@ export const COPY: Record<Language, Copy> = {
     studentName: "Student's full name",
     studentNameQ: (n) => (n === 1 ? "What is the student's name?" : `What is student ${ORDINALS_EN[n - 1]}'s name?`),
     studentNameHint: "As it is on the birth certificate.",
+    names: { first: "First name", middle: "Middle name", last: "Last name", student: "Student's name", father: "Father's name" },
+    fullNameLine: "Student's full name:",
     classQ: (name) => (name ? `Which class is ${name} applying for?` : "Which class are they applying for?"),
     className: "Class applying for",
     popular: "Most parents choose",
@@ -342,16 +388,20 @@ export const COPY: Record<Language, Copy> = {
     removeNamed: (name) => `Remove ${name}`,
     maxChildren: (max) => `You can apply for up to ${max} students on one form.`,
     parentBlock: "Custodian",
-    parentNameQ: "What is your full name?",
+    custodianQ: "Who is the custodian?",
+    custodianHint: (student) =>
+      student ? `The person who looks after ${student} and pays the school fees.` : "The person who looks after the students and pays the school fees.",
+    fatherIsCustodian: "The father is the custodian",
     parentName: "Custodian's full name",
-    relQ: (name) => (name ? `Who are you to ${name}?` : "Relationship to the student"),
-    relQMany: "Who are you to the students?",
+    relQ: (custodian, student) => `Who is ${custodian || "the custodian"} to ${student || "the student"}?`,
+    relQMany: (custodian) => `Who is ${custodian || "the custodian"} to the students?`,
     relName: "Relationship to the student",
     relationships: { Mother: "Mother", Father: "Father", Guardian: "Guardian", Other: "Other" },
     relDescribe: "Describe your relationship to the student",
-    phoneQ: "What is your phone number?",
+    phoneQ: (father) => (father ? `What is ${father}'s phone number?` : "What is the custodian's phone number?"),
     phone: "Phone number",
-    phoneHint: "The admissions office will call you on this number.",
+    phoneHint: "The admissions office will call this number.",
+    fatherNote: (father) => ({ before: "Custodian: ", name: father, after: ", the father. The relationship is set to Father." }),
     whatsappDifferent: "My WhatsApp number is different",
     whatsapp: "WhatsApp number",
     optional: "optional",
@@ -414,6 +464,8 @@ export const COPY: Record<Language, Copy> = {
       submission_key: "Your application changed since you first sent it. Tap Send application again.",
       payload: "We couldn't read the form. Reload the page and try again.",
     },
+    studentNameMissing: "Type the student's name and all three of the father's names.",
+    custodianNameMissing: "Type all three of the custodian's names, or turn on the switch if it is the father.",
     duplicateChild: (name) => `${name} is on this form twice. Remove one, or correct the name.`,
     checkPending: "Wait a moment for the security check to finish, then send.",
     rateLimited: "Too many tries. Wait a few minutes, then try again. Everything you typed is still here.",

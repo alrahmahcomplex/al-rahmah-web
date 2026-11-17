@@ -5,10 +5,19 @@ import { clearDraft, DRAFT_KEY, EMPTY_PARENT, emptyChild, parseDraft, readDraft,
 const YEARS = [2026, 2027]
 
 const DRAFT: Draft = {
-  parent: { fullName: "Amina Fixture", relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
+  parent: {
+    firstName: "AMINA",
+    middleName: "HASSANI",
+    lastName: "FIXTURE",
+    fatherCustodian: false,
+    relationship: "Mother",
+    relationshipDescription: "",
+    phone: "0700 000 900",
+    whatsapp: "",
+  },
   children: [
-    { card: 4, fullName: "Zawadi Fixture", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" },
-    { card: 7, fullName: "Juma Fixture", className: "FORM 1", enrollmentYear: 2026, dayOrBoarding: "Boarding" },
+    { card: 4, firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" },
+    { card: 7, firstName: "JUMA", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", className: "FORM 1", enrollmentYear: 2026, dayOrBoarding: "Boarding" },
   ],
   discountCode: "AMINA-1",
   linkCode: "BJN-402",
@@ -53,12 +62,12 @@ describe("the Admission form's draft", () => {
     writeDraft({
       ...DRAFT,
       parent: { ...DRAFT.parent, relationship: "Uncle" },
-      children: [{ card: 1, fullName: "Zawadi Fixture", className: "STD 9", enrollmentYear: 2025, dayOrBoarding: "Weekly" }],
+      children: [{ ...DRAFT.children[0], card: 1, className: "STD 9", enrollmentYear: 2025, dayOrBoarding: "Weekly" }],
     })
     const draft = readDraft(YEARS)!
     expect(draft.parent.relationship).toBe("")
-    expect(draft.parent.fullName).toBe("Amina Fixture")
-    expect(draft.children).toEqual([{ card: 1, fullName: "Zawadi Fixture", className: "", enrollmentYear: null, dayOrBoarding: "" }])
+    expect(draft.parent.firstName).toBe("AMINA")
+    expect(draft.children).toEqual([{ ...DRAFT.children[0], card: 1, className: "", enrollmentYear: null, dayOrBoarding: "" }])
   })
 
   it("ignores anything that isn't a draft this form wrote", () => {
@@ -67,10 +76,36 @@ describe("the Admission form's draft", () => {
     expect(parseDraft(JSON.stringify({ version: 99, parent: DRAFT.parent }), YEARS)).toBeNull()
     // The three-step form's drafts (version 1) start the new form afresh.
     expect(parseDraft(JSON.stringify({ ...DRAFT, version: 1 }), YEARS)).toBeNull()
-    const odd = parseDraft(JSON.stringify({ version: 2, parent: { fullName: 7 }, children: "two", discountCode: ["x"], done: "all" }), YEARS)
+    const odd = parseDraft(
+      JSON.stringify({ version: 3, parent: { firstName: 7, fatherCustodian: "yes" }, children: "two", discountCode: ["x"], done: "all" }),
+      YEARS,
+    )
     expect(odd).toEqual({ parent: EMPTY_PARENT, children: [emptyChild(1)], discountCode: "", linkCode: "", done: [] })
-    const many = parseDraft(JSON.stringify({ version: 2, parent: {}, children: Array(12).fill({}) }), YEARS)
+    const many = parseDraft(JSON.stringify({ version: 3, parent: {}, children: Array(12).fill({}) }), YEARS)
     expect(many?.children).toHaveLength(8)
+  })
+
+  it("keeps the father switch", () => {
+    writeDraft({ ...DRAFT, parent: { ...DRAFT.parent, fatherCustodian: true, relationship: "Father" } })
+    expect(readDraft(YEARS)?.parent).toMatchObject({ fatherCustodian: true, relationship: "Father" })
+  })
+
+  it("brings back a draft from before the name boxes with its names empty and its other answers kept", () => {
+    const old = {
+      version: 2,
+      parent: { fullName: "Amina Fixture", relationship: "Mother", relationshipDescription: "", phone: "0700 000 900", whatsapp: "" },
+      children: [{ fullName: "Zawadi Fixture", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }],
+      discountCode: "AMINA-1",
+      linkCode: "",
+      done: ["name-1", "class-1"],
+    }
+    expect(parseDraft(JSON.stringify(old), YEARS)).toEqual({
+      parent: { ...EMPTY_PARENT, relationship: "Mother", phone: "0700 000 900" },
+      children: [{ ...emptyChild(1), className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }],
+      discountCode: "AMINA-1",
+      linkCode: "",
+      done: ["name-1", "class-1"],
+    })
   })
 
   it("keeps only the answered questions it knows by name", () => {

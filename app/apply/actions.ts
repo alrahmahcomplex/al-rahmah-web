@@ -6,7 +6,7 @@ import { admissionContact, admissionYears, parseAdmissionForm } from "@/lib/admi
 import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { normalizeDiscountCode } from "@/lib/referral-link"
 import { submitAdmissionForm as saveAdmissionForm } from "@/lib/services/admission-form"
-import { estimateDiscountCode } from "@/lib/services/referral"
+import { estimateFormDiscountCode } from "@/lib/services/referral"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
@@ -97,7 +97,7 @@ export async function checkDiscountCode(code: unknown): Promise<DiscountCodeChec
 
   let estimate
   try {
-    estimate = await estimateDiscountCode(supabase, normalized ?? "")
+    estimate = await estimateFormDiscountCode(supabase, normalized ?? "")
   } catch (error) {
     console.error("Discount code check failed", error)
     return { status: "unavailable" }

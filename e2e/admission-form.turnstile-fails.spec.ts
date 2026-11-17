@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { expectQuestion, family, fillForm, openQuestion, PHONE_WIDTH, setLanguageCookie, waitForSecurityCheck, WORDS } from "./admission-form"
+import { expectQuestion, family, fillForm, nameBox, openQuestion, PHONE_WIDTH, setLanguageCookie, waitForSecurityCheck, WORDS } from "./admission-form"
 
 // The Admission form's fail-closed path, on the server whose Turnstile secret
 // always fails (playwright.config.ts).
@@ -47,7 +47,7 @@ test("a failed security check is refused, keeps the entries and resets the widge
   await page.getByRole("button", { name: WORDS.sw.back }).click()
   await page.getByRole("button", { name: WORDS.sw.back }).click()
   await page.getByRole("button", { name: WORDS.sw.back }).click()
-  await expectQuestion(page, /Wewe ni nani kwa/)
+  await expectQuestion(page, /ni nani kwa/)
   await page.getByRole("button", { name: "Badilisha Jina" }).last().click()
-  await expect(openQuestion(page).getByRole("textbox")).toHaveValue(who.parent)
+  await expect(nameBox(page, "sw", "first")).toHaveValue(who.parent.split(" ")[0])
 })

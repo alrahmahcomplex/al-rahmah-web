@@ -14,12 +14,22 @@ import { E2E_PORT } from "./server"
 
 export const PHONE_WIDTH = { width: 390, height: 844 }
 
+// Names go in boxes (prototype v38, #403): the student's own name, then the
+// father's three, and the custodian's three. Typed or filled with spaces, a
+// name spreads across the boxes. `child` and `parent` are the full names the
+// page shows; `childTyped` is what goes in the student's first box.
 export function family() {
-  const suffix = randomUUID().slice(0, 6)
+  const suffix = randomUUID().slice(0, 6).toUpperCase()
+  const student = (first: string) => ({ typed: `${first} MAJARIBIO BABA ${suffix}`, name: `${first} MAJARIBIO ${suffix}` })
+  const child = student("MWANAFUNZI")
   return {
-    parent: `Mzazi Majaribio ${suffix}`,
+    parent: `MZAZI MAMA ${suffix}`,
     phone: `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`,
-    child: `Mwanafunzi Majaribio ${suffix}`,
+    child: child.name,
+    childTyped: child.typed,
+    // The father's three names, as the switch "The father is the custodian" shows them.
+    father: `MAJARIBIO BABA ${suffix}`,
+    student,
   }
 }
 
@@ -36,11 +46,14 @@ export const WORDS = {
     another: "Unaomba kwa mwanafunzi mwingine pia?",
     addStudent: "Ndiyo, ongeza mwanafunzi",
     noMore: "Hapana, endelea",
-    parentName: "Jina lako kamili ni nani?",
+    parentName: "Msimamizi ni nani?",
+    studentBox: "Jina la mwanafunzi",
+    firstBox: "Jina la kwanza",
+    fatherSwitch: "Baba ndiye msimamizi",
     mother: "Mama",
     other: "Mwingine",
     otherDescription: "Eleza uhusiano wako na mwanafunzi",
-    phone: "Namba yako ya simu ni ipi?",
+    phone: "Namba ya simu ya msimamizi ni ipi?",
     haveCode: "Una code ya punguzo?",
     codeLabel: "Code ya Punguzo",
     codeCheck: "Hakiki Punguzo",
@@ -67,11 +80,14 @@ export const WORDS = {
     another: "Are you applying for another student too?",
     addStudent: "Yes, add a student",
     noMore: "No, continue",
-    parentName: "What is your full name?",
+    parentName: "Who is the custodian?",
+    studentBox: "Student's name",
+    firstBox: "First name",
+    fatherSwitch: "The father is the custodian",
     mother: "Mother",
     other: "Other",
     otherDescription: "Describe your relationship to the student",
-    phone: "What is your phone number?",
+    phone: "What is the custodian's phone number?",
     haveCode: "Have a discount code?",
     codeLabel: "Discount code",
     codeCheck: "Check Discount",
@@ -94,6 +110,11 @@ export type Lang = keyof typeof WORDS
 export function openQuestion(page: Page) {
   // A question folding away on its way out keeps its open state until it goes.
   return page.locator('li[data-state="open"]:not(.gf-leaving)')
+}
+
+/** The open question's first name box: the student's own name, or the custodian's First name. */
+export function nameBox(page: Page, lang: Lang, which: "student" | "first" = "student") {
+  return openQuestion(page).getByRole("textbox", { name: WORDS[lang][which === "student" ? "studentBox" : "firstBox"], exact: true })
 }
 
 /**
@@ -124,7 +145,8 @@ function levelOf(className: string): keyof (typeof WORDS)["sw"]["levels"] {
 }
 
 /**
- * Answers one student's three questions: the name, the class (from the full
+ * Answers one student's three questions: the name (`name` as typed in the
+ * student's box, spreading into the father's), the class (from the full
  * list, after picking the year), and Boarding. Leaves "another student?"
  * open, or the custodian's name after the eighth (`last`).
  */
@@ -137,7 +159,7 @@ export async function fillStudent(
 ) {
   const t = WORDS[lang]
   const q = openQuestion(page)
-  await q.getByRole("textbox").fill(name)
+  await nameBox(page, lang).fill(name)
   await q.getByRole("button", { name: t.continue }).click()
   await expect(q.getByRole("button", { name: t.chooseOther })).toBeVisible()
   if (!(await q.getByText(year, { exact: true }).isVisible())) {
@@ -159,7 +181,7 @@ export async function fillParent(page: Page, lang: Lang, who: Pick<ReturnType<ty
   const t = WORDS[lang]
   const q = openQuestion(page)
   await expectQuestion(page, t.parentName)
-  await q.getByRole("textbox").fill(who.parent)
+  await nameBox(page, lang, "first").fill(who.parent)
   await q.getByRole("button", { name: t.continue }).click()
   await tile(q, t.mother).click()
   await expectQuestion(page, t.phone)
@@ -173,7 +195,7 @@ export async function toCode(page: Page, lang: Lang, who: ReturnType<typeof fami
   const t = WORDS[lang]
   for (let n = 1; n <= students; n++) {
     if (n > 1) await openQuestion(page).getByRole("button", { name: t.addStudent }).click()
-    await fillStudent(page, lang, students === 1 ? who.child : `${who.child} ${n}`, year)
+    await fillStudent(page, lang, students === 1 ? who.childTyped : who.student(`MWANAFUNZI${n}`).typed, year)
   }
   await openQuestion(page).getByRole("button", { name: t.noMore }).click()
   await fillParent(page, lang, who)

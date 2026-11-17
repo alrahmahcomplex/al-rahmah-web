@@ -19,7 +19,7 @@
 }
 .gf-round:hover { background: var(--gf-whisper); }
 .gf-round:active { transform: scale(0.92); }
-.gf-round:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.gf-round:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
 
 /* ---------- progress bar ---------- */
 .gf-bar-row {
@@ -168,6 +168,47 @@ html.rm .gf-gn.gf-cheer { animation: none; }
 }
 .gf-names-head::after { content: ""; flex: 1; border-top: 0.75px dashed var(--gf-line); }
 
+/* ---------- the switch row (prototype v38, "The father is the custodian") ---------- */
+.gf-swrow {
+  position: relative; display: flex; align-items: center; gap: 14px; min-height: 44px; padding: 14px 16px; cursor: pointer; text-align: left;
+  border: 0.75px solid var(--gf-line); border-radius: 20px; background: var(--gf-paper);
+  transition: background var(--gf-t-med) var(--gf-ease-out), border-color var(--gf-t-med);
+}
+.gf-swrow:hover { background: var(--gf-chrome); }
+.gf-swrow:has(input:checked) { border-color: var(--gf-indigo); background: var(--gf-whisper); }
+.gf-swrow input { position: absolute; left: 16px; top: 50%; width: 52px; height: 32px; margin: -16px 0 0; opacity: 0; cursor: pointer; }
+.gf-swrow .gf-trk {
+  flex: none; position: relative; width: 52px; height: 32px; border-radius: 999px; background: var(--gf-whisper); box-shadow: inset 0 0 0 2px var(--gf-line-strong);
+  transition: background var(--gf-t-med) var(--gf-ease-out), box-shadow var(--gf-t-med) var(--gf-ease-out);
+}
+.gf-swrow .gf-knb {
+  position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; border-radius: 50%; background: var(--gf-quiet); color: var(--gf-indigo);
+  display: grid; place-items: center; transform: scale(0.667); transition: transform var(--gf-t-med) var(--gf-ease-out), background var(--gf-t-med) var(--gf-ease-out);
+}
+.gf-swrow .gf-knb svg { width: 15px; height: 15px; opacity: 0; transition: opacity var(--gf-t-med); }
+.gf-swrow input:focus-visible + .gf-trk { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
+.gf-swrow input:active + .gf-trk .gf-knb { transform: scale(0.85); }
+.gf-swrow input:checked + .gf-trk { background: var(--gf-indigo); box-shadow: inset 0 0 0 2px var(--gf-indigo); }
+.gf-swrow input:checked + .gf-trk .gf-knb { transform: translateX(20px); background: var(--gf-paper); }
+.gf-swrow input:checked + .gf-trk .gf-knb svg { opacity: 1; }
+.gf-swrow input:checked:active + .gf-trk .gf-knb { transform: translateX(20px) scale(1.08); }
+.gf-swt { display: flex; flex-direction: column; gap: 2px; min-width: 0; line-height: 1.45; color: var(--gf-ink); }
+.gf-swt b { font-weight: 600; font-size: 16px; }
+.gf-swt small { font-size: 13px; color: var(--gf-ink-soft); letter-spacing: 0.02em; overflow-wrap: anywhere; }
+
+/* ---------- a part that folds open and shut (the custodian's name boxes under the switch) ---------- */
+.gf-reveal {
+  display: grid; grid-template-rows: 0fr; grid-template-columns: minmax(0, 1fr); opacity: 0; margin: -7px -6px;
+  transition: grid-template-rows var(--gf-fold) var(--gf-ease-out), opacity var(--gf-fade) var(--gf-ease-out), margin var(--gf-fold) var(--gf-ease-out);
+}
+.gf-reveal > div { min-height: 0; overflow: hidden; padding: 0 6px; }
+.gf-reveal.gf-on { grid-template-rows: 1fr; opacity: 1; margin: 0 -6px; }
+.gf-reveal.gf-on > div { padding: 6px; }
+
+/* the full name the boxes build, under them */
+.gf-full-line { min-height: 21px; overflow-wrap: anywhere; }
+.gf-full-line b { color: var(--gf-ink); font-weight: 600; letter-spacing: 0.02em; }
+
 /* ---------- choices: radio rows with the tick on the right, the one-tap default tile ---------- */
 .gf-choice { position: relative; display: block; }
 .gf-choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
@@ -178,7 +219,7 @@ html.rm .gf-gn.gf-cheer { animation: none; }
 }
 .gf-choice:hover .gf-row { border-color: var(--gf-line-strong); background: var(--gf-chrome); }
 .gf-choice input:active + .gf-row { transform: scale(0.98); }
-.gf-choice input:focus-visible + .gf-row { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.gf-choice input:focus-visible + .gf-row { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
 .gf-choice input:checked + .gf-row { background: var(--gf-indigo); border-color: var(--gf-indigo); color: var(--gf-paper); }
 .gf-row .gf-t { display: block; font-weight: 600; font-size: 17px; line-height: 1.3; }
 .gf-row .gf-d { display: block; font-weight: 400; font-size: 14px; color: var(--gf-quiet); }
@@ -211,7 +252,7 @@ html.rm .gf-gn.gf-cheer { animation: none; }
 .gf-seg.gf-big span { min-height: 56px; font-family: var(--font-exo), "Exo", sans-serif; font-style: italic; font-weight: 800; font-size: 17px; line-height: 1.15; color: var(--gf-indigo); }
 .gf-seg label:hover span { border-color: var(--gf-line-strong); background: var(--gf-chrome); }
 .gf-seg input:active + span { transform: scale(0.97); }
-.gf-seg input:focus-visible + span { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.gf-seg input:focus-visible + span { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
 .gf-seg input:checked + span { background: var(--gf-indigo); color: var(--gf-paper); border-color: var(--gf-indigo); }
 
 .gf-pop {
@@ -225,7 +266,7 @@ html.rm .gf-gn.gf-cheer { animation: none; }
 .gf-pop small { font-size: 14px; color: var(--gf-ink-soft); }
 .gf-pop:hover { background: var(--gf-chrome); }
 .gf-pop:active { transform: scale(0.98); }
-.gf-pop:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
+.gf-pop:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
 .gf-pop[aria-pressed="true"] { background: var(--gf-indigo); border-color: var(--gf-indigo); color: var(--gf-paper); }
 .gf-pop[aria-pressed="true"] small { color: rgb(255 255 255 / 0.85); }
 @media (max-width: 380px) {

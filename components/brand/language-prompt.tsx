@@ -281,7 +281,7 @@ export function LanguagePrompt({ show, menuButtonRef, inPlace = false }: Languag
                     data-pick={lang}
                     onClick={() => confirm(lang)}
                     className={cn(
-                      "inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full px-6 font-exo text-[17px] font-bold italic outline-none select-none focus-visible:ring-3 focus-visible:ring-blue-600/40",
+                      "inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full px-6 font-exo text-[17px] font-bold italic outline-none select-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)",
                       lang === "sw" ? "gf-go bg-orange-500 text-white hover:bg-orange-600" : "border-[1.5px] border-blue-600/22 bg-transparent text-blue-600 hover:bg-blue-50 active:scale-[0.96]",
                     )}
                   >

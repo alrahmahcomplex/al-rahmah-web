@@ -16,7 +16,7 @@ export function ChangeLink({ className, children, type = "button", ...props }: B
     <button
       type={type}
       className={cn(
-        "inline-flex min-h-11 items-center gap-1.5 rounded-full px-2.5 text-[15px] font-semibold whitespace-nowrap text-blue-600 underline decoration-blue-600/35 underline-offset-4 transition-colors outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-[0.97] max-[380px]:whitespace-normal",
+        "inline-flex min-h-11 items-center gap-1.5 rounded-full px-2.5 text-[15px] font-semibold whitespace-nowrap text-blue-600 underline decoration-blue-600/35 underline-offset-4 transition-colors outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.97] max-[380px]:whitespace-normal",
         className,
       )}
       {...props}
@@ -212,7 +212,7 @@ export function ContinuePill({ variant = "go", icon, pending, className, childre
       aria-disabled={pending || props["aria-disabled"] || undefined}
       aria-busy={pending || undefined}
       className={cn(
-        "inline-flex w-full items-center justify-center gap-2 rounded-full px-6 font-exo text-lg font-semibold italic outline-none select-none focus-visible:ring-3 focus-visible:ring-blue-600/40",
+        "inline-flex w-full items-center justify-center gap-2 rounded-full px-6 font-exo text-lg font-semibold italic outline-none select-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)",
         go
           ? "gf-go min-h-13 bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-600"
           : "gf-ghost min-h-16 rounded-[24px] border-[1.5px] border-blue-600/45 bg-transparent text-blue-600 transition-[background,transform] hover:bg-blue-50 active:scale-[0.96]",
@@ -278,7 +278,7 @@ export function OfferPill({ children, onClick, className }: { children: ReactNod
       aria-haspopup="dialog"
       onClick={onClick}
       className={cn(
-        "gf-offerpill inline-flex min-h-[30px] flex-none items-center gap-1.5 rounded-full border-[1.5px] border-orange-700 bg-[#fff4e8] px-3 py-1 text-[11px] font-bold tracking-[0.06em] text-orange-700 uppercase outline-none hover:bg-[#ffe8d1] focus-visible:ring-3 focus-visible:ring-blue-600/40",
+        "gf-offerpill inline-flex min-h-[30px] flex-none items-center gap-1.5 rounded-full border-[1.5px] border-orange-700 bg-[#fff4e8] px-3 py-1 text-[11px] font-bold tracking-[0.06em] text-orange-700 uppercase outline-none hover:bg-[#ffe8d1] focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)",
         className,
       )}
     >
@@ -296,7 +296,7 @@ export function InfoButton({ label, onClick, className }: { label: string; onCli
       aria-haspopup="dialog"
       aria-label={label}
       onClick={onClick}
-      className={cn("gf-ibtn mr-1.5 inline-grid size-[22px] place-items-center rounded-full border-0 bg-transparent p-0 align-[-5px] text-orange-700 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40", className)}
+      className={cn("gf-ibtn mr-1.5 inline-grid size-[22px] place-items-center rounded-full border-0 bg-transparent p-0 align-[-5px] text-orange-700 outline-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)", className)}
     >
       <Icon name="info" className="size-[18px]" />
     </button>

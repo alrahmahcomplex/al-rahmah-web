@@ -25,21 +25,22 @@ const AGENT_CODE = "BJN-402"
 
 let year: number
 
-// A year in 1963–1997 with no lead in it, nor in the years either side.
+// A year in 1963–1997 with no lead in it, nor in the years either side,
+// picked at random from those still free. Each run fills three years, so
+// after many runs without a reset none may be left.
 async function emptyYear(): Promise<number> {
-  for (;;) {
-    const candidate = 1963 + randomInt(0, 35)
-    const taken = await inRolledBackTransaction(async (sql) => {
-      const { rows } = await sql.query<{ n: number }>(
-        `select count(*)::int as n from public.leads
-         where created_at >= make_timestamptz($1 - 1, 1, 1, 0, 0, 0, 'Africa/Dar_es_Salaam')
-           and created_at < make_timestamptz($1 + 2, 1, 1, 0, 0, 0, 'Africa/Dar_es_Salaam')`,
-        [candidate],
-      )
-      return rows[0].n
-    })
-    if (taken === 0) return candidate
-  }
+  const free = await inRolledBackTransaction(async (sql) => {
+    const { rows } = await sql.query<{ year: number }>(
+      `select y as year from generate_series(1963, 1997) as y
+       where not exists (
+           select 1 from public.leads l
+           where l.created_at >= make_timestamptz(y - 1, 1, 1, 0, 0, 0, 'Africa/Dar_es_Salaam')
+             and l.created_at < make_timestamptz(y + 2, 1, 1, 0, 0, 0, 'Africa/Dar_es_Salaam'))`,
+    )
+    return rows.map((row) => row.year)
+  })
+  if (free.length === 0) throw new Error("No free year in 1963–1997 for the chart counts test: run `npm run db:reset`.")
+  return free[randomInt(0, free.length)]
 }
 
 function formOf(className: AdmissionChild["className"], discountCode?: string): AdmissionForm {

@@ -479,11 +479,11 @@ describe("the Manager's queue", () => {
 
 // An agent imported with only three names and a code (#463): no mobile, no
 // WhatsApp, no email.
-async function importedWithoutMobile() {
+async function importedWithoutMobile(whatsapp = "") {
   const letter = () => String.fromCharCode(65 + randomInt(0, 26))
   const code = `C${letter()}${letter()}-${randomInt(100, 1000)}`
   const fullName = `Zuhura Claim ${randomUUID().slice(0, 8)}`
-  const bytes = new TextEncoder().encode(toCsv([["Code", "Full name", "Mobile", "WhatsApp", "Email"], [code, fullName, "", "", ""]]))
+  const bytes = new TextEncoder().encode(toCsv([["Code", "Full name", "Mobile", "WhatsApp", "Email"], [code, fullName, "", whatsapp, ""]]))
   const manager = await signedIn(MANAGER)
   const checked = await checkAgentImportFile(manager, `agents-${randomUUID().slice(0, 8)}.csv`, bytes)
   if (!checked.ok) throw new Error(JSON.stringify(checked.error))
@@ -545,6 +545,26 @@ describe("claiming an agent imported with no mobile (#463)", () => {
       error: { kind: "phone-taken", agent: expect.objectContaining({ id: taker.data.agent.id }) },
     })
     expect(await contactOf(agent.id)).toEqual({ phone: null, whatsapp: null, email: null })
+  })
+
+  test("a claim fills only what is empty: an imported WhatsApp stays, unless it is the new mobile", async () => {
+    const kept = phone()
+    const agent = await importedWithoutMobile(kept)
+    const address = email("whatsapp")
+    expect(await outcome({ fullName: agent.fullName, phone: phone(), whatsapp: phone(), email: address, hasCode: true, code: agent.code })).toMatchObject({
+      kind: "claimed",
+    })
+    const entry = await queueEntry(agent.id)
+    expect(await confirmEmailClaim(await signedIn(MANAGER), entry!.claims[0].id)).toMatchObject({ ok: true })
+    expect((await contactOf(agent.id)).whatsapp).toBe(asE164(kept))
+
+    // The imported WhatsApp is the mobile the claim typed: it is the mobile now, not a second number.
+    const same = phone()
+    const other = await importedWithoutMobile(same)
+    expect(await outcome({ fullName: other.fullName, phone: same, email: email("same"), hasCode: true, code: other.code })).toMatchObject({ kind: "claimed" })
+    const otherEntry = await queueEntry(other.id)
+    expect(await confirmEmailClaim(await signedIn(MANAGER), otherEntry!.claims[0].id)).toMatchObject({ ok: true })
+    expect(await contactOf(other.id)).toMatchObject({ phone: asE164(same), whatsapp: null })
   })
 
   test("an agent with a stored mobile is still matched by phone, and keeps it", async () => {

@@ -791,7 +791,9 @@ begin
     end if;
     -- An agent imported with no mobile takes the mobile and WhatsApp the
     -- claim typed (#463), unless another current agent has that mobile now.
-    -- A stored mobile is never changed.
+    -- A claim only fills what is empty: a stored mobile or WhatsApp is never
+    -- changed, and a WhatsApp equal to the new mobile is dropped, as
+    -- agent_draft drops it.
     if agent.phone is null and claim.phone is not null then
         select * into holder from public.marketing_agents a where a.phone = claim.phone and a.retired_at is null;
         if found then
@@ -804,7 +806,7 @@ begin
         perform set_config('app.agent_fill_mobile', agent.id::text, true);
         update public.marketing_agents a
         set phone = claim.phone,
-            whatsapp = coalesce(a.whatsapp, nullif(claim.whatsapp, claim.phone))
+            whatsapp = nullif(coalesce(a.whatsapp, claim.whatsapp), claim.phone)
         where a.id = agent.id;
         perform set_config('app.agent_fill_mobile', '', true);
     end if;

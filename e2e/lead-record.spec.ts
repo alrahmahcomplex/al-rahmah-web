@@ -47,6 +47,21 @@ async function refusesGarbage(scope: Locator, field: string, submit: string, tex
   await expect(input).toHaveAttribute("aria-invalid", "true")
 }
 
+/**
+ * Waits out the date field's refocus after a refused submit. The kit moves
+ * focus to the unreadable field at once, after a 0 ms timer and two frames
+ * later (revealFirst in components/kit/date-field.tsx). Playwright's fill
+ * selects a field and then presses its keys in a second step, so a late
+ * refocus landing in between sends the keys to the refused field instead.
+ * On a slow CI runner, fill("") on the date pressed Delete in the time box,
+ * the date stayed filled, and the form was sent (#446). Frame callbacks run
+ * in the order they were asked for, so two frames and a timer from now come
+ * after the kit's.
+ */
+async function refocusDone(page: Page) {
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 0)))))
+}
+
 test.describe("a date the field cannot read is never saved", () => {
   test("Record visit", async ({ page }) => {
     await open(page, SUPER_ADMIN, leadUrl(APPLIED))
@@ -117,10 +132,13 @@ test.describe("a date the field cannot read is never saved", () => {
       await sheet.getByRole("button", { name: "Record follow-up", exact: true }).click()
       await expect(sheet.getByText(WRONG_TIME)).toBeVisible()
       await expect(time).toBeFocused()
+      await refocusDone(page)
 
       // A time with the day emptied is half a value: unreadable, so not saved either.
       await time.fill("09:30")
-      await when.getByLabel("When", { exact: true }).fill("")
+      const day = when.getByLabel("When", { exact: true })
+      await day.fill("")
+      await expect(day).toHaveValue("")
       await sheet.getByRole("button", { name: "Record follow-up", exact: true }).click()
       await expect(sheet.getByText(WRONG_DATE)).toBeVisible()
       await expect(sheet).toBeVisible()

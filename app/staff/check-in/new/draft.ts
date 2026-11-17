@@ -6,7 +6,8 @@ import { MOST_STUDENTS, type Answers } from "./model"
 // wrapped: with storage blocked the form works with no draft.
 
 const VERSION = 1
-const keyFor = (staffId: string) => `al-rahmah:register-students:${staffId}`
+const PREFIX = "al-rahmah:register-students:"
+const keyFor = (staffId: string) => `${PREFIX}${staffId}`
 
 function storage(): Storage | null {
   try {
@@ -32,8 +33,29 @@ export function clearDraft(staffId: string) {
   }
 }
 
-/** The stored answers, or null when there are none or they are not what this form wrote. */
+/**
+ * Another staff member's draft, left in this tab when they signed out, holds
+ * a family's names and phone numbers: it goes as soon as this one's is read.
+ */
+function dropOtherDrafts(staffId: string) {
+  try {
+    const store = storage()
+    if (!store) return
+    const mine = keyFor(staffId)
+    const others: string[] = []
+    for (let i = 0; i < store.length; i++) {
+      const key = store.key(i)
+      if (key && key.startsWith(PREFIX) && key !== mine) others.push(key)
+    }
+    for (const key of others) store.removeItem(key)
+  } catch {
+    // Blocked: nothing to remove.
+  }
+}
+
+/** The stored answers, or null when there are none or they are not what this form wrote. Removes every other staff member's draft. */
 export function readDraft(staffId: string): Answers | null {
+  dropOtherDrafts(staffId)
   try {
     const raw = storage()?.getItem(keyFor(staffId))
     if (!raw) return null

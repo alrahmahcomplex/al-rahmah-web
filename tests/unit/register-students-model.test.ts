@@ -94,15 +94,97 @@ describe("the fee step's preview", () => {
     expect(p.total).toBe(1_400_000 * 0.9 + 3_000_000)
   })
 
-  test("a tie goes to the earlier student, and a request waits at the full fee", () => {
+  test("equal fees name no full payer: each tied row shows both prices, and a request waits at the full fee", () => {
     const a = form([
       student(1, "NEEMA", "JUMA SALIM MRISHO"),
       student(2, "HAMISI", "JUMA SALIMU MRISHO", { sibling: { kind: "typo", of: 1, spelling: "JUMA SALIM MRISHO", against: "JUMA SALIM MRISHO" } }),
       student(3, "BAKARI", "OMARI JUMA HASSAN", { sibling: { kind: "request", of: 1, note: "", requestId: "x", close: false, against: "JUMA SALIM MRISHO" } }),
     ])
     const p = feePreview(a, FEES, 2027, {})!
-    expect(p.rows.map((r) => r.why)).toEqual(["Pays full · highest fee", "Sibling 10% · same father", "10% requested · waits for the Manager"])
-    expect(p.rows[2].pays).toBe(p.rows[2].fee)
+    const tie = "Equal fees · one pays full, one gets 10%"
+    expect(p.rows.map((r) => [r.why, r.tied ?? false, r.tone, r.fee, r.pays])).toEqual([
+      [tie, true, "plain", 1_400_000, 1_400_000 * 0.9],
+      [tie, true, "plain", 1_400_000, 1_400_000 * 0.9],
+      ["10% requested · waits for the Manager", false, "wait", 1_400_000, 1_400_000],
+    ])
+    // One full and one at 10%, whichever it is, and the request at full.
+    expect(p.total).toBe(1_400_000 + 1_400_000 * 0.9 + 1_400_000)
+    expect(p.together).toBe(true)
+  })
+
+  test("three equal fees: one pays full and the others get 10%; a cheaper sibling's row is not tied", () => {
+    const sibling = { sibling: { kind: "match", of: 1 } } as const
+    const a = form([
+      student(1, "NEEMA", "JUMA SALIM MRISHO"),
+      student(2, "HAMISI", "JUMA SALIM MRISHO", sibling),
+      student(3, "BAKARI", "JUMA SALIM MRISHO", sibling),
+      student(4, "ZAWADI", "JUMA SALIM MRISHO", { ...sibling, className: "KG 1" }),
+    ])
+    const p = feePreview(a, FEES, 2027, {})!
+    const tie = "Equal fees · one pays full, the others get 10%"
+    expect(p.rows.map((r) => [r.why, r.tied ?? false, r.off])).toEqual([
+      [tie, true, 0],
+      [tie, true, 0],
+      [tie, true, 0],
+      ["Sibling 10% · same father", false, 0.1],
+    ])
+    expect(p.total).toBe(1_400_000 + 2 * (1_400_000 * 0.9) + 1_200_000 * 0.9)
+  })
+
+  test("a dearer student after two equal fees pays full, and nothing is tied", () => {
+    const sibling = { sibling: { kind: "match", of: 1 } } as const
+    const a = form([
+      student(1, "NEEMA", "JUMA SALIM MRISHO"),
+      student(2, "HAMISI", "JUMA SALIM MRISHO", sibling),
+      student(3, "BAKARI", "JUMA SALIM MRISHO", { ...sibling, className: "FORM 1" }),
+    ])
+    const p = feePreview(a, FEES, 2027, {})!
+    expect(p.rows.map((r) => [r.why, r.tied ?? false])).toEqual([
+      ["Sibling 10% · same father", false],
+      ["Sibling 10% · same father", false],
+      ["Pays full · highest fee", false],
+    ])
+  })
+
+  const onFile = (fee: number | null, more: Partial<Answers> = {}) => ({
+    answers: (students: Student[]) =>
+      form(students, {
+        onFileAsks: [{ student: 1, leadId: "L1", name: "SALMA JUMA MRISHO", admissionNumber: "ADMSN-1", father: "JUMA SALIM MRISHO", fromSave: true }],
+        onFile: { 1: { leadId: "L1", yes: true } },
+        ...more,
+      }),
+    fees: { L1: { leadId: "L1", name: "SALMA JUMA MRISHO", className: "STD 4", status: "Visited", fee, pays: fee, anchorName: null, fullPayerName: null } },
+  })
+
+  test("a child on file with the same fee wins the tie: it is older, so it pays full", () => {
+    const file = onFile(1_400_000)
+    const p = feePreview(file.answers([student(1, "NEEMA", "JUMA SALIM MRISHO"), student(2, "HAMISI", "JUMA SALIM MRISHO", { sibling: { kind: "match", of: 1 } })]), FEES, 2027, file.fees)!
+    expect(p.rows.map((r) => [r.why, r.tied ?? false])).toEqual([
+      ["Sibling 10% · same father", false],
+      ["Sibling 10% · same father", false],
+      ["Pays full · highest fee", false],
+    ])
+  })
+
+  test("new students tied above a cheaper child on file: the tie stands, and the child on file gets the 10% with no payer named", () => {
+    const file = onFile(1_300_000)
+    const p = feePreview(file.answers([student(1, "NEEMA", "JUMA SALIM MRISHO"), student(2, "HAMISI", "JUMA SALIM MRISHO", { sibling: { kind: "match", of: 1 } })]), FEES, 2027, file.fees)!
+    expect(p.rows.map((r) => [r.why, r.tied ?? false, r.pays])).toEqual([
+      ["Equal fees · one pays full, one gets 10%", true, 1_400_000 * 0.9],
+      ["Equal fees · one pays full, one gets 10%", true, 1_400_000 * 0.9],
+      ["Sibling 10% · same father", false, 1_300_000 * 0.9],
+    ])
+    expect(p.total).toBe(1_400_000 + 1_400_000 * 0.9)
+  })
+
+  test("a child on file in a year with no Fee schedule has no fee: never TZS 0, and the new student's row is as it was", () => {
+    const file = onFile(null)
+    const p = feePreview(file.answers([student(1, "NEEMA", "JUMA SALIM MRISHO", { className: "FORM 1" })]), FEES, 2027, file.fees)!
+    expect(p.rows.map((r) => [r.name, r.why, r.fee, r.pays])).toEqual([
+      ["NEEMA JUMA MRISHO", "Pays full · highest fee", 1_500_000, 1_500_000],
+      ["SALMA JUMA MRISHO", "Sibling 10% · NEEMA pays full", null, null],
+    ])
+    expect(p.total).toBe(1_500_000)
   })
 
   test("a sibling on file Enrolled at full gives the new student 10%, and its own fee is kept", () => {
@@ -301,7 +383,12 @@ describe("the links in the database's order (review rounds 2 and 3)", () => {
     ])
     expect([1, 2, 3].map((k) => savedFather(a, k))).toEqual([SALIM, SALIM, SALIM])
     // B still waits for the Manager: only its spelling changed.
-    expect(feePreview(a, FEES, 2027, {})!.rows.map((r) => r.tone)).toEqual(["plain", "wait", "good"])
+    // A and C are proven siblings with equal fees, so neither is named the full payer.
+    expect(feePreview(a, FEES, 2027, {})!.rows.map((r) => [r.tone, r.tied ?? false])).toEqual([
+      ["plain", true],
+      ["wait", false],
+      ["plain", true],
+    ])
   })
 
   test("a link is compared with the name the group counts by, never with a student who waits on a Sibling request", () => {

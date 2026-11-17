@@ -543,23 +543,34 @@ export type FeeRow = {
   key: string
   name: string
   detail: string
-  fee: number
-  // 0.1 for the Sibling 10%.
+  // Null for a child on file in a year with no Fee schedule: shown as "Not set".
+  fee: number | null
+  // 0.1 for the Sibling 10%. 0 on a tied row, where it is not known yet.
   off: number
   why: string
   tone: "good" | "wait" | "plain"
-  pays: number
+  // On a tied row, the fee with the 10%: the row pays this or the full fee.
+  pays: number | null
+  // Shares the household's highest fee with another new student: one of them pays full.
+  tied?: boolean
   onFile?: boolean
 }
 
 export type FeePreview = { rows: FeeRow[]; total: number; together: boolean; enrolledOnFile: string | null }
 
+/** The Discount chip on each row of a tie for the highest fee. */
+export const tieWhy = (tied: number) => `Equal fees · one pays full, ${tied === 2 ? "one gets" : "the others get"} 10%`
+
 /**
  * The prototype's rule: among proven siblings registered together, the
- * highest fee pays full (the earlier student on a tie) and each other gets
- * 10%. A sibling joining a group on file gets 10% when someone there is
- * Enrolled at full or already pays full. A Sibling request waits for the
- * Admissions Manager, at the full fee for now. Null when a fee is unknown.
+ * highest fee pays full and each other gets 10%. When new students share that
+ * highest fee, the preview names no full payer: the database picks one of
+ * them (choose_full_payer, by a random id until #467), so each tied row shows
+ * both prices and the total counts one full fee. A child on file with the
+ * same fee is older, so it wins the tie. A sibling joining a group on file
+ * gets 10% when someone there is Enrolled at full or already pays full. A
+ * Sibling request waits for the Admissions Manager, at the full fee for now.
+ * Null when a new student's fee is unknown.
  */
 export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFileFees: Record<string, OnFileFee>): FeePreview | null {
   const rows: FeeRow[] = []
@@ -581,10 +592,17 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
     const ask = onFileAnswer(a, h.root) === true ? onFileAsk(a, h.root) : null
     const linked = (ask && onFileFees[ask.leadId]) || undefined
     const groupGives = linked && (linked.anchorName || linked.fullPayerName)
-    let fullPayer: number | "on-file" | null = null
+    let fullPayer: number | "on-file" | "tied" | null = null
+    // The new students who share the highest fee, when the pick among them is the database's.
+    let tied: number[] = []
     if (!groupGives && (proven.length > 1 || linked)) {
-      const best = proven.reduce((x, y) => (feeAt.get(y)! > feeAt.get(x)! ? y : x), proven[0])
-      fullPayer = linked && linked.fee !== null && linked.fee >= feeAt.get(best)! ? "on-file" : best
+      const top = Math.max(...proven.map((k) => feeAt.get(k)!))
+      const highest = proven.filter((k) => feeAt.get(k) === top)
+      if (linked && linked.fee !== null && linked.fee >= top) fullPayer = "on-file"
+      else if (highest.length > 1) {
+        fullPayer = "tied"
+        tied = highest
+      } else fullPayer = highest[0]
       if (!linked) together = true
     }
     for (const k of h.members) {
@@ -601,6 +619,8 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
         off = 0.1
         tone = "good"
         why = linked.anchorName ? `Sibling 10% · ${firstOf(linked.anchorName)} is Enrolled` : `Sibling 10% · ${firstOf(linked.fullPayerName!)} pays full`
+      } else if (tied.includes(k)) {
+        why = tieWhy(tied.length)
       } else if (fullPayer !== null) {
         if (fullPayer === k) why = "Pays full · highest fee"
         else {
@@ -609,6 +629,7 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
           why = "Sibling 10% · same father"
         }
       }
+      const isTied = tied.includes(k)
       rows.push({
         key: String(k),
         name: studentName(s.name),
@@ -617,28 +638,33 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
         off,
         why,
         tone,
-        pays: fee * (1 - off),
+        pays: isTied ? fee * 0.9 : fee * (1 - off),
+        ...(isTied ? { tied: true } : {}),
       })
-      total += fee * (1 - off)
+      // The tied fees are equal, so the total is the same whichever of them pays full.
+      total += isTied && k !== tied[0] ? fee * 0.9 : fee * (1 - off)
     }
     if (linked) {
       const enrolled = linked.status === "Enrolled"
       if (enrolled) enrolledOnFile = linked.name
-      const fee = linked.fee ?? 0
+      // Null in a year with no Fee schedule: the row says "Not set", never TZS 0.
+      const fee = linked.fee
       // Not yet Enrolled, the child on file follows the rule too: it pays full when it is
       // the group's payer, else it gets the 10% once a sibling joins.
       let why = "Fee kept · already Enrolled"
       let off = 0
-      let pays = linked.pays ?? fee
+      let pays = fee === null ? null : (linked.pays ?? fee)
       if (!enrolled) {
-        const payer = groupGives ? linked.fullPayerName : fullPayer === "on-file" ? linked.name : fullPayer === null ? null : studentName(a.students.find((x) => x.key === fullPayer)?.name)
+        const payer =
+          groupGives ? linked.fullPayerName : fullPayer === "on-file" ? linked.name : typeof fullPayer === "number" ? studentName(a.students.find((x) => x.key === fullPayer)?.name) : null
         if (payer === linked.name) {
           why = "Pays full · highest fee"
           pays = fee
-        } else if (payer) {
-          why = `Sibling 10% · ${firstOf(payer)} pays full`
+        } else if (payer || fullPayer === "tied") {
+          // On a tie among the new students, one of them pays full: no name to give.
+          why = payer ? `Sibling 10% · ${firstOf(payer)} pays full` : "Sibling 10% · same father"
           off = 0.1
-          pays = fee * 0.9
+          pays = fee === null ? null : fee * 0.9
         }
       }
       rows.push({ key: `file:${linked.leadId}`, name: linked.name, detail: `${linked.className} · already ${linked.status}`, fee, off, why, tone: off ? "good" : "plain", pays, onFile: true })

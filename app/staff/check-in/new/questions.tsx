@@ -869,6 +869,8 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
 
 export function FeesQuestion({ answers, preview, onOk }: { answers: Answers; preview: FeePreview; onOk: () => void }) {
   const tzs = (n: number) => `TZS ${Math.round(n).toLocaleString("en-US")}`
+  // A child on file in a year with no Fee schedule has no fee to show.
+  const amount = (n: number | null) => (n === null ? "Not set" : tzs(n))
   const siblings = mentionsSiblings(answers, preview)
   const student = (r: FeePreview["rows"][number]): ReactNode => (
     <>
@@ -887,9 +889,10 @@ export function FeesQuestion({ answers, preview, onOk }: { answers: Answers; pre
           rowKey={(r) => r.key}
           columns={[
             { header: "Student", cell: student, rowHeader: true },
-            { header: "School fee", cell: (r) => tzs(r.fee), align: "end" },
+            { header: "School fee", cell: (r) => amount(r.fee), align: "end" },
             { header: "Discount", cell: (r) => <Tag tone={r.tone === "good" ? "ok" : r.tone === "wait" ? "wait" : "line"}>{r.why}</Tag> },
-            { header: "Pays", cell: (r) => <b>{tzs(r.pays)}</b>, align: "end" },
+            // A tied row pays one or the other: the database picks which sibling pays full.
+            { header: "Pays", cell: (r) => <b>{r.tied ? `${amount(r.pays)} or ${amount(r.fee)}` : amount(r.pays)}</b>, align: "end" },
           ]}
           total={["New students this year", "", "", tzs(preview.total)]}
         />
@@ -901,7 +904,7 @@ export function FeesQuestion({ answers, preview, onOk }: { answers: Answers; pre
           rowKey={(r) => r.key}
           columns={[
             { header: "Student", cell: student, rowHeader: true },
-            { header: "School fee", cell: (r) => <b>{tzs(r.fee)}</b>, align: "end" },
+            { header: "School fee", cell: (r) => <b>{amount(r.fee)}</b>, align: "end" },
           ]}
           total={["New student this year", tzs(preview.total)]}
         />

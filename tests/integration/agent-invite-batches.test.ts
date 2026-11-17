@@ -17,7 +17,7 @@ import {
 import type { AgentInviteSender } from "@/lib/services/agent-invites"
 import { changeAgentStatus } from "@/lib/services/marketing-agents"
 
-import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
+import { anonClient, asSystem, inOneSnapshot, inRolledBackTransaction, signedIn } from "../support/db"
 import { ADMISSIONS, MANAGER, SEEDED_AGENT } from "../support/fixtures"
 
 // Invite batches (#192) against local Supabase, with the email sender
@@ -259,16 +259,28 @@ describe("the daily budget", () => {
   })
 
   test("counts today's agent invite emails from agent events, failures left out", async () => {
-    const before = await getInviteBudgetUsed(await manager())
     const { importBatchId } = await importAgents([email("u1"), email("u2"), email("u3")])
     const send = stubSender([null, { message: "bad", code: "email_address_invalid" }, null])
 
-    await sendInviteBatch(await manager(), send, REDIRECT, { config: ROOMY, importBatchId })
+    const batch = await sendInviteBatch(await manager(), send, REDIRECT, { config: ROOMY, importBatchId })
+    if (!batch.ok) throw new Error(JSON.stringify(batch.error))
 
-    const after = await getInviteBudgetUsed(await manager())
-    if (!before.ok || !after.ok) throw new Error("unread")
-    // Other tests may send meanwhile, so at least the two that went.
-    expect(after.data - before.data).toBeGreaterThanOrEqual(2)
+    // The count is global, and other files' sends start and fail alongside,
+    // so two reads taken apart can differ by their sends (#395). Instead,
+    // within one snapshot, read the count, move this batch's three attempts
+    // to two days ago, and read it again: the difference is this batch's
+    // share alone. All of it rolls back.
+    const share = await inOneSnapshot(async (sql) => {
+      const count = "select public.agent_invite_emails_today() as n"
+      const total = (await sql.query<{ n: number }>(count)).rows[0].n
+      // agent_events refuses updates; triggers off for this rolled-back move.
+      await sql.query("set local session_replication_role = replica")
+      const moved = await sql.query("update public.agent_events set created_at = now() - interval '2 days' where batch_id = $1", [batch.data.batchId])
+      expect(moved.rowCount).toBe(3)
+      return total - (await sql.query<{ n: number }>(count)).rows[0].n
+    })
+    // Three attempts, one refused by the provider: two count.
+    expect(share).toBe(2)
   })
 
   test("with nothing left today, nothing is sent", async () => {

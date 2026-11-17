@@ -360,6 +360,11 @@ const pick = (open: Locator, name: string) =>
     .click()
 
 test("the guided form folds each answer, finishes its groups and ends on the finished screen", async ({ page }) => {
+  // About 26 answers, each folding for 300 ms and scrolling the next question
+  // into view twice (at once and 340 ms later). Every click waits for its
+  // target to stop moving, so clicks alone take about 21 s of the run: 27 to
+  // 32 s on CI against the 30 s default (#459). Three times the default.
+  test.slow()
   await page.setViewportSize({ width: 1280, height: 900 })
   await openKit(page)
   const card = page.locator('[data-part="more"]').getByRole("region", { name: "Guided form" })
@@ -449,7 +454,10 @@ test("the guided form folds each answer, finishes its groups and ends on the fin
   await expect(question("Register 2 students?")).toBeFocused()
   await open.getByRole("button", { name: "Register 2 students" }).click()
   // Once Register is pressed, the answers can't change on the way to the finished screen.
-  await card.getByRole("button", { name: "Remove Hamisi Juma Salim" }).click()
+  // The click goes straight to Remove, whose handler refuses once Register is pressed: waiting
+  // for the folding page to hold still can outlast the 950 ms before the finished screen, and
+  // the cheer below with it (#459).
+  await card.getByRole("button", { name: "Remove Hamisi Juma Salim" }).dispatchEvent("click")
 
   // The last group cheers before the Finished screen takes its place (950ms).
   await expect(bar.locator('[data-group="2"] .gf-gn.gf-cheer')).toHaveCount(1, { timeout: 800 })

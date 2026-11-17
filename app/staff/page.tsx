@@ -22,6 +22,7 @@ import { RegisterButton } from "./_home/register-button"
 import { seatsOnOpening } from "./_home/seats-on-opening"
 import { StatCard } from "./_home/stat-card"
 import { appliedCard, appliedRange, homeDate, interviewCard, interviewRange, pickedDay, pickedWeek } from "./_home/stats"
+import { mayRegister } from "./check-in/new/permissions"
 import { requireStaff } from "./session"
 import "./_home/home.css"
 
@@ -55,7 +56,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
   const canView = permissions.includes("leads.view")
   const canSeeSeats = permissions.includes("payments.view")
-  const canRegister = permissions.includes("leads.create") && permissions.includes("visits.record")
+  const canRegister = mayRegister(permissions)
   const interviews = interviewRange(day ?? today)
   const applied = appliedRange(week, today)
 

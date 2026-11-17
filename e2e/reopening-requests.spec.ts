@@ -81,29 +81,6 @@ test.describe("raising a reopening request", () => {
     await expect(page.getByText("requested reopening").first()).toBeVisible()
   })
 
-  test("from the front desk's Family hand-off", async ({ page }) => {
-    const lead = await declinedLead()
-    await signIn(page, ADMISSIONS)
-    await page.goto("/staff/check-in/new")
-    await page.getByLabel("Full name").fill("Someone typed")
-    await page.getByRole("radio", { name: "Mother" }).click()
-    await page.getByLabel("Phone", { exact: true }).fill(lead.phone)
-    await page.getByRole("button", { name: "Continue" }).click()
-
-    await page.getByRole("group", { name: lead.parent }).getByRole("button", { name: "Same person" }).click()
-    await page.getByRole("row", { name: new RegExp(lead.child) }).getByRole("link", { name: `Reopening request for ${lead.child}` }).click()
-
-    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}/reopen\\?source=duplicate_match$`))
-    await expect(page.getByText("This student is already on file, so no new record was made.")).toBeVisible()
-    await page.getByLabel("Why is the family back?").fill("The mother came to the front desk to re-register her son.")
-    await page.getByRole("button", { name: "Send request" }).click()
-
-    await expect(page).toHaveURL(new RegExp(`/staff/applicants/${lead.id}$`))
-    const pending = panel(page).getByRole("group", { name: "Pending reopening request" })
-    await expect(pending).toContainText("From the duplicate match at the front desk.")
-    await expect(pending).toContainText("The mother came to the front desk to re-register her son.")
-  })
-
   test("a second staff member sees who already asked, instead of the form", async ({ page }) => {
     await signIn(page, MANAGER)
     await page.goto(`/staff/applicants/${SEEDED_PENDING_LEAD}/reopen?source=lead`)

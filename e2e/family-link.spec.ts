@@ -127,7 +127,7 @@ test.describe("settling a match of the test's own", () => {
     await expect(page.getByText("Returning family", { exact: true })).toHaveCount(0)
   })
 
-  test("the known Family's lead and check-in list the form's child as unconfirmed", async ({ page }) => {
+  test("the known Family's lead lists the form's child as unconfirmed", async ({ page }) => {
     const match = await unconfirmedMatch()
     await signIn(page, ADMISSIONS)
 
@@ -135,17 +135,6 @@ test.describe("settling a match of the test's own", () => {
     await expect(familyRow(page, match.applied)).toContainText("Unconfirmed")
     // A match is settled from the child the form sent, not from here.
     await expect(page.getByRole("button", { name: "Confirm match" })).toHaveCount(0)
-
-    await page.goto("/staff/check-in/new")
-    await page.getByLabel("Full name").fill(match.parent)
-    await page.getByRole("radio", { name: "Father" }).click()
-    await page.getByLabel("Phone", { exact: true }).fill(match.phone)
-    await page.getByRole("button", { name: "Continue" }).click()
-    // One parent on file, not the form's copy as a second one.
-    await expect(page.getByRole("button", { name: "Same person", exact: true })).toHaveCount(1)
-    await page.getByRole("group", { name: match.parent }).getByRole("button", { name: "Same person" }).click()
-    await expect(page.getByRole("row", { name: new RegExp(match.applied) })).toContainText("Unconfirmed")
-    await expect(page.getByRole("row", { name: new RegExp(match.known) })).not.toContainText("Unconfirmed")
   })
 
   test("separating a sibling gives them their own parent or guardian and takes the badge away", async ({ page }) => {

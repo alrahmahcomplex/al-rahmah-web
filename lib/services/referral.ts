@@ -18,8 +18,9 @@ export type ReferralState = "approved" | "pending" | "switched_off" | "unrecogni
 export type LeadReferral = {
   // The code as stored, such as BJN-402, or null when the lead has none.
   code: string | null
-  // Null when there is no code. A Promo code reads `approved` while it gives
-  // its discount and `switched_off` otherwise; discountState says which.
+  // Null when there is no code. A Promo code reads `approved` while Active
+  // and `switched_off` otherwise; discountState says which, and
+  // sentBeforeCode whether it gives this application anything.
   state: ReferralState | null
   // The agent's name, when a current agent holds the code.
   agentName: string | null
@@ -37,6 +38,9 @@ export type LeadReferral = {
   discountState: DiscountCodeState | null
   // Whole TZS the code takes off the interview fee right now.
   amountOff: number
+  // A Promo code created after this application was sent: it gives the
+  // application nothing, whatever its state (#471). Imported records never.
+  sentBeforeCode: boolean
   agentId: string | null
   promoCodeId: string | null
 }
@@ -66,6 +70,9 @@ export type FoundDiscountCode = {
   amountOff: number
   agentId: string | null
   promoCodeId: string | null
+  // Looked up for an existing application: a Promo code created after it
+  // was sent, which gives it nothing (#471).
+  sentBeforeCode?: boolean
 }
 
 // The agent a typed code belongs to.
@@ -102,6 +109,7 @@ type DiscountRow = {
   holder_name: string | null
   state: DiscountCodeState | null
   amount_off: number
+  sent_before_code: boolean
 }
 
 // The legacy state, for screens that know agents only.
@@ -164,6 +172,7 @@ export async function getLeadReferral(
       holderName: row.holder_name,
       discountState: row.code ? (row.state ?? "unrecognised") : null,
       amountOff: row.amount_off,
+      sentBeforeCode: row.sent_before_code,
       agentId: row.agent_id,
       promoCodeId: row.promo_code_id,
     },
@@ -218,14 +227,18 @@ export async function findReferralAgent(
 
 // The agent record or Promo code a typed code belongs to, matched however it
 // is typed, or null when nothing ever held it. For the referral panel, its
-// editor and the check-in form. Staff without leads.view find nothing.
+// editor and the check-in form. With `leadId`, what the code would take off
+// that existing application (#471), and null for a lead the caller can't
+// see. Staff without leads.view find nothing.
 export async function findDiscountCode(
   supabase: SupabaseClient,
   code: string,
+  { leadId }: { leadId?: string } = {},
 ): Promise<Result<FoundDiscountCode | null, "unavailable">> {
-  const { data, error } = await supabase
-    .rpc("find_discount_code", { typed_code: code })
-    .maybeSingle<{
+  const query = leadId
+    ? supabase.rpc("find_lead_discount_code", { lead_id: leadId, typed_code: code })
+    : supabase.rpc("find_discount_code", { typed_code: code })
+  const { data, error } = await query.maybeSingle<{
       kind: "agent" | "promo"
       code: string
       holder_name: string
@@ -233,8 +246,11 @@ export async function findDiscountCode(
       amount_off: number
       agent_id: string | null
       promo_code_id: string | null
+      sent_before_code?: boolean
     }>()
   if (error) {
+    // A malformed lead id is no lead at all.
+    if (leadId && error.code === "22P02") return { ok: true, data: null }
     console.error("Could not look up a Discount code", error)
     return { ok: false, error: "unavailable" }
   }
@@ -249,6 +265,7 @@ export async function findDiscountCode(
       amountOff: data.amount_off,
       agentId: data.agent_id,
       promoCodeId: data.promo_code_id,
+      ...(leadId ? { sentBeforeCode: data.sent_before_code ?? false } : {}),
     },
   }
 }

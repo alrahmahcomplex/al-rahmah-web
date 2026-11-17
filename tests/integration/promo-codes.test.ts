@@ -6,11 +6,12 @@ vi.mock("server-only", () => ({}))
 
 import { checkPromoCodeAvailable, createPromoCode, getPromoCodeImpact, listPromoCodes, setPromoCodeState, updatePromoCode } from "@/lib/services/promo-codes"
 import { findDiscountCode, getLeadReferral, setLeadReferralCode } from "@/lib/services/referral"
+import { exportStudents } from "@/lib/services/student-export"
 
 import { agentWithLogin } from "../support/agent-students"
 import { anonClient, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { actAs, discountPhone, expectedFee, freshAgentCode, freshCode, leadWithCode, lockedAmount, payInterview } from "../support/discount-codes"
-import { ADMISSIONS, MANAGER } from "../support/fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // Promo codes (owner decisions of 2026-11-09): school codes with a name and
 // an amount, never tied to an agent. One namespace with agent codes. Active
@@ -448,6 +449,124 @@ describe("a lead carrying a Promo code", () => {
       return { code, remove, back }
     })
     expect(outcome).toEqual({ code: "promo_code_locked", remove: "delete_refused", back: "promo_code_ended" })
+  })
+})
+
+// Owner, 2026-11-17: a code typed before it was announced gives nothing. An
+// imported record is a family's record, not a new application, and keeps
+// the code whenever it was imported.
+describe("only applications sent after the code was created get its discount (#471)", () => {
+  async function promoHistory(id: string) {
+    return inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ kind: string; student_count: number; lead_ids: string[] }>(
+        "select kind, student_count, lead_ids from public.discount_amount_changes where promo_code_id = $1 order by sequence",
+        [id],
+      )
+      return rows
+    })
+  }
+
+  async function exportedFee(leadId: string): Promise<string> {
+    const admissionNumber = await inRolledBackTransaction(async (sql) => {
+      const { rows } = await sql.query<{ admission_number: string }>("select admission_number from public.leads where id = $1", [leadId])
+      return rows[0].admission_number
+    })
+    const result = await exportStudents(await signedIn(SUPER_ADMIN), { query: admissionNumber }, ["admission_number", "interview_fee_amount"])
+    if (!result.ok) throw new Error(JSON.stringify(result.error))
+    return result.data.rows[0][1]
+  }
+
+  test("an application that carried the code before then never gets it, now or on any later read", async () => {
+    const code = freshCode("E")
+    const early = await leadWithCode(code)
+    const earlyWithout = await leadWithCode(null)
+    const promo = await newPromo(25000, code)
+    // Creating the code moved no fee.
+    expect(await promoHistory(promo.id)).toEqual([{ kind: "promo_created", student_count: 0, lead_ids: [] }])
+
+    const admissions = await signedIn(ADMISSIONS)
+    expect(await getLeadReferral(admissions, early)).toEqual({
+      ok: true,
+      data: expect.objectContaining({
+        code,
+        kind: "promo",
+        discountState: "active",
+        amount: 50000,
+        amountOff: 0,
+        discountApplied: false,
+        sentBeforeCode: true,
+        promoCodeId: promo.id,
+      }),
+    })
+    // Staff putting the code on an application sent before it existed gives nothing either.
+    expect(await setLeadReferralCode(admissions, earlyWithout, code)).toEqual({ ok: true, data: { code } })
+    expect(await inRolledBackTransaction((sql) => expectedFee(sql, earlyWithout))).toBe(50000)
+
+    // An application sent after it gets it.
+    const later = await leadWithCode(code)
+    expect(await getLeadReferral(admissions, later)).toMatchObject({ ok: true, data: { amount: 25000, amountOff: 25000, sentBeforeCode: false } })
+
+    // The Referral code editor's lookup states the same for each application.
+    expect(await findDiscountCode(admissions, code.toLowerCase(), { leadId: early })).toEqual({
+      ok: true,
+      data: expect.objectContaining({ kind: "promo", code, state: "active", amountOff: 0, sentBeforeCode: true }),
+    })
+    expect(await findDiscountCode(admissions, code, { leadId: later })).toEqual({
+      ok: true,
+      data: expect.objectContaining({ kind: "promo", code, amountOff: 25000, sentBeforeCode: false }),
+    })
+    expect(await findDiscountCode(await signedIn(await createThrowawayStaff([])), code, { leadId: early })).toEqual({ ok: true, data: null })
+
+    // Every change counts and lists only the later application.
+    const manager = await signedIn(MANAGER)
+    expect(await getPromoCodeImpact(manager, promo.id, { state: "paused" })).toEqual({
+      ok: true,
+      data: [expect.objectContaining({ leadId: later, feeNow: 25000, feeAfter: 50000 })],
+    })
+    expect(await setPromoCodeState(manager, promo.id, "paused", "On hold")).toEqual({ ok: true, data: { feeChangeCount: 1 } })
+    expect(await setPromoCodeState(manager, promo.id, "active", "Back on")).toEqual({ ok: true, data: { feeChangeCount: 1 } })
+    expect(await updatePromoCode(manager, promo.id, { name: `Instagram ${code}`, amount: 30000, endsOn: null, note: null, reason: "Bigger" })).toEqual({
+      ok: true,
+      data: { feeChangeCount: 1 },
+    })
+    expect(await inRolledBackTransaction((sql) => expectedFee(sql, early))).toBe(50000)
+    expect(await inRolledBackTransaction((sql) => expectedFee(sql, later))).toBe(20000)
+
+    // The export states the same fees, and the early payment locks the full fee.
+    const interviews: string[] = []
+    for (const leadId of [early, later]) {
+      const registered = await admissions.rpc("register_for_interview", { lead_id: leadId })
+      expect(registered.error).toBeNull()
+      interviews.push((registered.data as { interview_id: string }).interview_id)
+    }
+    expect(await exportedFee(early)).toBe("50000")
+    expect(await exportedFee(later)).toBe("20000")
+    const paid = await (await signedIn(ACCOUNTANT)).rpc("set_interview_fee_status", { interview_id: interviews[0], fee_status: "Paid" })
+    expect(paid.data).toMatchObject({ locked_amount: 50000, discount_applied: false })
+
+    // The list still counts every student carrying the code.
+    const list = await listPromoCodes(admissions)
+    expect(list.ok && list.data.find((p) => p.id === promo.id)).toMatchObject({ studentCount: 3 })
+  })
+
+  test("an imported record takes the code whether it was imported before or after the code was created", async () => {
+    const code = freshCode("I")
+    const before = await leadWithCode(code, undefined, { imported: true })
+    const promo = await newPromo(20000, code)
+    expect(await promoHistory(promo.id)).toEqual([{ kind: "promo_created", student_count: 1, lead_ids: [before] }])
+    const after = await leadWithCode(code, undefined, { imported: true })
+
+    const admissions = await signedIn(ADMISSIONS)
+    for (const leadId of [before, after]) {
+      expect(await getLeadReferral(admissions, leadId)).toMatchObject({
+        ok: true,
+        data: { amount: 30000, amountOff: 20000, discountApplied: true, sentBeforeCode: false },
+      })
+    }
+    const manager = await signedIn(MANAGER)
+    const impact = await getPromoCodeImpact(manager, promo.id, { state: "paused" })
+    expect(impact.ok && impact.data.map((family) => family.leadId).sort()).toEqual([before, after].sort())
+    expect(await payInterview(before)).toBe(30000)
   })
 })
 

@@ -31,9 +31,11 @@ export async function saveLeadReferralCode(leadId: string, code: string | null):
 }
 
 // The agent record or Promo code a typed code belongs to, for staff who may
-// edit the code.
-export async function lookUpReferralCode(code: string): Promise<ReferralLookup> {
+// edit the code. With `leadId`, what it would take off that existing
+// application.
+export async function lookUpReferralCode(code: string, leadId?: string): Promise<ReferralLookup> {
   if (typeof code !== "string" || code.trim() === "") return { status: "empty" }
+  if (leadId !== undefined && typeof leadId !== "string") return { status: "unavailable" }
   // No code is longer than 20 characters, spaces aside.
   if (code.length > 60) return { status: "none" }
 
@@ -41,7 +43,7 @@ export async function lookUpReferralCode(code: string): Promise<ReferralLookup> 
   const allowed = await requirePermission(supabase, "leads.edit")
   if (!allowed.ok) return { status: "unavailable" }
 
-  const found = await findDiscountCode(supabase, code)
+  const found = await findDiscountCode(supabase, code, { leadId })
   if (!found.ok) return { status: "unavailable" }
   return found.data ? { status: "found", code: found.data } : { status: "none" }
 }

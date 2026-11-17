@@ -31,6 +31,10 @@ export function promoStateLabel(state: DiscountCodeState): string {
 // Said wherever a Promo code shows on an application.
 export const PROMO_NO_AGENT = "No Marketing Agent. No commission."
 
+// A Promo code gives nothing to an application sent before it was created
+// (#471).
+export const PROMO_SENT_BEFORE_CODE = "No discount: application sent before the Promo code was created"
+
 export type ReferralFeeLine = { label: string; amount: string; note: string | null; pending: boolean }
 
 // A day in East Africa Time, such as 4 Nov 2026.
@@ -48,6 +52,7 @@ export function referralFeeLine(
     kind?: DiscountCodeKind
     discountState?: DiscountCodeState | null
     amountOff?: number
+    sentBeforeCode?: boolean
   },
   current: { feeStatus: InterviewFeeStatus; amount: number; discountApplied: boolean } | null,
 ): ReferralFeeLine {
@@ -63,7 +68,9 @@ export function referralFeeLine(
     label: "Expected interview fee",
     amount: formatTzs(referral.amount),
     note:
-      referral.kind === "promo" && referral.discountState && referral.discountState !== "active"
+      referral.kind === "promo" && referral.sentBeforeCode
+        ? PROMO_SENT_BEFORE_CODE
+        : referral.kind === "promo" && referral.discountState && referral.discountState !== "active"
         ? `No discount: Promo code ${promoStateLabel(referral.discountState).toLowerCase()}`
         : referral.state === "switched_off"
           ? `No discount: code switched off${referral.switchedOffAt ? ` on ${DAY.format(new Date(referral.switchedOffAt))}` : ""}`
@@ -127,8 +134,12 @@ export const RETIRED_CODE_NOTE = "This code belongs to a retired Marketing Agent
 
 // What a found Promo code says: "Instagram ad · Promo code, Active ·
 // TZS 25,000 off. No Marketing Agent. No commission."
-export function promoCodeNote(code: Pick<FoundDiscountCode, "holderName" | "state" | "amountOff">): string {
-  const off = code.amountOff > 0 ? `${formatTzs(code.amountOff)} off` : "no discount"
+export function promoCodeNote(code: Pick<FoundDiscountCode, "holderName" | "state" | "amountOff" | "sentBeforeCode">): string {
+  const off = code.sentBeforeCode
+    ? "no discount: application sent before the Promo code was created"
+    : code.amountOff > 0
+      ? `${formatTzs(code.amountOff)} off`
+      : "no discount"
   return `${code.holderName} · Promo code, ${promoStateLabel(code.state)} · ${off}. ${PROMO_NO_AGENT}`
 }
 

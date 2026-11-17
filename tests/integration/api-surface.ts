@@ -1173,6 +1173,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { typed_code: "'BJN-402'" },
     agent: { returns: [] },
   },
+  "public.find_lead_discount_code(lead_id uuid, typed_code text)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'", typed_code: "'BJN-402'" },
+    agent: { returns: [] },
+  },
   "public.standard_discount_fee_impact(amount integer)": {
     roles: ["authenticated"],
     args: { amount: "12000" },

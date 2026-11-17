@@ -180,21 +180,39 @@ export type RingArc = { index: number; dash: number; rest: number; offset: numbe
 
 /**
  * The ring's arcs, one per source with a number, each with soft round ends
- * and a small gap to its neighbours. A round end reaches half the stroke's
- * width past its dash, so every dash is shortened by the gap and one stroke
- * width and starts half of that in. With one source, or none, the ring is
- * whole: `full` names the shade to draw it in.
+ * and the same small gap to its neighbours. A round end reaches half the
+ * stroke's width past its dash, so every dash is shortened by the gap and one
+ * stroke width and starts half of that in. A source too small for its round
+ * ends is given just enough of the ring to show as a dot with its gaps, taken
+ * from the others in proportion, so no arc is drawn over its neighbour. With
+ * one source, or none, the ring is whole: `full` names the shade to draw it
+ * in.
  */
 export function ringArcs(values: readonly number[]): { full: number | null; arcs: RingArc[] } {
   const around = 2 * Math.PI * RING.radius
-  const total = values.reduce((sum, value) => sum + value, 0)
   const live = values.flatMap((value, index) => (value > 0 ? [index] : []))
   if (live.length < 2) return { full: live[0] ?? 0, arcs: [] }
   const inset = RING.gap + RING.width
+  // The least of the ring an arc can take: its two round ends and its gap.
+  const least = inset + 0.01
+  const lengths = new Map<number, number>()
+  const small = new Set<number>()
+  for (;;) {
+    const rest = live.filter((index) => !small.has(index))
+    const room = around - small.size * least
+    const sum = rest.reduce((total, index) => total + values[index], 0)
+    for (const index of rest) lengths.set(index, (values[index] / sum) * room)
+    const tooSmall = rest.filter((index) => lengths.get(index)! < least)
+    if (tooSmall.length === 0) break
+    for (const index of tooSmall) {
+      small.add(index)
+      lengths.set(index, least)
+    }
+  }
   let start = 0
   const arcs = live.map((index) => {
-    const length = (values[index] / total) * around
-    const dash = Math.max(0.01, length - inset)
+    const length = lengths.get(index)!
+    const dash = length - inset
     const arc = { index, dash, rest: around - dash, offset: start + inset / 2 }
     start += length
     return arc

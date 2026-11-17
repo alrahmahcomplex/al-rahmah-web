@@ -65,9 +65,11 @@
 }
 .hm-stat-pick { grid-column: 2; grid-row: 1; align-self: center; display: flex; align-items: center; gap: 6px; }
 .hm-stat-g { grid-column: 1 / -1; grid-row: 3; align-self: end; min-width: 0; }
+/* A past day's title ("Interviews on Wed 11 Nov") is longer than the room
+   beside Reset and the picker: it takes a second line and is never cut. */
 .hm-stat-t {
-  grid-column: 1; grid-row: 1; align-self: center; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font-size: 14px; font-weight: 600; color: var(--gf-ink);
+  grid-column: 1; grid-row: 1; align-self: center; min-width: 0; margin: 0; overflow-wrap: anywhere;
+  font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--gf-ink);
 }
 /* v38 draws these 36px but outlined; the kit's ring keeps the 44px target. */
 .hm-stat .kit-round { width: 36px; height: 36px; }

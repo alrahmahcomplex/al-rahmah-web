@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 // post to it, so it checks the shape and the owner's permission rule itself
 // before the database does. The services are stubbed.
 
-const stubs = vi.hoisted(() => ({ allowed: vi.fn(), register: vi.fn() }))
+const stubs = vi.hoisted(() => ({ allowed: vi.fn(), register: vi.fn(), fee: vi.fn(), group: vi.fn() }))
 
 vi.mock("server-only", () => ({}))
 vi.mock("@/utils/supabase/server", () => ({ createClient: async () => ({ signed: "in" }) }))
@@ -14,7 +14,10 @@ vi.mock("@/lib/services/leads", async (importOriginal) => ({
   registerStudents: (...args: unknown[]) => stubs.register(...args),
 }))
 
-import { registerFamily, type RegisterFamilyForm } from "@/app/staff/check-in/new/actions"
+vi.mock("@/lib/services/lead-fees", () => ({ getLeadFee: (...args: unknown[]) => stubs.fee(...args) }))
+vi.mock("@/lib/services/sibling-counts", () => ({ explainSiblingGroup: (...args: unknown[]) => stubs.group(...args) }))
+
+import { readOnFileSibling, registerFamily, type RegisterFamilyForm } from "@/app/staff/check-in/new/actions"
 
 const form = (student: Record<string, unknown> = {}): RegisterFamilyForm =>
   ({
@@ -41,6 +44,8 @@ const staff = (permissions: string[]) => ({ ok: true, data: { id: "s", permissio
 beforeEach(() => {
   stubs.allowed.mockReset()
   stubs.register.mockReset()
+  stubs.fee.mockReset()
+  stubs.group.mockReset()
   stubs.register.mockResolvedValue({ ok: true, data: { kind: "created", students: [{ student: 1, leadId: "L", admissionNumber: "ADMSN-1", sibling: null }] } })
 })
 
@@ -60,5 +65,42 @@ describe("registerFamily", () => {
     stubs.allowed.mockResolvedValue(staff(["leads.create", "visits.record", "payments.view"]))
     expect(await registerFamily(form({ [field]: null }))).toEqual({ status: "refused", field: null })
     expect(stubs.register).not.toHaveBeenCalled()
+  })
+})
+
+describe("readOnFileSibling", () => {
+  const LEAD = "11111111-1111-4111-8111-111111111111"
+  const group = { ok: true, data: { members: [{ leadId: LEAD, studentName: "SALMA JUMA MRISHO", className: "STD 4", status: "Visited", result: "none", leadOpen: true }], anchors: [], fullPayerLeadId: null } }
+  const fee = { ok: true, data: { kind: "fee", bandFee: 1_300_000, schoolFee: 1_300_000 } }
+
+  beforeEach(() => {
+    stubs.allowed.mockResolvedValue(staff(["leads.view"]))
+    stubs.group.mockResolvedValue(group)
+    stubs.fee.mockResolvedValue(fee)
+  })
+
+  it("gives the child's fee and group", async () => {
+    expect(await readOnFileSibling(LEAD)).toEqual({
+      status: "read",
+      fee: { leadId: LEAD, name: "SALMA JUMA MRISHO", className: "STD 4", status: "Visited", fee: 1_300_000, pays: 1_300_000, anchorName: null, fullPayerName: null },
+    })
+  })
+
+  it("reads a year with no Fee schedule as no fee, not as a failure", async () => {
+    stubs.fee.mockResolvedValue({ ok: true, data: { kind: "no-schedule", year: 2027 } })
+    expect(await readOnFileSibling(LEAD)).toMatchObject({ status: "read", fee: { fee: null, pays: null } })
+  })
+
+  it("says so when the fee can't be read, rather than giving a child with no fee", async () => {
+    stubs.fee.mockResolvedValue({ ok: false, error: "unavailable" })
+    expect(await readOnFileSibling(LEAD)).toEqual({ status: "unavailable" })
+  })
+
+  it("says so when the group can't be read, or the role may not look", async () => {
+    stubs.group.mockResolvedValue({ ok: false, error: "unavailable" })
+    expect(await readOnFileSibling(LEAD)).toEqual({ status: "unavailable" })
+    stubs.group.mockResolvedValue(group)
+    stubs.allowed.mockResolvedValue({ ok: false, error: "forbidden" })
+    expect(await readOnFileSibling(LEAD)).toEqual({ status: "unavailable" })
   })
 })

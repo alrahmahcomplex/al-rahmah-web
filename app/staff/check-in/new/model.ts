@@ -1,5 +1,5 @@
 import type { FatherName, PersonName, StudentName } from "@/components/guided-form"
-import { fatherNameMatch, normalizeFatherName } from "@/lib/father-name"
+import { fatherNameMatch, normalizeFatherName, type FatherNameMatch } from "@/lib/father-name"
 import { BAND_CLASSES, FEE_BANDS, type FeeBand } from "@/lib/services/fees"
 import type {
   DayOrBoarding,
@@ -34,14 +34,21 @@ export const REGIONS = [
 
 export type SchoolAnswer = { name: string; type: "private" | "public"; region: string } | { notKnown: true }
 
-/** The answer to "Is X a sibling of another student here?", naming the earlier student by key. */
+/**
+ * The answer to "Is X a sibling of another student here?", naming the earlier
+ * student by key. An answer holds only for the question staff saw:
+ * `seen` lists the earlier students the question named as having the same
+ * father's name, and `against` is the father's name this student's was
+ * compared with. When either changes, linking() calls the answer stale and
+ * it is asked again.
+ */
 export type SiblingAnswer =
-  | { kind: "none" }
-  | { kind: "match"; of: number }
+  | { kind: "none"; seen?: number[] }
+  | { kind: "match"; of: number; seen?: number[] }
   // Close names that staff called one name with a typing mistake: `spelling` is the right father's name.
-  | { kind: "typo"; of: number; spelling: string }
+  | { kind: "typo"; of: number; spelling: string; against: string; seen?: number[] }
   // A Sibling request for the Admissions Manager. `close`: the names were close and staff said two names.
-  | { kind: "request"; of: number; note: string; requestId: string; close: boolean }
+  | { kind: "request"; of: number; note: string; requestId: string; close: boolean; against: string; seen?: number[] }
 
 export type Student = {
   // Stays with the student when another is removed.
@@ -95,8 +102,8 @@ export type Answers = {
   custodians: Record<number, Custodian>
   // Questions the save raised about a child on file, kept until answered.
   onFileAsks: OnFileAsk[]
-  // By the student's key: yes links to that child on file.
-  onFile: Record<number, boolean>
+  // By the student's key: staff's answer about one child on file. Yes links to that child, and no other.
+  onFile: Record<number, { leadId: string; yes: boolean }>
   brought?: Brought
   code?: string
   // The fee preview staff accepted, as feeSignature() writes it: a different preview asks again.
@@ -125,50 +132,151 @@ export const digits = (v: string) => v.replace(/\D/g, "")
 export const phoneOk = (v: string) => digits(v).length >= 10
 export const count = (n: number) => `${n} ${n === 1 ? "student" : "students"}`
 
-/**
- * The father's name each student's record will hold once saved, as the
- * database writes it: a typing-mistake answer puts the right spelling on every
- * member of that household holding the replaced one, in the order the
- * students are linked. A household counts by its first student's name.
- */
-export function savedFathers(a: Answers): Map<number, string> {
-  const out = new Map(a.students.map((s) => [s.key, fatherName(s.name)]))
-  const norm = (v: string | undefined) => normalizeFatherName(v)
-  for (const s of a.students) {
-    const sib = s.sibling
-    if (sib?.kind !== "typo") continue
-    const root = rootOf(a.students, s.key)
-    const members = households(a.students).find((h) => h.root === root)?.members ?? []
-    const mine = out.get(s.key)
-    const replaced = norm(mine) === norm(sib.spelling) ? out.get(root) : mine
-    for (const m of members) if (norm(out.get(m)) === norm(replaced)) out.set(m, sib.spelling)
-  }
-  return out
+// ---------------------------------------------------------------------------
+// The sibling links, as the database makes them on save.
+// ---------------------------------------------------------------------------
+
+type Basis = "matched" | "typo_confirmed" | "request_needed"
+/** sibling_basis_counts in the database. A student waiting on a Sibling request does not count. */
+const counts = (basis: Basis | undefined) => basis === "matched" || basis === "typo_confirmed"
+const sameName = (a: string | null | undefined, b: string | null | undefined) => fatherNameMatch(a, b) === "same"
+const TIER_ORDER: Record<FatherNameMatch, number> = { same: 0, close: 1, different: 2 }
+
+/** What a link to an earlier student compares, at the moment it is made. */
+export type Compared = {
+  // Which question staff get: same is a match, close asks "one name, or two?", different is a request.
+  tier: FatherNameMatch
+  // The counting student of that group this student is compared with, and its father's name then.
+  with: number
+  theirs: string
+  // The earlier student's own father's name then.
+  father: string
 }
 
-export const savedFather = (a: Answers, key: number) => savedFathers(a).get(key) ?? ""
+export type Linking = {
+  // The father's name each record holds once every link is saved.
+  fathers: Map<number, string>
+  // By student, then by earlier student: what a link to that one compares.
+  compared: Map<number, Map<number, Compared>>
+  // Linked students only. A household's first student is matched.
+  basis: Map<number, Basis>
+  // The first student whose sibling answer is not for the question the form asks now.
+  stale: number | null
+}
+
+function holds(sib: Exclude<SiblingAnswer, { kind: "none" }>, c: Compared, mine: string): boolean {
+  if (sib.kind === "match") return c.tier === "same"
+  if (!sameName(sib.against, c.theirs)) return false
+  if (sib.kind === "typo") return c.tier === "close" && (sameName(sib.spelling, mine) || sameName(sib.spelling, c.theirs))
+  return c.tier === (sib.close ? "close" : "different")
+}
 
 /**
- * An answer that changes what later answers were compared with: the students'
- * sibling answers built on it (later members of the same household) are asked
- * again, and so is everything after the students: the custodians, children on
- * file, who brought them and the fees.
+ * The sibling links as register_students makes them: one student after
+ * another in the form's order, so a student is linked after the one it links
+ * to. Each link compares the student's father's name with the names its
+ * sibling's group counts by at that moment (link_sibling_locked and
+ * sibling_name_check): the best answer wins, the earlier student on a tie. A
+ * typing-mistake answer then puts the right spelling on the students already
+ * in the group that hold the replaced one (write_typo_spelling). A student who
+ * joins later keeps its own.
+ *
+ * Everything the form shows or sends about siblings reads this one answer.
+ * Children on file are not in it: the form doesn't know their groups.
  */
-export function withoutDependents(a: Answers, key: number, own: boolean): Answers {
-  const at = a.students.findIndex((s) => s.key === key)
-  const root = rootOf(a.students, key)
-  const household = households(a.students).find((h) => h.root === root)?.members ?? [key]
-  const later = new Set(household.filter((k) => a.students.findIndex((s) => s.key === k) > at))
-  if (own) later.add(key)
-  return {
-    ...a,
-    students: a.students.map((s) => (later.has(s.key) && s.sibling && s.sibling.kind !== "none" ? { ...s, sibling: undefined } : s)),
-    custodians: {},
-    onFile: {},
-    onFileAsks: [],
-    brought: undefined,
-    feesChecked: undefined,
+export function linking(students: readonly Student[]): Linking {
+  const fathers = new Map(students.map((s) => [s.key, fatherName(s.name)]))
+  // Each linked student's group, named by its first student.
+  const group = new Map<number, number>()
+  const basis = new Map<number, Basis>()
+  const compared = new Map<number, Map<number, Compared>>()
+  let stale: number | null = null
+  const members = (g: number) => students.filter((s) => group.get(s.key) === g).map((s) => s.key)
+
+  for (const [i, s] of students.entries()) {
+    const mine = fathers.get(s.key) ?? ""
+    const options = new Map<number, Compared>()
+    for (const t of students.slice(0, i)) {
+      const g = group.get(t.key)
+      // A student in no group yet joins as matched, so it counts.
+      const counted = g === undefined ? [t.key] : members(g).filter((k) => counts(basis.get(k)))
+      let best: Compared | null = null
+      for (const k of counted) {
+        const theirs = fathers.get(k) ?? ""
+        const tier = fatherNameMatch(mine, theirs) ?? "different"
+        if (!best || TIER_ORDER[tier] < TIER_ORDER[best.tier]) best = { tier, with: k, theirs, father: fathers.get(t.key) ?? "" }
+      }
+      if (best) options.set(t.key, best)
+    }
+    compared.set(s.key, options)
+
+    const sib = s.sibling
+    if (!sib) continue
+    const unseen = sameFatherEarlier(students, i).some((k) => !sib.seen?.includes(k))
+    if (unseen) stale ??= s.key
+    if (sib.kind === "none") continue
+    const c = options.get(sib.of)
+    // An answer the comparison no longer supports links nobody until it is given again.
+    if (!c || !holds(sib, c, mine)) {
+      stale ??= s.key
+      continue
+    }
+    const g = group.get(sib.of) ?? sib.of
+    if (!group.has(sib.of)) {
+      group.set(sib.of, g)
+      basis.set(sib.of, "matched")
+    }
+    group.set(s.key, g)
+    basis.set(s.key, sib.kind === "match" ? "matched" : sib.kind === "typo" ? "typo_confirmed" : "request_needed")
+    if (sib.kind === "typo") {
+      const replaced = normalizeFatherName(sameName(sib.spelling, mine) ? c.theirs : mine)
+      for (const k of members(g)) if (normalizeFatherName(fathers.get(k)) === replaced) fathers.set(k, sib.spelling)
+    }
   }
+  return { fathers, compared, basis, stale }
+}
+
+/** The father's name each student's record will hold once saved. */
+export const savedFathers = (a: Answers) => linking(a.students).fathers
+export const savedFather = (a: Answers, key: number) => savedFathers(a).get(key) ?? ""
+
+/** Everything asked after the students, asked again: the custodians, children on file, who brought them and the fees. */
+const afterStudents = (a: Answers): Answers => ({ ...a, custodians: {}, onFile: {}, onFileAsks: [], brought: undefined, feesChecked: undefined })
+
+/**
+ * The answers with every stale sibling answer taken out, so staff are asked
+ * again: one at a time from the first, since taking one out changes what the
+ * later ones are compared with. Every change to the students goes through
+ * here, and so does a draft as it is read.
+ */
+export function settled(a: Answers): Answers {
+  let students = a.students
+  for (let stale = linking(students).stale; stale !== null; stale = linking(students).stale) {
+    const key = stale
+    students = students.map((s) => (s.key === key ? { ...s, sibling: undefined } : s))
+  }
+  return students === a.students ? a : afterStudents({ ...a, students })
+}
+
+/** A student's name answered. A different father's name asks their own sibling answer again, and every answer built on it. */
+export function withName(a: Answers, key: number, name: StudentName): Answers {
+  const old = a.students.find((s) => s.key === key)
+  const changed = old?.name !== undefined && !sameName(fatherName(old.name), fatherName(name))
+  const students = a.students.map((s) => {
+    if (s.key !== key) return s
+    return changed && s.sibling && s.sibling.kind !== "none" ? { ...s, name, sibling: undefined } : { ...s, name }
+  })
+  return changed ? settled(afterStudents({ ...a, students })) : { ...a, students }
+}
+
+/** A sibling answer given. It changes the households, so everything after the students is asked again. */
+export function withSibling(a: Answers, key: number, sibling: SiblingAnswer): Answers {
+  return settled(afterStudents({ ...a, students: a.students.map((s) => (s.key === key ? { ...s, sibling } : s)) }))
+}
+
+/** A student removed. Answers naming them go with them. */
+export function withoutStudent(a: Answers, key: number): Answers {
+  return settled(afterStudents({ ...a, more: undefined, students: a.students.filter((s) => s.key !== key) }))
 }
 
 // ---------------------------------------------------------------------------
@@ -233,7 +341,11 @@ export function households(students: readonly Student[]): Household[] {
   return out
 }
 
-/** Earlier students whose father's name is the same as this one's: the sibling question names them first. */
+/**
+ * Earlier students whose father's name, as typed, is the same as this one's:
+ * the sibling question names them first. The database asks its own
+ * same-father question (R8) by the typed names too.
+ */
 export function sameFatherEarlier(students: readonly Student[], index: number): number[] {
   const own = fatherName(students[index]?.name)
   return students.slice(0, index).filter((s) => fatherNameMatch(fatherName(s.name), own) === "same").map((s) => s.key)
@@ -249,8 +361,8 @@ export function fatherParts(a: Answers, root: number): FatherName {
 
 /** A student in this household whose father is another man: the father can't be the custodian of them all. */
 export function otherFather(a: Answers, h: Household): number | null {
-  const root = savedFather(a, h.root)
-  return h.members.find((k) => fatherNameMatch(savedFather(a, k), root) !== "same") ?? null
+  const fathers = savedFathers(a)
+  return h.members.find((k) => !sameName(fathers.get(k), fathers.get(h.root))) ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +391,7 @@ export function people(a: Answers): { people: Person[]; personOf: Record<number,
   const list: Person[] = []
   const personOf: Record<number, number> = {}
   const byContact = new Map<string, number>()
+  const fathers = savedFathers(a)
   const add = (p: Person, contactId?: string) => {
     if (contactId && byContact.has(contactId)) return byContact.get(contactId)!
     list.push(p)
@@ -297,16 +410,15 @@ export function people(a: Answers): { people: Person[]; personOf: Record<number,
       // Two households fathered by the same man on one phone are one person. Only the
       // same father's name on the same phone: any other adult with that phone stays a
       // person of their own, and the save refuses the shared number.
-      const same = list.findIndex(
-        (p) => p.father && fatherNameMatch(p.name, savedFather(a, h.root)) === "same" && digits(p.phone) === digits(c.phone),
-      )
+      const father = fathers.get(h.root) ?? ""
+      const same = list.findIndex((p) => p.father && sameName(p.name, father) && digits(p.phone) === digits(c.phone))
       // His three names are sent, so a typing-mistake sibling whose spelling the save corrects shares him.
       const parts = fatherParts(a, h.root)
       personOf[h.root] =
         same >= 0
           ? same
           : add({
-              name: savedFather(a, h.root),
+              name: father,
               father: true,
               phone: c.phone,
               payload: { firstName: parts.fatherFirst, middleName: parts.fatherMiddle, lastName: parts.fatherLast, phone: c.phone, whatsapp: c.whatsapp.trim() || undefined },
@@ -350,16 +462,61 @@ export function knownContacts(a: Answers): KnownContact[] {
   return out
 }
 
-/** For a household's first student: the open child on file, under a contact on this form, whose father's name is the same. */
+/**
+ * For a household's first student: the open child on file, under a contact on
+ * this form, whose father's name is the same. By the name as typed: this
+ * student is linked to the child on file before any sibling here is linked to
+ * it, so no typing-mistake answer has changed it yet.
+ */
 export function onFileMatch(a: Answers, root: number): OnFileAsk | null {
-  const father = savedFather(a, root)
+  const father = fatherName(a.students.find((s) => s.key === root)?.name)
   for (const contact of knownContacts(a)) {
-    const child = contact.children.find(
-      (c) => c.status !== "Declined" && c.closure === null && fatherNameMatch(c.fatherFullName, father) === "same",
-    )
+    const child = contact.children.find((c) => c.status !== "Declined" && c.closure === null && sameName(c.fatherFullName, father))
     if (child) return { student: root, leadId: child.id, name: child.studentName, admissionNumber: child.admissionNumber, father }
   }
   return null
+}
+
+/** The child on file a student is asked about: the save's own question, else the form's match for a household's first student. */
+export function onFileAsk(a: Answers, key: number): OnFileAsk | null {
+  return a.onFileAsks.find((q) => q.student === key) ?? (rootOf(a.students, key) === key ? onFileMatch(a, key) : null)
+}
+
+/** Staff's answer about that child. An answer given about another child is no answer. */
+export function onFileAnswer(a: Answers, key: number): boolean | undefined {
+  const given = a.onFile[key]
+  const ask = onFileAsk(a, key)
+  return given && ask && ask.leadId === given.leadId ? given.yes : undefined
+}
+
+/** The children on file staff linked a household to. */
+export function linkedOnFile(a: Answers): OnFileAsk[] {
+  return households(a.students)
+    .filter((h) => onFileAnswer(a, h.root) === true)
+    .map((h) => onFileAsk(a, h.root))
+    .filter((q): q is OnFileAsk => !!q)
+}
+
+/**
+ * A household's custodian answered. Another person may hold other children
+ * on file, and the match is looked for under every custodian on the form: this
+ * household's on-file answer is asked again, another household's is kept only
+ * while it is still about the same child, and the save asks its own questions
+ * again.
+ */
+export function withCustodian(a: Answers, root: number, custodian: Custodian): Answers {
+  const custodians = { ...a.custodians, [root]: custodian }
+  // A new first custodian: "the same person as before" now means someone else, so it is asked again.
+  if (households(a.students)[0]?.root === root) {
+    for (const [k, c] of Object.entries(custodians)) if (c.kind === "same") delete custodians[Number(k)]
+  }
+  const next: Answers = { ...a, custodians, onFileAsks: [], onFile: {}, brought: undefined, feesChecked: undefined }
+  for (const [k, given] of Object.entries(a.onFile)) {
+    const key = Number(k)
+    const ask = onFileAsk(next, key)
+    if (key !== root && ask && ask.leadId === given?.leadId) next.onFile[key] = given
+  }
+  return next
 }
 
 // ---------------------------------------------------------------------------
@@ -404,7 +561,7 @@ export type FeePreview = { rows: FeeRow[]; total: number; together: boolean; enr
  * Enrolled at full or already pays full. A Sibling request waits for the
  * Admissions Manager, at the full fee for now. Null when a fee is unknown.
  */
-export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFileFees: Record<string, OnFileFee | null>): FeePreview | null {
+export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFileFees: Record<string, OnFileFee>): FeePreview | null {
   const rows: FeeRow[] = []
   let total = 0
   let together = false
@@ -417,13 +574,11 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
     feeAt.set(s.key, f)
   }
 
+  const { basis } = linking(a.students)
   for (const h of households(a.students)) {
-    const proven = h.members.filter((k) => {
-      if (k === h.root) return true
-      const sib = a.students.find((s) => s.key === k)?.sibling
-      return sib?.kind === "match" || sib?.kind === "typo"
-    })
-    const ask = a.onFileAsks.find((q) => q.student === h.root && a.onFile[h.root]) ?? (a.onFile[h.root] ? onFileMatch(a, h.root) : null)
+    // The students the database counts as siblings: a Sibling request waits.
+    const proven = h.members.filter((k) => k === h.root || counts(basis.get(k)))
+    const ask = onFileAnswer(a, h.root) === true ? onFileAsk(a, h.root) : null
     const linked = (ask && onFileFees[ask.leadId]) || undefined
     const groupGives = linked && (linked.anchorName || linked.fullPayerName)
     let fullPayer: number | "on-file" | null = null
@@ -505,8 +660,25 @@ export const mentionsSiblings = (a: Answers, preview: FeePreview | null) => a.st
 /** "Fathers' names don't match" is the request's reason when staff leave the note empty. */
 export const DEFAULT_REQUEST_NOTE = "Fathers' names don't match."
 
+/**
+ * Whether staff already said this unlinked student is not a sibling of a
+ * student here with the same father's name, which the save would otherwise
+ * ask (R8). Either they answered Not a sibling with an earlier one named in
+ * the question, or a later one was asked about them by name and linked
+ * elsewhere.
+ */
+function saidNotASibling(a: Answers, index: number): boolean {
+  const s = a.students[index]
+  if (s.sibling?.kind === "none" && sameFatherEarlier(a.students, index).length > 0) return true
+  return a.students.slice(index + 1).some((t) => {
+    if (!t.sibling || rootOf(a.students, t.key) === s.key || !sameName(fatherName(t.name), fatherName(s.name))) return false
+    return t.sibling.kind !== "none" || onFileAnswer(a, t.key) === true
+  })
+}
+
 export function payload(a: Answers, defaultYear: number): { people: RegistrationPerson[]; students: RegistrationStudent[] } {
   const { people: list, personOf } = people(a)
+  const { compared } = linking(a.students)
   const number = (key: number) => a.students.findIndex((s) => s.key === key) + 1
   const students = a.students.map((s, i): RegistrationStudent => {
     const root = rootOf(a.students, s.key)
@@ -532,18 +704,18 @@ export function payload(a: Answers, defaultYear: number): { people: Registration
       out.siblingOf = { student: number(sib.of) }
       if (sib.kind === "typo") out.nameAnswer = { answer: "typo", spelling: sib.spelling }
       if (sib.kind === "request") {
-        if (sib.close) out.nameAnswer = { answer: "different" }
+        // Close names the database asks about; staff said they are two names.
+        if (compared.get(s.key)?.get(sib.of)?.tier === "close") out.nameAnswer = { answer: "different" }
         out.requestNote = sib.note.trim() || DEFAULT_REQUEST_NOTE
         out.requestId = sib.requestId
       }
     } else {
-      const ask = a.onFileAsks.find((q) => q.student === s.key) ?? (root === s.key ? onFileMatch(a, s.key) : null)
-      if (ask && a.onFile[s.key] === true) {
+      const ask = onFileAsk(a, s.key)
+      const said = onFileAnswer(a, s.key)
+      if (ask && said === true) {
         out.siblingOf = { leadId: ask.leadId }
         out.siblingFatherFullName = ask.father
-      } else if (ask && a.onFile[s.key] === false) {
-        out.notASibling = true
-      } else if (sib?.kind === "none" && sameFatherEarlier(a.students, i).length > 0) {
+      } else if ((ask && said === false) || saidNotASibling(a, i)) {
         out.notASibling = true
       }
     }

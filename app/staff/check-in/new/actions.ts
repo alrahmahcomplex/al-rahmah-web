@@ -209,31 +209,38 @@ export async function findCustodianFamily(phone: string, whatsapp: string | null
   }
 }
 
+// Unavailable: the group or the fee could not be read, so the fee step has nothing to show for this child.
+export type OnFileSiblingOutcome = { status: "read"; fee: OnFileFee } | { status: "unavailable" }
+
 /** A child on file staff linked a student to: its fee and who in its group gives the 10%, for the fee step. */
-export async function readOnFileSibling(leadId: string): Promise<OnFileFee | null> {
-  if (!str(leadId) || !UUID.test(leadId)) return null
+export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOutcome> {
+  if (!str(leadId) || !UUID.test(leadId)) return { status: "unavailable" }
   const supabase = await createClient()
   const allowed = await requirePermission(supabase, "leads.view")
-  if (!allowed.ok) return null
+  if (!allowed.ok) return { status: "unavailable" }
 
   const [explained, fee] = await Promise.all([explainSiblingGroup(supabase, leadId), getLeadFee(supabase, leadId)])
-  if (!explained.ok) return null
+  // A fee that can't be read is not "no Fee schedule": the preview would charge full where the save gives the 10%.
+  if (!explained.ok || !fee.ok) return { status: "unavailable" }
   const members = explained.data.members
   const self = members.find((m) => m.leadId === leadId)
-  if (!self) return null
+  if (!self) return { status: "unavailable" }
   const name = (id: string | null) => members.find((m) => m.leadId === id)?.studentName ?? null
   const counting = (id: string | null) => {
     const m = members.find((x) => x.leadId === id)
     return !!m && m.leadOpen && m.status !== "Declined"
   }
   return {
-    leadId,
-    name: self.studentName,
-    className: self.className,
-    status: self.status,
-    fee: fee.ok && fee.data.kind === "fee" ? fee.data.bandFee : null,
-    pays: fee.ok && fee.data.kind === "fee" ? fee.data.schoolFee : null,
-    anchorName: explained.data.anchors.length > 0 ? name(explained.data.anchors[0]) : self.status === "Enrolled" && self.result !== "ten" ? self.studentName : null,
-    fullPayerName: counting(explained.data.fullPayerLeadId) ? name(explained.data.fullPayerLeadId) : null,
+    status: "read",
+    fee: {
+      leadId,
+      name: self.studentName,
+      className: self.className,
+      status: self.status,
+      fee: fee.data.kind === "fee" ? fee.data.bandFee : null,
+      pays: fee.data.kind === "fee" ? fee.data.schoolFee : null,
+      anchorName: explained.data.anchors.length > 0 ? name(explained.data.anchors[0]) : self.status === "Enrolled" && self.result !== "ten" ? self.studentName : null,
+      fullPayerName: counting(explained.data.fullPayerLeadId) ? name(explained.data.fullPayerLeadId) : null,
+    },
   }
 }

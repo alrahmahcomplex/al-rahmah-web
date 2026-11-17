@@ -915,6 +915,20 @@ export function FeesQuestion({ answers, preview, onOk }: { answers: Answers; pre
   )
 }
 
+/** The fee step when a linked child's fee could not be read: nothing to accept until it is. */
+export function FeesUnread({ onRetry }: { onRetry: () => void }) {
+  return (
+    <>
+      <Note tone="wait" icon="alert" role="alert">
+        The fees could not be checked. Try again.
+      </Note>
+      <Button variant="ghost" size="wide" onClick={onRetry}>
+        Try again
+      </Button>
+    </>
+  )
+}
+
 export function SubmitQuestion({ who, failure, pending, onSubmit }: { who: string; failure: ReactNode; pending: boolean; onSubmit: () => void }) {
   return (
     <>

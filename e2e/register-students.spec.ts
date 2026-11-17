@@ -238,7 +238,8 @@ test.describe("registering a family", () => {
     await expect(open(page).getByRole("alert")).toContainText(`${full(a, dad)} is already registered, with Admission Number ADMSN-`)
   })
 
-  test("a child on file with the same father's name is asked about, and Yes links them", async ({ page }) => {
+  test("a child on file with the same father's name is asked about, and Yes links them; a fee check that fails is tried again", async ({ page, allowConsoleError }) => {
+    allowConsoleError(/^console\.error: Failed to load resource: net::ERR_FAILED \(http:\/\/[^)]+\/staff\/check-in\/new\)$/, "this test drops the fee check")
     await signIn(page, ADMISSIONS)
     const dad = father()
     const number = phone()
@@ -265,9 +266,16 @@ test.describe("registering a family", () => {
     await go(page, "Continue").click()
 
     await expect(page.getByRole("heading", { name: `${later} and ${first} have the same father’s name. Are they siblings?` })).toBeVisible()
+    // The read of the sibling's fee never comes back.
+    await page.route("**/staff/check-in/new", (route) => (route.request().method() === "POST" ? route.abort() : route.continue()))
     await pick(page, new RegExp(`^Yes, sibling of ${full(first, dad)}`))
     await pick(page, new RegExp(`^${dad.join(" ")}`))
     await go(page, /NO CODE/).click()
+    // No fees to accept on a guess: only the way to check them again.
+    await expect(open(page).getByRole("alert")).toHaveText("The fees could not be checked. Try again.")
+    await expect(go(page, "Looks right")).toHaveCount(0)
+    await page.unroute("**/staff/check-in/new")
+    await go(page, "Try again").click()
     await expect(open(page).getByRole("table")).toContainText(full(first, dad))
     await go(page, "Looks right").click()
     await go(page, "Register 1 student").click()

@@ -7,12 +7,13 @@ vi.mock("server-only", () => ({}))
 import { EXPORT_COLUMNS, EXPORT_PRESETS, exportStudents, studentsCsv, type ExportColumn } from "@/lib/services/student-export"
 
 import { anonClient, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
-import { actAs, freshCode, leadWithCode } from "../support/discount-codes"
+import { leadWithCode } from "../support/discount-codes"
 import { ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The student export (owner decisions of 2026-11-09): view columns for
 // leads.view, contact columns for leads.export, full columns for the Super
-// Admin alone. Every export is recorded in export_log.
+// Admin alone. Every export is recorded in export_log. The 5000-student
+// limit is in serial/student-export-limit.test.ts (#438).
 
 const VIEW: ExportColumn[] = ["admission_number", "student_name", "class_name", "status", "discount_code", "imported"]
 const CONTACT: ExportColumn[] = ["admission_number", "guardian_name", "guardian_phone", "guardian_whatsapp"]
@@ -119,40 +120,5 @@ describe("which students", () => {
     expect(otherClass.ok && otherClass.data.rows).toEqual([])
     const sameYear = await exportStudents(admissions, { query: lead.name, enrollmentYear: 2027 }, ["admission_number"])
     expect(sameYear.ok && sameYear.data.rowCount).toBe(1)
-  })
-
-  test("refuses more than 5000 students", async () => {
-    const answer = await inRolledBackTransaction(async (sql) => {
-      await sql.query("select public.set_audit_actor('system')")
-      const batch = await sql.query<{ id: string }>(
-        `insert into public.import_batches (kind, file_name, imported_by, row_count, created_count, updated_count, skipped_count)
-         values ('students', 'big.csv', $1, 1, 1, 0, 0) returning id`,
-        [MANAGER.id],
-      )
-      const contact = await sql.query<{ id: string }>(
-        "insert into public.guardian_contacts (full_name, relationship, phone, origin) values ('Mzazi Wengi', 'Mother', '+255899999999', 'front_desk') returning id",
-      )
-      const code = freshCode("X")
-      // Tests running alongside register applicants too, and one can take a
-      // free Admission Number before this insert lands. Skip a taken number
-      // and top up until there are exactly 5001.
-      for (let have = 0; have < 5001; ) {
-        const added = await sql.query(
-          `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id, import_batch_id, referral_code)
-           select 'ADMSN-' || lpad(n::text, 5, '0'), 'Many ' || n, 'STD 1', 2027, 'Day', 'Applied', $1, $2, $3
-           from generate_series(1, 99999) n
-           where not exists (select 1 from public.leads l where l.admission_number = 'ADMSN-' || lpad(n::text, 5, '0'))
-           limit $4
-           on conflict (admission_number) do nothing`,
-          [contact.rows[0].id, batch.rows[0].id, code, 5001 - have],
-        )
-        have += added.rowCount ?? 0
-      }
-      await actAs(sql, ADMISSIONS.id)
-      return sql
-        .query("select public.export_leads($1, array['admission_number'])", [{ import_batch_id: batch.rows[0].id }])
-        .then(() => null, (error: Error & { detail?: string }) => ({ message: error.message, detail: JSON.parse(error.detail ?? "{}") }))
-    })
-    expect(answer).toEqual({ message: "too_many", detail: { row_count: 5001 } })
   })
 })

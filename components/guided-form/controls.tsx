@@ -1,6 +1,6 @@
 "use client"
 
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from "react"
+import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, Ref } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -54,9 +54,9 @@ export function QuestionTitle({ id, htmlFor, children, ref, className }: { id?: 
 }
 
 /** Small grey help line under a question (`.hint`). */
-export function Hint({ id, children, className }: { id?: string; children: ReactNode; className?: string }) {
+export function Hint({ children, className, ...props }: HTMLAttributes<HTMLParagraphElement> & { children: ReactNode }) {
   return (
-    <p id={id} className={cn("m-0 text-sm text-slate-500", className)}>
+    <p {...props} className={cn("m-0 text-sm text-slate-500", className)}>
       {children}
     </p>
   )

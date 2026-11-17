@@ -765,6 +765,58 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     expect(open().getByRole("radio", { name: "Father" })).not.toBeChecked()
   })
 
+  it("turning the father switch off and on answers the relationship at once, so a Change link during the pause never strands the form", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await answerCustodian(user, "en")
+    await waitForQuestion("Have a discount code?")
+
+    // The pause before moving on is real here (no reduced motion).
+    document.documentElement.classList.remove("rm")
+    await user.click(screen.getAllByRole("button", { name: "Change Name" }).at(-1)!)
+    await waitForQuestion("Who is the custodian?")
+    const father = open().getByRole("switch", { name: /The father is the custodian/ })
+    await user.click(father)
+    await user.click(father)
+    await user.click(father)
+    // Within the pause: go and change the phone, then come back on Continue.
+    await user.click(screen.getByRole("button", { name: "Change Number" }))
+    await waitForQuestion("What is JUMA's phone number?")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await waitForQuestion("Have a discount code?")
+  })
+
+  it("opens the father's box when the database refuses the custodian's name with the switch on", async () => {
+    stubs.submit.mockResolvedValue({ status: "invalid", field: "contact_name", child: null, part: "contact_middle_name" })
+    const user = userEvent.setup()
+    render(form("en"))
+    await answerStudent(user, "Zawadi", "en")
+    await user.click(await screen.findByRole("button", { name: "No, continue" }))
+    await waitForQuestion("Who is the custodian?")
+    await user.click(open().getByRole("switch", { name: /The father is the custodian/ }))
+    await waitForQuestion("What is JUMA's phone number?")
+    await user.type(open().getByRole("textbox"), "0700 000 900")
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await user.click(open().getByRole("button", { name: "Skip, no code" }))
+    await user.click(open().getByRole("button", { name: "Continue" }))
+    await send(user, "Send application")
+
+    await waitForQuestion("What is the student's name?")
+    expect(open().getByRole("textbox", { name: "Middle name" })).toHaveAttribute("aria-invalid", "true")
+    expect(open().getByRole("textbox", { name: "Last name" })).not.toHaveAttribute("aria-invalid", "true")
+  })
+
+  it("reads the student's full name out as the boxes fill", async () => {
+    const user = userEvent.setup()
+    render(form("en"))
+    await user.type(nameBox("en"), `Zawadi ${FATHER}`)
+    const line = open().getByText("Student's full name:", { exact: false })
+    expect(line).toHaveAttribute("aria-live", "polite")
+    expect(line).toHaveTextContent("ZAWADI JUMA MFANO")
+  })
+
   it.each(["sw", "en"] as const)("never says agent, referral, wakala, idhini or mtoto in %s", async (language) => {
     const user = userEvent.setup()
     remembered("BJN-402")

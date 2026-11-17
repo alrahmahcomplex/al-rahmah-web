@@ -11,6 +11,9 @@ type Answer = { state: string; amount: number }
 function client(known: Record<string, Answer>, asked: string[] = []): SupabaseClient {
   return {
     rpc: (_name: string, { code }: { code: string }) => ({
+      abortSignal() {
+        return this
+      },
       single: async () => {
         asked.push(code)
         return { data: known[code] ?? { state: "unknown", amount: 50000 }, error: null }
@@ -58,7 +61,33 @@ describe("looking a form's code up", () => {
   })
 
   it("keeps the typed code when the lookup can't run", async () => {
-    const down = { rpc: () => ({ single: async () => ({ data: null, error: { message: "down" } }) }) } as unknown as SupabaseClient
+    const down = {
+      rpc: () => ({
+        abortSignal() {
+          return this
+        },
+        single: async () => ({ data: null, error: { message: "down" } }),
+      }),
+    } as unknown as SupabaseClient
     expect(await formDiscountCodeToKeep(down, "EID-2026")).toBe("EID-2026")
+  })
+})
+
+describe("the lookup before sending", () => {
+  it("gives up after its deadline and keeps the code as typed, so a stalled read never holds up an application", async () => {
+    let aborted = false
+    const stalled = {
+      rpc: () => ({
+        abortSignal(signal: AbortSignal) {
+          signal.addEventListener("abort", () => (aborted = true))
+          return this
+        },
+        single: () => new Promise(() => {}),
+      }),
+    } as unknown as SupabaseClient
+    const started = Date.now()
+    expect(await formDiscountCodeToKeep(stalled, "EID-2026", 50)).toBe("EID-2026")
+    expect(Date.now() - started).toBeLessThan(1000)
+    expect(aborted).toBe(true)
   })
 })

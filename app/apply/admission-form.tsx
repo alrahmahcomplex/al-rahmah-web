@@ -119,6 +119,24 @@ function nameBox(base: string, part: NamePart | undefined, boxes: readonly strin
   return `#${base}-${box}`
 }
 
+// The custodian's parts the father switch takes from the first student's father.
+const FATHER_PART: Partial<Record<NamePart, NamePart>> = {
+  contact_first_name: "father_first",
+  contact_middle_name: "father_middle",
+  contact_last_name: "father_last",
+}
+
+// A refusal as the page shows it. With the father switch on, the custodian's
+// names are the first student's father's, so a refused custodian name opens
+// that student's name question on the father's box, the one to fix.
+function refusalShown(result: { field: FormField; child: number | null; part?: NamePart }, parent: ParentDraft): Shown {
+  const fatherPart = result.part ? FATHER_PART[result.part] : undefined
+  if (result.field === "contact_name" && parent.fatherCustodian) {
+    return { field: "student_name", child: 0, ...(fatherPart ? { part: fatherPart } : {}), server: true }
+  }
+  return { field: result.field, child: result.child, ...(result.part ? { part: result.part } : {}), server: true }
+}
+
 // Where focus goes for a problem.
 function problemSelector({ field, child, part }: FieldProblem, children: readonly ChildDraft[], parent: ParentDraft): string {
   const card = child === null ? null : (children[child]?.card ?? null)
@@ -659,8 +677,11 @@ export function AdmissionFormSteps({
     const parent: ParentDraft = on
       ? { ...f.parent, fatherCustodian: true, relationship: "Father", relationshipDescription: "" }
       : { ...f.parent, fatherCustodian: false, relationship: f.parent.relationship === "Father" ? "" : f.parent.relationship }
+    // The relationship question is answered (Father) or open again at once, not
+    // when the pause ends: a Change link during the pause cancels the move on.
     const done = new Set(f.done)
-    if (!on) done.delete("rel")
+    if (on) done.add("rel")
+    else done.delete("rel")
     setForm({ ...f, parent, done })
     clearProblems((shown) => shown.field === "contact_name" || shown.field === "relationship" || shown.field === "relationship_description")
     if (on) switchTimer.current = window.setTimeout(() => void commit("pname"), prefersReducedMotion() ? 0 : SWITCH_PAUSE_MS)
@@ -797,7 +818,7 @@ export function AdmissionFormSteps({
         // the refusal brings the server's years, and the year tiles change in
         // place with the entries kept.
         if (result.calendar) setCalendar(result.calendar)
-        const shown: Shown = { field: result.field, child: result.child, ...(result.part ? { part: result.part } : {}), server: true }
+        const shown = refusalShown(result, formRef.current.parent)
         const key = stepForProblem(shown, formRef.current.children)
         if (key) return goTo(key, [shown])
         setProblems([shown])

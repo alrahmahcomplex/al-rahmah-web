@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 
 import { Icon } from "@/components/icons"
 import { Button, ButtonLink, Card, KeyValueList, Note, Pagination, Sheet, type KeyValueItem } from "@/components/kit"
@@ -22,45 +22,46 @@ const sheetTime = (time: string) => (/^\d\d:\d\d$/.test(time) ? `Today ${time}` 
  * the outlined button takes the next step for staff who may.
  */
 export function ActivityList({ first }: { first: ActivityScreenPage }) {
-  const [shown, setShown] = useState(first)
-  const [from, setFrom] = useState(first)
+  // The rows on screen, the first page they came from, and any failure to
+  // read another page, kept together so one update decides all three.
+  const [view, setView] = useState<{ from: ActivityScreenPage; shown: ActivityScreenPage; error: string | null }>({
+    from: first,
+    shown: first,
+    error: null,
+  })
   const [open, setOpen] = useState<ActivityView | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
-  // Only the newest page asked for, from the first page now on screen, may
-  // replace the rows: an older answer that arrives late is dropped.
+  // The newest page asked for. Only its answer may replace the rows.
   const asked = useRef(0)
-  const firstNow = useRef(first)
-  useEffect(() => {
-    firstNow.current = first
-  }, [first])
 
   // Home read the log again (an action revalidated it, or the page was
   // refreshed): show the new first page, as a reload would.
-  if (from !== first) {
-    setFrom(first)
-    setShown(first)
+  if (view.from !== first) {
+    setView({ from: first, shown: first, error: null })
     setOpen(null)
-    setError(null)
   }
+  const { shown, error } = view
 
   function goTo(page: number) {
-    setError(null)
     const ticket = ++asked.current
-    const base = first
-    const current = () => ticket === asked.current && firstNow.current === base
+    const from = view.from
+    // An answer counts only while it is the newest one asked for and the rows
+    // still come from the same first page; the check runs on the state as it
+    // is when the answer is applied, so a fresh read always wins.
+    const apply = (next: { shown?: ActivityScreenPage; error: string | null }) =>
+      setView((now) => (now.from === from && ticket === asked.current ? { ...now, shown: next.shown ?? now.shown, error: next.error } : now))
+    apply({ error: null })
     startTransition(async () => {
       try {
         let outcome = await loadActivityPage(page)
         // The log shrank since this page was drawn: go to its new last page.
-        if (current() && outcome.status === "ok" && outcome.page.total > 0 && outcome.page.page > outcome.page.pageCount) {
+        if (ticket === asked.current && outcome.status === "ok" && outcome.page.total > 0 && outcome.page.page > outcome.page.pageCount) {
           outcome = await loadActivityPage(outcome.page.pageCount)
         }
-        if (!current()) return
-        if (outcome.status === "ok") setShown(outcome.page)
-        else setError(outcome.message)
+        if (outcome.status === "ok") apply({ shown: outcome.page, error: null })
+        else apply({ error: outcome.message })
       } catch {
-        if (current()) setError(LOST_REQUEST)
+        apply({ error: LOST_REQUEST })
       }
     })
   }

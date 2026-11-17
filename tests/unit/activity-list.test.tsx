@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { flushSync } from "react-dom"
+import { createRoot } from "react-dom/client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 // Home's Activity log card (#406): it follows a fresh read from the server,
@@ -55,6 +57,42 @@ describe("the Activity log card", () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(rowFor("FRESH")).not.toBeNull()
     expect(rowFor("STALE PAGE TWO")).toBeNull()
+  })
+
+  it("keeps the fresh rows when the late answer lands right after the fresh read commits, before effects run", async () => {
+    let answer: (value: unknown) => void = () => {}
+    load.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+    const actEnvironment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    const before = actEnvironment.IS_REACT_ACT_ENVIRONMENT
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = false
+    const host = document.createElement("div")
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      flushSync(() => root.render(<ActivityList first={page(["FIRST"], { total: 11 })} />))
+      fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+      // A mutation observer runs as a microtask straight after React writes
+      // the fresh rows, before its passive effects run in a later task: the
+      // late answer lands in exactly that gap.
+      const landed = new Promise<void>((resolve) => {
+        const watch = new MutationObserver(() => {
+          if (!host.textContent?.includes("FRESH")) return
+          watch.disconnect()
+          answer({ status: "ok", page: page(["STALE PAGE TWO"], { total: 11, page: 2 }) })
+          resolve()
+        })
+        watch.observe(host, { childList: true, subtree: true, characterData: true })
+      })
+      root.render(<ActivityList first={page(["FRESH"], { total: 11 })} />)
+      await landed
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(rowFor("FRESH")).not.toBeNull()
+      expect(rowFor("STALE PAGE TWO")).toBeNull()
+    } finally {
+      root.unmount()
+      host.remove()
+      actEnvironment.IS_REACT_ACT_ENVIRONMENT = before
+    }
   })
 
   it("shows the page asked for last when two answers arrive out of order", async () => {

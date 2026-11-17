@@ -77,9 +77,9 @@ describe("registration", () => {
     })
   })
 
-  test("initials take letters A to Z only, and a name with none gives AR", async () => {
-    expect((await register("Élodie 9lives Omari")).code).toMatch(/^O-\d{3}$/)
-    expect((await register("99 ..")).code).toMatch(/^AR-\d{3}$/)
+  test("a code always starts with three letters A to Z: the initials, then the name's next letters, then X", async () => {
+    expect((await register("Élodie 9lives Omari")).code).toMatch(/^OLO-\d{3}$/)
+    expect((await register("99 ..")).code).toMatch(/^XXX-\d{3}$/)
   })
 
   test("the phone is normalized however it is typed, and a WhatsApp number equal to it is dropped", async () => {
@@ -351,15 +351,15 @@ describe("the table itself", () => {
     ).rejects.toThrow(/agent_locked/)
   })
 
-  test("codes are normalized in the database: trimmed, uppercased, inner spaces removed, at most 20 of A-Z 0-9 - .", async () => {
+  test("codes are normalized in the database: trimmed, uppercased, inner spaces removed, at most 20 printable characters", async () => {
     const normalized = await inRolledBackTransaction(async (sql) => {
       const { rows } = await sql.query(
         `select v, public.normalize_referral_code(v) as code
          from unnest($1::text[]) v`,
-        [["abc-123", " ABC-123", "ABC -123", " a b.c-1 ", "ABC_123", "", "   ", "A".repeat(20), "A".repeat(21), "ÄBC-123"]],
+        [["abc-123", " ABC-123", "ABC -123", " a b.c-1 ", "ABC_123", "", "   ", "A".repeat(20), "A".repeat(21), "ÄBC-123", "$ave", "kodi€"]],
       )
       return rows.map((r) => r.code)
     })
-    expect(normalized).toEqual(["ABC-123", "ABC-123", "ABC-123", "AB.C-1", null, null, null, "A".repeat(20), null, null])
+    expect(normalized).toEqual(["ABC-123", "ABC-123", "ABC-123", "AB.C-1", "ABC_123", null, null, "A".repeat(20), null, null, "$AVE", null])
   })
 })

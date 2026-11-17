@@ -517,19 +517,19 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
   })
 
   it("sends a claim with Ndiyo and the code, then shows the claimed code and says to check spam", async () => {
-    stubs.submit.mockResolvedValue({ status: "claimed", code: "RJ-407", link: "https://alrahmah.example/apply?ref=RJ-407" })
+    stubs.submit.mockResolvedValue({ status: "claimed", code: "RAJ-407", link: "https://alrahmah.example/apply?ref=RAJ-407" })
     const user = userEvent.setup()
     render(await DiscountCodePage())
-    await fill(user, "sw", { code: "rj407" })
-    expect(screen.getByText("RJ-407")).toBeInTheDocument()
+    await fill(user, "sw", { code: "raj--407" })
+    expect(screen.getByText("RAJ-407")).toBeInTheDocument()
     expect(screen.getByText(/Tunalinganisha code hii na namba yako ya simu/)).toBeInTheDocument()
     await send(user, "sw", true)
 
     const [, sent] = stubs.submit.mock.calls[0] as [unknown, FormData]
     expect(sent.get("has_code")).toBe("yes")
-    expect(sent.get("code")).toBe("RJ-407")
+    expect(sent.get("code")).toBe("RAJ-407")
     expect(await screen.findByRole("heading", { level: 1, name: "Ombi limepokelewa" })).toHaveFocus()
-    expect(screen.getByText("RJ-407")).toBeInTheDocument()
+    expect(screen.getByText("RAJ-407")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Shiriki kwenye WhatsApp" })).toBeInTheDocument()
     expect(screen.getByText(/Shule itathibitisha barua pepe yako/)).toHaveTextContent(/angalia spam/)
     expect(document.body.textContent).not.toMatch(FORBIDDEN)

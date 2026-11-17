@@ -114,7 +114,7 @@ describe("reading the posted Admission form", () => {
   it("keeps a code no agent may hold, but refuses one that isn't a code", () => {
     const unknown = parse(form({ discountCode: "QQQ-000" }))
     expect(unknown.ok && unknown.data.discountCode).toBe("QQQ-000")
-    expect(parse(form({ discountCode: "QQQ_000!" }))).toEqual({ ok: false, error: { field: "discount_code", child: null } })
+    expect(parse(form({ discountCode: "QQQ€000" }))).toEqual({ ok: false, error: { field: "discount_code", child: null } })
     expect(parse(form({ discountCode: 402 }))).toEqual({ ok: false, error: { field: "payload", child: null } })
   })
 

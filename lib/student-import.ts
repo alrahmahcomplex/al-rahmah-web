@@ -1,4 +1,5 @@
-import { normalizeAgentCode, normalizeAgentPhone } from "@/lib/agent-import"
+import { normalizeAgentPhone } from "@/lib/agent-import"
+import { normalizeDiscountCode } from "@/lib/referral-link"
 import { findDuplicates, refusedRowsCsv, toCsv, type ImportColumn, type ImportRecord } from "@/lib/import"
 
 // The student import's rules on top of the import module: the template's
@@ -204,7 +205,7 @@ const NO_CODE = new Set(["", "-", "--", "n/a", "na", "none", "nil", "hakuna"])
 // is no code at all. Blank and placeholders like "-" or "none" are no code.
 export function parseDiscountCode(raw: string): string | null | undefined {
   if (NO_CODE.has(raw.trim().toLowerCase())) return null
-  return normalizeAgentCode(raw) ?? undefined
+  return normalizeDiscountCode(raw) ?? undefined
 }
 
 // The workbook's "Contracted" is Enrolled. Empty is Visited with a Visit

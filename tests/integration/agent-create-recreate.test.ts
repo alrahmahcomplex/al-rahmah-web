@@ -35,10 +35,11 @@ function phone() {
 }
 const asE164 = (local: string) => `+255${local.slice(1)}`
 
-// A code no record holds: two letters and five digits, from 676 million.
+// An ABC-123 code no record is likely to hold: T, two letters and three
+// digits, from 608,400.
 function freshCode() {
   const letter = () => String.fromCharCode(65 + randomInt(0, 26))
-  return `T${letter()}${letter()}-${randomInt(10_000, 100_000)}`
+  return `T${letter()}${letter()}-${randomInt(100, 1000)}`
 }
 
 function name(stem = "Neema Create") {

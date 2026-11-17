@@ -52,20 +52,24 @@ describe("typeInNameBox", () => {
 })
 
 describe("the single-box rules", () => {
-  it("puts the hyphen between one to three letters and the number", () => {
+  it("puts the hyphen between three letters and a digit, and drops one typed again", () => {
     expect(formatCode("aan132")).toBe("AAN-132")
     expect(formatCode("AAN")).toBe("AAN")
     expect(formatCode("aan1")).toBe("AAN-1")
     expect(formatCode("aa n-1 3 2 9")).toBe("AAN-1329")
-    expect(formatCode("a!a")).toBe("AA")
-    // Two-name agents and numbers past 999 (#404).
-    expect(formatCode("jd123")).toBe("JD-123")
+    expect(formatCode("aan--132")).toBe("AAN-132")
+    expect(formatCode("AAN--")).toBe("AAN-")
     expect(formatCode("abc1234")).toBe("ABC-1234")
-    expect(formatCode("ABC-1000")).toBe("ABC-1000")
+    // Not for one or two letters, which no agent code has.
+    expect(formatCode("jd123")).toBe("JD123")
+    // Never more than 20 characters, the hyphen included.
+    expect(formatCode("ABC" + "1".repeat(17))).toBe("ABC-" + "1".repeat(16))
   })
 
   it("keeps any other code as typed, Promo codes included, up to 20 characters", () => {
-    for (const promo of ["MWAKASEGE", "KARIBU2026", "SAVE10", "2026", "RAMADHAN25", "ABCD12"]) expect(formatCode(promo)).toBe(promo)
+    for (const promo of ["MWAKASEGE", "KARIBU2026", "SAVE10", "2026", "RAMADHAN25", "ABCD12", "AS-135", "$AVE", "A!A", "EID-2026", "50%OFF"]) {
+      expect(formatCode(promo)).toBe(promo)
+    }
     expect(formatCode("karibu 2026")).toBe("KARIBU2026")
     expect(formatCode("mama.salma")).toBe("MAMA.SALMA")
     expect(formatCode("A".repeat(25))).toBe("A".repeat(20))

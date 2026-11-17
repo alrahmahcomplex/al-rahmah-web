@@ -9,7 +9,7 @@ import { findDiscountCode, getLeadReferral, setLeadReferralCode } from "@/lib/se
 
 import { agentWithLogin } from "../support/agent-students"
 import { anonClient, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
-import { actAs, discountPhone, expectedFee, freshCode, leadWithCode, lockedAmount, payInterview } from "../support/discount-codes"
+import { actAs, discountPhone, expectedFee, freshAgentCode, freshCode, leadWithCode, lockedAmount, payInterview } from "../support/discount-codes"
 import { ADMISSIONS, MANAGER } from "../support/fixtures"
 
 // Promo codes (owner decisions of 2026-11-09): school codes with a name and
@@ -89,8 +89,9 @@ describe("creating a Promo code", () => {
   test("refuses a bad code, name, amount, a past last day and a code already used", async () => {
     const manager = await signedIn(MANAGER)
     const base = { name: "Good", code: freshCode("B"), amount: 5000, endsOn: null, note: null }
-    expect(await createPromoCode(manager, { ...base, code: "AB1" })).toEqual({ ok: false, error: "invalid-code" })
-    expect(await createPromoCode(manager, { ...base, code: "ABC-123" })).toEqual({ ok: false, error: "invalid-code" })
+    for (const code of ["", "ABC--1", "abc --1", "1".repeat(16), "KODI€"]) {
+      expect(await createPromoCode(manager, { ...base, code })).toEqual({ ok: false, error: "invalid-code" })
+    }
     expect(await createPromoCode(manager, { ...base, name: " " })).toEqual({ ok: false, error: "invalid-name" })
     expect(await createPromoCode(manager, { ...base, amount: 60000 })).toEqual({ ok: false, error: "invalid-amount" })
     expect(await createPromoCode(manager, { ...base, endsOn: "2020-01-01" })).toEqual({ ok: false, error: "invalid-ends-on" })
@@ -101,8 +102,10 @@ describe("creating a Promo code", () => {
 })
 
 describe("one code namespace", () => {
-  test("a Promo code may not take an agent's code, current or retired", async () => {
-    const code = freshCode("A")
+  // A code and its twin across the box's hyphen are one code: ABC123 is
+  // ABC-123 (#462).
+  test("a Promo code may not take an agent's code or its twin, current or retired", async () => {
+    const code = freshAgentCode("A")
     const manager = await signedIn(MANAGER)
     const agent = await manager.rpc("create_marketing_agent", {
       full_name: `Juma Namespace ${randomUUID().slice(0, 6)}`,
@@ -114,8 +117,11 @@ describe("one code namespace", () => {
     expect((agent.data as { outcome: string }).outcome).toBe("created")
     expect(await createPromoCode(manager, { name: "Clash", code, amount: 5000, endsOn: null, note: null })).toEqual({ ok: false, error: "code-taken" })
     expect(await checkPromoCodeAvailable(manager, code)).toEqual({ ok: true, data: { kind: "agent", code } })
+    const twin = code.replace("-", "")
+    expect(await createPromoCode(manager, { name: "Clash", code: twin, amount: 5000, endsOn: null, note: null })).toEqual({ ok: false, error: "code-taken" })
+    expect(await checkPromoCodeAvailable(manager, twin)).toEqual({ ok: true, data: { kind: "agent", code: twin } })
 
-    const retiredCode = freshCode("R")
+    const retiredCode = freshAgentCode("R")
     const retiring = await manager.rpc("create_marketing_agent", {
       full_name: `Retiring Namespace ${randomUUID().slice(0, 6)}`,
       phone: discountPhone(),
@@ -125,29 +131,30 @@ describe("one code namespace", () => {
     })
     const retiringId = (retiring.data as { agent: { id: string } }).agent.id
     expect((await manager.rpc("change_marketing_agent_status", { agent_id: retiringId, kind: "retired", reason: "Left" })).error).toBeNull()
-    expect(await createPromoCode(manager, { name: "Retired clash", code: retiredCode, amount: 5000, endsOn: null, note: null })).toEqual({
+    expect(await createPromoCode(manager, { name: "Retired clash", code: retiredCode.replace("-", ""), amount: 5000, endsOn: null, note: null })).toEqual({
       ok: false,
       error: "code-taken",
     })
   })
 
-  test("an agent may not take a Promo code's code, through create, check and the agent import", async () => {
-    const promo = await newPromo()
+  test("an agent may not take a Promo code's twin, through create, check and the agent import", async () => {
+    const agentCode = freshAgentCode("Y")
+    const promo = await newPromo(25000, agentCode.replace("-", ""))
     const manager = await signedIn(MANAGER)
-    const draft = { full_name: `Asha Namespace ${randomUUID().slice(0, 6)}`, phone: discountPhone(), whatsapp: "", email: "", code: promo.code }
+    const draft = { full_name: `Asha Namespace ${randomUUID().slice(0, 6)}`, phone: discountPhone(), whatsapp: "", email: "", code: agentCode }
     const created = await manager.rpc("create_marketing_agent", draft)
     expect(created.error?.message).toBe("code_taken")
     const checked = await manager.rpc("check_marketing_agent", draft)
     expect(checked.error?.message).toBe("code_taken")
     const imported = await manager.rpc("check_agent_import", {
-      rows: [{ sheet_row: 2, code: promo.code, full_name: draft.full_name, phone: draft.phone, whatsapp: null, email: null }],
+      rows: [{ sheet_row: 2, code: agentCode, full_name: draft.full_name, phone: draft.phone, whatsapp: null, email: null }],
     })
     expect(imported.data).toEqual([{ sheet_row: 2, verdict: { verdict: "promo_code" } }])
     // The trigger holds even for the database owner.
     const direct = await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       return sql
-        .query("insert into public.marketing_agents (full_name, phone, code) values ('Direct Clash', $1, $2)", [discountPhone(), promo.code])
+        .query("insert into public.marketing_agents (full_name, phone, code) values ('Direct Clash', $1, $2)", [discountPhone(), agentCode])
         .then(() => "inserted", (error: Error) => error.message)
     })
     expect(direct).toBe("code_taken")
@@ -156,7 +163,104 @@ describe("one code namespace", () => {
       data: { kind: "promo-code", code: promo.code, name: expect.any(String) },
     })
     expect(await checkPromoCodeAvailable(manager, freshCode("F"))).toMatchObject({ ok: true, data: { kind: "available" } })
-    expect(await checkPromoCodeAvailable(manager, "ab")).toEqual({ ok: true, data: { kind: "invalid" } })
+    expect(await checkPromoCodeAvailable(manager, "kodi€")).toEqual({ ok: true, data: { kind: "invalid" } })
+    expect(await checkPromoCodeAvailable(manager, "ABC--1")).toEqual({ ok: true, data: { kind: "invalid" } })
+  })
+})
+
+describe("Promo codes in any format (#462)", () => {
+  test("takes letters, numbers and symbols in any mix, stored without spaces in capitals", async () => {
+    const tag = randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()
+    for (const [typed, stored] of [
+      [`save${tag}`, `SAVE${tag}`],
+      [`$ave${tag}`, `$AVE${tag}`],
+      [`as-${tag}`, `AS-${tag}`],
+      [`50% off ${tag}`, `50%OFF${tag}`],
+      [`${tag}!#&=;,'"<>/.:?@[]{}|~`.slice(0, 15), `${tag}!#&=;,'"<>/.:?@[]{}|~`.slice(0, 15)],
+    ]) {
+      const made = await createPromoCode(await signedIn(MANAGER), { name: `Any ${typed}`, code: typed, amount: 1000, endsOn: null, note: null })
+      expect(made).toMatchObject({ ok: true, data: { code: stored } })
+    }
+  })
+
+  test("the table itself refuses a code that isn't one, even from the database owner", async () => {
+    for (const code of ["", "KODI€", "save 10", "1".repeat(16), "ABC--1"]) {
+      const answer = await inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        return sql
+          .query("insert into public.promo_codes (code, name, amount) values ($1, 'Direct', 1000)", [code])
+          .then(() => "inserted", (error: Error) => error.message)
+      })
+      expect(answer, code).toMatch(/promo_codes_code_check/)
+    }
+  })
+
+  test("ABC123 and ABC-123 are one code: a Promo code can't be an agent code's twin, nor another Promo code's", async () => {
+    const manager = await signedIn(MANAGER)
+    const agentCode = freshAgentCode("W")
+    const agent = await manager.rpc("create_marketing_agent", {
+      full_name: `Twin Namespace ${randomUUID().slice(0, 6)}`,
+      phone: discountPhone(),
+      whatsapp: "",
+      email: "",
+      code: agentCode,
+    })
+    expect((agent.data as { outcome: string }).outcome).toBe("created")
+    const twin = agentCode.replace("-", "")
+    expect(await checkPromoCodeAvailable(manager, twin)).toEqual({ ok: true, data: { kind: "agent", code: twin } })
+    expect(await createPromoCode(manager, { name: "Agent twin", code: twin, amount: 1000, endsOn: null, note: null })).toEqual({
+      ok: false,
+      error: "code-taken",
+    })
+
+    const promo = await newPromo(1000, `EID${randomInt(10_000, 100_000)}`)
+    const hyphened = `${promo.code.slice(0, 3)}-${promo.code.slice(3)}`
+    expect(await checkPromoCodeAvailable(manager, hyphened)).toMatchObject({ ok: true, data: { kind: "promo-code", code: hyphened } })
+    expect(await createPromoCode(manager, { name: "Promo twin", code: hyphened, amount: 1000, endsOn: null, note: null })).toEqual({
+      ok: false,
+      error: "code-taken",
+    })
+  })
+})
+
+describe("a Promo code may take an agent's shape (owner, 2026-11-17)", () => {
+  test("a free ABC-123 is a Promo code, and then no agent may take it or its twin", async () => {
+    const manager = await signedIn(MANAGER)
+    const code = freshAgentCode("P")
+    expect(await checkPromoCodeAvailable(manager, code)).toEqual({ ok: true, data: { kind: "available", code } })
+    const promo = await newPromo(1000, code)
+    expect(promo.code).toBe(code)
+    const draft = { full_name: `Shape Twin ${randomUUID().slice(0, 6)}`, phone: discountPhone(), whatsapp: "", email: "", code }
+    expect((await manager.rpc("create_marketing_agent", draft)).error?.message).toBe("code_taken")
+    // Its twin is a Promo code's twin too.
+    expect(await createPromoCode(manager, { name: "Twin", code: code.replace("-", ""), amount: 1000, endsOn: null, note: null })).toEqual({
+      ok: false,
+      error: "code-taken",
+    })
+  })
+})
+
+describe("agent codes are exactly ABC-123 (#462)", () => {
+  test("a typed code of another shape is refused on create, and the database refuses any new one", async () => {
+    const manager = await signedIn(MANAGER)
+    for (const code of ["AB-123", "ABCD-123", "ABC-1234", "ABC123", "KARIBU2026", "$AVE"]) {
+      const answer = await manager.rpc("create_marketing_agent", {
+        full_name: `Shape Agent ${randomUUID().slice(0, 6)}`,
+        phone: discountPhone(),
+        whatsapp: "",
+        email: "",
+        code,
+      })
+      expect(answer.error?.message).toBe("invalid")
+      expect(JSON.parse(answer.error?.details ?? "{}")).toEqual({ field: "code" })
+    }
+    const direct = await inRolledBackTransaction(async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      return sql
+        .query("insert into public.marketing_agents (full_name, phone, code) values ('Direct Shape', $1, 'AB-12')", [discountPhone()])
+        .then(() => "inserted", (error: Error) => error.message)
+    })
+    expect(direct).toBe("invalid")
   })
 })
 

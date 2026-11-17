@@ -10,7 +10,7 @@ import {
   BottomSheet,
   ChangeLink,
   ChoiceTiles,
-  CodeBox,
+  AgentCodeBox,
   Confetti,
   ContinuePill,
   FieldError,
@@ -578,7 +578,7 @@ export function DiscountCodeForm({
                 <QuestionTitle htmlFor="code">{copy.code}</QuestionTitle>
                 <div className="flex flex-col gap-2">
                   <Hint id="code-hint">{copy.codeHint}</Hint>
-                  <CodeBox
+                  <AgentCodeBox
                     id="code"
                     name="code"
                     data-field="code"

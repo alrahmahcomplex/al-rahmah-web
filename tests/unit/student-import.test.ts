@@ -90,7 +90,8 @@ describe("reading values", () => {
   it("reads a code as agent codes are stored, blanks and placeholders as no code", () => {
     expect(parseDiscountCode(" bjn - 402 ")).toBe("BJN-402")
     for (const none of ["", "-", "N/A", "none", "Hakuna"]) expect(parseDiscountCode(none)).toBeNull()
-    expect(parseDiscountCode("bad/code")).toBeUndefined()
+    expect(parseDiscountCode("save 10$")).toBe("SAVE10$")
+    expect(parseDiscountCode("bad€code")).toBeUndefined()
   })
 
   it("reads Contracted as Enrolled, and an empty status from the Visit date", () => {
@@ -136,7 +137,7 @@ describe("the file's own checks", () => {
       "Kid,STD 1,2027,,Mama,,0712000001,abc,,,",
       "Kid,STD 1,2027,,Mama,,0712000001,,31/02/2026,,",
       "Kid,STD 1,2027,,Mama,,0712000001,,01/01/2027,,",
-      "Kid,STD 1,2027,,Mama,,0712000001,,,bad/code,",
+      "Kid,STD 1,2027,,Mama,,0712000001,,,bad€code,",
       "Kid,STD 1,2027,,Mama,,0712000001,,,,Paid",
       "Kid,STD 1,2027,,Mama,,712000012.0,,,,",
     ])

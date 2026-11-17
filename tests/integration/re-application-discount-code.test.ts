@@ -215,7 +215,7 @@ describe("a Discount code sent for a child already on file", () => {
       submission_key: randomUUID(),
       submitted: {
         contact: { full_name: lead.parent.fullName, relationship: "Mother", phone: lead.parent.phone },
-        student: { ...{ full_name: lead.studentName, class_name: "STD 3", enrollment_year: nextYear, day_or_boarding: "Day" }, discount_code: "not a code!" },
+        student: { ...{ full_name: lead.studentName, class_name: "STD 3", enrollment_year: nextYear, day_or_boarding: "Day" }, discount_code: "kodi ya €" },
       },
     })
     expect(error?.message).toBe("invalid")

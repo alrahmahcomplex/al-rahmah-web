@@ -1006,18 +1006,21 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
     expect(screen.getByText(/· not recognised/)).toBeInTheDocument()
   })
 
-  it("keeps only what a code can hold, in capitals", async () => {
+  it("keeps every character a code can hold, in capitals, with no spaces", async () => {
     const user = userEvent.setup()
     render(form("en"))
     await toCode(user)
-    await user.type(open().getByLabelText(/Discount code/), "not a code!")
-    expect(open().getByLabelText(/Discount code/)).toHaveValue("NOTACODE")
+    await user.type(open().getByLabelText(/Discount code/), "save 10 $!")
+    expect(open().getByLabelText(/Discount code/)).toHaveValue("SAVE10$!")
   })
 
   it.each([
     ["aan132", "AAN-132"],
     ["eid2026", "EID-2026"],
     ["karibu2026", "KARIBU2026"],
+    ["save10", "SAVE10"],
+    ["as-135", "AS-135"],
+    ["$ave", "$AVE"],
   ])("adds the hyphen by itself: %s reads %s, and is checked as it reads", async (typed, shown) => {
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
     const user = userEvent.setup()

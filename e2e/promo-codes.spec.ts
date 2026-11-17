@@ -3,12 +3,14 @@ import { randomInt, randomUUID } from "node:crypto"
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
+import { admissionYears } from "@/lib/admission-form"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { createLead } from "@/lib/services/leads"
 import { setLeadReferralCode } from "@/lib/services/referral"
 
 import { secretClient, signedIn } from "../tests/support/db"
 import { ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { family, openQuestion, PHONE_WIDTH, setLanguageCookie, toCode, WORDS } from "./admission-form"
 import { leadUrl } from "./lead-page"
 import { signInOnce } from "./log-in"
 
@@ -25,7 +27,7 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-// Letters and digits only, 4 to 12, and never an agent's ABC-123.
+// A code of its own.
 function newCode(): string {
   return `PR${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
 }
@@ -121,6 +123,33 @@ test.describe("Promo codes", () => {
     await expect(referral(page)).toContainText("Paused")
     await expect(referral(page).getByLabel("Expected interview fee")).toHaveText("TZS 50,000")
     await expect(referral(page)).toContainText("No discount: Promo code paused")
+  })
+
+  test("a Promo code with a hyphen and a symbol is made on the page and found by a parent's form (#462)", async ({ page }) => {
+    const code = `AS-$${randomInt(10_000_000, 100_000_000)}`
+    await signIn(page, MANAGER)
+    await page.goto("/staff/promo-codes")
+    await page.getByRole("button", { name: "New Promo code" }).click()
+    const sheet = page.getByRole("dialog", { name: "New Promo code" })
+    await sheet.getByLabel("Name").fill(`Any format ${randomUUID().slice(0, 6)}`)
+    // Three letters and two hyphens is the one shape a Promo code can't take.
+    await sheet.getByLabel("Code parents type").fill("abc--1")
+    await expect(sheet.getByText("Up to 15 letters, numbers or symbols.", { exact: true })).toBeVisible()
+    await sheet.getByLabel("Code parents type").fill(code.toLowerCase())
+    await expect(sheet.getByText(`${code} is available.`)).toBeVisible()
+    await sheet.getByLabel("Amount off the TZS 50,000 fee").fill("20000")
+    await sheet.getByRole("button", { name: "Create code" }).click()
+    await expect(page.getByText(`${code} created. Parents can use it now.`)).toBeVisible()
+
+    await page.setViewportSize(PHONE_WIDTH)
+    await setLanguageCookie(page.context(), "en")
+    await page.goto("/apply")
+    await toCode(page, "en", family(), String(admissionYears()[1]), 1)
+    const box = openQuestion(page).getByLabel(WORDS.en.codeLabel)
+    await box.pressSequentially(code.toLowerCase())
+    await expect(box).toHaveValue(code)
+    await openQuestion(page).getByRole("button", { name: "Check Discount" }).click()
+    await expect(page.getByText("Well done! You save TZS 20,000 for each student.")).toBeVisible()
   })
 
   test("Admissions Staff see Promo codes with no control to change them", async ({ page }) => {

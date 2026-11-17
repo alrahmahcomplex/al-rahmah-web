@@ -47,7 +47,7 @@ async function manager() {
 async function importAgents(emails: (string | null)[]) {
   const stem = `Batch ${randomUUID().slice(0, 8)}`
   const rows = emails.map((address, i) => ({
-    code: `IBT-${randomInt(10_000, 100_000)}${i}`,
+    code: `I${String.fromCharCode(65 + randomInt(0, 26), 65 + randomInt(0, 26))}-${randomInt(100, 900) + i}`,
     fullName: `${stem} Agent ${i + 1}`,
     phone: phone(),
     email: address,

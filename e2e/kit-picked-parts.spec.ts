@@ -51,10 +51,13 @@ test("the code box adds its hyphen, and the full-name box asks for two names", a
   await code.click()
   await page.keyboard.type("aan132")
   await expect(code).toHaveValue("AAN-132")
-  // A two-letter code keeps its shape (#404).
+  // Only three letters and a digit get the hyphen; any other shape stays as typed (#462).
   await code.fill("")
   await page.keyboard.type("jd123")
-  await expect(code).toHaveValue("JD-123")
+  await expect(code).toHaveValue("JD123")
+  await code.fill("")
+  await page.keyboard.type("as-135")
+  await expect(code).toHaveValue("AS-135")
 
   const who = card.getByRole("textbox", { name: "Their full name" })
   await who.click()

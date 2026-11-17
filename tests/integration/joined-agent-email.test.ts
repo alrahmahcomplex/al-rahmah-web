@@ -73,7 +73,7 @@ async function importVerdict(address: string) {
     rows: [
       {
         sheet_row: 2,
-        code: `QMV${randomInt(100_000, 1_000_000)}`,
+        code: `QMV-${randomInt(100, 1000)}`,
         full_name: `Imported Agent ${randomInt(100_000, 1_000_000)}`,
         phone: `+2557${String(randomInt(10_000_000, 100_000_000)).padStart(8, "0")}`,
         whatsapp: null,
@@ -167,7 +167,7 @@ describe("two current agents can't share a stored email", () => {
           name(),
           `+2557${String(randomInt(10_000_000, 100_000_000)).padStart(8, "0")}`,
           address,
-          `QDX${randomInt(100_000, 1_000_000)}`,
+          `QDX-${randomInt(100, 1000)}`,
         ])
       await insert(agent.before)
       await sql.query("savepoint second")

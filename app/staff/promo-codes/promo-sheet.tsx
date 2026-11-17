@@ -15,9 +15,9 @@ import {
   comparisonNote,
   ENDED_NOTE,
   formatDay,
+  isPromoCode,
   NAME_MISSING,
   NEW_PROMO_META,
-  PROMO_CODE_PATTERN,
   PROMO_LOST,
   PROMO_NAME_MAX,
   PROMO_NOTE_MAX,
@@ -178,7 +178,7 @@ function EditablePromo({
     const typedCode = typedPromoCode(code)
     const found: Errors = {
       name: name.trim() === "" ? NAME_MISSING : undefined,
-      code: isNew && !PROMO_CODE_PATTERN.test(typedCode) ? CODE_INVALID : isNew && check.status === "taken" ? "This code is already in use." : undefined,
+      code: isNew && !isPromoCode(typedCode) ? CODE_INVALID : isNew && check.status === "taken" ? "This code is already in use." : undefined,
       amount: amount === null ? AMOUNT_HINT : undefined,
       reason: (amountMoved || endsMoved) && reason.trim() === "" ? REASON_MISSING : undefined,
     }
@@ -529,7 +529,7 @@ function StateChange({
 // to an earlier code never replaces the answer to the latest.
 function useCodeCheck(typed: string): CodeCheck {
   const code = typedPromoCode(typed)
-  const readable = PROMO_CODE_PATTERN.test(code)
+  const readable = isPromoCode(code)
   const [answer, setAnswer] = useState<{ code: string; check: CodeCheck } | null>(null)
   const latest = useRef(code)
 

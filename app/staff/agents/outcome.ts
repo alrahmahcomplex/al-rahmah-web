@@ -174,7 +174,7 @@ const FIELD_HINTS: Record<AgentDraftField, string> = {
   phone: "Write a Tanzanian mobile number, such as 0712 345 678.",
   whatsapp: "Write the WhatsApp number as a Tanzanian mobile, or leave it empty.",
   email: "Write a whole email address, such as name@example.com, or leave it empty.",
-  code: "A code uses only letters, digits, - and ., up to 20 characters. Leave it empty to make a new one.",
+  code: "A code is 3 letters, a hyphen and 3 numbers, like ABC-123. Leave it empty to make a new one.",
 }
 
 export const AGENT_LOST = "The agent could not be confirmed as saved. Check your connection, reload the page and search for the agent's phone before trying again."

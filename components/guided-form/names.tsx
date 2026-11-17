@@ -5,7 +5,7 @@ import { useId, useLayoutEffect, useRef, useState, type ChangeEvent, type Compos
 import { cn } from "@/lib/utils"
 
 import { FieldInput, type FieldInputProps } from "./controls"
-import { formatCode, typeInNameBox } from "./typing"
+import { formatAgentCode, formatCode, typeInNameBox } from "./typing"
 import "./guided-form.css"
 
 // The name boxes and the code box (prototype v38). They live with the guided
@@ -210,11 +210,11 @@ type OneBoxProps = Omit<FieldInputProps, "value" | "defaultValue" | "onChange" |
 }
 
 /** Keeps a single box's value through `format`, with the caret where it was or, when the text moved, at the end. */
-function useOneBox({ value, defaultValue, onValueChange }: OneBoxProps, format: (raw: string) => string, caretToEndOnChange: boolean) {
+function useOneBox({ value, defaultValue, onValueChange }: OneBoxProps, format: (raw: string, previous: string) => string, caretToEndOnChange: boolean) {
   const [own, setOwn] = useState(defaultValue ?? "")
   const shown = value ?? own
   const typed = (input: HTMLInputElement) => {
-    const next = format(input.value)
+    const next = format(input.value, shown)
     if (next !== input.value) {
       const { selectionStart: a, selectionEnd: b } = input
       input.value = next
@@ -248,12 +248,24 @@ export function FullNameBox({ className, ...props }: OneBoxProps) {
 }
 
 /**
- * The Discount code box: capitals, the hyphen added between the initials and
- * the number by itself (AAN132 → AAN-132, JD123 → JD-123), anything else kept
- * as typed, at most 20 characters. See `formatCode`.
+ * The Admission form's Discount code box, for an agent's code or a Promo
+ * code: capitals, the hyphen added between three letters and a digit by
+ * itself (AAN132 → AAN-132), anything else kept as typed (SAVE10, AS-135,
+ * $AVE), at most 20 characters. See `formatCode`.
  */
 export function CodeBox({ className, ...props }: OneBoxProps) {
   const { value, defaultValue, onValueChange, ...rest } = props
   const box = useOneBox({ value, defaultValue: defaultValue === undefined ? undefined : formatCode(defaultValue), onValueChange }, formatCode, true)
+  return <FieldInput autoComplete="off" autoCapitalize="characters" spellCheck={false} {...rest} {...box} className={cn(CAPS, className)} />
+}
+
+/**
+ * A box for an agent's Discount code only, ABC-123: three letters, the hyphen
+ * by itself, then three digits; anything else is dropped and a hyphen typed
+ * again is ignored. See `formatAgentCode`.
+ */
+export function AgentCodeBox({ className, ...props }: OneBoxProps) {
+  const { value, defaultValue, onValueChange, ...rest } = props
+  const box = useOneBox({ value, defaultValue: defaultValue === undefined ? undefined : formatAgentCode(defaultValue), onValueChange }, formatAgentCode, true)
   return <FieldInput autoComplete="off" autoCapitalize="characters" spellCheck={false} {...rest} {...box} className={cn(CAPS, className)} />
 }

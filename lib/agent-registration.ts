@@ -47,18 +47,28 @@ export function agentFullName(draft: Pick<AgentDraft, "firstName" | "middleName"
 }
 
 /**
- * The letters a new Discount code starts with, by the database's rule
+ * The three letters a new Discount code starts with, by the database's rule
  * (`marketing_agent_code_prefix`): the first letter of each of the first
- * three words, keeping only A to Z, or AR when none is left.
+ * three words when it is A to Z, then the name's next unused letters A to Z
+ * in reading order, then X. JOHN DOE gives JDO.
  */
 export function agentCodePrefix(fullName: string): string {
-  const initials = cleanName(fullName)
-    .split(" ")
-    .slice(0, 3)
-    .map((word) => word.charAt(0))
-    .filter((letter) => /^[A-Z]$/.test(letter))
-    .join("")
-  return initials || "AR"
+  const name = Array.from(cleanName(fullName))
+  const used = new Set<number>()
+  let letters = ""
+  let words = 0
+  name.forEach((ch, i) => {
+    if (ch === " " || (i > 0 && name[i - 1] !== " ")) return
+    words += 1
+    if (words <= 3 && /^[A-Z]$/.test(ch)) {
+      letters += ch
+      used.add(i)
+    }
+  })
+  for (let i = 0; i < name.length && letters.length < 3; i++) {
+    if (!used.has(i) && /^[A-Z]$/.test(name[i])) letters += name[i]
+  }
+  return letters.padEnd(3, "X")
 }
 
 function read(draft: AgentDraft): Result<AgentRegistration, AgentField> {

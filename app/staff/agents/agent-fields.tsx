@@ -2,6 +2,7 @@
 
 import { useId } from "react"
 
+import { formatAgentCode } from "@/components/guided-form/typing"
 import { Field } from "@/components/kit"
 import type { AgentDraftField } from "@/lib/services/marketing-agents"
 
@@ -66,7 +67,10 @@ export function AgentFields({
               className={field === "code" ? "ag-mono ag-upper" : undefined}
               // On a short phone the keyboard can cover the field; keep it in view.
               onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
-              onChange={(event) => onChange({ ...value, [key]: event.target.value })}
+              // A code is ABC-123, with the hyphen added by itself.
+              onChange={(event) =>
+                onChange({ ...value, [key]: field === "code" ? formatAgentCode(event.target.value, value.code) : event.target.value })
+              }
               invalid={invalid}
               aria-describedby={invalid ? `${id}-${field}-error` : hint ? `${id}-${field}-hint` : undefined}
             />

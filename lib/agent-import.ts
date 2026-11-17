@@ -1,3 +1,4 @@
+import { AGENT_CODE_PATTERN } from "@/lib/discount-code-rules"
 import { findDuplicates, refusedRowsCsv, toCsv, type ImportColumn, type ImportRecord } from "@/lib/import"
 
 // The agent import's rules on top of the import module (#190): the
@@ -72,10 +73,10 @@ export type AgentImportRow = {
 // agent_draft in the database, which re-checks every value it is sent.
 // ---------------------------------------------------------------------------
 
+// An agent's code is exactly ABC-123: three letters, a hyphen and three digits.
 export function normalizeAgentCode(raw: string): string | null {
-  if (!/^[A-Za-z0-9.\-\s]*$/.test(raw)) return null
   const code = raw.replace(/\s/g, "").toUpperCase()
-  return /^[A-Z0-9.-]{1,20}$/.test(code) ? code : null
+  return AGENT_CODE_PATTERN.test(code) ? code : null
 }
 
 export function normalizeAgentPhone(raw: string): string | null {

@@ -2,17 +2,20 @@ import "server-only"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import { boxHyphenTwin, cleanDiscountCode, isPromoCode } from "@/lib/discount-code-rules"
+
 import { discountRefusal, feeImpactFamilies, validAmount, type DiscountWriteError, type FeeChange, type FeeImpactRow } from "./discount-codes"
 import type { FeeImpactFamily } from "./marketing-agents"
 import type { Result } from "./result"
 
 // Promo codes: school codes with a name and an amount off the interview fee,
-// never tied to an agent and never carrying commission. A code is 4 to 12
-// letters and digits, unique across agent codes and Promo codes, and never
-// changes. Active gives the discount; Paused gives nothing until resumed;
-// Ended is final; an Active code past its last day reads as Expired. Writes
-// need discount_codes.manage, which the database checks itself. A Paid fee
-// keeps its amount.
+// never tied to an agent and never carrying commission. A code is 1 to 15
+// letters, digits or symbols in any mix and shape (isPromoCode), unique
+// across agent codes and Promo codes (ABC123 and ABC-123 count as one), and
+// never changes. Active gives the discount; Paused gives nothing until
+// resumed; Ended is final; an Active code past its last day reads as
+// Expired. Writes need discount_codes.manage, which the database checks
+// itself. A Paid fee keeps its amount.
 
 export type PromoState = "active" | "paused" | "ended"
 export type PromoEffectiveState = PromoState | "expired"
@@ -34,14 +37,13 @@ export type PromoCode = {
   updatedAt: string
 }
 
-export const PROMO_CODE_PATTERN = /^[A-Z0-9]{4,12}$/
 export const PROMO_NAME_MAX = 80
 export const PROMO_NOTE_MAX = 200
 
 // The code as the database stores it, or null when it can't be one.
 export function normalizePromoCode(raw: string): string | null {
-  const code = raw.replace(/\s/g, "").toUpperCase()
-  return PROMO_CODE_PATTERN.test(code) ? code : null
+  const code = cleanDiscountCode(raw)
+  return isPromoCode(code) ? code : null
 }
 
 export type PromoWriteError =
@@ -127,7 +129,8 @@ export async function getPromoCode(supabase: SupabaseClient, id: string): Promis
 }
 
 // Whether a code typed while creating a Promo code is free: unreadable,
-// free, a Promo code's, or an agent record's (current or retired). For the
+// free, a Promo code's, or an agent record's (current or retired), the
+// code itself or its twin across the box's hyphen (boxHyphenTwin). For the
 // live check under the Code field. Needs leads.view.
 export type CodeAvailability =
   | { kind: "invalid" }
@@ -138,12 +141,18 @@ export type CodeAvailability =
 export async function checkPromoCodeAvailable(supabase: SupabaseClient, typed: string): Promise<Result<CodeAvailability, "unavailable">> {
   const code = normalizePromoCode(typed)
   if (!code) return { ok: true, data: { kind: "invalid" } }
-  const { data, error } = await supabase
-    .rpc("find_discount_code", { typed_code: code })
-    .maybeSingle<{ kind: "agent" | "promo"; code: string; holder_name: string | null }>()
-  if (error) {
-    console.error("Could not check a Promo code", error)
-    return { ok: false, error: "unavailable" }
+  let data: { kind: "agent" | "promo"; code: string; holder_name: string | null } | null = null
+  for (const spelling of [code, boxHyphenTwin(code)]) {
+    if (!spelling) continue
+    const found = await supabase
+      .rpc("find_discount_code", { typed_code: spelling })
+      .maybeSingle<{ kind: "agent" | "promo"; code: string; holder_name: string | null }>()
+    if (found.error) {
+      console.error("Could not check a Promo code", found.error)
+      return { ok: false, error: "unavailable" }
+    }
+    data = found.data
+    if (data) break
   }
   if (!data) return { ok: true, data: { kind: "available", code } }
   if (data.kind === "promo") return { ok: true, data: { kind: "promo-code", code, name: data.holder_name ?? "" } }

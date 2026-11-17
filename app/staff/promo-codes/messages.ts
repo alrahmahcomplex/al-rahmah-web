@@ -1,6 +1,7 @@
 import type { ChipTone } from "../agents/discount-fields"
 import { discountRefusal, plural, tzs } from "../agents/discount-outcome"
 
+import { cleanDiscountCode, isPromoCode, PROMO_CODE_MAX_LENGTH } from "@/lib/discount-code-rules"
 import type { DiscountWriteError } from "@/lib/services/discount-codes"
 import type { PromoEffectiveState, PromoState, PromoWriteError } from "@/lib/services/promo-codes"
 
@@ -8,14 +9,14 @@ import type { PromoEffectiveState, PromoState, PromoWriteError } from "@/lib/ser
 // with agents' amounts, and what each save answers. Database codes never
 // reach the screen.
 
-export const PROMO_CODE_PATTERN = /^[A-Z0-9]{4,12}$/
 export const PROMO_NAME_MAX = 80
 export const PROMO_NOTE_MAX = 200
 
 // The code as typed, the way the database stores it.
-export function typedPromoCode(typed: string): string {
-  return typed.replace(/\s/g, "").toUpperCase()
-}
+export const typedPromoCode = cleanDiscountCode
+
+// Whether the typed code, cleaned, can be a Promo code.
+export { isPromoCode }
 
 const STATE: Record<PromoEffectiveState, { label: string; tone: ChipTone }> = {
   active: { label: "Active", tone: "good" },
@@ -53,9 +54,9 @@ export type CodeCheck =
   | { status: "taken"; code: string; by: "promo-code" | "agent" }
   | { status: "unavailable" }
 
-export const CODE_HELP = "Letters and numbers, 4 to 12."
+export const CODE_HELP = `Any letters, numbers or symbols, up to ${PROMO_CODE_MAX_LENGTH}.`
 export const CODE_FIXED = "A code cannot be changed once created."
-export const CODE_INVALID = "Letters and numbers only, 4 to 12, no hyphen."
+export const CODE_INVALID = `Up to ${PROMO_CODE_MAX_LENGTH} letters, numbers or symbols.`
 
 // The line under Code while it is typed, and whether it is a problem.
 export function codeCheckLine(check: CodeCheck): { text: string; problem: boolean } {
@@ -63,7 +64,7 @@ export function codeCheckLine(check: CodeCheck): { text: string; problem: boolea
     case "empty":
       return { text: CODE_HELP, problem: false }
     case "unreadable":
-      return { text: "Letters and numbers only, 4 to 12. No hyphen, so it never looks like an agent’s ABC-123.", problem: false }
+      return { text: CODE_INVALID, problem: false }
     case "checking":
       return { text: "Checking the code…", problem: false }
     case "available":

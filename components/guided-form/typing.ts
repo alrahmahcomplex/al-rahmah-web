@@ -1,3 +1,5 @@
+import { AGENT_CODE_PATTERN, DISCOUNT_CODE_MAX_LENGTH } from "@/lib/discount-code-rules"
+
 // What the name boxes and the code box do to what is typed (prototype v38,
 // "names in three boxes" and "Discount codes get their hyphen by themselves").
 // Plain functions, so the rules are tested without a browser.
@@ -44,18 +46,44 @@ export const cleanName = (value: string) => value.trim().replace(/\s+/g, " ").to
 export const hasTwoNames = (value: string) => cleanName(value).split(" ").filter(Boolean).length >= 2
 
 /** The longest code the database reads (`normalize_referral_code`). */
-export const CODE_MAX_LENGTH = 20
+export const CODE_MAX_LENGTH = DISCOUNT_CODE_MAX_LENGTH
+
+export { AGENT_CODE_PATTERN }
 
 /**
- * A Discount code is the agent's initials, a hyphen and a number: AAN-132.
- * Capitals, no spaces, and only letters, digits, "-" and "." kept. One to
- * three letters followed straight by digits get the hyphen between them, so
- * "aan132" becomes "AAN-132", "jd123" becomes "JD-123" and "abc1234" becomes
- * "ABC-1234". Anything else stays as typed, such as a Promo code that starts
- * with four letters (KARIBU2026), up to 20 characters.
+ * The Admission form's code box, which takes an agent's code or a Promo
+ * code. Capitals, no spaces, and only printable characters kept. Three
+ * letters followed by a digit get the agent hyphen between them, so
+ * "aan132" becomes "AAN-132". A hyphen typed again after three letters is
+ * dropped ("ABC--1" becomes "ABC-1"; no Promo code starts that way). Any
+ * other shape stays as typed, such as SAVE10, KARIBU2026, AS-135 or $AVE, up
+ * to 20 characters, the hyphen included. The form looks a code up
+ * as typed and then without that hyphen, so a Promo code like EID2026 still
+ * matches.
  */
 export function formatCode(raw: string): string {
-  const plain = raw.toUpperCase().replace(/[^A-Z0-9.-]/g, "")
-  const joined = plain.match(/^([A-Z]{1,3})([0-9]+)$/)
-  return (joined ? `${joined[1]}-${joined[2]}` : plain).slice(0, CODE_MAX_LENGTH)
+  const plain = raw.toUpperCase().replace(/[^!-~]/g, "").replace(/^([A-Z]{3})-{2,}/, "$1-")
+  return plain.replace(/^([A-Z]{3})(?=[0-9])/, "$1-").slice(0, CODE_MAX_LENGTH)
+}
+
+/**
+ * A box that takes only an agent's code, ABC-123: the first three letters,
+ * then the first three digits, in capitals; anything else is dropped. The
+ * hyphen goes in by itself after the third letter, and one typed again is
+ * ignored. `previous` is the box's value before this change: when the
+ * change deletes the hyphen after the three letters, it stays deleted, so
+ * the letters can be corrected.
+ */
+export function formatAgentCode(raw: string, previous = ""): string {
+  let letters = ""
+  let digits = ""
+  for (const ch of raw.toUpperCase()) {
+    if (letters.length < 3) {
+      if (/[A-Z]/.test(ch)) letters += ch
+    } else if (digits.length < 3 && /[0-9]/.test(ch)) digits += ch
+  }
+  if (letters.length < 3) return letters
+  if (digits) return `${letters}-${digits}`
+  const deleting = raw.length < previous.length
+  return deleting && !raw.toUpperCase().endsWith("-") ? letters : `${letters}-`
 }

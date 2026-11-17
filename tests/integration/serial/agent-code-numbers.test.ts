@@ -4,10 +4,11 @@ import { describe, expect, test } from "vitest"
 
 import { inRolledBackTransaction, secretClient } from "../../support/db"
 
-// Discount codes in the v38 format (#404): the initials, a hyphen, and the
-// next number after the last generated code (ABC-123, then XYZ-124). The
-// numbers come from the sequence agent_code_numbers, so creations at the same
-// moment get different numbers without waiting for each other.
+// Discount codes in the v38 format (#404), held to ABC-123 (#462): three
+// letters from the name, a hyphen, and the next number after the last
+// generated code (ABC-123, then XYZ-124), from 001 to 999 and round again.
+// The numbers come from the sequence agent_code_numbers, so creations at the
+// same moment get different numbers without waiting for each other.
 //
 // A sequence's position is not rolled back with a transaction, so a test that
 // moves it puts it back afterwards (`atNumber`). That is safe only while no
@@ -21,6 +22,10 @@ function phone() {
 
 // A number no code holds yet: far above any other test's.
 const farNumber = () => randomInt(500_000, 900_000_000)
+
+// The three digits a code gets from the sequence's number n: 001 to 999 and
+// round again.
+const digits = (n: number) => String(((n - 1) % 999) + 1).padStart(3, "0")
 
 async function signUp(sql: Client, fullName: string, code: string | null = null) {
   await sql.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ role: "service_role" })])
@@ -74,30 +79,81 @@ async function atNumber<T>(n: number, work: (sql: Client) => Promise<T>): Promis
 }
 
 describe("the Discount code format", () => {
-  test("a new code is the three initials and the next number after the last code: ABC-123, then XYZ-124", async () => {
-    const n = farNumber()
-    await atNumber(n, async (sql) => {
-      const first = await signUp(sql, "AMINA BAKARI CHANDE")
-      expect(first).toMatchObject({ outcome: "registered", code: `ABC-${n + 1}` })
+  test("a new code is the three initials and the next number after the last code: QVW-123, then XYZ-124", async () => {
+    // Rare initials, so no other test's lead carries these codes.
+    await atNumber(122, async (sql) => {
+      const first = await signUp(sql, "QUDRA VUAI WEMA")
+      expect(first).toMatchObject({ outcome: "registered", code: "QVW-123" })
       const second = await signUp(sql, "XAVIER YUSUF ZUBERI")
-      expect(second).toMatchObject({ outcome: "registered", code: `XYZ-${n + 2}` })
-      expect(await counter(sql)).toBe(n + 2)
+      expect(second).toMatchObject({ outcome: "registered", code: "XYZ-124" })
+      expect(await counter(sql)).toBe(124)
     })
   })
 
-  test("the number has at least three digits, and prints in full past 999", async () => {
+  test("the number always has three digits: after 999 it starts again at 001", async () => {
     // Small numbers may be taken by seeded codes; a rare prefix keeps them free.
     await atNumber(6, async (sql) => {
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toMatch(/^ZXQ-0\d\d$/)
-      await setCounter(sql, 999)
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-1000")
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-007")
+      await setCounter(sql, 998)
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-999")
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-001")
+      expect(await counter(sql)).toBe(1000)
     })
   })
 
-  test("the staff Create agent path gets the same format, and a two-name agent gets two initials", async () => {
+  test("the staff Create agent path gets the same format, and a name short of three initials is filled from its next letters, then X", async () => {
     const n = farNumber()
     await atNumber(n, async (sql) => {
-      expect(await create(sql, "Juma Doe")).toBe(`JD-${n + 1}`)
+      expect(await create(sql, "Juma Doe")).toBe(`JDU-${digits(n + 1)}`)
+      expect(await create(sql, "Madonna")).toBe(`MAD-${digits(n + 2)}`)
+      expect(await create(sql, "Ox")).toBe(`OXX-${digits(n + 3)}`)
+      expect(await create(sql, "Émile Ali Juma")).toBe(`AJM-${digits(n + 4)}`)
+    })
+  })
+
+  test("the one number left for a set of initials is found, however far round", async () => {
+    await atNumber(farNumber(), async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(
+        `insert into public.marketing_agents (full_name, phone, code)
+         select 'Taken Prefix', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || lpad(k::text, 3, '0')
+         from generate_series(1, 999) k where k <> 500`,
+        [randomInt(0, 90_000_000)],
+      )
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-500")
+    })
+  })
+
+  test("a free number is still found when other creations take the numbers it would have tried", async () => {
+    await atNumber(farNumber(), async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(
+        `insert into public.marketing_agents (full_name, phone, code)
+         select 'Taken Prefix', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || lpad(k::text, 3, '0')
+         from generate_series(1, 999) k where k <> 500`,
+        [randomInt(0, 90_000_000)],
+      )
+      // Stepping 999 at a time, as if other creations took every number in
+      // between, the sequence offers the same taken number 999 times over.
+      await sql.query("alter sequence public.agent_code_numbers increment by 999")
+      try {
+        expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-500")
+      } finally {
+        await sql.query("alter sequence public.agent_code_numbers increment by 1")
+      }
+    })
+  })
+
+  test("every set of initials has 999 codes; when all are taken, the creation is refused", async () => {
+    await atNumber(farNumber(), async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(
+        `insert into public.marketing_agents (full_name, phone, code)
+         select 'Taken Prefix', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || lpad(k::text, 3, '0')
+         from generate_series(1, 999) k`,
+        [randomInt(0, 90_000_000)],
+      )
+      await expect(create(sql, "ZAWADI XENIA QUINN")).rejects.toThrow(/no_free_code/)
     })
   })
 
@@ -105,33 +161,40 @@ describe("the Discount code format", () => {
     const n = farNumber()
     await atNumber(n, async (sql) => {
       // Codes staff typed, or an import carried, with higher numbers.
-      expect(await create(sql, "ZAWADI XENIA QUINN", `ZXQ-${n + 1}`)).toBe(`ZXQ-${n + 1}`)
-      expect(await create(sql, "BAKARI ALI JUMA", `BAJ-${n + 3}`)).toBe(`BAJ-${n + 3}`)
+      expect(await create(sql, "ZAWADI XENIA QUINN", `ZXQ-${digits(n + 1)}`)).toBe(`ZXQ-${digits(n + 1)}`)
+      expect(await create(sql, "BAKARI ALI JUMA", `BAJ-${digits(n + 3)}`)).toBe(`BAJ-${digits(n + 3)}`)
       expect(await counter(sql)).toBe(n)
 
       // The next ZXQ code would be n + 1, which is taken: it moves on to n + 2.
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${n + 2}`)
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${digits(n + 2)}`)
       // BAJ at n + 3 is taken too: n + 4. Skipped numbers are not handed out again.
-      expect(await create(sql, "BAKARI ALI JUMA")).toBe(`BAJ-${n + 4}`)
+      expect(await create(sql, "BAKARI ALI JUMA")).toBe(`BAJ-${digits(n + 4)}`)
       expect(await counter(sql)).toBe(n + 4)
       // Another prefix carries on from there.
-      expect(await create(sql, "AMINA BAKARI CHANDE")).toBe(`ABC-${n + 5}`)
+      expect(await create(sql, "AMINA BAKARI CHANDE")).toBe(`ABC-${digits(n + 5)}`)
     })
   })
 
-  test("a long run of taken codes is passed over, however long", async () => {
-    const n = farNumber()
-    await atNumber(n, async (sql) => {
+  test("a long run of taken codes is passed over", async () => {
+    await atNumber(100, async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      // 150 typed codes in a row, ZXQ-(n+1) to ZXQ-(n+150), none of which moves the sequence.
+      // 150 typed codes in a row, ZXQ-101 to ZXQ-250, none of which moves the sequence.
       const planted = await sql.query(
         `insert into public.marketing_agents (full_name, phone, code)
-         select 'Taken Run', '+2556' || lpad((k + $2::int)::text, 8, '0'), 'ZXQ-' || ($1::bigint + k)
+         select 'Taken Run', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || (100 + k)
          from generate_series(1, 150) k`,
-        [n, randomInt(0, 90_000_000)],
+        [randomInt(0, 90_000_000)],
       )
       expect(planted.rowCount).toBe(150)
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${n + 151}`)
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-251")
+    })
+  })
+
+  test("a generated code whose twin a Promo code holds is skipped, so the form can tell them apart", async () => {
+    await atNumber(300, async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("insert into public.promo_codes (code, name, amount) values ('ZXQ301', 'Twin of an agent code', 1000)")
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-302")
     })
   })
 
@@ -139,11 +202,11 @@ describe("the Discount code format", () => {
     const n = farNumber()
     await atNumber(n, async (sql) => {
       const old = await create(sql, "ZAWADI XENIA QUINN")
-      expect(old).toBe(`ZXQ-${n + 1}`)
+      expect(old).toBe(`ZXQ-${digits(n + 1)}`)
       const { rows } = await sql.query<{ id: string }>("select id from public.marketing_agents where code = $1", [old])
       await sql.query("select public.record_agent_status_change($1, 'retired', 'Test: retired', null)", [rows[0].id])
       await setCounter(sql, n)
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${n + 2}`)
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${digits(n + 2)}`)
     })
   })
 
@@ -160,10 +223,10 @@ describe("the Discount code format", () => {
                  order by random() limit 1),
                 'Coded Pupil', l.class_name, l.enrollment_year, l.day_or_boarding, l.guardian_contact_id, l.status, l.visit_date, $1
          from public.leads l limit 1`,
-        [`ZXQ-${n + 1}`],
+        [`ZXQ-${digits(n + 1)}`],
       )
       expect(planted.rowCount).toBe(1)
-      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${n + 2}`)
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe(`ZXQ-${digits(n + 2)}`)
     })
   })
 
@@ -215,7 +278,7 @@ describe("the Discount code format", () => {
     })
     const numbers = codes.map((code) => Number(code.split("-")[1]))
     expect(new Set(numbers).size).toBe(6)
-    for (const code of codes) expect(code).toMatch(/^PAN-\d{3,}$/)
+    for (const code of codes) expect(code).toMatch(/^PAN-\d{3}$/)
   })
 })
 
@@ -223,6 +286,9 @@ describe("the last number", () => {
   test("is the number in the newest record's code shaped like a generated one, retired records included", async () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
+      // Records stored before codes were held to ABC-123 (#462), planted past
+      // the triggers that hold new codes to it.
+      await sql.query("set local session_replication_role = replica")
       const insert = (code: string, at: string) =>
         sql.query<{ id: string }>(
           "insert into public.marketing_agents (full_name, phone, code, registered_at) values ('Last Number', $1, $2, $3) returning id",

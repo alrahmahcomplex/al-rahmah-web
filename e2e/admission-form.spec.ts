@@ -238,7 +238,6 @@ test("Start over sits on the first question, Back takes its place after, and Cle
   await expect(page.getByRole("button", { name: WORDS.sw.reset })).toHaveCount(0)
   await expect(page.getByRole("button", { name: WORDS.sw.back })).toBeVisible()
   // Back on the first question again: Start over comes back, with the answers kept.
-  await page.getByRole("button", { name: "Badilisha Taarifa, " + who.child }).click()
   await page.getByRole("button", { name: "Badilisha Jina" }).click()
   await expectQuestion(page, WORDS.sw.studentName)
   await expect(page.getByRole("button", { name: WORDS.sw.reset })).toBeVisible()

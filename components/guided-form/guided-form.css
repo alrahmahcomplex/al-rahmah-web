@@ -176,7 +176,7 @@ html.rm .gf-gn.gf-cheer { animation: none; }
 }
 .gf-swrow:hover { background: var(--gf-chrome); }
 .gf-swrow:has(input:checked) { border-color: var(--gf-indigo); background: var(--gf-whisper); }
-.gf-swrow input { position: absolute; left: 16px; top: 50%; width: 52px; height: 32px; margin: -16px 0 0; opacity: 0; cursor: pointer; }
+.gf-swrow input { position: absolute; z-index: 1; left: 16px; top: 50%; width: 52px; height: 32px; margin: -16px 0 0; opacity: 0; cursor: pointer; }
 .gf-swrow .gf-trk {
   flex: none; position: relative; width: 52px; height: 32px; border-radius: 999px; background: var(--gf-whisper); box-shadow: inset 0 0 0 2px var(--gf-line-strong);
   transition: background var(--gf-t-med) var(--gf-ease-out), box-shadow var(--gf-t-med) var(--gf-ease-out);

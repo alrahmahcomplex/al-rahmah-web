@@ -67,7 +67,13 @@ export async function submitAdmissionForm(
   if (saved.ok) return { status: "confirmed", children: saved.data }
   switch (saved.error.kind) {
     case "invalid":
-      return { status: "invalid", field: saved.error.field, child: saved.error.child, ...calendarFor(saved.error.field) }
+      return {
+        status: "invalid",
+        field: saved.error.field,
+        child: saved.error.child,
+        ...(saved.error.part ? { part: saved.error.part } : {}),
+        ...calendarFor(saved.error.field),
+      }
     case "already-sent":
       return { status: "already-sent", children: saved.error.children, complete: saved.error.complete }
     case "unavailable":

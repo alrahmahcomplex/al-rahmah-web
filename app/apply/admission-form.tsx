@@ -797,7 +797,7 @@ export function AdmissionFormSteps({
         // the refusal brings the server's years, and the year tiles change in
         // place with the entries kept.
         if (result.calendar) setCalendar(result.calendar)
-        const shown: Shown = { field: result.field, child: result.child, server: true }
+        const shown: Shown = { field: result.field, child: result.child, ...(result.part ? { part: result.part } : {}), server: true }
         const key = stepForProblem(shown, formRef.current.children)
         if (key) return goTo(key, [shown])
         setProblems([shown])

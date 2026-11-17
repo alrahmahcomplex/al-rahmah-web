@@ -103,7 +103,7 @@ Prototype CSS: `.stack`, `.item`, `.step`, `.sum-w`, `.fold`, `.settled`, `.head
 | `SwitchRow` | A whole-row switch with a small line under its label ("The father is the custodian", with his three names): a real checkbox, `role="switch"`. Tinted Whisper with an indigo line while on. The kit's `Switch` needs kit.css, so public pages use this one | `.swt.swrow` |
 | `Reveal` | A part that folds open and shut (`open`), `inert` while shut, such as the custodian's name boxes under the switch | `.rv` |
 
-**Focus ring.** Every part here draws 3px of `--gf-focus-ring` (indigo at 47%), 2px out: 3.17:1 on Paper and 3.08:1 on Lavender Whisper. The choices, round buttons and switch get it from `guided-form.css`; the pills and links from `ring-(color:--gf-focus-ring)`.
+**Focus ring.** Every part here draws 3px of `--gf-focus-ring` (indigo at 47%), 2px out: 3.16:1 on Paper and 3.06:1 on Lavender Whisper. The choices, round buttons and switch get it from `guided-form.css`; the pills and links from `ring-(color:--gf-focus-ring)`.
 
 `prefersReducedMotion()`, `foldMs()` and `buzz()` are exported for page code that times its own steps. The prototype's card frame (`.card`, 32px corners on phones, 40px from 640px, Indigo lift) and the lavender page wash stay with the page: use Tailwind there.
 

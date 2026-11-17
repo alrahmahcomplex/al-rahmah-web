@@ -37,7 +37,7 @@ test("Back, Forward and reload keep every entry, and a confirmed send clears the
 
   await page.reload()
   await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
-  await expect(page.getByText(who.child, { exact: true })).toBeVisible()
+  await expect(page.getByText(who.child, { exact: true }).first()).toBeVisible()
 
   // The form's own Back steps back through history, so Forward still works.
   await page.getByRole("button", { name: t.back }).click()

@@ -19,7 +19,8 @@ export const PHONE_WIDTH = { width: 390, height: 844 }
 // name spreads across the boxes. `child` and `parent` are the full names the
 // page shows; `childTyped` is what goes in the student's first box.
 export function family() {
-  const suffix = randomUUID().slice(0, 6).toUpperCase()
+  // Letters only: a name part holds no digits.
+  const suffix = Array.from(randomUUID().replace(/-/g, "").slice(0, 6), (c) => String.fromCharCode(65 + (parseInt(c, 16) % 26))).join("")
   const student = (first: string) => ({ typed: `${first} MAJARIBIO BABA ${suffix}`, name: `${first} MAJARIBIO ${suffix}` })
   const child = student("MWANAFUNZI")
   return {
@@ -195,7 +196,7 @@ export async function toCode(page: Page, lang: Lang, who: ReturnType<typeof fami
   const t = WORDS[lang]
   for (let n = 1; n <= students; n++) {
     if (n > 1) await openQuestion(page).getByRole("button", { name: t.addStudent }).click()
-    await fillStudent(page, lang, students === 1 ? who.childTyped : who.student(`MWANAFUNZI${n}`).typed, year)
+    await fillStudent(page, lang, students === 1 ? who.childTyped : who.student(`MWANAFUNZI${"ABCDEFGH"[n - 1]}`).typed, year)
   }
   await openQuestion(page).getByRole("button", { name: t.noMore }).click()
   await fillParent(page, lang, who)

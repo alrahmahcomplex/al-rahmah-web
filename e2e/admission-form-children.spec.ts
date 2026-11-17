@@ -40,13 +40,14 @@ test("adds students up to eight with their labels, and removes one, keeping the 
   await expect(page.getByRole("button", { name: `Badilisha Taarifa, ${b.name}` })).toHaveCount(0)
   await page.getByRole("button", { name: `Ondoa ${b.name}` }).click()
   await expect(page.getByText(b.name)).toHaveCount(0)
-  await expect(page.getByText(new RegExp(`^${a.name}`))).toBeVisible()
-  await expect(page.getByText(new RegExp(`^${c.name}`))).toBeVisible()
+  // The first match is the folded line; the full-name line under the boxes stays in the page, folded away.
+  await expect(page.getByText(new RegExp(`^${a.name}`)).first()).toBeVisible()
+  await expect(page.getByText(new RegExp(`^${c.name}`)).first()).toBeVisible()
 
   for (let n = 3; n <= 8; n++) {
     await openQuestion(page).getByRole("button", { name: t.addStudent }).click()
     // The eighth student has no "another student?" question after it.
-    await fillStudent(page, "sw", who.student(`MWANAFUNZI${n}`).typed, nextYear, { last: n === 8 })
+    await fillStudent(page, "sw", who.student(`MWANAFUNZI${"ABCDEFGH"[n - 1]}`).typed, nextYear, { last: n === 8 })
   }
   await expect(page.getByText("Unaweza kuomba kwa wanafunzi hadi 8 kwenye fomu moja.")).toBeVisible()
   await expect(page.getByRole("button", { name: t.addStudent })).toHaveCount(0)

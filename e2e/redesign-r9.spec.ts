@@ -36,6 +36,14 @@ test("an Audit date that cannot be read stops the search and is never sent as an
   await page.getByRole("button", { name: "Apply" }).click()
   await expect(page).toHaveURL(/[?&]from=2026-09-05(&|$)/)
   await expect(from).toHaveValue(dayFirst("2026-09-05"))
+
+  // Clear empties the field, so the next Apply does not bring the date back.
+  await page.getByRole("link", { name: "Clear" }).click()
+  await expect(page).toHaveURL(/\/staff\/audit$/)
+  await expect(from).toHaveValue("")
+  await page.getByRole("button", { name: "Apply" }).click()
+  await expect(page).toHaveURL(/\/staff\/audit\?/)
+  expect(new URL(page.url()).searchParams.get("from") ?? "").toBe("")
 })
 
 test("Audit Who sends the chosen actor, and Anyone sends no one", async ({ page }) => {

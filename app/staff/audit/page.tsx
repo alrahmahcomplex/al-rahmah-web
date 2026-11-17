@@ -48,7 +48,10 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
     <div className="au-page">
       <PageHeader title="Audit" subtitle="Every recorded change and action, newest first. Only you can see this page." />
 
-      <form method="get" action="/staff/audit" className="au-filters" aria-label="Filter the audit">
+      {/* Keyed by the applied filters: the kit's date fields and lists keep
+          what they mounted with, so Clear (a link to the same page) or a
+          shared address must draw them afresh with the new values. */}
+      <form key={auditHref(filters, 1)} method="get" action="/staff/audit" className="au-filters" aria-label="Filter the audit">
         <div className="au-w-date">
           <label htmlFor="audit-from">From</label>
           <DateField id="audit-from" name="from" defaultValue={filters.from ?? ""} />

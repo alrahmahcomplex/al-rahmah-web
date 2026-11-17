@@ -1,0 +1,39 @@
+/* Home's Activity log (#406), measured from prototype v39 → Home → Activity
+   log: a timeline in five columns, full width under Home's grid. */
+
+.kit-card.hm-al { padding: 20px 22px 16px; }
+.hm-al .kit-card-cap { margin-bottom: 10px; }
+.al-cols, .al-r { display: grid; grid-template-columns: 56px 40px minmax(170px, 1fr) minmax(0, 2fr) 190px; gap: 14px; align-items: center; }
+.al-cols { padding: 0 10px 8px; border-bottom: var(--gf-stroke) solid var(--gf-mist); font-size: 12px; font-weight: 600; color: var(--gf-quiet); }
+.al { margin: 0; padding: 0; list-style: none; }
+.al-r { position: relative; padding: 10px; border-radius: 14px; cursor: pointer; transition: background var(--gf-t-med) var(--gf-ease-out); }
+.al-r:hover { background: var(--gf-chrome); }
+/* the timeline's thread between two icons */
+.al-r + .al-r::before { content: ""; position: absolute; left: calc(10px + 56px + 14px + 19.5px); top: -10px; height: 20px; width: 1.5px; background: var(--gf-mist); }
+.al-t { font-size: 13px; font-weight: 600; color: var(--gf-ink-soft); font-variant-numeric: tabular-nums; }
+.al-ico { width: 40px; height: 40px; border-radius: 50%; background: var(--gf-whisper); color: var(--gf-indigo); display: grid; place-items: center; position: relative; z-index: 1; }
+.al-n { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; border-radius: 8px; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; font: inherit; }
+.al-n b { font-weight: 600; font-size: 14.5px; color: var(--gf-ink); }
+.al-n small { font-size: 12.5px; color: var(--gf-quiet); overflow-wrap: anywhere; }
+.al-d { font-size: 13.5px; line-height: 1.45; color: var(--gf-ink-soft); min-width: 0; overflow-wrap: anywhere; }
+.al-a { justify-self: end; }
+.al-a .kit-btn { white-space: nowrap; }
+.al-pg { justify-content: center; padding-top: 14px; margin-top: 6px; border-top: var(--gf-stroke) solid var(--gf-mist); }
+.al-sheet-note { margin-top: 14px; }
+
+/* Narrower: the details and the button move under the task, and the column
+   names go. v39 does this below a 1,100px window, where the stage is about
+   760px wide. */
+@container hm (max-width: 760px) {
+  .al-cols { display: none; }
+  .al-r { grid-template-columns: 48px 40px minmax(0, 1fr); row-gap: 6px; }
+  .al-d, .al-a { grid-column: 3; }
+  .al-a { justify-self: start; }
+  .al-r + .al-r::before { left: calc(10px + 48px + 14px + 19.5px); }
+}
+
+@media (max-width: 560px) {
+  .al-a { max-width: 100%; }
+  .al-a .kit-btn { white-space: normal; height: auto; min-height: 36px; padding: 6px 14px; text-align: left; }
+}
+.al-skel { display: grid; gap: 10px; margin-top: 12px; }

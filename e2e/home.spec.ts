@@ -4,7 +4,7 @@ import { expect, test } from "./staff-test"
 import { addDays, mondayOf, shortDay, shortRange } from "@/app/staff/_home/stats"
 import { tanzaniaToday } from "@/lib/school-calendar"
 
-import { unusedAdmissionNumber } from "../tests/support/db"
+import { createThrowawayStaff, unusedAdmissionNumber } from "../tests/support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 import { axeProblems } from "./axe"
 import { signInOnce } from "./log-in"
@@ -191,6 +191,62 @@ test.describe("Quick actions", () => {
     await expect(quickActions(page).getByRole("link", { name: /^Call a family back/ })).toBeVisible()
     await quickActions(page).getByRole("link", { name: /^Request a discount/ }).click()
     await expect(page).toHaveURL(/\/staff\/discounts$/)
+  })
+})
+
+test.describe("the chart card", () => {
+  const charts = (page: Page) => page.getByRole("region", { name: "Charts" })
+  const tab = (page: Page, name: string) => charts(page).getByRole("tab", { name })
+
+  test("its four tabs each show their chart, and See the numbers shows them as a table", async ({ page }) => {
+    await signIn(page, MANAGER)
+    await expect(charts(page).getByRole("tab")).toHaveText(["Classes", "Months", "Seats", "Sources"])
+    await expect(tab(page, "Classes")).toHaveAttribute("aria-selected", "true")
+    await expect(charts(page).getByText(/ draws? the most students$/)).toBeVisible()
+
+    await charts(page).getByRole("button", { name: "See the numbers" }).click()
+    const classes = charts(page).getByRole("table", { name: "Classes: the numbers" })
+    await expect(classes.getByRole("rowheader")).toHaveCount(14)
+    await expect(classes.getByRole("rowheader").first()).toHaveText("DAY CARE")
+    await charts(page).getByRole("button", { name: "Hide the numbers" }).click()
+    await expect(classes).toBeHidden()
+
+    await tab(page, "Months").click()
+    await expect(charts(page).getByText(/busiest month/)).toBeVisible()
+    const month = charts(page).getByRole("img", { name: /· applications$/ }).first()
+    await month.hover()
+    await expect(charts(page).getByText(/^(Jan · applications|January so far · applications)$/)).toBeVisible()
+
+    await tab(page, "Seats").click()
+    await expect(charts(page).getByText("Each capsule is the whole class. The fill is the seats held.")).toBeVisible()
+
+    await tab(page, "Sources").click()
+    await expect(charts(page).getByRole("listitem")).toHaveText([/^Admission form/, /^Agents’ Discount codes/, /^Promo codes/, /^Walk-in at the desk/])
+  })
+
+  test("the arrow keys move along the tabs, and a mark shows its number on keyboard focus", async ({ page }) => {
+    await signIn(page, MANAGER)
+    await tab(page, "Classes").focus()
+    await page.keyboard.press("ArrowRight")
+    await expect(tab(page, "Months")).toHaveAttribute("aria-selected", "true")
+    await page.keyboard.press("End")
+    await expect(tab(page, "Sources")).toBeFocused()
+    await tab(page, "Classes").click()
+    await charts(page).getByRole("img", { name: /, DAY CARE · students$/ }).focus()
+    await expect(charts(page).getByText("DAY CARE · students")).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(charts(page).getByText("DAY CARE · students")).toBeHidden()
+  })
+
+  test("staff who may not see payments get no Seats tab, and staff who see only payments get Seats alone", async ({ page }) => {
+    const leadsOnly = await createThrowawayStaff(["leads.view"])
+    await signIn(page, leadsOnly)
+    await expect(charts(page).getByRole("tab")).toHaveText(["Classes", "Months", "Sources"])
+
+    await page.context().clearCookies()
+    const paymentsOnly = await createThrowawayStaff(["payments.view"])
+    await signIn(page, paymentsOnly)
+    await expect(charts(page).getByRole("tab")).toHaveText(["Seats"])
   })
 })
 

@@ -851,12 +851,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     agent: { refused: "not_permitted" },
   },
   // Check-in of an Admission form family (#305).
+  // Other tests create leads with random Admission Numbers, so the sample's
+  // lead takes one no lead holds (#443).
   "public.complete_admission_visit(visited_on date, people jsonb, students jsonb)": {
     roles: ["authenticated"],
     setup:
       "insert into public.guardian_contacts (id, full_name, relationship, phone, origin) values ('c0a70000-0000-4000-8000-000000000305', 'Sample Form Parent', 'Mother', public.normalize_phone('0689999002'), 'admission_form'); " +
-      "insert into public.leads (id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id) values ('1ead0000-0000-4000-8000-000000000305', 'ADMSN-30599', 'Sample Pupil Surface', 'KG 1', extract(year from public.tanzania_today())::int + 1, 'Day', 'Applied', 'c0a70000-0000-4000-8000-000000000305'); " +
-      "insert into public.admission_submissions (submission_key, payload_hash, child_count, contact_id, outcomes) values ('5b305000-0000-4000-8000-000000000305', repeat('a', 64), 1, 'c0a70000-0000-4000-8000-000000000305', '{\"0\": {\"result\": \"created\", \"lead_id\": \"1ead0000-0000-4000-8000-000000000305\", \"admission_number\": \"ADMSN-30599\"}}')",
+      "insert into public.leads (id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id) select '1ead0000-0000-4000-8000-000000000305', free.number, 'Sample Pupil Surface', 'KG 1', extract(year from public.tanzania_today())::int + 1, 'Day', 'Applied', 'c0a70000-0000-4000-8000-000000000305' from (select 'ADMSN-' || lpad(n::text, 5, '0') as number from generate_series(0, 99999) n where not exists (select 1 from public.leads l where l.admission_number = 'ADMSN-' || lpad(n::text, 5, '0')) order by random() limit 1) free; " +
+      "insert into public.admission_submissions (submission_key, payload_hash, child_count, contact_id, outcomes) select '5b305000-0000-4000-8000-000000000305', repeat('a', 64), 1, 'c0a70000-0000-4000-8000-000000000305', jsonb_build_object('0', jsonb_build_object('result', 'created', 'lead_id', l.id, 'admission_number', l.admission_number)) from public.leads l where l.id = '1ead0000-0000-4000-8000-000000000305'",
     args: {
       visited_on: "current_date",
       people: `'[{"contact_id": "c0a70000-0000-4000-8000-000000000305"}]'::jsonb`,

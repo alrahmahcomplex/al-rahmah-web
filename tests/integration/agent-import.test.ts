@@ -414,6 +414,11 @@ describe("only three names and an ABC-123 code (#463)", () => {
     // The Agents list reads it with no mobile.
     const listed = await listAgents(await signedIn(MANAGER), { importBatchId: done.data.batchId, page: 1 })
     expect(listed.ok && listed.data.agents.map((agent) => [agent.code, agent.phone])).toEqual([[bare.code, null]])
+    // The search box finds it by code and by name, with no mobile to match.
+    for (const query of [bare.code, bare.fullName]) {
+      const found = await listAgents(await signedIn(MANAGER), { query, page: 1 })
+      expect(found.ok && found.data.agents.map((agent) => agent.code)).toEqual([bare.code])
+    }
   })
 
   test("every other way an agent is made still needs a mobile, and the table holds it", async () => {

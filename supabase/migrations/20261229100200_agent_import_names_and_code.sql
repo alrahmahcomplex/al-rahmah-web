@@ -20,6 +20,19 @@ alter table public.marketing_agents alter column phone drop not null;
 alter table public.marketing_agents
     add constraint marketing_agents_phone_needed check (phone is not null or import_batch_id is not null);
 
+-- The staff screens' search text, as 20261016400100_marketing_agents.sql made
+-- it, with the mobile optional: joined to a missing mobile it was null, and
+-- the agent could not be found by name or code. Dropped and added again, as
+-- a stored generated column's expression can't otherwise change everywhere
+-- this runs.
+alter table public.marketing_agents drop column search_text;
+alter table public.marketing_agents
+    add column search_text text generated always as (
+        lower(full_name) || ' ' || lower(code)
+        || coalesce(' ' || regexp_replace(phone, '\D', '', 'g'), '')
+        || coalesce(' ' || regexp_replace(whatsapp, '\D', '', 'g'), '')
+    ) stored;
+
 -- ---------------------------------------------------------------------------
 -- agent_draft, as 20261229100100_promo_any_format_agent_code_shape.sql made
 -- it, with phone_optional: an empty mobile is none instead of refused.

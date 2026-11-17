@@ -109,8 +109,7 @@
   font-weight: 700; font-size: 13px; color: var(--gf-indigo-night); white-space: nowrap;
 }
 
-/* ---------- Quick actions: a row of tiles the width of the page ---------- */
-.hm-qa { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 14px; }
+/* ---------- Quick actions: a row of tiles the width of the page, laid out by the kit's Bento ---------- */
 .hm-q {
   display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 16px; border-radius: 22px; background: var(--gf-paper);
   border: var(--gf-stroke) solid var(--gf-line-soft); color: inherit; text-align: left; text-decoration: none;
@@ -125,7 +124,7 @@
 .hm-q-text { flex: 1; min-width: 0; }
 .hm-q-text b { display: block; font-size: 14px; font-weight: 600; line-height: 1.3; }
 .hm-q-text small { display: block; font-size: 12px; line-height: 1.35; color: var(--gf-quiet); }
-.hm-q-chev { flex: none; color: var(--gf-quiet); }
+.hm-q-chev { flex: none; color: var(--gf-indigo); }
 @media (prefers-reduced-motion: reduce) { .hm-q:hover { transform: none; } }
 
 /* ---------- the notices, until they have a prototyped place ---------- */
@@ -163,6 +162,6 @@
 }
 @media (max-width: 560px) {
   .hm-find-bar .kit-btn { font-size: 13px; padding: 0 14px; }
-  /* A phone: the chart, the stat cards, then the tiles, one under another. */
-  .hm-side, .hm-qa { grid-template-columns: minmax(0, 1fr); }
+  /* A phone: the chart, then the stat cards one under another; the tiles stack by the Bento's own rule. */
+  .hm-side { grid-template-columns: minmax(0, 1fr); }
 }

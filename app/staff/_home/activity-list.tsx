@@ -6,11 +6,18 @@ import { Icon } from "@/components/icons"
 import { Button, ButtonLink, Card, KeyValueList, Note, Pagination, Sheet, type KeyValueItem } from "@/components/kit"
 
 import type { ActivityView } from "./activity"
-import { loadActivityPage } from "./activity-actions"
+import { loadActivityPage, type ActivityPageOutcome } from "./activity-actions"
 import type { ActivityScreenPage } from "./activity-data"
 import "./activity.css"
 
 const LOST_REQUEST = "The Activity log could not be loaded. Check your connection and try again."
+const UNAVAILABLE = "The Activity log could not be loaded. Try again in a moment."
+// How often one press goes back a page because the log shrank while it loaded.
+const SHRINK_TRIES = 5
+
+// The log's last page, when the answer is for a page past the end of a log that still has rows.
+const lastPageInstead = (outcome: ActivityPageOutcome): number | null =>
+  outcome.status === "ok" && outcome.page.total > 0 && outcome.page.page > outcome.page.pageCount ? outcome.page.pageCount : null
 
 const whoLine = (row: ActivityView) => (row.about ? `${row.who} · ${row.about}` : row.who)
 // v39: a clock time reads "Today 08:05" in the sheet; "All day", "Today" and dates read as they are.
@@ -59,11 +66,16 @@ export function ActivityList({ first }: { first: ActivityScreenPage }) {
     startTransition(async () => {
       try {
         let outcome = await loadActivityPage(page)
-        // The log shrank since this page was drawn: go to its new last page.
-        if (ticket === asked.current && outcome.status === "ok" && outcome.page.total > 0 && outcome.page.page > outcome.page.pageCount) {
-          outcome = await loadActivityPage(outcome.page.pageCount)
+        // The log shrank since this page was drawn: go to its new last page,
+        // and again if it shrank once more while that page loaded (#464).
+        for (let tries = 0; tries < SHRINK_TRIES && ticket === asked.current; tries++) {
+          const last = lastPageInstead(outcome)
+          if (last === null) break
+          outcome = await loadActivityPage(last)
         }
-        if (outcome.status === "ok") apply({ shown: outcome.page, error: null })
+        // Still past the end: keep the rows on screen and say so, never an empty page.
+        if (lastPageInstead(outcome) !== null) apply({ error: UNAVAILABLE })
+        else if (outcome.status === "ok") apply({ shown: outcome.page, error: null })
         else apply({ error: outcome.message })
       } catch {
         apply({ error: LOST_REQUEST })

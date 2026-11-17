@@ -133,6 +133,27 @@ describe("the Activity log card", () => {
     expect(load.mock.calls).toEqual([[2], [1]])
   })
 
+  it("keeps going back when the log shrinks again while the last page loads", async () => {
+    load.mockResolvedValueOnce({ status: "ok", page: page([], { total: 11, page: 3 }) })
+    load.mockResolvedValueOnce({ status: "ok", page: page([], { total: 10, page: 2 }) })
+    load.mockResolvedValueOnce({ status: "ok", page: page(["STILL HERE"], { total: 10, page: 1 }) })
+    render(<ActivityList first={page(["FIRST"], { total: 21 })} />)
+    fireEvent.click(screen.getByRole("button", { name: /^3$/ }))
+    await waitFor(() => expect(rowFor("STILL HERE")).not.toBeNull())
+    expect(load.mock.calls).toEqual([[3], [2], [1]])
+  })
+
+  it("keeps its rows and says so when every answer is past the end", async () => {
+    // Answers that never settle: always a page past the end, whatever is asked.
+    load.mockResolvedValue({ status: "ok", page: { rows: [], total: 5, page: 2, pageCount: 1 } })
+    render(<ActivityList first={page(["FIRST"], { total: 500 })} />)
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("The Activity log could not be loaded. Try again in a moment.")
+    expect(rowFor("FIRST")).not.toBeNull()
+    // The first try and five more, then it stops.
+    expect(load).toHaveBeenCalledTimes(6)
+  })
+
   it("goes when nothing is left in the log", async () => {
     load.mockResolvedValueOnce({ status: "ok", page: page([], { total: 0, page: 2 }) })
     render(<ActivityList first={page(["FIRST"], { total: 11 })} />)

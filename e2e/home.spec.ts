@@ -255,6 +255,8 @@ for (const [label, size] of [
   ["a phone", { width: 390, height: 844 }],
 ] as const) {
   test(`axe finds nothing but the accepted findings on Home at ${label}`, { tag: "@nightly" }, async ({ page }) => {
+    // Five scans: the page, then each chart tab.
+    test.slow()
     await page.setViewportSize(size)
     await signIn(page, MANAGER)
     expect(await axeProblems(page)).toEqual([])

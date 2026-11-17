@@ -183,6 +183,16 @@ export const metadata = { title: pageTitle("Applicants") }
 </Card>
 ```
 
+Cards side by side go in a `Bento` (prototype v40, Design system): every card in a row is as tall as the tallest, its content at the top, and a short last row fills the width, so no hole is left. It takes one column, two from 580px of its own width and three from 880px; `columns={2}` stops at two. A card with `data-bento="full"` spans the row. Put full cards first or last, or start a new `Bento` after one (back-to-back grids sit 14px apart, like one grid). The last row counts only the cards that show: a full, hidden or empty card is left out, and an empty card takes no place.
+
+```tsx
+<Bento columns={2}>
+  <Card title="Student" data-bento="full">…</Card>
+  <Card title="Parent or guardian">…</Card>
+  <Card title="Family">…</Card>
+</Bento>
+```
+
 `PageHeader` is the page's one `h1`. A client part deeper down adds an action to its slot with `<PageActions>`. A `Card` with a title is a region named by it. `TaskCard` is the one lifted card on a page.
 
 `ListRow` is a link with `href`, a button with `onClick`, a plain row otherwise; `icon` draws the featured disc, `leading` takes a Line tag instead. `Table` takes `columns` (`header`, `cell`, `align: "end"` for money, `rowHeader` for the cell that names its row, such as a name) and `rows`; `onOpen` makes rows focusable, opened by click or Enter, named by `rowLabel`. `total` adds the bold total row. `KeyValueList` items take a `reason` line and `numeric`. `Section` heads a part of a card or sheet. `Timeline` lists what happened, newest first, as the prototype v38 Design system page draws it: each item has a `title`, a `meta` line (who and when), an optional `tone` (`ok` green, `wait` orange; indigo otherwise) and children below, such as the fields an edit changed; `label` names the list. `Note tone="info" | "good" | "wait" | "bad"` takes a `role`: `status` for news, `alert` for a failure. Each tone is a faint tint with a thin line in its own colour.

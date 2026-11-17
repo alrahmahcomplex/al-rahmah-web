@@ -66,6 +66,7 @@ export async function Dashboard({
             filters={tile.filters}
             enrollmentYears={enrollmentYears}
             searchParams={query}
+            className="rp-tile"
           >
             {tile.count.ok ? (
               <div>

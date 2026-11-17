@@ -1,14 +1,19 @@
 /* Reports: the dashboard's grid, its count cards and their filters (DESIGN.md, Cards and Lists). */
 .rp-dash { display: flex; flex-direction: column; gap: 12px; }
 .rp-dash > .kit-sec-title { margin: 0; }
-.rp-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 16px; }
+/* The kit's bento rule (#455), drawn here because the table stands beside the
+   tiles: cards in a row are as tall as each other, and a lone last tile spans
+   both tile columns. */
+.rp-grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 14px; }
 @media (min-width: 640px) {
   .rp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rp-wide { grid-column: 1 / -1; }
+  .rp-grid > :nth-child(odd of .rp-tile):nth-last-child(1 of .rp-tile) { grid-column: 1 / span 2; }
+  /* Under the tiles, Applicants by enrollment class and Seats by class take the width. */
+  .rp-side, .rp-wide { grid-column: 1 / -1; }
 }
 @media (min-width: 1024px) {
-  /* The third row takes what the tall table needs, so the tiles above it sit close together. */
-  .rp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto 1fr; }
+  /* The tile rows share the table's height evenly, so the table ends level with the last tile. */
+  .rp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, 1fr); }
   /* Applicants by enrollment class stands in the right-hand column, beside the tiles. */
   .rp-side { grid-column: 3; grid-row: 1 / span 3; }
 }

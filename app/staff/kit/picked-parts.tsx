@@ -44,12 +44,12 @@ export function PickedPartsCards() {
   const [discount, setDiscount] = useState(10)
   return (
     <>
-      <Card title="Tabs: sliding track" className="kp-full">
+      <Card title="Tabs: sliding track" data-bento="full">
         <p className="kp-spec">Sections of one record. One indigo pill slides to the chosen tab; the arrow keys move along.</p>
         <TabSwitch label="Record sections" tabs={RECORD_TABS.map((t) => ({ value: t, label: t, panel: <p className="kp-spec">Showing: {t}</p> }))} />
       </Card>
 
-      <Card title="Pagination: numbered pills" className="kp-full">
+      <Card title="Pagination: numbered pills" data-bento="full">
         <p className="kp-spec">For lists longer than 10 rows, such as Applicants and Audit.</p>
         <Pagination label="Applicant pages" page={page} pageCount={12} onPage={setPage} previousLabel="Previous page" nextLabel="Next page" pageLabel={(n) => `Page ${n}`} />
         <p className="kp-spec" aria-live="polite">
@@ -93,13 +93,12 @@ export function PickedPartsCards() {
         <Timeline label="History" items={HISTORY} />
         <p className="kp-spec">What happened, newest first. A student’s history and the audit log use it.</p>
       </Card>
-
-      <NamesCard />
     </>
   )
 }
 
-function NamesCard() {
+/** The name boxes and the code box, which open the kit page's last grid. */
+export function NamesCard() {
   const ids = { person: useId(), student: useId(), who: useId(), whoError: useId(), code: useId() }
   const [whoError, setWhoError] = useState("")
   const check = (event: FormEvent<HTMLFormElement>) => {
@@ -108,7 +107,7 @@ function NamesCard() {
     setWhoError(hasTwoNames(String(who ?? "")) ? "" : "Type their full name, at least two names.")
   }
   return (
-    <Card title="Names and codes" className="kp-full">
+    <Card title="Names and codes" data-bento="full">
       <p className="kp-spec">Names are typed in capitals. Space moves to the next box, a pasted full name spreads across the boxes, and Backspace in an empty box goes back.</p>
       <form className="kp-fpg" data-kit-form="names" noValidate onSubmit={check}>
         <div className="kp-fpc">

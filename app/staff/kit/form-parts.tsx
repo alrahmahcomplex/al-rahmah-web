@@ -189,7 +189,7 @@ export function FormPartsCard({ tab, today }: { tab: string; today: string }) {
   const ids = { pay: useId(), paid: useId(), paidHint: useId(), at: useId(), atLabel: useId(), why: useId(), whyHint: useId(), ends: useId() }
 
   return (
-    <Card title="Form parts on the student’s record" className="kp-full">
+    <Card title="Form parts on the student’s record" data-bento="full">
       <p className="kp-spec">
         Ten parts the student’s record and the other screens need. Each one borrows a look already on this page. Lists and the calendar open in our own popups,
         never the browser’s grey ones.

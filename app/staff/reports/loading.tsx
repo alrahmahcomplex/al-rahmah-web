@@ -13,7 +13,7 @@ export default function Loading() {
       <SkeletonBlock width={110} height={18} />
       <div className="rp-grid">
         {Array.from({ length: 5 }, (_, index) => (
-          <SkeletonBlock key={index} height={168} shape="card" />
+          <SkeletonBlock key={index} height={168} shape="card" className="rp-tile" />
         ))}
         <SkeletonBlock height={520} shape="card" className="rp-side" />
         <SkeletonBlock height={300} shape="card" className="rp-wide" />

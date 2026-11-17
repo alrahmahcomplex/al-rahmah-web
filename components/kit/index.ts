@@ -1,6 +1,7 @@
 // The kit (DESIGN.md, Components). Converted staff screens import from here.
 // See README.md for what to use instead of the old parts.
 export { Button, ButtonLink, RoundButton, TextLink, type ButtonLinkProps, type ButtonProps, type ButtonSize, type ButtonVariant, type RoundButtonProps, type TextLinkProps } from "./button"
+export { Bento, type BentoProps } from "./bento"
 export { Card, TaskCard, type CardProps } from "./card"
 export { ChipButtons, ChoiceTiles, DefaultTile, type ChipOption, type ChoiceOption, type ChoiceTilesProps } from "./choices"
 export { StatusChip, Tag, type TagTone } from "./chips"

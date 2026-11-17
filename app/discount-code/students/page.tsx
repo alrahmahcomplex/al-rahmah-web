@@ -90,7 +90,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
               <Link
                 href={`?${new URLSearchParams({ ...(search ? { q: search } : {}), n: String(shown + PAGE_SIZE) })}`}
                 scroll={false}
-                className="inline-flex min-h-12 items-center justify-center self-center rounded-full border-[1.5px] border-blue-600/45 px-6 font-exo text-base font-semibold italic text-blue-600 outline-none transition-[background,transform] hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-[0.97]"
+                className="inline-flex min-h-12 items-center justify-center self-center rounded-full border-[1.5px] border-blue-600/45 px-6 font-exo text-base font-semibold italic text-blue-600 outline-none transition-[background,transform] hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.97]"
               >
                 {copy.more}
               </Link>
@@ -115,7 +115,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
           <input type="hidden" name="back" value="/login" />
           <button
             type="submit"
-            className="inline-flex min-h-11 items-center rounded-full px-2.5 font-exo text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+            className="inline-flex min-h-11 items-center rounded-full px-2.5 font-exo text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
           >
             {account.signOut}
           </button>

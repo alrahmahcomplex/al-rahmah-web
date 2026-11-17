@@ -641,7 +641,7 @@ export function DiscountCodeForm({
           {copy.signInPrompt}{" "}
           <Link
             href="/login"
-            className="font-semibold text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-blue-600/40"
+            className="font-semibold text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
           >
             {copy.signIn}
           </Link>
@@ -672,7 +672,7 @@ export function DiscountCodeForm({
 }
 
 const OUTLINED_PILL =
-  "inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-blue-600/45 px-6 font-exo text-lg font-semibold italic text-blue-600 outline-none transition-[background,transform] hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40 active:scale-[0.97]"
+  "inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-full border-[1.5px] border-blue-600/45 px-6 font-exo text-lg font-semibold italic text-blue-600 outline-none transition-[background,transform] hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring) active:scale-[0.97]"
 
 function Note({ tone, children }: { tone: "wait" | "info"; children: ReactNode }) {
   return (
@@ -789,7 +789,7 @@ function Confirmation({
         <p className="text-sm text-slate-600">{copy.call}</p>
         <a
           href={`tel:${officePhone.replaceAll(" ", "")}`}
-          className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold text-blue-600 italic outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-blue-600/40"
+          className="mt-1 inline-flex min-h-11 items-center gap-2 rounded-full px-4 font-exo text-lg font-bold text-blue-600 italic outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
         >
           <Phone className="size-5" strokeWidth={2} aria-hidden />
           {officePhone}

@@ -19,10 +19,10 @@ const buttonVariants = cva(
           "border-destructive bg-background text-destructive hover:bg-destructive/10 focus-visible:border-destructive focus-visible:ring-destructive/20 dark:hover:bg-destructive/20 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
         // Every orange action in the app (DESIGN.md, The ShuleFasta Button Rule):
-        // white semibold text on orange-500, orange-600 on hover, a blue-600
-        // focus ring. Call sites keep their own radius and size.
+        // white semibold text on orange-500, orange-600 on hover, the indigo
+        // --gf-focus-ring (#451). Call sites keep their own radius and size.
         orange:
-          "bg-orange-500 text-white font-semibold hover:bg-orange-600 focus-visible:border-blue-600 focus-visible:ring-blue-600/40",
+          "bg-orange-500 text-white font-semibold hover:bg-orange-600 focus-visible:border-blue-600 focus-visible:ring-(color:--gf-focus-ring)",
       },
       size: {
         default:

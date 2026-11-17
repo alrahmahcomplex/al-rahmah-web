@@ -197,6 +197,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setFailure(null)
     setOnFileFees({})
     asked.current.clear()
+    setSheetRound((r) => r + 1)
   }
 
   function removeStudent(key: number) {
@@ -236,8 +237,12 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         setSibling(key, { kind: "match", of, seen })
         toast("Same father’s name. The 10% sibling discount applies.")
       }, PICK_MS)
-    } else if (compared.tier === "close") setTypo({ key, of, counted: compared.with, pair, seen, clear })
-    else setMismatch({ key, of, counted: compared.with, pair, close: false, seen, clear })
+    } else {
+      // Each question opens a fresh sheet: no choice or note from the last one.
+      setSheetRound((r) => r + 1)
+      if (compared.tier === "close") setTypo({ key, of, counted: compared.with, pair, seen, clear })
+      else setMismatch({ key, of, counted: compared.with, pair, close: false, seen, clear })
+    }
   }
 
   const steps = buildSteps(answers)
@@ -820,6 +825,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           setTypo(null)
           if (v === "different") {
             window.setTimeout(() => {
+              setSheetRound((r) => r + 1)
               setSheetRound((r) => r + 1)
               setMismatch({ key: t.key, of: t.of, counted: t.counted, pair: t.pair, close: true, seen: t.seen, clear: t.clear })
             }, 380)

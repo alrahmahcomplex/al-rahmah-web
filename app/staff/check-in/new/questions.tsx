@@ -801,6 +801,8 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
   const [code, setCode] = useState(has ? saved : "")
   const [error, setError] = useState("")
   const [checking, setChecking] = useState(false)
+  // Counts every change to the answer: a check whose answer arrives after one is ignored.
+  const attempt = useRef(0)
   const errId = `${id}-error`
   const inputId = useId()
 
@@ -810,6 +812,7 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
     if (checking) return
     const v = formatCode(code)
     if (v.length < 3) return setError("Type the code, or choose No code.")
+    const mine = ++attempt.current
     setChecking(true)
     let lookup: ReferralLookup
     try {
@@ -817,6 +820,7 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
     } catch {
       lookup = { status: "unavailable" }
     }
+    if (mine !== attempt.current) return
     setChecking(false)
     const found = usableCode(lookup)
     if (!found) return setError(codeProblem(lookup))
@@ -833,6 +837,8 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
           tagline="Nothing to enter"
           pressed={none}
           onClick={() => {
+            attempt.current++
+            setChecking(false)
             setNone(true)
             window.setTimeout(() => onDone("none"), PICK_MS)
           }}
@@ -849,6 +855,8 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
             invalid={!!error}
             aria-describedby={errId}
             onValueChange={(v) => {
+              attempt.current++
+              setChecking(false)
               setCode(v)
               setError("")
               setNone(false)

@@ -18,14 +18,20 @@ async function signIn(page: Page, person: FixtureStaff) {
   await expect(page).toHaveURL(/\/staff$/)
 }
 
+// The staff 404 (the catch-all route), the only page the old shell still
+// draws, shows the counts beside the entries; the new shell shows none
+// (#323, #328, #331). Not for the Accountant: it throws React error #419 for
+// them (#437).
+const UNKNOWN = "/staff/no-such-page"
+const UNKNOWN_404 = /^console\.error: Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/[^)]+\/staff\/no-such-page\)$/
+
 const navEntry = (page: Page) => page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /Reopening requests/ })
 
-test("the Manager sees the Pending count in the navigation and the seeded request in the queue", async ({ page }) => {
+test("the Manager sees the Pending count in the navigation and the seeded request in the queue", async ({ page, allowConsoleError }) => {
   await signIn(page, MANAGER)
-  // Reports keeps the old shell, which shows the count beside the entry; the
-  // new shell shows none (#323, #328).
-  await page.goto("/staff/reports")
-  await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
+  allowConsoleError(UNKNOWN_404, "the staff 404 may answer with a 404 status")
+  await page.goto(UNKNOWN)
+  await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
   await expect(navEntry(page)).toHaveAccessibleName(/^Reopening requests\s*,\s*[1-9]\d*\s+Pending$/)
 
   await navEntry(page).click()

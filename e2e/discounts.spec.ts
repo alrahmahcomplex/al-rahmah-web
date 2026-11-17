@@ -85,7 +85,14 @@ function feeDetail(page: Page, term: string) {
     .locator("xpath=following-sibling::dd[1]")
 }
 
-test("Admissions Staff request a Staff child discount, and the Manager grants it from Discount requests", async ({ page }) => {
+// The staff 404 (the catch-all route), the only page the old shell still
+// draws, shows the counts beside the entries; the new shell shows none
+// (#323, #328, #331). Not for the Accountant: it throws React error #419 for
+// them (#437).
+const UNKNOWN = "/staff/no-such-page"
+const UNKNOWN_404 = /^console\.error: Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/[^)]+\/staff\/no-such-page\)$/
+
+test("Admissions Staff request a Staff child discount, and the Manager grants it from Discount requests", async ({ page, allowConsoleError }) => {
   const lead = await passedLead()
 
   await signIn(page, ADMISSIONS)
@@ -107,10 +114,9 @@ test("Admissions Staff request a Staff child discount, and the Manager grants it
   await expect(panel.getByRole("button", { name: "Request discount" })).toHaveCount(0)
 
   await signIn(page, MANAGER)
-  // Reports keeps the old shell, which shows the count beside the entry; the
-  // new shell shows none (#323, #328).
-  await page.goto("/staff/reports")
-  await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible()
+  allowConsoleError(UNKNOWN_404, "the staff 404 may answer with a 404 status")
+  await page.goto(UNKNOWN)
+  await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()
   const nav = page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: /Discount requests/ })
   await expect(nav).toContainText(/\d+/)
   await nav.click()

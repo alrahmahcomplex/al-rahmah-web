@@ -479,18 +479,29 @@ begin
     end if;
 
     -- A generated code takes the next number, 001 to 999 and round again,
-    -- until its code is free. A typed code is tried once, and either saves
-    -- or raises. The unique index catches a code committed alongside.
+    -- until its code is free. Other creations take numbers from the same
+    -- sequence meanwhile, so after 999 tries the free numbers left for these
+    -- letters are looked for directly, lowest first; none left is
+    -- `no_free_code`. A typed code is tried once, and either saves or
+    -- raises. The unique index catches a code committed alongside.
     loop
         if draft.agent_code is not null then
             candidate := draft.agent_code;
-        else
+        elsif tries < 999 then
             tries := tries + 1;
-            if tries > 999 then
-                raise exception 'no_free_code' using detail = prefix;
-            end if;
             number := (nextval('public.agent_code_numbers') - 1) % 999 + 1;
             candidate := prefix || '-' || lpad(number::text, 3, '0');
+        else
+            select c.code into candidate
+            from (select prefix || '-' || lpad(g::text, 3, '0') as code from generate_series(1, 999) g) c
+            where not public.agent_code_issued(c.code)
+              and not exists (select 1 from public.leads l where l.referral_code in (c.code, public.discount_code_key(c.code)))
+              and not public.promo_code_holds_key(c.code)
+            order by c.code
+            limit 1;
+            if candidate is null then
+                raise exception 'no_free_code' using detail = prefix;
+            end if;
         end if;
         -- Skips the subtransaction below for a code already used.
         continue when draft.agent_code is null
@@ -523,6 +534,12 @@ begin
             -- A supplied code taken by a creation that committed after the check.
             if draft.agent_code is not null then
                 raise exception 'code_taken' using detail = draft.agent_code;
+            end if;
+        when raise_exception then
+            -- refuse_agent_code_taken: a Promo code with this key committed
+            -- after the check. A generated code moves on to the next number.
+            if sqlerrm <> 'code_taken' or draft.agent_code is not null then
+                raise;
             end if;
         end;
     end loop;

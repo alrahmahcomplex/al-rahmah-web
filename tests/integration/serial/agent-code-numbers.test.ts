@@ -111,6 +111,19 @@ describe("the Discount code format", () => {
     })
   })
 
+  test("the one number left for a set of initials is found, however far round", async () => {
+    await atNumber(farNumber(), async (sql) => {
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query(
+        `insert into public.marketing_agents (full_name, phone, code)
+         select 'Taken Prefix', '+2556' || lpad((k + $1::int)::text, 8, '0'), 'ZXQ-' || lpad(k::text, 3, '0')
+         from generate_series(1, 999) k where k <> 500`,
+        [randomInt(0, 90_000_000)],
+      )
+      expect(await create(sql, "ZAWADI XENIA QUINN")).toBe("ZXQ-500")
+    })
+  })
+
   test("every set of initials has 999 codes; when all are taken, the creation is refused", async () => {
     await atNumber(farNumber(), async (sql) => {
       await sql.query("select public.set_audit_actor('system')")

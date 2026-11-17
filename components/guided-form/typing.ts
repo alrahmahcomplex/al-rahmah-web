@@ -54,19 +54,16 @@ export { AGENT_CODE_PATTERN }
  * The Admission form's code box, which takes an agent's code or a Promo
  * code. Capitals, no spaces, and only printable characters kept. Three
  * letters followed by a digit get the agent hyphen between them, so
- * "aan132" becomes "AAN-132", while it still fits in 20 characters. A hyphen
- * typed again after three letters is dropped ("ABC--1" becomes "ABC-1"; no
- * Promo code starts that way). Any other shape stays as typed, such as SAVE10,
- * KARIBU2026, AS-135 or $AVE, up to 20 characters. The form looks a code up
+ * "aan132" becomes "AAN-132". A hyphen typed again after three letters is
+ * dropped ("ABC--1" becomes "ABC-1"; no Promo code starts that way). Any
+ * other shape stays as typed, such as SAVE10, KARIBU2026, AS-135 or $AVE, up
+ * to 20 characters, the hyphen included. The form looks a code up
  * as typed and then without that hyphen, so a Promo code like EID2026 still
  * matches.
  */
 export function formatCode(raw: string): string {
   const plain = raw.toUpperCase().replace(/[^!-~]/g, "").replace(/^([A-Z]{3})-{2,}/, "$1-")
-  // Past 20 characters the hyphen can only be the box's: it gives way.
-  if (plain.length > CODE_MAX_LENGTH && /^[A-Z]{3}-[0-9]/.test(plain)) return (plain.slice(0, 3) + plain.slice(4)).slice(0, CODE_MAX_LENGTH)
-  const hyphened = plain.length < CODE_MAX_LENGTH ? plain.replace(/^([A-Z]{3})(?=[0-9])/, "$1-") : plain
-  return hyphened.slice(0, CODE_MAX_LENGTH)
+  return plain.replace(/^([A-Z]{3})(?=[0-9])/, "$1-").slice(0, CODE_MAX_LENGTH)
 }
 
 /**

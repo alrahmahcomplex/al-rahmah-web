@@ -62,9 +62,8 @@ describe("the single-box rules", () => {
     expect(formatCode("abc1234")).toBe("ABC-1234")
     // Not for one or two letters, which no agent code has.
     expect(formatCode("jd123")).toBe("JD123")
-    // The hyphen only goes in while the code still fits in 20 characters.
-    expect(formatCode("ABC" + "1".repeat(17))).toBe("ABC" + "1".repeat(17))
-    expect(formatCode("ABC-" + "1".repeat(17))).toBe("ABC" + "1".repeat(17))
+    // Never more than 20 characters, the hyphen included.
+    expect(formatCode("ABC" + "1".repeat(17))).toBe("ABC-" + "1".repeat(16))
   })
 
   it("keeps any other code as typed, Promo codes included, up to 20 characters", () => {

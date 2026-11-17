@@ -2,7 +2,7 @@ import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
 import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
-import { logIn } from "./log-in"
+import { logIn, signInOnce } from "./log-in"
 
 // The shell around every staff page (#225): the grouped sidebar and its rail,
 // and the phone's tab bar with its More sheet. Most routes are in the new
@@ -84,7 +84,7 @@ test.describe("on a desktop", () => {
   // for every role. The console guard fails the test on any page error.
   for (const person of [ACCOUNTANT, MANAGER, ADMISSIONS]) {
     test(`the staff 404 opens and is left with no page errors, as ${person.roleName}`, async ({ page }) => {
-      await logIn(page, person.email, person.password)
+      await signInOnce(page, person.email, person.password)
       await expect(page).toHaveURL(/\/staff$/)
       await page.goto(UNKNOWN)
       await expect(page.getByRole("heading", { level: 1, name: "This page does not exist" })).toBeVisible()

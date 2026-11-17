@@ -1,16 +1,31 @@
-import type { IconName } from "@/components/icons"
-import { Card, ListRow } from "@/components/kit"
+import Link from "next/link"
+import type { CSSProperties } from "react"
+
+import { Icon, type IconName } from "@/components/icons"
 
 export type QuickAction = { href: string; icon: IconName; title: string; caption?: string }
 
-/** Home's three shortcuts (#323), each shown only to staff who can open its page. */
+/**
+ * Home's shortcuts (#323), as prototype v40 draws them: a row of tiles the
+ * width of the page, under the chart and the stat cards. Each shows only to
+ * staff who can open its page, and the tiles there are share the row.
+ */
 export function QuickActions({ actions }: { actions: QuickAction[] }) {
   if (actions.length === 0) return null
   return (
-    <Card title="Quick actions" className="hm-qa">
+    <nav aria-label="Quick actions" className="hm-qa" style={{ "--n": actions.length } as CSSProperties}>
       {actions.map((action) => (
-        <ListRow key={action.href} href={action.href} icon={action.icon} title={action.title} caption={action.caption} trailing={false} />
+        <Link key={action.href} href={action.href} className="hm-q">
+          <span className="hm-q-disc">
+            <Icon name={action.icon} featured />
+          </span>
+          <span className="hm-q-text">
+            <b>{action.title}</b>
+            {action.caption && <small>{action.caption}</small>}
+          </span>
+          <Icon name="right" className="hm-q-chev" />
+        </Link>
       ))}
-    </Card>
+    </nav>
   )
 }

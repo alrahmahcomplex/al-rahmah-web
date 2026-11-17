@@ -36,10 +36,10 @@ const WEEK_WORDS = { pick: "Show another week", choose: "Choose a week", close: 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 const one = (value: string | string[] | undefined) => (typeof value === "string" ? value : undefined)
 
-// Home (#323): Today, Check-in and Register students in one page. The date,
-// the check-in bar beside Register students, then the two stat cards and the
-// quick actions in the right column; the chart card (#405) in the left
-// column. The Activity log (#406) takes the full width below, loading on its
+// Home (#323), laid out as prototype v40's bento: the date, the check-in bar
+// beside Register students, then the chart card (#405) ending level with the
+// two stat cards beside it, and the quick actions as a row of tiles under
+// both. The Activity log (#406) takes the full width below, loading on its
 // own so the rest of Home never waits for it.
 // Every count is read only for someone who may see it today: the
 // applications for leads.view, the seats for payments.view, as the
@@ -78,12 +78,12 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const statsFailed =
     (interviewCounts && !interviewCounts.ok) || (appliedCounts && !appliedCounts.ok) || (chartCounts && !chartCounts.ok) || (canSeeSeats && seats && !seats.ok)
   const counts = chartCounts?.ok ? chartCounts.data : null
-  // v38 order; a tab with nothing to draw is left out.
+  // v40 order, Sources first and so the one shown; a tab with nothing to draw is left out.
   const charts = [
+    counts && sourcesTab(counts),
     counts && classesTab(counts),
     counts && monthsTab(counts, today),
     canSeeSeats && seats?.ok ? seatsTab(seats.data.classes) : null,
-    counts && sourcesTab(counts),
   ].filter((tab): tab is ChartTab => !!tab)
 
   return (
@@ -110,10 +110,10 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
           {appliedCounts?.ok && (
             <StatCard card={appliedCard(week, today, appliedCounts.data)} param="week" today={today} picked={week} words={WEEK_WORDS} />
           )}
-          {statsFailed && <Note tone="bad">The numbers could not be counted. Try again in a moment.</Note>}
-          <QuickActions actions={actions} />
         </div>
       </div>
+      {statsFailed && <Note tone="bad">The numbers could not be counted. Try again in a moment.</Note>}
+      <QuickActions actions={actions} />
       {mayReadActivity(permissions) && (
         <Suspense fallback={<ActivitySkeleton />}>
           <ActivityLog permissions={permissions} today={today} full={fullClassesFor(permissions, seats?.ok ? seats.data.classes : null)} />

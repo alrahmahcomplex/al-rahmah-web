@@ -23,7 +23,7 @@ async function signIn(page: Page, person: FixtureStaff) {
 const staffNav = (page: Page) => page.getByRole("navigation", { name: "Staff" })
 const searchBar = (page: Page) => page.getByRole("search", { name: "Check in a family" })
 const statCard = (page: Page, label: string | RegExp) => page.getByRole("region", { name: label })
-const quickActions = (page: Page) => page.getByRole("region", { name: "Quick actions" })
+const quickActions = (page: Page) => page.getByRole("navigation", { name: "Quick actions" })
 
 async function lookUp(page: Page, typed: string) {
   await page.goto("/staff")
@@ -200,8 +200,11 @@ test.describe("the chart card", () => {
 
   test("its four tabs each show their chart, and See the numbers shows them as a table", async ({ page }) => {
     await signIn(page, MANAGER)
-    await expect(charts(page).getByRole("tab")).toHaveText(["Classes", "Months", "Seats", "Sources"])
-    await expect(tab(page, "Classes")).toHaveAttribute("aria-selected", "true")
+    await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months", "Seats"])
+    await expect(tab(page, "Sources")).toHaveAttribute("aria-selected", "true")
+    await expect(charts(page).getByRole("listitem")).toHaveText([/^Admission form/, /^Agents’ Discount codes/, /^Promo codes/, /^Walk-in at the desk/])
+
+    await tab(page, "Classes").click()
     await expect(charts(page).getByText(/ draws? the most students$/)).toBeVisible()
 
     await charts(page).getByRole("button", { name: "See the numbers" }).click()
@@ -219,18 +222,15 @@ test.describe("the chart card", () => {
 
     await tab(page, "Seats").click()
     await expect(charts(page).getByText("Each capsule is the whole class. The fill is the seats held.")).toBeVisible()
-
-    await tab(page, "Sources").click()
-    await expect(charts(page).getByRole("listitem")).toHaveText([/^Admission form/, /^Agents’ Discount codes/, /^Promo codes/, /^Walk-in at the desk/])
   })
 
   test("the arrow keys move along the tabs, and a mark shows its number on keyboard focus", async ({ page }) => {
     await signIn(page, MANAGER)
-    await tab(page, "Classes").focus()
+    await tab(page, "Sources").focus()
     await page.keyboard.press("ArrowRight")
-    await expect(tab(page, "Months")).toHaveAttribute("aria-selected", "true")
+    await expect(tab(page, "Classes")).toHaveAttribute("aria-selected", "true")
     await page.keyboard.press("End")
-    await expect(tab(page, "Sources")).toBeFocused()
+    await expect(tab(page, "Seats")).toBeFocused()
     await tab(page, "Classes").click()
     await charts(page).getByRole("img", { name: /, DAY CARE · students$/ }).focus()
     await expect(charts(page).getByText("DAY CARE · students")).toBeVisible()
@@ -241,7 +241,7 @@ test.describe("the chart card", () => {
   test("staff who may not see payments get no Seats tab, and staff who see only payments get Seats alone", async ({ page }) => {
     const leadsOnly = await createThrowawayStaff(["leads.view"])
     await signIn(page, leadsOnly)
-    await expect(charts(page).getByRole("tab")).toHaveText(["Classes", "Months", "Sources"])
+    await expect(charts(page).getByRole("tab")).toHaveText(["Sources", "Classes", "Months"])
 
     await page.context().clearCookies()
     const paymentsOnly = await createThrowawayStaff(["payments.view"])
@@ -255,8 +255,17 @@ for (const [label, size] of [
   ["a phone", { width: 390, height: 844 }],
 ] as const) {
   test(`axe finds nothing but the accepted findings on Home at ${label}`, { tag: "@nightly" }, async ({ page }) => {
+    // The page, then each chart tab with its numbers open: five scans.
+    test.slow()
     await page.setViewportSize(size)
     await signIn(page, MANAGER)
     expect(await axeProblems(page)).toEqual([])
+    const charts = page.getByRole("region", { name: "Charts" })
+    for (const name of ["Sources", "Classes", "Months", "Seats"]) {
+      await charts.getByRole("tab", { name }).click()
+      await charts.getByRole("button", { name: "See the numbers" }).click()
+      await expect(charts.getByRole("table", { name: `${name}: the numbers` })).toBeVisible()
+      expect(await axeProblems(page, ".hm-chart"), `the ${name} tab`).toEqual([])
+    }
   })
 }

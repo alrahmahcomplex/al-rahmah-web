@@ -3,7 +3,8 @@ import { SkeletonBlock } from "@/components/kit"
 import "./_home/home.css"
 
 // Home while it opens (#323): the date, the check-in bar beside Register
-// students, then the right column's two stat cards and Quick actions.
+// students, the chart card beside the two stat cards, then the row of quick
+// action tiles.
 export default function Loading() {
   return (
     <div role="status" aria-busy="true" className="hm">
@@ -14,13 +15,15 @@ export default function Loading() {
         <SkeletonBlock height={56} shape="pill" />
       </div>
       <div className="hm-body">
-        <div className="hm-main" />
+        <div className="hm-main">
+          <SkeletonBlock height={394} shape="card" />
+        </div>
         <div className="hm-side">
           <SkeletonBlock height={190} shape="card" />
           <SkeletonBlock height={190} shape="card" />
-          <SkeletonBlock height={230} shape="card" />
         </div>
       </div>
+      <SkeletonBlock height={70} shape="card" />
     </div>
   )
 }

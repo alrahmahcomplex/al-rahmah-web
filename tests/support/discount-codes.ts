@@ -3,7 +3,7 @@ import { randomInt, randomUUID } from "node:crypto"
 import type { Client } from "pg"
 
 import { asSystem, signedIn, unusedAdmissionNumber } from "./db"
-import { ACCOUNTANT, ADMISSIONS } from "./fixtures"
+import { ACCOUNTANT, ADMISSIONS, MANAGER } from "./fixtures"
 
 // Fixtures for discount amounts and Promo codes: leads carrying a code, and
 // an interview fee marked Paid through the Accountant's own path, so the
@@ -27,10 +27,24 @@ export function freshAgentCode(first = "T"): string {
 }
 
 // A Visited lead carrying `code`, on a contact of its own, written as the
-// system.
-export async function leadWithCode(code: string | null, name = `Punguzo ${randomUUID().slice(0, 8)}`): Promise<string> {
+// system. `imported` puts it in a student import batch of its own, as the
+// import does.
+export async function leadWithCode(
+  code: string | null,
+  name = `Punguzo ${randomUUID().slice(0, 8)}`,
+  { imported = false }: { imported?: boolean } = {},
+): Promise<string> {
   const admissionNumber = await unusedAdmissionNumber()
   return asSystem(async (sql) => {
+    const batch = imported
+      ? (
+          await sql.query<{ id: string }>(
+            `insert into public.import_batches (kind, file_name, imported_by, row_count, created_count, updated_count, skipped_count)
+             values ('students', 'punguzo.csv', $1, 1, 1, 0, 0) returning id`,
+            [MANAGER.id],
+          )
+        ).rows[0].id
+      : null
     const contact = await sql.query<{ id: string }>(
       `insert into public.guardian_contacts (full_name, relationship, phone, origin)
        values ('Mzazi Punguzo', 'Mother', $1, 'front_desk') returning id`,
@@ -38,9 +52,9 @@ export async function leadWithCode(code: string | null, name = `Punguzo ${random
     )
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date,
-           guardian_contact_id, referral_code)
-       values ($1, $2, 'STD 3', 2027, 'Day', 'Visited', '2026-09-01', $3, $4) returning id`,
-      [admissionNumber, name, contact.rows[0].id, code],
+           guardian_contact_id, referral_code, import_batch_id)
+       values ($1, $2, 'STD 3', 2027, 'Day', 'Visited', '2026-09-01', $3, $4, $5) returning id`,
+      [admissionNumber, name, contact.rows[0].id, code, batch],
     )
     return lead.rows[0].id
   })

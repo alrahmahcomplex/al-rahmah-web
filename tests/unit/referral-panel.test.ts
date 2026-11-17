@@ -111,6 +111,25 @@ describe("the Referral code panel's words", () => {
     expect(referralFeeLine({ ...paused, discountState: "ended" as const }, null).note).toBe("No discount: Promo code ended")
   })
 
+  it("says why an application sent before the Promo code was created gets nothing (#471)", () => {
+    const early = {
+      amount: 50000,
+      discountApplied: false,
+      state: "approved" as const,
+      kind: "promo" as const,
+      discountState: "active" as const,
+      amountOff: 0,
+      sentBeforeCode: true,
+    }
+    expect(referralFeeLine(early, null).note).toBe("No discount: application sent before the Promo code was created")
+    // Whatever the state: it never gets the discount.
+    expect(referralFeeLine({ ...early, state: "switched_off" as const, discountState: "paused" as const }, null).note).toBe(
+      "No discount: application sent before the Promo code was created",
+    )
+    // Once Paid, the panel says what was paid.
+    expect(referralFeeLine(early, { feeStatus: "Paid", amount: 50000, discountApplied: false }).note).toBeNull()
+  })
+
   it("tells staff a typed code is switched off", () => {
     expect(referralLookupNote({ status: "found", code: agentCode({ holderName: "Baraka", state: "switched_off", amountOff: 0 }) })).toBe(
       "Baraka · This code is switched off. No discount.",

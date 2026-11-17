@@ -18,8 +18,9 @@ export type ReferralState = "approved" | "pending" | "switched_off" | "unrecogni
 export type LeadReferral = {
   // The code as stored, such as BJN-402, or null when the lead has none.
   code: string | null
-  // Null when there is no code. A Promo code reads `approved` while it gives
-  // its discount and `switched_off` otherwise; discountState says which.
+  // Null when there is no code. A Promo code reads `approved` while Active
+  // and `switched_off` otherwise; discountState says which, and
+  // sentBeforeCode whether it gives this application anything.
   state: ReferralState | null
   // The agent's name, when a current agent holds the code.
   agentName: string | null
@@ -37,6 +38,9 @@ export type LeadReferral = {
   discountState: DiscountCodeState | null
   // Whole TZS the code takes off the interview fee right now.
   amountOff: number
+  // A Promo code created after this application was sent: it gives the
+  // application nothing, whatever its state (#471). Imported records never.
+  sentBeforeCode: boolean
   agentId: string | null
   promoCodeId: string | null
 }
@@ -102,6 +106,7 @@ type DiscountRow = {
   holder_name: string | null
   state: DiscountCodeState | null
   amount_off: number
+  sent_before_code: boolean
 }
 
 // The legacy state, for screens that know agents only.
@@ -164,6 +169,7 @@ export async function getLeadReferral(
       holderName: row.holder_name,
       discountState: row.code ? (row.state ?? "unrecognised") : null,
       amountOff: row.amount_off,
+      sentBeforeCode: row.sent_before_code,
       agentId: row.agent_id,
       promoCodeId: row.promo_code_id,
     },

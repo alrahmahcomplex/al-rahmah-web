@@ -1,4 +1,4 @@
-/* Home (#323), measured from prototype v38 → Home. Lines use the kit's
+/* Home (#323), measured from prototype v40 → Home. Lines use the kit's
    --gf-stroke (#401). */
 
 /* The stage keeps a right gutter on Home for the folded Register button. */
@@ -35,35 +35,49 @@
 
 .hm-reg .kit-btn { width: 100%; height: 56px; font-size: 17px; }
 
-/* ---------- the body: the chart card (#405), and the right column ---------- */
-.hm-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
-.hm-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* ---------- the body, v40's bento: the chart card (#405) ends level with
+   the last stat card, and the stat cards share the right column's height ---------- */
+.hm-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: stretch; }
+.hm-main { display: flex; flex-direction: column; min-width: 0; }
+.hm-side { display: grid; grid-auto-rows: minmax(0, 1fr); gap: 14px; min-width: 0; }
+/* No stat card to show: the chart card takes the whole row. */
+.hm-side:empty { display: none; }
+.hm-body:has(> .hm-side:empty) { grid-template-columns: minmax(0, 1fr); }
 
 /* ---------- a stat card ---------- */
+/* Title and picker on top, the icon before the number, the 7-day line last. */
 .hm-stat {
-  display: grid; grid-template-columns: minmax(0, 1fr) 36px; grid-template-rows: auto auto 36px; column-gap: 10px; row-gap: 6px;
-  padding: 16px 16px 10px 18px; border-radius: 22px; background: var(--gf-paper); border: var(--gf-stroke) solid var(--gf-line);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto minmax(0, 1fr); column-gap: 10px; row-gap: 12px;
+  min-height: 0; padding: 14px 14px 12px 18px; border-radius: 22px; background: var(--gf-paper); border: var(--gf-stroke) solid var(--gf-line);
   transition: border-color var(--gf-t-med);
 }
 .hm-stat:hover { border-color: var(--gf-line-strong); }
-.hm-stat-n { grid-column: 1; grid-row: 1; display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.hm-stat-n { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.hm-stat-ic {
+  flex: none; width: 46px; height: 46px; border-radius: 15px; background: var(--gf-whisper); color: var(--gf-indigo);
+  display: grid; place-items: center;
+}
+.hm-stat-ic .gf-ic { width: 23px; height: 23px; }
+.hm-stat-n .hm-trend { align-self: flex-start; }
 .hm-stat-n b {
   font: italic 800 51px/0.92 var(--font-exo), "Exo", system-ui, sans-serif; letter-spacing: -0.03em; color: var(--gf-indigo);
   padding-right: 0.06em;
 }
-.hm-stat-pick { grid-column: 2; grid-row: 1; align-self: start; display: flex; }
-.hm-stat-g { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
+.hm-stat-pick { grid-column: 2; grid-row: 1; align-self: center; display: flex; align-items: center; gap: 6px; }
+.hm-stat-g { grid-column: 1 / -1; grid-row: 3; align-self: end; min-width: 0; }
+/* A past day's title ("Interviews on Wed 11 Nov") is longer than the room
+   beside Reset and the picker: it takes a second line and is never cut. */
 .hm-stat-t {
-  grid-column: 1; grid-row: 3; align-self: center; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font-size: 13px; color: var(--gf-ink-soft);
+  grid-column: 1; grid-row: 1; align-self: center; min-width: 0; margin: 0; overflow-wrap: anywhere;
+  font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--gf-ink);
 }
 /* v38 draws these 36px but outlined; the kit's ring keeps the 44px target. */
 .hm-stat .kit-round { width: 36px; height: 36px; }
 .hm-stat .kit-round::after { inset: -4px; }
 
-/* Reset shows on hover or keyboard focus; on a touch screen it always shows. */
+/* Reset sits beside the picker and shows on hover or keyboard focus; on a touch screen it always shows. */
 .hm-stat-reset {
-  grid-column: 2; grid-row: 3; align-self: center; opacity: 0; transform: scale(0.85); pointer-events: none;
+  opacity: 0; transform: scale(0.85); pointer-events: none;
   transition: opacity var(--gf-t-med) var(--gf-ease-out), transform var(--gf-t-med) var(--gf-ease-out);
 }
 .hm-stat:hover .hm-stat-reset, .hm-stat:focus-within .hm-stat-reset { opacity: 1; transform: none; pointer-events: auto; }
@@ -77,7 +91,7 @@
 .hm-trend[data-kind="flat"] { color: var(--gf-indigo); }
 
 /* The 7-day line: a soft glow under it, a dot a day, the last day stronger. */
-.hm-spark { position: relative; height: 84px; }
+.hm-spark { position: relative; height: 76px; }
 .hm-spark svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .hm-spark-glow { stop-color: var(--gf-confetti-violet); stop-opacity: 0.26; }
 .hm-spark-fade { stop-color: var(--gf-confetti-violet); stop-opacity: 0; }
@@ -97,9 +111,23 @@
   font-weight: 700; font-size: 13px; color: var(--gf-indigo-night); white-space: nowrap;
 }
 
-/* ---------- Quick actions ---------- */
-.hm-qa { padding: 18px 16px 10px; box-shadow: none; }
-.hm-qa .kit-card-title { padding: 0 8px; margin-bottom: 4px; }
+/* ---------- Quick actions: a row of tiles the width of the page, laid out by the kit's Bento ---------- */
+.hm-q {
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 16px; border-radius: 22px; background: var(--gf-paper);
+  border: var(--gf-stroke) solid var(--gf-line-soft); color: inherit; text-align: left; text-decoration: none;
+  transition: border-color var(--gf-t-med), transform var(--gf-t-fast) var(--gf-ease-out), box-shadow var(--gf-t-med);
+}
+.hm-q:hover { border-color: var(--gf-line-strong); transform: translateY(-2px); box-shadow: var(--gf-card-shadow); }
+.hm-q:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 2px; }
+.hm-q-disc {
+  flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--gf-whisper); color: var(--gf-indigo);
+  display: grid; place-items: center;
+}
+.hm-q-text { flex: 1; min-width: 0; }
+.hm-q-text b { display: block; font-size: 14px; font-weight: 600; line-height: 1.3; }
+.hm-q-text small { display: block; font-size: 12px; line-height: 1.35; color: var(--gf-quiet); }
+.hm-q-chev { flex: none; color: var(--gf-indigo); }
+@media (prefers-reduced-motion: reduce) { .hm-q:hover { transform: none; } }
 
 /* ---------- the notices, until they have a prototyped place ---------- */
 .hm-notices-title { display: block; font-weight: 600; }
@@ -126,6 +154,8 @@
 @container hm (max-width: 820px) {
   .hm-top, .hm-body { grid-template-columns: minmax(0, 1fr); }
   .hm-main:empty { display: none; }
+  /* Under the chart, the two stat cards sit side by side. */
+  .hm-side { grid-auto-rows: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
   .hm-find-l b { display: none; }
@@ -134,4 +164,6 @@
 }
 @media (max-width: 560px) {
   .hm-find-bar .kit-btn { font-size: 13px; padding: 0 14px; }
+  /* A phone: the chart, then the stat cards one under another; the tiles stack by the Bento's own rule. */
+  .hm-side { grid-template-columns: minmax(0, 1fr); }
 }

@@ -173,6 +173,53 @@ export function sourcesTab(counts: HomeChartCounts): SourcesTab | null {
   return { kind: "sources", heading: SOURCE_NAMES[top.source].heading, points, total: counts.total }
 }
 
+/** The Sources ring as prototype v40 draws it, in the SVG's own units. */
+export const RING = { radius: 54, width: 15, gap: 4 } as const
+
+export type RingArc = { index: number; dash: number; rest: number; offset: number }
+
+/**
+ * The ring's arcs, one per source with a number, each with soft round ends
+ * and the same small gap to its neighbours. A round end reaches half the
+ * stroke's width past its dash, so every dash is shortened by the gap and one
+ * stroke width and starts half of that in. A source too small for its round
+ * ends is given just enough of the ring to show as a dot with its gaps, taken
+ * from the others in proportion, so no arc is drawn over its neighbour. With
+ * one source, or none, the ring is whole: `full` names the shade to draw it
+ * in.
+ */
+export function ringArcs(values: readonly number[]): { full: number | null; arcs: RingArc[] } {
+  const around = 2 * Math.PI * RING.radius
+  const live = values.flatMap((value, index) => (value > 0 ? [index] : []))
+  if (live.length < 2) return { full: live[0] ?? 0, arcs: [] }
+  const inset = RING.gap + RING.width
+  // The least of the ring an arc can take: its two round ends and its gap.
+  const least = inset + 0.01
+  const lengths = new Map<number, number>()
+  const small = new Set<number>()
+  for (;;) {
+    const rest = live.filter((index) => !small.has(index))
+    const room = around - small.size * least
+    const sum = rest.reduce((total, index) => total + values[index], 0)
+    for (const index of rest) lengths.set(index, (values[index] / sum) * room)
+    const tooSmall = rest.filter((index) => lengths.get(index)! < least)
+    if (tooSmall.length === 0) break
+    for (const index of tooSmall) {
+      small.add(index)
+      lengths.set(index, least)
+    }
+  }
+  let start = 0
+  const arcs = live.map((index) => {
+    const length = lengths.get(index)!
+    const dash = length - inset
+    const arc = { index, dash, rest: around - dash, offset: start + inset / 2 }
+    start += length
+    return arc
+  })
+  return { full: null, arcs }
+}
+
 /** A round top for the scale and the step between its lines, at most five steps. */
 export function niceScale(max: number): { top: number; step: number } {
   for (const step of [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000]) {

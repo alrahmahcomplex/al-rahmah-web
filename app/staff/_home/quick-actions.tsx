@@ -1,16 +1,34 @@
-import type { IconName } from "@/components/icons"
-import { Card, ListRow } from "@/components/kit"
+import Link from "next/link"
+
+import { Icon, type IconName } from "@/components/icons"
+import { Bento } from "@/components/kit"
 
 export type QuickAction = { href: string; icon: IconName; title: string; caption?: string }
 
-/** Home's three shortcuts (#323), each shown only to staff who can open its page. */
+/**
+ * Home's shortcuts (#323), as prototype v40 draws them: a row of tiles the
+ * width of the page, under the chart and the stat cards, in the kit's bento
+ * rule, so the tiles a role has fill the row. Each shows only to staff who
+ * can open its page.
+ */
 export function QuickActions({ actions }: { actions: QuickAction[] }) {
   if (actions.length === 0) return null
   return (
-    <Card title="Quick actions" className="hm-qa">
-      {actions.map((action) => (
-        <ListRow key={action.href} href={action.href} icon={action.icon} title={action.title} caption={action.caption} trailing={false} />
-      ))}
-    </Card>
+    <nav aria-label="Quick actions" className="hm-qa">
+      <Bento columns={3}>
+        {actions.map((action) => (
+          <Link key={action.href} href={action.href} className="hm-q">
+            <span className="hm-q-disc">
+              <Icon name={action.icon} featured />
+            </span>
+            <span className="hm-q-text">
+              <b>{action.title}</b>
+              {action.caption && <small>{action.caption}</small>}
+            </span>
+            <Icon name="right" className="hm-q-chev" />
+          </Link>
+        ))}
+      </Bento>
+    </nav>
   )
 }

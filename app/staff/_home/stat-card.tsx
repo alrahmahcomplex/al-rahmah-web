@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useId, useState } from "react"
 
+import { Icon } from "@/components/icons"
 import { MonthGrid, Popover, RoundButton } from "@/components/kit"
 
 import { sparkShape, SPARK_HEIGHT, SPARK_WIDTH } from "./spark"
@@ -72,10 +73,11 @@ function Spark({ days }: { days: StatCardData["days"] }) {
 }
 
 /**
- * One of Home's two stat cards (#323): the number with its trend, the
- * picker in the round button, the 7-day line and the label. Once a past day
- * or week is shown, Reset brings back today or this week by dropping
- * `param` from the address.
+ * One of Home's two stat cards (#323), as prototype v40 draws it: the title
+ * on top with the picker in the round button, then an icon before the number
+ * and its trend, and the 7-day line at the bottom. Once a past day or week is
+ * shown, Reset sits beside the picker and brings back today or this week by
+ * dropping `param` from the address.
  */
 export function StatCard({
   card,
@@ -115,11 +117,11 @@ export function StatCard({
 
   return (
     <section className="hm-stat" aria-labelledby={labelId}>
-      <div className="hm-stat-n">
-        <b className="kit-num">{card.value}</b>
-        <Trend change={card.change} comparedWith={card.comparedWith} />
-      </div>
+      <p className="hm-stat-t" id={labelId}>
+        {card.label}
+      </p>
       <div className="hm-stat-pick">
+        {picked && <RoundButton icon="reset" label={words.reset} size={40} className="hm-stat-reset" onClick={() => show(null)} />}
         <Popover
           open={open}
           onOpenChange={setOpen}
@@ -130,13 +132,16 @@ export function StatCard({
           <MonthGrid mode={param} value={picked ?? today} max={today} onPick={pick} autoFocus />
         </Popover>
       </div>
+      <div className="hm-stat-n">
+        <span className="hm-stat-ic">
+          <Icon name={param === "day" ? "interviews" : "applicants"} size={24} />
+        </span>
+        <b className="kit-num">{card.value}</b>
+        <Trend change={card.change} comparedWith={card.comparedWith} />
+      </div>
       <div className="hm-stat-g">
         <Spark days={card.days} />
       </div>
-      <p className="hm-stat-t" id={labelId}>
-        {card.label}
-      </p>
-      {picked && <RoundButton icon="reset" label={words.reset} size={40} className="hm-stat-reset" onClick={() => show(null)} />}
     </section>
   )
 }

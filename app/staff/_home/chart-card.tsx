@@ -4,7 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties
 
 import { Card, Table, TabSwitch, TextLink } from "@/components/kit"
 
-import { niceScale, type AxisGroup, type ChartPoint, type ChartTab, type ClassesTab, type MonthsTab, type SeatsTab, type SourcesTab } from "./charts"
+import { niceScale, RING, ringArcs, type AxisGroup, type ChartPoint, type ChartTab, type ClassesTab, type MonthsTab, type SeatsTab, type SourcesTab } from "./charts"
 import { smoothLine } from "./spark"
 import "./chart.css"
 
@@ -14,9 +14,10 @@ type Tip = ChartPoint["tip"]
 type ShownTip = Tip & { key: string; x: number; y: number }
 
 /**
- * Home's chart card (#405), as prototype v38 draws it: the sliding-track
- * tabs, and under each the sentence the numbers say, "See the numbers", and
- * one chart in one indigo hue. Every mark shows its tooltip on hover and on
+ * Home's chart card (#405), as prototype v40 draws it: the sliding-track
+ * tabs, Sources first, and under each the sentence the numbers say, "See the
+ * numbers", and one chart in one indigo hue. The card fills its place in
+ * Home's grid, so the chart takes the room left over. Every mark shows its tooltip on hover and on
  * keyboard focus: the number in bold, what it is underneath.
  */
 export function ChartCard({ tabs }: { tabs: ChartTab[] }) {
@@ -247,32 +248,28 @@ function SeatCapsules({ tab, mark }: { tab: SeatsTab; mark: Mark }) {
   )
 }
 
-const R = 54
-const C = 2 * Math.PI * R
-
-/** Sources: a ring with the total in the middle, and the list beside it. */
+/** Sources: a ring with soft round ends and the total in the middle, and the list beside it. */
 function SourceRing({ tab, mark }: { tab: SourcesTab; mark: Mark }) {
-  const lengths = tab.points.map((point) => (point.value / tab.total) * C)
-  const arcs = lengths.map((length, i) => ({ i, length, offset: lengths.slice(0, i).reduce((sum, n) => sum + n, 0) }))
+  const { full, arcs } = ringArcs(tab.points.map((point) => point.value))
   return (
     <div className="hm-ch-ring">
       <div className="hm-ch-rw">
         <svg viewBox="0 0 140 140" role="img" aria-label={tab.points.map((point) => `${point.label} ${point.value}`).join(", ")}>
-          {arcs
-            .filter((arc) => arc.length > 0)
-            .map((arc) => (
-              <circle
-                key={arc.i}
-                cx="70"
-                cy="70"
-                r={R}
-                className="hm-ch-arc"
-                data-shade={arc.i}
-                strokeDasharray={`${Math.max(0, arc.length - 2).toFixed(1)} ${(C - arc.length + 2).toFixed(1)}`}
-                strokeDashoffset={(-arc.offset).toFixed(1)}
-                transform="rotate(-90 70 70)"
-              />
-            ))}
+          {full !== null && <circle cx="70" cy="70" r={RING.radius} className="hm-ch-arc" data-shade={full} />}
+          {arcs.map((arc) => (
+            <circle
+              key={arc.index}
+              cx="70"
+              cy="70"
+              r={RING.radius}
+              className="hm-ch-arc"
+              data-shade={arc.index}
+              strokeLinecap="round"
+              strokeDasharray={`${arc.dash.toFixed(2)} ${arc.rest.toFixed(2)}`}
+              strokeDashoffset={(-arc.offset).toFixed(2)}
+              transform="rotate(-90 70 70)"
+            />
+          ))}
         </svg>
         <span className="hm-ch-total" aria-hidden="true">
           <b className="kit-num">{tab.total}</b>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { classesTab, monthsTab, niceScale, seatsTab, sourcesTab } from "@/app/staff/_home/charts"
+import { classesTab, monthsTab, niceScale, RING, ringArcs, seatsTab, sourcesTab } from "@/app/staff/_home/charts"
 import type { ClassSeatFigures } from "@/lib/services/dashboard"
 import { APPLICATION_SOURCES, type ApplicationSource, type HomeChartCounts } from "@/lib/services/home-charts"
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
@@ -200,5 +200,62 @@ describe("niceScale", () => {
     expect(niceScale(0)).toEqual({ top: 1, step: 1 })
     expect(niceScale(130)).toEqual({ top: 150, step: 50 })
     expect(niceScale(4200)).toEqual({ top: 5000, step: 1000 })
+  })
+})
+
+describe("the Sources ring", () => {
+  const around = 2 * Math.PI * RING.radius
+  // A round end reaches half the stroke's width past its dash.
+  const reach = RING.width / 2
+
+  // The space between each arc's round end and the next arc's, all the way round.
+  const gaps = (arcs: ReturnType<typeof ringArcs>["arcs"]) => {
+    const ends = arcs.map((arc) => ({ from: arc.offset - reach, to: arc.offset + arc.dash + reach }))
+    return ends.map((end, i) => {
+      const next = ends[(i + 1) % ends.length]
+      return (i + 1 === ends.length ? next.from + around : next.from) - end.to
+    })
+  }
+
+  it("draws one soft-ended arc per source, with the same gap between neighbours all the way round", () => {
+    const values = [74, 31, 12, 11]
+    const { full, arcs } = ringArcs(values)
+    expect(full).toBeNull()
+    expect(arcs.map((arc) => arc.index)).toEqual([0, 1, 2, 3])
+    for (const gap of gaps(arcs)) expect(gap).toBeCloseTo(RING.gap, 6)
+    // Each arc, with its gap, takes its share of the ring.
+    arcs.forEach((arc, i) => expect(arc.dash + RING.width + RING.gap).toBeCloseTo((values[i] / 128) * around, 6))
+    arcs.forEach((arc) => expect(arc.dash + arc.rest).toBeCloseTo(around, 6))
+  })
+
+  it("leaves out a source with no applications, and keeps each arc's own shade", () => {
+    const { full, arcs } = ringArcs([40, 0, 0, 10])
+    expect(full).toBeNull()
+    expect(arcs.map((arc) => arc.index)).toEqual([0, 3])
+  })
+
+  it("is one whole ring, in that source's shade, when only one source has applications", () => {
+    expect(ringArcs([0, 0, 7, 0])).toEqual({ full: 2, arcs: [] })
+    expect(ringArcs([5])).toEqual({ full: 0, arcs: [] })
+  })
+
+  it("gives a source too small for its round ends a dot of its own, never drawn over its neighbours", () => {
+    for (const values of [
+      [1000, 1],
+      [1, 500, 1, 498],
+      [3, 0, 0, 64],
+      [1, 1, 1, 5000],
+    ]) {
+      const { arcs } = ringArcs(values)
+      expect(arcs).toHaveLength(values.filter((value) => value > 0).length)
+      for (const arc of arcs) expect(arc.dash).toBeGreaterThan(0)
+      // Every gap is the same, so no round end reaches its neighbour.
+      for (const gap of gaps(arcs)) expect(gap).toBeCloseTo(RING.gap, 6)
+      // The arcs and their gaps still add up to the whole ring.
+      expect(arcs.reduce((sum, arc) => sum + arc.dash + RING.width + RING.gap, 0)).toBeCloseTo(around, 6)
+    }
+    // The larger sources keep their order of size.
+    const [small, large] = ringArcs([1000, 1]).arcs.map((arc) => arc.dash).sort((a, b) => a - b)
+    expect(large).toBeGreaterThan(small * 100)
   })
 })

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ClassSeatFigures } from "./dashboard-seats"
 import type { FeeDiscountKind } from "./discounts"
 import type { InterviewResult } from "./interviews"
-import type { LeadClass, Relationship } from "./leads"
+import type { LeadClass, LeadClosure, LeadStatus, Relationship } from "./leads"
 import type { ReApplicationField } from "./re-applications"
 import type { Result } from "./result"
 import type { PaymentType } from "./school-fee-payments"
@@ -29,7 +29,8 @@ export type ActivityRow =
   // An Admission form sent in the 7 days before today, naming only its
   // children still Applied and open.
   | (Timed & { kind: "expected"; sentOn: string; children: ActivityLead[] })
-  | (Timed & ActivityLead & { kind: "new_application"; referralCode: string | null })
+  | (Timed &
+      ActivityLead & { kind: "new_application"; referralCode: string | null; status: LeadStatus; closure: LeadClosure | null })
   | (Timed &
       ActivityLead & {
         kind: "result_ready"
@@ -114,7 +115,14 @@ function toRow(row: Row): ActivityRow | null {
         children: (row.children as Row[]).map(lead),
       }
     case "new_application":
-      return { ...base, ...lead(row), kind: "new_application", referralCode: (row.referral_code as string | null) ?? null }
+      return {
+        ...base,
+        ...lead(row),
+        kind: "new_application",
+        referralCode: (row.referral_code as string | null) ?? null,
+        status: row.status as LeadStatus,
+        closure: (row.closure as LeadClosure | null) ?? null,
+      }
     case "result_ready":
       return {
         ...base,

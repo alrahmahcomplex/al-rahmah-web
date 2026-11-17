@@ -6,8 +6,9 @@
 --   expected          an Admission form sent in the 7 days before today with
 --                     a child still Applied and open; one row per form, all
 --                     day, naming only the waiting children.
---   new_application   a child created today by the Admission form, still
---                     Applied and open.
+--   new_application   a child created today by the Admission form,
+--                     whatever has happened to it since; its status and
+--                     closure come with it, for the screen's button.
 --   result_ready      a current interview whose result is ready to send
 --                     (interview_release_status: never sent, or changed
 --                     since it was sent), dated by the interview.
@@ -32,11 +33,10 @@
 --   leads.view                   expected, new_application, result_ready,
 --                                discount_request, re_application, call_back
 --   leads.view and payments.view fee_paid (the row names the student)
---   agents.approve               agent_claim; stricter than the claim
---                                queue's leads.view, as v38 shows it to the
---                                Manager only
--- A caller with none of leads.view and agents.approve is refused
--- (`not_permitted`), and so is anyone who is not a signed-in staff member:
+--   leads.view and agents.approve agent_claim: the claim queue reads under
+--                                leads.view and only agents.approve confirms,
+--                                so v38 shows it to the Manager only
+-- A caller without leads.view is refused (`not_permitted`), and so is anyone who is not a signed-in staff member:
 -- has_permission is false for agents, deactivated staff and retired roles.
 --
 -- It is security definer because rows carry staff names, which
@@ -126,8 +126,10 @@ begin
     end if;
     sees_leads := public.has_permission('leads.view');
     sees_payments := sees_leads and public.has_permission('payments.view');
-    sees_claims := public.has_permission('agents.approve');
-    if not (sees_leads or sees_claims) then
+    -- Agents are read under leads.view (marketing_agents' policy and the
+    -- claim queue), and confirming a claim needs agents.approve.
+    sees_claims := sees_leads and public.has_permission('agents.approve');
+    if not sees_leads then
         raise exception 'not_permitted';
     end if;
     if row_offset is null or row_offset < 0 then
@@ -170,8 +172,6 @@ begin
         where sees_leads
           and s.created_at >= week_start
           and o.value ->> 'result' = 'created'
-          and l.status = 'Applied'
-          and l.closure is null
     ),
     expected as (
         select
@@ -189,7 +189,10 @@ begin
                 ) order by c.created_at, c.id)
             ) as body
         from form_children c
-        where c.sent_at < day_start and c.created_at < day_start
+        where c.sent_at < day_start
+          and c.created_at < day_start
+          and c.status = 'Applied'
+          and c.closure is null
         group by c.submission_key
     ),
     new_application as (
@@ -200,7 +203,9 @@ begin
                 'admission_number', c.admission_number,
                 'student_name', c.student_name,
                 'class_name', c.class_name,
-                'referral_code', c.referral_code
+                'referral_code', c.referral_code,
+                'status', c.status,
+                'closure', c.closure
             )
         from form_children c
         where c.created_at >= day_start

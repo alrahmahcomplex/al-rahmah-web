@@ -476,6 +476,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { permission: "'leads.view'" },
     agent: { returns: [false] },
   },
+  "public.home_activity(row_offset integer, row_limit integer)": {
+    roles: ["authenticated"],
+    args: { row_offset: "0", row_limit: "10" },
+    agent: { refused: "not_permitted" },
+  },
   "public.home_chart_counts(year integer)": {
     roles: ["authenticated"],
     args: { year: "2026" },
@@ -689,6 +694,11 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     roles: ["authenticated"],
     args: { name: "'Sample role'" },
     agent: { returns: ["sample role"] },
+  },
+  "public.open_follow_ups()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { returns: [] },
   },
   "public.pending_discount_requests()": {
     roles: ["authenticated"],

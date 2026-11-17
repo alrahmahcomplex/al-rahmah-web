@@ -12,6 +12,8 @@ import { submitAdmissionForm } from "@/lib/services/admission-form"
 import { decideDiscount, requestDiscount } from "@/lib/services/discounts"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { getHomeActivity } from "@/lib/services/home-activity"
+import { markReApplicationReviewed } from "@/lib/services/re-applications"
+import { releaseResult } from "@/lib/services/result-release"
 import { recordInterviewResult, registerForInterview, setInterviewFeeStatus } from "@/lib/services/interviews"
 import { createLead, recordVisit } from "@/lib/services/leads"
 import { createAgent } from "@/lib/services/marketing-agents"
@@ -243,10 +245,11 @@ describe("what each role sees", () => {
     expect(mine(asLeadsOnly, [paymentId])).toEqual([])
     expect(asLeadsOnly.rows.some((row) => row.kind === "fee_paid" || row.kind === "agent_claim")).toBe(false)
 
+    // Agents are read under leads.view, so agents.approve alone sees nothing.
     const claimsOnly = await createThrowawayStaff(["agents.approve"])
-    const asClaimsOnly = await activityAs(claimsOnly.id)
-    expect(mine(asClaimsOnly, [agentId])).toHaveLength(1)
-    expect(asClaimsOnly.rows.every((row) => row.kind === "agent_claim")).toBe(true)
+    await expect(activityAs(claimsOnly.id)).rejects.toThrow("not_permitted")
+    const leadsAndClaims = await createThrowawayStaff(["leads.view", "agents.approve"])
+    expect(mine(await activityAs(leadsAndClaims.id), [agentId])).toHaveLength(1)
   })
 
   test("payments.view alone, no permission, a deactivated member, an agent and anon are refused", async () => {
@@ -279,6 +282,8 @@ describe("today, and what leaves the log", () => {
     const before = await formSent([{ name: `${word()} Before Edge` }])
     const after = await formSent([{ name: `${word()} After Edge` }])
     const tooOld = await formSent([{ name: `${word()} Too Old` }])
+    const weekEdge = await formSent([{ name: `${word()} Week Edge` }])
+    await sentAt(weekEdge.submissionKey, weekEdge.leadIds, new Date(dayStart.getTime() - 7 * DAY))
     await sentAt(before.submissionKey, before.leadIds, new Date(dayStart.getTime() - 1000))
     await sentAt(after.submissionKey, after.leadIds, dayStart)
     await sentAt(tooOld.submissionKey, tooOld.leadIds, new Date(dayStart.getTime() - 7 * DAY - 1000))
@@ -290,6 +295,47 @@ describe("today, and what leaves the log", () => {
     expect(kindsFor(seen, before.leadIds[0])).toEqual([])
     expect(mine(seen, [after.leadIds[0]])).toMatchObject([{ kind: "new_application" }])
     expect(mine(seen, [tooOld.submissionKey])).toEqual([])
+    expect(mine(seen, [weekEdge.submissionKey])).toMatchObject([{ kind: "expected" }])
+  })
+
+  test("today's application stays after the family is checked in, with its new status", async () => {
+    const form = await formSent([{ name: `${word()} Same Day Visit` }])
+    expect((await recordVisit(await signedIn(ADMISSIONS), form.leadIds[0], today)).ok).toBe(true)
+    expect(mine(await activityAs(ADMISSIONS.id), [form.leadIds[0]])).toMatchObject([{ kind: "new_application", status: "Visited", closure: null }])
+  })
+
+  test("call backs due up to today show; one due tomorrow does not", async () => {
+    const lead = await walkIn()
+    const ids = await asSystem(async (sql) => {
+      const due = async (on: string) =>
+        (await sql.query<{ id: string }>("insert into public.follow_ups (lead_id, due_on) values ($1, $2) returning id", [lead, on])).rows[0].id
+      return { today: await due(today), tomorrow: await due(tanzaniaToday(new Date(Date.now() + DAY))) }
+    })
+    const seen = await activityAs(ADMISSIONS.id)
+    expect(mine(seen, [ids.today])).toMatchObject([{ kind: "call_back", due_on: today, note: null }])
+    expect(mine(seen, [ids.tomorrow])).toEqual([])
+  })
+
+  test("only school-fee payments recorded today show, and never Fee waived or the Pre-Form One fee", async () => {
+    const lead = await payableLead()
+    const yesterdays = await pay(lead, 310_000)
+    const todays = await pay(lead, 320_000)
+    const others = await asSystem(async (sql) => {
+      await sql.query("set local session_replication_role = replica")
+      await sql.query("update public.school_fee_payments set recorded_at = $2 where id = $1", [yesterdays, new Date(dayStart.getTime() - 1000)])
+      await sql.query("update public.school_fee_payments set recorded_at = $2 where id = $1", [todays, dayStart])
+      const insert = async (type: string, amount: number | null) =>
+        (
+          await sql.query<{ id: string }>(
+            "insert into public.school_fee_payments (lead_id, payment_type, amount, paid_on, recorded_by) values ($1, $2, $3, $4, $5) returning id",
+            [lead, type, amount, today, ACCOUNTANT.id],
+          )
+        ).rows[0].id
+      return [await insert("fee_waived", null), await insert("pre_form_one_fee", 450_000)]
+    })
+    const seen = await activityAs(MANAGER.id)
+    expect(mine(seen, [todays])).toHaveLength(1)
+    expect(mine(seen, [yesterdays, ...others])).toEqual([])
   })
 
   test("an expected form names only the children still waiting", async () => {
@@ -310,6 +356,11 @@ describe("today, and what leaves the log", () => {
     expect(mine(await activityAs(ADMISSIONS.id), [interviewId])).toMatchObject([
       { kind: "result_ready", result: "Passed", score: 78, changed_since_sent: false, interview_date: today },
     ])
+    const admissions = await signedIn(ADMISSIONS)
+    expect((await releaseResult(admissions, interviewId, "sms", { officePhone: "+255 673 526 644" })).ok).toBe(true)
+    expect(mine(await activityAs(ADMISSIONS.id), [interviewId])).toEqual([])
+    expect((await recordInterviewResult(admissions, interviewId, { interviewDate: today, result: "Passed", score: 81 })).ok).toBe(true)
+    expect(mine(await activityAs(ADMISSIONS.id), [interviewId])).toMatchObject([{ kind: "result_ready", score: 81, changed_since_sent: true }])
 
     const feeLead = await payableLead()
     const paymentId = await pay(feeLead, 300_000)
@@ -341,6 +392,15 @@ describe("today, and what leaves the log", () => {
     )
     expect((await rejectEmailClaim(manager, claims[0].id)).ok).toBe(true)
     expect(mine(await activityAs(MANAGER.id), [request.data, agentId])).toEqual([])
+
+    const returning = await formSent([{ name: `${word()} Reviewed Return` }])
+    await formSent([{ name: await childName(returning.leadIds[0]) }], returning.parentPhone)
+    const [reApplication] = await asSystem(async (sql) =>
+      (await sql.query<{ id: string }>("select id from public.re_applications where lead_id = $1", [returning.leadIds[0]])).rows,
+    )
+    expect(mine(await activityAs(MANAGER.id), [reApplication.id])).toHaveLength(1)
+    expect((await markReApplicationReviewed(await signedIn(ADMISSIONS), reApplication.id)).ok).toBe(true)
+    expect(mine(await activityAs(MANAGER.id), [reApplication.id])).toEqual([])
   })
 })
 

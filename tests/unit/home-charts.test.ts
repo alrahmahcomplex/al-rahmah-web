@@ -130,6 +130,18 @@ describe("Seats", () => {
     expect(tab.heading).toBe("FORM 1 has the most free seats, 6")
   })
 
+  it("leaves out a class holding seats in a section with no seats set, since its free seats are not known", () => {
+    const tab = seatsTab([seat("FORM 1", 20, 15), seat("FORM 1", null, 5, "Boarding"), seat("FORM 2", 10, 4), seat("FORM 2", null, 0, "Boarding")])!
+    expect(tab.points.map((point) => point.label)).toEqual(["FORM 2"])
+    expect(tab.heading).toBe("FORM 2 has the most free seats, 6")
+  })
+
+  it("shows a class set to zero seats as Full", () => {
+    const tab = seatsTab([seat("FORM 4", 0, 0), seat("FORM 3", 10, 3)])!
+    expect(tab.points[0]).toMatchObject({ label: "FORM 4", full: true, fill: 100, tip: { number: "0 of 0", words: "FORM 4 · Full" } })
+    expect(tab.heading).toBe("FORM 4 is full. FORM 3 has the most free seats, 7")
+  })
+
   it("keeps an over-full class full, its capsule filled to the top", () => {
     const tab = seatsTab([seat("STD 6", 10, 12), seat("STD 7", 10, 2)])!
     expect(tab.points[0]).toMatchObject({ full: true, fill: 100 })

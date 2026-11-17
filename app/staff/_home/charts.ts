@@ -99,18 +99,23 @@ export function monthsTab(counts: HomeChartCounts, today: string): MonthsTab | n
 
 /**
  * Seats held against the seats in each class, Day and Boarding together, in
- * the year the Seats screen opens on. A class with no seats set is left out.
+ * the year the Seats screen opens on. A section with no seats set and none
+ * held (Boarding where the class has none) is skipped. A class is left out
+ * when it has no seats set at all, or when seats are held in a section with
+ * no seats set, since its free seats are then not known. Zero seats set is a
+ * class with no seats: Full.
  */
 export function seatsTab(classes: readonly ClassSeatFigures[]): SeatsTab | null {
-  const byClass = new Map<LeadClass, { seats: number; held: number }>()
+  const byClass = new Map<LeadClass, { seats: number; held: number; unknown: boolean }>()
   for (const entry of classes) {
-    if (entry.seats === null) continue
-    const sum = byClass.get(entry.className) ?? { seats: 0, held: 0 }
-    sum.seats += entry.seats
+    if (entry.seats === null && entry.taken === 0) continue
+    const sum = byClass.get(entry.className) ?? { seats: 0, held: 0, unknown: false }
+    if (entry.seats === null) sum.unknown = true
+    else sum.seats += entry.seats
     sum.held += entry.taken
     byClass.set(entry.className, sum)
   }
-  const rows = [...byClass].filter(([, { seats }]) => seats > 0)
+  const rows = [...byClass].filter(([, { unknown }]) => !unknown)
   if (rows.length === 0) return null
 
   const points = rows.map(([className, { seats, held }]) => {
@@ -122,7 +127,7 @@ export function seatsTab(classes: readonly ClassSeatFigures[]): SeatsTab | null 
       value: held,
       seats,
       full,
-      fill: Math.min(100, (held / seats) * 100),
+      fill: seats === 0 ? 100 : Math.min(100, (held / seats) * 100),
       tip: { number: `${held} of ${seats}`, words: `${className} · ${full ? "Full" : `${free} free`}` },
     }
   })

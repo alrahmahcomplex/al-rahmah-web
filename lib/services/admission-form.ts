@@ -55,7 +55,7 @@ export type AdmissionFormError =
   // A field the database refused. `child` is the child card for a child's
   // field, null for the parent's. `duplicate_child` is a child the form
   // already named on an earlier card.
-  | { kind: "invalid"; field: ParentField | ChildField | "discount_code"; child: number | null; part?: NamePart }
+  | { kind: "invalid"; field: ParentField | ChildField | "discount_code" | "payload"; child: number | null; part?: NamePart }
   // This submission key already created children, from an earlier send of
   // the form before the parent edited it. Those children, in form order, and
   // whether they are every child that send carried.
@@ -95,6 +95,8 @@ export function payloadHash({ parent, children, discountCode }: Pick<AdmissionFo
       ...(c.nameParts
         ? [[c.nameParts.firstName, c.nameParts.fatherFirst, c.nameParts.fatherMiddle, c.nameParts.fatherLast]]
         : []),
+      // Only when given, so a form sent before the question keeps its key.
+      ...(c.gender ? [{ gender: c.gender }] : []),
     ]),
   })
   return createHash("sha256").update(canonical).digest("hex")
@@ -114,6 +116,7 @@ function studentDetails(child: AdmissionChild, discountCode: string | undefined)
     class_name: child.className,
     enrollment_year: child.enrollmentYear,
     day_or_boarding: child.dayOrBoarding,
+    ...(child.gender ? { gender: child.gender } : {}),
     ...(discountCode ? { discount_code: discountCode } : {}),
   }
 }
@@ -199,6 +202,11 @@ export async function submitAdmissionForm(
         }
         if (field && FORM_FIELDS.has(field)) {
           return { ok: false, error: { kind: "invalid", field: "discount_code", child: null } }
+        }
+        // No screen asks Boy or girl yet (#449 slice 2 adds the step and its
+        // words), so a refused answer is a malformed form, not an outage.
+        if (field === "gender") {
+          return { ok: false, error: { kind: "invalid", field: "payload", child: null } }
         }
         if (field && CHILD_FIELDS.has(field)) {
           return {

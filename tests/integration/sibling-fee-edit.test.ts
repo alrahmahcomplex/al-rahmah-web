@@ -1034,13 +1034,17 @@ describe("who may edit", () => {
       if (error) throw new Error(JSON.stringify(error));
       return data.length;
     };
-    // Leads but not payments, or signed out: nothing.
+    // Leads but not payments, or signed out: nothing. visits.record would
+    // bring payments.view with it (#460), so it is left out too.
     expect(
       await read(
         await signedIn(
           await createThrowawayStaff(
             PERMISSIONS.filter(
-              (p) => !p.startsWith("payments.") && p !== "audit.view",
+              (p) =>
+                !p.startsWith("payments.") &&
+                p !== "visits.record" &&
+                p !== "audit.view",
             ),
           ),
         ),

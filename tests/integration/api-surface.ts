@@ -90,6 +90,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       },
       agent: { refused: "not_permitted" },
     },
+  // The Admission form family a lead came from, for check-in (#309).
+  "public.admission_form_family(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "gen_random_uuid()" },
+    agent: { refused: "not_permitted" },
+  },
   "public.agent_access_status()": {
     roles: ["authenticated"],
     args: {},

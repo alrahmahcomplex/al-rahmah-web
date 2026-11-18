@@ -13,8 +13,9 @@ const LOST_REQUEST = "The lookup could not be completed. Check your connection a
 
 /**
  * Home's check-in bar (#323): the family's Admission Number, looked up as
- * Check-in always has. A number found opens the student's record; anything
- * else says why under the bar. Names are searched from the top bar.
+ * Check-in always has. An Admission form child still waiting for its visit
+ * opens check-in (#309), any other number found the student's record;
+ * anything else says why under the bar. Names are searched from the top bar.
  */
 export function FindFamily() {
   const router = useRouter()

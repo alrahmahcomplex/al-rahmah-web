@@ -44,6 +44,8 @@ export type ApplicantSheetView = {
   fee: ApplicantSheetFee | null
   // Null on a closed lead.
   nextStep: { state: "ready"; title: string } | { state: "failed" } | null
+  // An Admission form child still waiting for its visit, for staff who may check in (#309): "Check in this family".
+  checkInHref: string | null
 }
 
 export type ApplicantSheetAnswer =

@@ -57,9 +57,16 @@ export function ApplicantSheet({
       closeLabel="Close"
       foot={
         applicant && (
-          <ButtonLink href={`/staff/applicants/${applicant.id}`} variant="ghost" size="wide">
-            Open full record
-          </ButtonLink>
+          <>
+            {view?.id === applicant.id && view.checkInHref && (
+              <ButtonLink href={view.checkInHref} size="wide" chevron>
+                Check in this family
+              </ButtonLink>
+            )}
+            <ButtonLink href={`/staff/applicants/${applicant.id}`} variant="ghost" size="wide">
+              Open full record
+            </ButtonLink>
+          </>
         )
       }
     >
@@ -126,14 +133,20 @@ export function ApplicantSheet({
           {answer.view.fee && (
             <FeeSection leadId={answer.view.id} fee={answer.view.fee} sibling={answer.view.sibling?.fee ?? null} onChanged={onChanged} />
           )}
-          {answer.view.nextStep &&
+          {answer.view.checkInHref ? (
+            <Note tone="wait" icon="info">
+              Sent from the Admission form. Check-in fills in the missing answers.
+            </Note>
+          ) : (
+            answer.view.nextStep &&
             (answer.view.nextStep.state === "ready" ? (
               <Note>Next step: {answer.view.nextStep.title}.</Note>
             ) : (
               <Note tone="bad" role="alert">
                 The next step could not be worked out. Try again in a moment.
               </Note>
-            ))}
+            ))
+          )}
         </>
       )}
     </Sheet>

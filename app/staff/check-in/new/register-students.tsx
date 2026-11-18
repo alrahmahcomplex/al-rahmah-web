@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 
 import { GuidedHead, GuidedStack, GuidedStep, Hint, QuestionTitle, revealStep, SummaryRow, ContinuePill, type ProgressGroup } from "@/components/guided-form"
-import { Button, ButtonLink, GuidedTask, Note, Sheet, TextLink, toast } from "@/components/kit"
+import { Button, ButtonLink, GuidedTask, Note, PageHeader, Sheet, TextLink, toast } from "@/components/kit"
 import type { RegistrationQuestion } from "@/lib/services/leads"
 
+import { completeVisit, type CompleteVisitOutcome } from "../[id]/actions"
+import { checkInStudents, type CheckIn } from "../[id]/model"
 import { readOnFileSibling, registerFamily, type RegisterFamilyOutcome } from "./actions"
 import { clearDraft, readDraft, saveDraft } from "./draft"
 import {
@@ -77,8 +79,15 @@ import {
 // Register students (#308): the staff form for a family with no Admission
 // Number, prototype v38. Up to 8 students first, then their custodians, then
 // the finish: the Discount code, the fees and one save for everyone.
+//
+// Check-in (#309) is the same form for an Admission form family: it starts
+// from the form's answers and asks only the rest (owner's rule 5). The
+// class, year, Day or Boarding and the students stay as the family gave
+// them, there is no Discount code, and the save records the visit.
 
-const GROUPS = ["Students", "Custodians", "Finish"]
+const REGISTER_GROUPS = ["Students", "Custodians", "Finish"]
+const CHECK_IN_GROUPS = ["Students", "Custodians", "Visit"]
+const FROM_FORM = " · from the Admission form"
 const RESET_MS = 460
 // One sheet closes before the next opens.
 const SHEET_MS = 380
@@ -86,9 +95,14 @@ const FINISH_MS = 950
 const KEPT = "Your answers are kept on this computer, so you don’t need to type them again."
 
 type Head = { key: string; title: string; remove?: number }
-type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; summary: () => ReactNode; body: () => ReactNode }
+// `fixed`: an answer the family gave that check-in keeps, shown with no Change.
+type Step = { id: string; group: number; head: Head; label: string; done: boolean; silent?: boolean; fixed?: boolean; summary: () => ReactNode; body: () => ReactNode }
 
-type Finished = Extract<RegisterFamilyOutcome, { status: "created" }> & { names: string[]; unknownSchools: number }
+type Saved =
+  | Extract<RegisterFamilyOutcome, { status: "created" }>
+  | (Extract<CompleteVisitOutcome, { status: "completed" }> & { codeMissed: 0 })
+type Finished = Saved & { names: string[]; unknownSchools: number }
+type SaveOutcome = RegisterFamilyOutcome | CompleteVisitOutcome
 
 /** A question the save asked about a student joining a child on file's group, as one of the two sheets shows it. */
 type SaveQuestion = { key: number; root: number; leadId: string; tier: "close" | "different"; pair: NamePair }
@@ -118,6 +132,18 @@ export type RegisterStudentsProps = {
   canEnterCode: boolean
   // leads.view: the custodian's number is checked against families on file.
   canCheck: boolean
+  // Check-in of an Admission form family (#309).
+  checkIn?: CheckInMode
+}
+
+export type CheckInMode = {
+  // The children's leads, which name this family's draft.
+  family: string
+  given: CheckIn
+  // The answers the form gave, where check-in starts and starts over.
+  start: Answers
+  title: string
+  subtitle: string
 }
 
 let lastKey = 0
@@ -134,7 +160,19 @@ export function RegisterStudents(props: RegisterStudentsProps) {
   return browser ? <RegisterForm {...props} /> : null
 }
 
-function startingAnswers(staffId: string): Answers {
+function startingAnswers(staffId: string, mode?: CheckInMode): Answers {
+  if (mode) {
+    nextKey(mode.start)
+    const draft = readDraft(staffId, mode.family)
+    // The same children, in the same order; what the family gave comes from the record, never the draft.
+    const same = draft && draft.students.length === mode.start.students.length && draft.students.every((s, i) => s.key === mode.start.students[i].key)
+    if (!draft || !same) return mode.start
+    const students = draft.students.map((s, i) => {
+      const { className, year, board } = mode.start.students[i]
+      return { ...s, className, year, board }
+    })
+    return settled({ ...draft, students, more: true, code: undefined })
+  }
   const draft = readDraft(staffId)
   if (draft && !isEmpty(draft)) {
     nextKey(draft)
@@ -144,8 +182,10 @@ function startingAnswers(staffId: string): Answers {
   return freshAnswers(nextKey())
 }
 
-function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEnterCode, canCheck }: RegisterStudentsProps) {
-  const [answers, setAnswers] = useState<Answers>(() => startingAnswers(staffId))
+function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEnterCode, canCheck, checkIn: mode }: RegisterStudentsProps) {
+  const GROUPS = mode ? CHECK_IN_GROUPS : REGISTER_GROUPS
+  const given = (key: number) => mode?.given.children.find((c) => c.key === key)
+  const [answers, setAnswers] = useState<Answers>(() => startingAnswers(staffId, mode))
   const [edit, setEdit] = useState<string | null>(null)
   const [finished, setFinished] = useState<Finished | null>(null)
   const [instant, setInstant] = useState(false)
@@ -168,8 +208,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const [timers] = useState(() => new Set<number>())
 
   useEffect(() => {
-    if (!finished) saveDraft(staffId, answers)
-  }, [answers, staffId, finished])
+    if (!finished) saveDraft(staffId, answers, mode?.family)
+  }, [answers, staffId, finished, mode?.family])
   useEffect(() => () => timers.forEach((t) => window.clearTimeout(t)), [timers])
   useEffect(() => {
     latest.current = { answers, onFileFees }
@@ -221,10 +261,10 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   function restart() {
     timers.forEach((t) => window.clearTimeout(t))
     timers.clear()
-    clearDraft(staffId)
+    clearDraft(staffId, mode?.family)
     setInstant(true)
     setRound((r) => r + 1)
-    setAnswers(freshAnswers(nextKey()))
+    setAnswers(mode ? mode.start : freshAnswers(nextKey()))
     setEdit(null)
     setFinished(null)
     setFailure(null)
@@ -379,6 +419,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const openId = editing ?? (firstOpen >= 0 ? steps[firstOpen].id : null)
   const open = steps.find((s) => s.id === openId)
   const at = visible.findIndex((s) => s.id === openId)
+  const backTo = visible.slice(0, Math.max(at, 0)).findLastIndex((s) => !s.fixed)
 
   function buildSteps(a: Answers): Step[] {
     const out: Step[] = []
@@ -394,12 +435,14 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       const sid = `s${s.key}`
       const full = studentName(s.name)
       const f = firstOf(full)
-      head = { key: sid, title: full || `Student ${i + 1}`, remove: n > 1 ? s.key : undefined }
+      const form = given(s.key)
+      // Check-in completes the form's own students: none is added or removed.
+      head = { key: sid, title: full || `Student ${i + 1}`, remove: n > 1 && !mode ? s.key : undefined }
       out.push({
         id: `${sid}.name`,
         group: 0,
         head,
-        label: "Full name",
+        label: `Full name${form?.given.name ? FROM_FORM : ""}`,
         done: !!s.name,
         summary: () => (
           <>
@@ -407,13 +450,14 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
             <small className="rs-fa">Father: {father(s.key)}</small>
           </>
         ),
-        body: () => <NameQuestion id={`rs-${sid}`} next={i > 0} saved={s.name} onDone={(name) => setName(s.key, name)} />,
+        // At check-in a name the form did not give in full opens with what it did give.
+        body: () => <NameQuestion id={`rs-${sid}`} next={i > 0} saved={s.name ?? form?.prefill} onDone={(name) => setName(s.key, name)} />,
       })
       out.push({
         id: `${sid}.gender`,
         group: 0,
         head,
-        label: "Boy or girl",
+        label: `Boy or girl${form?.given.gender ? FROM_FORM : ""}`,
         done: !!s.gender,
         summary: () => s.gender,
         body: () => <GenderQuestion id={`rs-${sid}`} first={f} saved={s.gender} onPick={(v) => later(() => answer(`${sid}.gender`, setStudent(s.key, { gender: v })), PICK_MS)} />,
@@ -423,8 +467,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         id: `${sid}.cls`,
         group: 0,
         head,
-        label: "Class",
+        label: `Class${mode ? FROM_FORM : ""}`,
         done: !!s.className,
+        fixed: !!mode,
         summary: () => `${s.className} · ${year}`,
         body: () => (
           <ClassQuestion
@@ -442,8 +487,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         id: `${sid}.board`,
         group: 0,
         head,
-        label: "Day or boarding",
+        label: `Day or boarding${mode ? FROM_FORM : ""}`,
         done: !!s.board,
+        fixed: !!mode,
         summary: () => s.board,
         body: () => <BoardQuestion id={`rs-${sid}`} first={f} saved={s.board} onPick={(v) => later(() => answer(`${sid}.board`, setStudent(s.key, { board: v })), PICK_MS)} />,
       })
@@ -470,7 +516,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           ),
         })
       }
-      if (i > 0 && canLink) {
+      // A child already in a sibling group keeps that link at check-in: nothing to ask.
+      if (i > 0 && canLink && !form?.linked) {
         const same = new Set(sameFatherEarlier(a.students, i))
         const sib = s.sibling
         out.push({
@@ -510,8 +557,9 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       id: "more",
       group: 0,
       head,
-      label: "Students on this form",
+      label: `Students on this form${mode ? FROM_FORM : ""}`,
       done: !!a.more,
+      fixed: !!mode,
       summary: () => count(n),
       body: () => (
         <>
@@ -533,7 +581,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
 
     const hh = households(a.students)
     const custodiansHead: Head = { key: "g1", title: "Custodians" }
-    const finish: Head = { key: "g2", title: "Finish" }
+    const finish: Head = { key: "g2", title: mode ? "Today’s visit" : "Finish" }
     const firstCustodian = hh[0] ? a.custodians[hh[0].root] : undefined
     const { people: adults } = people(a)
     const firstName = (c: Custodian | undefined) =>
@@ -568,18 +616,20 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
               const k = otherFather(a, h)
               return k === null ? null : firstOf(studentName(a.students.find((s) => s.key === k)?.name))
             })()}
+            prefill={k === 0 ? mode?.given.contact : null}
             onDone={(custodian) => answer(id, (x) => withCustodian(x, h.root, custodian))}
           />
         ),
       })
-      const ask = canLink && c ? (a.onFileAsks.find((q) => q.student === h.root && !q.fromSave) ?? onFileMatch(a, h.root)) : null
+      const ask = canLink && c && !given(h.root)?.linked ? (a.onFileAsks.find((q) => q.student === h.root && !q.fromSave) ?? onFileMatch(a, h.root)) : null
       if (ask) out.push(onFileStep(a, ask, custodiansHead, fileOpen))
     })
 
     out.push({
       id: "brought",
-      group: 1,
-      head: custodiansHead,
+      // Check-in asks it with today's visit.
+      group: mode ? 2 : 1,
+      head: mode ? finish : custodiansHead,
       label: "Brought the students today",
       done: !!a.brought,
       summary: () => {
@@ -598,7 +648,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       ),
     })
 
-    if (canEnterCode) {
+    if (canEnterCode && !mode) {
       out.push({
         id: "code",
         group: 2,
@@ -645,7 +695,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       label: "",
       done: false,
       summary: () => "",
-      body: () => <SubmitQuestion who={count(n)} failure={failure} pending={pending} onSubmit={submit} />,
+      body: () => <SubmitQuestion who={count(n)} failure={failure} pending={pending} checkIn={!!mode} onSubmit={submit} />,
     })
     return out
   }
@@ -683,13 +733,16 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     return s ? studentName(s.name) : ""
   }
 
-  function failureFor(outcome: Exclude<RegisterFamilyOutcome, { status: "created" | "questions" }>): ReactNode {
+  function failureFor(outcome: Exclude<SaveOutcome, { status: "created" | "completed" | "questions" }>): ReactNode {
     const nothing = <b>Nothing was saved.</b>
     switch (outcome.status) {
       case "duplicate": {
         const lines = outcome.duplicates.map((d) => {
           const name = nameOf(d.student)
-          return `${name} is already registered, with Admission Number ${d.admissionNumber}. Remove ${firstOf(name)} from this form, or change the name if it is a different student.`
+          // At check-in a corrected name or another custodian can match a student on file; nobody can be removed.
+          return mode
+            ? `${name} is already registered, with Admission Number ${d.admissionNumber}. Check ${firstOf(name)}’s name and custodian.`
+            : `${name} is already registered, with Admission Number ${d.admissionNumber}. Remove ${firstOf(name)} from this form, or change the name if it is a different student.`
         })
         return (
           <>
@@ -703,16 +756,37 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
             {nothing} The sibling on file chosen for {nameOf(outcome.student) || "a student"} is Declined or closed, so they can’t be linked. Answer Not a sibling, then press the button again. {KEPT}
           </>
         )
+      case "not-applied":
+        return (
+          <>
+            {nothing} {`${nameOf(outcome.student) || "A student"}’s visit was recorded while you were answering. Open the family again from Home.`}
+          </>
+        )
       case "forbidden":
         return (
           <>
-            {nothing} Your role can’t register students, or can’t link siblings. Ask the Admissions Manager. {KEPT}
+            {nothing} {mode ? "Your role can’t check in families. Ask the Admissions Manager." : "Your role can’t register students, or can’t link siblings. Ask the Admissions Manager."} {KEPT}
           </>
         )
       case "refused": {
         const who = outcome.student ? nameOf(outcome.student) : ""
+        // The form's children changed on file while staff were answering: the page must be opened again.
+        if (outcome.field === "lead_id")
+          return (
+            <>
+              {nothing} This family changed on file while you were answering. Open the family again from Home.
+            </>
+          )
+        if (outcome.field === "family_match")
+          return (
+            <>
+              {nothing} The parent’s phone number waits for a Family match. Settle it on the student’s record in Applicants first. {KEPT}
+            </>
+          )
         const what =
-          outcome.reason === "father_names_differ"
+          outcome.reason === "linked_member"
+            ? `${who} is already in a sibling group, so the father’s name can’t change here. Put it back as it was, or correct it on the student’s record`
+            : outcome.reason === "father_names_differ"
             ? `${who}’s father is another man, so the father can’t be the custodian of them all. Change the custodian`
             : (outcome.field === "phone" || outcome.field === "whatsapp") && outcome.reason === "repeated_on_form"
               ? "Two different custodians on this form have the same phone number. Change one of them"
@@ -788,14 +862,18 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     setFailure(null)
     const { people: adults, students } = payload(answers, defaultYear, readFees(onFileFees))
     const code = answers.code && answers.code !== "none" ? answers.code : null
-    registerFamily({ visitDate: today, people: adults, students, code })
+    const save: Promise<SaveOutcome> = mode
+      ? completeVisit({ visitDate: today, people: adults, students: checkInStudents(students, answers, mode.given) })
+      : registerFamily({ visitDate: today, people: adults, students, code })
+    save
       .then((outcome) => {
         setPending(false)
-        if (outcome.status === "created") {
-          clearDraft(staffId)
+        if (outcome.status === "created" || outcome.status === "completed") {
+          clearDraft(staffId, mode?.family)
           const names = answers.students.map((s) => studentName(s.name))
           const unknownSchools = answers.students.filter((s) => s.school && "notKnown" in s.school && s.className && !NO_SCHOOL_ASKED.includes(s.className)).length
-          later(() => setFinished({ ...outcome, names, unknownSchools }), FINISH_MS)
+          const saved: Saved = outcome.status === "created" ? outcome : { ...outcome, codeMissed: 0 }
+          later(() => setFinished({ ...saved, names, unknownSchools }), FINISH_MS)
           return
         }
         if (outcome.status === "questions") {
@@ -857,9 +935,11 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
               label={s.label}
               value={s.summary()}
               action={
-                <TextLink onClick={() => !locked && setEdit(s.id)} aria-label={`Change ${s.label}${s.group === 0 && s.id !== "more" ? `, ${s.head.title}` : ""}`}>
-                  Change
-                </TextLink>
+                !s.fixed && (
+                  <TextLink onClick={() => !locked && setEdit(s.id)} aria-label={`Change ${s.label}${s.group === 0 && s.id !== "more" ? `, ${s.head.title}` : ""}`}>
+                    Change
+                  </TextLink>
+                )
               }
             />
           )
@@ -894,12 +974,26 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
 
   return (
     <>
+      {mode && (
+        <PageHeader
+          title={mode.title}
+          subtitle={mode.subtitle}
+          actions={
+            !finished && (
+              <ButtonLink href="/staff" variant="ghost" size="small">
+                Choose another family
+              </ButtonLink>
+            )
+          }
+        />
+      )}
       <GuidedTask
         progress={{
           groups,
           activeGroup,
-          canBack: at > 0 && !locked,
-          onBack: () => at > 0 && setEdit(visible[at - 1].id),
+          // Back skips the answers check-in keeps as the family gave them.
+          canBack: backTo >= 0 && !locked,
+          onBack: () => backTo >= 0 && setEdit(visible[backTo].id),
           canReset: at <= 0 && openId === steps[0].id,
           onReset: () => {
             if (isEmpty(answers)) toast("Nothing to clear yet. The form is empty.")
@@ -911,8 +1005,16 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         finished={
           finished
             ? {
-                title: `${count(finished.students.length)} registered`,
-                hint: "Give the family these Admission Numbers.",
+                title: mode ? "Visit recorded" : `${count(finished.students.length)} registered`,
+                hint: !mode
+                  ? "Give the family these Admission Numbers."
+                  : finished.students.length > 1
+                    ? finished.unknownSchools > 0
+                      ? "The students are now Visited."
+                      : "The students are now Visited, and their records are complete."
+                    : finished.unknownSchools > 0
+                      ? `${firstOf(finished.names[0] ?? "")} is now Visited.`
+                      : `${firstOf(finished.names[0] ?? "")} is now Visited, and the record is complete.`,
                 results: finished.students.map((s) => ({ label: finished.names[s.student - 1], value: s.admissionNumber })),
                 children: (
                   <>
@@ -929,9 +1031,15 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
                     <ButtonLink href="/staff/applicants" size="wide" chevron>
                       Open Applicants
                     </ButtonLink>
-                    <ContinuePill variant="ghost" onClick={restart}>
-                      Register another family
-                    </ContinuePill>
+                    {mode ? (
+                      <ButtonLink href="/staff" variant="ghost" size="wide">
+                        Check in another family
+                      </ButtonLink>
+                    ) : (
+                      <ContinuePill variant="ghost" onClick={restart}>
+                        Register another family
+                      </ContinuePill>
+                    )}
                   </>
                 ),
               }
@@ -1028,7 +1136,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         }}
       />
       <span className="sr-only" aria-live="polite">
-        {pending ? `Registering ${count(n)}…` : ""}
+        {pending ? (mode ? `Recording the visit for ${count(n)}…` : `Registering ${count(n)}…`) : ""}
       </span>
     </>
   )

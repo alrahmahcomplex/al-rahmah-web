@@ -38,6 +38,7 @@ import { STUDENT_GENDERS, type DayOrBoarding, type LeadClass, type StudentGender
 
 import { lookUpReferralCode } from "../../applicants/[id]/referral-actions"
 import { usableCode, type ReferralLookup } from "../../applicants/[id]/referral-outcome"
+import { givenRelationship, personParts, type GivenContact } from "../[id]/model"
 import { findCustodianFamily } from "./actions"
 import {
   CLASS_LEVELS,
@@ -554,6 +555,7 @@ export function CustodianQuestion({
   saved,
   canCheck,
   otherFather,
+  prefill,
   onDone,
 }: {
   id: string
@@ -566,19 +568,25 @@ export function CustodianQuestion({
   canCheck: boolean
   // A child here whose father is another man, by first name: then the father can't be everyone's custodian.
   otherFather: string | null
+  // Check-in (#309): the parent the Admission form gave, offered first with their number and relationship.
+  prefill?: GivenContact | null
   onDone: (c: Custodian) => void
 }) {
-  const [dad, setDad] = useState(saved?.kind === "father")
+  // The form said Father: the switch starts on. The form's number goes with the form's answer.
+  const formDad = prefill?.relationship === "Father"
+  const given = prefill && !saved ? givenRelationship(prefill) : null
+  const formNumber = (on: boolean) => (prefill && on === formDad ? { phone: prefill.contact.phone, whatsapp: prefill.contact.whatsapp ?? "" } : { phone: "", whatsapp: "" })
+  const [dad, setDad] = useState(saved ? saved.kind === "father" : formDad)
   const [same, setSame] = useState<boolean | null>(saved ? saved.kind === "same" : null)
-  const [phone, setPhone] = useState(saved && saved.kind !== "same" ? saved.phone : "")
-  const [whatsapp, setWhatsapp] = useState(saved && saved.kind !== "same" ? saved.whatsapp : "")
+  const [phone, setPhone] = useState(saved && saved.kind !== "same" ? saved.phone : formNumber(formDad).phone)
+  const [whatsapp, setWhatsapp] = useState(saved && saved.kind !== "same" ? saved.whatsapp : formNumber(formDad).whatsapp)
   const [waOpen, setWaOpen] = useState(!!whatsapp)
   const savedContact = saved?.kind === "known" || saved?.kind === "father" ? saved.contact : undefined
   // Which person on file staff said it is, by contact id, or "else" for someone else. A changed number asks again.
   const [picked, setPicked] = useState<string | null>(saved ? (savedContact ? savedContact.id : saved.kind === "new" || saved.kind === "father" ? "else" : null) : null)
   const [name, setName] = useState<PersonName>(saved?.kind === "new" ? saved.name : EMPTY_PERSON)
-  const [rel, setRel] = useState<RelationshipChoice | null>(saved && saved.kind !== "father" ? saved.relationship : null)
-  const [desc, setDesc] = useState(saved && saved.kind !== "father" ? saved.description : "")
+  const [rel, setRel] = useState<RelationshipChoice | null>(saved && saved.kind !== "father" ? saved.relationship : (given?.choice ?? null))
+  const [desc, setDesc] = useState(saved && saved.kind !== "father" ? saved.description : (given?.description ?? ""))
   const [error, setError] = useState("")
   const errId = `${id}-error`
   const waRef = useRef<HTMLInputElement>(null)
@@ -587,16 +595,18 @@ export function CustodianQuestion({
   const other = !dad
   const reuse = other && !!first && same === true
   const askPhone = dad || (other && (!first || same === false))
-  const lookup = useFamilyLookup(phone, whatsapp, canCheck && askPhone)
+  // The form's own parent on the form's number: kept as the record holds them, so nothing is looked up and no name is typed.
+  const formParent = !!prefill && dad === formDad && phoneOk(phone) && digits(phone) === digits(prefill.contact.phone)
+  const lookup = useFamilyLookup(phone, whatsapp, canCheck && askPhone && !formParent)
   const onFile = lookup?.state === "found" ? lookup.contacts : []
-  const contact = onFile.find((c) => c.id === picked)
-  const needName = other && !reuse && phoneOk(phone) && lookup?.state !== "checking" && (onFile.length === 0 || picked === "else")
+  const contact = formParent ? prefill.contact : onFile.find((c) => c.id === picked)
+  const needName = other && !reuse && !formParent && phoneOk(phone) && lookup?.state !== "checking" && (onFile.length === 0 || picked === "else")
   const nameOk = Object.values(name).every((v) => v.trim())
   const relReady = other && (reuse || !!contact || (needName && nameOk))
   const options: readonly RelationshipChoice[] = reuse ? SAME_RELATIONSHIPS : FIRST_RELATIONSHIPS
   const relOk = !!rel && options.includes(rel) && (rel !== "Other" || desc.trim().length > 0)
-  const famSettled = onFile.length === 0 || picked === "else" || !!contact
-  const ready = dad ? phoneOk(phone) && famSettled && lookup?.state !== "checking" : relReady && relOk
+  const famSettled = formParent || onFile.length === 0 || picked === "else" || !!contact
+  const ready = dad ? phoneOk(phone) && famSettled && (formParent || lookup?.state !== "checking") : relReady && relOk
 
   function submit(e: FormEvent) {
     e.preventDefault()
@@ -629,6 +639,16 @@ export function CustodianQuestion({
             setPicked(null)
             setSame(null)
             setError("")
+            if (prefill) {
+              // The form's number belongs to the form's answer: it comes back with it, and goes with the other.
+              const back = formNumber(on)
+              setPhone(back.phone)
+              setWhatsapp(back.whatsapp)
+              setWaOpen(!!back.whatsapp)
+              const r = on === formDad ? givenRelationship(prefill) : null
+              setRel(r?.choice ?? null)
+              setDesc(r?.description ?? "")
+            }
             if (on) window.setTimeout(() => phoneRef.current?.focus(), 330)
           }}
         />
@@ -721,6 +741,11 @@ export function CustodianQuestion({
         <GuidedReveal open={needName}>
           <PersonNameBoxes id={`${id}-cn`} aria-labelledby={`${id}-title`} labels={NAME_LABELS} value={name} onChange={setName} />
         </GuidedReveal>
+        {prefill && (
+          <GuidedReveal open={formParent && other}>
+            <PersonNameBoxes id={`${id}-fp`} aria-labelledby={`${id}-title`} labels={NAME_LABELS} value={personParts(prefill.contact.fullName)} readOnly />
+          </GuidedReveal>
+        )}
         <GuidedReveal open={relReady}>
           <ChoiceTiles
             name={`${id}-rel`}
@@ -996,7 +1021,35 @@ export function FeesUnread({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-export function SubmitQuestion({ who, failure, pending, onSubmit }: { who: string; failure: ReactNode; pending: boolean; onSubmit: () => void }) {
+export function SubmitQuestion({
+  who,
+  failure,
+  pending,
+  checkIn,
+  onSubmit,
+}: {
+  who: string
+  failure: ReactNode
+  pending: boolean
+  // Check-in (#309): the visit is recorded on students who are on file already.
+  checkIn?: boolean
+  onSubmit: () => void
+}) {
+  if (checkIn)
+    return (
+      <>
+        <QuestionTitle>{`Record today’s visit for ${who}?`}</QuestionTitle>
+        <Hint>Their status moves from Applied to Visited, and the new answers are saved on each record.</Hint>
+        {failure && (
+          <Note tone="wait" icon="alert" role="alert">
+            {failure}
+          </Note>
+        )}
+        <ContinuePill pending={pending} onClick={() => !pending && onSubmit()}>
+          Record the visit
+        </ContinuePill>
+      </>
+    )
   return (
     <>
       <QuestionTitle>{`Register ${who}?`}</QuestionTitle>

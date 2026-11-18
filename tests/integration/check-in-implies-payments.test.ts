@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto"
-import { readFileSync } from "node:fs"
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { Client } from "pg"
@@ -11,10 +10,10 @@ import { SUPER_ADMIN } from "../support/fixtures"
 // visits.record implies payments.view (#460). Whoever can check in or
 // register a student also sees school-fee payments. Every path that writes a
 // role's permissions keeps the pair together, a check constraint backs the
-// trigger, and the migration's repair gives payments.view to any role that
-// held visits.record without it.
+// trigger, and no role is left holding visits.record without payments.view.
+// The repair's one-off replay ran on the branch as migration-day evidence
+// (PR #477); it alters the table, so it stays out of the suite.
 
-const MIGRATION = "supabase/migrations/20270103100100_check_in_implies_payments_view.sql"
 const BOTH = ["payments.view", "visits.record"]
 const unique = (name: string) => `${name} ${randomUUID().slice(0, 8)}`
 
@@ -121,40 +120,6 @@ describe("direct SQL", () => {
 })
 
 describe("the repair", () => {
-  test("gives payments.view to a role holding visits.record without it, with a system audit row, and leaves other roles alone", async () => {
-    const repair = /^update public\.roles[\s\S]*?;$/m.exec(readFileSync(MIGRATION, "utf8"))?.[0]
-    expect(repair).toBeDefined()
-
-    const result = await rolledBackAsPostgres(async (sql) => {
-      // Put back the state before the migration: no constraint, and a role
-      // written without the trigger.
-      await sql.query("alter table public.roles drop constraint roles_visits_record_needs_payments_view")
-      await sql.query("set local session_replication_role = replica")
-      const inserted = await sql.query<{ id: string }>(
-        "insert into public.roles (name, permissions) values ($1, '{leads.view,visits.record}'), ($2, '{leads.view}') returning id",
-        [unique("Before"), unique("Untouched")],
-      )
-      await sql.query("set local session_replication_role = origin")
-      const [broken, untouched] = inserted.rows.map((row) => row.id)
-
-      await sql.query(repair!)
-
-      const { rows } = await sql.query<{ id: string; permissions: string[] }>(
-        "select id, permissions from public.roles where id = any ($1)",
-        [[broken, untouched]],
-      )
-      const byId = Object.fromEntries(rows.map((row) => [row.id, row.permissions]))
-      return { broken: byId[broken], untouched: byId[untouched], brokenAudit: await auditRows(sql, broken), untouchedAudit: await auditRows(sql, untouched) }
-    })
-
-    expect(result.broken).toEqual(["leads.view", ...BOTH])
-    expect(result.untouched).toEqual(["leads.view"])
-    expect(result.brokenAudit.map((row) => [row.action, row.actor_kind, row.old_values?.permissions, row.new_values.permissions])).toEqual([
-      ["update", "system", ["leads.view", "visits.record"], ["leads.view", ...BOTH]],
-    ])
-    expect(result.untouchedAudit).toEqual([])
-  })
-
   test("leaves no role holding visits.record without payments.view", async () => {
     const { rows } = await inRolledBackTransaction((sql) =>
       sql.query<{ count: number }>(

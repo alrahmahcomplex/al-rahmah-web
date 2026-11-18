@@ -9,14 +9,19 @@ import { createClient } from "@/utils/supabase/server"
 
 import { formatShillings } from "../../fees/format"
 import { enrolledBy } from "./enrolment-text"
+import { FeeEditNeededTag, SiblingFeeControls } from "./fee-edit"
+import { setByHandLine } from "./fee-edit-outcome"
 import { InstalmentTable } from "./instalment-table"
 import { PaymentList } from "./payment-list"
 import { PreFormOneProgramme } from "./pre-form-one-programme"
 import { PreFormOneTickSection } from "./pre-form-one-tick-section"
-import { RecordPayment } from "./record-payment"
+import { readSiblingView } from "./lead-reads"
 import { SeatPriorityTag } from "./seat-priority-tag"
 
 const INSTALMENTS = ["First", "Second", "Third"] as const
+
+// When the Sibling group can't be read: Record payment alone.
+const NO_SIBLING_FEE = { canEdit: false, feeEditNeeded: false, canKeep: false, setByHand: null, paymentNote: null }
 
 // The lead's School fee on the lead screen, for staff who may view payments:
 // the annual fee for its class band and Day or boarding, Total paid, the
@@ -28,7 +33,10 @@ const INSTALMENTS = ["First", "Second", "Third"] as const
 // `canAdjust`, on a closed lead too, since an adjustment corrects history.
 // The Pre-Form One programme (#114) shows apart from the School fee, its tick
 // editable when `canEditPreFormOne`, and Record payment offers its fee while
-// the tick applies.
+// the tick applies. The Sibling fee edit and "Leave the fee as it is" (#311)
+// sit beside Record payment for staff who may record payments; while a
+// Sibling request waits, the payment form says the fee is recorded in full
+// for now.
 export async function SchoolFeeSection({
   leadId,
   staff,
@@ -52,13 +60,20 @@ export async function SchoolFeeSection({
   }
 
   const supabase = await createClient()
-  const [fee, payments] = await Promise.all([getLeadFee(supabase, leadId), listPayments(supabase, leadId)])
+  const [fee, payments, sibling] = await Promise.all([
+    getLeadFee(supabase, leadId),
+    listPayments(supabase, leadId),
+    readSiblingView(leadId, staff.permissions.join(",")),
+  ])
+  const siblingFee = sibling?.fee ?? null
+  const byHand = siblingFee && setByHandLine(siblingFee)
 
   return (
     <section aria-labelledby="lead-school-fee" className="lr-card">
       <h2 id="lead-school-fee" className="kit-card-title">
         School fee
       </h2>
+      {siblingFee && <FeeEditNeededTag fee={siblingFee} />}
       {!fee.ok ? (
         <Note tone="bad" role="alert">The School fee could not be loaded. Try again in a moment.</Note>
       ) : fee.data.kind === "no-schedule" ? (
@@ -80,6 +95,7 @@ export async function SchoolFeeSection({
                   {formatShillings(fee.data.bandFee)}
                 </small>
               )}
+              {byHand && <small>{byHand.charAt(0).toUpperCase() + byHand.slice(1)}</small>}
             </dt>
             <dd className="kit-num">TZS {formatShillings(fee.data.schoolFee)}</dd>
             <dt>Total paid</dt>
@@ -119,12 +135,14 @@ export async function SchoolFeeSection({
             canEdit={canEditPreFormOne}
           />
 
-          {canRecord && (
-            <RecordPayment
+          {canRecord ? (
+            <SiblingFeeControls
               leadId={leadId}
-              canWaive={fee.data.discount?.kind === "qualified_orphan"}
-              canPayPreFormOne={fee.data.preFormOne.applies}
+              fee={siblingFee ?? NO_SIBLING_FEE}
+              record={{ canWaive: fee.data.discount?.kind === "qualified_orphan", canPayPreFormOne: fee.data.preFormOne.applies }}
             />
+          ) : (
+            siblingFee?.canKeep && <SiblingFeeControls leadId={leadId} fee={{ ...siblingFee, canEdit: false }} />
           )}
         </div>
       )}

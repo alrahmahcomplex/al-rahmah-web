@@ -3,10 +3,12 @@
 import { ButtonLink, KeyValueList, LoadingState, Note, Section, Sheet, StatusChip } from "@/components/kit"
 import type { LeadClosure, LeadStatus } from "@/lib/services/leads"
 
+import { FeeEditNeededTag, SiblingFeeControls } from "./[id]/fee-edit"
 import { FatherNameRow, PreviousSchoolRow } from "./[id]/father-school"
 import { SeatPriorityTag } from "./[id]/seat-priority-tag"
 import { SiblingGroupCard } from "./[id]/sibling-group"
 import type { SiblingMemberView } from "@/lib/sibling-group-view"
+import type { SiblingFeeFacts } from "./[id]/sibling-read"
 import type { ApplicantSheetAnswer, ApplicantSheetFee } from "./sheet-view"
 
 // The row the sheet opened from: what the list already knows, shown while
@@ -121,7 +123,9 @@ export function ApplicantSheet({
               </Note>
             </Section>
           )}
-          {answer.view.fee && <FeeSection fee={answer.view.fee} />}
+          {answer.view.fee && (
+            <FeeSection leadId={answer.view.id} fee={answer.view.fee} sibling={answer.view.sibling?.fee ?? null} onChanged={onChanged} />
+          )}
           {answer.view.nextStep &&
             (answer.view.nextStep.state === "ready" ? (
               <Note>Next step: {answer.view.nextStep.title}.</Note>
@@ -136,10 +140,23 @@ export function ApplicantSheet({
   )
 }
 
-// The record's School fee summary: the same four rows as its Overview card.
-function FeeSection({ fee }: { fee: ApplicantSheetFee }) {
+// The record's School fee summary: the same four rows as its Overview card,
+// with "Granted: fee edit needed", and Edit fee and "Leave the fee as it is"
+// beside Record payment for staff who may record payments (#311).
+function FeeSection({
+  leadId,
+  fee,
+  sibling,
+  onChanged,
+}: {
+  leadId: string
+  fee: ApplicantSheetFee
+  sibling: SiblingFeeFacts | null
+  onChanged: () => void
+}) {
   return (
     <Section title="School fee">
+      {sibling && <FeeEditNeededTag fee={sibling} />}
       {fee.state === "failed" ? (
         <Note tone="bad" role="alert">
           The School fee could not be loaded. Try again in a moment.
@@ -150,7 +167,7 @@ function FeeSection({ fee }: { fee: ApplicantSheetFee }) {
         <>
           <KeyValueList
             items={[
-              { key: "Annual fee", value: fee.annualFee, numeric: true },
+              { key: "Annual fee", value: fee.annualFee, numeric: true, reason: fee.why },
               { key: "Paid", value: fee.paid, numeric: true },
               { key: "Balance", value: fee.balance, numeric: true },
               {
@@ -160,10 +177,14 @@ function FeeSection({ fee }: { fee: ApplicantSheetFee }) {
               },
             ]}
           />
-          {fee.recordPaymentHref && (
-            <ButtonLink href={fee.recordPaymentHref} variant="ghost" size="small">
-              Record payment
-            </ButtonLink>
+          {sibling ? (
+            <SiblingFeeControls key={leadId} leadId={leadId} fee={sibling} recordHref={fee.recordPaymentHref} onChanged={onChanged} />
+          ) : (
+            fee.recordPaymentHref && (
+              <ButtonLink href={fee.recordPaymentHref} variant="ghost" size="small">
+                Record payment
+              </ButtonLink>
+            )
           )}
         </>
       )}

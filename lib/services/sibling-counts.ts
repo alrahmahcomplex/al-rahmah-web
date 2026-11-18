@@ -429,3 +429,26 @@ export async function getFullPayerTie(supabase: SupabaseClient, leadId: string):
   if (error) return { ok: false, error: countError(error, "Could not read whether the full payer's fee ties") }
   return { ok: true, data: data as boolean | null }
 }
+
+// ---------------------------------------------------------------------------
+// leads.view: the Sibling discount column on Applicants (#311).
+// ---------------------------------------------------------------------------
+
+export type SiblingListTag = SiblingMemberExplanation & { grantsPaused: boolean }
+
+// Each listed lead's own member entry from explain_sibling_group, for leads
+// in a Sibling group or with the prior-sibling tick; any other lead is left
+// out. At most 100 ids, as sibling_list_tags allows.
+export async function getSiblingListTags(
+  supabase: SupabaseClient,
+  leadIds: readonly string[],
+): Promise<Result<Map<string, SiblingListTag>, CountError>> {
+  if (leadIds.length === 0) return { ok: true, data: new Map() }
+  const { data, error } = await supabase.rpc("sibling_list_tags", { lead_ids: leadIds })
+  if (error) return { ok: false, error: countError(error, "Could not read the Sibling discount tags") }
+  const rows = data as Record<string, MemberRow & { grants_paused: boolean }>
+  return {
+    ok: true,
+    data: new Map(Object.entries(rows).map(([id, row]) => [id, { ...member(row), grantsPaused: row.grants_paused }])),
+  }
+}

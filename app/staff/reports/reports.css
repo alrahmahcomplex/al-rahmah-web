@@ -40,3 +40,8 @@
 /* Counts, not money: as before the redesign, a long Taken split or "Seats not set" wraps, so the table fits a phone. */
 .rp-panel .kit-tbl td[data-align="end"] { white-space: normal; }
 .rp-grow { flex: 1; min-width: 0; }
+
+/* Sibling discount follow-up (#311): one row per count, the number at the end. */
+.rp-sib { margin-top: 24px; }
+.rp-sib-rows { display: flex; flex-direction: column; }
+.rp-sib-n { font: italic 800 20px/1 var(--font-exo), "Exo", system-ui, sans-serif; color: var(--gf-indigo); }

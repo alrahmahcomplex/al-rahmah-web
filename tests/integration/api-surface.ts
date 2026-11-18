@@ -1040,6 +1040,25 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { stream_id: "'5a5a0000-0000-4000-8000-000000000450'", label: "'Y'", seats: "2" },
     agent: { refused: "not_permitted" },
   },
+  // Streams, slice 4b (#449): payments.view reads; a request for a child
+  // also needs leads.view; the outlook needs both.
+  "public.year_streams(schedule_year integer)": {
+    roles: ["authenticated"],
+    args: { schedule_year: "2027" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.lead_seat_outlook(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
+    agent: { refused: "forbidden" },
+  },
+  "public.request_stream(lead_id uuid, schedule_year integer, class lead_class, need stream_takes)": {
+    roles: ["authenticated"],
+    setup:
+      "update public.seat_settings set mode = 'named'; insert into public.streams (enrollment_year, class_name, label, takes, seats, position) values (2027, 'FORM 1', 'Z', 'Mixed', 0, 99)",
+    args: { lead_id: "null", schedule_year: "2027", class: "'FORM 1'", need: "null" },
+    agent: { refused: "not_permitted" },
+  },
   "public.bring_up_streams(schedule_year integer, sources uuid[])": {
     roles: ["authenticated"],
     setup: "update public.seat_settings set mode = 'named'",

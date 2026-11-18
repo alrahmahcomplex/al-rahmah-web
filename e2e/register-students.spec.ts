@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto"
 
-import { type Page } from "@playwright/test"
+import { type Locator, type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 
 import { ACCOUNTANT, ADMISSIONS, type FixtureStaff } from "../tests/support/fixtures"
@@ -57,6 +57,12 @@ async function student(page: Page, first: string, f: Father, cls: { tab: string;
   await pick(page, board)
   // From STD 2 the previous school is asked.
   if (cls === "FORM 1" || cls.name !== "STD 1") await go(page, "Not known yet").click()
+}
+
+// The fathers' names don't match: the note on the proof, then the request.
+async function requestWithNote(sheet: Locator) {
+  await sheet.getByRole("textbox", { name: "Note for the Admissions Manager" }).fill("Both birth certificates on Thursday.")
+  await sheet.getByRole("button", { name: "Request the discount" }).click()
 }
 
 async function another(page: Page) {
@@ -210,7 +216,7 @@ test.describe("registering a family", () => {
     await another(page)
     await student(page, b, two, "FORM 1", "Day")
     await pick(page, new RegExp(`^Sibling of ${full(a, one)}`))
-    await page.getByRole("dialog", { name: "The fathers’ names don’t match" }).getByRole("button", { name: "Request the discount" }).click()
+    await requestWithNote(page.getByRole("dialog", { name: "The fathers’ names don’t match" }))
     await go(page, "No, go to custodians").click()
     const first = open(page)
     await first.getByRole("textbox", { name: "Custodian’s mobile number" }).fill(number)
@@ -241,7 +247,10 @@ test.describe("registering a family", () => {
     const sheet = page.getByRole("dialog", { name: "The fathers’ names don’t match" })
     await expect(sheet).toContainText(one.join(" "))
     await expect(sheet).toContainText(two.join(" "))
+    // The note on the proof is required (#310).
     await sheet.getByRole("button", { name: "Request the discount" }).click()
+    await expect(sheet.getByText("Write what proof the family will bring.")).toBeVisible()
+    await requestWithNote(sheet)
     await expect(page.getByText(/different fathers’ names, discount requested/)).toBeVisible()
     await pick(page, new RegExp(`^${mum.join(" ")}`))
     await go(page, /NO CODE/).click()
@@ -359,7 +368,7 @@ test.describe("answers that depend on others", () => {
     await another(page)
     await student(page, b, omari, "FORM 1", "Day")
     await pick(page, new RegExp(`^Sibling of ${full(a, juma)}`))
-    await page.getByRole("dialog", { name: "The fathers’ names don’t match" }).getByRole("button", { name: "Request the discount" }).click()
+    await requestWithNote(page.getByRole("dialog", { name: "The fathers’ names don’t match" }))
     await another(page)
     await student(page, c, omari, "FORM 1", "Day")
     // The same father as B, but B's group counts by A's father: a request again, never a match.

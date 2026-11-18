@@ -3,7 +3,10 @@
 import { ButtonLink, KeyValueList, LoadingState, Note, Section, Sheet, StatusChip } from "@/components/kit"
 import type { LeadClosure, LeadStatus } from "@/lib/services/leads"
 
+import { FatherNameRow, PreviousSchoolRow } from "./[id]/father-school"
 import { SeatPriorityTag } from "./[id]/seat-priority-tag"
+import { SiblingGroupCard } from "./[id]/sibling-group"
+import type { SiblingMemberView } from "@/lib/sibling-group-view"
 import type { ApplicantSheetAnswer, ApplicantSheetFee } from "./sheet-view"
 
 // The row the sheet opened from: what the list already knows, shown while
@@ -11,7 +14,8 @@ import type { ApplicantSheetAnswer, ApplicantSheetFee } from "./sheet-view"
 export type SheetApplicant = { id: string; studentName: string; status: LeadStatus; closure: LeadClosure | null }
 
 // The side sheet an Applicants row opens (the owner's shell decision 4,
-// 2026-11-11): Student, Custodian, School fee and the next step, with
+// 2026-11-11): Student with the father's name and previous school, Custodian,
+// the Sibling group (#310), School fee and the next step, with
 // "Open full record" in the foot. Kept mounted, so it slides out; focus goes
 // back to the row that opened it.
 export function ApplicantSheet({
@@ -19,12 +23,18 @@ export function ApplicantSheet({
   answer,
   open,
   onOpenChange,
+  onChanged,
+  onOpenMember,
 }: {
   applicant: SheetApplicant | null
   // Null while the applicant loads.
   answer: ApplicantSheetAnswer | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Reads the applicant again after a change made in the sheet.
+  onChanged: () => void
+  // Opens a sibling in the sheet.
+  onOpenMember: (member: SiblingMemberView) => void
 }) {
   const view = answer?.status === "ready" ? answer.view : null
   const shown = view ?? applicant
@@ -65,10 +75,52 @@ export function ApplicantSheet({
         <>
           <Section title="Student">
             <KeyValueList items={answer.view.student.map(([key, value]) => ({ key, value, numeric: key === "Admission Number" }))} />
+            {answer.view.fatherAndSchool ? (
+              <div className="ap-rows">
+                <FatherNameRow
+                  key={"f-" + answer.view.id}
+                  leadId={answer.view.id}
+                  studentName={answer.view.studentName}
+                  father={answer.view.fatherAndSchool.father}
+                  enrolled={answer.view.status === "Enrolled"}
+                  compareWith={answer.view.sibling?.compareWith ?? null}
+                  canEdit={answer.view.canEdit}
+                  onChanged={onChanged}
+                />
+                <PreviousSchoolRow
+                  key={"s-" + answer.view.id}
+                  leadId={answer.view.id}
+                  className={answer.view.className}
+                  school={answer.view.fatherAndSchool.previousSchool}
+                  canEdit={answer.view.canEdit}
+                  onChanged={onChanged}
+                />
+              </div>
+            ) : (
+              <Note tone="bad" role="alert">
+                The father’s name and previous school could not be loaded. Try again in a moment.
+              </Note>
+            )}
           </Section>
           <Section title="Custodian">
             <KeyValueList items={answer.view.custodian.map(([key, value]) => ({ key, value }))} />
           </Section>
+          {answer.view.sibling ? (
+            <SiblingGroupCard
+              key={answer.view.id}
+              view={answer.view.sibling}
+              open={answer.view.open}
+              inSheet
+              onChanged={onChanged}
+              onOpenMember={onOpenMember}
+            />
+          ) : (
+            <Section title="Sibling group">
+              <Note tone="bad" role="alert">
+                The sibling group could not be loaded. Try again in a moment.
+              </Note>
+            </Section>
+          )}
           {answer.view.fee && <FeeSection fee={answer.view.fee} />}
           {answer.view.nextStep &&
             (answer.view.nextStep.state === "ready" ? (

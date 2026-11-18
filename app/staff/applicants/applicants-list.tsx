@@ -101,7 +101,7 @@ export function ApplicantsList({
   const [open, setOpen] = useState(false)
   const asked = useRef(0)
 
-  async function openRow(lead: LeadListItem) {
+  async function openRow(lead: SheetApplicant) {
     const ask = ++asked.current
     setSheet({ applicant: lead, answer: null })
     setOpen(true)
@@ -113,6 +113,21 @@ export function ApplicantsList({
     }
     // A later row's answer wins.
     if (ask === asked.current) setSheet({ applicant: lead, answer })
+  }
+
+  // After a change made in the sheet: the applicant again, and the list.
+  async function reloadSheet() {
+    const current = sheet?.applicant
+    if (!current) return
+    const ask = ++asked.current
+    let answer: ApplicantSheetAnswer
+    try {
+      answer = await loadApplicantSheet(current.id)
+    } catch {
+      answer = LOST
+    }
+    if (ask === asked.current) setSheet({ applicant: current, answer })
+    router.refresh()
   }
 
   const columns: TableColumn<LeadListItem>[] = [
@@ -248,7 +263,14 @@ export function ApplicantsList({
         pageLabel={(each) => `Page ${each}`}
       />
 
-      <ApplicantSheet applicant={sheet?.applicant ?? null} answer={sheet?.answer ?? null} open={open} onOpenChange={setOpen} />
+      <ApplicantSheet
+        applicant={sheet?.applicant ?? null}
+        answer={sheet?.answer ?? null}
+        open={open}
+        onOpenChange={setOpen}
+        onChanged={reloadSheet}
+        onOpenMember={(member) => void openRow({ id: member.leadId, studentName: member.studentName, status: member.status as LeadStatus, closure: null })}
+      />
     </>
   )
 }

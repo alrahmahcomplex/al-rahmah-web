@@ -9,7 +9,7 @@ import { FamilySection } from "./family-section"
 import { FollowUpSection } from "./follow-up-section"
 import { GroupInvitationSection } from "./group-invitation-section"
 import { InterviewSection } from "./interview-section"
-import { FeeSummaryPanel, ParentPanel, RecentActivityPanel, StudentPanel } from "./overview-panels"
+import { FeeSummaryPanel, ParentPanel, RecentActivityPanel, SiblingGroupPanel, StudentPanel } from "./overview-panels"
 import { ReApplicationSection } from "./re-application-section"
 import { ReopenedNote } from "./reopened-note"
 import { ReopeningSection } from "./reopening-section"
@@ -59,6 +59,9 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
   // Read-only on a closed lead: it offers no corrections.
   { key: "student", tab: "overview", readOnlyWhenClosed: true, Panel: StudentPanel },
   { key: "parent", tab: "overview", readOnlyWhenClosed: true, Panel: ParentPanel },
+  // Each member's Sibling fee and why (#310). On a closed lead it still says
+  // why, without the request.
+  { key: "sibling-group", tab: "overview", readOnlyWhenClosed: true, Panel: SiblingGroupPanel },
   {
     key: "family",
     tab: "overview",

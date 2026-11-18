@@ -10,11 +10,13 @@ import { formatShillings } from "../../fees/format"
 import { describeLeadHistory } from "./history/describe"
 import { CardHeading } from "./lead-card"
 import { ContactEditor, StudentEditor } from "./lead-editors"
-import { readFee, readFollowUps } from "./lead-reads"
+import { FatherNameRow, PreviousSchoolRow } from "./father-school"
+import { readFatherAndSchool, readFee, readFollowUps, readSiblingView } from "./lead-reads"
 import { parentRows, studentRows } from "./lead-rows"
 import { Details } from "./lead-summary"
 import type { LeadPanelProps } from "./panels"
 import { SeatPriorityTag } from "./seat-priority-tag"
+import { SiblingGroupCard } from "./sibling-group"
 import { leadTabHref } from "./tabs"
 
 // The Overview tab's own cards: the student and the parent or guardian with
@@ -23,10 +25,11 @@ import { leadTabHref } from "./tabs"
 // How many history entries Recent activity shows.
 export const RECENT_ENTRIES = 4
 
-export function StudentPanel({ lead, staff, open }: LeadPanelProps) {
+export async function StudentPanel({ lead, staff, open }: LeadPanelProps) {
   // A closed lead is read-only: it offers no corrections.
   const canEditDetails = open && staff.permissions.includes("leads.edit")
   const canCorrectVisit = open && lead.visitDate !== null && staff.permissions.includes("visits.record")
+  const [details, group] = await Promise.all([readFatherAndSchool(lead.id), readSiblingView(lead.id, staff.permissions.join(","))])
   return (
     <StudentEditor
       lead={lead}
@@ -36,6 +39,21 @@ export function StudentPanel({ lead, staff, open }: LeadPanelProps) {
       canCorrectVisit={canCorrectVisit}
     >
       <Details rows={studentRows(lead)} />
+      {details.ok ? (
+        <div className="fs-rows">
+          <FatherNameRow
+            leadId={lead.id}
+            studentName={lead.studentName}
+            father={details.data.fatherFullName}
+            enrolled={lead.status === "Enrolled"}
+            compareWith={group?.compareWith ?? null}
+            canEdit={canEditDetails}
+          />
+          <PreviousSchoolRow leadId={lead.id} className={lead.className} school={details.data.previousSchool} canEdit={canEditDetails} />
+        </div>
+      ) : (
+        <Note tone="bad" role="alert">The father’s name and previous school could not be loaded. Try again in a moment.</Note>
+      )}
     </StudentEditor>
   )
 }
@@ -52,6 +70,21 @@ export async function ParentPanel({ lead, staff, open }: LeadPanelProps) {
       <Details rows={parentRows(lead)} />
     </ContactEditor>
   )
+}
+
+// The Sibling group (#310): every member's fee and why, the Sibling request
+// waiting on the lead, and the request or the review.
+export async function SiblingGroupPanel({ lead, staff, open }: LeadPanelProps) {
+  const view = await readSiblingView(lead.id, staff.permissions.join(","))
+  if (!view) {
+    return (
+      <section aria-labelledby="lead-sibling-group" className="lr-card">
+        <CardHeading id="lead-sibling-group" title="Sibling group" />
+        <Note tone="bad" role="alert">The sibling group could not be loaded. Try again in a moment.</Note>
+      </section>
+    )
+  }
+  return <SiblingGroupCard view={view} open={open} headingId="lead-sibling-group" />
 }
 
 // The School fee at a glance, for staff who may view payments; the School

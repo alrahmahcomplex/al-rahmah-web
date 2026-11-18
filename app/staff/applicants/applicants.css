@@ -43,3 +43,7 @@
 .ap-steps .ap-line { width: 16px; height: 1px; background: var(--gf-mist); }
 
 .ap-reason { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--kit-quiet, var(--gf-quiet)); overflow-wrap: anywhere; }
+
+/* The father's name and the previous school under Student (#310). */
+.ap-rows { display: flex; flex-direction: column; gap: 8px; }
+.ap-rows dl.kit-kv { margin-block: 0; }

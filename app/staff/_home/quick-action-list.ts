@@ -30,17 +30,20 @@ export function quickActions({
   permissions,
   overdue,
   fullClass,
+  seatsCaption,
   waitingDiscounts,
 }: {
   permissions: readonly Permission[]
   overdue: number | null
   fullClass: string | null
+  // Once streams are on (#449): the Seats caption itself, v42’s "{class} needs a new stream".
+  seatsCaption?: string | null
   waitingDiscounts: number | null
 }): QuickAction[] {
   const actions: QuickAction[] = []
   if (mayCallBack(permissions))
     actions.push({ href: "/staff/follow-ups", icon: "followups", title: "Call a family back", caption: overdue ? `${overdue} overdue` : undefined })
-  if (mayOpenSeats(permissions)) actions.push({ href: "/staff/seats", icon: "seats", title: "Seats", caption: fullClass ? `${fullClass} is full` : undefined })
+  if (mayOpenSeats(permissions)) actions.push({ href: "/staff/seats", icon: "seats", title: "Seats", caption: seatsCaption ?? (fullClass ? `${fullClass} is full` : undefined) })
   if (mayDecideDiscounts(permissions))
     actions.push({
       href: "/staff/discounts",

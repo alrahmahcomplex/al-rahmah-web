@@ -275,6 +275,10 @@ export async function setAcademicYear(
   if (error) {
     if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
     if (error.message === "no_schedule") return { ok: false, error: { kind: "no-schedule" } }
+    // Streams are on (#449): seats no longer live here, so a form opened
+    // before saved seats nothing reads. Refused like any form that is out of
+    // date, so it reloads, now without its seat boxes.
+    if (error.message === "seats_moved") return { ok: false, error: { kind: "stale", field: null } }
     if (error.message === "invalid" || error.message === "stale") {
       return {
         ok: false,

@@ -25,7 +25,7 @@ export async function loadActivityPage(page: number): Promise<ActivityPageOutcom
     page,
     permissions,
     today,
-    full: fullClassesFor(permissions, seats?.ok ? seats.data.classes : null),
+    full: fullClassesFor(permissions, seats?.ok ? seats.data : null),
   })
   return read.ok ? { status: "ok", page: read.data } : { status: "refused", message: UNAVAILABLE }
 }

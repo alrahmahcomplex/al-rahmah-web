@@ -52,16 +52,20 @@ function settingsOf(draft: Draft): AcademicYearSettings {
 }
 
 // The start and seats for the Admissions Manager: the read-only view with
-// Edit start and seats, or the form.
+// Edit start and seats, or the form. Once streams are on (#449) the seats
+// live on the Seats screen: the form keeps only the start, and sends no
+// seats, since only seats that changed are sent.
 export function AcademicYearEditor({
   year,
   start,
   seats,
+  streamsOn = false,
   children,
 }: {
   year: number
   start: string | null
   seats: SeatSetting[]
+  streamsOn?: boolean
   children: React.ReactNode
 }) {
   const [editing, setEditing] = useState(false)
@@ -73,9 +77,10 @@ export function AcademicYearEditor({
         year={year}
         start={start}
         seats={seats}
+        streamsOn={streamsOn}
         onSaved={() => {
           setEditing(false)
-          setSaved("Start and seats saved.")
+          setSaved(streamsOn ? "Start saved." : "Start and seats saved.")
         }}
         onCancel={() => setEditing(false)}
       />
@@ -94,7 +99,7 @@ export function AcademicYearEditor({
             setEditing(true)
           }}
         >
-          Edit start and seats
+          {streamsOn ? "Edit start" : "Edit start and seats"}
         </Button>
         <p role="status" className="fs-saved">
           {saved}
@@ -109,12 +114,14 @@ function AcademicYearForm({
   year,
   start,
   seats,
+  streamsOn,
   onSaved,
   onCancel,
 }: {
   year: number
   start: string | null
   seats: SeatSetting[]
+  streamsOn: boolean
   onSaved: () => void
   onCancel: () => void
 }) {
@@ -172,6 +179,7 @@ function AcademicYearForm({
         </p>
       </div>
 
+      {!streamsOn && (
       <fieldset>
         <legend className="fs-legend">Seats in each class</legend>
         <p className="fs-hint">Leave a class blank while its seats are not set. 0 means no seats.</p>
@@ -195,6 +203,7 @@ function AcademicYearForm({
           ))}
         </div>
       </fieldset>
+      )}
 
       {refusal && (
         <Note tone="bad" role="alert">

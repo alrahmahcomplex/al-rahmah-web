@@ -19,6 +19,7 @@ import { Notices } from "./_home/notices"
 import { mayCallBack, mayDecideDiscounts, mayOpenSeats, onlyFullClass, quickActions } from "./_home/quick-action-list"
 import { QuickActions } from "./_home/quick-actions"
 import { RegisterButton } from "./_home/register-button"
+import { namedSeatsTab, needCaption } from "./_home/seats-named"
 import { seatsOnOpening } from "./_home/seats-on-opening"
 import { StatCard } from "./_home/stat-card"
 import { appliedCard, appliedRange, homeDate, interviewCard, interviewRange, pickedDay, pickedWeek } from "./_home/stats"
@@ -74,6 +75,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     permissions,
     overdue: overdue?.ok ? overdue.data : null,
     fullClass: mayOpenSeats(permissions) && seats?.ok ? onlyFullClass(seats.data.classes) : null,
+    seatsCaption: mayOpenSeats(permissions) && seats?.ok && seats.data.named ? needCaption(seats.data.named.streams) : undefined,
     waitingDiscounts: discounts?.ok ? discounts.data : null,
   })
   const statsFailed =
@@ -84,7 +86,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     counts && sourcesTab(counts),
     counts && classesTab(counts),
     counts && monthsTab(counts, today),
-    canSeeSeats && seats?.ok ? seatsTab(seats.data.classes) : null,
+    canSeeSeats && seats?.ok ? (seats.data.named ? namedSeatsTab(seats.data.named.streams) : seatsTab(seats.data.classes)) : null,
   ].filter((tab): tab is ChartTab => !!tab)
 
   return (
@@ -117,7 +119,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       <QuickActions actions={actions} />
       {mayReadActivity(permissions) && (
         <Suspense fallback={<ActivitySkeleton />}>
-          <ActivityLog permissions={permissions} today={today} full={fullClassesFor(permissions, seats?.ok ? seats.data.classes : null)} />
+          <ActivityLog permissions={permissions} today={today} full={fullClassesFor(permissions, seats?.ok ? seats.data : null)} />
         </Suspense>
       )}
     </div>

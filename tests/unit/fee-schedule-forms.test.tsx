@@ -168,3 +168,25 @@ describe("the Academic year and seats form", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Start and seats saved.")
   })
 })
+
+describe("the Academic year form once streams are on (#449)", () => {
+  beforeEach(() => {
+    actions.saveAcademicYear.mockReset()
+    actions.saveAcademicYear.mockResolvedValue({ status: "saved" })
+  })
+
+  it("keeps only the start, and sends the seats as they were, so none changes", async () => {
+    render(
+      <AcademicYearEditor year={YEAR} start={START} seats={SEATS} streamsOn>
+        <p>View</p>
+      </AcademicYearEditor>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Edit start" }))
+    const form = screen.getByRole("form", { name: `Academic year ${YEAR}` })
+    expect(form.querySelectorAll("input")).toHaveLength(1)
+    expect(screen.queryByText("Seats in each class")).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(actions.saveAcademicYear).toHaveBeenCalledWith(YEAR, settingsOpened(), { start: START, seats: SEATS }))
+    expect(await screen.findByRole("status")).toHaveTextContent("Start saved.")
+  })
+})

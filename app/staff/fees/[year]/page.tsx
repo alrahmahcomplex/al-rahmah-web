@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import { Card, Note, PageHeader, pageTitle } from "@/components/kit"
 import { getFeeSchedule } from "@/lib/services/fees"
+import { getSeatMode } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 import StaffForbidden from "../../forbidden"
@@ -42,7 +43,13 @@ export default async function FeeSchedulePage({ params }: { params: Promise<{ ye
 
   // The schedule needs payments.view; without it the database would return
   // nothing and the page would wrongly say the year has no schedule.
-  const schedule = canSeeFeeAmounts(staff.permissions) ? await getFeeSchedule(await createClient(), year) : null
+  const supabase = await createClient()
+  const [schedule, mode] = await Promise.all([
+    canSeeFeeAmounts(staff.permissions) ? getFeeSchedule(supabase, year) : null,
+    getSeatMode(supabase),
+  ])
+  // Once streams are on (#449), seats are set on the Seats screen, not here.
+  const streamsOn = mode === "named"
 
   return (
     <>
@@ -69,19 +76,19 @@ export default async function FeeSchedulePage({ params }: { params: Promise<{ ye
         ) : (
           <p className="fs-text">
             No fee schedule for {year} yet.
-            {canSetYear && " Once the Accountant creates it, you can set the Academic-year start and seats here."}
+            {canSetYear && ` Once the Accountant creates it, you can set the Academic-year start${streamsOn ? "" : " and seats"} here.`}
           </p>
         )}
 
         {schedule?.ok && (
-          <Card title="Academic year and seats" titleId="fees-academic-year">
+          <Card title={streamsOn ? "Academic year" : "Academic year and seats"} titleId="fees-academic-year">
             <div className="fs-card-body">
               {canSetYear ? (
-                <AcademicYearEditor year={year} start={schedule.data.academicYearStart} seats={schedule.data.seats}>
-                  <AcademicYearView schedule={schedule.data} />
+                <AcademicYearEditor year={year} start={schedule.data.academicYearStart} seats={schedule.data.seats} streamsOn={streamsOn}>
+                  <AcademicYearView schedule={schedule.data} streamsOn={streamsOn} />
                 </AcademicYearEditor>
               ) : (
-                <AcademicYearView schedule={schedule.data} />
+                <AcademicYearView schedule={schedule.data} streamsOn={streamsOn} />
               )}
             </div>
           </Card>

@@ -48,7 +48,7 @@ export async function Dashboard({
       }),
     ),
     getLeadsByClass(supabase, classFilters),
-    getSeatsByClass(supabase, parseSeatsYear(searchParams)),
+    getSeatsByClass(supabase, parseSeatsYear(searchParams), { figures: true }),
   ])
   const enrollmentYears = years.ok ? years.data : []
 

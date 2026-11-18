@@ -198,7 +198,7 @@ describe("the side sheet", () => {
 
 describe("who sees the card", () => {
   it("names full classes only for staff who may open Seats", () => {
-    const full = [{ className: "STD 6", dayOrBoarding: "Day", seats: 35, taken: 35 }] as ClassSeatFigures[]
+    const full = { year: 2027, years: [2027], classes: [{ className: "STD 6", dayOrBoarding: "Day", seats: 35, taken: 35 }] as ClassSeatFigures[], named: null }
     expect(fullClassesFor(["payments.view", "academic_years.manage"], full)).toEqual([{ className: "STD 6", taken: 35, seats: 35 }])
     expect(fullClassesFor(["leads.view", "payments.view"], full)).toEqual([])
     expect(fullClassesFor(["academic_years.manage"], full)).toEqual([])

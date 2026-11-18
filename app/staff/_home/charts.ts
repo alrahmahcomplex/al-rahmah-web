@@ -115,12 +115,20 @@ export function seatsTab(classes: readonly ClassSeatFigures[]): SeatsTab | null 
     sum.held += entry.taken
     byClass.set(entry.className, sum)
   }
-  const rows = [...byClass].filter(([, { unknown }]) => !unknown)
+  const rows = [...byClass]
+    .filter(([, { unknown }]) => !unknown)
+    .map(([className, { seats, held }]) => ({ className, seats, held, full: held >= seats, free: seats - held }))
+  return seatsTabOf(rows)
+}
+
+/** One class on the Seats tab: its seats and seats held, whether it is full, and its free seats. */
+export type SeatsTabClass = { className: LeadClass; seats: number; held: number; full: boolean; free: number }
+
+/** The Seats tab from each class’s figures, in class order. */
+export function seatsTabOf(rows: readonly SeatsTabClass[]): SeatsTab | null {
   if (rows.length === 0) return null
 
-  const points = rows.map(([className, { seats, held }]) => {
-    const full = held >= seats
-    const free = seats - held
+  const points = rows.map(({ className, seats, held, full, free }) => {
     return {
       label: className,
       short: className === "DAY CARE" ? "DC" : className,
@@ -133,9 +141,10 @@ export function seatsTab(classes: readonly ClassSeatFigures[]): SeatsTab | null 
   })
 
   const full = points.filter((point) => point.full).map((point) => point.label)
+  const freeOf = new Map(rows.map((row) => [row.className as string, row.free]))
   const roomy = largest(
     points.filter((point) => !point.full),
-    (point) => point.seats - point.value,
+    (point) => freeOf.get(point.label) ?? point.seats - point.value,
   )
   const fullLine =
     full.length === 0
@@ -145,7 +154,7 @@ export function seatsTab(classes: readonly ClassSeatFigures[]): SeatsTab | null 
         : full.length > 2
           ? `${full.length} classes are full`
           : `${both(full)} ${full.length === 1 ? "is" : "are"} full`
-  const roomyLine = roomy ? `${roomy.label} has the most free seats, ${roomy.seats - roomy.value}` : null
+  const roomyLine = roomy ? `${roomy.label} has the most free seats, ${freeOf.get(roomy.label) ?? roomy.seats - roomy.value}` : null
   return { kind: "seats", heading: [fullLine, roomyLine].filter(Boolean).join(". "), points }
 }
 

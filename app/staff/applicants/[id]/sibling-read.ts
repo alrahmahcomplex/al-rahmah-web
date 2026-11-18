@@ -2,6 +2,7 @@ import "server-only"
 
 import type { Permission } from "@/lib/permissions"
 import { formatDate, tanzaniaToday } from "@/lib/school-calendar"
+import { getSiblingLeadFacts, type SiblingLeadFacts } from "@/lib/services/lead-details"
 import { getFullPayerTie, explainSiblingGroup } from "@/lib/services/sibling-counts"
 import { getPriorSibling } from "@/lib/services/sibling-groups"
 import { getLeadSiblingRequests } from "@/lib/services/sibling-requests"
@@ -43,7 +44,6 @@ export type SiblingGroupView = {
   canReview: boolean
 }
 
-type LeadRow = { id: string; student_name: string; closure: "Inactive" | "Archived" | null; father_full_name: string | null }
 
 const dateOf = (at: string) => formatDate(tanzaniaToday(new Date(at)))
 
@@ -59,14 +59,11 @@ export async function describeGroupFor(
   group: SiblingGroupExplanation,
   hereLeadId: string,
   fullPayerTie?: boolean | null,
-): Promise<{ members: SiblingMemberView[]; leads: Map<string, LeadRow> } | null> {
+): Promise<{ members: SiblingMemberView[]; leads: Map<string, SiblingLeadFacts> } | null> {
   const ids = [...new Set([...group.members.map((m) => m.leadId), ...outsideNames(group)])]
-  const { data, error } = await supabase.from("leads").select("id, student_name, closure, father_full_name").in("id", ids)
-  if (error) {
-    console.error("Could not read a sibling group's leads", error)
-    return null
-  }
-  const leads = new Map((data as LeadRow[]).map((row) => [row.id, row]))
+  const read = await getSiblingLeadFacts(supabase, ids)
+  if (!read.ok) return null
+  const leads = read.data
 
   const ticked = group.members.filter((m) => m.reason === "prior_sibling")
   const priors = await Promise.all(ticked.map((m) => getPriorSibling(supabase, m.leadId)))
@@ -86,7 +83,7 @@ export async function describeGroupFor(
   const closures: Record<string, "Inactive" | "Archived"> = {}
   const names: Record<string, string> = {}
   for (const row of leads.values()) {
-    names[row.id] = row.student_name
+    names[row.id] = row.studentName
     if (row.closure) closures[row.id] = row.closure
   }
 
@@ -111,8 +108,8 @@ export async function readSiblingGroup(
   const here = group.members.find((m) => m.leadId === leadId)
   if (!here) return null
   const person = (id: string): SiblingPerson => {
-    const name = leads.get(id)?.student_name ?? group.members.find((m) => m.leadId === id)?.studentName ?? ""
-    return { leadId: id, firstName: firstName(name), studentName: name, father: leads.get(id)?.father_full_name ?? null }
+    const name = leads.get(id)?.studentName ?? group.members.find((m) => m.leadId === id)?.studentName ?? ""
+    return { leadId: id, firstName: firstName(name), studentName: name, father: leads.get(id)?.fatherFullName ?? null }
   }
 
   const waiting = requests.data.find((r) => r.state === "pending") ?? null
@@ -123,7 +120,7 @@ export async function readSiblingGroup(
     leadId,
     studentName: here.studentName,
     enrolled: here.status === "Enrolled",
-    father: leads.get(leadId)?.father_full_name ?? null,
+    father: leads.get(leadId)?.fatherFullName ?? null,
     inGroup: group.groupId !== null,
     members,
     pending: waiting && {

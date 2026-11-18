@@ -197,3 +197,30 @@ export async function correctPreviousSchool(
   if (!error) return { ok: true, data: null }
   return { ok: false, error: correctionError(error, "correct a previous school") }
 }
+
+// What the Sibling screens name for each lead (#310): the student's name, a
+// closure mark and the father's full name. Row-level security answers only
+// staff who may view leads; a lead they can't see is left out.
+export type SiblingLeadFacts = {
+  id: string
+  studentName: string
+  closure: "Inactive" | "Archived" | null
+  fatherFullName: string | null
+}
+
+export async function getSiblingLeadFacts(
+  supabase: SupabaseClient,
+  leadIds: string[],
+): Promise<Result<Map<string, SiblingLeadFacts>, "unavailable">> {
+  if (leadIds.length === 0) return { ok: true, data: new Map() }
+  const { data, error } = await supabase.from("leads").select("id, student_name, closure, father_full_name").in("id", leadIds)
+  if (error) {
+    console.error("Could not read the leads of a sibling group", error)
+    return { ok: false, error: "unavailable" }
+  }
+  const rows = data as { id: string; student_name: string; closure: "Inactive" | "Archived" | null; father_full_name: string | null }[]
+  return {
+    ok: true,
+    data: new Map(rows.map((r) => [r.id, { id: r.id, studentName: r.student_name, closure: r.closure, fatherFullName: r.father_full_name }])),
+  }
+}

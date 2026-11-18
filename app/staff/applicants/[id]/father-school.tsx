@@ -1,6 +1,6 @@
 "use client"
 
-import { useId, useState, useTransition } from "react"
+import { useEffect, useId, useRef, useState, useTransition } from "react"
 
 import { FatherNameBoxes, type FatherName } from "@/components/guided-form/names"
 import { Button, ChipButtons, ChoiceTiles, Field, Note, Sheet, Tag, TextLink, toast } from "@/components/kit"
@@ -69,7 +69,17 @@ export function FatherNameRow({
   const [error, setError] = useState<string | null>(null)
   const [flow, setFlow] = useState<Flow | null>(null)
   const [flowOpen, setFlowOpen] = useState(false)
-  const [answered, setAnswered] = useState(false)
+  // The answer to "One name, or two?": the first one picked wins, and it is
+  // saved once, after the tile shows it.
+  const [choice, setChoice] = useState<string | null>(null)
+  const picked = useRef<string | null>(null)
+  const timer = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current)
+    },
+    [],
+  )
   const [pending, startTransition] = useTransition()
   const refreshed = useRefreshed(onChanged)
   const errorId = useId()
@@ -77,7 +87,8 @@ export function FatherNameRow({
 
   function openFlow(next: Flow) {
     setFlow(next)
-    setAnswered(false)
+    picked.current = null
+    setChoice(null)
     setFlowOpen(true)
   }
 
@@ -194,7 +205,7 @@ export function FatherNameRow({
           onOpenChange={(next) => {
             if (pending) return
             setFlowOpen(next)
-            if (!next && !answered) toast("Nothing saved. The father’s name is as it was.")
+            if (!next && picked.current === null) toast("Nothing saved. The father’s name is as it was.")
           }}
           placement="side"
           title="One name, or two?"
@@ -223,11 +234,13 @@ export function FatherNameRow({
                 },
                 { value: "different", label: "Two different names", description: "Send a Sibling request to the Admissions Manager" },
               ]}
-              value={null}
+              value={choice}
               onChange={(value) => {
-                if (pending) return
-                setAnswered(true)
-                window.setTimeout(() => {
+                if (pending || picked.current !== null) return
+                picked.current = value
+                setChoice(value)
+                timer.current = window.setTimeout(() => {
+                  timer.current = null
                   setFlowOpen(false)
                   send(flow.name, value as "typo-mine" | "typo-theirs" | "different", flow.sibling.father)
                 }, PICK_MS)

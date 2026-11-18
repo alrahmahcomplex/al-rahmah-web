@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
-import { correctFatherFullName, correctPreviousSchool, type PreviousSchoolType } from "@/lib/services/lead-details"
+import { correctFatherFullName, correctPreviousSchool, getSiblingLeadFacts, type PreviousSchoolType } from "@/lib/services/lead-details"
 import { getLeadFee } from "@/lib/services/lead-fees"
 import { explainSiblingGroup, type SiblingGroupExplanation } from "@/lib/services/sibling-counts"
 import { decideSiblingRequest, previewSiblingGrant, requestSiblingDiscount } from "@/lib/services/sibling-requests"
@@ -42,9 +42,12 @@ function revalidate(leadIds: string[]) {
   revalidatePath("/staff/discounts")
 }
 
-async function fathersOf(supabase: SupabaseClient, ids: string[]): Promise<Map<string, { name: string; father: string | null }>> {
-  const { data } = await supabase.from("leads").select("id, student_name, father_full_name").in("id", ids)
-  return new Map(((data ?? []) as { id: string; student_name: string; father_full_name: string | null }[]).map((r) => [r.id, { name: r.student_name, father: r.father_full_name }]))
+// Each lead's student name and father's full name, or null when they
+// can't be read.
+async function fathersOf(supabase: SupabaseClient, ids: string[]): Promise<Map<string, { name: string; father: string | null }> | null> {
+  const read = await getSiblingLeadFacts(supabase, ids)
+  if (!read.ok) return null
+  return new Map([...read.data.values()].map((r) => [r.id, { name: r.studentName, father: r.fatherFullName }]))
 }
 
 // Each member's School fee, for staff who may view payments; null otherwise.
@@ -121,6 +124,8 @@ export async function saveFatherName(
     if (saved.error.kind !== "father-name-question") return detailRefusal(saved.error)
     const question = saved.error
     const people = await fathersOf(supabase, [question.siblingLeadId, ...ids])
+    // Nothing was saved yet, so a failed read refuses rather than ask with names missing.
+    if (!people) return detailRefusal({ kind: "unavailable" })
     const them = people.get(question.siblingLeadId)
     const holders: string[] = []
     for (const id of ids) {
@@ -146,8 +151,11 @@ export async function saveFatherName(
   if (answer === "typo-mine") {
     const people = await fathersOf(supabase, ids)
     let records = 0
-    for (const id of ids) if (sameFatherName(people.get(id)?.father ?? null, fatherFullName)) records++
-    return { status: "saved", message: `Saved as one name on ${records} records. Still siblings.` }
+    for (const id of ids) if (sameFatherName(people?.get(id)?.father ?? null, fatherFullName)) records++
+    return {
+      status: "saved",
+      message: people && records > 1 ? `Saved as one name on ${records} records. Still siblings.` : "Saved as one name. Still siblings.",
+    }
   }
   if (answer === "typo-theirs") return { status: "saved", message: "Saved as one name. Still siblings." }
 
@@ -155,6 +163,7 @@ export async function saveFatherName(
   if (!after.ok || !hereBefore || !before.data.groupId) return { status: "saved", message: "Father’s name saved." }
   const hereAfter = after.data.members.find((m) => m.leadId === leadId)
   const people = await fathersOf(supabase, after.data.members.map((m) => m.leadId))
+  if (!people) return { status: "saved", message: "Father’s name saved." }
   const person = (id: string): SiblingPerson => {
     const p = people.get(id)
     return { leadId: id, firstName: firstName(p?.name ?? ""), studentName: p?.name ?? "", father: p?.father ?? null }
@@ -256,7 +265,7 @@ export async function previewGrant(requestId: string, leadId: string): Promise<G
   const { explanation, fullPayerTie, changes } = preview.data
   const described = await describeGroupFor(supabase, explanation, leadId, fullPayerTie)
   if (!described) return decideRefusal("unavailable", "preview")
-  const nameOf = (id: string) => firstName(described.leads.get(id)?.student_name ?? "")
+  const nameOf = (id: string) => firstName(described.leads.get(id)?.studentName ?? "")
   const others = explanation.members.filter((m) => m.leadId !== leadId)
   const compare = others.find(counts) ?? others[0] ?? null
   const row = compare ? described.leads.get(compare.leadId) : undefined
@@ -264,9 +273,9 @@ export async function previewGrant(requestId: string, leadId: string): Promise<G
     status: "ready",
     compareWith: compare && {
       leadId: compare.leadId,
-      firstName: firstName(row?.student_name ?? compare.studentName),
-      studentName: row?.student_name ?? compare.studentName,
-      father: row?.father_full_name ?? null,
+      firstName: firstName(row?.studentName ?? compare.studentName),
+      studentName: row?.studentName ?? compare.studentName,
+      father: row?.fatherFullName ?? null,
     },
     members: described.members.map((m) => ({
       leadId: m.leadId,

@@ -159,9 +159,38 @@ describe("leads_for_sibling_follow_up", () => {
     expect((await dismissSiblingFeeEdit(accountant, kept, "The invoice is already sent.")).ok).toBe(true)
     expect(await inList(accountant, "fee_edit_needed", mine)).toEqual({ ids: [needed] })
 
-    // The Applicants list pages the same rows.
-    const page = await searchLeads(accountant, { siblingFollowUp: "fee_edit_needed", page: 1 })
-    expect(page.ok && page.data.total).toBeGreaterThanOrEqual(1)
+    // The Applicants list pages the same rows, newest first, whatever the
+    // other filters say.
+    const page = await searchLeads(accountant, { siblingFollowUp: "fee_edit_needed", status: "Applied", closure: "Archived", page: 1 })
+    expect(page.ok).toBe(true)
+    if (!page.ok) return
+    const listed = page.data.leads.map((l) => l.id)
+    expect(listed).toContain(needed)
+    expect(listed).not.toContain(applied)
+    expect(listed).not.toContain(kept)
+  })
+
+  test("Enrolled at 10% with nobody at full, and a 10% kept when leaving the old family rule", async () => {
+    const year = await yearWithSchedule()
+    const name = father()
+    const dear = await child(year, name, "FORM 1")
+    const cheap = await child(year, name, "KG 1")
+    await link({ leadId: cheap, siblingOfLeadId: dear })
+    // The cheaper child enrols with the 10%; the full payer never has.
+    await payInFull(cheap)
+    const kept = await child(year, father(), "STD 2")
+    // A 10% kept when leaving legacy, planted as #301 leaves it.
+    await asSystem(async (sql) => {
+      await sql.query("set local session_replication_role = replica")
+      await sql.query(
+        "insert into public.lead_sibling_results (lead_id, result, source, cause) values ($1, 'ten', 'legacy', 'left_legacy') on conflict (lead_id) do update set result = 'ten', source = 'legacy', cause = 'left_legacy'",
+        [kept],
+      )
+    })
+    const accountant = await signedIn(ACCOUNTANT)
+    const mine = [dear, cheap, kept]
+    expect(await inList(accountant, "no_full", mine)).toEqual({ ids: [cheap] })
+    expect(await inList(accountant, "kept_ten", mine)).toEqual({ ids: [kept] })
   })
 
   test("previous school not known yet and missing, for staff who may view leads", async () => {

@@ -95,6 +95,8 @@ test.describe("the Sibling fee edit", () => {
     const khalid = await child(year, `KHALID${letters(3)}`, name, "FORM 1")
     const zuhura = `ZUHURA${letters(3)}`
     await linked(await child(year, zuhura, name, "KG 1"), khalid)
+    const rashidi = `RASHIDI${letters(3)}`
+    await linked(await child(year, rashidi, name, "KG 2"), khalid)
 
     await signIn(page, ACCOUNTANT)
     await page.goto(leadUrl(khalid, "School fee"))
@@ -103,19 +105,31 @@ test.describe("the Sibling fee edit", () => {
     await form.locator("label").filter({ hasText: "Sibling 10%" }).click()
 
     const rows = form.getByRole("listitem")
-    await expect(rows).toHaveCount(2)
+    await expect(rows).toHaveCount(3)
     await expect(rows.nth(0)).toContainText("this student")
     await expect(rows.nth(0)).toContainText("TZS 2,520,000")
     await expect(rows.nth(0)).toContainText("was TZS 2,800,000")
-    // Khalid no longer pays full, so Zuhura does.
-    await expect(rows.nth(1)).toContainText(zuhura)
-    await expect(rows.nth(1)).toContainText("TZS 1,100,000")
-    await expect(rows.nth(1)).toContainText("Full fee")
-    await expect(rows.nth(1)).toContainText("was TZS 990,000")
+    // Khalid no longer pays full; the first of the others by fee does.
+    const zuhuraRow = rows.filter({ hasText: zuhura })
+    await expect(zuhuraRow).toContainText("TZS 1,100,000")
+    await expect(zuhuraRow).toContainText("Full fee")
+    await expect(zuhuraRow).toContainText("was TZS 990,000")
+    // Rashidi keeps the 10%.
+    await expect(rows.filter({ hasText: rashidi })).toContainText("No change")
+    await expect(rows.filter({ hasText: rashidi })).toContainText("TZS 990,000")
 
     await form.getByRole("button", { name: "Save the fee" }).click()
     await expect(form.getByRole("alert")).toHaveText("Choose the reason.")
     await form.getByRole("button", { name: "Sibling proof after enrolment" }).click()
+
+    // Back to automatic on a fee that is already automatic changes nothing.
+    await form.locator("label").filter({ hasText: "Back to automatic" }).click()
+    await expect(rows).toHaveCount(3)
+    await expect(form.getByText("No sibling’s fee changes.")).toBeVisible()
+    await form.getByRole("button", { name: "Save the fee" }).click()
+    await expect(form.getByRole("alert")).toHaveText("Nothing would change.")
+    await form.locator("label").filter({ hasText: "Sibling 10%" }).click()
+    await expect(rows.nth(0)).toContainText("TZS 2,520,000")
     await form.getByRole("textbox", { name: "Note, optional" }).fill("Certificates seen")
     await form.getByRole("button", { name: "Save the fee" }).click()
     await expect(page.getByText("Fee saved. The change and its reason are in the audit log.")).toBeVisible()
@@ -168,6 +182,11 @@ test.describe("the Sibling fee edit", () => {
     await expect(schoolFee(page)).toContainText(
       `A Sibling request for ${bakari} and ${latifa} is waiting. Recorded at the full fee for now. If the request is granted, the fee can be edited.`,
     )
+
+    // The Accountant has Edit fee in the side sheet too.
+    await page.goto(`/staff/applicants?q=${bakari}`)
+    await page.getByRole("row", { name: new RegExp(bakari) }).click()
+    await expect(page.getByRole("dialog", { name: new RegExp(bakari) }).getByRole("button", { name: "Edit fee" })).toBeVisible()
 
     // The Applicants list says a request waits; the desk's side sheet has no Edit fee.
     const desk = await (await browser.newContext()).newPage()

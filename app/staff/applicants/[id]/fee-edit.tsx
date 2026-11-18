@@ -105,10 +105,23 @@ function ErrorLine({ id, message }: { id: string; message: string | null }) {
   ) : null
 }
 
-function SaveRow({ label, pendingLabel, pending, onCancel }: { label: string; pendingLabel: string; pending: boolean; onCancel: () => void }) {
+// `waiting`: Save stays inactive, such as while "Before you save" loads.
+function SaveRow({
+  label,
+  pendingLabel,
+  pending,
+  waiting = false,
+  onCancel,
+}: {
+  label: string
+  pendingLabel: string
+  pending: boolean
+  waiting?: boolean
+  onCancel: () => void
+}) {
   return (
     <div className="lr-acts fs-acts">
-      <Button type="submit" size="small" pending={pending}>
+      <Button type="submit" size="small" pending={pending} aria-disabled={waiting || undefined}>
         {pending ? pendingLabel : label}
       </Button>
       <Button variant="ghost" size="small" aria-disabled={pending || undefined} onClick={() => !pending && onCancel()}>
@@ -125,7 +138,10 @@ function FeeEditForm({ leadId, onCancel, onSaved }: { leadId: string; onCancel: 
   const [note, setNote] = useState("")
   const [preview, setPreview] = useState<FeeEditPreview | Refused | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [requestId] = useState(() => crypto.randomUUID())
+  // One id per edit as typed: a retry of the same edit is saved once, and a
+  // changed edit is a new one, so a retry never collides with an earlier save.
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID())
+  const renew = () => setRequestId(crypto.randomUUID())
   const [pending, startTransition] = useTransition()
   const errorId = useId()
   const noteId = useId()
@@ -148,6 +164,7 @@ function FeeEditForm({ leadId, onCancel, onSaved }: { leadId: string; onCancel: 
     if (!value) return setError("Choose the fee.")
     if (preview?.status === "ready" && preview.unchanged) return setError("Nothing would change.")
     if (!reason) return setError("Choose the reason.")
+    // Save waits until the Accountant has seen what it changes.
     if (preview?.status !== "ready") return
     setError(null)
     startTransition(async () => {
@@ -176,6 +193,7 @@ function FeeEditForm({ leadId, onCancel, onSaved }: { leadId: string; onCancel: 
           setValue(next as SiblingFeeEditValue)
           setPreview(null)
           setError(null)
+          renew()
         }}
       />
       {value && (
@@ -229,6 +247,7 @@ function FeeEditForm({ leadId, onCancel, onSaved }: { leadId: string; onCancel: 
         onChange={(next) => {
           setReason(next as SiblingFeeEditReason)
           setError(null)
+          renew()
         }}
       />
       <Field
@@ -243,10 +262,17 @@ function FeeEditForm({ leadId, onCancel, onSaved }: { leadId: string; onCancel: 
         onChange={(event) => {
           setNote(event.target.value)
           setError(null)
+          renew()
         }}
       />
       <ErrorLine id={errorId} message={error} />
-      <SaveRow label="Save the fee" pendingLabel="Saving…" pending={pending} onCancel={onCancel} />
+      <SaveRow
+        label="Save the fee"
+        pendingLabel="Saving…"
+        pending={pending}
+        waiting={value !== null && preview?.status !== "ready"}
+        onCancel={onCancel}
+      />
     </form>
   )
 }

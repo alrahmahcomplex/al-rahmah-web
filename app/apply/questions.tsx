@@ -33,7 +33,7 @@ import type { Language } from "@/lib/language"
 import { STANDARD_INTERVIEW_FEE } from "@/lib/referral-link"
 import { FORM_NOTICE, FORM_NOTICE_VERSION } from "@/lib/referral-notice"
 import { namePart } from "@/lib/names"
-import { DAY_OR_BOARDING, RELATIONSHIPS, type DayOrBoarding, type Relationship } from "@/lib/services/leads"
+import { DAY_OR_BOARDING, RELATIONSHIPS, STUDENT_GENDERS, type DayOrBoarding, type Relationship, type StudentGender } from "@/lib/services/leads"
 
 import type { ChangeWord, FormCopy } from "./copy"
 import type { ChildDraft, ParentDraft } from "./draft"
@@ -210,6 +210,8 @@ function summary(p: QuestionsProps, key: StepKey): ReactNode {
   switch (kind) {
     case "name":
       return <SummaryRow label={copy.studentName} value={studentName(child)} action={changeLink(p, key, "name")} />
+    case "gender":
+      return <SummaryRow label={copy.genderName} value={copy.genders[child.gender as StudentGender]} action={changeLink(p, key, "gender")} />
     case "class":
       return <SummaryRow label={copy.className} value={`${child.className} · ${yearOf(p.children, index, p.defaultYear)}`} action={changeLink(p, key, "class")} />
     case "board":
@@ -341,6 +343,35 @@ function body(p: QuestionsProps, key: StepKey): ReactNode {
               )}
             </Hint>
             <FieldError id={`e-${id}`} message={error} />
+          </div>
+          {next()}
+        </>
+      )
+    }
+    case "gender": {
+      // Never taken from the student before: brothers and sisters differ.
+      const error = p.message("gender", index)
+      const hintId = `h-gender-${child.card}`
+      return (
+        <>
+          <div onClick={(event) => p.on.tapChoice(key, event)}>
+            <ChoiceTiles
+              name={`gender-${child.card}`}
+              legend={
+                <>
+                  <QuestionTitle id={titleId}>{copy.genderQ(firstName(child))}</QuestionTitle>
+                  <Hint id={hintId} className="-mt-2 mb-4 text-center">
+                    {copy.genderHint}
+                  </Hint>
+                </>
+              }
+              options={STUDENT_GENDERS.map((value) => ({ value, label: copy.genders[value] }))}
+              value={child.gender || null}
+              describedBy={`e-gender-${child.card}`}
+              onChange={(value) => p.on.child(child.card, { gender: value })}
+            >
+              <FieldError id={`e-gender-${child.card}`} message={error} />
+            </ChoiceTiles>
           </div>
           {next()}
         </>

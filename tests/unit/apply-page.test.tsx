@@ -84,6 +84,7 @@ const W = {
     name: "Mwanafunzi anaitwa nani?",
     other: "Chagua darasa lingine",
     day: "Kutwa",
+    girl: "Msichana",
     no: "Hapana, endelea",
     yes: "Ndiyo, ongeza mwanafunzi",
     pname: "Msimamizi ni nani?",
@@ -99,6 +100,7 @@ const W = {
     name: "What is the student's name?",
     other: "Choose another class",
     day: "Day",
+    girl: "Girl",
     no: "No, continue",
     yes: "Yes, add a student",
     pname: "Who is the custodian?",
@@ -138,9 +140,17 @@ async function pickClass(user: User, className: string, lang: "sw" | "en") {
   await user.click(within(sheet).getByRole("button", { name: className }))
 }
 
+/** Taps Girl on the open Boy or girl question, which answers it. */
+async function answerGender(user: User, lang: "sw" | "en") {
+  await waitFor(() => expect(open().getByRole("radio", { name: W[lang].girl })).toBeInTheDocument())
+  await user.click(open().getByRole("radio", { name: W[lang].girl }))
+}
+
 async function answerStudent(user: User, name: string, lang: "sw" | "en", { className = "STD 2", day = true } = {}) {
   await user.type(nameBox(lang), `${name} ${FATHER}`)
   await user.click(open().getByRole("button", { name: W[lang].next }))
+  await answerGender(user, lang)
+  await waitFor(() => expect(open().getByRole("button", { name: W[lang].other })).toBeInTheDocument())
   await pickClass(user, className, lang)
   await waitFor(() => expect(open().getByRole("radio", { name: new RegExp(W[lang].day) })).toBeInTheDocument())
   if (day) await user.click(open().getByRole("radio", { name: new RegExp(W[lang].day) }))
@@ -190,7 +200,7 @@ function remembered(code: string) {
 
 // A draft's names, in the boxes' shape.
 const DRAFT_PARENT = { firstName: "ASHA", middleName: "ALI", lastName: "MFANO", fatherCustodian: false }
-const DRAFT_CHILD = { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO" }
+const DRAFT_CHILD = { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO", gender: "Girl" }
 
 function renderPage(state: "first" | "sw" | "en") {
   return ApplyPage({ params: Promise.resolve({ state }) })
@@ -258,10 +268,20 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await user.type(nameBox("sw"), "Neema Salim Omari Mfano")
     expect(open().getByText("SALIM", { exact: false, selector: "b" })).toHaveTextContent("NEEMA SALIM MFANO")
     await user.click(open().getByRole("button", { name: "Endelea" }))
-    await waitForQuestion("NEEMA anaomba darasa gani?")
+    await waitForQuestion("NEEMA ni mvulana au msichana?")
     expect(screen.getByRole("heading", { level: 3, name: "Mwanafunzi" })).toBeInTheDocument()
     expect(screen.getByText("Jina kamili la mwanafunzi")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Badilisha Jina" })).toBeInTheDocument()
+    // Boy or girl (v41): two rows, the hint, and nothing picked for the parent.
+    expect(open().getByText("Madarasa ni ya wavulana, ya wasichana au ya wote, hivyo tunampangia kila mwanafunzi darasa linalomfaa.")).toBeInTheDocument()
+    expect(open().getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["Mvulana", "Msichana"])
+    expect(open().getAllByRole("radio").some((r) => (r as HTMLInputElement).checked)).toBe(false)
+    await user.click(open().getByRole("button", { name: "Endelea" }))
+    expect(open().getByText("Chagua mvulana au msichana.")).toBeInTheDocument()
+    await user.click(open().getByRole("radio", { name: "Msichana" }))
+    await waitForQuestion("NEEMA anaomba darasa gani?")
+    expect(screen.getByText("Mvulana au msichana")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Badilisha Jibu" })).toBeInTheDocument()
     expect(open().getByText("Wazazi wengi huchagua")).toBeInTheDocument()
     expect(open().getByText(String(DEFAULT_YEAR))).toBeInTheDocument()
 
@@ -336,7 +356,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
 
     await user.type(nameBox("en"), `Zawadi ${FATHER}`)
     await user.click(open().getByRole("button", { name: "Continue" }))
-    await waitForQuestion("Which class is ZAWADI applying for?")
+    await waitForQuestion("Is ZAWADI a boy or a girl?")
     expect(document.querySelector('button[aria-label="Start over"]')).toHaveAttribute("aria-hidden", "true")
     await user.click(screen.getByRole("button", { name: "Back" }))
     await waitForQuestion("What is the student's name?")
@@ -403,6 +423,8 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     await user.type(open().getByRole("textbox", { name: "Middle name" }), "Ali Mfano")
     expect(screen.queryByText(missing)).not.toBeInTheDocument()
     await user.click(open().getByRole("button", { name: "Continue" }))
+    await answerGender(user, "en")
+    await waitFor(() => expect(open().getByRole("button", { name: "Choose another class" })).toBeInTheDocument())
     await pickClass(user, "STD 2", "en")
     await waitForQuestion(/day scholar/)
     await user.click(open().getByRole("button", { name: "Continue" }))
@@ -431,6 +453,8 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     render(form("sw"))
     await user.type(nameBox("sw"), `Neema ${FATHER}`)
     await user.click(open().getByRole("button", { name: "Endelea" }))
+    await answerGender(user, "sw")
+    await waitFor(() => expect(open().getByRole("button", { name: "Chagua darasa lingine" })).toBeInTheDocument())
     await user.click(open().getByRole("button", { name: "Chagua darasa lingine" }))
     const sheet = await screen.findByRole("dialog", { name: "Chagua darasa" })
     const classes: string[] = []
@@ -522,7 +546,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
     // The names in their parts, as the names contract on #400 asks.
     expect(body.parent).toEqual({ firstName: "AMINA", middleName: "HASSANI", lastName: "MFANO", relationship: "Mother", phone: "0700 000 900" })
     expect(body.children).toEqual([
-      { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO", className: "STD 2", enrollmentYear: DEFAULT_YEAR, dayOrBoarding: "Day" },
+      { firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "MFANO", gender: "Girl", className: "STD 2", enrollmentYear: DEFAULT_YEAR, dayOrBoarding: "Day" },
     ])
     expect(body.discountCode).toBeUndefined()
 
@@ -590,7 +614,7 @@ describe("the Admission form page", { timeout: 30_000 }, () => {
         children: [{ ...DRAFT_CHILD, className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
         discountCode: "BJN-402",
         linkCode: "",
-        done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code", "fee"],
+        done: ["name-1", "gender-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code", "fee"],
       }),
     )
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })
@@ -916,7 +940,7 @@ describe("the Discount code question", { timeout: 30_000 }, () => {
         children: [{ ...DRAFT_CHILD, className: "STD 2", enrollmentYear: years[1], dayOrBoarding: "Day" }],
         discountCode: "BJN-402",
         linkCode: "",
-        done: ["name-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code"],
+        done: ["name-1", "gender-1", "class-1", "board-1", "more", "pname", "rel", "phone", "code"],
       }),
     )
     stubs.check.mockResolvedValue({ status: "approved", amount: 40000 })

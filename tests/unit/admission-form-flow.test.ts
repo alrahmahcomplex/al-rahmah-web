@@ -18,14 +18,14 @@ import {
 
 const YEARS = [2026, 2027] as const
 const father = { fatherFirst: "SALIM", fatherMiddle: "OMARI", fatherLast: "MFANO" }
-const neema: ChildDraft = { card: 3, firstName: "NEEMA", ...father, className: "FORM 1", enrollmentYear: 2027, dayOrBoarding: "Day" }
-const juma: ChildDraft = { card: 5, firstName: "JUMA", ...father, className: "", enrollmentYear: null, dayOrBoarding: "" }
+const neema: ChildDraft = { card: 3, firstName: "NEEMA", ...father, gender: "Girl", className: "FORM 1", enrollmentYear: 2027, dayOrBoarding: "Day" }
+const juma: ChildDraft = { card: 5, firstName: "JUMA", ...father, gender: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
 const parent = { ...EMPTY_PARENT, firstName: "ASHA", middleName: "ALI", lastName: "MFANO", relationship: "Mother", phone: "0712 345 678" }
 
 describe("the Admission form's order of questions", () => {
-  it("asks each student's name, class and Day or Boarding, then another student, the custodian, the code, the fee and the send", () => {
+  it("asks each student's name, boy or girl, class and Day or Boarding, then another student, the custodian, the code, the fee and the send", () => {
     expect(order([neema, juma])).toEqual([
-      "name:3", "class:3", "board:3", "name:5", "class:5", "board:5", "more", "pname", "rel", "phone", "code", "fee", "send",
+      "name:3", "gender:3", "class:3", "board:3", "name:5", "gender:5", "class:5", "board:5", "more", "pname", "rel", "phone", "code", "fee", "send",
     ])
   })
 
@@ -35,7 +35,7 @@ describe("the Admission form's order of questions", () => {
   })
 
   it("opens the first question not answered", () => {
-    expect(furthest([neema], new Set<StepKey>(["name:3", "class:3"]))).toBe("board:3")
+    expect(furthest([neema], new Set<StepKey>(["name:3", "gender:3", "class:3"]))).toBe("board:3")
     expect(furthest([neema], new Set<StepKey>(order([neema]).filter((key) => key !== "send")))).toBe("send")
   })
 
@@ -43,6 +43,8 @@ describe("the Admission form's order of questions", () => {
     expect(keyToParam("class:5", [neema, juma])).toBe("class-2")
     expect(paramToKey("class-2", [neema, juma])).toBe("class:5")
     expect(paramToKey("class-3", [neema, juma])).toBeNull()
+    expect(keyToParam("gender:5", [neema, juma])).toBe("gender-2")
+    expect(paramToKey("gender-2", [neema, juma])).toBe("gender:5")
     expect(paramToKey("code", [neema])).toBe("code")
     expect(paramToKey("javascript:1", [neema])).toBeNull()
   })
@@ -51,15 +53,24 @@ describe("the Admission form's order of questions", () => {
 describe("answers after a reload", () => {
   it("counts the draft's answered questions up to the first that no longer holds", () => {
     const entries = { parent, children: [neema, juma], discountCode: "" }
-    const done = restoreDone(["name-1", "class-1", "board-1", "name-2", "class-2", "pname"], entries, YEARS)
-    expect([...done]).toEqual(["name:3", "class:3", "board:3", "name:5"])
-    expect(firstOpenable(entries, done, YEARS)).toBe("class:5")
+    const done = restoreDone(["name-1", "gender-1", "class-1", "board-1", "name-2", "gender-2", "class-2", "pname"], entries, YEARS)
+    expect([...done]).toEqual(["name:3", "gender:3", "class:3", "board:3", "name:5"])
+    expect(firstOpenable(entries, done, YEARS)).toBe("gender:5")
+  })
+
+  it("opens a draft from before the question on boy or girl, keeping the answers after it", () => {
+    const before = { ...neema, gender: "" }
+    const entries = { parent, children: [before], discountCode: "" }
+    const done = restoreDone(["name-1", "class-1", "board-1", "more", "pname"], entries, YEARS)
+    expect([...done]).toEqual(["name:3"])
+    expect(firstOpenable(entries, done, YEARS)).toBe("gender:3")
+    expect(stepProblems("gender:3", entries, YEARS)).toEqual([{ field: "gender", child: 0 }])
   })
 
   it("reopens the class question when the draft's year is no longer offered", () => {
     const entries = { parent, children: [{ ...neema, enrollmentYear: null }], discountCode: "" }
-    const done = restoreDone(["name-1", "class-1", "board-1", "more", "pname"], entries, YEARS)
-    expect([...done]).toEqual(["name:3"])
+    const done = restoreDone(["name-1", "gender-1", "class-1", "board-1", "more", "pname"], entries, YEARS)
+    expect([...done]).toEqual(["name:3", "gender:3"])
     expect(firstOpenable(entries, done, YEARS)).toBe("class:3")
   })
 
@@ -78,6 +89,7 @@ describe("the names the page sends (the names contract, #400)", () => {
       fatherFirst: "SALIM",
       fatherMiddle: "OMARI",
       fatherLast: "MFANO",
+      gender: "Girl",
       className: "FORM 1",
       enrollmentYear: 2027,
       dayOrBoarding: "Day",

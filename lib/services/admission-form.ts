@@ -67,7 +67,7 @@ type ChildRow =
   | { result: "duplicate"; lead_id: string; admission_number: string }
 
 const PARENT_FIELDS = new Set<string>(["contact_name", "relationship", "relationship_description", "phone", "whatsapp"])
-const CHILD_FIELDS = new Set<string>(["student_name", "class_name", "enrollment_year", "day_or_boarding", "duplicate_child"])
+const CHILD_FIELDS = new Set<string>(["student_name", "gender", "class_name", "enrollment_year", "day_or_boarding", "duplicate_child"])
 const FORM_FIELDS = new Set<string>(["discount_code"])
 const PARENT_PARTS = new Set<string>(["contact_first_name", "contact_middle_name", "contact_last_name"])
 const CHILD_PARTS = new Set<string>(["first_name", "father_first", "father_middle", "father_last"])
@@ -202,11 +202,6 @@ export async function submitAdmissionForm(
         }
         if (field && FORM_FIELDS.has(field)) {
           return { ok: false, error: { kind: "invalid", field: "discount_code", child: null } }
-        }
-        // No screen asks Boy or girl yet (#449 slice 2 adds the step and its
-        // words), so a refused answer is a malformed form, not an outage.
-        if (field === "gender") {
-          return { ok: false, error: { kind: "invalid", field: "payload", child: null } }
         }
         if (field && CHILD_FIELDS.has(field)) {
           return {

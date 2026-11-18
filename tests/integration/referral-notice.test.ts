@@ -100,7 +100,7 @@ describe("the notice version on leads the Admission form creates", () => {
     // Through the same parser the Server Action uses: this server shows
     // form_v2, so it vouches for no other notice.
     // Names in their parts, as the page posts them since #403.
-    const pupil = () => ({ firstName: letters(), fatherFirst: "NOTICE", fatherMiddle: "BABA", fatherLast: "MZAZI", className: "STD 4", enrollmentYear: nextYear, dayOrBoarding: "Day" })
+    const pupil = () => ({ firstName: letters(), fatherFirst: "NOTICE", fatherMiddle: "BABA", fatherLast: "MZAZI", gender: "Boy", className: "STD 4", enrollmentYear: nextYear, dayOrBoarding: "Day" })
     const posted = {
       submissionKey: randomUUID(),
       parent: { firstName: "NOTICE", middleName: "MAMA", lastName: "MZAZI", relationship: "Mother", phone: `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },

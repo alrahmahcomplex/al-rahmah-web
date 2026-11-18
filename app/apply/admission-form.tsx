@@ -31,12 +31,14 @@ import {
   stepForProblem,
   stepProblems,
   STUDENT_KINDS,
+  STUDENT_PARAM,
   studentKey,
   studentName,
   wireChild,
   wireParent,
   yearOf,
   type StepKey,
+  type StudentKind,
 } from "./flow"
 import { useLiveApply } from "./live"
 import type { AdmissionCalendar, AdmissionFormState, DiscountCodeCheck } from "./outcome"
@@ -106,9 +108,9 @@ function urlKey(children: readonly ChildDraft[]): StepKey {
   const param = new URLSearchParams(window.location.search).get("q")
   const key = paramToKey(param, children)
   if (key) return key
-  const removed = param ? /^(name|class|board)-[1-8]$/.exec(param) : null
+  const removed = param ? STUDENT_PARAM.exec(param) : null
   const last = children[children.length - 1]
-  return removed && last ? studentKey(removed[1] as "name" | "class" | "board", last.card) : order(children)[0]
+  return removed && last ? studentKey(removed[1] as StudentKind, last.card) : order(children)[0]
 }
 
 // The name box a problem should take focus in: the part it names, else the
@@ -149,6 +151,8 @@ function problemSelector({ field, child, part }: FieldProblem, children: readonl
       return `#${stepId(studentKey("class", card ?? 0))} .gf-pop`
     case "enrollment_year":
       return `input[name="year-${card}"]`
+    case "gender":
+      return `input[name="gender-${card}"]`
     case "day_or_boarding":
       return `input[name="board-${card}"]`
     case "contact_name":
@@ -179,6 +183,7 @@ const PROBLEM_FIELDS: Record<string, readonly FormField[]> = {
   fatherFirst: ["student_name", "duplicate_child"],
   fatherMiddle: ["student_name", "duplicate_child"],
   fatherLast: ["student_name", "duplicate_child"],
+  gender: ["gender"],
   className: ["class_name"],
   enrollmentYear: ["enrollment_year"],
   dayOrBoarding: ["day_or_boarding"],
@@ -641,7 +646,7 @@ export function AdmissionFormSteps({
     if (commitAfter && "className" in change) window.setTimeout(() => void commit(studentKey("class", card)), prefersReducedMotion() ? 0 : 200)
   }
 
-  // A tap on Day or Boarding, or on a relationship other than Other, answers
+  // A tap on Boy or Girl, on Day or Boarding, or on a relationship other than Other, answers
   // the question, as a tap on the one already picked does. Only a tap: the
   // arrow keys also move between radios.
   function tapChoice(key: StepKey, event: React.MouseEvent) {

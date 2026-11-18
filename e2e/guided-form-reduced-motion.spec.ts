@@ -42,7 +42,7 @@ for (const viewport of [
 
     await q.getByRole("textbox", { name: APPLY.sw.studentBox }).fill(family().childTyped)
     await q.getByRole("button", { name: APPLY.sw.continue }).click()
-    await expect(openApplyQuestion(page).getByRole("button", { name: APPLY.sw.chooseOther })).toBeVisible()
+    await expect(openApplyQuestion(page).getByRole("heading", { name: /ni mvulana au msichana?$/ })).toBeVisible()
     expect(errors).toEqual([])
   })
 

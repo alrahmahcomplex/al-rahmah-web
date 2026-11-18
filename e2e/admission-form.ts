@@ -38,6 +38,8 @@ export const WORDS = {
   sw: {
     studentName: "Mwanafunzi anaitwa nani?",
     secondStudentName: "Mwanafunzi wa pili anaitwa nani?",
+    boy: "Mvulana",
+    girl: "Msichana",
     chooseOther: "Chagua darasa lingine",
     sheetTitle: "Chagua darasa",
     levels: { nursery: "Awali", primary: "Msingi", secondary: "Sekondari" },
@@ -72,6 +74,8 @@ export const WORDS = {
   en: {
     studentName: "What is the student's name?",
     secondStudentName: "What is student two's name?",
+    boy: "Boy",
+    girl: "Girl",
     chooseOther: "Choose another class",
     sheetTitle: "Choose a class",
     levels: { nursery: "Nursery", primary: "Primary", secondary: "Secondary" },
@@ -146,9 +150,9 @@ function levelOf(className: string): keyof (typeof WORDS)["sw"]["levels"] {
 }
 
 /**
- * Answers one student's three questions: the name (`name` as typed in the
- * student's box, spreading into the father's), the class (from the full
- * list, after picking the year), and Boarding. Leaves "another student?"
+ * Answers one student's four questions: the name (`name` as typed in the
+ * student's box, spreading into the father's), Girl (or `gender`), the
+ * class (from the full list, after picking the year), and Boarding. Leaves "another student?"
  * open, or the custodian's name after the eighth (`last`).
  */
 export async function fillStudent(
@@ -156,12 +160,13 @@ export async function fillStudent(
   lang: Lang,
   name: string,
   year: string,
-  { className = "STD 3", residence = "boarding" as "day" | "boarding", last = false } = {},
+  { className = "STD 3", residence = "boarding" as "day" | "boarding", gender = "girl" as "boy" | "girl", last = false } = {},
 ) {
   const t = WORDS[lang]
   const q = openQuestion(page)
   await nameBox(page, lang).fill(name)
   await q.getByRole("button", { name: t.continue }).click()
+  await answerGender(page, lang, gender)
   await expect(q.getByRole("button", { name: t.chooseOther })).toBeVisible()
   if (!(await q.getByText(year, { exact: true }).isVisible())) {
     await q.getByRole("button", { name: t.changeYear }).click()
@@ -175,6 +180,11 @@ export async function fillStudent(
   await expect(sheet).toHaveCount(0)
   await q.getByText(t[residence], { exact: true }).click()
   await expectQuestion(page, last ? t.parentName : t.another)
+}
+
+/** Taps Boy or Girl on the open question, which answers it and opens the class. */
+export async function answerGender(page: Page, lang: Lang, gender: "boy" | "girl" = "girl") {
+  await openQuestion(page).getByText(WORDS[lang][gender], { exact: true }).click()
 }
 
 /** Answers the custodian's name, Mother, and the phone. Leaves the Discount code open. */

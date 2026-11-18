@@ -177,13 +177,13 @@ describe("a new child's answer", () => {
     expect(await Promise.all(ids.map(genderOf))).toEqual(["Girl", "Boy", null])
   })
 
-  test("the Admission form refuses an answer other than Boy or Girl as a malformed form", async () => {
+  test("the Admission form refuses an answer other than Boy or Girl on that student's question", async () => {
     const sent = await submitAdmissionForm(secretClient(), {
       submissionKey: randomUUID(),
       parent: parentOf(),
       children: [{ ...formChild(nextYear), gender: "Other" as StudentGender }],
     })
-    expect(sent).toEqual({ ok: false, error: { kind: "invalid", field: "payload", child: null } })
+    expect(sent).toEqual({ ok: false, error: { kind: "invalid", field: "gender", child: 0 } })
   })
 
   test("a form sent before the question has the same retry key as before", async () => {

@@ -35,7 +35,7 @@ insert into public.roles (id, name, permissions) values
         'leads.edit', 'leads.export', 'leads.import', 'leads.view', 'lifecycle.intervene', 'payments.view',
         'reopenings.approve', 'reports.view', 'results.send', 'visits.record']),
     ('7e000000-0000-4000-8000-000000000003', 'Accountant', array[
-        'interview_payments.record', 'leads.view', 'payments.record', 'payments.view']),
+        'interview_payments.record', 'leads.view', 'payments.record', 'payments.view', 'reports.view']),
     ('7e000000-0000-4000-8000-000000000004', 'Receptionist', array['leads.view', 'leads.create']);
 
 insert into public.role_managed_roles (role_id, managed_role_id) values

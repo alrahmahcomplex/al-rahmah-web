@@ -38,7 +38,7 @@ const ADMISSIONS_MANAGER = [
   "academic_years.manage",
   "reports.view",
 ] as const
-const ACCOUNTANT = ["leads.view", "interview_payments.record", "payments.view", "payments.record"] as const
+const ACCOUNTANT = ["leads.view", "interview_payments.record", "payments.view", "payments.record", "reports.view"] as const
 
 describe("navFor", () => {
   it("shows only the entries whose permission the staff member holds, in order", () => {
@@ -142,7 +142,7 @@ describe("the staff navigation", () => {
     expect(navFor(["reports.view"])).toContain(reports)
     expect(navFor(["leads.view"])).not.toContain(reports)
     expect(navFor(ADMISSIONS_STAFF)).not.toContain(reports)
-    expect(navFor(ACCOUNTANT)).not.toContain(reports)
+    expect(navFor(ACCOUNTANT)).toContain(reports)
   })
 })
 
@@ -165,8 +165,9 @@ describe("groupNav", () => {
     expect(groupNav([])).toEqual([])
   })
 
-  it("gives the Accountant, who may view leads, the lead screens as well as Money", () => {
-    expect(names(groupNav([STAFF_HOME, ...navFor(ACCOUNTANT)]))).toEqual(["", "Admissions", "Referrals", "Money"])
+  it("gives the Accountant, who may view leads, the lead screens as well as Money, and Reports under Admin", () => {
+    expect(names(groupNav([STAFF_HOME, ...navFor(ACCOUNTANT)]))).toEqual(["", "Admissions", "Referrals", "Money", "Admin"])
+    expect(groupNav(navFor(ACCOUNTANT)).find((group) => group.name === "Admin")?.entries.map((entry) => entry.label)).toEqual(["Reports"])
   })
 })
 

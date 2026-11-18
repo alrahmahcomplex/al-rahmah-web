@@ -214,7 +214,7 @@ No role holds `reports.view`, `discount_codes.manage` or `leads.export` without 
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
 
-The templates hold these permissions. Head Accountant has the Accountant's plus `reports.view`; Administrator has `leads.view`, `payments.view` and `reports.view` only.
+The templates hold these permissions. Head Accountant has the Accountant's; Administrator has `leads.view`, `payments.view` and `reports.view` only.
 
 | Permission | Admissions Staff | Admissions Manager | Accountant |
 |---|:-:|:-:|:-:|
@@ -236,7 +236,7 @@ The templates hold these permissions. Head Accountant has the Accountant's plus 
 | `discounts.approve` | | ✓ | |
 | `academic_years.manage` | | ✓ | |
 | `group_links.manage` | ✓ | ✓ | |
-| `reports.view` | | ✓ | |
+| `reports.view` | | ✓ | ✓ |
 
 **Audit history**:
 Every change and action the system records is visible, event by event, to the **Super Admin** alone. Everyone else keeps only the facts their screen needs: a lead's current status and the date it last changed, who declined a lead and why, who marked it Inactive or Archived and why, the newest result release, an agent's "Retired by [name] on [date]", and the notice of a change someone made to their own role or account.
@@ -247,7 +247,7 @@ Admissions Staff may edit interview results and percentage scores directly. Ever
 
 **Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. They grant **Staff child** and **Qualified orphan** discounts and **Sibling requests**, and set each year's **Academic-year start** and class seats. The Admissions Manager template also manages the Admissions Staff: inviting, deactivating and reactivating them. Roles themselves are the Super Admin's.
 
-**Accountant** records school-fee payments and payment adjustments, maintains the fee amounts, and marks the interview fee **Paid** or **Not Paid**. School-fee payment records are the source of the system-derived **Enrolled** status. The Accountant reads leads to find the student being paid for. The only lead detail they change is the Sibling discount: by a **Manual Sibling fee edit** with a reason, and by applying or dismissing **Granted: fee edit needed**. The system records fees for information and handles no money, so a recorded fee can be corrected by hand, with an audit entry.
+**Accountant** records school-fee payments and payment adjustments, maintains the fee amounts, and marks the interview fee **Paid** or **Not Paid**. School-fee payment records are the source of the system-derived **Enrolled** status. The Accountant reads leads to find the student being paid for, and reads Reports, including the Sibling discount follow-up counts. The only lead detail they change is the Sibling discount: by a **Manual Sibling fee edit** with a reason, and by applying or dismissing **Granted: fee edit needed**. The system records fees for information and handles no money, so a recorded fee can be corrected by hand, with an audit entry.
 
 **Admissions WhatsApp group links**:
 Staff with `leads.view` read each Enrollment year's saved link, who set it and when, under WhatsApp groups. Staff with `group_links.manage` save or replace it. Only `https://chat.whatsapp.com/` invite links are accepted. A year need not have a Fee schedule. Replacing a link affects only new invitations; earlier families still hold the earlier link. Links cannot be deleted, and every change is audited in the lead scope. The migration grants the permission to every non-retired role holding `leads.edit`; roles created later must be granted it explicitly.

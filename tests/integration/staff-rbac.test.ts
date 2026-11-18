@@ -122,7 +122,7 @@ describe("permissions and roles", () => {
     [MANAGER, "staff.administer", false],
     [MANAGER, "reports.view", true],
     [ADMISSIONS, "reports.view", false],
-    [ACCOUNTANT, "reports.view", false],
+    [ACCOUNTANT, "reports.view", true],
     [ADMISSIONS, "leads.create", true],
     [ADMISSIONS, "agents.approve", false],
     [ACCOUNTANT, "payments.record", true],

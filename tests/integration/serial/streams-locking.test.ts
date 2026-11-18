@@ -198,6 +198,45 @@ describe("the seat lock never waits for a lead row", () => {
   /** A statement's error message, or "no refusal", without throwing. */
   const outcome = (run: Promise<unknown>) => run.then(() => "no refusal", (error: Error) => error.message)
 
+  test("a request whose child's row is busy when a fitting stream opens is closed by the retry", async () => {
+    const year = await yearWithSchedule()
+    const cls = await emptyClass(year)
+    const holderId = await child(year, cls)
+    const paid = await recordPayment(await signedIn(ACCOUNTANT), holderId, { type: "initial_deposit", amount: 300_000, paidOn: daysAgo(4) }, randomUUID())
+    if (!paid.ok) throw new Error("payment failed")
+    const asking = await child(year, cls)
+
+    // One full stream, and a request for the child who can't pay.
+    const manager = session()
+    await manager.connect()
+    await manager.query("set lock_timeout = '3s'")
+    await manager.query("begin")
+    await actAsStaff(manager, MANAGER.id)
+    await manager.query("select public.open_stream($1, $2, 'A', 'Boys', 1, $3)", [year, cls, randomUUID()])
+    await manager.query("commit")
+    const request = await asSystem(async (sql) => {
+      await actAsStaff(sql, ADMISSIONS.id)
+      return (await sql.query("select public.request_stream($1, null, null, null) as r", [asking])).rows[0].r.id as string
+    })
+
+    // A correction holds the child's row while a second stream opens.
+    const busy = session()
+    await busy.connect()
+    await busy.query("begin")
+    await busy.query("select 1 from public.leads where id = $1 for update", [asking])
+    await manager.query("begin")
+    await actAsStaff(manager, MANAGER.id)
+    await manager.query("select public.open_stream($1, $2, 'B', 'Boys', 1, $3)", [year, cls, randomUUID()])
+    await manager.query("commit")
+    const open = async () =>
+      (await asSystem((sql) => sql.query<{ done: boolean }>("select resolved_at is not null as done from public.stream_requests where id = $1", [request]))).rows[0].done
+    expect(await open()).toBe(false)
+
+    await busy.query("commit")
+    await asSystem((sql) => sql.query("select public.run_seat_retries()"))
+    expect(await open()).toBe(true)
+  })
+
   test("a payment and an opening stream at once both finish, and the payer takes the new seat", async () => {
     const year = await yearWithSchedule()
     const cls = await emptyClass(year)

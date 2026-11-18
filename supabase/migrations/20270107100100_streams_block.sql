@@ -398,7 +398,8 @@ begin
     -- answers, or whose child is placed, declined or no longer here. Under
     -- the seat lock. A request naming a child is written only once the
     -- child's row is held without waiting (the audit row's key check);
-    -- otherwise it waits for the next sync.
+    -- otherwise the child is queued as a retry for this class, and the next
+    -- sync or the daily job closes it.
     create function public.resolve_stream_requests(schedule_year integer, class public.lead_class)
     returns void
     language plpgsql
@@ -432,6 +433,8 @@ begin
                 if answered then
                     perform 1 from public.leads l where l.id = request.lead_id for key share skip locked;
                     if not found then
+                        -- Busy: the next sync or the daily job closes it.
+                        perform public.queue_seat_retry(request.lead_id, schedule_year, class);
                         continue;
                     end if;
                 end if;

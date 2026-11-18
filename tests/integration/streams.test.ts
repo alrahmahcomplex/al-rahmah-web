@@ -414,6 +414,51 @@ describe("the seat sync", () => {
     })
   })
 
+  test("a child left with only a retry keeps their turn when a stream opens", async () => {
+    const { year, classes: [c] } = await yearAndClasses(1)
+    const skipped = await holder(year, c, "Boy", 9)
+    const recorded = await holder(year, c, "Boy", 3)
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      // A girls' stream first: both boys wait.
+      await open(sql, year, c, "A", "Girls", 1)
+      await asOwner(sql)
+      await sql.query("select public.set_audit_actor('system')")
+      // The higher-ranked boy's waiting write was skipped (his row was
+      // busy): he has only a retry. The other's wait is from earlier.
+      await sql.query("update public.seat_placements set waiting_since = null, waiting_xid = null, waiting_year = null, waiting_class = null where lead_id = $1", [skipped])
+      await sql.query("insert into public.seat_sync_queue (lead_id, cause, retry, retry_year, retry_class) values ($1, 'retry', true, $2, $3)", [skipped, year, c])
+      await sql.query("update public.seat_placements set waiting_xid = '1'::xid8 where lead_id = $1", [recorded])
+      await actAsStaff(sql, MANAGER.id)
+      await open(sql, year, c, "A", "Boys", 1)
+      await asOwner(sql)
+      expect(await placements(sql, [skipped, recorded])).toEqual({ [skipped]: "A", [recorded]: null })
+    })
+  })
+
+  test("a retry's turn holds only in the class it arose in", async () => {
+    const { year, classes: [from, to] } = await yearAndClasses(2)
+    const placed = await holder(year, to, "Boy", 20)
+    const waiting = await holder(year, to, "Boy", 3)
+    const mover = await holder(year, from, "Boy", 10)
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      await open(sql, year, to, "A", "Mixed", 1)
+      await asOwner(sql)
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("update public.seat_placements set waiting_xid = '1'::xid8 where lead_id = $1", [waiting])
+      // The mover was skipped in their old class, then corrected into this
+      // one in the same transaction that frees its seat.
+      await sql.query("insert into public.seat_sync_queue (lead_id, cause, retry, retry_year, retry_class) values ($1, 'retry', true, $2, $3)", [mover, year, from])
+      await sql.query("update public.leads set class_name = $2 where id = $1", [mover, to])
+      await actAsStaff(sql, MANAGER.id)
+      await sql.query("select public.decline_lead($1, 'No seat available', null)", [placed])
+      await asOwner(sql)
+      await sql.query("select public.flush_seat_queue()")
+      expect(await placements(sql, [placed, waiting, mover])).toEqual({ [placed]: null, [waiting]: "A", [mover]: null })
+    })
+  })
+
   test("each placement keeps its own child's cause, and the queue's actor survives a cleared one", async () => {
     const { year, classes: [c] } = await yearAndClasses(1)
     const [first, second] = [await child(year, c, "Boy"), await child(year, c, "Girl")]

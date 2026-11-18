@@ -280,6 +280,10 @@ begin
         -- A child skipped because another transaction held their row: kept
         -- past the commit, run by the next flush or the daily job.
         retry boolean not null default false,
+        -- For a retry: the class and year whose reconcile skipped the child.
+        -- Its turn ahead of newcomers holds there only.
+        retry_year integer,
+        retry_class public.lead_class,
         actor_kind text,
         actor_staff_id uuid,
         queued_at timestamptz not null default now()
@@ -287,7 +291,7 @@ begin
     comment on table public.seat_sync_queue is
         'Internal (#449): leads whose seat is checked at the end of the transaction, and children skipped while their row was busy.';
     create unique index seat_sync_queue_once on public.seat_sync_queue (lead_id) where not retry;
-    create unique index seat_sync_queue_retry_once on public.seat_sync_queue (lead_id) where retry;
+    create unique index seat_sync_queue_retry_once on public.seat_sync_queue (lead_id, retry_year, retry_class) where retry;
     alter table public.seat_sync_queue enable row level security;
     revoke all on public.seat_sync_queue from anon, authenticated, service_role;
 
@@ -390,7 +394,7 @@ begin
 
     -- A child whose row was busy: run again by the next flush or the daily
     -- job. The queue has no foreign key, so this never waits.
-    create function public.queue_seat_retry(lead_id uuid)
+    create function public.queue_seat_retry(lead_id uuid, in_year integer, in_class public.lead_class)
     returns void
     language plpgsql
     security definer
@@ -398,14 +402,16 @@ begin
     as $fn$
     #variable_conflict use_column
     begin
-        insert into public.seat_sync_queue (lead_id, cause, retry)
-        values (queue_seat_retry.lead_id, 'retry', true)
-        on conflict (lead_id) where retry do nothing;
+        insert into public.seat_sync_queue (lead_id, cause, retry, retry_year, retry_class)
+        values (queue_seat_retry.lead_id, 'retry', true, queue_seat_retry.in_year, queue_seat_retry.in_class)
+        on conflict (lead_id, retry_year, retry_class) where retry do nothing;
     end;
     $fn$;
-    revoke execute on function public.queue_seat_retry(uuid) from public, anon, authenticated, service_role;
+    revoke execute on function public.queue_seat_retry(uuid, integer, public.lead_class) from public, anon, authenticated, service_role;
 
     -- reconcile_class_seats(year, class, causes, default_cause, retried):
+    -- `retried` holds the retries the caller took off the queue, as
+    -- "lead|year|class"; a retry still queued for this class counts the same.
     -- the one place seats are given and taken back, for one class and year,
     -- under the seat lock.
     --   1. Children placed in a stream of this class that still holds them
@@ -427,7 +433,7 @@ begin
         class public.lead_class,
         causes jsonb,
         default_cause text,
-        retried uuid[]
+        retried text[]
     )
     returns void
     language plpgsql
@@ -455,7 +461,7 @@ begin
             loop
                 if not public.set_seat_placement(stale.lead_id, null, null, null,
                         coalesce(causes ->> stale.lead_id::text, default_cause)) then
-                    perform public.queue_seat_retry(stale.lead_id);
+                    perform public.queue_seat_retry(stale.lead_id, schedule_year, class);
                 end if;
             end loop;
             return;
@@ -477,7 +483,7 @@ begin
                          else coalesce(causes ->> placed.lead_id::text, default_cause) end) then
                 -- Busy: the seat stays counted until the retry clears it.
                 settled := settled || placed.lead_id;
-                perform public.queue_seat_retry(placed.lead_id);
+                perform public.queue_seat_retry(placed.lead_id, schedule_year, class);
             end if;
         end loop;
 
@@ -489,7 +495,7 @@ begin
         loop
             if not public.set_seat_placement(stale.lead_id, null, null, null,
                     coalesce(causes ->> stale.lead_id::text, default_cause)) then
-                perform public.queue_seat_retry(stale.lead_id);
+                perform public.queue_seat_retry(stale.lead_id, schedule_year, class);
             end if;
         end loop;
 
@@ -510,7 +516,11 @@ begin
             -- coalesce: a child with no row has no waiting, and a null
             -- would sort first under desc.
             order by coalesce(
-                h.lead_id = any (coalesce(retried, '{}'))
+                (h.lead_id::text || '|' || schedule_year || '|' || class) = any (coalesce(retried, '{}'))
+                or exists (
+                    select 1 from public.seat_sync_queue q
+                    where q.retry and q.lead_id = h.lead_id and q.retry_year = schedule_year and q.retry_class = class
+                )
                 or (p.waiting_year = schedule_year and p.waiting_class = class and p.waiting_xid <> this_xact),
                 false
             ) desc,
@@ -536,12 +546,12 @@ begin
                 case when target is null then class end,
                 why
             ) then
-                perform public.queue_seat_retry(holder.lead_id);
+                perform public.queue_seat_retry(holder.lead_id, schedule_year, class);
             end if;
         end loop;
     end;
     $fn$;
-    revoke execute on function public.reconcile_class_seats(integer, public.lead_class, jsonb, text, uuid[])
+    revoke execute on function public.reconcile_class_seats(integer, public.lead_class, jsonb, text, text[])
         from public, anon, authenticated, service_role;
 
     create function public.seat_classes_of(leads uuid[])
@@ -583,12 +593,21 @@ begin
         actor_kind text;
         actor_staff uuid;
         retries uuid[];
+        retry_keys text[];
         pair record;
         touched integer;
     begin
         if not exists (select 1 from public.seat_sync_queue q where not q.retry) then
             return 0;
         end if;
+
+        -- The audit rows written after the seat lock name a staff actor;
+        -- their key check must not wait then.
+        perform 1 from public.staff_members s
+        where s.id = (select a.staff_id from public.audit_actor() a)
+           or s.id in (select q.actor_staff_id from public.seat_sync_queue q where not q.retry)
+        order by s.id
+        for key share;
 
         perform public.seat_lock();
 
@@ -605,8 +624,14 @@ begin
             return 0;
         end if;
 
-        with gone as (delete from public.seat_sync_queue q where q.retry returning q.lead_id)
-        select coalesce(array_agg(g.lead_id), '{}') into retries from gone g;
+        with gone as (
+            delete from public.seat_sync_queue q where q.retry
+            returning q.lead_id, q.retry_year, q.retry_class
+        )
+        select coalesce(array_agg(g.lead_id), '{}'),
+               coalesce(array_agg(g.lead_id::text || '|' || g.retry_year || '|' || g.retry_class), '{}')
+        into retries, retry_keys
+        from gone g;
 
         -- Some blocks clear their actor before the commit: the queue kept it.
         if (select a.kind from public.audit_actor() a) is null and actor_kind is not null then
@@ -615,9 +640,13 @@ begin
         end if;
 
         touched := 0;
-        for pair in select * from public.seat_classes_of(own || retries)
+        for pair in
+            select c.enrollment_year, c.class_name from public.seat_classes_of(own || retries) c
+            union
+            select split_part(k, '|', 2)::integer, split_part(k, '|', 3)::public.lead_class from unnest(retry_keys) k
+            order by 1, 2
         loop
-            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, causes, 'seat_freed', retries);
+            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, causes, 'seat_freed', retry_keys);
             touched := touched + 1;
         end loop;
 
@@ -657,6 +686,7 @@ begin
     as $fn$
     declare
         retries uuid[];
+        retry_keys text[];
         pair record;
     begin
         if not exists (select 1 from public.seat_sync_queue q where q.retry) then
@@ -664,11 +694,21 @@ begin
         end if;
         perform public.set_audit_actor('system');
         perform public.seat_lock();
-        with gone as (delete from public.seat_sync_queue q where q.retry returning q.lead_id)
-        select coalesce(array_agg(g.lead_id), '{}') into retries from gone g;
-        for pair in select * from public.seat_classes_of(retries)
+        with gone as (
+            delete from public.seat_sync_queue q where q.retry
+            returning q.lead_id, q.retry_year, q.retry_class
+        )
+        select coalesce(array_agg(g.lead_id), '{}'),
+               coalesce(array_agg(g.lead_id::text || '|' || g.retry_year || '|' || g.retry_class), '{}')
+        into retries, retry_keys
+        from gone g;
+        for pair in
+            select c.enrollment_year, c.class_name from public.seat_classes_of(retries) c
+            union
+            select split_part(k, '|', 2)::integer, split_part(k, '|', 3)::public.lead_class from unnest(retry_keys) k
+            order by 1, 2
         loop
-            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, '{}'::jsonb, 'seat_freed', retries);
+            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, '{}'::jsonb, 'seat_freed', retry_keys);
         end loop;
         return cardinality(retries);
     end;
@@ -995,7 +1035,7 @@ begin
         )
         returning * into made;
 
-        perform public.reconcile_class_seats(schedule_year, class, '{}'::jsonb, 'stream_opened', '{}');
+        perform public.reconcile_class_seats(schedule_year, class, '{}'::jsonb, 'stream_opened', '{}'::text[]);
         return public.stream_json(made);
     end;
     $fn$;
@@ -1035,6 +1075,7 @@ begin
             raise exception 'not_found';
         end if;
         perform 1 from public.fee_schedules f where f.enrollment_year = current_stream.enrollment_year for key share;
+        perform 1 from public.staff_members s where s.id = public.current_staff_id() for key share;
 
         perform public.seat_lock();
 
@@ -1059,7 +1100,7 @@ begin
         where s.id = current_stream.id
         returning * into current_stream;
 
-        perform public.reconcile_class_seats(current_stream.enrollment_year, current_stream.class_name, '{}'::jsonb, 'seat_freed', '{}');
+        perform public.reconcile_class_seats(current_stream.enrollment_year, current_stream.class_name, '{}'::jsonb, 'seat_freed', '{}'::text[]);
         return public.stream_json(current_stream);
     end;
     $fn$;
@@ -1142,7 +1183,7 @@ begin
         -- A class that had no streams now has some with 0 seats: its
         -- holders wait until the places are typed.
         foreach each_class in array touched loop
-            perform public.reconcile_class_seats(schedule_year, each_class, '{}'::jsonb, 'stream_opened', '{}');
+            perform public.reconcile_class_seats(schedule_year, each_class, '{}'::jsonb, 'stream_opened', '{}'::text[]);
         end loop;
         return out_list;
     end;

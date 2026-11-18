@@ -149,7 +149,10 @@ describe("admission_form_family", () => {
 
     const read = await getAdmissionFormFamily(admissions, form.leadIds[0])
     if (!read.ok) throw new Error(`read failed: ${read.error}`)
-    expect(read.data.children.find((c) => c.leadId === form.leadIds[1])?.linked).toBe(true)
+    const [a, b] = form.leadIds.map((id) => read.data.children.find((c) => c.leadId === id))
+    expect(b).toMatchObject({ linked: true, groupId: expect.any(String) })
+    // Both are in the one group the link made.
+    expect(a?.groupId).toBe(b?.groupId)
   })
 
   test("tells a lead registered at the desk, and one that does not exist, from a form's", async () => {

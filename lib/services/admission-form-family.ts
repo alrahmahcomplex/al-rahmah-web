@@ -22,6 +22,8 @@ export type FormChild = {
   broughtByName: string | null
   // Already in a sibling group outside the old family rule: check-in keeps that link.
   linked: boolean
+  // That group, when linked.
+  groupId: string | null
 }
 
 export type FormContact = {
@@ -79,6 +81,7 @@ function child(r: Row): FormChild {
           : null,
     broughtByName: text(r.brought_by_name),
     linked: r.linked === true,
+    groupId: text(r.group_id),
   }
 }
 

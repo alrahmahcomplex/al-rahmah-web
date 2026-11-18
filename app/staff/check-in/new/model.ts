@@ -769,12 +769,14 @@ export function feePreview(
   const shownAfter = new Map<string, number>()
   for (const h of all) {
     const linked = linkedTo(h)
+    // Kept siblings beyond the household's first share its group: their own reads come too.
+    const reads = [...(linked ? [linked] : []), ...h.members.filter((k) => k !== h.root && kept[k]).map((k) => kept[k])]
     const id = linked ? (linked.groupId ?? linked.leadId) : null
     const g = id === null ? undefined : groups.find((x) => x.id === id)
-    if (!g) groups.push({ id, households: [h], linked: linked ? [linked] : [] })
+    if (!g) groups.push({ id, households: [h], linked: reads })
     else {
       g.households.push(h)
-      if (linked && !g.linked.some((l) => l.leadId === linked.leadId)) g.linked.push(linked)
+      for (const r of reads) if (!g.linked.some((l) => l.leadId === r.leadId)) g.linked.push(r)
     }
     if (linked) shownAfter.set(linked.leadId, h.root)
   }

@@ -18,8 +18,9 @@
 --       children  every child the form created, in the form's order, with
 --                 what the lead holds now: names, Boy or girl, class, year,
 --                 Day or Boarding, status, closure, previous school, who
---                 brought them, and `linked`, true when the child is already
---                 in a sibling group outside the old family rule.
+--                 brought them, and `linked` with its `group_id` when the
+--                 child is already in a sibling group outside the old
+--                 family rule.
 --       on_file   the parent's other children, open or not, each with its
 --                 father's name.
 --
@@ -100,13 +101,13 @@ begin
                 'previous_school_region', l.previous_school_region,
                 'previous_school_not_known', l.previous_school_not_known,
                 'brought_by_name', l.brought_by_name,
-                'linked', exists (
-                    select 1 from public.sibling_group_members m
-                    where m.lead_id = l.id and m.group_id is not null and not m.legacy
-                )
+                'linked', m.group_id is not null,
+                'group_id', m.group_id
             ) order by x.position)
             from unnest(child_ids) with ordinality as x (id, position)
             join public.leads l on l.id = x.id
+            -- One membership row per lead (sibling_group_members_lead_id_key).
+            left join public.sibling_group_members m on m.lead_id = l.id and m.group_id is not null and not m.legacy
         ), '[]'::jsonb),
         'on_file', coalesce((
             select jsonb_agg(jsonb_build_object(

@@ -2,7 +2,9 @@ import type { PersonName, StudentName } from "@/components/guided-form"
 import type { AdmissionFormFamily, FormChild } from "@/lib/services/admission-form-family"
 import type { CheckInStudent, RegistrationStudent, Relationship } from "@/lib/services/leads"
 
-import { NO_SCHOOL_ASKED, type Answers, type KnownContact, type RelationshipChoice, type Student } from "../new/model"
+import { fatherNameMatch } from "@/lib/father-name"
+
+import { fatherName, NO_SCHOOL_ASKED, sameFatherEarlier, type Answers, type KnownContact, type RelationshipChoice, type Student } from "../new/model"
 
 // Check-in of an Admission form family (#309, prototype v38): the Register
 // form's answers, started from what the form gave. Staff are asked only the
@@ -86,9 +88,20 @@ function student(child: FormChild, key: number): { student: Student; given: Give
 /** The answers check-in starts from, and what the form gave. `children`: those still waiting for their visit. */
 export function startCheckIn(family: AdmissionFormFamily, children: FormChild[]): { answers: Answers; checkIn: CheckIn } {
   const seeded = children.map((c, i) => student(c, i + 1))
+  const students = seeded.map((s) => s.student)
+  // Children already siblings in one group stay one household, with one custodian question: the later
+  // one starts as "Sibling of" the first, which the save never sends (checkInStudents). Only while the
+  // fathers' names are the same, as the form's own rule would have it; otherwise each is asked apart.
+  for (const [i, child] of children.entries()) {
+    const j = child.groupId ? children.findIndex((o, x) => x < i && o.groupId === child.groupId) : -1
+    const mine = students[i]
+    const theirs = students[j]
+    if (j < 0 || !mine.name || !theirs?.name || fatherNameMatch(fatherName(mine.name), fatherName(theirs.name)) !== "same") continue
+    students[i] = { ...mine, sibling: { kind: "match", of: theirs.key, seen: sameFatherEarlier(students, i) } }
+  }
   const c = family.contact
   return {
-    answers: { students: seeded.map((s) => s.student), more: true, custodians: {}, onFileAsks: [], onFile: {} },
+    answers: { students, more: true, custodians: {}, onFileAsks: [], onFile: {} },
     checkIn: {
       children: seeded.map((s) => s.given),
       contact: c

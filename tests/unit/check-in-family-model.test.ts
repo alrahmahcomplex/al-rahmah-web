@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { checkInStudents, familyName, formName, givenRelationship, personParts, startCheckIn } from "@/app/staff/check-in/[id]/model"
-import { feePreview, mentionsSiblings, payload, type Answers, type OnFileFee, type Student } from "@/app/staff/check-in/new/model"
+import { feePreview, households, mentionsSiblings, payload, type Answers, type OnFileFee, type Student } from "@/app/staff/check-in/new/model"
 import type { AdmissionFormFamily, FormChild } from "@/lib/services/admission-form-family"
 
 // Check-in of an Admission form family (#309): it starts from what the form
@@ -21,6 +21,7 @@ const child = (more: Partial<FormChild> = {}): FormChild => ({
   previousSchool: null,
   broughtByName: null,
   linked: false,
+  groupId: null,
   ...more,
 })
 
@@ -128,7 +129,7 @@ describe("the answers check-in starts from", () => {
 })
 
 describe("the save check-in sends", () => {
-  const linked = child({ leadId: "22222222-2222-4222-8222-222222222222", studentName: "MARIAM ALI HASSAN", className: "STD 1", linked: true })
+  const linked = child({ leadId: "22222222-2222-4222-8222-222222222222", studentName: "MARIAM ALI HASSAN", className: "STD 1", linked: true, groupId: "g9" })
   const { answers: start, checkIn } = startCheckIn(family([]), [child(), linked])
   const answers = {
     ...start,
@@ -191,5 +192,54 @@ describe("the fee step for a child already in a sibling group (#309)", () => {
   it("without the group, shows the fee as a new student's, as before", () => {
     const preview = feePreview(answers, FEES, 2027, {})!
     expect(preview.rows[0]).toMatchObject({ why: "No discount", pays: 1_200_000 })
+  })
+})
+
+describe("children already siblings in one group (#309)", () => {
+  const first = child({ linked: true, groupId: "g1" })
+  const second = child({ leadId: "22222222-2222-4222-8222-222222222222", studentName: "MARIAM ALI HASSAN", className: "STD 1", linked: true, groupId: "g1" })
+
+  it("start as one household, so one custodian question covers both", () => {
+    const { answers } = startCheckIn(family([]), [first, second])
+    expect(answers.students[1].sibling).toMatchObject({ kind: "match", of: 1 })
+    expect(households(answers.students)).toEqual([{ root: 1, members: [1, 2] }])
+  })
+
+  it("both save with the custodian and relationship staff gave once, and no sibling choice", () => {
+    const { answers: start, checkIn } = startCheckIn(family([]), [first, second])
+    const answers = {
+      ...start,
+      custodians: { 1: { kind: "known" as const, contact: checkIn.contact!.contact, phone: "+255755000222", whatsapp: "", relationship: "Mother" as const, description: "" } },
+      brought: { who: "person" as const, person: 0 },
+    }
+    const sent = checkInStudents(payload(answers, 2027).students, answers, checkIn)
+    expect(sent.map((s) => s.custodian)).toEqual([
+      { person: 1, relationship: "Mother" },
+      { person: 1, relationship: "Mother" },
+    ])
+    for (const s of sent) expect(s).not.toHaveProperty("siblingOf")
+  })
+
+  it("stay apart when their fathers' names differ, or their groups do", () => {
+    const other = { ...second, fatherFullName: "OMARI JUMA SAID", studentName: "MARIAM OMARI SAID" }
+    expect(households(startCheckIn(family([]), [first, other]).answers.students)).toHaveLength(2)
+    expect(households(startCheckIn(family([]), [first, { ...second, groupId: "g2" }]).answers.students)).toHaveLength(2)
+  })
+
+  it("show each one's fee in the group, once each", () => {
+    const FEES = { 2027: { nursery: { day: 1_000_000, boarding: 2_500_000 }, primary_lower: { day: 1_100_000, boarding: 2_600_000 }, primary_upper: { day: 1_200_000, boarding: 2_700_000 }, secondary: { day: 1_300_000, boarding: 2_800_000 } } }
+    const { answers } = startCheckIn(family([]), [first, second])
+    const read = (leadId: string, name: string, fee: number, pays: number): OnFileFee => ({
+      leadId, name, className: "STD 6", status: "Applied", fee, pays, anchorName: null, fullPayerName: "YUSUF ALI HASSAN", groupId: "g1",
+      father: "ALI OMARI HASSAN", counted: [], selfCounts: true, mayPayFull: true,
+    })
+    const preview = feePreview(answers, FEES, 2027, {}, {
+      1: read(first.leadId, "YUSUF ALI HASSAN", 1_200_000, 1_200_000),
+      2: read(second.leadId, "MARIAM ALI HASSAN", 1_100_000, 990_000),
+    })!
+    expect(preview.rows.map((r) => [r.key, r.why, r.pays])).toEqual([
+      ["1", "Pays full · highest fee", 1_200_000],
+      ["2", "Sibling 10% · YUSUF pays full", 990_000],
+    ])
   })
 })

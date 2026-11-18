@@ -209,3 +209,21 @@ describe("StreamsView, a Mixed-only class", () => {
     expect(screen.queryByRole("button", { name: "Send a request to open a new stream" })).not.toBeInTheDocument()
   })
 })
+
+describe("children with no Boy or girl answer in a class without a Mixed stream", () => {
+  const noAnswer = { ...FORM1.waiting[0], leadId: "lead-3", studentName: "Neema Hamisi", gender: null }
+  const split: ClassStreams = { ...FORM1, freeForBoy: true, waiting: [noAnswer, { ...noAnswer, leadId: "lead-4" }] }
+
+  it("asks the Manager to open a stream for any child, naming no full stream", () => {
+    view(MANAGER, { ...YEAR, classes: [split] })
+    const notice = screen.getByText("Open a new FORM 1 stream.").closest(".st-notice") as HTMLElement
+    expect(notice).toHaveTextContent("Open a new FORM 1 stream. 2 children wait for a seat.")
+    expect(notice).not.toHaveTextContent("is full")
+  })
+
+  it("gives other staff the request for any child", () => {
+    view(STAFF, { ...YEAR, classes: [split] })
+    const notice = screen.getByText("FORM 1 has no seat left.").closest(".st-notice") as HTMLElement
+    expect(notice).toHaveTextContent("FORM 1 has no seat left. Only the Admissions Manager can open a new stream.")
+  })
+})

@@ -21,7 +21,8 @@ export type Who = { manages: boolean; mayDecline: boolean }
 const needWord = (need: "Boys" | "Girls") => (need === "Boys" ? "boys" : "girls")
 
 function NeedNotice({ need, year, classStreams, who }: { need: SeatNeed; year: number; classStreams: Stream[]; who: Who }) {
-  const full = streamName(need.className, need.fullStream.label, need.fullStream.takes)
+  // No full stream to name when no stream takes these children at all.
+  const full = need.fullStream ? `${streamName(need.className, need.fullStream.label, need.fullStream.takes)} is full.` : null
   const asked = need.request
   if (who.manages) {
     const by = asked
@@ -42,12 +43,13 @@ function NeedNotice({ need, year, classStreams, who }: { need: SeatNeed; year: n
               <b>
                 Open a new {need.className} stream for {needWord(need.need)}.
               </b>{" "}
-              {full} is full.
+              {full}
               {askedBy}
             </>
           ) : (
             <>
-              <b>Open a new {need.className} stream.</b> {full} is full.
+              <b>Open a new {need.className} stream.</b>
+              {full && ` ${full}`}
               {need.waiting > 0 && ` ${need.waiting} ${need.waiting === 1 ? "child waits" : "children wait"} for a seat.`}
               {askedBy}
             </>
@@ -81,7 +83,7 @@ function NeedNotice({ need, year, classStreams, who }: { need: SeatNeed; year: n
           {need.className} has no seat left
           {need.need ? ` for ${needWord(need.need)}` : ""}.
         </b>{" "}
-        {full} is full. Only the Admissions Manager can open a new stream.
+        {full && `${full} `}Only the Admissions Manager can open a new stream.
       </span>
       <RequestStreamButton
         target={{ year, className: need.className, need: need.need }}

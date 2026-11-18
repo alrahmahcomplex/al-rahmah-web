@@ -83,14 +83,14 @@ describe("seatNeeds", () => {
     const needs = seatNeeds([std6], [])
     expect(needs).toHaveLength(1)
     expect(needs[0]).toMatchObject({ className: "STD 6", need: null })
-    expect(needs[0].fullStream.label).toBe("B")
+    expect(needs[0].fullStream?.label).toBe("B")
   })
 
   test("a split class gives a notice only for the need it takes and has no seat for", () => {
     const form1 = cls("FORM 1", [stream("A", "Girls", 20, 5), stream("B", "Boys", 20, 20)], { freeForBoy: false, freeForAny: false })
     const needs = seatNeeds([form1], [])
     expect(needs.map((n) => n.need)).toEqual(["Boys"])
-    expect(needs[0].fullStream.label).toBe("B")
+    expect(needs[0].fullStream?.label).toBe("B")
   })
 
   test("no notice for a need no stream takes, nor for a class without streams", () => {
@@ -114,6 +114,31 @@ describe("seatNeeds", () => {
       request("FORM 1", "Girls", "2027-01-13T06:00:00Z"),
     ]
     expect(seatNeeds([form1], requests)[0].request?.requestedAt).toBe("2027-01-11T06:40:00Z")
+  })
+
+  test("children with no Boy or girl answer get a notice for any child when no Mixed stream has a seat for them", () => {
+    const child = (leadId: string, gender: "Boy" | null) => ({
+      leadId,
+      admissionNumber: leadId,
+      studentName: leadId,
+      gender,
+      priority: "Deposit" as const,
+      reachedOn: "2027-01-10",
+      rank: 1,
+    })
+    const split = { ...cls("FORM 1", [stream("A", "Girls", 20, 5), stream("B", "Boys", 20, 5)], { freeForAny: false }), waiting: [child("x", null), child("y", null)] }
+    const needs = seatNeeds([split], [])
+    expect(needs).toHaveLength(1)
+    expect(needs[0]).toMatchObject({ className: "FORM 1", need: null, waiting: 2, fullStream: null })
+
+    const withMixed = { ...cls("FORM 2", [stream("A", "Mixed", 20, 20), stream("B", "Boys", 20, 5)], { freeForAny: false }), waiting: [child("z", null)] }
+    expect(seatNeeds([withMixed], [])[0].fullStream?.label).toBe("A")
+
+    // None waits, no request: no notice. A Mixed stream with a free seat: none either.
+    expect(seatNeeds([{ ...split, waiting: [child("b", "Boy")] }], [])).toEqual([])
+    expect(seatNeeds([{ ...split, freeForAny: true }], [])).toEqual([])
+    // A request sent from such a child's page is enough.
+    expect(seatNeeds([{ ...split, waiting: [] }], [request("FORM 1", null, "2027-01-11T06:40:00Z")])[0].need).toBeNull()
   })
 })
 

@@ -48,8 +48,10 @@ export function placeholderSeats(streams: readonly Stream[]): number | null {
 export type SeatNeed = {
   className: LeadClass
   need: "Boys" | "Girls" | null
-  // The class's last stream that takes this need, which is full.
-  fullStream: Stream
+  // The class's last stream that takes this need, which is full. Null when
+  // no stream takes it: children with no Boy or girl answer in a class with
+  // no Mixed stream.
+  fullStream: Stream | null
   waiting: number
   // An open request for this class and need, the newest first.
   request: StreamRequest | null
@@ -61,7 +63,8 @@ const takesNeed = (takes: StreamTakes, need: "Boys" | "Girls") => takes === "Mix
  * The notices for a year: for each class with streams, each need (boys, girls,
  * or any child when every stream is Mixed) whose streams are all full after
  * the children already waiting. A need no stream takes at all gets none: the
- * class isn't full for it, it simply has no stream for it.
+ * class isn't full for it, it simply has no stream for it. Children with no
+ * Boy or girl answer are the exception, as only a Mixed stream takes them.
  */
 export function seatNeeds(classes: readonly ClassStreams[], requests: readonly StreamRequest[]): SeatNeed[] {
   const needs: SeatNeed[] = []
@@ -97,6 +100,20 @@ export function seatNeeds(classes: readonly ClassStreams[], requests: readonly S
         fullStream: taking[taking.length - 1],
         waiting,
         request: openRequest(each.className, need),
+      })
+    }
+    // Only a Mixed stream takes a child with no Boy or girl answer: when none
+    // has a free seat and such a child waits, or a request was sent for one,
+    // the class needs a stream for any child (lead, 2026-11-18).
+    const unanswered = each.waiting.filter((w) => w.gender === null).length
+    const anyRequest = openRequest(each.className, null)
+    if (!each.freeForAny && (unanswered > 0 || anyRequest)) {
+      needs.push({
+        className: each.className,
+        need: null,
+        fullStream: ordered.filter((s) => s.takes === "Mixed").at(-1) ?? null,
+        waiting: unanswered,
+        request: anyRequest,
       })
     }
   }

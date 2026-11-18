@@ -186,13 +186,14 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const GROUPS = mode ? CHECK_IN_GROUPS : REGISTER_GROUPS
   const given = (key: number) => mode?.given.children.find((c) => c.key === key)
   const [answers, setAnswers] = useState<Answers>(() => startingAnswers(staffId, mode))
-  // At check-in, children already in a sibling group keep it: the fee step reads that group (#309).
-  const keptChildren = mode?.given.children.filter((c) => c.linked) ?? []
+  // At check-in the children are on file already (#309): the fee step reads each one's fee and group. A child
+  // already in a sibling group keeps it; any child keeps a discount the save never takes away.
+  const checkInChildren = mode?.given.children ?? []
+  const keptLeads = checkInChildren.map((c) => c.leadId).join(",")
   // Every child on file whose fee and group the fee step needs.
-  const keptLeads = keptChildren.map((c) => c.leadId).join(",")
   const feeLeads = (a: Answers) => [...linkedOnFile(a).map((q) => q.leadId), ...(keptLeads ? keptLeads.split(",") : [])]
-  const keptGroups = (read: Record<string, OnFileFee>): Record<number, OnFileFee> =>
-    Object.fromEntries(keptChildren.filter((c) => read[c.leadId]).map((c) => [c.key, read[c.leadId]]))
+  const readsBy = (read: Record<string, OnFileFee>, linked: boolean): Record<number, OnFileFee> =>
+    Object.fromEntries(checkInChildren.filter((c) => c.linked === linked && read[c.leadId]).map((c) => [c.key, read[c.leadId]]))
   const [edit, setEdit] = useState<string | null>(null)
   const [finished, setFinished] = useState<Finished | null>(null)
   const [instant, setInstant] = useState(false)
@@ -675,7 +676,7 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
     const reads = feeLeads(a).map((leadId) => onFileFees[leadId])
     const unread = reads.includes("failed")
     const loading = reads.some((r) => r === undefined)
-    const preview = feePreview(a, fees, defaultYear, read, keptGroups(read))
+    const preview = feePreview(a, fees, defaultYear, read, readsBy(read, true), readsBy(read, false))
     if (preview) {
       const shown = feeSignature(preview)
       out.push({

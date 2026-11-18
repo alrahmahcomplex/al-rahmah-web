@@ -124,6 +124,7 @@ describe("readOnFileSibling", () => {
         counted: [],
         selfCounts: true,
         mayPayFull: true,
+        manual: false,
       },
     })
   })
@@ -181,6 +182,11 @@ describe("readOnFileSibling", () => {
   ])("a child that %s may not be the full payer", async (_why, more) => {
     stubs.group.mockResolvedValue(explained([self(more)]))
     expect(await read()).toMatchObject({ selfCounts: true, mayPayFull: false })
+  })
+
+  it("says when the child's Sibling discount was set by hand, which check-in keeps (#309)", async () => {
+    stubs.group.mockResolvedValue(explained([self({ source: "manual", result: "ten" })]))
+    expect(await read()).toMatchObject({ manual: true })
   })
 
   it("reads a year with no Fee schedule as no fee, not as a failure", async () => {

@@ -232,6 +232,7 @@ export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOu
       counted,
       selfCounts,
       mayPayFull,
+      manual: self.source === "manual",
     },
   }
 }

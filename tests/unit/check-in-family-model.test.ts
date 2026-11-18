@@ -243,3 +243,36 @@ describe("children already siblings in one group (#309)", () => {
     ])
   })
 })
+
+describe("a discount a child holds on file at check-in (#309)", () => {
+  const FEES = { 2027: { nursery: { day: 1_000_000, boarding: 2_500_000 }, primary_lower: { day: 1_100_000, boarding: 2_600_000 }, primary_upper: { day: 1_200_000, boarding: 2_700_000 }, secondary: { day: 1_300_000, boarding: 2_800_000 } } }
+  const yusuf: Student = { key: 1, name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" }, gender: "Boy", className: "STD 6", year: 2027, board: "Day" }
+  const answers: Answers = { students: [yusuf], more: true, custodians: {}, onFileAsks: [], onFile: {} }
+  const own = (more: Partial<OnFileFee>): OnFileFee => ({
+    leadId: "11111111-1111-4111-8111-111111111111", name: "YUSUF ALI HASSAN", className: "STD 6", status: "Applied", fee: 1_200_000, pays: 1_200_000,
+    anchorName: null, fullPayerName: null, groupId: null, father: "ALI OMARI HASSAN", counted: [], selfCounts: true, mayPayFull: true, ...more,
+  })
+
+  it("keeps a Sibling 10% set by hand, which the save never changes", () => {
+    const preview = feePreview(answers, FEES, 2027, {}, {}, { 1: own({ pays: 1_080_000, manual: true }) })!
+    expect(preview.rows[0]).toMatchObject({ why: "Fee kept", fee: 1_200_000, pays: 1_080_000, off: 0.1 })
+    expect(preview.total).toBe(1_080_000)
+  })
+
+  it("keeps a full fee set by hand where the rule would give the 10%", () => {
+    const mariam: Student = { ...yusuf, key: 2, name: { ...yusuf.name!, firstName: "MARIAM" }, className: "STD 1", sibling: { kind: "match", of: 1, seen: [1] } }
+    const two: Answers = { ...answers, students: [yusuf, mariam] }
+    const preview = feePreview(two, FEES, 2027, {}, {}, { 2: own({ leadId: "m", fee: 1_100_000, pays: 1_100_000, manual: true }) })!
+    expect(preview.rows[1]).toMatchObject({ why: "Fee kept", pays: 1_100_000, off: 0 })
+  })
+
+  it("keeps a 10% the rule would take away, since the save never raises a fee", () => {
+    const preview = feePreview(answers, FEES, 2027, {}, {}, { 1: own({ pays: 1_080_000 }) })!
+    expect(preview.rows[0]).toMatchObject({ why: "Fee kept", pays: 1_080_000 })
+  })
+
+  it("shows the rule's fee when the child holds nothing more", () => {
+    const preview = feePreview(answers, FEES, 2027, {}, {}, { 1: own({}) })!
+    expect(preview.rows[0]).toMatchObject({ why: "No discount", pays: 1_200_000 })
+  })
+})

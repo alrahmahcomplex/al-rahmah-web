@@ -692,6 +692,8 @@ export type OnFileFee = {
   // Whether the database may choose it as the full payer (choose_full_payer): it counts, is open and not
   // Enrolled, and holds no manual result, no result fixed at an enrolment and no larger discount.
   mayPayFull: boolean
+  // Its Sibling discount was set by hand (#311): no recompute changes it.
+  manual?: boolean
 }
 
 export type FeeRow = {
@@ -735,6 +737,9 @@ export const tieWhy = (tied: number) => `Equal fees · one pays full, ${tied ===
  * `kept`, at check-in (#309): by student key, the group a child already in a
  * sibling group keeps, as read on file. Its household counts with that group,
  * as the save leaves it, and its row takes the fee the rule gives it there.
+ * \`held\`, at check-in: by student key, every other child's own fee as read on
+ * file. The save never raises a fee and never changes one set by hand
+ * (complete_admission_visit, rule 4), so such a row shows the fee it keeps.
  */
 export function feePreview(
   a: Answers,
@@ -742,6 +747,7 @@ export function feePreview(
   defaultYear: number,
   onFileFees: Record<string, OnFileFee>,
   kept: Record<number, OnFileFee> = {},
+  held: Record<number, OnFileFee> = {},
 ): FeePreview | null {
   const rows: FeeRow[] = []
   let total = 0
@@ -871,6 +877,24 @@ export function feePreview(
       }
       const fee = feeAt.get(k)!
       const { off, why, tone, tied, counted } = newRows.get(k)!
+      // A discount the child holds on file stays: one set by hand, or a 10% the rule would take away.
+      const onRecord = held[k]
+      const ruled = tied ? fee * 0.9 : fee * (1 - off)
+      if (onRecord && onRecord.pays !== null && onRecord.fee !== null && (onRecord.manual || onRecord.pays < ruled)) {
+        const keeps = onRecord.pays < onRecord.fee
+        rows.push({
+          key: String(k),
+          name: studentName(s.name),
+          detail: `${s.className} · ${s.board} · ${yearOf(a.students, a.students.indexOf(s), defaultYear)}`,
+          fee: onRecord.fee,
+          off: keeps ? 0.1 : 0,
+          why: "Fee kept",
+          tone: keeps ? "good" : "plain",
+          pays: onRecord.pays,
+        })
+        total += onRecord.pays
+        continue
+      }
       rows.push({
         key: String(k),
         name: studentName(s.name),

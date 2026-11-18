@@ -59,9 +59,11 @@ export type SeatsByClass = {
   // Every class in class order, Day before Boarding. Empty when `year` is
   // null, and once streams are on, when `named` says it instead.
   classes: ClassSeatFigures[]
-  // Once streams are on (#449): the year’s streams, as Seats reads them, and
-  // with `figures` asked for, Reports’ counts by stream. Null before.
-  named: { streams: YearStreams; figures: ClassStreamFigures[] | null } | null
+  // Once streams are on (#449), null before: the year’s streams as Seats reads
+  // them, for Home, which reads them on the server; or, with `figures` asked
+  // for, Reports’ counts by stream alone, since Reports hands them to the
+  // browser and the streams name the children waiting.
+  named: { streams: YearStreams; figures: null } | { streams: null; figures: ClassStreamFigures[] } | null
 }
 
 // The seats in `year`, or in the latest year with a Fee schedule when `year`
@@ -88,9 +90,14 @@ export async function getSeatsByClass(
   if (shown === null) return { ok: true, data: { year: null, years, classes: [], named: null } }
 
   if ((await getSeatMode(supabase)) === "named") {
-    const [streams, counted] = await Promise.all([getYearStreams(supabase, shown), figures ? yearSeatFigures(supabase, shown) : null])
-    if (!streams.ok || (counted && !counted.ok)) return { ok: false, error: "unavailable" }
-    return { ok: true, data: { year: shown, years, classes: [], named: { streams: streams.data, figures: counted?.ok ? counted.data : null } } }
+    if (figures) {
+      const counted = await yearSeatFigures(supabase, shown)
+      if (!counted.ok) return counted
+      return { ok: true, data: { year: shown, years, classes: [], named: { streams: null, figures: counted.data } } }
+    }
+    const streams = await getYearStreams(supabase, shown)
+    if (!streams.ok) return { ok: false, error: "unavailable" }
+    return { ok: true, data: { year: shown, years, classes: [], named: { streams: streams.data, figures: null } } }
   }
 
   const seats = await getSeats(supabase, shown)

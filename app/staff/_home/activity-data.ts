@@ -18,7 +18,8 @@ export type ActivityScreenPage = { rows: ActivityView[]; total: number; page: nu
  */
 export function fullClassesFor(permissions: readonly Permission[], seats: SeatsByClass | null): FullClass[] {
   if (!mayOpenSeats(permissions) || !seats) return []
-  return seats.named ? namedFullClasses(seats.named.streams) : fullClasses(seats.classes)
+  if (seats.named) return seats.named.streams ? namedFullClasses(seats.named.streams) : []
+  return fullClasses(seats.classes)
 }
 
 /**

@@ -185,13 +185,14 @@ describe("afterQueue", () => {
     // The first two boys take the Mixed seats, which come first; the girl finds Mixed and Girls full; the third boy takes the Boys seat.
     expect(after.unseated.map((w) => w.leadId)).toEqual(["girl", "no-answer"])
     expect(after.mixedSeatLeft).toBe(false)
+    expect([girls, boys, mixed].map(after.freeAfter)).toEqual([0, 0, 0])
   })
 
   test("a child with no Boy or girl answer takes a Mixed seat only", () => {
     const streams = [stream("A", "Boys", 10, 0), stream("B", "Girls", 10, 0), stream("C", "Mixed", 10, 9)]
     expect(afterQueue(streams, [child("x", null, 1), child("y", null, 2)])).toMatchObject({ unseated: [{ leadId: "y" }], mixedSeatLeft: false })
-    expect(afterQueue(streams, [])).toEqual({ unseated: [], mixedSeatLeft: true })
-    expect(afterQueue(streams.slice(0, 2), [])).toEqual({ unseated: [], mixedSeatLeft: false })
+    expect(afterQueue(streams, [])).toMatchObject({ unseated: [], mixedSeatLeft: true })
+    expect(afterQueue(streams.slice(0, 2), [])).toMatchObject({ unseated: [], mixedSeatLeft: false })
   })
 
   test("a stream with 0 seats takes no one", () => {

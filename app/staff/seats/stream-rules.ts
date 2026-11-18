@@ -81,7 +81,7 @@ const takesChild = (takes: StreamTakes, gender: WaitingChild["gender"]) =>
 export function afterQueue<T extends Pick<WaitingChild, "gender" | "rank">>(
   streams: readonly Stream[],
   waiting: readonly T[],
-): { unseated: T[]; mixedSeatLeft: boolean } {
+): { unseated: T[]; mixedSeatLeft: boolean; freeAfter: (stream: Stream) => number } {
   const ordered = streams.toSorted((a, b) => a.position - b.position)
   const free = new Map(ordered.map((s) => [s.id, s.seats - s.placed]))
   const freeIn = (s: Stream) => free.get(s.id) ?? 0
@@ -91,7 +91,7 @@ export function afterQueue<T extends Pick<WaitingChild, "gender" | "rank">>(
     if (seat) free.set(seat.id, freeIn(seat) - 1)
     else unseated.push(child)
   }
-  return { unseated, mixedSeatLeft: ordered.some((s) => s.takes === "Mixed" && freeIn(s) > 0) }
+  return { unseated, mixedSeatLeft: ordered.some((s) => s.takes === "Mixed" && freeIn(s) > 0), freeAfter: (s) => Math.max(0, freeIn(s)) }
 }
 
 /**

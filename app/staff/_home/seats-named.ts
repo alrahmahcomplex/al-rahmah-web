@@ -2,7 +2,7 @@ import type { FullClass } from "@/lib/services/home-activity"
 import { LEAD_CLASSES } from "@/lib/services/leads"
 import { streamName, type YearStreams } from "@/lib/services/streams"
 
-import { seatNeeds } from "../seats/stream-rules"
+import { afterQueue, seatNeeds } from "../seats/stream-rules"
 import { seatsTabOf, type SeatsTab } from "./charts"
 
 // Home's seats once streams are on (#449, prototype v42), from the same read
@@ -49,13 +49,16 @@ export function needCaption(data: YearStreams): string | null {
 
 /**
  * The "Class is full" rows: one per class and need with no free seat, with a
- * stream of the class that still has seats for the others, when there is one.
+ * stream of the class that still has seats for the others, when there is one
+ * once the children already waiting take theirs.
  */
 export function namedFullClasses(data: YearStreams): FullClass[] {
   return seatNeeds(data.classes, data.requests).map((need) => {
-    const streams = data.classes.find((entry) => entry.className === need.className)?.streams ?? []
+    const entry = data.classes.find((each) => each.className === need.className)
+    const streams = entry?.streams ?? []
     const other = need.need === "Boys" ? "Girls" : need.need === "Girls" ? "Boys" : null
-    const elsewhere = other ? streams.toSorted((a, b) => a.position - b.position).find((s) => s.takes === other && free(s) > 0) : undefined
+    const queue = afterQueue(streams, entry?.waiting ?? [])
+    const elsewhere = other ? streams.toSorted((a, b) => a.position - b.position).find((s) => s.takes === other && queue.freeAfter(s) > 0) : undefined
     return {
       className: need.className,
       taken: streams.reduce((sum, stream) => sum + stream.placed, 0),

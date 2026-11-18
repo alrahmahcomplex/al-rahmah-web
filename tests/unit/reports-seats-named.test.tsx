@@ -28,7 +28,7 @@ const named = (figures: ClassStreamFigures[]): SeatsByClass => ({
   year: 2027,
   years: [2027],
   classes: [],
-  named: { streams: { mode: "named", year: 2027, classes: [], requests: [] }, figures },
+  named: { streams: null, figures },
 })
 
 const cells = (name: string) =>

@@ -74,4 +74,11 @@ describe("the Class is full rows", () => {
     })
     expect(any).toMatchObject({ who: "STD 6", about: "no free seat for any child", details: "Open Seats to see who waits." })
   })
+
+  it("names no stream for the others when the children already waiting take its last seats", () => {
+    const girl = { leadId: "g", admissionNumber: "ADMSN-1", studentName: "Girl", gender: "Girl" as const, priority: "Deposit" as const, reachedOn: "2027-01-10", rank: 1 }
+    // FORM 1 A (Girls) shows one seat, but a girl waits for it (her row was busy).
+    const busy = cls("FORM 1", [stream("A", "Girls", 20, 19), stream("B", "Boys", 20, 20)], { freeForBoy: false, freeForGirl: false, waiting: [girl] })
+    expect(namedFullClasses(year([busy])).find((row) => row.named?.need === "Boys")?.named).toEqual({ need: "Boys", elsewhere: null })
+  })
 })

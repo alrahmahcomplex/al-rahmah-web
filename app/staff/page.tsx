@@ -75,7 +75,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     permissions,
     overdue: overdue?.ok ? overdue.data : null,
     fullClass: mayOpenSeats(permissions) && seats?.ok ? onlyFullClass(seats.data.classes) : null,
-    seatsCaption: mayOpenSeats(permissions) && seats?.ok && seats.data.named ? needCaption(seats.data.named.streams) : undefined,
+    seatsCaption: mayOpenSeats(permissions) && seats?.ok && seats.data.named?.streams ? needCaption(seats.data.named.streams) : undefined,
     waitingDiscounts: discounts?.ok ? discounts.data : null,
   })
   const statsFailed =
@@ -86,7 +86,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     counts && sourcesTab(counts),
     counts && classesTab(counts),
     counts && monthsTab(counts, today),
-    canSeeSeats && seats?.ok ? (seats.data.named ? namedSeatsTab(seats.data.named.streams) : seatsTab(seats.data.classes)) : null,
+    canSeeSeats && seats?.ok ? (seats.data.named?.streams ? namedSeatsTab(seats.data.named.streams) : seats.data.named ? null : seatsTab(seats.data.classes)) : null,
   ].filter((tab): tab is ChartTab => !!tab)
 
   return (

@@ -258,6 +258,32 @@ describe("recording a contact", () => {
     expect(await recordFollowUp(staff, lead, contact(null, { contactedBy: SECOND_MANAGER.id }))).toMatchObject({ ok: true })
   })
 
+  // #476: the Super Admin role keeps no permission list.
+  test("the Super Admin records a contact they made themselves", async () => {
+    const lead = await newLead()
+    const owner = await signedIn(SUPER_ADMIN)
+
+    expect(await recordFollowUp(owner, lead, contact(null, { contactedBy: SUPER_ADMIN.id }))).toEqual({
+      ok: true,
+      data: { recordId: expect.any(String) },
+    })
+    expect(await getLeadFollowUps(owner, lead)).toMatchObject({
+      ok: true,
+      data: { records: [{ kind: "contact", contactedBy: { id: SUPER_ADMIN.id, name: SUPER_ADMIN.name } }] },
+    })
+  })
+
+  test("nobody else may name the Super Admin as the one who made the contact", async () => {
+    const lead = await newLead()
+    for (const person of [ADMISSIONS, MANAGER]) {
+      expect(await recordFollowUp(await signedIn(person), lead, contact(null, { contactedBy: SUPER_ADMIN.id })), person.email).toEqual({
+        ok: false,
+        error: { kind: "invalid", field: "contacted_by" },
+      })
+    }
+    expect(await recordsOf(lead)).toEqual([])
+  })
+
   test("a follow-up opened, changed or recorded since the form loaded is a conflict", async () => {
     const lead = await newLead()
     const staff = await signedIn(ADMISSIONS)
@@ -414,6 +440,15 @@ describe("the staff who made the contact", () => {
     for (const person of [DEACTIVATED, RETIRED_ROLE, ACCOUNTANT]) expect(ids, person.email).not.toContain(person.id)
     expect(listed.data).toContainEqual({ id: ADMISSIONS.id, name: ADMISSIONS.name })
     for (const person of listed.data) expect(Object.keys(person).sort()).toEqual(["id", "name"])
+  })
+
+  test("lists the Super Admin to the Super Admin alone", async () => {
+    const own = await listContactStaff(await signedIn(SUPER_ADMIN))
+    expect(own.ok && own.data).toContainEqual({ id: SUPER_ADMIN.id, name: SUPER_ADMIN.name })
+    for (const person of [ADMISSIONS, MANAGER]) {
+      const listed = await listContactStaff(await signedIn(person))
+      expect(listed.ok && listed.data.map((p) => p.id), person.email).not.toContain(SUPER_ADMIN.id)
+    }
   })
 
   test("leaves out a colleague once deactivated", async () => {

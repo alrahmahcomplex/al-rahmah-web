@@ -101,7 +101,9 @@ export async function SiblingFollowUp({ supabase, permissions }: { supabase: Sup
       {
         title: "Granted: fee edit needed",
         caption: "Apply the 10%, or leave the fee with a reason",
-        count: fees.data.feeEditNeeded.count,
+        // Students, not requests: two grants for one student before the fee
+        // decision is one row in the list it opens.
+        count: new Set(fees.data.feeEditNeeded.requests.map((r) => r.leadId)).size,
         href: followUpHref("fee_edit_needed"),
       },
     )

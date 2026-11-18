@@ -185,7 +185,11 @@ export async function readSiblingGroup(
         reason: FEE_EDIT_REASONS[edit.reason].en,
         note: note?.ok ? note.data : null,
       },
-      paymentNote: waiting
+      // Only while the student pays the full fee: a Staff child or Qualified
+      // orphan discount, or the prior-sibling tick's 10%, still applies while
+      // the request waits.
+      paymentNote:
+        waiting && !here.largerDiscount && here.result !== "ten"
         ? `A Sibling request for ${list([firstName(here.studentName), ...(pendingSibling?.firstName ? [pendingSibling.firstName] : [])], "and")} is waiting. Recorded at the full fee for now. If the request is granted, the fee can be edited.`
         : null,
     },

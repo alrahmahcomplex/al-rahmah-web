@@ -725,6 +725,14 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000902'", value: "'ten'" },
     agent: { refused: "not_permitted" },
   },
+  // What granting a Sibling request would do, saved nothing (#310).
+  "public.preview_sibling_grant(request_id uuid)": {
+    roles: ["authenticated"],
+    setup:
+      "with g as (insert into public.sibling_groups (id, cause) values ('5b100000-0000-4000-8000-000000000310', 'sibling_link') returning id), m as (insert into public.sibling_group_members as m (lead_id, group_id, legacy, basis, cause, joined_at) select '1ead0000-0000-4000-8000-000000000431', g.id, false, 'request_needed', 'sibling_link', now() from g on conflict (lead_id) do update set group_id = excluded.group_id, legacy = false, basis = excluded.basis, cause = excluded.cause, joined_at = excluded.joined_at returning m.group_id) insert into public.discount_requests (id, lead_id, kind, note, requested_by, state, group_id) select 'd15c0000-0000-4000-8000-000000000310', '1ead0000-0000-4000-8000-000000000431', 'sibling', 'A note', 'a1a1a1a1-0000-4000-8000-000000000001', 'pending', m.group_id from m",
+    args: { request_id: "'d15c0000-0000-4000-8000-000000000310'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.preview_school_fee_payment(lead_id uuid, payment_type text, amount numeric, paid_on date)": {
     roles: ["authenticated"],
     args: {
@@ -996,6 +1004,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.sibling_fee_counts(year integer)": {
     roles: ["authenticated"],
     args: { year: "null" },
+    agent: { refused: "not_permitted" },
+  },
+  // Whether the full payer's fee ties with a sibling's (#310).
+  "public.sibling_full_payer_tie(lead_id uuid)": {
+    roles: ["authenticated"],
+    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "not_permitted" },
   },
   "public.sibling_lead_counts(year integer)": {

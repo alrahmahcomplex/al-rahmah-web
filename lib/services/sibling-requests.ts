@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { DayOrBoarding, LeadClass, LeadStatus } from "./leads"
 import type { Result } from "./result"
+import { toExplanation, type ExplanationRow, type SiblingGroupExplanation } from "./sibling-counts"
 
 // Sibling discount requests (#302). When the fathers' names don't match,
 // staff with leads.edit ask the Admissions Manager to let a linked lead count
@@ -249,6 +250,56 @@ export async function decideSiblingRequest(
   if (error.message === "not_pending") return { ok: false, error: "not-pending" }
   console.error("Could not decide a Sibling request", error)
   return { ok: false, error: "unavailable" }
+}
+
+// What granting a Pending Sibling request would do, saving nothing: the
+// request's lead's group as it would be, and for staff who may view payments
+// each School fee that would move. It runs the grant's own steps and rolls
+// them back, so it refuses what the grant would refuse. Needs
+// discounts.approve.
+export type SiblingGrantPreview = {
+  // Null without leads.view.
+  explanation: SiblingGroupExplanation | null
+  // For the group's full payer after the grant; null without payments.view.
+  fullPayerTie: boolean | null
+  // Null without payments.view.
+  // studentName is null, without leads.view, for anyone the request doesn't name.
+  changes: { leadId: string; studentName: string | null; before: number | null; after: number | null }[] | null
+}
+
+type PreviewRow = {
+  explanation: (ExplanationRow & { full_payer_tie: boolean | null }) | null
+  changes: { lead_id: string; student_name: string | null; before: number | null; after: number | null }[] | null
+}
+
+export async function previewSiblingGrant(
+  supabase: SupabaseClient,
+  requestId: string,
+): Promise<Result<SiblingGrantPreview, DecideSiblingRequestError>> {
+  const { data, error } = await supabase.rpc("preview_sibling_grant", { request_id: requestId })
+  if (error) {
+    const common = commonError(error)
+    if (common) return { ok: false, error: common }
+    if (error.message === "invalid") {
+      const reason = detailOf(error.details).reason
+      if (reason === "stale") return { ok: false, error: "stale" }
+      if (reason === "refused_request") return { ok: false, error: "refused-request" }
+      return { ok: false, error: "invalid" }
+    }
+    if (error.message === "lead_closed") return { ok: false, error: "lead-closed" }
+    if (error.message === "not_pending") return { ok: false, error: "not-pending" }
+    console.error("Could not preview a Sibling grant", error)
+    return { ok: false, error: "unavailable" }
+  }
+  const row = data as PreviewRow
+  return {
+    ok: true,
+    data: {
+      explanation: row.explanation && toExplanation(row.explanation),
+      fullPayerTie: row.explanation?.full_payer_tie ?? null,
+      changes: row.changes && row.changes.map((c) => ({ leadId: c.lead_id, studentName: c.student_name, before: c.before, after: c.after })),
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------

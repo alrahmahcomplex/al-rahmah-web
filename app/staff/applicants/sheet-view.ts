@@ -1,5 +1,8 @@
-import type { LeadClosure, LeadStatus } from "@/lib/services/leads"
+import type { LeadPreviousSchool } from "@/lib/services/lead-details"
+import type { LeadClass, LeadClosure, LeadStatus } from "@/lib/services/leads"
 import type { SeatPriority } from "@/lib/services/school-fee-payments"
+
+import type { SiblingGroupView } from "./[id]/sibling-read"
 
 // What the Applicants side sheet is given for one applicant (sheet-actions).
 // Plain data, so it crosses from the server action to the sheet.
@@ -24,7 +27,16 @@ export type ApplicantSheetView = {
   studentName: string
   status: LeadStatus
   closure: LeadClosure | null
+  className: LeadClass
+  // False on a closed lead, which is read-only.
+  open: boolean
+  // leads.edit on an open lead: the father's name and previous school take Edit.
+  canEdit: boolean
   student: [string, string][]
+  // The father's full name and previous school (#310); null when they could not be read.
+  fatherAndSchool: { father: string | null; previousSchool: LeadPreviousSchool } | null
+  // The Sibling group (#310); null when it could not be read.
+  sibling: SiblingGroupView | null
   custodian: [string, string][]
   // Null for staff who may not view payments.
   fee: ApplicantSheetFee | null

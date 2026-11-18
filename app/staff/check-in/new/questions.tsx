@@ -460,6 +460,8 @@ export function MismatchSheet({
   onClose: () => void
 }) {
   const [note, setNote] = useState("")
+  const [error, setError] = useState("")
+  const errorId = useId()
   if (!pair) return null
   return (
     <Sheet
@@ -470,7 +472,7 @@ export function MismatchSheet({
       closeLabel="Close"
       foot={
         <>
-          <Button size="wide" chevron onClick={() => onRequest(note)}>
+          <Button size="wide" chevron onClick={() => (note.trim() ? onRequest(note) : setError("Write what proof the family will bring."))}>
             Request the discount
           </Button>
           <Button variant="ghost" size="wide" onClick={onNotSiblings}>
@@ -494,7 +496,23 @@ export function MismatchSheet({
           Ask the family to bring proof. If the children share only their mother and she has full custody, ask for both birth certificates. The
           mother’s name must match on both.
         </Note>
-        <Field size="compact" alignStart placeholder="Note for the Admissions Manager (optional)" aria-label="Note for the Admissions Manager" autoComplete="off" maxLength={1000} value={note} onChange={(e) => setNote(e.target.value)} />
+        {/* The database refuses a Sibling request without a note on the proof (#310). */}
+        <Field
+          size="compact"
+          alignStart
+          placeholder="Note for the Admissions Manager"
+          aria-label="Note for the Admissions Manager"
+          autoComplete="off"
+          maxLength={1000}
+          value={note}
+          invalid={!!error}
+          aria-describedby={errorId}
+          onChange={(e) => {
+            setNote(e.target.value)
+            setError("")
+          }}
+        />
+        <FieldError id={errorId} message={error} />
       </div>
     </Sheet>
   )

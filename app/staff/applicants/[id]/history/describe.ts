@@ -77,6 +77,19 @@ const LABELS: Record<string, string> = {
   returning_family_reapplied: "Returning family: re-applied",
   referral_code: "Referral code",
   referral_notice_version: "Code holder notice",
+  // The father's full name and where it came from (#299), and the custodian,
+  // who brought the child and the previous school (#298), labelled in #310.
+  father_full_name: "Father’s full name",
+  father_full_name_source: "Father’s name from",
+  custodian_relationship: "Custodian’s relationship",
+  custodian_relationship_description: "Custodian’s relationship details",
+  brought_by_name: "Brought by",
+  brought_by_phone: "Brought by: phone",
+  brought_by_relationship: "Brought by: relationship",
+  previous_school_name: "Previous school",
+  previous_school_type: "Previous school: private or public",
+  previous_school_region: "Previous school: region",
+  previous_school_not_known: "Previous school not known yet",
   // Its parent or guardian.
   full_name: "Full name",
   contact_name: "Parent or guardian name",
@@ -180,6 +193,16 @@ const NOTICE_VERSIONS: Record<string, string> = {
   staff_reminder: "Staff reminded to tell the family",
 }
 
+// Where a father's full name came from (#299).
+const FATHER_SOURCES: Record<string, string> = {
+  derived: "From the student’s name",
+  backfilled: "From the student’s name, when sibling groups began",
+  edited: "Corrected by staff",
+  typo_confirmed: "Typing mistake confirmed",
+}
+
+const SCHOOL_TYPES: Record<string, string> = { private: "Private", public: "Public" }
+
 const ORIGINS: Record<string, string> = {
   front_desk: "Front desk",
   admission_form: "Admission form",
@@ -204,6 +227,10 @@ function display(field: string, value: unknown, contactNames: Readonly<Record<st
       return contactNames[String(value)] ?? raw(value)
     case "origin":
       return ORIGINS[String(value)] ?? raw(value)
+    case "father_full_name_source":
+      return FATHER_SOURCES[String(value)] ?? raw(value)
+    case "previous_school_type":
+      return SCHOOL_TYPES[String(value)] ?? raw(value)
     case "referral_notice_version":
       return NOTICE_VERSIONS[String(value)] ?? raw(value)
     case "score":

@@ -342,7 +342,7 @@ type MemberRow = {
   } | null
 }
 
-type ExplanationRow = {
+export type ExplanationRow = {
   lead_id: string
   group_id: string | null
   all_legacy: boolean | null
@@ -405,17 +405,27 @@ export async function explainSiblingGroup(
     if (error.message === "not_found" || error.code === "22P02") return { ok: false, error: "not-found" }
     return { ok: false, error: countError(error, "Could not explain a sibling group") }
   }
-  const row = data as ExplanationRow
+  return { ok: true, data: toExplanation(data as ExplanationRow) }
+}
+
+// The explanation as explain_sibling_group returns it, in the app's names.
+export function toExplanation(row: ExplanationRow): SiblingGroupExplanation {
   return {
-    ok: true,
-    data: {
-      leadId: row.lead_id,
-      groupId: row.group_id,
-      allLegacy: row.all_legacy,
-      fullPayerLeadId: row.full_payer_lead_id,
-      anchors: row.anchors,
-      grantsPaused: row.grants_paused,
-      members: row.members.map(member),
-    },
+    leadId: row.lead_id,
+    groupId: row.group_id,
+    allLegacy: row.all_legacy,
+    fullPayerLeadId: row.full_payer_lead_id,
+    anchors: row.anchors,
+    grantsPaused: row.grants_paused,
+    members: row.members.map(member),
   }
+}
+
+// For the group's full payer: whether another member ranked for the place
+// has the same School fee, so the full payer is the one that joined first.
+// Null without payments.view, and for a lead that isn't the full payer.
+export async function getFullPayerTie(supabase: SupabaseClient, leadId: string): Promise<Result<boolean | null, CountError>> {
+  const { data, error } = await supabase.rpc("sibling_full_payer_tie", { lead_id: leadId })
+  if (error) return { ok: false, error: countError(error, "Could not read whether the full payer's fee ties") }
+  return { ok: true, data: data as boolean | null }
 }

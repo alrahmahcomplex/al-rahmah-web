@@ -80,3 +80,45 @@ a.lr-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offse
 /* A value under a tick box, such as the chosen sibling: Ink at normal weight,
    lined up with the label (the 22px box and its 12px gap). */
 .lr-tick-value { margin: 0; padding-left: 34px; font-size: 14.5px; line-height: 1.45; color: var(--gf-ink); }
+
+/* The Sibling group (#310): one row per member, its fee chip and why. */
+.sg-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.sg-head h2, .sg-head h3 { margin: 0; }
+.sg-lang { display: inline-flex; margin: 0; padding: 3px; border: 0; border-radius: 999px; background: var(--gf-whisper); }
+.sg-lang label { position: relative; }
+.sg-lang input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.sg-lang span { display: inline-flex; align-items: center; height: 26px; padding: 0 11px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--gf-indigo); }
+.sg-lang input:checked + span { background: var(--gf-indigo); color: var(--gf-paper); }
+.sg-lang input:focus-visible + span { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 1px; }
+.sg-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border: 0.75px solid var(--gf-line); border-radius: 18px; overflow: hidden; }
+.sg-m { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 11px 14px 12px; }
+.sg-m + .sg-m { border-top: 1px solid var(--gf-mist); }
+.sg-m[data-here] { background: var(--gf-chrome); }
+.sg-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.sg-top b, .sg-name { font-size: 14.5px; font-weight: 600; }
+.sg-name { color: var(--gf-indigo); text-decoration: underline; text-underline-offset: 3px; }
+.sg-meta { font-size: 12.5px; color: var(--gf-quiet); }
+.sg-why { margin: 3px 0 0; font-size: 14px; line-height: 1.45; color: var(--gf-ink); }
+.sg-why:lang(sw) { color: var(--gf-ink-soft); font-style: italic; }
+.sg-note { margin: 4px 0 0; font-size: 13px; line-height: 1.4; color: var(--gf-ink-soft); }
+.sg-note[data-tone="wait"] { color: var(--gf-orange-deep); }
+.sg-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sg-lead { margin: 0; text-align: center; font-size: 15px; }
+.sg-part { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--gf-mist); }
+.sg-part h4 { margin: 0; }
+.sg-pv { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.sg-pv li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+.sg-pv b { font-weight: 600; font-size: 14px; }
+.sg-pv small { grid-column: 1 / -1; font-size: 13px; color: var(--gf-ink-soft); }
+.sg-cmp { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--gf-indigo); border-radius: 20px; overflow: hidden; text-align: center; }
+.sg-cmp div { min-width: 0; padding: 12px 10px; }
+.sg-cmp div + div { border-left: 1.5px dashed var(--gf-line-strong); }
+.sg-cmp small { display: block; font-size: 13px; color: var(--gf-ink-soft); }
+.sg-cmp b { font-size: 15px; overflow-wrap: anywhere; }
+
+/* The father's full name and the previous school under Student (#310). */
+.fs-row { display: flex; flex-direction: column; gap: 12px; }
+.fs-form { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px dashed var(--gf-line); }
+.fs-acts { justify-content: center; }
+.fs-nk { align-self: center; }
+.fs-rows { display: flex; flex-direction: column; gap: 8px; margin-top: -6px; }

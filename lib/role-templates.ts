@@ -30,11 +30,14 @@ const ADMISSIONS_STAFF: readonly Permission[] = [
   "visits.record",
 ]
 
+// Reports since the owner's decision of 2026-11-19, so Accountants see the
+// Sibling discount follow-up counts (#311).
 const ACCOUNTANT: readonly Permission[] = [
   "interview_payments.record",
   "leads.view",
   "payments.record",
   "payments.view",
+  "reports.view",
 ]
 
 export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
@@ -63,14 +66,14 @@ export const ROLE_TEMPLATES: readonly RoleTemplate[] = [
   },
   {
     name: "Accountant",
-    summary: "Records interview fees and school-fee payments.",
+    summary: "Records interview fees and school-fee payments, and sees Reports.",
     permissions: ACCOUNTANT,
     manages: [],
   },
   {
     name: "Head Accountant",
-    summary: "An Accountant who also manages the Accountants and sees Reports.",
-    permissions: [...ACCOUNTANT, "reports.view"],
+    summary: "An Accountant who also manages the Accountants.",
+    permissions: ACCOUNTANT,
     manages: ["Accountant"],
   },
   {

@@ -79,9 +79,12 @@ export async function editStreamAction(input: { streamId: string; label: string;
   })
   if (!edited.ok) {
     if (edited.error === "below_placed") {
+      // The database's count: a payment may have placed a child since the sheet opened.
+      const placed = ("placed" in edited ? edited.placed : null) ?? input.placed
+      revalidatePath("/staff/seats")
       return {
         status: "refused",
-        message: `${input.name} has ${input.placed} ${input.placed === 1 ? "child" : "children"} placed. The seats can’t go below ${input.placed}.`,
+        message: `${input.name} has ${placed} ${placed === 1 ? "child" : "children"} placed. The seats can’t go below ${placed}.`,
       }
     }
     return refused(edited.error)

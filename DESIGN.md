@@ -435,8 +435,10 @@ One component shows a lead's status wherever staff see it. A chip is a 24px pill
 | Inactive (closure) | Paper, thin Indigo Line | `#45556c` |
 | Archived (closure) | `#e2e8f0` | `#314158` |
 | Line (a time, a search term) | Paper, thin Indigo Line | Rahmah Indigo |
+| Boys, who a stream takes | `#e3f0ff` | `#0b4c8c` |
+| Girls, who a stream takes | `#fde8f1` | `#9c1c5a` |
 
-The lifecycle colours mean only lifecycle. Other tags on a lead (Returning family, Initially declined, Seat priority) use the Line chip.
+The lifecycle colours mean only lifecycle. Other tags on a lead (Returning family, Initially declined, Seat priority) use the Line chip, and so does a Mixed stream.
 
 ### Notes
 A note is a 16px-cornered box, 12px × 14px padding, 14px/1.45 text, with a 16px icon at the start: `NoticeBox` with tone `info` (Lavender Whisper, indigo text), `good` (Green Tint, dark green), `wait` (warm orange tint, dark orange) or `bad` (Red Tint, dark red). In the staff look (the kit's `Note`) it also has a thin line in its own colour: indigo at 28%, green at 38%, orange at 42%, red at 38% (v38). Never filled. A note says one thing and what to do about it.

@@ -221,14 +221,36 @@ export async function openStream(supabase: SupabaseClient, stream: NewStream): P
   return { ok: true, data: toStream(data as StreamRow) }
 }
 
-/** Corrects a stream's label and seats, never below the children placed. Needs academic_years.manage. */
-export async function editStream(supabase: SupabaseClient, change: { streamId: string; label: string; seats: number }): Promise<Result<Stream, StreamError>> {
+/** The database's count when it refuses seats below the children placed, read from the refusal's detail; null when absent. */
+function placedFromDetail(details: unknown): number | null {
+  if (typeof details !== "string") return null
+  try {
+    const placed = (JSON.parse(details) as { placed?: unknown }).placed
+    return typeof placed === "number" && Number.isInteger(placed) && placed >= 0 ? placed : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Corrects a stream's label and seats, never below the children placed. Needs
+ * academic_years.manage. A `below_placed` refusal carries the database's count
+ * at that moment, which may be higher than the screen showed.
+ */
+export async function editStream(
+  supabase: SupabaseClient,
+  change: { streamId: string; label: string; seats: number },
+): Promise<Result<Stream, StreamError> | { ok: false; error: "below_placed"; placed: number | null }> {
   const { data, error } = await supabase.rpc("edit_stream", {
     stream_id: change.streamId,
     label: change.label,
     seats: change.seats,
   })
-  if (error) return { ok: false, error: streamError(error, "change a stream") }
+  if (error) {
+    const code = streamError(error, "change a stream")
+    if (code === "below_placed") return { ok: false, error: code, placed: placedFromDetail((error as { details?: unknown }).details) }
+    return { ok: false, error: code }
+  }
   return { ok: true, data: toStream(data as StreamRow) }
 }
 

@@ -519,7 +519,7 @@ export function SiblingReviewSheet({
           />
           <Note>Proof noted at the desk: {request.note}</Note>
           {!canGrant && <Note>This application is closed. It can be granted only after it is reopened.</Note>}
-          {canGrant && !(preview?.status === "ready" && preview.members === null) && (
+          {canGrant && !(preview?.status === "ready" && preview.members === null && preview.changes === null) && (
             <div className="sg-part">
               <h4 className="lr-sub">If you grant it</h4>
               {preview === null ? (
@@ -530,18 +530,20 @@ export function SiblingReviewSheet({
                 </Note>
               ) : (
                 <>
-                  <ul className="sg-pv">
-                    {(preview.members ?? []).map((m) => (
-                      <li key={m.leadId}>
-                        <b>{m.firstName}</b>
-                        <Tag tone={m.chip.en.tone}>{m.chip.en.text}</Tag>
-                        <small>
-                          {m.sentence.en}
-                          {m.feeEditNeeded ? " Shows Granted: fee edit needed." : ""}
-                        </small>
-                      </li>
-                    ))}
-                  </ul>
+                  {preview.members && (
+                    <ul className="sg-pv">
+                      {preview.members.map((m) => (
+                        <li key={m.leadId}>
+                          <b>{m.firstName}</b>
+                          <Tag tone={m.chip.en.tone}>{m.chip.en.text}</Tag>
+                          <small>
+                            {m.sentence.en}
+                            {m.feeEditNeeded ? " Shows Granted: fee edit needed." : ""}
+                          </small>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   {preview.changes !== null && (
                     <p className="lr-hint">{preview.changes.length > 0 ? preview.changes.join(" ") : "No fee changes."}</p>
                   )}

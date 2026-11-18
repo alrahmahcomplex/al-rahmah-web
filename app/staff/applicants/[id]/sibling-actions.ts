@@ -264,11 +264,16 @@ export async function previewGrant(requestId: string, leadId: string): Promise<G
   const preview = await previewSiblingGrant(supabase, requestId)
   if (!preview.ok) return decideRefusal(preview.error, "preview")
   const { explanation, fullPayerTie, changes } = preview.data
-  // A role that may approve discounts without viewing leads sees no group.
-  if (!explanation) return { status: "ready", compareWith: null, members: null, changes: null }
+  // "Neema: TZS 1,800,000 becomes TZS 1,620,000.", for staff who may view payments.
+  const lines =
+    changes &&
+    changes.flatMap((c) =>
+      c.before !== null && c.after !== null ? [`${firstName(c.studentName)}: ${tzs(c.before)} becomes ${tzs(c.after)}.`] : [],
+    )
+  // A role that may approve discounts without viewing leads sees the fees, not the group.
+  if (!explanation) return { status: "ready", compareWith: null, members: null, changes: lines }
   const described = await describeGroupFor(supabase, explanation, leadId, fullPayerTie)
   if (!described) return decideRefusal("unavailable", "preview")
-  const nameOf = (id: string) => firstName(described.leads.get(id)?.studentName ?? "")
   const others = explanation.members.filter((m) => m.leadId !== leadId)
   const compare = others.find(counts) ?? others[0] ?? null
   const row = compare ? described.leads.get(compare.leadId) : undefined
@@ -287,11 +292,7 @@ export async function previewGrant(requestId: string, leadId: string): Promise<G
       sentence: m.sentence,
       feeEditNeeded: m.notes.some((n) => n.note === "fee_edit_needed"),
     })),
-    changes:
-      changes &&
-      changes.flatMap((c) =>
-        c.before !== null && c.after !== null ? [`${nameOf(c.leadId)}: ${tzs(c.before)} becomes ${tzs(c.after)}.`] : [],
-      ),
+    changes: lines,
   }
 }
 

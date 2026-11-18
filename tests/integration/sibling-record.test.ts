@@ -131,7 +131,7 @@ describe("preview_sibling_grant", () => {
     expect(member).toMatchObject({ basis: "granted", reason: "full_payer_sibling", becauseOf: [dear], result: "ten" })
     expect(preview.data.explanation?.members.find((m) => m.leadId === dear)).toMatchObject({ reason: "full_payer", highestFee: true })
     expect(preview.data.fullPayerTie).toBe(false)
-    expect(preview.data.changes).toEqual([{ leadId: waiting, before: KG1, after: tenOff(KG1) }])
+    expect(preview.data.changes).toEqual([{ leadId: waiting, studentName: expect.stringMatching(/^Kid/), before: KG1, after: tenOff(KG1) }])
 
     // Nothing was saved: the request still waits, and the fee and basis are as before.
     expect(await basisOf(waiting)).toBe("request_needed")
@@ -171,7 +171,7 @@ describe("preview_sibling_grant for a role without leads.view", () => {
     const preview = await previewSiblingGrant(await signedIn(approver), asked.data)
     expect(preview).toEqual({
       ok: true,
-      data: { explanation: null, fullPayerTie: null, changes: [{ leadId: waiting, before: KG1, after: tenOff(KG1) }] },
+      data: { explanation: null, fullPayerTie: null, changes: [{ leadId: waiting, studentName: expect.stringMatching(/^Kid/), before: KG1, after: tenOff(KG1) }] },
     })
     expect(await basisOf(waiting)).toBe("request_needed")
   })

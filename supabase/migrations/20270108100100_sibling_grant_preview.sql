@@ -20,7 +20,8 @@
 --      {"explanation": explain_sibling_group(the request's lead) after the
 --                      grant, plus "full_payer_tie" for its full payer, or
 --                      null without leads.view,
---       "changes": [{"lead_id", "before", "after"}] whose School fee moves,
+--       "changes": [{"lead_id", "student_name", "before", "after"}] whose
+--                  School fee moves,
 --                  or null without payments.view}
 --
 -- Rollback: drop both functions. Nothing else uses them.
@@ -135,6 +136,9 @@ begin
         if fees_visible then
             select coalesce(jsonb_agg(jsonb_build_object(
                        'lead_id', x,
+                       -- Named here, so staff who may see fees but not leads
+                       -- still read whose fee moves.
+                       'student_name', (select l.student_name from public.leads l where l.id = x),
                        'before', (fees_before -> x::text ->> 'school_fee')::integer,
                        'after', (fees_after -> x::text ->> 'school_fee')::integer
                    ) order by x), '[]'::jsonb)

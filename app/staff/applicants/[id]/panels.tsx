@@ -111,6 +111,7 @@ export const LEAD_PANELS: readonly LeadPanel[] = [
     Panel: ({ lead, staff, open }) => (
       <SchoolFeeSection
         leadId={lead.id}
+        lead={open ? lead : undefined}
         staff={staff}
         canRecord={open && staff.permissions.includes("payments.record")}
         canAdjust={staff.permissions.includes("payments.record")}

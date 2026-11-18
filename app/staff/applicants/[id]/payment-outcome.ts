@@ -12,7 +12,11 @@ export type PaymentRefusal = { status: "refused"; field: PaymentField | null; me
 
 export type PreviewOutcome = { status: "preview"; preview: PaymentPreview } | PaymentRefusal
 
-export type RecordPaymentOutcome = { status: "recorded"; message: string } | PaymentRefusal
+// Once streams are on, a payment that places the child, or one below what
+// books the seat, says so in a note instead of the plain message (v42).
+export type SeatNote = { tone: "good" | "info"; title: string; text: string; stream?: string }
+
+export type RecordPaymentOutcome = { status: "recorded"; message: string; seat?: SeatNote } | PaymentRefusal
 
 // A Pre-Form One fee leaves Total paid and the Seat priority alone, so its
 // confirmation says so instead of repeating them.
@@ -90,6 +94,9 @@ export function paymentRefusal(error: PaymentError, doing: "checked" | "recorded
       return { status: "refused", field: null, message: "Your role can't record school-fee payments." }
     case "not_found":
       return { status: "refused", field: null, message: "This application could not be found. Reload the page." }
+    // The action reads the seat afresh and names why (v42’s red note); this
+    // is only for when that read fails too.
+    case "no_class":
     case "unavailable":
       return {
         status: "refused",

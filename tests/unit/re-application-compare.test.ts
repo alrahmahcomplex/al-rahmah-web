@@ -17,6 +17,7 @@ const lead: Lead = {
   className: "STD 3",
   enrollmentYear: 2027,
   dayOrBoarding: "Day",
+  gender: null,
   status: "Applied",
   closure: null,
   visitDate: null,

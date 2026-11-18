@@ -80,6 +80,8 @@ export type PaymentError =
   | "amount_too_large"
   | "date_missing"
   | "date_in_future"
+  // Streams are on and no stream has a free seat that takes the child (#449).
+  | "no_class"
   | "forbidden"
   | "not_found"
   | "unavailable"
@@ -98,6 +100,7 @@ const REFUSALS: ReadonlySet<string> = new Set<PaymentError>([
   "amount_too_large",
   "date_missing",
   "date_in_future",
+  "no_class",
 ])
 
 type RpcError = { message: string; code?: string }

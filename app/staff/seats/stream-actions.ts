@@ -3,14 +3,23 @@
 import { revalidatePath } from "next/cache"
 
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
-import { bringUpStreams, editStream, openStream, requestStream, STREAM_TAKES, type StreamError, type StreamTakes } from "@/lib/services/streams"
+import { bringUpStreams, editStream, getSeatOutlook, openStream, requestStream, STREAM_TAKES, type StreamError, type StreamTakes } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 // Seats, once streams are on (#449, prototype v42): open, change and bring up
 // streams, and ask the Admissions Manager for one. The database checks every
 // permission and rule again; these turn its answers into the screen's words.
 
-export type StreamOutcome = { status: "done"; message: string } | { status: "refused"; message: string }
+// `childCanPay`: opened from a child’s Record payment, whether a school-fee
+// payment by them would now go through, as the database reads it after the
+// opening (children already waiting take the new seats first).
+export type StreamOutcome = { status: "done"; message: string; childCanPay?: boolean } | { status: "refused"; message: string }
+
+// Seats, and every applicant page, whose Record payment reads the streams.
+function revalidateSeats() {
+  revalidatePath("/staff/seats")
+  revalidatePath("/staff/applicants/[id]", "page")
+}
 
 const LOST = "The change could not be saved just now. Try again in a moment."
 
@@ -48,6 +57,7 @@ export async function openStreamAction(input: {
   seats: number
   requestId: string
   name: string
+  forLeadId?: string
 }): Promise<StreamOutcome> {
   if (!isWhole(input.year, 2000) || !isClass(input.className) || !isTakes(input.takes) || !isWhole(input.seats, 1) || typeof input.label !== "string") {
     return { status: "refused", message: LOST }
@@ -62,11 +72,11 @@ export async function openStreamAction(input: {
     requestId: input.requestId,
   })
   if (!opened.ok) return refused(opened.error)
-  revalidatePath("/staff/seats")
-  return {
-    status: "done",
-    message: `${input.name} is open with ${opened.data.seats} seats.`,
-  }
+  revalidateSeats()
+  const message = `${input.name} is open with ${opened.data.seats} seats.`
+  if (typeof input.forLeadId !== "string") return { status: "done", message }
+  const outlook = await getSeatOutlook(supabase, input.forLeadId)
+  return { status: "done", message, childCanPay: outlook.ok && !outlook.data.blocked }
 }
 
 export async function editStreamAction(input: { streamId: string; label: string; seats: number; name: string; placed: number }): Promise<StreamOutcome> {
@@ -81,7 +91,7 @@ export async function editStreamAction(input: { streamId: string; label: string;
     if (edited.error === "below_placed") {
       // The database's count: a payment may have placed a child since the sheet opened.
       const placed = ("placed" in edited ? edited.placed : null) ?? input.placed
-      revalidatePath("/staff/seats")
+      revalidateSeats()
       return {
         status: "refused",
         message: `${input.name} has ${placed} ${placed === 1 ? "child" : "children"} placed. The seats can’t go below ${placed}.`,
@@ -89,7 +99,7 @@ export async function editStreamAction(input: { streamId: string; label: string;
     }
     return refused(edited.error)
   }
-  revalidatePath("/staff/seats")
+  revalidateSeats()
   return {
     status: "done",
     message: `${input.name} saved: ${edited.data.seats} seats.`,
@@ -103,7 +113,7 @@ export async function bringUpAction(input: { year: number; sources: string[] }):
   const supabase = await createClient()
   const brought = await bringUpStreams(supabase, input.year, input.sources)
   if (!brought.ok) return refused(brought.error)
-  revalidatePath("/staff/seats")
+  revalidateSeats()
   const n = brought.data.length
   return {
     status: "done",
@@ -137,7 +147,6 @@ export async function requestStreamAction(input: { leadId: string } | { year: nu
       }
     return { status: "refused", message: LOST }
   }
-  revalidatePath("/staff/seats")
-  revalidatePath("/staff/applicants/[id]", "page")
+  revalidateSeats()
   return { status: "done", message: "Request sent to the Admissions Manager." }
 }

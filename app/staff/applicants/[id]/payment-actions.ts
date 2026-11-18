@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { isRecordablePaymentType, previewPayment, recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 import { requirePermission } from "@/lib/services/staff-auth"
+import { getSeatMode } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 import {
@@ -13,6 +14,7 @@ import {
   type PreviewOutcome,
   type RecordPaymentOutcome,
 } from "./payment-outcome"
+import { noClassRefusal, seatAfter, seatBefore } from "./seat-reads"
 
 // Server Actions take input from anyone who can post to them, so the shape is
 // checked here, and the database then checks the rules and the permission.
@@ -42,7 +44,13 @@ export async function previewSchoolFeePayment(leadId: string, input: PaymentInpu
   if (!allowed.ok) return paymentRefusal("forbidden", "checked")
 
   const preview = await previewPayment(supabase, leadId, { type: input.type, amount: input.amount ?? null, paidOn: input.paidOn })
-  if (!preview.ok) return paymentRefusal(preview.error, "checked")
+  if (!preview.ok) {
+    return preview.error === "no_class" ? noClassRefusal(supabase, leadId, "checked") : paymentRefusal(preview.error, "checked")
+  }
+  // Once streams are on, the old seat count says nothing, so its warning goes.
+  if (preview.data.wouldOverfill && (await getSeatMode(supabase)) === "named") {
+    return { status: "preview", preview: { ...preview.data, wouldOverfill: false } }
+  }
   return { status: "preview", preview: preview.data }
 }
 
@@ -63,13 +71,18 @@ export async function recordSchoolFeePayment(
   const allowed = await requirePermission(supabase, "payments.record")
   if (!allowed.ok) return paymentRefusal("forbidden", "recorded")
 
+  const before = await seatBefore(supabase, leadId, input.type)
   const recorded = await recordPayment(
     supabase,
     leadId,
     { type: input.type, amount: input.amount ?? null, paidOn: input.paidOn },
     requestId,
   )
-  if (!recorded.ok) return paymentRefusal(recorded.error, "recorded")
+  if (!recorded.ok) {
+    return recorded.error === "no_class" ? noClassRefusal(supabase, leadId, "recorded") : paymentRefusal(recorded.error, "recorded")
+  }
   revalidatePath(`/staff/applicants/${leadId}`)
-  return recordedPaymentOutcome(recorded.data, input.type)
+  const outcome = recordedPaymentOutcome(recorded.data, input.type)
+  const seat = await seatAfter(supabase, leadId, before, input.amount ?? null)
+  return seat && outcome.status === "recorded" ? { ...outcome, seat } : outcome
 }

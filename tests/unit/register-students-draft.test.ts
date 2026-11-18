@@ -56,7 +56,11 @@ describe("the Register students draft", () => {
     saveDraft("staff-a", answers("YUSUF"), "lead-1,lead-2")
     expect(readDraft("staff-a", "lead-1,lead-2")).toEqual(answers("YUSUF"))
     expect(readDraft("staff-a", "lead-9")).toBeNull()
-    // The Register form's draft is untouched by it.
+    // Another family's draft leaves this one alone.
+    saveDraft("staff-a", answers("ZAWADI"), "lead-9")
+    expect(readDraft("staff-a", "lead-1,lead-2")).toEqual(answers("YUSUF"))
+    expect(readDraft("staff-a", "lead-9")).toEqual(answers("ZAWADI"))
+    // The Register form's draft is untouched by them.
     expect(readDraft("staff-a")).toEqual(answers("NEEMA"))
   })
 

@@ -5,14 +5,13 @@ import { MOST_STUDENTS, type Answers } from "./model"
 // reload keeps the answers and they die with the tab. Every read and write is
 // wrapped: with storage blocked the form works with no draft.
 //
-// Check-in (#309) keeps its own draft the same way, under its own prefix,
-// with the family it is for: a draft for another family is not read.
+// Check-in (#309) keeps a draft the same way for each family, under its own
+// prefix: opening another family leaves the first one's answers alone.
 
 const VERSION = 1
 const REGISTER = "al-rahmah:register-students:"
 const CHECK_IN = "al-rahmah:check-in:"
-const prefixOf = (family?: string) => (family === undefined ? REGISTER : CHECK_IN)
-const keyFor = (staffId: string, family?: string) => `${prefixOf(family)}${staffId}`
+const keyFor = (staffId: string, family?: string) => (family === undefined ? `${REGISTER}${staffId}` : `${CHECK_IN}${staffId}:${family}`)
 
 function storage(): Storage | null {
   try {
@@ -47,11 +46,11 @@ function dropOtherDrafts(staffId: string) {
   try {
     const store = storage()
     if (!store) return
-    const mine = [keyFor(staffId), keyFor(staffId, "")]
+    const mine = (key: string) => key === keyFor(staffId) || key.startsWith(`${CHECK_IN}${staffId}:`)
     const others: string[] = []
     for (let i = 0; i < store.length; i++) {
       const key = store.key(i)
-      if (key && (key.startsWith(REGISTER) || key.startsWith(CHECK_IN)) && !mine.includes(key)) others.push(key)
+      if (key && (key.startsWith(REGISTER) || key.startsWith(CHECK_IN)) && !mine(key)) others.push(key)
     }
     for (const key of others) store.removeItem(key)
   } catch {

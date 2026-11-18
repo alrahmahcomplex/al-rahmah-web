@@ -731,8 +731,18 @@ export const tieWhy = (tied: number) => `Equal fees · one pays full, ${tied ===
  * payer. A child on file with the same fee is older, so it wins the tie, but
  * only one the database may choose: a child with a larger discount, a manual
  * or fixed result, or waiting on a Sibling request keeps the fee it has.
+ *
+ * `kept`, at check-in (#309): by student key, the group a child already in a
+ * sibling group keeps, as read on file. Its household counts with that group,
+ * as the save leaves it, and its row takes the fee the rule gives it there.
  */
-export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFileFees: Record<string, OnFileFee>): FeePreview | null {
+export function feePreview(
+  a: Answers,
+  fees: FeeTable,
+  defaultYear: number,
+  onFileFees: Record<string, OnFileFee>,
+  kept: Record<number, OnFileFee> = {},
+): FeePreview | null {
   const rows: FeeRow[] = []
   let total = 0
   let together = false
@@ -747,7 +757,9 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
 
   const { basis } = linking(a.students, onFileLinks(a, onFileFees))
   const all = households(a.students)
+  const keptLeads = new Set(Object.values(kept).map((k) => k.leadId))
   const linkedTo = (h: Household) => {
+    if (kept[h.root]) return kept[h.root]
     const ask = onFileAnswer(a, h.root) === true ? onFileAsk(a, h.root) : null
     return (ask && onFileFees[ask.leadId]) || undefined
   }
@@ -771,7 +783,7 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
   const fileRows = new Map<string, FeeRow>()
   for (const g of groups) {
     // The students the database counts as siblings: a Sibling request waits.
-    const proven = g.households.flatMap((h) => h.members.filter((k) => (basis.has(k) ? counts(basis.get(k)) : k === h.root)))
+    const proven = g.households.flatMap((h) => h.members.filter((k) => !kept[k] && (basis.has(k) ? counts(basis.get(k)) : k === h.root)))
     const giver = g.linked.find((l) => l.anchorName || l.fullPayerName)
     let fullPayer: number | OnFileFee | "tied" | null = null
     // The new students who share the highest fee, when the pick among them is the database's.
@@ -788,6 +800,7 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
       if (g.linked.length === 0) together = true
     }
     for (const k of g.households.flatMap((h) => h.members)) {
+      if (kept[k]) continue
       const fee = feeAt.get(k)!
       let off = 0
       let why = "No discount"
@@ -847,6 +860,13 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
   for (const h of all) {
     for (const k of h.members) {
       const s = a.students.find((x) => x.key === k)!
+      const own = kept[k] ? fileRows.get(kept[k].leadId) : undefined
+      if (own) {
+        // A child already in a sibling group: the fee the rule gives it there, shown as the student it is.
+        rows.push({ ...own, key: String(k), name: studentName(s.name), detail: `${s.className} · ${s.board} · ${yearOf(a.students, a.students.indexOf(s), defaultYear)}`, onFile: undefined })
+        total += own.pays ?? feeAt.get(k)!
+        continue
+      }
       const fee = feeAt.get(k)!
       const { off, why, tone, tied, counted } = newRows.get(k)!
       rows.push({
@@ -862,7 +882,7 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
       })
       total += counted
     }
-    for (const [leadId, after] of shownAfter) if (after === h.root) rows.push(fileRows.get(leadId)!)
+    for (const [leadId, after] of shownAfter) if (after === h.root && !keptLeads.has(leadId)) rows.push(fileRows.get(leadId)!)
   }
   return { rows, total, together, enrolledOnFile }
 }
@@ -871,7 +891,7 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
 export const feeSignature = (p: FeePreview) => p.rows.map((r) => `${r.key}:${r.fee}:${r.off}:${r.why}`).join("|")
 
 /** The sibling discount is mentioned only when the family has more than one child, on this form or on file (v38). */
-export const mentionsSiblings = (a: Answers, preview: FeePreview | null) => a.students.length > 1 || !!preview?.rows.some((r) => r.onFile)
+export const mentionsSiblings = (a: Answers, preview: FeePreview | null) => a.students.length > 1 || !!preview?.rows.some((r) => r.onFile || r.off > 0)
 
 // ---------------------------------------------------------------------------
 // The save.

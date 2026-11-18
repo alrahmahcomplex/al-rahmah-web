@@ -9,9 +9,12 @@
 --   {"result": "not_admission_form"}  no Admission form submission created it.
 --   {"result": "family", "sent_on", "contact", "children", "on_file"}
 --       sent_on   the day the form was sent, in Tanzania.
---       contact   the parent the form gave (id, full_name, relationship,
---                 relationship_description, phone, whatsapp, and
---                 family_match: a Family match waits on it), or null.
+--       contact   the parent the looked-up child sits on now (id,
+--                 full_name, relationship, relationship_description,
+--                 phone, whatsapp, and family_match: a Family match waits
+--                 on it). That is the form's parent, or the Family a
+--                 confirmed match moved the children to: the submission
+--                 keeps the contact it first made, so it is not read.
 --       children  every child the form created, in the form's order, with
 --                 what the lead holds now: names, Boy or girl, class, year,
 --                 Day or Boarding, status, closure, previous school, who
@@ -63,7 +66,10 @@ begin
         order by (o.key)::integer
     );
 
-    select g.* into contact from public.guardian_contacts g where g.id = submission.contact_id;
+    select g.* into contact
+    from public.leads l
+    join public.guardian_contacts g on g.id = l.guardian_contact_id
+    where l.id = admission_form_family.lead_id;
 
     return jsonb_build_object(
         'result', 'family',

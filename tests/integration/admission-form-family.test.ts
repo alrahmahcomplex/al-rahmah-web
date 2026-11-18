@@ -8,7 +8,7 @@ import { fatherFullName, studentFullName } from "@/lib/names"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { getAdmissionFormFamily, waitingChildren } from "@/lib/services/admission-form-family"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
-import { createLead, recordVisit } from "@/lib/services/leads"
+import { confirmFamilyMatch, createLead, recordVisit } from "@/lib/services/leads"
 import { linkSibling } from "@/lib/services/sibling-groups"
 
 import { anonClient, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
@@ -95,6 +95,31 @@ describe("admission_form_family", () => {
     expect(read.data.onFile.map((c) => c.leadId)).toEqual([onFile.data.leadId])
     // Registered at the desk, its father's name is the words after its own name: his first and last.
     expect(read.data.onFile[0].fatherFullName).toBe(`${dad.fatherFirst} ${dad.fatherLast}`.toUpperCase())
+  })
+
+  test("offers the Family a confirmed match moved the children to, not the form's first parent", async () => {
+    const admissions = await signedIn(ADMISSIONS)
+    const known = phone()
+    const walkIn = await createLead(admissions, {
+      guardian: { contact: { fullName: `Known Parent ${word()}`, relationship: "Mother", phone: known } },
+      student: { fullName: `${word()} ${word()} ${word()}`, className: "KG 1", enrollmentYear: year, dayOrBoarding: "Day" },
+      start: { kind: "walk-in", visitDate: today },
+    })
+    if (!walkIn.ok) throw new Error(`setup failed: ${JSON.stringify(walkIn.error)}`)
+    // The form gives a number already on file: its children wait on a Family match.
+    const form = await sendForm([{ first: word(), father: father(), className: "KG 1" }], known)
+
+    const waiting = await getAdmissionFormFamily(admissions, form.leadIds[0])
+    expect(waiting.ok && waiting.data.contact).toMatchObject({ id: form.contactId, familyMatch: true })
+
+    const confirmed = await confirmFamilyMatch(admissions, form.leadIds[0], form.leadIds)
+    if (!confirmed.ok) throw new Error(`setup failed: ${JSON.stringify(confirmed.error)}`)
+    const read = await getAdmissionFormFamily(admissions, form.leadIds[0])
+    if (!read.ok) throw new Error(`read failed: ${read.error}`)
+    expect(read.data.contact?.id).not.toBe(form.contactId)
+    expect(read.data.contact).toMatchObject({ familyMatch: false })
+    expect(read.data.children.map((c) => c.leadId)).toEqual(form.leadIds)
+    expect(read.data.onFile.map((c) => c.leadId)).toEqual([walkIn.data.leadId])
   })
 
   test("leaves a child whose visit is recorded out of the children check-in completes", async () => {

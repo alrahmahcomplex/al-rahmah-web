@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { checkInStudents, familyName, formName, givenRelationship, personParts, startCheckIn } from "@/app/staff/check-in/[id]/model"
-import { payload } from "@/app/staff/check-in/new/model"
+import { feePreview, mentionsSiblings, payload, type Answers, type OnFileFee, type Student } from "@/app/staff/check-in/new/model"
 import type { AdmissionFormFamily, FormChild } from "@/lib/services/admission-form-family"
 
 // Check-in of an Admission form family (#309): it starts from what the form
@@ -151,5 +151,45 @@ describe("the save check-in sends", () => {
   it("sends no sibling choice for a child already in a sibling group, which keeps its link", () => {
     expect(sent[1]).not.toHaveProperty("notASibling")
     expect(sent[1]).not.toHaveProperty("siblingOf")
+  })
+})
+
+describe("the fee step for a child already in a sibling group (#309)", () => {
+  const FEES = { 2027: { nursery: { day: 1_000_000, boarding: 2_500_000 }, primary_lower: { day: 1_100_000, boarding: 2_600_000 }, primary_upper: { day: 1_200_000, boarding: 2_700_000 }, secondary: { day: 1_300_000, boarding: 2_800_000 } } }
+  const yusuf: Student = { key: 1, name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" }, gender: "Boy", className: "STD 6", year: 2027, board: "Day" }
+  const group = (more: Partial<OnFileFee>): OnFileFee => ({
+    leadId: "11111111-1111-4111-8111-111111111111",
+    name: "YUSUF ALI HASSAN",
+    className: "STD 6",
+    status: "Applied",
+    fee: 1_200_000,
+    pays: 1_200_000,
+    anchorName: null,
+    fullPayerName: null,
+    groupId: "g1",
+    father: "ALI OMARI HASSAN",
+    counted: [],
+    selfCounts: true,
+    mayPayFull: true,
+    ...more,
+  })
+  const answers: Answers = { students: [yusuf], more: true, custodians: {}, onFileAsks: [], onFile: {} }
+
+  it("gives the 10% its group gives, by the sibling Enrolled there, and lists the child once", () => {
+    const preview = feePreview(answers, FEES, 2027, {}, { 1: group({ anchorName: "SALMA ALI HASSAN" }) })!
+    expect(preview.rows).toHaveLength(1)
+    expect(preview.rows[0]).toMatchObject({ key: "1", name: "YUSUF ALI HASSAN", why: "Sibling 10% · SALMA is Enrolled", off: 0.1, pays: 1_080_000 })
+    expect(preview.total).toBe(1_080_000)
+    expect(mentionsSiblings(answers, preview)).toBe(true)
+  })
+
+  it("keeps the full fee of the group's full payer", () => {
+    const preview = feePreview(answers, FEES, 2027, {}, { 1: group({ fullPayerName: "YUSUF ALI HASSAN" }) })!
+    expect(preview.rows[0]).toMatchObject({ why: "Pays full · highest fee", pays: 1_200_000 })
+  })
+
+  it("without the group, shows the fee as a new student's, as before", () => {
+    const preview = feePreview(answers, FEES, 2027, {})!
+    expect(preview.rows[0]).toMatchObject({ why: "No discount", pays: 1_200_000 })
   })
 })

@@ -186,6 +186,13 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
   const GROUPS = mode ? CHECK_IN_GROUPS : REGISTER_GROUPS
   const given = (key: number) => mode?.given.children.find((c) => c.key === key)
   const [answers, setAnswers] = useState<Answers>(() => startingAnswers(staffId, mode))
+  // At check-in, children already in a sibling group keep it: the fee step reads that group (#309).
+  const keptChildren = mode?.given.children.filter((c) => c.linked) ?? []
+  // Every child on file whose fee and group the fee step needs.
+  const keptLeads = keptChildren.map((c) => c.leadId).join(",")
+  const feeLeads = (a: Answers) => [...linkedOnFile(a).map((q) => q.leadId), ...(keptLeads ? keptLeads.split(",") : [])]
+  const keptGroups = (read: Record<string, OnFileFee>): Record<number, OnFileFee> =>
+    Object.fromEntries(keptChildren.filter((c) => read[c.leadId]).map((c) => [c.key, read[c.leadId]]))
   const [edit, setEdit] = useState<string | null>(null)
   const [finished, setFinished] = useState<Finished | null>(null)
   const [instant, setInstant] = useState(false)
@@ -228,12 +235,13 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
       .then((read) => setOnFileFees((m) => ({ ...m, [leadId]: read?.status === "read" ? read.fee : "failed" })))
   }
   useEffect(() => {
-    for (const q of linkedOnFile(answers)) if (!asked.current.has(q.leadId)) readFee(q.leadId)
-  }, [answers])
+    const leads = [...linkedOnFile(answers).map((q) => q.leadId), ...(keptLeads ? keptLeads.split(",") : [])]
+    for (const leadId of leads) if (!asked.current.has(leadId)) readFee(leadId)
+  }, [answers, keptLeads])
   function retryFees() {
-    const failed = linkedOnFile(answers).filter((q) => onFileFees[q.leadId] === "failed")
-    setOnFileFees((m) => Object.fromEntries(Object.entries(m).filter(([id]) => !failed.some((q) => q.leadId === id))))
-    for (const q of failed) readFee(q.leadId)
+    const failed = feeLeads(answers).filter((leadId) => onFileFees[leadId] === "failed")
+    setOnFileFees((m) => Object.fromEntries(Object.entries(m).filter(([id]) => !failed.includes(id))))
+    for (const leadId of failed) readFee(leadId)
   }
 
   const later = (fn: () => void, ms: number) => {
@@ -664,10 +672,10 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
 
     // The fee step waits for every linked child on file, and its answer holds only for the preview shown.
     // A fee that could not be read stops it: the preview would be a guess.
-    const reads = linkedOnFile(a).map((q) => onFileFees[q.leadId])
+    const reads = feeLeads(a).map((leadId) => onFileFees[leadId])
     const unread = reads.includes("failed")
     const loading = reads.some((r) => r === undefined)
-    const preview = feePreview(a, fees, defaultYear, read)
+    const preview = feePreview(a, fees, defaultYear, read, keptGroups(read))
     if (preview) {
       const shown = feeSignature(preview)
       out.push({
@@ -751,6 +759,13 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
         )
       }
       case "closed":
+        // At check-in the closed lead may be the child itself: opening the family again leaves it out.
+        if (mode)
+          return (
+            <>
+              {nothing} {`${nameOf(outcome.student) || "A student"}, or the sibling on file chosen for them, was closed while you were answering. Open the family again from Home.`}
+            </>
+          )
         return (
           <>
             {nothing} The sibling on file chosen for {nameOf(outcome.student) || "a student"} is Declined or closed, so they can’t be linked. Answer Not a sibling, then press the button again. {KEPT}

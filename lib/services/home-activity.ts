@@ -56,11 +56,18 @@ export type ActivityRow =
         relationship: Relationship
         relationshipDescription: string | null
       })
-  | { kind: "class_full"; id: string; className: LeadClass; taken: number; seats: number }
+  | { kind: "class_full"; id: string; className: LeadClass; taken: number; seats: number; named?: FullClassNeed }
 
 export type ActivityPage = { rows: ActivityRow[]; total: number; page: number; pageCount: number }
 
-export type FullClass = { className: LeadClass; taken: number; seats: number }
+/**
+ * Once streams are on (#449, v42): which children the class has no free seat
+ * for (boys, girls, or any child in a class of Mixed streams), and a stream of
+ * the class that still has seats for the others, by name.
+ */
+export type FullClassNeed = { need: "Boys" | "Girls" | null; elsewhere: string | null }
+
+export type FullClass = { className: LeadClass; taken: number; seats: number; named?: FullClassNeed }
 
 /**
  * The classes with no seat left, in class order: every seat kind of the class
@@ -224,7 +231,7 @@ export async function getHomeActivity(
 
   const classRows: ActivityRow[] = full
     .slice(window.aheadShown.from, window.aheadShown.to)
-    .map((entry) => ({ kind: "class_full", id: entry.className, ...entry }))
+    .map((entry) => ({ kind: "class_full", id: entry.named ? `${entry.className} ${entry.named.need ?? "any"}` : entry.className, ...entry }))
   const total = full.length + dbTotal
   return {
     ok: true,

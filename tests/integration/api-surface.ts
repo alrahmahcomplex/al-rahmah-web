@@ -1078,6 +1078,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "forbidden" },
   },
+  // Slice 5c: Reports’ seats by stream, counts only; payments.view.
+  "public.year_seat_figures(schedule_year integer)": {
+    roles: ["authenticated"],
+    args: { schedule_year: "2027" },
+    agent: { refused: "not_permitted" },
+  },
   // Slice 5b: what a Boy or girl correction does to a seat; leads.view and leads.edit.
   "public.lead_gender_outlook(lead_id uuid, gender student_gender)": {
     roles: ["authenticated"],

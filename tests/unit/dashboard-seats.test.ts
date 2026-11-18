@@ -28,7 +28,7 @@ describe("getSeatsByClass", () => {
 
   test("with no Fee schedule it shows no year and asks for no seats", async () => {
     const { rpc, supabase } = client(true)
-    expect(await getSeatsByClass(supabase)).toEqual({ ok: true, data: { year: null, years: [], classes: [] } })
+    expect(await getSeatsByClass(supabase)).toEqual({ ok: true, data: { year: null, years: [], classes: [], named: null } })
     expect(rpc).not.toHaveBeenCalledWith("year_seats", expect.anything())
   })
 })

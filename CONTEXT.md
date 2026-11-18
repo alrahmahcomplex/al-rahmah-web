@@ -85,7 +85,7 @@ The system restricts the next action automatically: **Passed** leads to **Comple
 The annual fee a student owes for their **Enrollment year**, taken from the **Fee schedule** for their class and **Day or boarding** choice, less any **School-fee discount**. It is paid in three instalments: 40%, 40% and 20% of the discounted fee, each with its due date. This is separate from the interview fee.
 
 **Fee schedule**:
-The school's fees for one **Enrollment year**. It groups the classes into fee bands (Nursery: **DAY CARE**, **KG 1**, **KG 2**; Primary: **STD 1** to **STD 4**; Primary: **STD 5** to **STD 7**; Secondary: **FORM 1** to **FORM 4**), gives each band a Day and a Boarding annual fee, and holds the instalment split and due dates, the minimum **Initial deposit**, and the **Pre-Form One programme** fee. The Accountant maintains the amounts. The Admissions Manager sets the year's **Academic-year start** and the number of seats in each class, separately for day and boarding. A new year's fees are added as a new schedule; a lead always uses the schedule of its own enrollment year.
+The school's fees for one **Enrollment year**. It groups the classes into fee bands (Nursery: **DAY CARE**, **KG 1**, **KG 2**; Primary: **STD 1** to **STD 4**; Primary: **STD 5** to **STD 7**; Secondary: **FORM 1** to **FORM 4**), gives each band a Day and a Boarding annual fee, and holds the instalment split and due dates, the minimum **Initial deposit**, and the **Pre-Form One programme** fee. The Accountant maintains the amounts. The Admissions Manager sets the year's **Academic-year start** and the number of seats in each class, separately for day and boarding. Once the school counts its seats in **Streams**, the seats are set on each stream instead, and day or boarding only sets the fee. A new year's fees are added as a new schedule; a lead always uses the schedule of its own enrollment year.
 
 **Day or boarding**:
 Whether the student will be a day scholar or a boarder. Every lead records it; the **Admission form** and staff registration both ask it, and staff may correct it.
@@ -463,7 +463,22 @@ The single calendar year in which the student is planned to enroll, such as **20
 **Class**:
 A fixed school class selected from the current workbook list: **DAY CARE**, **KG 1**, **KG 2**, **STD 1** through **STD 7**, and **FORM 1** through **FORM 4**. Staff cannot create ad hoc class values. The workbook's **PRE-FORM ONE** is not a class: such a student is a **FORM 1** lead on the **Pre-Form One programme**.
 
-Student gender is not part of the admissions-lead information model.
+**Stream**:
+One teaching group of a **Class** in an **Enrollment year**, such as **Form 1 A**. A stream takes **Boys**, **Girls** or both (**Mixed**) and has a number of seats: the places it offers to new students that year, not its size, since the students already in it are outside the admissions records. A boys' stream and a girls' stream may share a name, such as **Form 1 A (Boys)** and **Form 1 A (Girls)**; no other two streams of a class may. Staff who may set the seats open a stream and may correct its name and seats, never below the leads placed in it; who it takes is fixed once opened. A **Class** with no stream in a year has no seat limit that year. A stream has its own short label, usually a letter, and is always shown after its class: **Form 2** + **A** reads **Form 2 A**.
+_Avoid_: named class, section, level (for the **Class**)
+
+**Bringing up streams**:
+Staff who may set the seats carry the previous **Enrollment year**'s streams up one class into a new year: **Form 1 A (Boys)** of 2027 becomes **Form 2 A (Boys)** of 2028, keeping its label and who it takes. Every class moves up except **FORM 4**, which leaves the school; **STD 7** streams become **FORM 1** streams, and **DAY CARE** starts the new year with none. Streams brought up are added after any the new year already has; one whose label is already taken there gets the next free letter. Each stream is brought up once at most. A stream brought up has no seats until staff set its places for new students. Students do not move with it, since they are outside the admissions records.
+_Avoid_: transfer, promotion (for the streams)
+
+**Boy or girl**:
+Whether the student is a boy or a girl. The **Admission form** and staff registration ask it, and staff may correct it. A lead from before the question may have no answer until staff add one. A **Re-application** fills a missing answer and never overwrites one.
+
+**Placed**:
+A lead holding a **Seat priority** is placed automatically in the first stream of its class and year, in the streams' order, that takes it and has a free seat. A lead with no answer to **Boy or girl** fits **Mixed** streams only. Correcting the answer moves a placed lead to the first stream that takes it, or leaves it **Waiting for a stream** when none has a seat. A lead with no priority is never placed, and a **Declined** lead gives its seat back.
+
+**Waiting for a stream**:
+A lead holding a **Seat priority** that no stream of its class and year can take. It keeps its priority, may go on paying and may become **Enrolled**, and it takes the first fitting seat when a stream opens or a seat frees. It gets there only by a route other than a new payment, such as a discount, a payment correction, a reopening, a correction to **Boy or girl**, or streams brought up with no seats yet. A seat is booked once the deposit is paid: precisely, by the **School-fee payment** that gives the lead a **Seat priority**, which on a fee discounted far enough can come before the minimum **Initial deposit**. Until then any school-fee payment is refused while no stream can take the lead. A payment that gives no priority, made while a seat is free, is kept but books nothing, so another lead who reaches the deposit first takes that seat; the money already paid stays recorded either way. The interview fee and the **Pre-Form One programme** fee take no seat and are never refused for it.
 
 Student date of birth is not part of the admissions-lead information model.
 

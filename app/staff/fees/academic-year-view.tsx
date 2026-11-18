@@ -6,8 +6,9 @@ import type { FeeSchedule } from "@/lib/services/fees"
 import { DAY_OR_BOARDING, LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
 
 // A year's Academic-year start and seat grid, read-only, for everyone who may
-// read the schedule.
-export function AcademicYearView({ schedule }: { schedule: FeeSchedule }) {
+// read the schedule. Once streams are on (#449) the seats live on the Seats
+// screen, so the grid goes.
+export function AcademicYearView({ schedule, streamsOn = false }: { schedule: FeeSchedule; streamsOn?: boolean }) {
   const seatsOf = (className: string, dayOrBoarding: string) =>
     schedule.seats.find((seat) => seat.className === className && seat.dayOrBoarding === dayOrBoarding)?.seats
 
@@ -24,6 +25,7 @@ export function AcademicYearView({ schedule }: { schedule: FeeSchedule }) {
         ]}
       />
 
+      {!streamsOn && (
       <section aria-labelledby="fees-seats" className="kit-sec">
         <h3 id="fees-seats" className="kit-sec-title">
           Seats
@@ -46,6 +48,7 @@ export function AcademicYearView({ schedule }: { schedule: FeeSchedule }) {
           ]}
         />
       </section>
+      )}
     </div>
   )
 }

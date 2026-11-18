@@ -1,21 +1,25 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Permission } from "@/lib/permissions"
-import type { ClassSeatFigures } from "@/lib/services/dashboard"
+import type { SeatsByClass } from "@/lib/services/dashboard"
 import { fullClasses, getHomeActivity, type FullClass } from "@/lib/services/home-activity"
 import type { Result } from "@/lib/services/result"
 
 import { activityView, type ActivityView } from "./activity"
 import { mayOpenSeats } from "./quick-action-list"
+import { namedFullClasses } from "./seats-named"
 
 export type ActivityScreenPage = { rows: ActivityView[]; total: number; page: number; pageCount: number }
 
 /**
  * The full classes the log names, only for staff who may open Seats: the row
- * is theirs alone, and its button opens that screen.
+ * is theirs alone, and its button opens that screen. Once streams are on
+ * (#449), one row per class and need with no free seat.
  */
-export function fullClassesFor(permissions: readonly Permission[], classes: readonly ClassSeatFigures[] | null): FullClass[] {
-  return mayOpenSeats(permissions) && classes ? fullClasses(classes) : []
+export function fullClassesFor(permissions: readonly Permission[], seats: SeatsByClass | null): FullClass[] {
+  if (!mayOpenSeats(permissions) || !seats) return []
+  if (seats.named) return seats.named.streams ? namedFullClasses(seats.named.streams) : []
+  return fullClasses(seats.classes)
 }
 
 /**

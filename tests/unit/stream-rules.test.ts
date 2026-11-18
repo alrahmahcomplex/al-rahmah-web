@@ -139,3 +139,11 @@ describe("tanzaniaTime", () => {
     expect(tanzaniaTime("2027-01-11T21:05:00Z")).toBe("00:05")
   })
 })
+
+describe("seatNeeds and requests from a child's page", () => {
+  test("a full Mixed-only class shows a request sent for a child, whatever their need", () => {
+    const std6 = cls("STD 6", [stream("A", "Mixed", 1, 1)], { freeForAny: false, freeForBoy: false, freeForGirl: false })
+    const fromChild = { ...request("STD 6", "Girls", "2027-01-11T06:40:00Z"), studentName: "Rehema Saidi Bakari" }
+    expect(seatNeeds([std6], [fromChild])[0].request?.studentName).toBe("Rehema Saidi Bakari")
+  })
+})

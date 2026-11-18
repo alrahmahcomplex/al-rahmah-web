@@ -27,7 +27,13 @@ function NeedNotice({ need, year, classStreams, who }: { need: SeatNeed; year: n
     const by = asked
       ? `${asked.requestedByName}${asked.requestedByRole ? ` (${asked.requestedByRole})` : ""} asked at ${tanzaniaTime(asked.requestedAt)}`
       : null
-    const pronoun = need.need === "Girls" ? { his: "her", him: "her" } : { his: "his", him: "him" }
+    // v42 names the child only when the request came from their page; the
+    // child's need (from their Boy or girl answer) gives the pronoun.
+    const childNeed = asked?.need === "Boys" || asked?.need === "Girls" ? asked.need : null
+    const pronoun = childNeed === "Girls" ? { his: "her", him: "her" } : { his: "his", him: "him" }
+    const askedBy =
+      by &&
+      (asked?.studentName && childNeed ? ` ${by}: ${asked.studentName} can’t pay ${pronoun.his} school fee until a stream takes ${pronoun.him}.` : ` ${by}.`)
     return (
       <Note tone="wait" className="st-notice">
         <span>
@@ -37,13 +43,13 @@ function NeedNotice({ need, year, classStreams, who }: { need: SeatNeed; year: n
                 Open a new {need.className} stream for {needWord(need.need)}.
               </b>{" "}
               {full} is full.
-              {by && (asked?.studentName ? ` ${by}: ${asked.studentName} can’t pay ${pronoun.his} school fee until a stream takes ${pronoun.him}.` : ` ${by}.`)}
+              {askedBy}
             </>
           ) : (
             <>
               <b>Open a new {need.className} stream.</b> {full} is full.
               {need.waiting > 0 && ` ${need.waiting} ${need.waiting === 1 ? "child waits" : "children wait"} for a seat.`}
-              {by && ` ${by}.`}
+              {askedBy}
             </>
           )}
         </span>

@@ -173,3 +173,39 @@ describe("StreamsView", () => {
     expect(actions.edit).not.toHaveBeenCalled()
   })
 })
+
+describe("StreamsView, a Mixed-only class", () => {
+  const STD6: ClassStreams = {
+    className: "STD 6",
+    streams: [stream("m", "A", "Mixed", 1, 1, 1)],
+    freeForBoy: false,
+    freeForGirl: false,
+    freeForAny: false,
+    waiting: [],
+  }
+  const fromChild = {
+    id: "r2",
+    className: "STD 6" as const,
+    need: "Girls" as const,
+    leadId: "lead-2",
+    studentName: "Rehema Saidi Bakari",
+    requestedByName: "Asha",
+    requestedByRole: "Admissions Staff",
+    requestedAt: "2027-01-11T06:40:00Z",
+    resolvedAt: null,
+    resolvedByStreamId: null,
+  }
+
+  it("names the child a request came from, for the Manager", () => {
+    view(MANAGER, { ...YEAR, classes: [STD6], requests: [fromChild] })
+    expect(
+      screen.getByText(/Asha \(Admissions Staff\) asked at 09:40: Rehema Saidi Bakari can’t pay her school fee until a stream takes her\./),
+    ).toBeInTheDocument()
+  })
+
+  it("shows other staff the request as sent", () => {
+    view(STAFF, { ...YEAR, classes: [STD6], requests: [fromChild] })
+    expect(screen.getByText("Request sent at 09:40.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Send a request to open a new stream" })).not.toBeInTheDocument()
+  })
+})

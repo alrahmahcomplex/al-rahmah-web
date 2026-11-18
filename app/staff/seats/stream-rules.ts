@@ -65,9 +65,11 @@ const takesNeed = (takes: StreamTakes, need: "Boys" | "Girls") => takes === "Mix
  */
 export function seatNeeds(classes: readonly ClassStreams[], requests: readonly StreamRequest[]): SeatNeed[] {
   const needs: SeatNeed[] = []
-  const openRequest = (className: LeadClass, need: "Boys" | "Girls" | null) =>
+  // A class of Mixed streams only takes any request for it: a request sent
+  // from a child's page is recorded with the child's need, Boys or Girls.
+  const openRequest = (className: LeadClass, need: "Boys" | "Girls" | null, anyNeed = false) =>
     requests
-      .filter((r) => r.resolvedAt === null && r.className === className && r.need === need)
+      .filter((r) => r.resolvedAt === null && r.className === className && (anyNeed || r.need === need))
       .toSorted((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0] ?? null
   for (const each of classes) {
     const ordered = each.streams.toSorted((a, b) => a.position - b.position)
@@ -79,7 +81,7 @@ export function seatNeeds(classes: readonly ClassStreams[], requests: readonly S
           need: null,
           fullStream: ordered[ordered.length - 1],
           waiting: each.waiting.length,
-          request: openRequest(each.className, null),
+          request: openRequest(each.className, null, true),
         })
       }
       continue

@@ -57,6 +57,7 @@ import {
 import {
   BoardQuestion,
   BroughtQuestion,
+  GenderQuestion,
   ClassQuestion,
   CodeQuestion,
   CustodianQuestion,
@@ -407,6 +408,15 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
           </>
         ),
         body: () => <NameQuestion id={`rs-${sid}`} next={i > 0} saved={s.name} onDone={(name) => setName(s.key, name)} />,
+      })
+      out.push({
+        id: `${sid}.gender`,
+        group: 0,
+        head,
+        label: "Boy or girl",
+        done: !!s.gender,
+        summary: () => s.gender,
+        body: () => <GenderQuestion id={`rs-${sid}`} first={f} saved={s.gender} onPick={(v) => later(() => answer(`${sid}.gender`, setStudent(s.key, { gender: v })), PICK_MS)} />,
       })
       const year = yearOf(a.students, i, defaultYear)
       out.push({

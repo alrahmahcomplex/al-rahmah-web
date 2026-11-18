@@ -9,6 +9,7 @@ import type {
   RegistrationPerson,
   RegistrationStudent,
   Relationship,
+  StudentGender,
 } from "@/lib/services/leads"
 
 // Register students (#308, prototype v38): the answers the form holds, and
@@ -54,6 +55,8 @@ export type Student = {
   // Stays with the student when another is removed.
   key: number
   name?: StudentName
+  // Boy or girl (prototype v41, #449).
+  gender?: StudentGender
   className?: LeadClass
   // Left out: the student before's, else the coming intake.
   year?: number
@@ -923,6 +926,7 @@ export function payload(a: Answers, defaultYear: number, onFileFees: Record<stri
       fatherFirst: s.name?.fatherFirst ?? "",
       fatherMiddle: s.name?.fatherMiddle ?? "",
       fatherLast: s.name?.fatherLast ?? "",
+      gender: s.gender!,
       className: s.className!,
       enrollmentYear: yearOf(a.students, i, defaultYear),
       dayOrBoarding: s.board!,

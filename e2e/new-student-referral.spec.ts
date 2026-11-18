@@ -33,6 +33,7 @@ async function toCodeStep(page: Page) {
   await step.getByRole("textbox", { name: "Middle name" }).fill(m)
   await step.getByRole("textbox", { name: "Last name" }).fill(l)
   await go(page, "Continue").click()
+  await pick(page, "Boy")
   await go(page, /FORM 1/).click()
   await pick(page, "Day")
   await go(page, "Not known yet").click()

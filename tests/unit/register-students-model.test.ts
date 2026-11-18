@@ -47,6 +47,7 @@ const name = (first: string, father: string) => {
 const student = (key: number, first: string, father: string, more: Partial<Student> = {}): Student => ({
   key,
   name: name(first, father),
+  gender: "Girl",
   className: "STD 5",
   board: "Day",
   ...more,
@@ -275,6 +276,13 @@ describe("the save", () => {
     expect(out.students[2].notASibling).toBeUndefined()
     expect(out.students[0].broughtBy).toEqual({ name: "JUMA SALIM MRISHO", phone: "0712 345 678", relationship: "Father" })
     expect(out.students[2].broughtBy).toEqual({ name: "JUMA SALIM MRISHO", phone: "0712 345 678", relationship: undefined })
+  })
+
+  test("sends each student's Boy or girl answer", () => {
+    const a = form([student(1, "NEEMA", "JUMA SALIM MRISHO"), student(2, "HAMISI", "JUMA SALIM MRISHO", { gender: "Boy", sibling: { kind: "match", of: 1 } })], {
+      custodians: { 1: { kind: "father", phone: "0712345678", whatsapp: "" } },
+    })
+    expect(payload(a, 2027).students.map((s) => s.gender)).toEqual(["Girl", "Boy"])
   })
 
   test("Not a sibling with the same father's name answers the database's question; a request carries its note, or the reason", () => {

@@ -621,6 +621,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]" },
     agent: { refused: "forbidden" },
   },
+  // The leads behind one Sibling follow-up count, for the Applicants list (#311).
+  "public.leads_for_sibling_follow_up(kind text)": {
+    roles: ["authenticated"],
+    args: { kind: "'not_known'" },
+    agent: { refused: "not_permitted" },
+  },
   "public.leads_with_earlier_group_link(link_year integer)": {
     roles: ["authenticated"],
     args: { link_year: "2027" },
@@ -1020,6 +1026,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.sibling_request_counts(year integer)": {
     roles: ["authenticated"],
     args: { year: "null" },
+    agent: { refused: "not_permitted" },
+  },
+  // Each listed lead's Sibling discount tag, for the Applicants list (#311).
+  "public.sibling_list_tags(lead_ids uuid[])": {
+    roles: ["authenticated"],
+    args: { lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]" },
     agent: { refused: "not_permitted" },
   },
   "public.seat_check(lead_id uuid)": {

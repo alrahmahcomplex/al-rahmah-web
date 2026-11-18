@@ -157,7 +157,8 @@ describe("seatNeeds", () => {
     const form1 = { ...cls("FORM 1", streams), waiting: [child("x", null, 1), child("y", null, 2)] }
     const needs = seatNeeds([form1], [])
     expect(needs).toHaveLength(1)
-    expect(needs[0]).toMatchObject({ need: null, waiting: 2, fullStream: { label: "A" }, request: null, askFor: "y" })
+    // The first takes the Mixed seat on their retry; only the second still needs a stream.
+    expect(needs[0]).toMatchObject({ need: null, waiting: 1, fullStream: { label: "A" }, request: null, askFor: "y" })
   })
 
   test("a child the last Mixed seat is for gets no notice, nor does their own open request; another child's request does", () => {
@@ -169,7 +170,7 @@ describe("seatNeeds", () => {
     // A child who can't pay yet holds no Seat priority, so they aren't in the queue: the seat is not theirs.
     const needs = seatNeeds([form1], [own, { ...request("FORM 1", null, "2027-01-11T06:00:00Z"), leadId: "other" }])
     expect(needs).toHaveLength(1)
-    expect(needs[0]).toMatchObject({ need: null, askFor: null, request: { leadId: "other" } })
+    expect(needs[0]).toMatchObject({ need: null, waiting: 0, askFor: null, request: { leadId: "other" } })
   })
 })
 

@@ -156,7 +156,7 @@ export function seatNeeds(classes: readonly ClassStreams[], requests: readonly S
         className: each.className,
         need: null,
         fullStream: ordered.filter((s) => s.takes === "Mixed").at(-1) ?? null,
-        waiting: each.waiting.filter((w) => w.gender === null).length,
+        waiting: stuck.length,
         request: anyRequest,
         askFor: stuck[0]?.leadId ?? null,
       })

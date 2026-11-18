@@ -161,6 +161,38 @@ describe("the seat lock never waits for a lead row", () => {
     expect(await streamOf(waiting)).toBe("A")
   })
 
+  test("a child left waiting while their row is busy is retried and recorded as waiting, keeping their turn", async () => {
+    const year = await yearWithSchedule()
+    const cls = await emptyClass(year)
+    const girl = await child(year, cls)
+    await asSystem((sql) => sql.query("update public.leads set gender = 'Girl' where id = $1", [girl]))
+    const paid = await recordPayment(await signedIn(ACCOUNTANT), girl, { type: "initial_deposit", amount: 300_000, paidOn: daysAgo(4) }, randomUUID())
+    if (!paid.ok) throw new Error("payment failed")
+
+    const busy = session()
+    await busy.connect()
+    await busy.query("begin")
+    await busy.query("select 1 from public.leads where id = $1 for update", [girl])
+
+    // The first stream is for boys: she waits, but her row is busy.
+    const manager = session()
+    await manager.connect()
+    await manager.query("set lock_timeout = '3s'")
+    await manager.query("begin")
+    await actAsStaff(manager, MANAGER.id)
+    await manager.query("select public.open_stream($1, $2, 'A', 'Boys', 5, $3)", [year, cls, randomUUID()])
+    await manager.query("commit")
+    const retry = await asSystem((sql) => sql.query("select count(*)::int as n from public.seat_sync_queue where lead_id = $1 and retry", [girl]))
+    expect(retry.rows[0].n).toBe(1)
+
+    await busy.query("commit")
+    await asSystem((sql) => sql.query("select public.run_seat_retries()"))
+    const waiting = await asSystem((sql) =>
+      sql.query<{ cls: string }>("select waiting_class::text as cls from public.seat_placements where lead_id = $1", [girl]),
+    )
+    expect(waiting.rows[0]?.cls).toBe(cls)
+  })
+
   test("a payment and an opening stream at once both finish, and the payer takes the new seat at commit", async () => {
     const year = await yearWithSchedule()
     const cls = await emptyClass(year)

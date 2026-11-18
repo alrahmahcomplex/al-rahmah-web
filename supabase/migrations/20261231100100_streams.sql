@@ -128,10 +128,19 @@ begin
         -- Null: the child holds no seat now (it was given back, or none
         -- was free).
         stream_id uuid references public.streams (id),
-        -- Set while the child holds a Seat priority and waits for a stream:
-        -- since when. A child waiting from an earlier transaction is served
-        -- before any newcomer (brief, invariant 5).
-        waiting_since timestamptz check (stream_id is null or waiting_since is null),
+        -- Set while the child holds a Seat priority and waits for a stream
+        -- in that class and year: since when, and the transaction that
+        -- recorded it. A child waiting from an earlier transaction is served
+        -- before any newcomer (brief, invariant 5); a child moved to another
+        -- class or year starts waiting afresh there.
+        waiting_since timestamptz,
+        waiting_xid xid8,
+        waiting_year integer,
+        waiting_class public.lead_class,
+        check (stream_id is null or waiting_since is null),
+        check ((waiting_since is null) = (waiting_xid is null)
+               and (waiting_since is null) = (waiting_year is null)
+               and (waiting_since is null) = (waiting_class is null)),
         cause text not null,
         changed_at timestamptz not null default now()
     );
@@ -306,53 +315,120 @@ begin
     $fn$;
     revoke execute on function public.queue_seat_sync(uuid, text) from public, anon, authenticated, service_role;
 
-    -- Writes where a child sits, or, with no stream, that the child waits
-    -- (keeping the time they started). Only after the child's row is held,
-    -- so a child being declined beside this is never placed; false means the
-    -- row was busy and nothing was written.
-    create function public.write_seat_placement(lead_id uuid, stream_id uuid, cause text)
+    -- set_seat_placement(lead, stream, waiting_in_year, waiting_in_class,
+    -- cause): the one writer of seat_placements. With a stream, the child is
+    -- placed there. With no stream and a class, the child waits in that class
+    -- and year; a child already waiting there keeps when they started and
+    -- the transaction that recorded it. With neither, the child holds no seat
+    -- and does not wait. Nothing is written until the child's row is held
+    -- (`for no key update skip locked`), because the audit row and the key
+    -- check would otherwise wait on it; false means the row was busy and the
+    -- caller queues a retry.
+    create function public.set_seat_placement(
+        lead_id uuid,
+        stream_id uuid,
+        waiting_in_year integer,
+        waiting_in_class public.lead_class,
+        cause text
+    )
     returns boolean
     language plpgsql
     security definer
     set search_path = ''
     as $fn$
     #variable_conflict use_column
+    declare
+        current_row public.seat_placements;
+        waits boolean := set_seat_placement.stream_id is null and set_seat_placement.waiting_in_class is not null;
+        same_wait boolean;
     begin
-        perform 1 from public.leads l where l.id = write_seat_placement.lead_id for no key update skip locked;
+        perform 1 from public.leads l where l.id = set_seat_placement.lead_id for no key update skip locked;
         if not found then
             return false;
         end if;
-        insert into public.seat_placements as p (lead_id, stream_id, waiting_since, cause)
-        values (
-            write_seat_placement.lead_id, write_seat_placement.stream_id,
-            case when write_seat_placement.stream_id is null then now() end,
-            write_seat_placement.cause
-        )
-        on conflict (lead_id) do update
-        set stream_id = excluded.stream_id,
-            waiting_since = case when excluded.stream_id is null then coalesce(p.waiting_since, now()) end,
-            cause = excluded.cause,
+
+        select * into current_row from public.seat_placements p where p.lead_id = set_seat_placement.lead_id;
+        same_wait := waits and current_row.waiting_class is not distinct from set_seat_placement.waiting_in_class
+                     and current_row.waiting_year is not distinct from set_seat_placement.waiting_in_year
+                     and current_row.waiting_since is not null;
+
+        if current_row.id is null then
+            if set_seat_placement.stream_id is null and not waits then
+                return true;
+            end if;
+            insert into public.seat_placements (lead_id, stream_id, waiting_since, waiting_xid, waiting_year, waiting_class, cause)
+            values (
+                set_seat_placement.lead_id, set_seat_placement.stream_id,
+                case when waits then now() end,
+                case when waits then pg_current_xact_id() end,
+                case when waits then set_seat_placement.waiting_in_year end,
+                case when waits then set_seat_placement.waiting_in_class end,
+                set_seat_placement.cause
+            );
+            return true;
+        end if;
+
+        if current_row.stream_id is not distinct from set_seat_placement.stream_id
+           and ((waits and same_wait) or (not waits and current_row.waiting_since is null)) then
+            return true;
+        end if;
+
+        update public.seat_placements p
+        set stream_id = set_seat_placement.stream_id,
+            waiting_since = case when same_wait then current_row.waiting_since when waits then now() end,
+            waiting_xid = case when same_wait then current_row.waiting_xid when waits then pg_current_xact_id() end,
+            waiting_year = case when waits then set_seat_placement.waiting_in_year end,
+            waiting_class = case when waits then set_seat_placement.waiting_in_class end,
+            cause = set_seat_placement.cause,
             changed_at = now()
-        where p.stream_id is distinct from excluded.stream_id
-           or (excluded.stream_id is null and p.waiting_since is null);
+        where p.lead_id = set_seat_placement.lead_id;
         return true;
     end;
     $fn$;
-    revoke execute on function public.write_seat_placement(uuid, uuid, text) from public, anon, authenticated, service_role;
+    revoke execute on function public.set_seat_placement(uuid, uuid, integer, public.lead_class, text)
+        from public, anon, authenticated, service_role;
 
-    -- reconcile_class_seats(year, class, causes, default_cause): the one
-    -- place seats are given and taken back, for one class and year, under
-    -- the seat lock. Children already placed in a stream that still takes
-    -- them stay (nobody is moved to tidy up). Placements of children who no
-    -- longer hold a seat here, or whose stream no longer takes them, are
-    -- cleared. Then the free seats go, in ranking order, first to children
-    -- who were already waiting before this transaction, then to everyone
-    -- else, each to the first stream in order that takes them and has a
-    -- seat. A child with no seat is recorded as waiting. A waiting child
-    -- whose row is busy keeps their seat in the count, so nobody passes
-    -- them, and is queued as a retry. `causes` gives each queued child's own
-    -- cause; the others take `default_cause`.
-    create function public.reconcile_class_seats(schedule_year integer, class public.lead_class, causes jsonb, default_cause text)
+    -- A child whose row was busy: run again by the next flush or the daily
+    -- job. The queue has no foreign key, so this never waits.
+    create function public.queue_seat_retry(lead_id uuid)
+    returns void
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    #variable_conflict use_column
+    begin
+        insert into public.seat_sync_queue (lead_id, cause, retry)
+        values (queue_seat_retry.lead_id, 'retry', true)
+        on conflict (lead_id) where retry do nothing;
+    end;
+    $fn$;
+    revoke execute on function public.queue_seat_retry(uuid) from public, anon, authenticated, service_role;
+
+    -- reconcile_class_seats(year, class, causes, default_cause, retried):
+    -- the one place seats are given and taken back, for one class and year,
+    -- under the seat lock.
+    --   1. Children placed in a stream of this class that still holds them
+    --      and still takes them stay (nobody is moved to tidy up). Others are
+    --      cleared.
+    --   2. Children recorded as waiting here who no longer hold a seat here
+    --      stop waiting.
+    --   3. The free seats go, in ranking order, first to children already
+    --      waiting here (recorded by an earlier transaction, or retried
+    --      because their row was busy), then to everyone else, each to the
+    --      first stream in order that takes them and has a seat. A child with
+    --      no seat is recorded as waiting here.
+    -- Every write goes through set_seat_placement; a busy row is skipped and
+    -- retried, and a seat it holds keeps counting, so nobody is over the
+    -- seats and nobody passes a waiting child. `causes` gives each queued
+    -- child's own cause; the others take `default_cause`.
+    create function public.reconcile_class_seats(
+        schedule_year integer,
+        class public.lead_class,
+        causes jsonb,
+        default_cause text,
+        retried uuid[]
+    )
     returns void
     language plpgsql
     security definer
@@ -362,22 +438,32 @@ begin
         free_seats jsonb := '{}'::jsonb;
         holder record;
         placed record;
+        stale record;
         target uuid;
-        kept uuid[] := '{}';
+        settled uuid[] := '{}';
         why text;
+        this_xact xid8 := pg_current_xact_id();
     begin
         if not exists (
             select 1 from public.streams s
             where s.enrollment_year = schedule_year and s.class_name = class
         ) then
+            -- No streams here: no seats to give, and nobody waits here.
+            for stale in
+                select p.lead_id from public.seat_placements p
+                where p.waiting_year = schedule_year and p.waiting_class = class
+            loop
+                if not public.set_seat_placement(stale.lead_id, null, null, null,
+                        coalesce(causes ->> stale.lead_id::text, default_cause)) then
+                    perform public.queue_seat_retry(stale.lead_id);
+                end if;
+            end loop;
             return;
         end if;
 
-        -- Take back seats no longer held, or in a stream that no longer
-        -- takes the child, or in another class or year now.
+        -- 1. Seats no longer held, or in a stream that no longer takes the child.
         for placed in
-            select p.lead_id, p.stream_id, s.takes,
-                   h.lead_id is not null as holds, h.gender
+            select p.lead_id, s.takes, h.lead_id is not null as holds, h.gender
             from public.seat_placements p
             join public.streams s on s.id = p.stream_id
             left join public.class_seat_holders(schedule_year, class) h on h.lead_id = p.lead_id
@@ -385,31 +471,27 @@ begin
             order by p.lead_id
         loop
             if placed.holds and public.stream_takes_child(placed.takes, placed.gender) then
-                kept := kept || placed.lead_id;
-            else
-                -- The clearing write needs no lead row: the lead column
-                -- doesn't change, so no key check runs.
-                update public.seat_placements p
-                set stream_id = null,
-                    waiting_since = null,
-                    cause = case when placed.holds then 'gender'
-                                 else coalesce(causes ->> placed.lead_id::text, default_cause) end,
-                    changed_at = now()
-                where p.lead_id = placed.lead_id;
+                settled := settled || placed.lead_id;
+            elsif not public.set_seat_placement(placed.lead_id, null, null, null,
+                    case when placed.holds then 'gender'
+                         else coalesce(causes ->> placed.lead_id::text, default_cause) end) then
+                -- Busy: the seat stays counted until the retry clears it.
+                settled := settled || placed.lead_id;
+                perform public.queue_seat_retry(placed.lead_id);
             end if;
         end loop;
 
-        -- A child of this class who waited and no longer holds a seat
-        -- (declined, or the priority went) stops waiting.
-        update public.seat_placements p
-        set waiting_since = null,
-            cause = coalesce(causes ->> p.lead_id::text, default_cause),
-            changed_at = now()
-        from public.leads l
-        where l.id = p.lead_id
-          and l.enrollment_year = schedule_year and l.class_name = class
-          and p.stream_id is null and p.waiting_since is not null
-          and not exists (select 1 from public.class_seat_holders(schedule_year, class) h where h.lead_id = p.lead_id);
+        -- 2. Waiting here, but no longer holding a seat here.
+        for stale in
+            select p.lead_id from public.seat_placements p
+            where p.waiting_year = schedule_year and p.waiting_class = class
+              and not exists (select 1 from public.class_seat_holders(schedule_year, class) h where h.lead_id = p.lead_id)
+        loop
+            if not public.set_seat_placement(stale.lead_id, null, null, null,
+                    coalesce(causes ->> stale.lead_id::text, default_cause)) then
+                perform public.queue_seat_retry(stale.lead_id);
+            end if;
+        end loop;
 
         select coalesce(jsonb_object_agg(s.id::text, s.seats - (
                    select count(*) from public.seat_placements p where p.stream_id = s.id
@@ -418,15 +500,21 @@ begin
         from public.streams s
         where s.enrollment_year = schedule_year and s.class_name = class;
 
-        -- Children waiting since an earlier transaction first, then the
-        -- rest; each group in rank order.
+        -- 3. Children already waiting here first, then the rest; each group
+        -- in rank order.
         for holder in
-            select h.lead_id, h.gender,
-                   coalesce(p.stream_id is null and p.waiting_since is not null, false) as recorded_waiting
+            select h.lead_id, h.gender
             from public.class_seat_holders(schedule_year, class) h
             left join public.seat_placements p on p.lead_id = h.lead_id
-            where not (h.lead_id = any (kept))
-            order by coalesce(p.waiting_since < now(), false) desc, h.place
+            where not (h.lead_id = any (settled))
+            -- coalesce: a child with no row has no waiting, and a null
+            -- would sort first under desc.
+            order by coalesce(
+                h.lead_id = any (coalesce(retried, '{}'))
+                or (p.waiting_year = schedule_year and p.waiting_class = class and p.waiting_xid <> this_xact),
+                false
+            ) desc,
+            h.place
         loop
             why := coalesce(causes ->> holder.lead_id::text, default_cause);
             select s.id into target
@@ -437,25 +525,46 @@ begin
             order by s.position
             limit 1;
 
-            if target is null then
-                -- Waits. A busy row is recorded by the next sync.
-                if not holder.recorded_waiting then
-                    perform public.write_seat_placement(holder.lead_id, null, why);
-                end if;
-                continue;
+            if target is not null then
+                -- The seat is counted as taken whether or not the row was
+                -- free, so a busy child is never passed.
+                free_seats := jsonb_set(free_seats, array[target::text], to_jsonb((free_seats ->> target::text)::integer - 1));
             end if;
-
-            free_seats := jsonb_set(free_seats, array[target::text], to_jsonb((free_seats ->> target::text)::integer - 1));
-            if not public.write_seat_placement(holder.lead_id, target, why) then
-                insert into public.seat_sync_queue (lead_id, cause, retry)
-                values (holder.lead_id, 'retry', true)
-                on conflict (lead_id) where retry do nothing;
+            if not public.set_seat_placement(
+                holder.lead_id, target,
+                case when target is null then schedule_year end,
+                case when target is null then class end,
+                why
+            ) then
+                perform public.queue_seat_retry(holder.lead_id);
             end if;
         end loop;
     end;
     $fn$;
-    revoke execute on function public.reconcile_class_seats(integer, public.lead_class, jsonb, text)
+    revoke execute on function public.reconcile_class_seats(integer, public.lead_class, jsonb, text, uuid[])
         from public, anon, authenticated, service_role;
+
+    create function public.seat_classes_of(leads uuid[])
+    returns table (enrollment_year integer, class_name public.lead_class)
+    language sql
+    stable
+    set search_path = ''
+    as $fn$
+        select distinct x.enrollment_year, x.class_name
+        from (
+            select l.enrollment_year, l.class_name from public.leads l where l.id = any (leads)
+            union
+            select s.enrollment_year, s.class_name
+            from public.seat_placements p join public.streams s on s.id = p.stream_id
+            where p.lead_id = any (leads)
+            union
+            select p.waiting_year, p.waiting_class
+            from public.seat_placements p
+            where p.lead_id = any (leads) and p.waiting_class is not null
+        ) x
+        order by 1, 2;
+    $fn$;
+    revoke execute on function public.seat_classes_of(uuid[]) from public, anon, authenticated, service_role;
 
     -- flush_seat_queue(): runs this transaction's queued leads, and every
     -- retry left by earlier ones, under the seat lock. Each class and year
@@ -506,20 +615,9 @@ begin
         end if;
 
         touched := 0;
-        for pair in
-            select distinct x.enrollment_year, x.class_name
-            from (
-                select l.enrollment_year, l.class_name
-                from public.leads l where l.id = any (own || retries)
-                union
-                select s.enrollment_year, s.class_name
-                from public.seat_placements p
-                join public.streams s on s.id = p.stream_id
-                where p.lead_id = any (own || retries)
-            ) x
-            order by x.enrollment_year, x.class_name
+        for pair in select * from public.seat_classes_of(own || retries)
         loop
-            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, causes, 'seat_freed');
+            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, causes, 'seat_freed', retries);
             touched := touched + 1;
         end loop;
 
@@ -568,12 +666,9 @@ begin
         perform public.seat_lock();
         with gone as (delete from public.seat_sync_queue q where q.retry returning q.lead_id)
         select coalesce(array_agg(g.lead_id), '{}') into retries from gone g;
-        for pair in
-            select distinct l.enrollment_year, l.class_name
-            from public.leads l where l.id = any (retries)
-            order by 1, 2
+        for pair in select * from public.seat_classes_of(retries)
         loop
-            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, '{}'::jsonb, 'seat_freed');
+            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, '{}'::jsonb, 'seat_freed', retries);
         end loop;
         return cardinality(retries);
     end;
@@ -900,7 +995,7 @@ begin
         )
         returning * into made;
 
-        perform public.reconcile_class_seats(schedule_year, class, '{}'::jsonb, 'stream_opened');
+        perform public.reconcile_class_seats(schedule_year, class, '{}'::jsonb, 'stream_opened', '{}');
         return public.stream_json(made);
     end;
     $fn$;
@@ -964,7 +1059,7 @@ begin
         where s.id = current_stream.id
         returning * into current_stream;
 
-        perform public.reconcile_class_seats(current_stream.enrollment_year, current_stream.class_name, '{}'::jsonb, 'seat_freed');
+        perform public.reconcile_class_seats(current_stream.enrollment_year, current_stream.class_name, '{}'::jsonb, 'seat_freed', '{}');
         return public.stream_json(current_stream);
     end;
     $fn$;
@@ -1047,7 +1142,7 @@ begin
         -- A class that had no streams now has some with 0 seats: its
         -- holders wait until the places are typed.
         foreach each_class in array touched loop
-            perform public.reconcile_class_seats(schedule_year, each_class, '{}'::jsonb, 'stream_opened');
+            perform public.reconcile_class_seats(schedule_year, each_class, '{}'::jsonb, 'stream_opened', '{}');
         end loop;
         return out_list;
     end;

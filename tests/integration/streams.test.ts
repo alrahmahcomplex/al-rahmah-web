@@ -350,8 +350,8 @@ describe("the seat sync", () => {
       await named(sql)
       await open(sql, year, c, "A", "Mixed", 1)
       await asOwner(sql)
-      // The waiting child was recorded in an earlier transaction.
-      await sql.query("update public.seat_placements set waiting_since = now() - interval '1 day' where lead_id = $1", [waiting])
+      // The waiting child was recorded by an earlier transaction.
+      await sql.query("update public.seat_placements set waiting_xid = '1'::xid8 where lead_id = $1", [waiting])
       // In one transaction: the newcomer reaches a priority dated before the
       // waiting child's (so it ranks higher), and the placed child is declined.
       await actAsStaff(sql, ACCOUNTANT.id)
@@ -364,6 +364,39 @@ describe("the seat sync", () => {
       expect(await placements(sql, [placed, waiting, newcomer])).toEqual({ [placed]: null, [waiting]: "A", [newcomer]: null })
       const { rows } = await sql.query("select waiting_since is not null as waits from public.seat_placements where lead_id = $1", [newcomer])
       expect(rows[0].waits).toBe(true)
+    })
+  })
+
+  test("a waiting child moved to another class stops waiting in the old one and waits afresh in the new", async () => {
+    const year = await yearWithSchedule()
+    const [from, to, noStreams] = await emptyClasses(year, 3)
+    const placed = await holder(year, from, "Boy", 9)
+    const mover = await holder(year, from, "Boy", 4)
+    const waitingThere = await holder(year, to, "Boy", 2)
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      await open(sql, year, from, "A", "Mixed", 1)
+      await open(sql, year, to, "A", "Mixed", 0 + 1)
+      await asOwner(sql)
+      const waits = async (id: string) =>
+        (await sql.query<{ cls: string | null; earlier: boolean | null }>(
+          "select waiting_class::text as cls, waiting_xid <> pg_current_xact_id() as earlier from public.seat_placements where lead_id = $1",
+          [id],
+        )).rows[0] ?? { cls: null, earlier: null }
+      expect(await placements(sql, [placed, mover, waitingThere])).toEqual({ [placed]: "A", [mover]: null, [waitingThere]: "A" })
+      expect((await waits(mover)).cls).toBe(from)
+      await sql.query("update public.seat_placements set waiting_xid = '1'::xid8 where lead_id = $1", [mover])
+
+      // Corrected into a full class with streams: waits there, afresh.
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("update public.leads set class_name = $2 where id = $1", [mover, to])
+      await sql.query("select public.flush_seat_queue()")
+      expect(await waits(mover)).toEqual({ cls: to, earlier: false })
+
+      // Corrected into a class with no streams: no limit, so no waiting.
+      await sql.query("update public.leads set class_name = $2 where id = $1", [mover, noStreams])
+      await sql.query("select public.flush_seat_queue()")
+      expect(await waits(mover)).toEqual({ cls: null, earlier: null })
     })
   })
 

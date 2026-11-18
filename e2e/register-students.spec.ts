@@ -36,7 +36,7 @@ async function start(page: Page) {
   await expect(page.getByRole("heading", { name: "What is the student’s name?" })).toBeVisible()
 }
 
-async function student(page: Page, first: string, f: Father, cls: { tab: string; name: string } | "FORM 1", board: "Day" | "Boarding") {
+async function student(page: Page, first: string, f: Father, cls: { tab: string; name: string } | "FORM 1", board: "Day" | "Boarding", gender: "Boy" | "Girl" = "Girl") {
   const step = open(page)
   await step.getByRole("textbox", { name: "Student’s name" }).fill(first)
   await step.getByRole("textbox", { name: "First name" }).fill(f[0])
@@ -44,6 +44,8 @@ async function student(page: Page, first: string, f: Father, cls: { tab: string;
   await step.getByRole("textbox", { name: "Last name" }).fill(f[2])
   await expect(step.getByText(`Student’s full name: ${full(first, f)}`)).toBeVisible()
   await go(page, "Continue").click()
+  await expect(open(page).getByRole("heading", { name: `Is ${first} a boy or a girl?` })).toBeVisible()
+  await pick(page, gender)
 
   if (cls === "FORM 1") await go(page, /FORM 1/).click()
   else {
@@ -79,13 +81,13 @@ async function siblingResult(name: string) {
   return inRolledBackTransaction(async (sql) => {
     const { rows } = await sql.query(
       `select l.status, l.custodian_relationship as rel, l.custodian_relationship_description as rel_desc, l.brought_by_name as brought,
-              l.previous_school_not_known as school_unknown, coalesce(r.result, 'none') as result
+              l.previous_school_not_known as school_unknown, l.gender, coalesce(r.result, 'none') as result
          from public.leads l left join public.lead_sibling_results r on r.lead_id = l.id
         where l.student_name = $1`,
       [name],
     )
     if (rows.length !== 1) throw new Error(`expected one lead named ${name}, found ${rows.length}`)
-    return rows[0] as { status: string; rel: string; rel_desc: string | null; brought: string | null; school_unknown: boolean; result: string }
+    return rows[0] as { status: string; rel: string; rel_desc: string | null; brought: string | null; school_unknown: boolean; gender: string | null; result: string }
   })
 }
 
@@ -102,7 +104,7 @@ test.describe("registering a family", () => {
 
     await student(page, neema, dad, { tab: "Primary", name: "STD 5" }, "Day")
     await another(page)
-    await student(page, hamisi, dad, "FORM 1", "Boarding")
+    await student(page, hamisi, dad, "FORM 1", "Boarding", "Boy")
     await expect(page.getByRole("heading", { name: new RegExp(`^${hamisi} and ${neema} have the same father’s name`) })).toBeVisible()
     await pick(page, new RegExp(`^Yes, sibling of ${full(neema, dad)}`))
     await expect(page.getByText("Same father’s name. The 10% sibling discount applies.")).toBeVisible()
@@ -134,8 +136,8 @@ test.describe("registering a family", () => {
     await expect(page.getByText("The 10% sibling discount is on 1 student.")).toBeVisible()
     await expect(page.getByText("3 previous schools are saved as Not known yet.", { exact: false })).toBeVisible()
 
-    expect(await siblingResult(full(neema, dad))).toMatchObject({ status: "Visited", rel: "Father", result: "ten", brought: dad.join(" "), school_unknown: true })
-    expect(await siblingResult(full(hamisi, dad))).toMatchObject({ rel: "Father", result: "full" })
+    expect(await siblingResult(full(neema, dad))).toMatchObject({ status: "Visited", rel: "Father", result: "ten", brought: dad.join(" "), school_unknown: true, gender: "Girl" })
+    expect(await siblingResult(full(hamisi, dad))).toMatchObject({ rel: "Father", result: "full", gender: "Boy" })
     expect(await siblingResult(full(zawadi, other))).toMatchObject({ rel: "Other", rel_desc: "Uncle", result: "none" })
   })
 

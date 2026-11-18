@@ -32,6 +32,7 @@ const form = (student: Record<string, unknown> = {}): RegisterFamilyForm =>
         fatherLast: "MRISHO",
         className: "FORM 1",
         enrollmentYear: 2027,
+        gender: "Girl",
         dayOrBoarding: "Day",
         custodian: { person: 1, father: true },
         ...student,

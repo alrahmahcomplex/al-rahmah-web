@@ -10,6 +10,7 @@ import {
   MAX_STUDENTS_PER_FORM,
   RELATIONSHIPS,
   registerStudents,
+  STUDENT_GENDERS,
   type RegistrationInvalidField,
   type RegistrationPerson,
   type RegistrationQuestion,
@@ -58,6 +59,7 @@ function isStudent(s: RegistrationStudent, people: number, students: number): bo
   const brought = s.broughtBy === undefined || (str(s.broughtBy.name, 120) && optStr(s.broughtBy.phone, 40) && optStr(s.broughtBy.relationship, 60))
   return (
     str(s.firstName) && str(s.fatherFirst) && str(s.fatherMiddle) && str(s.fatherLast) &&
+    (STUDENT_GENDERS as readonly string[]).includes(s.gender ?? "") &&
     (LEAD_CLASSES as readonly string[]).includes(s.className) &&
     Number.isInteger(s.enrollmentYear) &&
     (DAY_OR_BOARDING as readonly string[]).includes(s.dayOrBoarding) &&

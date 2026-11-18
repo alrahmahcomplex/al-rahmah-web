@@ -34,7 +34,7 @@ import {
 } from "@/components/kit"
 import { Icon } from "@/components/icons"
 import { STAFF_REMINDER } from "@/lib/referral-notice"
-import type { DayOrBoarding, LeadClass } from "@/lib/services/leads"
+import { STUDENT_GENDERS, type DayOrBoarding, type LeadClass, type StudentGender } from "@/lib/services/leads"
 
 import { lookUpReferralCode } from "../../applicants/[id]/referral-actions"
 import { usableCode, type ReferralLookup } from "../../applicants/[id]/referral-outcome"
@@ -215,6 +215,27 @@ export function ClassQuestion({
           }))}
         />
       </Sheet>
+    </div>
+  )
+}
+
+export function GenderQuestion({ id, first, saved, onPick }: { id: string; first: string; saved?: StudentGender; onPick: (v: StudentGender) => void }) {
+  const [value, setValue] = useState<string | null>(saved ?? null)
+  const pick = (v: string) => onPick(v as StudentGender)
+  return (
+    <div onClick={again(saved, pick)}>
+      <ChoiceTiles
+        name={`${id}-gender`}
+        layout="two"
+        big
+        legend={<QuestionTitle>{`Is ${first} a boy or a girl?`}</QuestionTitle>}
+        options={STUDENT_GENDERS.map((o) => ({ value: o, label: o }))}
+        value={value}
+        onChange={(v) => {
+          setValue(v)
+          pick(v)
+        }}
+      />
     </div>
   )
 }

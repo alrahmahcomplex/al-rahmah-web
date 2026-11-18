@@ -12,7 +12,7 @@ test.use({ viewport: PHONE_WIDTH })
 
 const t = WORDS.sw
 const nextYear = String(admissionYears()[1])
-const genderQ = /ni mvulana au msichana?$/
+const genderQ = /ni mvulana au msichana\?$/
 
 test.beforeEach(async ({ context }) => {
   await setLanguageCookie(context, "sw")

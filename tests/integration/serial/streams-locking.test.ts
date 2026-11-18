@@ -237,6 +237,58 @@ describe("the seat lock never waits for a lead row", () => {
     expect(await open()).toBe(true)
   })
 
+  test("a request left open on a busy row gives its child no turn: paying in full later, he still comes after the girl already waiting", async () => {
+    const year = await yearWithSchedule()
+    const cls = await emptyClass(year)
+    const accountant = await signedIn(ACCOUNTANT)
+    const [seated, girl, asking] = [await child(year, cls), await child(year, cls), await child(year, cls)]
+    await asSystem((sql) => sql.query("update public.leads set gender = 'Girl' where id = $1", [girl]))
+    for (const [id, days] of [[seated, 6], [girl, 4]] as const) {
+      const paid = await recordPayment(accountant, id, { type: "initial_deposit", amount: 300_000, paidOn: daysAgo(days) }, randomUUID())
+      if (!paid.ok) throw new Error("payment failed")
+    }
+
+    // The boys' stream is full: the girl waits, and the boy who hasn't paid asks for a stream.
+    const manager = session()
+    await manager.connect()
+    await manager.query("set lock_timeout = '3s'")
+    const openStream = async (label: string, takes: string) => {
+      await manager.query("begin")
+      await actAsStaff(manager, MANAGER.id)
+      await manager.query("select public.open_stream($1, $2, $3, $4, 1, $5)", [year, cls, label, takes, randomUUID()])
+      await manager.query("commit")
+    }
+    await openStream("A", "Boys")
+    expect([await streamOf(seated), await streamOf(girl)]).toEqual(["A", null])
+    const request = await asSystem(async (sql) => {
+      await actAsStaff(sql, ADMISSIONS.id)
+      return (await sql.query("select public.request_stream($1, null, null, null) as r", [asking])).rows[0].r.id as string
+    })
+
+    // Both rows are busy while a mixed stream and then a boys' stream open:
+    // her seat in B is counted but not written, and his request, answered
+    // by C, can't be closed.
+    const busy = session()
+    await busy.connect()
+    await busy.query("begin")
+    await busy.query("select 1 from public.leads where id = any ($1) for update", [[girl, asking]])
+    await openStream("B", "Mixed")
+    await openStream("C", "Boys")
+    const closed = async () =>
+      (await asSystem((sql) => sql.query<{ done: boolean }>("select resolved_at is not null as done from public.stream_requests where id = $1", [request]))).rows[0].done
+    expect(await closed()).toBe(false)
+    expect([await streamOf(girl), await streamOf(asking)]).toEqual([null, null])
+    await busy.query("commit")
+
+    // Before any other sync, he pays in full. Full ranks above her Deposit,
+    // but she was waiting first: she takes B, and he takes C.
+    const fee = await asSystem((sql) => sql.query<{ school_fee: number }>("select school_fee from public.lead_seat_priority($1)", [asking]))
+    const paid = await recordPayment(accountant, asking, { type: "full_payment", amount: fee.rows[0].school_fee, paidOn: today }, randomUUID())
+    expect(paid).toMatchObject({ ok: true, data: { priority: "Full" } })
+    expect([await streamOf(girl), await streamOf(asking)]).toEqual(["B", "C"])
+    expect(await closed()).toBe(true)
+  })
+
   test("a payment and an opening stream at once both finish, and the payer takes the new seat", async () => {
     const year = await yearWithSchedule()
     const cls = await emptyClass(year)

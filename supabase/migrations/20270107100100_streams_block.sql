@@ -22,7 +22,12 @@
 --    a child (from their application) or for a class and need. Refused with
 --    `not_full` when a stream can take them after all. resolve_stream_requests
 --    closes requests once a fitting seat is free, or the child is placed,
---    declined or moved; reconcile_class_seats calls it.
+--    declined or moved; reconcile_class_seats calls it. A request left open
+--    because its child's row was busy is queued as a retry marked
+--    `for_request`: the next sync looks at the class again, and the mark
+--    gives the child no turn ahead of anyone (only a retry of a skipped
+--    seat write does). queue_seat_retry, flush_seat_queue and
+--    run_seat_retries are redefined for the mark.
 -- 5. Reads: year_streams(year) for Seats and Reports, lead_seat_outlook(lead)
 --    for Record payment (with the amount that books the seat: the deposit
 --    normally, the first share when a discount brings it lower, nothing when
@@ -34,9 +39,12 @@
 -- invalid, not_full, no_class, seats_moved.
 --
 -- Rollback: a new migration putting check_school_fee_payment,
--- record_school_fee_payment, set_academic_year and reconcile_class_seats
--- back as 20261204130500, 20261106901100, 20261014900100 and 20270104100100
--- made them, and dropping the functions added here.
+-- record_school_fee_payment, set_academic_year, reconcile_class_seats,
+-- queue_seat_retry, flush_seat_queue and run_seat_retries back as
+-- 20261204130500, 20261106901100, 20261014900100 and 20270104100100 made
+-- them, dropping the functions added here, then dropping
+-- seat_sync_queue.for_request and recreating seat_sync_queue_retry_once on
+-- (lead_id, retry_year, retry_class).
 
 do $migration$
 begin
@@ -45,6 +53,51 @@ begin
     -- -----------------------------------------------------------------------
     -- 1. The shared first-fit rule.
     -- -----------------------------------------------------------------------
+
+    -- A retry in seat_sync_queue does two things: the next sync looks at
+    -- its class again, and its child keeps their turn ahead of newcomers
+    -- there. A request left open because its child's row was busy needs only
+    -- the first. `for_request` marks that kind: every read of who is
+    -- already waiting leaves it out, so it gives nobody a turn. A child may
+    -- hold one retry of each kind for a class.
+    alter table public.seat_sync_queue add column for_request boolean not null default false;
+    comment on column public.seat_sync_queue.for_request is
+        'A retry that only has its class looked at again, to close a stream request; it gives the child no turn ahead of others.';
+    drop index public.seat_sync_queue_retry_once;
+    create unique index seat_sync_queue_retry_once
+        on public.seat_sync_queue (lead_id, retry_year, retry_class, for_request) where retry;
+
+    -- queue_seat_retry, as 20270104100100 made it, naming the wider index.
+    create or replace function public.queue_seat_retry(lead_id uuid, in_year integer, in_class public.lead_class)
+    returns void
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    #variable_conflict use_column
+    begin
+        insert into public.seat_sync_queue (lead_id, cause, retry, retry_year, retry_class)
+        values (queue_seat_retry.lead_id, 'retry', true, queue_seat_retry.in_year, queue_seat_retry.in_class)
+        on conflict (lead_id, retry_year, retry_class, for_request) where retry do nothing;
+    end;
+    $fn$;
+
+    -- A child whose row was busy when their request was answered: the next
+    -- sync or the daily job looks at the class again. No turn comes with it.
+    create function public.queue_request_retry(lead_id uuid, in_year integer, in_class public.lead_class)
+    returns void
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    #variable_conflict use_column
+    begin
+        insert into public.seat_sync_queue (lead_id, cause, retry, retry_year, retry_class, for_request)
+        values (queue_request_retry.lead_id, 'request', true, queue_request_retry.in_year, queue_request_retry.in_class, true)
+        on conflict (lead_id, retry_year, retry_class, for_request) where retry do nothing;
+    end;
+    $fn$;
+    revoke execute on function public.queue_request_retry(uuid, integer, public.lead_class) from public, anon, authenticated, service_role;
 
     -- class_seat_holders, as 20270104100100 made it, reading the class's
     -- leads first instead of the whole year's: seat_holders' rule (a Seat
@@ -101,7 +154,8 @@ begin
         end if;
 
         -- Children already holding a seat priority here and not placed take
-        -- theirs first, in the order the sync serves them.
+        -- theirs first, in the order the sync serves them. A request's retry
+        -- is no turn.
         for holder in
             select h.lead_id, h.gender
             from public.class_seat_holders(schedule_year, class) h
@@ -110,7 +164,8 @@ begin
             order by coalesce(
                 exists (
                     select 1 from public.seat_sync_queue q
-                    where q.retry and q.lead_id = h.lead_id and q.retry_year = schedule_year and q.retry_class = class
+                    where q.retry and not q.for_request
+                      and q.lead_id = h.lead_id and q.retry_year = schedule_year and q.retry_class = class
                 )
                 or (p.waiting_year = schedule_year and p.waiting_class = class),
                 false
@@ -398,8 +453,10 @@ begin
     -- answers, or whose child is placed, declined or no longer here. Under
     -- the seat lock. A request naming a child is written only once the
     -- child's row is held without waiting (the audit row's key check);
-    -- otherwise the child is queued as a retry for this class, and the next
-    -- sync or the daily job closes it.
+    -- otherwise the class is queued to be looked at again
+    -- (queue_request_retry), and the next sync or the daily job closes it.
+    -- That retry gives the child no turn: a child who then pays is ranked
+    -- like any newcomer, behind the children already waiting.
     create function public.resolve_stream_requests(schedule_year integer, class public.lead_class)
     returns void
     language plpgsql
@@ -434,7 +491,7 @@ begin
                     perform 1 from public.leads l where l.id = request.lead_id for key share skip locked;
                     if not found then
                         -- Busy: the next sync or the daily job closes it.
-                        perform public.queue_seat_retry(request.lead_id, schedule_year, class);
+                        perform public.queue_request_retry(request.lead_id, schedule_year, class);
                         continue;
                     end if;
                 end if;
@@ -488,7 +545,7 @@ begin
     $fn$;
 
     -- reconcile_class_seats, as 20270104100100 made it, closing the requests
-    -- its seats now answer.
+    -- its seats now answer, and giving no turn for a request's retry.
     create or replace function public.reconcile_class_seats(
         schedule_year integer,
         class public.lead_class,
@@ -589,7 +646,8 @@ begin
                 (h.lead_id::text || '|' || schedule_year || '|' || class) = any (coalesce(retried, '{}'))
                 or exists (
                     select 1 from public.seat_sync_queue q
-                    where q.retry and q.lead_id = h.lead_id and q.retry_year = schedule_year and q.retry_class = class
+                    where q.retry and not q.for_request
+                      and q.lead_id = h.lead_id and q.retry_year = schedule_year and q.retry_class = class
                 )
                 or (p.waiting_year = schedule_year and p.waiting_class = class and p.waiting_xid <> this_xact),
                 false
@@ -622,6 +680,129 @@ begin
 
         -- Requests its seats now answer (slice 4b).
         perform public.resolve_stream_requests(schedule_year, class);
+    end;
+    $fn$;
+
+    -- flush_seat_queue and run_seat_retries, as 20270104100100 made them:
+    -- every retry still has its class reconciled, and only the retries of a
+    -- skipped seat write are handed on as `retried`.
+    create or replace function public.flush_seat_queue()
+    returns integer
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    declare
+        queued record;
+        own uuid[] := '{}';
+        causes jsonb := '{}'::jsonb;
+        actor_kind text;
+        actor_staff uuid;
+        retries uuid[];
+        retry_keys text[];
+        retry_classes text[];
+        pair record;
+        touched integer;
+    begin
+        if not exists (select 1 from public.seat_sync_queue q where not q.retry) then
+            return 0;
+        end if;
+
+        -- The audit rows written after the seat lock name a staff actor;
+        -- their key check must not wait then.
+        perform 1 from public.staff_members s
+        where s.id = (select a.staff_id from public.audit_actor() a)
+           or s.id in (select q.actor_staff_id from public.seat_sync_queue q where not q.retry)
+        order by s.id
+        for key share;
+
+        perform public.seat_lock();
+
+        for queued in
+            delete from public.seat_sync_queue q where not q.retry
+            returning q.lead_id, q.cause, q.actor_kind, q.actor_staff_id, q.id
+        loop
+            own := own || queued.lead_id;
+            causes := causes || jsonb_build_object(queued.lead_id::text, queued.cause);
+            actor_kind := coalesce(actor_kind, queued.actor_kind);
+            actor_staff := coalesce(actor_staff, queued.actor_staff_id);
+        end loop;
+        if cardinality(own) = 0 then
+            return 0;
+        end if;
+
+        with gone as (
+            delete from public.seat_sync_queue q where q.retry
+            returning q.lead_id, q.retry_year, q.retry_class, q.for_request
+        )
+        -- A request's retry has its class reconciled like any other, and is
+        -- left out of the keys that keep a child's turn.
+        select coalesce(array_agg(g.lead_id), '{}'),
+               coalesce(array_agg(g.lead_id::text || '|' || g.retry_year || '|' || g.retry_class)
+                        filter (where not g.for_request), '{}'),
+               coalesce(array_agg(g.lead_id::text || '|' || g.retry_year || '|' || g.retry_class), '{}')
+        into retries, retry_keys, retry_classes
+        from gone g;
+
+        -- Some blocks clear their actor before the commit: the queue kept it.
+        if (select a.kind from public.audit_actor() a) is null and actor_kind is not null then
+            perform set_config('audit.actor_kind', actor_kind, true);
+            perform set_config('audit.actor_staff_id', coalesce(actor_staff::text, ''), true);
+        end if;
+
+        touched := 0;
+        for pair in
+            select c.enrollment_year, c.class_name from public.seat_classes_of(own || retries) c
+            union
+            select split_part(k, '|', 2)::integer, split_part(k, '|', 3)::public.lead_class from unnest(retry_classes) k
+            order by 1, 2
+        loop
+            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, causes, 'seat_freed', retry_keys);
+            touched := touched + 1;
+        end loop;
+
+        return cardinality(own);
+    end;
+    $fn$;
+
+    create or replace function public.run_seat_retries()
+    returns integer
+    language plpgsql
+    security definer
+    set search_path = ''
+    as $fn$
+    declare
+        retries uuid[];
+        retry_keys text[];
+        retry_classes text[];
+        pair record;
+    begin
+        if not exists (select 1 from public.seat_sync_queue q where q.retry) then
+            return 0;
+        end if;
+        perform public.set_audit_actor('system');
+        perform public.seat_lock();
+        with gone as (
+            delete from public.seat_sync_queue q where q.retry
+            returning q.lead_id, q.retry_year, q.retry_class, q.for_request
+        )
+        -- A request's retry has its class reconciled like any other, and is
+        -- left out of the keys that keep a child's turn.
+        select coalesce(array_agg(g.lead_id), '{}'),
+               coalesce(array_agg(g.lead_id::text || '|' || g.retry_year || '|' || g.retry_class)
+                        filter (where not g.for_request), '{}'),
+               coalesce(array_agg(g.lead_id::text || '|' || g.retry_year || '|' || g.retry_class), '{}')
+        into retries, retry_keys, retry_classes
+        from gone g;
+        for pair in
+            select c.enrollment_year, c.class_name from public.seat_classes_of(retries) c
+            union
+            select split_part(k, '|', 2)::integer, split_part(k, '|', 3)::public.lead_class from unnest(retry_classes) k
+            order by 1, 2
+        loop
+            perform public.reconcile_class_seats(pair.enrollment_year, pair.class_name, '{}'::jsonb, 'seat_freed', retry_keys);
+        end loop;
+        return cardinality(retries);
     end;
     $fn$;
 

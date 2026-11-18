@@ -231,6 +231,85 @@ describe("stream requests", () => {
     })
   })
 
+  // What two openings leave behind when the waiting girl's row was busy: a
+  // mixed stream and a boys' stream with a seat each, her seat in the mixed
+  // one counted but not written, and her retry. Returns the boys' stream.
+  async function openedWhileHerRowWasBusy(sql: Client, year: number, c: string, girl: string): Promise<string> {
+    await asOwner(sql)
+    await sql.query("select public.set_audit_actor('system')")
+    await sql.query("update public.seat_placements set waiting_xid = '1'::xid8 where lead_id = $1", [girl])
+    await sql.query("insert into public.streams (enrollment_year, class_name, label, takes, seats, position) values ($1, $2, 'B', 'Mixed', 1, 2)", [year, c])
+    const boys = await sql.query<{ id: string }>(
+      "insert into public.streams (enrollment_year, class_name, label, takes, seats, position) values ($1, $2, 'C', 'Boys', 1, 3) returning id",
+      [year, c],
+    )
+    await sql.query("select public.queue_seat_retry($1, $2, $3)", [girl, year, c])
+    return boys.rows[0].id
+  }
+
+  test("a request answered while its child's row was busy gives him no turn: paying in full, he still comes after the girl already waiting", async () => {
+    const { year, classes: [c] } = await yearAndClasses(1)
+    const seated = await holder(year, c, "Boy", 20)
+    const girl = await holder(year, c, "Girl", 3)
+    const boy = await child(year, c, "Boy")
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      await open(sql, year, c, "A", "Boys", 1)
+      await asOwner(sql)
+      await actAsStaff(sql, ADMISSIONS.id)
+      const made = (await sql.query("select public.request_stream($1, null, null, null) as r", [boy])).rows[0].r
+      // The boys' stream answers his request, but his row was busy too: the
+      // request stays open with its own kind of retry.
+      const boysStream = await openedWhileHerRowWasBusy(sql, year, c, girl)
+      await sql.query("select public.queue_request_retry($1, $2, $3)", [boy, year, c])
+
+      // Full ranks above her Deposit, and she was waiting first.
+      const fee = (await sql.query<{ school_fee: number }>("select school_fee from public.lead_seat_priority($1)", [boy])).rows[0].school_fee
+      await pay(sql, boy, fee, "full_payment")
+      expect(await placements(sql, [seated, girl, boy])).toEqual({ [seated]: "A", [girl]: "B", [boy]: "C" })
+      const { rows } = await sql.query("select resolved_at is not null as done, resolved_by_stream_id from public.stream_requests where id = $1", [made.id])
+      expect(rows[0]).toEqual({ done: true, resolved_by_stream_id: boysStream })
+      expect((await sql.query("select 1 from public.seat_sync_queue where lead_id = any ($1)", [[girl, boy]])).rows).toEqual([])
+    })
+  })
+
+  test("a child whose only retry is a request's is left out wherever children already waiting go first", async () => {
+    const { year, classes: [c] } = await yearAndClasses(1)
+    const seated = await holder(year, c, "Boy", 20)
+    const asked = await holder(year, c, "Boy", 9)
+    const girl = await holder(year, c, "Girl", 3)
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      await open(sql, year, c, "A", "Boys", 1)
+      await openedWhileHerRowWasBusy(sql, year, c, girl)
+      // He ranks above her and has no wait recorded, only a request's retry.
+      await sql.query("update public.seat_placements set waiting_since = null, waiting_xid = null, waiting_year = null, waiting_class = null where lead_id = $1", [asked])
+      await sql.query("select public.queue_request_retry($1, $2, $3)", [asked, year, c])
+      // A request's retry and a skipped seat write's are kept apart, one of each at most.
+      await sql.query("select public.queue_request_retry($1, $2, $3)", [asked, year, c])
+      await sql.query("select public.queue_seat_retry($1, $2, $3)", [girl, year, c])
+      const { rows } = await sql.query("select lead_id, for_request from public.seat_sync_queue where lead_id = any ($1) and retry", [[asked, girl]])
+      expect(rows).toHaveLength(2)
+      expect(rows).toEqual(expect.arrayContaining([{ lead_id: asked, for_request: true }, { lead_id: girl, for_request: false }]))
+      const seats = { [seated]: "A", [girl]: "B", [asked]: "C" }
+
+      // The first-fit read: she takes the mixed seat and he the boys', so no third boy fits.
+      expect((await sql.query("select public.stream_fit($1, $2, 'Boy', false, null) as fit", [year, c])).rows[0].fit).toBeNull()
+
+      // The daily job.
+      await sql.query("savepoint before_job")
+      expect((await sql.query("select public.run_seat_retries() as n")).rows[0].n).toBeGreaterThanOrEqual(2)
+      expect(await placements(sql, [seated, girl, asked])).toEqual(seats)
+      await sql.query("rollback to savepoint before_job")
+
+      // A stream opening while both retries are still queued.
+      await actAsStaff(sql, MANAGER.id)
+      await open(sql, year, c, "D", "Boys", 1)
+      await asOwner(sql)
+      expect(await placements(sql, [seated, girl, asked])).toEqual(seats)
+    })
+  })
+
   test("a request for a class and need, and the Seats read with its waiting children and requests", async () => {
     const { year, classes: [c] } = await yearAndClasses(1)
     const placed = await holder(year, c, "Boy", 6)

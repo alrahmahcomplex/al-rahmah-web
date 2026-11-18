@@ -1,5 +1,5 @@
 import { MAX_CHILDREN } from "@/lib/admission-form"
-import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS } from "@/lib/services/leads"
+import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, STUDENT_GENDERS } from "@/lib/services/leads"
 
 // The Admission form's draft, kept in the tab's sessionStorage so Back, a
 // reload, or an in-app browser that reloads after the parent switches to
@@ -42,6 +42,9 @@ export type ChildDraft = {
   fatherFirst: string
   fatherMiddle: string
   fatherLast: string
+  // Boy or girl (#449). A draft from before the question comes back without
+  // one, and the form opens on it.
+  gender: string
   className: string
   enrollmentYear: number | null
   dayOrBoarding: string
@@ -66,12 +69,12 @@ export const EMPTY_PARENT: ParentDraft = {
 // `card` counts up within one form from 1, the same on the server and in the
 // browser, so the field ids built from it match when the page hydrates.
 export function emptyChild(card: number): ChildDraft {
-  return { card, firstName: "", fatherFirst: "", fatherMiddle: "", fatherLast: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
+  return { card, firstName: "", fatherFirst: "", fatherMiddle: "", fatherLast: "", gender: "", className: "", enrollmentYear: null, dayOrBoarding: "" }
 }
 
 // A question's name in the draft: a student's (`class-3`) or the form's own.
-const DONE_KEY = /^((name|class|board)-[1-8]|more|pname|rel|phone|code|fee)$/
-const MAX_DONE = MAX_CHILDREN * 3 + 6
+const DONE_KEY = /^((name|gender|class|board)-[1-8]|more|pname|rel|phone|code|fee)$/
+const MAX_DONE = MAX_CHILDREN * 4 + 6
 
 function storage(): Storage | null {
   try {
@@ -130,6 +133,7 @@ export function parseDraft(raw: string | null, years: readonly number[]): Draft 
       fatherFirst: name(c.fatherFirst),
       fatherMiddle: name(c.fatherMiddle),
       fatherLast: name(c.fatherLast),
+      gender: oneOf(c.gender, STUDENT_GENDERS),
       className: oneOf(c.className, LEAD_CLASSES),
       enrollmentYear: year,
       dayOrBoarding: oneOf(c.dayOrBoarding, DAY_OR_BOARDING),
@@ -158,7 +162,7 @@ export function isEmptyDraft(draft: Draft): boolean {
   const parentEmpty = Object.values(parent).every((value) => value === "" || value === false)
   const childrenEmpty = children.every(
     (child) =>
-      !child.firstName && !child.fatherFirst && !child.fatherMiddle && !child.fatherLast && !child.className && child.enrollmentYear === null && !child.dayOrBoarding,
+      !child.firstName && !child.fatherFirst && !child.fatherMiddle && !child.fatherLast && !child.gender && !child.className && child.enrollmentYear === null && !child.dayOrBoarding,
   )
   return parentEmpty && childrenEmpty
 }
@@ -177,11 +181,12 @@ export function writeDraft(draft: Draft) {
       JSON.stringify({
         version: VERSION,
         parent,
-        children: children.map(({ firstName, fatherFirst, fatherMiddle, fatherLast, className, enrollmentYear, dayOrBoarding }) => ({
+        children: children.map(({ firstName, fatherFirst, fatherMiddle, fatherLast, gender, className, enrollmentYear, dayOrBoarding }) => ({
           firstName,
           fatherFirst,
           fatherMiddle,
           fatherLast,
+          gender,
           className,
           enrollmentYear,
           dayOrBoarding,

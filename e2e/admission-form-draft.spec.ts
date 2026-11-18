@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 import { admissionYears } from "../lib/admission-form"
-import { expectQuestion, family, fillForm, fillParent, fillStudent, nameBox, openQuestion, PHONE_WIDTH, send, toCode, toSend, setLanguageCookie, WORDS } from "./admission-form"
+import { answerGender, expectQuestion, family, fillForm, fillParent, fillStudent, nameBox, openQuestion, PHONE_WIDTH, send, toCode, toSend, setLanguageCookie, WORDS } from "./admission-form"
 
 // The Admission form's history entries and its sessionStorage draft (#255):
 // the phone's Back and Forward move between questions, a reload keeps the
@@ -12,6 +12,7 @@ test.use({ viewport: PHONE_WIDTH })
 
 const t = WORDS.sw
 const nextYear = String(admissionYears()[1])
+const genderQ = /ni mvulana au msichana\?$/
 
 test.beforeEach(async ({ context }) => {
   await setLanguageCookie(context, "sw")
@@ -24,8 +25,8 @@ test("Back, Forward and reload keep every entry, and a confirmed send clears the
   await page.goto(`/apply?ref=${ref}`)
   await nameBox(page, "sw").fill(who.childTyped)
   await openQuestion(page).getByRole("button", { name: t.continue }).click()
-  await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
-  await expect(page).toHaveURL(`/apply?ref=${ref}&q=class-1`)
+  await expectQuestion(page, genderQ)
+  await expect(page).toHaveURL(`/apply?ref=${ref}&q=gender-1`)
 
   await page.goBack()
   await expectQuestion(page, t.studentName)
@@ -33,10 +34,10 @@ test("Back, Forward and reload keep every entry, and a confirmed send clears the
   await expect(nameBox(page, "sw")).toHaveValue(own)
 
   await page.goForward()
-  await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
+  await expectQuestion(page, genderQ)
 
   await page.reload()
-  await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
+  await expectQuestion(page, genderQ)
   await expect(page.getByText(who.child, { exact: true }).first()).toBeVisible()
 
   // The form's own Back steps back through history, so Forward still works.
@@ -44,10 +45,11 @@ test("Back, Forward and reload keep every entry, and a confirmed send clears the
   await expectQuestion(page, t.studentName)
   await expect(nameBox(page, "sw")).toHaveValue(own)
   await page.goForward()
-  await expect(openQuestion(page).getByRole("button", { name: t.chooseOther })).toBeVisible()
+  await expectQuestion(page, genderQ)
 
   await page.getByRole("button", { name: t.back }).click()
   await openQuestion(page).getByRole("button", { name: t.continue }).click()
+  await answerGender(page, "sw")
   await openQuestion(page).getByRole("button", { name: t.chooseOther }).click()
   await page.getByRole("dialog", { name: t.sheetTitle }).getByRole("button", { name: "STD 3", exact: true }).click()
   await openQuestion(page).getByText(t.boarding, { exact: true }).click()

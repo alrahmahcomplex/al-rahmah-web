@@ -49,7 +49,7 @@ const KEY = "3f2b7c1e-8d4a-4b6f-9a0e-1c2d3e4f5a6b"
 
 const PARENT = { firstName: "Amina", middleName: "Hassani", lastName: "Fixture" }
 const FATHER = { fatherFirst: "Juma", fatherMiddle: "Ali", fatherLast: "Fixture" }
-const child = (firstName: string) => ({ firstName, ...FATHER, className: "STD 2", enrollmentYear: thisYear, dayOrBoarding: "Day" })
+const child = (firstName: string) => ({ firstName, ...FATHER, gender: "Boy", className: "STD 2", enrollmentYear: thisYear, dayOrBoarding: "Day" })
 
 function posted(overrides: Record<string, unknown> = {}) {
   const data = new FormData()
@@ -100,6 +100,7 @@ describe("sending the Admission form", () => {
           {
             fullName: "ZAWADI JUMA FIXTURE",
             nameParts: { firstName: "Zawadi", ...FATHER },
+            gender: "Boy",
             className: "STD 2",
             enrollmentYear: thisYear,
             dayOrBoarding: "Day",

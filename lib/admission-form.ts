@@ -2,7 +2,7 @@ import { normalizeDiscountCode } from "@/lib/referral-link"
 import { FORM_NOTICE_VERSION } from "@/lib/referral-notice"
 import { personFullName, studentFullName, type PersonNameParts, type StudentNameParts } from "@/lib/names"
 import { tanzaniaToday } from "@/lib/school-calendar"
-import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, type NewContact, type NewStudent } from "@/lib/services/leads"
+import { DAY_OR_BOARDING, LEAD_CLASSES, RELATIONSHIPS, STUDENT_GENDERS, type NewContact, type NewStudent, type StudentGender } from "@/lib/services/leads"
 
 // The Admission form's shape and the checks it runs, shared by the page (so
 // Continue names the field to fix) and the Server Action (which repeats every
@@ -34,7 +34,7 @@ export type AdmissionForm = {
 // The fields a refusal can name. `child` says which child card, for the
 // child's own fields.
 export type ParentField = "contact_name" | "relationship" | "relationship_description" | "phone" | "whatsapp"
-export type ChildField = "student_name" | "class_name" | "enrollment_year" | "day_or_boarding" | "duplicate_child"
+export type ChildField = "student_name" | "gender" | "class_name" | "enrollment_year" | "day_or_boarding" | "duplicate_child"
 export type FormField = ParentField | ChildField | "discount_code" | "children" | "submission_key" | "payload"
 
 // Which name box a `contact_name` or `student_name` problem is about, when
@@ -119,6 +119,8 @@ export function childrenProblems(children: AdmissionChild[], years: readonly num
     const named = parts ? missing.length === 0 : child.fullName.trim() !== ""
     if (parts) for (const part of missing) problems.push({ field: "student_name", child: index, part })
     else if (!named) problems.push({ field: "student_name", child: index })
+    // Boy or girl (#449): every student on the form has one.
+    if (!(STUDENT_GENDERS as readonly string[]).includes(child.gender ?? "")) problems.push({ field: "gender", child: index })
     if (!(LEAD_CLASSES as readonly string[]).includes(child.className)) problems.push({ field: "class_name", child: index })
     if (!years.includes(child.enrollmentYear)) problems.push({ field: "enrollment_year", child: index })
     if (!(DAY_OR_BOARDING as readonly string[]).includes(child.dayOrBoarding)) {
@@ -223,12 +225,15 @@ export function parseAdmissionForm(
     const name = nameOf(c, STUDENT_PARTS.map(([key]) => key))
     const className = text(c.className)
     const dayOrBoarding = text(c.dayOrBoarding)
-    if (name === null || className === null || dayOrBoarding === null || typeof c.enrollmentYear !== "number") {
+    // Left out, Boy or girl is a problem on the student's own question.
+    const gender = c.gender === undefined ? "" : text(c.gender)
+    if (name === null || className === null || dayOrBoarding === null || gender === null || typeof c.enrollmentYear !== "number") {
       return { ok: false, error: payload }
     }
     cleanChildren.push({
       fullName: studentFullName(name.parts),
       nameParts: name.parts,
+      ...(gender ? { gender: gender as StudentGender } : {}),
       className: className as AdmissionChild["className"],
       enrollmentYear: c.enrollmentYear,
       dayOrBoarding: dayOrBoarding as AdmissionChild["dayOrBoarding"],

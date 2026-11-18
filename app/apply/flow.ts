@@ -7,16 +7,16 @@ import type { ChildDraft, ParentDraft } from "./draft"
 // The order of the Admission form's questions, one open at a time, and which
 // answers each question owns. Pure, so the form and its tests share it.
 //
-// Per student: name, class (with the year), Day or Boarding. Then "another
+// Per student: name, boy or girl, class (with the year), Day or Boarding. Then "another
 // student?", unless the form already has MAX_CHILDREN. Then the custodian's
 // name, relationship and phone, the Discount code, the interview fee, and
 // the send step. Student questions carry the card number, which stays with
 // the card when another card is removed.
 
-export type StudentKind = "name" | "class" | "board"
+export type StudentKind = "name" | "gender" | "class" | "board"
 export type StepKey = `${StudentKind}:${number}` | "more" | "pname" | "rel" | "phone" | "code" | "fee" | "send"
 
-export const STUDENT_KINDS: readonly StudentKind[] = ["name", "class", "board"]
+export const STUDENT_KINDS: readonly StudentKind[] = ["name", "gender", "class", "board"]
 
 export function studentKey(kind: StudentKind, card: number): StepKey {
   return `${kind}:${card}`
@@ -89,6 +89,7 @@ export function asChild(draft: ChildDraft): AdmissionChild {
   return {
     fullName: studentFullName(studentParts(draft)),
     nameParts: studentParts(draft),
+    ...(draft.gender ? { gender: draft.gender as AdmissionChild["gender"] } : {}),
     className: draft.className as AdmissionChild["className"],
     enrollmentYear: draft.enrollmentYear ?? 0,
     dayOrBoarding: draft.dayOrBoarding as AdmissionChild["dayOrBoarding"],
@@ -103,12 +104,13 @@ export function wireParent(draft: ParentDraft, children: readonly ChildDraft[]) 
 }
 
 export function wireChild(draft: ChildDraft) {
-  const { nameParts, className, enrollmentYear, dayOrBoarding } = asChild(draft)
-  return { ...nameParts, className, enrollmentYear, dayOrBoarding }
+  const { nameParts, gender, className, enrollmentYear, dayOrBoarding } = asChild(draft)
+  return { ...nameParts, gender, className, enrollmentYear, dayOrBoarding }
 }
 
 const STEP_FIELDS: Record<string, readonly FormField[]> = {
   name: ["student_name", "duplicate_child"],
+  gender: ["gender"],
   class: ["class_name", "enrollment_year"],
   board: ["day_or_boarding"],
   pname: ["contact_name"],
@@ -121,9 +123,9 @@ const STEP_FIELDS: Record<string, readonly FormField[]> = {
 export function stepForProblem(problem: FieldProblem, children: readonly ChildDraft[]): StepKey | null {
   for (const [kind, fields] of Object.entries(STEP_FIELDS)) {
     if (!fields.includes(problem.field)) continue
-    if (kind === "name" || kind === "class" || kind === "board") {
+    if ((STUDENT_KINDS as readonly string[]).includes(kind)) {
       const child = problem.child === null ? null : children[problem.child]
-      return child ? studentKey(kind, child.card) : null
+      return child ? studentKey(kind as StudentKind, child.card) : null
     }
     return kind as StepKey
   }
@@ -187,6 +189,9 @@ export function firstName(child: ChildDraft | undefined): string {
 // The URL and the draft name a question by the student's place on the form
 // (`name-2`), since card numbers start afresh on a reload.
 
+/** A student's question in the URL or the draft: `gender-2`. */
+export const STUDENT_PARAM = /^(name|gender|class|board)-([1-8])$/
+
 export function keyToParam(key: StepKey, children: readonly ChildDraft[]): string | null {
   const { kind, card } = parseKey(key)
   if (card === null) return kind
@@ -197,7 +202,7 @@ export function keyToParam(key: StepKey, children: readonly ChildDraft[]): strin
 export function paramToKey(param: string | null, children: readonly ChildDraft[]): StepKey | null {
   if (!param) return null
   if (["more", "pname", "rel", "phone", "code", "fee", "send"].includes(param)) return param as StepKey
-  const match = /^(name|class|board)-([1-8])$/.exec(param)
+  const match = STUDENT_PARAM.exec(param)
   if (!match) return null
   const child = children[Number(match[2]) - 1]
   return child ? studentKey(match[1] as StudentKind, child.card) : null

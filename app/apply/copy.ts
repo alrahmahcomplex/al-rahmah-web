@@ -1,6 +1,6 @@
 import type { FormField } from "@/lib/admission-form"
 import type { Language } from "@/lib/language"
-import type { DayOrBoarding, Relationship } from "@/lib/services/leads"
+import type { DayOrBoarding, Relationship, StudentGender } from "@/lib/services/leads"
 
 // The Admission form's words, in Swahili and English, for the one-question-
 // at-a-time form (concept C). New Swahili comes from the approved prototype;
@@ -12,7 +12,7 @@ import type { DayOrBoarding, Relationship } from "@/lib/services/leads"
 const ORDINALS_SW = ["kwanza", "pili", "tatu", "nne", "tano", "sita", "saba", "nane"]
 const ORDINALS_EN = ["one", "two", "three", "four", "five", "six", "seven", "eight"]
 
-export type ChangeWord = "name" | "class" | "year" | "board" | "pname" | "rel" | "phone" | "code" | "kid"
+export type ChangeWord = "name" | "gender" | "class" | "year" | "board" | "pname" | "rel" | "phone" | "code" | "kid"
 export type CodeStatusWord = "approved" | "pending" | "switched_off" | "unknown"
 
 type Copy = {
@@ -42,6 +42,11 @@ type Copy = {
   // The name boxes' placeholders, which are also their names for a screen reader.
   names: { first: string; middle: string; last: string; student: string; father: string }
   fullNameLine: string
+  // Boy or girl (prototype v41, #449).
+  genderQ: (name: string) => string
+  genderHint: string
+  genderName: string
+  genders: Record<StudentGender, string>
   classQ: (name: string) => string
   className: string
   popular: string
@@ -177,6 +182,7 @@ export const COPY: Record<Language, Copy> = {
     continue: "Endelea",
     change: {
       name: "Badilisha Jina",
+      gender: "Badilisha Jibu",
       class: "Badilisha Darasa",
       year: "Badilisha Mwaka",
       board: "Badilisha Malazi",
@@ -192,6 +198,10 @@ export const COPY: Record<Language, Copy> = {
     studentNameHint: "Kama lilivyo kwenye cheti cha kuzaliwa.",
     names: { first: "Jina la kwanza", middle: "Jina la kati", last: "Jina la mwisho", student: "Jina la mwanafunzi", father: "Jina la baba" },
     fullNameLine: "Jina kamili la mwanafunzi:",
+    genderQ: (name) => (name ? `${name} ni mvulana au msichana?` : "Mvulana au msichana?"),
+    genderHint: "Madarasa ni ya wavulana, ya wasichana au ya wote, hivyo tunampangia kila mwanafunzi darasa linalomfaa.",
+    genderName: "Mvulana au msichana",
+    genders: { Boy: "Mvulana", Girl: "Msichana" },
     classQ: (name) => (name ? `${name} anaomba darasa gani?` : "Anaomba darasa gani?"),
     className: "Darasa analoomba",
     popular: "Wazazi wengi huchagua",
@@ -287,6 +297,7 @@ export const COPY: Record<Language, Copy> = {
       enrollment_year: "Chagua mwaka wa kujiunga.",
       year_closed: "Mwaka huo haupokei maombi tena. Chagua mwaka mwingine.",
       day_or_boarding: "Chagua kutwa au bweni.",
+      gender: "Chagua mvulana au msichana.",
       duplicate_child: "Mwanafunzi huyu ameandikwa mara mbili.",
       discount_code: "Code ya punguzo ina herufi, namba, - na . tu, hadi 20. Ihakiki, au ifute ili utume bila code.",
       children: "Ongeza mwanafunzi mmoja au zaidi.",
@@ -348,6 +359,7 @@ export const COPY: Record<Language, Copy> = {
     continue: "Continue",
     change: {
       name: "Change Name",
+      gender: "Change Answer",
       class: "Change Class",
       year: "Change Year",
       board: "Change Residence",
@@ -363,6 +375,10 @@ export const COPY: Record<Language, Copy> = {
     studentNameHint: "As it is on the birth certificate.",
     names: { first: "First name", middle: "Middle name", last: "Last name", student: "Student's name", father: "Father's name" },
     fullNameLine: "Student's full name:",
+    genderQ: (name) => (name ? `Is ${name} a boy or a girl?` : "Boy or girl?"),
+    genderHint: "Classes are for boys, for girls or for both, so we place each child in the right one.",
+    genderName: "Boy or girl",
+    genders: { Boy: "Boy", Girl: "Girl" },
     classQ: (name) => (name ? `Which class is ${name} applying for?` : "Which class are they applying for?"),
     className: "Class applying for",
     popular: "Most parents choose",
@@ -458,6 +474,7 @@ export const COPY: Record<Language, Copy> = {
       enrollment_year: "Choose the year of enrolment.",
       year_closed: "That year no longer takes applications. Choose another year.",
       day_or_boarding: "Choose day or boarding.",
+      gender: "Choose boy or girl.",
       duplicate_child: "This student is listed twice.",
       discount_code: "A discount code has only letters, numbers, - and ., up to 20. Check it, or clear it to send without a code.",
       children: "Add at least one student.",

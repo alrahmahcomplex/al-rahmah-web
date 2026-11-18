@@ -9,7 +9,7 @@ function form(overrides: Record<string, unknown> = {}) {
   return {
     submissionKey: KEY,
     parent: { firstName: "  Amina ", middleName: "Hassani", lastName: "Fixture", relationship: "Mother", phone: "0700 000 900", whatsapp: "" },
-    children: [{ firstName: " Zawadi ", fatherFirst: "Juma", fatherMiddle: "Ali", fatherLast: "Fixture", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }],
+    children: [{ firstName: " Zawadi ", fatherFirst: "Juma", fatherMiddle: "Ali", fatherLast: "Fixture", className: "STD 2", enrollmentYear: 2027, gender: "Girl", dayOrBoarding: "Day" }],
     ...overrides,
   }
 }
@@ -48,7 +48,7 @@ describe("reading the posted Admission form", () => {
             nameParts: { firstName: "Zawadi", fatherFirst: "Juma", fatherMiddle: "Ali", fatherLast: "Fixture" },
             className: "STD 2",
             enrollmentYear: 2027,
-            dayOrBoarding: "Day",
+            gender: "Girl", dayOrBoarding: "Day",
           },
         ],
       },
@@ -75,14 +75,16 @@ describe("reading the posted Admission form", () => {
     ["a class that isn't one of the 14", { className: "PRE-FORM ONE" }, "class_name"],
     ["a year that isn't on offer", { enrollmentYear: 2028 }, "enrollment_year"],
     ["day or boarding", { dayOrBoarding: "Weekly" }, "day_or_boarding"],
+    ["boy or girl when it is left out", { gender: undefined }, "gender"],
+    ["boy or girl when it is neither", { gender: "Other" }, "gender"],
   ])("names %s on its child card", (_, change, field) => {
-    const child = { ...CHILD, className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day", ...change }
+    const child = { ...CHILD, className: "STD 2", enrollmentYear: 2027, gender: "Girl", dayOrBoarding: "Day", ...change }
     expect(parse(form({ children: [child] }))).toEqual({ ok: false, error: { field, child: 0 } })
   })
 
   it("refuses the same child twice, ignoring case and spacing", () => {
     expect(childNameKey("  Zawadi   FIXTURE ")).toBe(childNameKey("zawadi fixture"))
-    const child = { ...CHILD, className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }
+    const child = { ...CHILD, className: "STD 2", enrollmentYear: 2027, gender: "Girl", dayOrBoarding: "Day" }
     const twice = parse(form({ children: [child, { ...child, firstName: "zawadi ", fatherLast: " FIXTURE" }] }))
     expect(twice).toEqual({ ok: false, error: { field: "duplicate_child", child: 1 } })
   })
@@ -94,7 +96,7 @@ describe("reading the posted Admission form", () => {
       firstName: `Child ${i}`,
       className: "STD 2",
       enrollmentYear: 2027,
-      dayOrBoarding: "Day",
+      gender: "Girl", dayOrBoarding: "Day",
     }))
     expect(parse(form({ children: many }))).toEqual({ ok: false, error: { field: "children", child: null } })
   })
@@ -145,11 +147,12 @@ describe("reading the posted Admission form", () => {
     ["no form at all", null],
     ["text that isn't JSON", "{"],
     ["a child that isn't an object", JSON.stringify(form({ children: ["Zawadi"] }))],
-    ["a year sent as text", JSON.stringify(form({ children: [{ ...CHILD, className: "STD 2", enrollmentYear: "2027", dayOrBoarding: "Day" }] }))],
+    ["boy or girl sent as anything but text", JSON.stringify(form({ children: [{ ...CHILD, gender: true, className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }] }))],
+    ["a year sent as text", JSON.stringify(form({ children: [{ ...CHILD, className: "STD 2", enrollmentYear: "2027", gender: "Girl", dayOrBoarding: "Day" }] }))],
     ["a name far too long", JSON.stringify(form({ parent: { ...PARENT, firstName: "x".repeat(1001), relationship: "Mother", phone: "0700000900" } }))],
     // The live form's one box went with #403: only the parts are read now.
     ["the custodian's name in one box", JSON.stringify(form({ parent: { fullName: "Amina Hassani Fixture", relationship: "Mother", phone: "0700000900" } }))],
-    ["the student's name in one box", JSON.stringify(form({ children: [{ fullName: "Zawadi Juma Fixture", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }] }))],
+    ["the student's name in one box", JSON.stringify(form({ children: [{ fullName: "Zawadi Juma Fixture", className: "STD 2", enrollmentYear: 2027, gender: "Girl", dayOrBoarding: "Day" }] }))],
   ])("treats %s as an unreadable form", (_, raw) => {
     expect(parseAdmissionForm(raw, YEARS)).toEqual({ ok: false, error: { field: "payload", child: null } })
   })
@@ -157,7 +160,7 @@ describe("reading the posted Admission form", () => {
 
 describe("names sent in their parts (#400)", () => {
   const parent = { firstName: " amina ", middleName: "Juma", lastName: "fixture", relationship: "Mother", phone: "0700 000 900" }
-  const child = { firstName: "zawadi", fatherFirst: " Hassan ", fatherMiddle: "Ali", fatherLast: "Mohamed", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }
+  const child = { firstName: "zawadi", fatherFirst: " Hassan ", fatherMiddle: "Ali", fatherLast: "Mohamed", className: "STD 2", enrollmentYear: 2027, gender: "Girl", dayOrBoarding: "Day" }
 
   it("keeps the parts, trimmed, and builds the full names as the database stores them", () => {
     expect(parse(form({ parent, children: [child] }))).toEqual({
@@ -177,7 +180,7 @@ describe("names sent in their parts (#400)", () => {
             nameParts: { firstName: "zawadi", fatherFirst: "Hassan", fatherMiddle: "Ali", fatherLast: "Mohamed" },
             className: "STD 2",
             enrollmentYear: 2027,
-            dayOrBoarding: "Day",
+            gender: "Girl", dayOrBoarding: "Day",
           },
         ],
       },

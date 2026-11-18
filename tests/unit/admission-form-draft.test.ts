@@ -16,12 +16,12 @@ const DRAFT: Draft = {
     whatsapp: "",
   },
   children: [
-    { card: 4, firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" },
-    { card: 7, firstName: "JUMA", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", className: "FORM 1", enrollmentYear: 2026, dayOrBoarding: "Boarding" },
+    { card: 4, firstName: "ZAWADI", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", gender: "Girl", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" },
+    { card: 7, firstName: "JUMA", fatherFirst: "JUMA", fatherMiddle: "ALI", fatherLast: "FIXTURE", gender: "Boy", className: "FORM 1", enrollmentYear: 2026, dayOrBoarding: "Boarding" },
   ],
   discountCode: "AMINA-1",
   linkCode: "BJN-402",
-  done: ["name-1", "class-1", "board-1", "name-2", "pname"],
+  done: ["name-1", "gender-1", "class-1", "board-1", "name-2", "pname"],
 }
 
 afterEach(() => {
@@ -62,12 +62,21 @@ describe("the Admission form's draft", () => {
     writeDraft({
       ...DRAFT,
       parent: { ...DRAFT.parent, relationship: "Uncle" },
-      children: [{ ...DRAFT.children[0], card: 1, className: "STD 9", enrollmentYear: 2025, dayOrBoarding: "Weekly" }],
+      children: [{ ...DRAFT.children[0], card: 1, gender: "Other", className: "STD 9", enrollmentYear: 2025, dayOrBoarding: "Weekly" }],
     })
     const draft = readDraft(YEARS)!
     expect(draft.parent.relationship).toBe("")
     expect(draft.parent.firstName).toBe("AMINA")
-    expect(draft.children).toEqual([{ ...DRAFT.children[0], card: 1, className: "", enrollmentYear: null, dayOrBoarding: "" }])
+    expect(draft.children).toEqual([{ ...DRAFT.children[0], card: 1, gender: "", className: "", enrollmentYear: null, dayOrBoarding: "" }])
+  })
+
+  it("brings back a draft from before boy or girl with the question unanswered and the other answers kept", () => {
+    const { gender: _gender, ...before } = DRAFT.children[0]
+    void _gender
+    window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ ...DRAFT, version: 3, children: [before], done: ["name-1", "class-1", "board-1"] }))
+    const draft = readDraft(YEARS)!
+    expect(draft.children).toEqual([{ ...DRAFT.children[0], card: 1, gender: "" }])
+    expect(draft.done).toEqual(["name-1", "class-1", "board-1"])
   })
 
   it("ignores anything that isn't a draft this form wrote", () => {
@@ -109,8 +118,8 @@ describe("the Admission form's draft", () => {
   })
 
   it("keeps only the answered questions it knows by name", () => {
-    writeDraft({ ...DRAFT, done: ["name-1", "class-9", "send", "<script>", "code", "fee"] })
-    expect(readDraft(YEARS)?.done).toEqual(["name-1", "code", "fee"])
+    writeDraft({ ...DRAFT, done: ["name-1", "gender-1", "class-9", "gender-9", "send", "<script>", "code", "fee"] })
+    expect(readDraft(YEARS)?.done).toEqual(["name-1", "gender-1", "code", "fee"])
   })
 
   it("works without a draft when storage is blocked", () => {

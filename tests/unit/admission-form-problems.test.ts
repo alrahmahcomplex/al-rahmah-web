@@ -7,7 +7,7 @@ const YEARS = [2026, 2027]
 
 const EMPTY_PARENT = { fullName: "", relationship: "" as never, phone: "" }
 const EMPTY_CHILD = { fullName: "", className: "" as never, enrollmentYear: 0, dayOrBoarding: "" as never }
-const CHILD: NewStudent = { fullName: "Zawadi Fixture", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }
+const CHILD: NewStudent = { fullName: "Zawadi Fixture", gender: "Girl", className: "STD 2", enrollmentYear: 2027, dayOrBoarding: "Day" }
 
 describe("every problem on the parent step", () => {
   it("names each missing field at once, in the order the fields show", () => {
@@ -30,6 +30,7 @@ describe("every problem across the child cards", () => {
     const problems = childrenProblems([EMPTY_CHILD, { ...CHILD, className: "" as never, dayOrBoarding: "" as never }], YEARS)
     expect(problems).toEqual([
       { field: "student_name", child: 0 },
+      { field: "gender", child: 0 },
       { field: "class_name", child: 0 },
       { field: "enrollment_year", child: 0 },
       { field: "day_or_boarding", child: 0 },

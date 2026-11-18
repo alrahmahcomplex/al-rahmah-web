@@ -1,5 +1,5 @@
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
-import type { ClassStreams, Stream, StreamRequest, StreamTakes } from "@/lib/services/streams"
+import type { ClassStreams, Stream, StreamRequest, StreamTakes, WaitingChild } from "@/lib/services/streams"
 
 // The Seats screen's own reading of a year's streams (#449, prototype v42).
 // The database decides every seat (ADR 0008); these only shape what the
@@ -55,9 +55,44 @@ export type SeatNeed = {
   waiting: number
   // An open request for this class and need, the newest first.
   request: StreamRequest | null
+  // The child other staff ask for, instead of the class: a class request for
+  // any child counts Boys and Girls seats, so the database would refuse it
+  // while one is free. Null where the class request is the right one.
+  askFor: string | null
 }
 
 const takesNeed = (takes: StreamTakes, need: "Boys" | "Girls") => takes === "Mixed" || takes === need
+
+// The database's stream_takes_child: a child with no Boy or girl answer fits Mixed only.
+const takesChild = (takes: StreamTakes, gender: WaitingChild["gender"]) =>
+  takes === "Mixed" || (takes === "Boys" && gender === "Boy") || (takes === "Girls" && gender === "Girl")
+
+/**
+ * What the children waiting leave behind once each takes their seat, in rank
+ * order: the first stream by position that takes them and still has a free
+ * seat. `unseated` are the children no stream has a seat for; `mixedSeatLeft`
+ * is whether a Mixed stream still has one, the only kind a child with no Boy
+ * or girl answer fits.
+ *
+ * This is the database's stream_fit, except that stream_fit serves a child
+ * whose retry is pending before the others. The screen can't see retries, so
+ * it may disagree with the database until the retry runs.
+ */
+export function afterQueue<T extends Pick<WaitingChild, "gender" | "rank">>(
+  streams: readonly Stream[],
+  waiting: readonly T[],
+): { unseated: T[]; mixedSeatLeft: boolean } {
+  const ordered = streams.toSorted((a, b) => a.position - b.position)
+  const free = new Map(ordered.map((s) => [s.id, s.seats - s.placed]))
+  const freeIn = (s: Stream) => free.get(s.id) ?? 0
+  const unseated: T[] = []
+  for (const child of waiting.toSorted((a, b) => a.rank - b.rank)) {
+    const seat = ordered.find((s) => takesChild(s.takes, child.gender) && freeIn(s) > 0)
+    if (seat) free.set(seat.id, freeIn(seat) - 1)
+    else unseated.push(child)
+  }
+  return { unseated, mixedSeatLeft: ordered.some((s) => s.takes === "Mixed" && freeIn(s) > 0) }
+}
 
 /**
  * The notices for a year: for each class with streams, each need (boys, girls,
@@ -70,9 +105,9 @@ export function seatNeeds(classes: readonly ClassStreams[], requests: readonly S
   const needs: SeatNeed[] = []
   // A class of Mixed streams only takes any request for it: a request sent
   // from a child's page is recorded with the child's need, Boys or Girls.
-  const openRequest = (className: LeadClass, need: "Boys" | "Girls" | null, anyNeed = false) =>
+  const openRequest = (className: LeadClass, need: "Boys" | "Girls" | null, anyNeed = false, stands: (r: StreamRequest) => boolean = () => true) =>
     requests
-      .filter((r) => r.resolvedAt === null && r.className === className && (anyNeed || r.need === need))
+      .filter((r) => r.resolvedAt === null && r.className === className && (anyNeed || r.need === need) && stands(r))
       .toSorted((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0] ?? null
   for (const each of classes) {
     const ordered = each.streams.toSorted((a, b) => a.position - b.position)
@@ -85,6 +120,7 @@ export function seatNeeds(classes: readonly ClassStreams[], requests: readonly S
           fullStream: ordered[ordered.length - 1],
           waiting: each.waiting.length,
           request: openRequest(each.className, null, true),
+          askFor: null,
         })
       }
       continue
@@ -100,22 +136,29 @@ export function seatNeeds(classes: readonly ClassStreams[], requests: readonly S
         fullStream: taking[taking.length - 1],
         waiting,
         request: openRequest(each.className, need),
+        askFor: null,
       })
     }
-    // Only a Mixed stream takes a child with no Boy or girl answer: when such
-    // a child waits, or a request sent for one is still open, the class needs
-    // a stream for any child (lead, 2026-11-18). The database settles both:
-    // a child waits, and a request stays open, only while no stream can take
-    // them. `freeForAny` can't say it, since it counts Boys and Girls seats.
-    const unanswered = each.waiting.filter((w) => w.gender === null).length
-    const anyRequest = openRequest(each.className, null)
-    if (unanswered > 0 || anyRequest) {
+    // Only a Mixed stream takes a child with no Boy or girl answer, so the
+    // class needs a stream for any child when the queue leaves such a child
+    // without a seat, or leaves no Mixed seat for a request still open
+    // (lead, 2026-11-18). Waiting, or an open request, doesn't say it alone:
+    // a child whose row was busy waits for a retry, and their request stays
+    // open, while a Mixed seat is free for them. Nor does `freeForAny`,
+    // which counts Boys and Girls seats.
+    const queue = afterQueue(ordered, each.waiting)
+    const stuck = queue.unseated.filter((w) => w.gender === null)
+    const seated = new Set(each.waiting.filter((w) => !queue.unseated.includes(w)).map((w) => w.leadId))
+    // A request sent for a child the queue seats is about to close.
+    const anyRequest = openRequest(each.className, null, false, (r) => !queue.mixedSeatLeft && !(r.leadId !== null && seated.has(r.leadId)))
+    if (stuck.length > 0 || anyRequest) {
       needs.push({
         className: each.className,
         need: null,
         fullStream: ordered.filter((s) => s.takes === "Mixed").at(-1) ?? null,
-        waiting: unanswered,
+        waiting: each.waiting.filter((w) => w.gender === null).length,
         request: anyRequest,
+        askFor: stuck[0]?.leadId ?? null,
       })
     }
   }

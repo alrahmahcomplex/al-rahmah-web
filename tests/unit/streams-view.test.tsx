@@ -212,8 +212,18 @@ describe("StreamsView, a Mixed-only class", () => {
 
 describe("children with no Boy or girl answer in a class without a Mixed stream", () => {
   const noAnswer = { ...FORM1.waiting[0], leadId: "lead-3", studentName: "Neema Hamisi", gender: null }
-  // Seats free for boys and girls, as the database reports it; only a Mixed stream takes these two.
-  const split: ClassStreams = { ...FORM1, freeForBoy: true, freeForAny: true, waiting: [noAnswer, { ...noAnswer, leadId: "lead-4" }] }
+  // Seats free for boys and girls, and so for "any" child, as the database reports it; only a Mixed stream takes these two.
+  const split: ClassStreams = {
+    ...FORM1,
+    streams: [stream("g", "A", "Girls", 20, 12, 1), stream("b", "B", "Boys", 20, 15, 2)],
+    freeForBoy: true,
+    freeForGirl: true,
+    freeForAny: true,
+    waiting: [
+      { ...noAnswer, leadId: "lead-4", rank: 2 },
+      { ...noAnswer, rank: 1 },
+    ],
+  }
 
   it("asks the Manager to open a stream for any child, naming no full stream", () => {
     view(MANAGER, { ...YEAR, classes: [split] })
@@ -226,5 +236,13 @@ describe("children with no Boy or girl answer in a class without a Mixed stream"
     view(STAFF, { ...YEAR, classes: [split] })
     const notice = screen.getByText("FORM 1 has no seat left.").closest(".st-notice") as HTMLElement
     expect(notice).toHaveTextContent("FORM 1 has no seat left. Only the Admissions Manager can open a new stream.")
+  })
+
+  it("sends other staff's request for the first of these children, not for the class", async () => {
+    actions.request.mockResolvedValue({ status: "done", message: "Request sent to the Admissions Manager." })
+    view(STAFF, { ...YEAR, classes: [split] })
+    await userEvent.click(screen.getByRole("button", { name: "Send a request to open a new stream" }))
+    expect(actions.request).toHaveBeenCalledTimes(1)
+    expect(actions.request).toHaveBeenCalledWith({ leadId: "lead-3" })
   })
 })

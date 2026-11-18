@@ -86,7 +86,10 @@ function NeedNotice({ need, year, classStreams, who }: { need: SeatNeed; year: n
         {full && `${full} `}Only the Admissions Manager can open a new stream.
       </span>
       <RequestStreamButton
-        target={{ year, className: need.className, need: need.need }}
+        // For a child with no Boy or girl answer in a class with Boys or
+        // Girls streams, the request is the child's: the database checks a
+        // class request for any child against every free seat.
+        target={need.askFor ? { leadId: need.askFor } : { year, className: need.className, need: need.need }}
         className={need.className}
         need={need.need}
         variant={need.need ? "go" : "ghost"}

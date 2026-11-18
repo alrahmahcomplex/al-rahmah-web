@@ -69,6 +69,20 @@ async function twoYearsWithSchedules(): Promise<number> {
   throw new Error("No two fee test years in a row were free")
 }
 
+// Local databases keep every committed lead and reuse fee test years, so a
+// test that counts seats takes classes where nobody in its year holds one.
+async function emptyClasses(year: number, n: number): Promise<string[]> {
+  const { rows } = await asSystem((sql) =>
+    sql.query<{ class_name: string }>("select distinct class_name::text from public.seat_holders($1)", [year]),
+  )
+  const taken = new Set(rows.map((r) => r.class_name))
+  const free = ["DAY CARE", "KG 1", "KG 2", "STD 1", "STD 2", "STD 3", "STD 4", "STD 5", "STD 6", "STD 7", "FORM 1", "FORM 2", "FORM 3"].filter((c) => !taken.has(c))
+  if (free.length < n) throw new Error(`not enough classes of ${year} without seat holders`)
+  return free.slice(0, n)
+}
+
+const emptyClass = async (year: number) => (await emptyClasses(year, 1))[0]
+
 const phone = () => `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
 
 /** A child of `year` and `className` who passed their interview, with no payment yet. */
@@ -167,13 +181,14 @@ describe("while the seat mode is legacy", () => {
 describe("opening streams", () => {
   test("the first stream places the children it takes, in ranking order, up to its seats; the rest wait", async () => {
     const year = await yearWithSchedule()
-    const firstBoy = await holder(year, "FORM 1", "Boy", 5)
-    const girl = await holder(year, "FORM 1", "Girl", 4)
-    const noAnswer = await holder(year, "FORM 1", undefined, 3)
-    const laterBoy = await holder(year, "FORM 1", "Boy", 2)
+    const c = await emptyClass(year)
+    const firstBoy = await holder(year, c, "Boy", 5)
+    const girl = await holder(year, c, "Girl", 4)
+    const noAnswer = await holder(year, c, undefined, 3)
+    const laterBoy = await holder(year, c, "Boy", 2)
     await inRolledBackTransaction(async (sql) => {
       await named(sql)
-      const boys = await open(sql, year, "FORM 1", "A", "Boys", 1)
+      const boys = await open(sql, year, c, "A", "Boys", 1)
       expect(boys).toMatchObject({ label: "A", takes: "Boys", seats: 1, position: 1, placed: 1 })
       await asOwner(sql)
       expect(await placements(sql, [firstBoy, girl, noAnswer, laterBoy])).toEqual({ [firstBoy]: "A", [girl]: null, [noAnswer]: null, [laterBoy]: null })
@@ -181,8 +196,8 @@ describe("opening streams", () => {
       // A Girls stream may share the label; a Mixed one comes next and takes
       // the child with no answer and the boy still waiting, in rank order.
       await actAsStaff(sql, MANAGER.id)
-      expect(await open(sql, year, "FORM 1", "A", "Girls", 5)).toMatchObject({ position: 2, placed: 1 })
-      expect(await open(sql, year, "FORM 1", "B", "Mixed", 1)).toMatchObject({ position: 3, placed: 1 })
+      expect(await open(sql, year, c, "A", "Girls", 5)).toMatchObject({ position: 2, placed: 1 })
+      expect(await open(sql, year, c, "B", "Mixed", 1)).toMatchObject({ position: 3, placed: 1 })
       await asOwner(sql)
       expect(await placements(sql, [firstBoy, girl, noAnswer, laterBoy])).toEqual({ [firstBoy]: "A", [girl]: "A", [noAnswer]: "B", [laterBoy]: null })
     })
@@ -245,11 +260,12 @@ describe("opening streams", () => {
 describe("editing a stream", () => {
   test("seats never go below the children placed; raising them places a waiting child", async () => {
     const year = await yearWithSchedule()
-    const first = await holder(year, "STD 2", "Girl", 5)
-    const second = await holder(year, "STD 2", "Boy", 4)
+    const c = await emptyClass(year)
+    const first = await holder(year, c, "Girl", 5)
+    const second = await holder(year, c, "Boy", 4)
     await inRolledBackTransaction(async (sql) => {
       await named(sql)
-      const stream = await open(sql, year, "STD 2", "A", "Mixed", 1)
+      const stream = await open(sql, year, c, "A", "Mixed", 1)
       expect(await refusal(sql, "select public.edit_stream($1, 'A', 0)", [stream.id])).toBe("below_placed")
       await sql.query("select public.edit_stream($1, 'Ruby', 2)", [stream.id])
       await asOwner(sql)
@@ -261,12 +277,13 @@ describe("editing a stream", () => {
 describe("the seat sync", () => {
   test("a new Seat priority takes a free seat at the end of the transaction, after the children already waiting", async () => {
     const year = await yearWithSchedule()
-    const waiting = await holder(year, "STD 4", "Boy", 10)
-    const newcomer = await child(year, "STD 4", "Boy")
+    const c = await emptyClass(year)
+    const waiting = await holder(year, c, "Boy", 10)
+    const newcomer = await child(year, c, "Boy")
     await inRolledBackTransaction(async (sql) => {
       await named(sql)
       // No seat while the stream is full: the earlier holder waits.
-      const stream = await open(sql, year, "STD 4", "A", "Boys", 1)
+      const stream = await open(sql, year, c, "A", "Boys", 1)
       await asOwner(sql)
       expect(await placements(sql, [waiting])).toEqual({ [waiting]: "A" })
       // Make room for one more, then the newcomer pays.
@@ -285,11 +302,12 @@ describe("the seat sync", () => {
 
   test("a waiting child takes the seat a declined child gives back", async () => {
     const year = await yearWithSchedule()
-    const placed = await holder(year, "STD 5", "Girl", 6)
-    const waiting = await holder(year, "STD 5", "Girl", 3)
+    const c = await emptyClass(year)
+    const placed = await holder(year, c, "Girl", 6)
+    const waiting = await holder(year, c, "Girl", 3)
     await inRolledBackTransaction(async (sql) => {
       await named(sql)
-      await open(sql, year, "STD 5", "A", "Mixed", 1)
+      await open(sql, year, c, "A", "Mixed", 1)
       await asOwner(sql)
       expect(await placements(sql, [placed, waiting])).toEqual({ [placed]: "A", [waiting]: null })
       await actAsStaff(sql, MANAGER.id)
@@ -302,13 +320,14 @@ describe("the seat sync", () => {
 
   test("a gender correction moves a child out of a stream that no longer takes them, and leaves a Mixed one alone", async () => {
     const year = await yearWithSchedule()
-    const boy = await holder(year, "FORM 2", "Boy", 6)
-    const mixedChild = await holder(year, "FORM 3", "Boy", 6)
+    const [c, c2] = await emptyClasses(year, 2)
+    const boy = await holder(year, c, "Boy", 6)
+    const mixedChild = await holder(year, c2, "Boy", 6)
     await inRolledBackTransaction(async (sql) => {
       await named(sql)
-      await open(sql, year, "FORM 2", "A", "Boys", 5)
-      await open(sql, year, "FORM 2", "A", "Girls", 5)
-      await open(sql, year, "FORM 3", "A", "Mixed", 5)
+      await open(sql, year, c, "A", "Boys", 5)
+      await open(sql, year, c, "A", "Girls", 5)
+      await open(sql, year, c2, "A", "Mixed", 5)
       await asOwner(sql)
       await sql.query("select public.set_audit_actor('system')")
       await sql.query("update public.leads set gender = 'Girl' where id = any ($1)", [[boy, mixedChild]])
@@ -321,14 +340,75 @@ describe("the seat sync", () => {
     })
   })
 
+  test("a child already waiting takes a freed seat before a higher-ranked newcomer queued in the same sweep", async () => {
+    const year = await yearWithSchedule()
+    const c = await emptyClass(year)
+    const placed = await holder(year, c, "Girl", 20)
+    const waiting = await holder(year, c, "Girl", 3)
+    const newcomer = await child(year, c, "Girl")
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      await open(sql, year, c, "A", "Mixed", 1)
+      await asOwner(sql)
+      // The waiting child was recorded in an earlier transaction.
+      await sql.query("update public.seat_placements set waiting_since = now() - interval '1 day' where lead_id = $1", [waiting])
+      // In one transaction: the newcomer reaches a priority dated before the
+      // waiting child's (so it ranks higher), and the placed child is declined.
+      await actAsStaff(sql, ACCOUNTANT.id)
+      await sql.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [newcomer, daysAgo(10), randomUUID()])
+      await asOwner(sql)
+      await actAsStaff(sql, MANAGER.id)
+      await sql.query("select public.decline_lead($1, 'No seat available', null)", [placed])
+      await asOwner(sql)
+      await sql.query("select public.flush_seat_queue()")
+      expect(await placements(sql, [placed, waiting, newcomer])).toEqual({ [placed]: null, [waiting]: "A", [newcomer]: null })
+      const { rows } = await sql.query("select waiting_since is not null as waits from public.seat_placements where lead_id = $1", [newcomer])
+      expect(rows[0].waits).toBe(true)
+    })
+  })
+
+  test("each placement keeps its own child's cause, and the queue's actor survives a cleared one", async () => {
+    const year = await yearWithSchedule()
+    const c = await emptyClass(year)
+    const [first, second] = [await child(year, c, "Boy"), await child(year, c, "Girl")]
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      await open(sql, year, c, "A", "Mixed", 5)
+      await asOwner(sql)
+      await actAsStaff(sql, ACCOUNTANT.id)
+      await sql.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [first, today, randomUUID()])
+      await asOwner(sql)
+      // A second child queued by a sibling recompute, then every actor
+      // cleared, as some blocks do before the commit: the queue kept it.
+      await actAsStaff(sql, ACCOUNTANT.id)
+      await sql.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [second, today, randomUUID()])
+      await asOwner(sql)
+      await sql.query("update public.seat_sync_queue set cause = 'sibling' where lead_id = $1", [second])
+      await sql.query("select set_config('request.jwt.claims', '', true), set_config('audit.actor_kind', '', true)")
+      expect((await sql.query("select public.flush_seat_queue() as n")).rows[0].n).toBe(2)
+      expect((await sql.query("select public.flush_seat_queue() as n")).rows[0].n).toBe(0)
+      const { rows } = await sql.query<{ lead_id: string; cause: string; actor_kind: string }>(
+        `select p.lead_id, p.cause, a.actor_kind
+         from public.seat_placements p
+         join public.audit_log a on a.row_id = p.id and a.table_name = 'seat_placements'
+         where p.lead_id = any ($1)
+         order by p.lead_id`,
+        [[first, second]],
+      )
+      expect(Object.fromEntries(rows.map((r) => [r.lead_id, r.cause]))).toEqual({ [first]: "payment", [second]: "sibling" })
+      expect(rows.map((r) => r.actor_kind)).toEqual(["staff", "staff"])
+    })
+  })
+
   test("placement never changes a fee, a status or a Seat priority", async () => {
     const year = await yearWithSchedule()
-    const ids = [await holder(year, "STD 7", "Boy", 4), await holder(year, "STD 7", "Girl", 3)]
+    const c = await emptyClass(year)
+    const ids = [await holder(year, c, "Boy", 4), await holder(year, c, "Girl", 3)]
     await inRolledBackTransaction(async (sql) => {
       const snapshot = "select l.id, l.status, (public.lead_seat_priority(l.id)).priority from public.leads l where l.id = any ($1) order by l.id"
       const before = (await sql.query(snapshot, [ids])).rows
       await named(sql)
-      await open(sql, year, "STD 7", "A", "Mixed", 1)
+      await open(sql, year, c, "A", "Mixed", 1)
       await asOwner(sql)
       expect((await sql.query(snapshot, [ids])).rows).toEqual(before)
     })

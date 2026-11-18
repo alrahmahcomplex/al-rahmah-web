@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/server"
 import StaffForbidden from "../forbidden"
 import { requireStaff } from "../session"
 import { Dashboard } from "./_dashboard/dashboard"
+import { SiblingFollowUp } from "./sibling-follow-up"
 
 export const metadata: Metadata = {
   title: pageTitle("Reports"),
@@ -14,7 +15,8 @@ export const metadata: Metadata = {
 // The statistics that were the staff home until #226, for holders of
 // reports.view (#241). The database still answers each count only under
 // leads.view and Seats by class only under payments.view, so the page shows
-// nobody more than their role reads elsewhere.
+// nobody more than their role reads elsewhere. Sibling discount follow-up
+// (#311) shows each count to the role that may read it.
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -33,6 +35,7 @@ export default async function ReportsPage({
         searchParams={await searchParams}
         canOpenSeats={staff.permissions.includes("academic_years.manage")}
       />
+      <SiblingFollowUp supabase={supabase} permissions={staff.permissions} />
     </>
   )
 }

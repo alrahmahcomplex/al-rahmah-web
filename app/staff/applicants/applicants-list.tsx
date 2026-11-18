@@ -5,7 +5,16 @@ import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 
 import { ButtonLink, EmptyState, FilterPills, Pagination, Select, StatusChip, Table, Tag, type TableColumn } from "@/components/kit"
-import { LEAD_STATUSES, type ClosureFilter, type LeadListItem, type LeadSearch, type LeadSearchResults, type LeadStatus } from "@/lib/services/leads"
+import {
+  LEAD_STATUSES,
+  type ClosureFilter,
+  type LeadListItem,
+  type LeadSearch,
+  type LeadSearchResults,
+  type LeadStatus,
+  type SiblingFollowUp,
+} from "@/lib/services/leads"
+import type { FeeChip } from "@/lib/sibling-sentences"
 import type { SeatPriority } from "@/lib/services/school-fee-payments"
 
 import { SeatPriorityTag } from "./[id]/seat-priority-tag"
@@ -32,6 +41,20 @@ const EMPTY: Record<LeadSearchResults["mode"], string> = {
 
 const LOST: ApplicantSheetAnswer = { status: "failed" }
 
+// The Sibling follow-up lists Reports opens (#311), as the list's chip names them.
+const FOLLOW_UP_LABELS: Record<SiblingFollowUp, string> = {
+  fee_edit_needed: "Granted: fee edit needed",
+  no_full: "Enrolled at 10%, no sibling Enrolled at full",
+  not_known: "Previous school not known yet",
+  missing: "Previous school missing",
+  kept_ten: "Kept the 10% from the old family rule",
+}
+
+// A row's Sibling discount: its fee tag, and whether a fee edit or a Sibling
+// request waits. Null for a lead in no Sibling group and without the
+// prior-sibling tick.
+export type SiblingTag = { chip: FeeChip; feeEditNeeded: boolean; requestWaiting: boolean } | null
+
 type Search = LeadSearch & { closure: ClosureFilter }
 
 /**
@@ -49,6 +72,7 @@ export function ApplicantsList({
   groupYears,
   priorities,
   nextSteps,
+  siblingTags = null,
   importLabel,
 }: {
   results: LeadSearchResults
@@ -60,12 +84,17 @@ export function ApplicantsList({
   // The next step's title by lead id, null on a closed lead; null hides the
   // column.
   nextSteps: Record<string, string | null> | null
+  // Each row's Sibling discount, by lead id; null hides the column.
+  siblingTags?: Record<string, SiblingTag> | null
   // What the import chip says, while the list shows one import's applicants.
   importLabel: string | null
 }) {
   const router = useRouter()
   const { leads, total, page, pageCount, mode } = results
   const searching = mode !== "list"
+  // A Sibling follow-up list from Reports: the count chose the leads, so the
+  // other filters don't apply until it is cleared.
+  const followUp = searching ? undefined : search.siblingFollowUp
 
   // The filters as last chosen, not as `search` has them: a second change made
   // before the first one's page arrives would otherwise undo it. They follow
@@ -80,7 +109,8 @@ export function ApplicantsList({
   function filter(changes: Partial<Pick<LeadSearch, "status" | "closure" | "earlierLinkYear">>) {
     const next = { ...chosen, ...changes }
     setChosen(next)
-    const href = leadsHref({ ...next, importBatchId: search.importBatchId, page: 1 })
+    // A status leaves a Sibling follow-up list for the everyday one.
+    const href = leadsHref({ ...next, importBatchId: search.importBatchId, siblingFollowUp: undefined, page: 1 })
     // The top bar's search carries these until their page arrives.
     setPendingFilters({ href, fields: [...new URLSearchParams(href.split("?")[1] ?? "")] })
     router.push(href)
@@ -163,6 +193,25 @@ export function ApplicantsList({
           },
         ]
       : []),
+    ...(siblingTags
+      ? [
+          {
+            header: "Sibling discount",
+            cell: (lead: LeadListItem) => {
+              const tag = siblingTags[lead.id]
+              return tag ? (
+                <span className="ap-chips">
+                  <Tag tone={tag.chip.tone}>{tag.chip.text}</Tag>
+                  {tag.feeEditNeeded && <Tag tone="wait">Granted: fee edit needed</Tag>}
+                  {tag.requestWaiting && <Tag tone="wait">Request waiting</Tag>}
+                </span>
+              ) : (
+                <small className="ap-quiet">None</small>
+              )
+            },
+          },
+        ]
+      : []),
     ...(priorities
       ? [
           {
@@ -173,9 +222,15 @@ export function ApplicantsList({
       : []),
   ]
 
-  const chip = searching ? `Search: ${search.query}` : importLabel
-  const clearHref = searching ? leadsHref(search, { query: undefined, page: 1 }) : leadsHref(search, { importBatchId: undefined, page: 1 })
-  const filtered = !searching && (search.status !== undefined || search.closure !== "open" || search.earlierLinkYear !== undefined || !!search.importBatchId)
+  const chip = searching ? `Search: ${search.query}` : followUp ? FOLLOW_UP_LABELS[followUp] : importLabel
+  const clearHref = searching
+    ? leadsHref(search, { query: undefined, page: 1 })
+    : followUp
+      ? leadsHref({ closure: "open", page: 1 })
+      : leadsHref(search, { importBatchId: undefined, page: 1 })
+  const filtered =
+    !searching &&
+    (!!followUp || search.status !== undefined || search.closure !== "open" || search.earlierLinkYear !== undefined || !!search.importBatchId)
 
   return (
     <>
@@ -184,10 +239,10 @@ export function ApplicantsList({
           label="Filter by status"
           className="ap-pills"
           options={[ALL, ...LEAD_STATUSES].map((status) => ({ value: status, label: status }))}
-          value={searching ? "" : (chosen.status ?? ALL)}
+          value={searching || followUp ? "" : (chosen.status ?? ALL)}
           onChange={(value) => filter({ status: value === ALL ? undefined : (value as LeadStatus) })}
         />
-        {!searching && (
+        {!searching && !followUp && (
           <div className="ap-selects">
             <Select
               aria-label="Closure"

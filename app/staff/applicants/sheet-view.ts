@@ -14,6 +14,8 @@ export type ApplicantSheetFee =
       state: "fee"
       // Whole TZS, formatted.
       annualFee: string
+      // "Sibling 10%", "Full fee" or a larger discount, and who set it by hand (#311).
+      why: string
       paid: string
       balance: string
       priority: SeatPriority | null

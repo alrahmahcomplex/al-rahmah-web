@@ -7,6 +7,7 @@ import { getLead, isClosed } from "@/lib/services/leads"
 import { createClient } from "@/utils/supabase/server"
 
 import { formatShillings } from "../fees/format"
+import { feeWhy, setByHandLine } from "./[id]/fee-edit-outcome"
 import { readFee } from "./[id]/lead-reads"
 import { parentRows, studentRows } from "./[id]/lead-rows"
 import { readNextStep } from "./[id]/next-step-read"
@@ -42,6 +43,7 @@ export async function loadApplicantSheet(leadId: string): Promise<ApplicantSheet
   ])
 
   const text = step && step.kind !== "closed" ? nextStepText(step, formatDate) : null
+  const byHand = sibling && setByHandLine(sibling.fee)
   return {
     status: "ready",
     view: {
@@ -59,7 +61,10 @@ export async function loadApplicantSheet(leadId: string): Promise<ApplicantSheet
         // The status is the chip under the name.
         ...studentRows(lead.data).filter(([key]) => key !== "Status"),
       ],
-      custodian: parentRows(lead.data),
+      custodian: [
+        ...parentRows(lead.data),
+        ...(details.ok && details.data.broughtBy ? ([["Brought by", details.data.broughtBy]] as [string, string][]) : []),
+      ],
       fee:
         fee === null
           ? null
@@ -70,6 +75,7 @@ export async function loadApplicantSheet(leadId: string): Promise<ApplicantSheet
               : {
                   state: "fee",
                   annualFee: formatShillings(fee.data.schoolFee),
+                  why: [feeWhy(fee.data.discount?.kind ?? null), byHand].filter(Boolean).join(" · "),
                   paid: formatShillings(fee.data.totalPaid),
                   balance: formatShillings(fee.data.balance),
                   priority: fee.data.priority,

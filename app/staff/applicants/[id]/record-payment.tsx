@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, type ReactNode } from "react"
 
 import { Button, Note } from "@/components/kit"
 import { formatDate } from "@/lib/school-calendar"
@@ -37,15 +37,21 @@ function parseAmount(typed: string): number {
 // The confirmation outlasts the refresh that follows. `canWaive` offers Fee
 // waived, for a lead with a granted Qualified orphan discount, and
 // `canPayPreFormOne` the Pre-Form One fee, for a lead whose Pre-Form One tick
-// applies.
+// applies. `note` shows on the form and its review: what the payment
+// does while a Sibling request waits (#311). `beside` sits next to the
+// button, such as Edit fee.
 export function RecordPayment({
   leadId,
   canWaive = false,
   canPayPreFormOne = false,
+  note = null,
+  beside = null,
 }: {
   leadId: string
   canWaive?: boolean
   canPayPreFormOne?: boolean
+  note?: string | null
+  beside?: ReactNode
 }) {
   const [today, setToday] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
@@ -71,6 +77,7 @@ export function RecordPayment({
         today={today}
         canWaive={canWaive}
         canPayPreFormOne={canPayPreFormOne}
+        note={note}
         onDone={(message) => {
           setToday(null)
           setSaved(message)
@@ -81,10 +88,11 @@ export function RecordPayment({
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
+      <div className="lr-acts">
         <Button variant="ghost" size="small" onClick={open} pending={opening}>
           {opening ? "Opening…" : "Record payment"}
         </Button>
+        {beside}
       </div>
       {unopened && (
         <Note tone="bad" role="alert">
@@ -101,12 +109,14 @@ function PaymentForm({
   today,
   canWaive,
   canPayPreFormOne,
+  note,
   onDone,
 }: {
   leadId: string
   today: string
   canWaive: boolean
   canPayPreFormOne: boolean
+  note: string | null
   onDone: (saved: string | null) => void
 }) {
   const [type, setType] = useState<RecordablePaymentType | "">("")
@@ -161,6 +171,7 @@ function PaymentForm({
     })
   }
 
+  const siblingNote = note && <Note>{note}</Note>
   const refusalAlert = refusal && (
     <Note tone="bad" role="alert">
       {refusal.message}
@@ -172,6 +183,7 @@ function PaymentForm({
     const warning = overfillWarning(preview)
     return (
       <section aria-label="Review payment" className="lr-form lr-inline">
+        {siblingNote}
         <p className="lr-text font-semibold">Check this payment before you confirm it. Once recorded, it can&apos;t be changed.</p>
         {refusalAlert}
         {warning && (
@@ -251,6 +263,7 @@ function PaymentForm({
         review()
       }}
     >
+      {siblingNote}
       {refusalAlert}
       <Field label="Payment type">
         {({ id }) => (

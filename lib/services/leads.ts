@@ -770,9 +770,17 @@ export type LeadSearch = {
   earlierLinkYear?: number
   // Only the leads one student import created ("Show them in the list").
   importBatchId?: string
+  // Only the leads behind one Sibling follow-up count on Reports (#311).
+  // The other filters don't apply with it: the count already chose.
+  siblingFollowUp?: SiblingFollowUp
   // From 1.
   page: number
 }
+
+// The Sibling follow-up counts a list can show the leads of
+// (leads_for_sibling_follow_up).
+export const SIBLING_FOLLOW_UPS = ["not_known", "missing", "kept_ten", "no_full", "fee_edit_needed"] as const
+export type SiblingFollowUp = (typeof SIBLING_FOLLOW_UPS)[number]
 
 export type LeadListItem = {
   id: string
@@ -854,6 +862,15 @@ export async function searchLeads(
     const fromLeads = () => supabase.from("leads").select(LEAD_LIST_COLUMNS, { count: "exact", head })
     // The earlier-link filter reads leads rows from a function, filtered and
     // paged the same way as the table.
+    if (mode === "list" && search.siblingFollowUp) {
+      return (
+        supabase
+          .rpc("leads_for_sibling_follow_up", { kind: search.siblingFollowUp }, { count: "exact", head })
+          .select(LEAD_LIST_COLUMNS) as unknown as ReturnType<typeof fromLeads>
+      )
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+    }
     const select =
       mode === "list" && search.earlierLinkYear !== undefined
         ? (supabase

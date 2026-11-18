@@ -26,6 +26,8 @@ export type LeadFatherAndSchool = {
   fatherFullName: string | null
   fatherFullNameSource: FatherNameSource | null
   previousSchool: LeadPreviousSchool
+  // Who brought the student (#298), "Name (Relationship)"; null when nobody is recorded.
+  broughtBy: string | null
 }
 
 type Row = {
@@ -35,6 +37,8 @@ type Row = {
   previous_school_type: PreviousSchoolType | null
   previous_school_region: string | null
   previous_school_not_known: boolean
+  brought_by_name: string | null
+  brought_by_relationship: string | null
 }
 
 export async function getLeadFatherAndSchool(
@@ -44,7 +48,7 @@ export async function getLeadFatherAndSchool(
   const { data, error } = await supabase
     .from("leads")
     .select(
-      "father_full_name, father_full_name_source, previous_school_name, previous_school_type, previous_school_region, previous_school_not_known",
+      "father_full_name, father_full_name_source, previous_school_name, previous_school_type, previous_school_region, previous_school_not_known, brought_by_name, brought_by_relationship",
     )
     .eq("id", leadId)
     .maybeSingle<Row>()
@@ -65,6 +69,11 @@ export async function getLeadFatherAndSchool(
         : data.previous_school_name && data.previous_school_type && data.previous_school_region
           ? { kind: "school", name: data.previous_school_name, type: data.previous_school_type, region: data.previous_school_region }
           : null,
+      broughtBy: data.brought_by_name
+        ? data.brought_by_relationship
+          ? `${data.brought_by_name} (${data.brought_by_relationship})`
+          : data.brought_by_name
+        : null,
     },
   }
 }

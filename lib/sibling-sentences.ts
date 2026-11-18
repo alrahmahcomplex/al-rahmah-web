@@ -51,7 +51,7 @@ export const NO_FACTS: SentenceFacts = {
   grantedOn: "",
 }
 
-const list = (names: string[], and: string) =>
+export const list = (names: string[], and: string) =>
   names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} ${and} ${names[names.length - 1]}`
 
 export const FEE_EDIT_REASONS: Record<SiblingFeeEditReason, Record<SentenceLanguage, string>> = {

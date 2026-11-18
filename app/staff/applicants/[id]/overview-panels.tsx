@@ -63,11 +63,16 @@ export async function ParentPanel({ lead, staff, open }: LeadPanelProps) {
   // The children a contact correction would also reach, closed ones included.
   // If they can't be listed, the correction is not offered, so it is never
   // made unwarned.
-  const children = canEditDetails ? await listContactChildren(await createClient(), lead.contact.id) : null
+  const [children, details] = await Promise.all([
+    canEditDetails ? listContactChildren(await createClient(), lead.contact.id) : null,
+    readFatherAndSchool(lead.id),
+  ])
   const siblings = children?.ok ? children.data.filter((child) => child.id !== lead.id) : []
+  // Who brought the student (#298), under the custodian, as the side sheet shows it (#311).
+  const broughtBy: [string, string][] = details.ok && details.data.broughtBy ? [["Brought by", details.data.broughtBy]] : []
   return (
     <ContactEditor lead={lead} siblings={siblings} canEdit={canEditDetails && children?.ok === true}>
-      <Details rows={parentRows(lead)} />
+      <Details rows={[...parentRows(lead), ...broughtBy]} />
     </ContactEditor>
   )
 }

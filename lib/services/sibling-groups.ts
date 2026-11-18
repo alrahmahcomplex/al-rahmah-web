@@ -247,6 +247,17 @@ export async function editSiblingFee(
   return { ok: true, data: { ...outcome(row), editId: row.edit_id as string } }
 }
 
+// The note saved with one fee edit, for staff who may view payments (the
+// table's policy). Null when it has none or can't be seen.
+export async function getSiblingFeeEditNote(supabase: SupabaseClient, editId: string): Promise<Result<string | null, "unavailable">> {
+  const { data, error } = await supabase.from("sibling_fee_edits").select("note").eq("id", editId).maybeSingle<{ note: string | null }>()
+  if (error) {
+    console.error("Could not read a Sibling fee edit's note", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: data?.note ?? null }
+}
+
 // ---------------------------------------------------------------------------
 // The prior-sibling tick, moved here from sibling-discount.ts (#304).
 // ---------------------------------------------------------------------------

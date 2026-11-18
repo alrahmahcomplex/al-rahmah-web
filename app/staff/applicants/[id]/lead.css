@@ -88,7 +88,7 @@ a.lr-link:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offse
 .sg-lang label { position: relative; }
 .sg-lang input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
 .sg-lang span { display: inline-flex; align-items: center; height: 26px; padding: 0 11px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--gf-indigo); }
-.sg-lang input:checked + span { background: var(--gf-indigo); color: #fff; }
+.sg-lang input:checked + span { background: var(--gf-indigo); color: var(--gf-paper); }
 .sg-lang input:focus-visible + span { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 1px; }
 .sg-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border: 0.75px solid var(--gf-line); border-radius: 18px; overflow: hidden; }
 .sg-m { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 11px 14px 12px; }

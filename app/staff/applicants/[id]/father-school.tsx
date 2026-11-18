@@ -407,7 +407,7 @@ export function PreviousSchoolRow({
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const n = name.trim().replace(/\s+/g, " ")
-    if (n.length < 3) return setError("Type the school’s name.")
+    if (n.length < 2) return setError("Type the school’s name.")
     if (!type || !region) return setError("Choose private or public, and the region.")
     save({ kind: "school", name: n, type, region }, "Previous school saved.")
   }

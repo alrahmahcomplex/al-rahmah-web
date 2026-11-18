@@ -206,7 +206,7 @@ export type SchoolInput = { kind: "school"; name: string; type: PreviousSchoolTy
 export async function savePreviousSchool(leadId: string, school: SchoolInput): Promise<{ status: "saved" } | Refused> {
   if (!isId(leadId) || !school || typeof school !== "object") return NOT_READ
   if (school.kind === "school") {
-    if (typeof school.name !== "string" || school.name.trim().length < 3) {
+    if (typeof school.name !== "string" || school.name.trim().length < 2) {
       return { status: "refused", field: "previous_school_name", message: "Type the school’s name." }
     }
     if ((school.type !== "private" && school.type !== "public") || !REGIONS.includes(school.region)) {
@@ -245,8 +245,9 @@ export async function sendSiblingRequest(leadId: string, note: string, requestId
 
 export type GrantPreviewView = {
   status: "ready"
-  // English only: the Manager reads the group as it would be.
-  members: (Pick<SiblingMemberView, "leadId" | "firstName" | "chip" | "sentence"> & { feeEditNeeded: boolean })[]
+  // English only: the Manager reads the group as it would be. Null for a
+  // role without leads.view, which sees no group.
+  members: (Pick<SiblingMemberView, "leadId" | "firstName" | "chip" | "sentence"> & { feeEditNeeded: boolean })[] | null
   // Null for staff who may not view payments.
   changes: string[] | null
   // The member the request compares the father's name with, for a request
@@ -263,6 +264,8 @@ export async function previewGrant(requestId: string, leadId: string): Promise<G
   const preview = await previewSiblingGrant(supabase, requestId)
   if (!preview.ok) return decideRefusal(preview.error, "preview")
   const { explanation, fullPayerTie, changes } = preview.data
+  // A role that may approve discounts without viewing leads sees no group.
+  if (!explanation) return { status: "ready", compareWith: null, members: null, changes: null }
   const described = await describeGroupFor(supabase, explanation, leadId, fullPayerTie)
   if (!described) return decideRefusal("unavailable", "preview")
   const nameOf = (id: string) => firstName(described.leads.get(id)?.studentName ?? "")

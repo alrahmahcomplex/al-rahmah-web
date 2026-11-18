@@ -129,7 +129,16 @@ export async function readSiblingGroup(
       requestedOn: dayOf(waiting.requestedAt),
       waitingDays: daysBetween(tanzaniaToday(new Date(waiting.requestedAt)), tanzaniaToday()),
       note: waiting.note,
-      sibling: waiting.siblingOfLeadId ? person(waiting.siblingOfLeadId) : compare && person(compare.leadId),
+      // A request across groups names a sibling outside this group: the
+      // request carries its name and father's name.
+      sibling: waiting.siblingOfLeadId
+        ? {
+            leadId: waiting.siblingOfLeadId,
+            firstName: firstName(waiting.siblingOfStudentName ?? ""),
+            studentName: waiting.siblingOfStudentName ?? "",
+            father: waiting.siblingOfFatherFullName,
+          }
+        : compare && person(compare.leadId),
     },
     compareWith: compare && person(compare.leadId),
     canRequest:

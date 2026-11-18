@@ -258,7 +258,8 @@ export async function decideSiblingRequest(
 // them back, so it refuses what the grant would refuse. Needs
 // discounts.approve.
 export type SiblingGrantPreview = {
-  explanation: SiblingGroupExplanation
+  // Null without leads.view.
+  explanation: SiblingGroupExplanation | null
   // For the group's full payer after the grant; null without payments.view.
   fullPayerTie: boolean | null
   // Null without payments.view.
@@ -266,7 +267,7 @@ export type SiblingGrantPreview = {
 }
 
 type PreviewRow = {
-  explanation: ExplanationRow & { full_payer_tie: boolean | null }
+  explanation: (ExplanationRow & { full_payer_tie: boolean | null }) | null
   changes: { lead_id: string; before: number | null; after: number | null }[] | null
 }
 
@@ -293,8 +294,8 @@ export async function previewSiblingGrant(
   return {
     ok: true,
     data: {
-      explanation: toExplanation(row.explanation),
-      fullPayerTie: row.explanation.full_payer_tie,
+      explanation: row.explanation && toExplanation(row.explanation),
+      fullPayerTie: row.explanation?.full_payer_tie ?? null,
       changes: row.changes && row.changes.map((c) => ({ leadId: c.lead_id, before: c.before, after: c.after })),
     },
   }

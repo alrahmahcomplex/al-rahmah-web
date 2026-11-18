@@ -163,6 +163,28 @@ describe("the group view", () => {
     expect(view[2].notes).toEqual([])
   })
 
+  test("paused grants: the pause is the sentence and the tag says full fee for now, never the held-back 10%", () => {
+    const group: SiblingGroupExplanation = {
+      leadId: "b",
+      groupId: "g",
+      allLegacy: false,
+      fullPayerLeadId: "a",
+      anchors: [],
+      grantsPaused: true,
+      members: [
+        member({ leadId: "a", studentName: "Khalid Ali Khamis", reason: "full_payer", fullPayer: true }),
+        member({ leadId: "b", studentName: "Rashidi Ali Khamis", reason: "full_payer_sibling", becauseOf: ["a"], result: "none", notes: ["grants_paused"] }),
+      ],
+    }
+    const paused = describeSiblingGroup(group, extras, "b")[1]
+    expect(paused.sentence).toEqual({
+      en: "New Sibling 10% grants are paused, so this student pays the full fee for now.",
+      sw: "Punguzo jipya la ndugu 10% limesimamishwa, kwa hiyo mwanafunzi huyu analipa ada kamili kwa sasa.",
+    })
+    expect(paused.chip.en).toEqual({ text: "Full fee for now", tone: "wait" })
+    expect(paused.notes).toEqual([])
+  })
+
   test("no other sibling counts: the lone member says so; a ticked sibling is named", () => {
     const group: SiblingGroupExplanation = {
       leadId: "a",

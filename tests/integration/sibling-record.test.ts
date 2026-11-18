@@ -12,7 +12,7 @@ import { explainSiblingGroup, getFullPayerTie } from "@/lib/services/sibling-cou
 import { linkSibling, type LinkSiblingInput } from "@/lib/services/sibling-groups"
 import { decideSiblingRequest, getLeadSiblingRequests, previewSiblingGrant, requestSiblingDiscount } from "@/lib/services/sibling-requests"
 
-import { asSystem, inRolledBackTransaction, signedIn } from "../support/db"
+import { asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 
@@ -127,9 +127,9 @@ describe("preview_sibling_grant", () => {
     const preview = await previewSiblingGrant(await signedIn(MANAGER), asked.data)
     expect(preview.ok).toBe(true)
     if (!preview.ok) return
-    const member = preview.data.explanation.members.find((m) => m.leadId === waiting)
+    const member = preview.data.explanation?.members.find((m) => m.leadId === waiting)
     expect(member).toMatchObject({ basis: "granted", reason: "full_payer_sibling", becauseOf: [dear], result: "ten" })
-    expect(preview.data.explanation.members.find((m) => m.leadId === dear)).toMatchObject({ reason: "full_payer", highestFee: true })
+    expect(preview.data.explanation?.members.find((m) => m.leadId === dear)).toMatchObject({ reason: "full_payer", highestFee: true })
     expect(preview.data.fullPayerTie).toBe(false)
     expect(preview.data.changes).toEqual([{ leadId: waiting, before: KG1, after: tenOff(KG1) }])
 
@@ -155,6 +155,25 @@ describe("preview_sibling_grant", () => {
     const refused = await decideSiblingRequest(await signedIn(MANAGER), asked.data, { decision: "refuse", reason: "Two mothers." })
     expect(refused.ok).toBe(true)
     expect(await previewSiblingGrant(await signedIn(MANAGER), asked.data)).toEqual({ ok: false, error: "not-pending" })
+  })
+})
+
+describe("preview_sibling_grant for a role without leads.view", () => {
+  test("shows the fees that move but no group, and still saves nothing", async () => {
+    const year = await yearWithSchedule()
+    const { a: dear } = await pair(year, father(), "FORM 1", "STD 2")
+    const waiting = await child(year, father(), "KG 1")
+    await link({ leadId: waiting, siblingOfLeadId: dear })
+    const asked = await requestSiblingDiscount(await signedIn(ADMISSIONS), { leadId: waiting, note: "Proof.", requestId: randomUUID() })
+    if (!asked.ok) throw new Error("request failed")
+
+    const approver = await createThrowawayStaff(["discounts.approve", "payments.view"])
+    const preview = await previewSiblingGrant(await signedIn(approver), asked.data)
+    expect(preview).toEqual({
+      ok: true,
+      data: { explanation: null, fullPayerTie: null, changes: [{ leadId: waiting, before: KG1, after: tenOff(KG1) }] },
+    })
+    expect(await basisOf(waiting)).toBe("request_needed")
   })
 })
 

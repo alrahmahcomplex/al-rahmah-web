@@ -18,7 +18,8 @@
 --    not_pending, lead_closed, invalid with `stale` or `refused_request`.
 --    Needs discounts.approve. Returns
 --      {"explanation": explain_sibling_group(the request's lead) after the
---                      grant, plus "full_payer_tie" for its full payer,
+--                      grant, plus "full_payer_tie" for its full payer, or
+--                      null without leads.view,
 --       "changes": [{"lead_id", "before", "after"}] whose School fee moves,
 --                  or null without payments.view}
 --
@@ -120,12 +121,16 @@ begin
 
         reach := array(select distinct x from unnest(reach || public.sibling_fee_edit_reach(request.lead_id)) x);
         fees_after := public.sibling_fee_edit_fees(reach);
-        explanation := public.explain_sibling_group(request.lead_id);
-        explanation := explanation || jsonb_build_object(
-            'full_payer_tie',
-            case when explanation ->> 'full_payer_lead_id' is null then null
-                 else public.sibling_full_payer_tie((explanation ->> 'full_payer_lead_id')::uuid) end
-        );
+        -- The group is named only to staff who may view leads; a role that
+        -- may approve discounts without it still gets the fees below.
+        if public.has_permission('leads.view') then
+            explanation := public.explain_sibling_group(request.lead_id);
+            explanation := explanation || jsonb_build_object(
+                'full_payer_tie',
+                case when explanation ->> 'full_payer_lead_id' is null then null
+                     else public.sibling_full_payer_tie((explanation ->> 'full_payer_lead_id')::uuid) end
+            );
+        end if;
 
         if fees_visible then
             select coalesce(jsonb_agg(jsonb_build_object(

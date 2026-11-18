@@ -458,7 +458,14 @@ export function SiblingReviewSheet({
         ) : (
           <>
             {canGrant && (
-              <Button size="wide" chevron pending={busy} onClick={() => decide("grant")}>
+              <Button
+                size="wide"
+                chevron
+                pending={busy}
+                // The grant waits until the Manager has seen what it changes.
+                aria-disabled={preview?.status !== "ready" || undefined}
+                onClick={() => preview?.status === "ready" && decide("grant")}
+              >
                 {busy ? "Granting…" : "Grant discount"}
               </Button>
             )}
@@ -512,7 +519,7 @@ export function SiblingReviewSheet({
           />
           <Note>Proof noted at the desk: {request.note}</Note>
           {!canGrant && <Note>This application is closed. It can be granted only after it is reopened.</Note>}
-          {canGrant && (
+          {canGrant && !(preview?.status === "ready" && preview.members === null) && (
             <div className="sg-part">
               <h4 className="lr-sub">If you grant it</h4>
               {preview === null ? (
@@ -524,7 +531,7 @@ export function SiblingReviewSheet({
               ) : (
                 <>
                   <ul className="sg-pv">
-                    {preview.members.map((m) => (
+                    {(preview.members ?? []).map((m) => (
                       <li key={m.leadId}>
                         <b>{m.firstName}</b>
                         <Tag tone={m.chip.en.tone}>{m.chip.en.text}</Tag>

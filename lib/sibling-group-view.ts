@@ -1,6 +1,7 @@
 import {
   feeChip,
   NO_FACTS,
+  NOTE_LINES,
   noteLines,
   reasonSentence,
   type FeeChip,
@@ -98,8 +99,16 @@ export function describeSiblingGroup(
     const here = m.leadId === hereLeadId
     const basis = group.groupId ? (m.legacy ? "old family rule" : m.basis ? BASIS_WORDS[m.basis] : "") : ""
     const meta = [m.className, m.status, basis].filter(Boolean).join(" · ") + (here && group.groupId ? " · this student" : "")
-    const en = noteLines(m.reason, m.notes, facts, "en")
-    const sw = noteLines(m.reason, m.notes, facts, "sw")
+    // While new grants are paused, the rule's 10% is held back: the pause is
+    // the reason the student pays what the tag says, so it says why.
+    const paused = m.notes.includes("grants_paused")
+    const notes = paused ? m.notes.filter((n) => n !== "grants_paused") : m.notes
+    const en = noteLines(m.reason, notes, facts, "en")
+    const sw = noteLines(m.reason, notes, facts, "sw")
+    const heldBack = (lang: "en" | "sw") =>
+      paused && m.status !== "Enrolled" && !m.largerDiscount
+        ? { text: lang === "sw" ? "Ada kamili kwa sasa" : "Full fee for now", tone: "wait" as const }
+        : feeChip(m, lang)
     return {
       leadId: m.leadId,
       studentName: m.studentName,
@@ -107,8 +116,10 @@ export function describeSiblingGroup(
       status: m.status,
       here,
       meta,
-      chip: { en: feeChip(m, "en"), sw: feeChip(m, "sw") },
-      sentence: { en: reasonSentence(m.reason, facts, "en"), sw: reasonSentence(m.reason, facts, "sw") },
+      chip: { en: heldBack("en"), sw: heldBack("sw") },
+      sentence: paused
+        ? { en: NOTE_LINES.grants_paused.en(facts), sw: NOTE_LINES.grants_paused.sw(facts) }
+        : { en: reasonSentence(m.reason, facts, "en"), sw: reasonSentence(m.reason, facts, "sw") },
       notes: en.map((line, i) => ({ note: line.note, text: { en: line.text, sw: sw[i].text } })),
     }
   })

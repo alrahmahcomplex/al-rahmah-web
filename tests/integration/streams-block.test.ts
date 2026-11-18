@@ -211,6 +211,26 @@ describe("stream requests", () => {
     })
   })
 
+  test("a child's request closes when their class is corrected before any payment", async () => {
+    const { year, classes: [from, to] } = await yearAndClasses(2)
+    const placed = await holder(year, from, "Boy", 5)
+    const boy = await child(year, from, "Boy")
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      await open(sql, year, from, "A", "Boys", 1)
+      await asOwner(sql)
+      await actAsStaff(sql, ADMISSIONS.id)
+      const made = (await sql.query("select public.request_stream($1, null, null, null) as r", [boy])).rows[0].r
+      await asOwner(sql)
+      await sql.query("select public.set_audit_actor('system')")
+      await sql.query("update public.leads set class_name = $2 where id = $1", [boy, to])
+      await sql.query("select public.flush_seat_queue()")
+      const { rows } = await sql.query("select resolved_at is not null as done from public.stream_requests where id = $1", [made.id])
+      expect(rows[0].done).toBe(true)
+      expect(await placements(sql, [placed])).toEqual({ [placed]: "A" })
+    })
+  })
+
   test("a request for a class and need, and the Seats read with its waiting children and requests", async () => {
     const { year, classes: [c] } = await yearAndClasses(1)
     const placed = await holder(year, c, "Boy", 6)

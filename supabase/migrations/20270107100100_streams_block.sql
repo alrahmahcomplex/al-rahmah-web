@@ -456,6 +456,34 @@ begin
     revoke execute on function public.resolve_stream_requests(integer, public.lead_class)
         from public, anon, authenticated, service_role;
 
+    -- seat_classes_of, as 20270104100100 made it, also naming the class and
+    -- year of each open request about these leads, so a request is looked at
+    -- again when its child's class or year is corrected before any payment.
+    create or replace function public.seat_classes_of(leads uuid[])
+    returns table (enrollment_year integer, class_name public.lead_class)
+    language sql
+    stable
+    set search_path = ''
+    as $fn$
+        select distinct x.enrollment_year, x.class_name
+        from (
+            select l.enrollment_year, l.class_name from public.leads l where l.id = any (leads)
+            union
+            select s.enrollment_year, s.class_name
+            from public.seat_placements p join public.streams s on s.id = p.stream_id
+            where p.lead_id = any (leads)
+            union
+            select p.waiting_year, p.waiting_class
+            from public.seat_placements p
+            where p.lead_id = any (leads) and p.waiting_class is not null
+            union
+            select r.enrollment_year, r.class_name
+            from public.stream_requests r
+            where r.lead_id = any (leads) and r.resolved_at is null
+        ) x
+        order by 1, 2;
+    $fn$;
+
     -- reconcile_class_seats, as 20270104100100 made it, closing the requests
     -- its seats now answer.
     create or replace function public.reconcile_class_seats(

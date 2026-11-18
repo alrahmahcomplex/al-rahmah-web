@@ -9,9 +9,16 @@
 -- made it.
 --
 -- It now also accepts the active Super Admin, but only when the Super Admin
--- is the one asking. The Super Admin stays hidden from everyone else, as
--- hidden_staff_member keeps them: no other staff member sees them in the
--- "Made the contact" list or may record a contact in their name.
+-- is the one asking. No other staff member sees the Super Admin in the
+-- "Made the contact" list or may record a contact in their name, as
+-- hidden_staff_member keeps them out of other staff lists.
+--
+-- A contact the Super Admin records names them to everyone who reads the
+-- lead's follow-ups (follow_up_record_staff), the way a school-fee payment
+-- they record names them on Home and in the payment's history.
+--
+-- service_role joins the revoke: the helpers this now calls,
+-- super_admin_role_id() and current_staff_id(), are revoked from it too.
 
 create or replace function public.is_contact_staff(staff_id uuid)
 returns boolean
@@ -33,4 +40,4 @@ as $$
     );
 $$;
 
-revoke execute on function public.is_contact_staff(uuid) from public, anon, authenticated;
+revoke execute on function public.is_contact_staff(uuid) from public, anon, authenticated, service_role;

@@ -267,10 +267,13 @@ describe("recording a contact", () => {
       ok: true,
       data: { recordId: expect.any(String) },
     })
-    expect(await getLeadFollowUps(owner, lead)).toMatchObject({
-      ok: true,
-      data: { records: [{ kind: "contact", contactedBy: { id: SUPER_ADMIN.id, name: SUPER_ADMIN.name } }] },
-    })
+    // Named to everyone who reads the lead, as a payment they record is.
+    for (const reader of [owner, await signedIn(ADMISSIONS)]) {
+      expect(await getLeadFollowUps(reader, lead)).toMatchObject({
+        ok: true,
+        data: { records: [{ kind: "contact", contactedBy: { id: SUPER_ADMIN.id, name: SUPER_ADMIN.name } }] },
+      })
+    }
   })
 
   test("nobody else may name the Super Admin as the one who made the contact", async () => {

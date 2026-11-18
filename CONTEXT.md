@@ -189,7 +189,7 @@ The permissions are:
 | `leads.view` | Finding and reading leads, the date each lead's status last changed, the dashboard, and the follow-up queue. |
 | `leads.create` | Entering a new lead. A lead matching an existing record becomes a reopening request instead. |
 | `leads.edit` | Correcting a lead's details, **Custodian**, **Brought by**, **Father's full name**, **Previous school**, class, enrollment year, day or boarding, **Pre-Form One programme** and referral code, requesting a **Staff child** or **Qualified orphan** discount or raising a **Sibling request**, reviewing re-applications, and sending the admissions WhatsApp group invitation. |
-| `visits.record` | Recording a campus visit. |
+| `visits.record` | Recording a campus visit. Needs `payments.view`: whoever checks in or registers a student also sees school-fee payments. |
 | `interviews.record` | Registering a lead for interview and recording its result and score, including editing a recorded result or score. |
 | `interview_payments.record` | Marking the interview fee **Paid** or **Not Paid**. |
 | `results.send` | Releasing an interview result through **Send through WhatsApp** or the copied **Send SMS** text. |
@@ -210,7 +210,7 @@ The permissions are:
 | `leads.export` | Exporting applicants with their parents' names and phone numbers. Needs `leads.view`. |
 | `audit.view` | Reading the audit history: every lead's History page, the Staff and roles history and the system-wide **Audit** screen. Held only by the **Super Admin**; no role may be given it. |
 
-No role holds `reports.view`, `discount_codes.manage` or `leads.export` without `leads.view`, or `leads.import` without `leads.create`. The database keeps each pair together on every write and records the implied change in the same audit entry as the role change.
+No role holds `reports.view`, `discount_codes.manage` or `leads.export` without `leads.view`, `leads.import` without `leads.create`, or `visits.record` without `payments.view`. The database keeps each pair together on every write and records the implied change in the same audit entry as the role change.
 
 Recording and editing an interview are one permission: the same people do both, and the audit history keeps every earlier value. Approving an agent and approving a reopening are separate, so a role can approve agents without any power over leads.
 

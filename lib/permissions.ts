@@ -46,6 +46,14 @@ export type Permission = (typeof PERMISSIONS)[number]
 // (supabase/migrations/20261204130100_discount_import_export_permissions.sql);
 // the role screen uses this to tick and untick them together and say why.
 // No needed permission needs another, so one step is always enough.
+//
+// The database keeps one more pair that is not listed here yet:
+// visits.record needs payments.view (#460,
+// supabase/migrations/20270103100100_check_in_implies_payments_view.sql).
+// The role screen's wording names Reports as the reason for every pair, so
+// listing it would show the wrong reason; it waits for a copy change the
+// owner approves. Until then the screen's ticks still show the database's
+// result after each change.
 export const PERMISSION_NEEDS: Readonly<Partial<Record<Permission, Permission>>> = {
   "reports.view": "leads.view",
   "discount_codes.manage": "leads.view",

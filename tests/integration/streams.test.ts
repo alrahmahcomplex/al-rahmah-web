@@ -405,7 +405,13 @@ describe("the seat sync", () => {
     const c = await emptyClass(year)
     const ids = [await holder(year, c, "Boy", 4), await holder(year, c, "Girl", 3)]
     await inRolledBackTransaction(async (sql) => {
-      const snapshot = "select l.id, l.status, (public.lead_seat_priority(l.id)).priority from public.leads l where l.id = any ($1) order by l.id"
+      // fee_snapshot()'s fields for these children: the fee, its parts, the
+      // discount, what is paid, the status and the priority.
+      const snapshot = `select l.id, l.status, l.closure, to_jsonb(fee) as fee, to_jsonb(seat) as seat
+        from public.leads l
+        cross join lateral public.lead_fee_amounts(l.id) fee
+        cross join lateral public.lead_seat_priority(l.id) seat
+        where l.id = any ($1) order by l.id`
       const before = (await sql.query(snapshot, [ids])).rows
       await named(sql)
       await open(sql, year, c, "A", "Mixed", 1)

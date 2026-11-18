@@ -66,8 +66,8 @@ async function yearWithSchedule(): Promise<number> {
 async function child(year: number, className: string): Promise<string> {
   const admissions = await signedIn(ADMISSIONS)
   const created = await createLead(admissions, {
-    guardian: { contact: { fullName: `Lock Parent ${randomUUID().slice(0, 6)}`, relationship: "Mother", phone: `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}` } },
-    student: { fullName: `Lock ${randomUUID().slice(0, 8)}`, className: className as never, enrollmentYear: thisYear + 1, dayOrBoarding: "Day", gender: "Boy" },
+    guardian: { contact: { fullName: `Seat Parent ${randomUUID().slice(0, 6)}`, relationship: "Mother", phone: `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}` } },
+    student: { fullName: `Seats ${randomUUID().slice(0, 8)}`, className: className as never, enrollmentYear: thisYear + 1, dayOrBoarding: "Day", gender: "Boy" },
     start: { kind: "walk-in", visitDate: daysAgo(1) },
   })
   if (!created.ok) throw new Error(`setup failed: ${JSON.stringify(created.error)}`)
@@ -109,22 +109,20 @@ beforeAll(async () => {
 afterAll(async () => {
   await setMode("legacy")
   // Streams refuse deletes; this file's are removed so a later run that
-  // claims the same years starts clean.
+  // claims the same years starts clean. The replica role skips the refusal
+  // triggers for this transaction only, without altering a table.
   if (years.length === 0) return
   const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
   await sql.connect()
   try {
     await sql.query("begin")
-    await sql.query("alter table public.seat_placements disable trigger refuse_delete")
-    await sql.query("alter table public.streams disable trigger refuse_delete")
+    await sql.query("set local session_replication_role = replica")
     await sql.query(
       "delete from public.seat_placements where stream_id in (select id from public.streams where enrollment_year = any ($1))",
       [years],
     )
     await sql.query("delete from public.seat_sync_queue")
     await sql.query("delete from public.streams where enrollment_year = any ($1)", [years])
-    await sql.query("alter table public.seat_placements enable trigger refuse_delete")
-    await sql.query("alter table public.streams enable trigger refuse_delete")
     await sql.query("commit")
   } finally {
     await sql.end()

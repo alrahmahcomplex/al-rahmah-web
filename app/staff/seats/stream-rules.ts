@@ -102,12 +102,14 @@ export function seatNeeds(classes: readonly ClassStreams[], requests: readonly S
         request: openRequest(each.className, need),
       })
     }
-    // Only a Mixed stream takes a child with no Boy or girl answer: when none
-    // has a free seat and such a child waits, or a request was sent for one,
-    // the class needs a stream for any child (lead, 2026-11-18).
+    // Only a Mixed stream takes a child with no Boy or girl answer: when such
+    // a child waits, or a request sent for one is still open, the class needs
+    // a stream for any child (lead, 2026-11-18). The database settles both:
+    // a child waits, and a request stays open, only while no stream can take
+    // them. `freeForAny` can't say it, since it counts Boys and Girls seats.
     const unanswered = each.waiting.filter((w) => w.gender === null).length
     const anyRequest = openRequest(each.className, null)
-    if (!each.freeForAny && (unanswered > 0 || anyRequest)) {
+    if (unanswered > 0 || anyRequest) {
       needs.push({
         className: each.className,
         need: null,

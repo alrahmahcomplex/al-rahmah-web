@@ -116,7 +116,7 @@ describe("seatNeeds", () => {
     expect(seatNeeds([form1], requests)[0].request?.requestedAt).toBe("2027-01-11T06:40:00Z")
   })
 
-  test("children with no Boy or girl answer get a notice for any child when no Mixed stream has a seat for them", () => {
+  test("children with no Boy or girl answer get a notice for any child while they wait, though Boys and Girls seats are free", () => {
     const child = (leadId: string, gender: "Boy" | null) => ({
       leadId,
       admissionNumber: leadId,
@@ -126,17 +126,18 @@ describe("seatNeeds", () => {
       reachedOn: "2027-01-10",
       rank: 1,
     })
-    const split = { ...cls("FORM 1", [stream("A", "Girls", 20, 5), stream("B", "Boys", 20, 5)], { freeForAny: false }), waiting: [child("x", null), child("y", null)] }
+    // As the database reports it: seats free for boys, for girls and so for "any" child.
+    const split = { ...cls("FORM 1", [stream("A", "Girls", 20, 5), stream("B", "Boys", 20, 5)]), waiting: [child("x", null), child("y", null)] }
     const needs = seatNeeds([split], [])
     expect(needs).toHaveLength(1)
     expect(needs[0]).toMatchObject({ className: "FORM 1", need: null, waiting: 2, fullStream: null })
 
-    const withMixed = { ...cls("FORM 2", [stream("A", "Mixed", 20, 20), stream("B", "Boys", 20, 5)], { freeForAny: false }), waiting: [child("z", null)] }
-    expect(seatNeeds([withMixed], [])[0].fullStream?.label).toBe("A")
+    const withMixed = { ...cls("FORM 2", [stream("A", "Mixed", 20, 20), stream("B", "Boys", 20, 5)], { freeForGirl: false }), waiting: [child("z", null)] }
+    expect(seatNeeds([withMixed], []).find((n) => n.need === null)?.fullStream?.label).toBe("A")
 
-    // None waits, no request: no notice. A Mixed stream with a free seat: none either.
+    // None without an answer waits and no request is open: no notice.
     expect(seatNeeds([{ ...split, waiting: [child("b", "Boy")] }], [])).toEqual([])
-    expect(seatNeeds([{ ...split, freeForAny: true }], [])).toEqual([])
+    expect(seatNeeds([{ ...split, waiting: [] }], [request("FORM 1", null, "2027-01-10T06:00:00Z", "2027-01-10T07:00:00Z")])).toEqual([])
     // A request sent from such a child's page is enough.
     expect(seatNeeds([{ ...split, waiting: [] }], [request("FORM 1", null, "2027-01-11T06:40:00Z")])[0].need).toBeNull()
   })

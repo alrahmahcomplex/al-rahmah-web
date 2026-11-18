@@ -212,7 +212,8 @@ describe("StreamsView, a Mixed-only class", () => {
 
 describe("children with no Boy or girl answer in a class without a Mixed stream", () => {
   const noAnswer = { ...FORM1.waiting[0], leadId: "lead-3", studentName: "Neema Hamisi", gender: null }
-  const split: ClassStreams = { ...FORM1, freeForBoy: true, waiting: [noAnswer, { ...noAnswer, leadId: "lead-4" }] }
+  // Seats free for boys and girls, as the database reports it; only a Mixed stream takes these two.
+  const split: ClassStreams = { ...FORM1, freeForBoy: true, freeForAny: true, waiting: [noAnswer, { ...noAnswer, leadId: "lead-4" }] }
 
   it("asks the Manager to open a stream for any child, naming no full stream", () => {
     view(MANAGER, { ...YEAR, classes: [split] })

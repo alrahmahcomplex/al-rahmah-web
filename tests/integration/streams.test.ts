@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
 import type { Client } from "pg"
-import { describe, expect, onTestFinished, test, vi } from "vitest"
+import { afterAll, describe, expect, onTestFinished, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
@@ -40,12 +40,35 @@ const AMOUNTS: FeeAmounts = {
   preFormOne: { day: 450_000, boarding: 580_000 },
 }
 
-async function yearWithSchedule(): Promise<number> {
+// The tests share one claimed year, so they save few fee schedules (other
+// files compare fee_schedules rows while they run), and take another only
+// when the shared year has no class left without seat holders.
+const releases: (() => Promise<void>)[] = []
+afterAll(async () => {
+  for (const release of releases) await release()
+})
+let shared: number | null = null
+
+async function claimYear(): Promise<number> {
   const claim = await claimFeeYear()
-  onTestFinished(claim.release)
+  releases.push(claim.release)
   const saved = await saveFeeAmounts(await signedIn(ACCOUNTANT), claim.year, AMOUNTS)
   if (!saved.ok) throw new Error(`schedule failed: ${JSON.stringify(saved.error)}`)
   return claim.year
+}
+
+async function yearWithSchedule(): Promise<number> {
+  shared ??= await claimYear()
+  return shared
+}
+
+/** The shared year and `n` of its classes where nobody holds a seat yet. */
+async function yearAndClasses(n: number): Promise<{ year: number; classes: string[] }> {
+  const year = await yearWithSchedule()
+  const classes = await emptyClasses(year, n).catch(() => null)
+  if (classes) return { year, classes }
+  shared = await claimYear()
+  return { year: shared, classes: await emptyClasses(shared, n) }
 }
 
 /** Two years in a row, each with a schedule: the year streams come up from, and the next. */
@@ -80,8 +103,6 @@ async function emptyClasses(year: number, n: number): Promise<string[]> {
   if (free.length < n) throw new Error(`not enough classes of ${year} without seat holders`)
   return free.slice(0, n)
 }
-
-const emptyClass = async (year: number) => (await emptyClasses(year, 1))[0]
 
 const phone = () => `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
 
@@ -180,8 +201,7 @@ describe("while the seat mode is legacy", () => {
 
 describe("opening streams", () => {
   test("the first stream places the children it takes, in ranking order, up to its seats; the rest wait", async () => {
-    const year = await yearWithSchedule()
-    const c = await emptyClass(year)
+    const { year, classes: [c] } = await yearAndClasses(1)
     const firstBoy = await holder(year, c, "Boy", 5)
     const girl = await holder(year, c, "Girl", 4)
     const noAnswer = await holder(year, c, undefined, 3)
@@ -259,8 +279,7 @@ describe("opening streams", () => {
 
 describe("editing a stream", () => {
   test("seats never go below the children placed; raising them places a waiting child", async () => {
-    const year = await yearWithSchedule()
-    const c = await emptyClass(year)
+    const { year, classes: [c] } = await yearAndClasses(1)
     const first = await holder(year, c, "Girl", 5)
     const second = await holder(year, c, "Boy", 4)
     await inRolledBackTransaction(async (sql) => {
@@ -276,8 +295,7 @@ describe("editing a stream", () => {
 
 describe("the seat sync", () => {
   test("a new Seat priority takes a free seat at the end of the transaction, after the children already waiting", async () => {
-    const year = await yearWithSchedule()
-    const c = await emptyClass(year)
+    const { year, classes: [c] } = await yearAndClasses(1)
     const waiting = await holder(year, c, "Boy", 10)
     const newcomer = await child(year, c, "Boy")
     await inRolledBackTransaction(async (sql) => {
@@ -301,8 +319,7 @@ describe("the seat sync", () => {
   })
 
   test("a waiting child takes the seat a declined child gives back", async () => {
-    const year = await yearWithSchedule()
-    const c = await emptyClass(year)
+    const { year, classes: [c] } = await yearAndClasses(1)
     const placed = await holder(year, c, "Girl", 6)
     const waiting = await holder(year, c, "Girl", 3)
     await inRolledBackTransaction(async (sql) => {
@@ -319,8 +336,7 @@ describe("the seat sync", () => {
   })
 
   test("a gender correction moves a child out of a stream that no longer takes them, and leaves a Mixed one alone", async () => {
-    const year = await yearWithSchedule()
-    const [c, c2] = await emptyClasses(year, 2)
+    const { year, classes: [c, c2] } = await yearAndClasses(2)
     const boy = await holder(year, c, "Boy", 6)
     const mixedChild = await holder(year, c2, "Boy", 6)
     await inRolledBackTransaction(async (sql) => {
@@ -341,8 +357,7 @@ describe("the seat sync", () => {
   })
 
   test("a child already waiting takes a freed seat before a higher-ranked newcomer queued in the same sweep", async () => {
-    const year = await yearWithSchedule()
-    const c = await emptyClass(year)
+    const { year, classes: [c] } = await yearAndClasses(1)
     const placed = await holder(year, c, "Girl", 20)
     const waiting = await holder(year, c, "Girl", 3)
     const newcomer = await child(year, c, "Girl")
@@ -368,8 +383,7 @@ describe("the seat sync", () => {
   })
 
   test("a waiting child moved to another class stops waiting in the old one and waits afresh in the new", async () => {
-    const year = await yearWithSchedule()
-    const [from, to, noStreams] = await emptyClasses(year, 3)
+    const { year, classes: [from, to, noStreams] } = await yearAndClasses(3)
     const placed = await holder(year, from, "Boy", 9)
     const mover = await holder(year, from, "Boy", 4)
     const waitingThere = await holder(year, to, "Boy", 2)
@@ -401,8 +415,7 @@ describe("the seat sync", () => {
   })
 
   test("each placement keeps its own child's cause, and the queue's actor survives a cleared one", async () => {
-    const year = await yearWithSchedule()
-    const c = await emptyClass(year)
+    const { year, classes: [c] } = await yearAndClasses(1)
     const [first, second] = [await child(year, c, "Boy"), await child(year, c, "Girl")]
     await inRolledBackTransaction(async (sql) => {
       await named(sql)
@@ -434,8 +447,7 @@ describe("the seat sync", () => {
   })
 
   test("placement never changes a fee, a status or a Seat priority", async () => {
-    const year = await yearWithSchedule()
-    const c = await emptyClass(year)
+    const { year, classes: [c] } = await yearAndClasses(1)
     const ids = [await holder(year, c, "Boy", 4), await holder(year, c, "Girl", 3)]
     await inRolledBackTransaction(async (sql) => {
       // fee_snapshot()'s fields for these children: the fee, its parts, the

@@ -1013,6 +1013,39 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "forbidden" },
   },
+  // Seats per stream (#449): legacy or named, the same for everyone.
+  "public.seat_mode()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { anyAnswer: "How the school counts seats, legacy or named: one setting for the whole school, no staff data." },
+  },
+  // Streams (#449): academic_years.manage, and only once the mode is named.
+  "public.open_stream(schedule_year integer, class lead_class, label text, takes stream_takes, seats integer, request_id uuid)": {
+    roles: ["authenticated"],
+    setup: "update public.seat_settings set mode = 'named'",
+    args: {
+      schedule_year: "2027",
+      class: "'FORM 1'",
+      label: "'Z'",
+      takes: "'Mixed'",
+      seats: "1",
+      request_id: "'5a5a0000-0000-4000-8000-000000000449'",
+    },
+    agent: { refused: "not_permitted" },
+  },
+  "public.edit_stream(stream_id uuid, label text, seats integer)": {
+    roles: ["authenticated"],
+    setup:
+      "update public.seat_settings set mode = 'named'; insert into public.streams (id, enrollment_year, class_name, label, takes, seats, position) values ('5a5a0000-0000-4000-8000-000000000450', 2027, 'FORM 1', 'Z', 'Mixed', 1, 99)",
+    args: { stream_id: "'5a5a0000-0000-4000-8000-000000000450'", label: "'Y'", seats: "2" },
+    agent: { refused: "not_permitted" },
+  },
+  "public.bring_up_streams(schedule_year integer, sources uuid[])": {
+    roles: ["authenticated"],
+    setup: "update public.seat_settings set mode = 'named'",
+    args: { schedule_year: "2027", sources: "array['5a5a0000-0000-4000-8000-000000000451']::uuid[]" },
+    agent: { refused: "not_permitted" },
+  },
   "public.send_group_invitation(lead_id uuid, method text, link_year integer, link_seen text, template_version text)": {
     roles: ["authenticated"],
     setup:
@@ -1393,6 +1426,20 @@ export const RELATIONS: Record<string, RelationEntry> = {
   },
   "public.sibling_rule_settings": { authenticated: [], anon: [] },
   // Sibling groups and their members (#300).
+  "public.seat_placements": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
+  "public.seat_settings": { authenticated: [], anon: [] },
+  "public.seat_sync_queue": { authenticated: [], anon: [] },
+  "public.stream_requests": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
+  "public.streams": {
+    authenticated: ["select", "references", "trigger", "maintain"],
+    anon: ["select", "references", "trigger", "maintain"],
+  },
   "public.sibling_groups": {
     authenticated: ["select", "references", "trigger", "maintain"],
     anon: ["select", "references", "trigger", "maintain"],
@@ -1597,6 +1644,25 @@ export const POLICIES: Record<string, PolicyEntry> = {
     command: "SELECT",
     roles: ["authenticated"],
     using: "( SELECT has_permission('leads.view'::text) AS has_permission)",
+    check: null,
+  },
+  // Streams (#449): staff who may view payments.
+  "public.seat_placements: Staff who may view payments read seat placements": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.stream_requests: Staff who may view payments read stream requests": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
+    check: null,
+  },
+  "public.streams: Staff who may view payments read streams": {
+    command: "SELECT",
+    roles: ["authenticated"],
+    using: "( SELECT has_permission('payments.view'::text) AS has_permission)",
     check: null,
   },
   "public.sibling_groups: Staff who may view leads read sibling groups": {

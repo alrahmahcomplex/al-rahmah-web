@@ -70,6 +70,11 @@
   --gf-chip-red-ink: #c10007;
   --gf-chip-inactive-ink: #45556c;
   --gf-chip-archived: #e2e8f0;
+  /* the Boys and Girls tags on a stream (#449, prototype v42) */
+  --gf-chip-boys: #e3f0ff;
+  --gf-chip-boys-ink: #0b4c8c;
+  --gf-chip-girls: #fde8f1;
+  --gf-chip-girls-ink: #9c1c5a;
   /* the dark text of a good, wait or bad note (DESIGN.md, Notes) */
   --gf-note-good-ink: #0b5a2d;
   --gf-note-wait-ink: #6b2a00;

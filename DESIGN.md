@@ -435,8 +435,10 @@ One component shows a lead's status wherever staff see it. A chip is a 24px pill
 | Inactive (closure) | Paper, thin Indigo Line | `#45556c` |
 | Archived (closure) | `#e2e8f0` | `#314158` |
 | Line (a time, a search term) | Paper, thin Indigo Line | Rahmah Indigo |
+| Boys, who a stream takes | `#e3f0ff` | `#0b4c8c` |
+| Girls, who a stream takes | `#fde8f1` | `#9c1c5a` |
 
-The lifecycle colours mean only lifecycle. Other tags on a lead (Returning family, Initially declined, Seat priority) use the Line chip.
+The lifecycle colours mean only lifecycle. Other tags on a lead (Returning family, Initially declined, Seat priority) use the Line chip, and so does a Mixed stream.
 
 ### Notes
 A note is a 16px-cornered box, 12px × 14px padding, 14px/1.45 text, with a 16px icon at the start: `NoticeBox` with tone `info` (Lavender Whisper, indigo text), `good` (Green Tint, dark green), `wait` (warm orange tint, dark orange) or `bad` (Red Tint, dark red). In the staff look (the kit's `Note`) it also has a thin line in its own colour: indigo at 28%, green at 38%, orange at 42%, red at 38% (v38). Never filled. A note says one thing and what to do about it.
@@ -471,10 +473,10 @@ The price box sets the full fee on an orange-tint half against the saving on a g
 ### Icons
 One library, set 1 ("Two lines", since prototype v38), drawn for this app. It replaces lucide on every screen as that screen converts.
 - **Grid:** 24 × 24 viewBox, 2px stroke, round caps and joins, no fill on lines. Shown at 20px (16px small; 16px in the sidebar; 18px in a row disc; 19px in the sidebar toggle; 24px on its own).
-- **Two lines:** each icon is a main outline and a second detail (for example the calendar and its days). Utility glyphs (back, right, check, plus, x) and phone, down and upload are a single line.
+- **Two lines:** each icon is a main outline and a second detail (for example the calendar and its days). Utility glyphs (back, right, check, plus, x, up) and phone, down and upload are a single line.
 - **At rest:** both lines take the text colour.
 - **Active** (hovered, current, inside a pressed button, an open popup or a button that is on, or featured in a row disc): the main line turns Rahmah Indigo and the detail Sunrise Orange, in 280ms. On indigo, the main line turns white and the detail light orange (`#ffa24d`).
-- **Names:** today, checkin, register, applicants, interviews, followups, reapps, agents, promo, groups, fees, seats, discounts, reopen, reports, roles, audit, search, bell, panel, menu, back, right, check, plus, x, reset, alert, info, phone, user, school, house (the Home entry), link, filter, and the form parts' down, calendar and upload. The prototype holds each path. A new icon follows the same grid and splits into a main line and a detail; it is added to the library, never drawn inline in a page.
+- **Names:** today, checkin, register, applicants, interviews, followups, reapps, agents, promo, groups, fees, seats, discounts, reopen, reports, roles, audit, search, bell, panel, menu, back, right, check, plus, x, reset, alert, info, phone, user, school, house (the Home entry), link, filter, the form parts' down, calendar and upload, and Seats' up (Bring up) and pen (the pencil on a stream). The prototype holds each path. A new icon follows the same grid and splits into a main line and a detail; it is added to the library, never drawn inline in a page.
 - Icons are `aria-hidden`; the button or link around them carries the name.
 
 ### Illustrations

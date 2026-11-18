@@ -193,12 +193,108 @@ describe("the seat lock never waits for a lead row", () => {
     expect(waiting.rows[0]?.cls).toBe(cls)
   })
 
-  test("a payment and an opening stream at once both finish, and the payer takes the new seat at commit", async () => {
+  // Slice 4b: a first booking runs the seat sync inside the payment and keeps
+  // the seat lock until it commits, so whoever comes second waits for it.
+  /** A statement's error message, or "no refusal", without throwing. */
+  const outcome = (run: Promise<unknown>) => run.then(() => "no refusal", (error: Error) => error.message)
+
+  test("a request whose child's row is busy when a fitting stream opens is closed by the retry", async () => {
+    const year = await yearWithSchedule()
+    const cls = await emptyClass(year)
+    const holderId = await child(year, cls)
+    const paid = await recordPayment(await signedIn(ACCOUNTANT), holderId, { type: "initial_deposit", amount: 300_000, paidOn: daysAgo(4) }, randomUUID())
+    if (!paid.ok) throw new Error("payment failed")
+    const asking = await child(year, cls)
+
+    // One full stream, and a request for the child who can't pay.
+    const manager = session()
+    await manager.connect()
+    await manager.query("set lock_timeout = '3s'")
+    await manager.query("begin")
+    await actAsStaff(manager, MANAGER.id)
+    await manager.query("select public.open_stream($1, $2, 'A', 'Boys', 1, $3)", [year, cls, randomUUID()])
+    await manager.query("commit")
+    const request = await asSystem(async (sql) => {
+      await actAsStaff(sql, ADMISSIONS.id)
+      return (await sql.query("select public.request_stream($1, null, null, null) as r", [asking])).rows[0].r.id as string
+    })
+
+    // A correction holds the child's row while a second stream opens.
+    const busy = session()
+    await busy.connect()
+    await busy.query("begin")
+    await busy.query("select 1 from public.leads where id = $1 for update", [asking])
+    await manager.query("begin")
+    await actAsStaff(manager, MANAGER.id)
+    await manager.query("select public.open_stream($1, $2, 'B', 'Boys', 1, $3)", [year, cls, randomUUID()])
+    await manager.query("commit")
+    const open = async () =>
+      (await asSystem((sql) => sql.query<{ done: boolean }>("select resolved_at is not null as done from public.stream_requests where id = $1", [request]))).rows[0].done
+    expect(await open()).toBe(false)
+
+    await busy.query("commit")
+    await asSystem((sql) => sql.query("select public.run_seat_retries()"))
+    expect(await open()).toBe(true)
+  })
+
+  test("a request left open on a busy row gives its child no turn: paying in full later, he still comes after the girl already waiting", async () => {
+    const year = await yearWithSchedule()
+    const cls = await emptyClass(year)
+    const accountant = await signedIn(ACCOUNTANT)
+    const [seated, girl, asking] = [await child(year, cls), await child(year, cls), await child(year, cls)]
+    await asSystem((sql) => sql.query("update public.leads set gender = 'Girl' where id = $1", [girl]))
+    for (const [id, days] of [[seated, 6], [girl, 4]] as const) {
+      const paid = await recordPayment(accountant, id, { type: "initial_deposit", amount: 300_000, paidOn: daysAgo(days) }, randomUUID())
+      if (!paid.ok) throw new Error("payment failed")
+    }
+
+    // The boys' stream is full: the girl waits, and the boy who hasn't paid asks for a stream.
+    const manager = session()
+    await manager.connect()
+    await manager.query("set lock_timeout = '3s'")
+    const openStream = async (label: string, takes: string) => {
+      await manager.query("begin")
+      await actAsStaff(manager, MANAGER.id)
+      await manager.query("select public.open_stream($1, $2, $3, $4, 1, $5)", [year, cls, label, takes, randomUUID()])
+      await manager.query("commit")
+    }
+    await openStream("A", "Boys")
+    expect([await streamOf(seated), await streamOf(girl)]).toEqual(["A", null])
+    const request = await asSystem(async (sql) => {
+      await actAsStaff(sql, ADMISSIONS.id)
+      return (await sql.query("select public.request_stream($1, null, null, null) as r", [asking])).rows[0].r.id as string
+    })
+
+    // Both rows are busy while a mixed stream and then a boys' stream open:
+    // her seat in B is counted but not written, and his request, answered
+    // by C, can't be closed.
+    const busy = session()
+    await busy.connect()
+    await busy.query("begin")
+    await busy.query("select 1 from public.leads where id = any ($1) for update", [[girl, asking]])
+    await openStream("B", "Mixed")
+    await openStream("C", "Boys")
+    const closed = async () =>
+      (await asSystem((sql) => sql.query<{ done: boolean }>("select resolved_at is not null as done from public.stream_requests where id = $1", [request]))).rows[0].done
+    expect(await closed()).toBe(false)
+    expect([await streamOf(girl), await streamOf(asking)]).toEqual([null, null])
+    await busy.query("commit")
+
+    // Before any other sync, he pays in full. Full ranks above her Deposit,
+    // but she was waiting first: she takes B, and he takes C.
+    const fee = await asSystem((sql) => sql.query<{ school_fee: number }>("select school_fee from public.lead_seat_priority($1)", [asking]))
+    const paid = await recordPayment(accountant, asking, { type: "full_payment", amount: fee.rows[0].school_fee, paidOn: today }, randomUUID())
+    expect(paid).toMatchObject({ ok: true, data: { priority: "Full" } })
+    expect([await streamOf(girl), await streamOf(asking)]).toEqual(["B", "C"])
+    expect(await closed()).toBe(true)
+  })
+
+  test("a payment and an opening stream at once both finish, and the payer takes the new seat", async () => {
     const year = await yearWithSchedule()
     const cls = await emptyClass(year)
     const payer = await child(year, cls)
 
-    // The payment: Family lock and the lead's row, then the seat lock at commit.
+    // No streams yet, so nothing blocks the payment; it holds the seat lock.
     const accountant = session()
     await accountant.connect()
     await accountant.query("set lock_timeout = '5s'")
@@ -206,22 +302,20 @@ describe("the seat lock never waits for a lead row", () => {
     await actAsStaff(accountant, ACCOUNTANT.id)
     await accountant.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [payer, today, randomUUID()])
 
-    // The opening, beside it: the fee schedule row, then the seat lock. It
-    // sees no committed priority for the payer and doesn't wait for the row.
+    // The opening waits for the seat lock, then sees the payer's priority.
     const manager = session()
     await manager.connect()
     await manager.query("set lock_timeout = '5s'")
     await manager.query("begin")
     await actAsStaff(manager, MANAGER.id)
-    await manager.query("select public.open_stream($1, $2, 'A', 'Boys', 1, $3)", [year, cls, randomUUID()])
-    await manager.query("commit")
-
-    // The payment commits: its queued sync takes the seat lock and places the payer.
+    const opening = outcome(manager.query("select public.open_stream($1, $2, 'A', 'Boys', 1, $3)", [year, cls, randomUUID()]))
     await accountant.query("commit")
+    expect(await opening).toBe("no refusal")
+    await manager.query("commit")
     expect(await streamOf(payer)).toBe("A")
   })
 
-  test("a decline beside a payment for the seat it frees: both finish, and the payer takes it", async () => {
+  test("a payment beside a decline that hasn't committed is refused; once it has, the payer takes the freed seat", async () => {
     const year = await yearWithSchedule()
     const cls = await emptyClass(year)
     const [leaving, payer] = [await child(year, cls), await child(year, cls)]
@@ -245,15 +339,17 @@ describe("the seat lock never waits for a lead row", () => {
     await actAsStaff(decline, MANAGER.id)
     await actAsStaff(pay, ACCOUNTANT.id)
     await decline.query("select public.decline_lead($1, 'No seat available', null)", [leaving])
-    await pay.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [payer, today, randomUUID()])
-    await Promise.all([pay.query("commit"), decline.query("commit")])
-    // The payer committed either before the seat was free (and waits until
-    // the decline's sync) or after; either way the seat ends up theirs.
-    await asSystem((sql) => sql.query("select public.run_seat_retries()"))
+    // The seat isn't free until the decline commits.
+    expect(await outcome(pay.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [payer, today, randomUUID()]))).toBe("no_class")
+    await pay.query("rollback")
+    await decline.query("commit")
+
+    const again = await recordPayment(await signedIn(ACCOUNTANT), payer, { type: "initial_deposit", amount: 300_000, paidOn: today }, randomUUID())
+    expect(again.ok).toBe(true)
     expect([await streamOf(leaving), await streamOf(payer)]).toEqual([null, "A"])
   })
 
-  test("lowering a stream's seats beside a payment: both finish and nobody is over the seats", async () => {
+  test("lowering a stream's seats beside a payment that took the last one is refused, and nobody is over the seats", async () => {
     const year = await yearWithSchedule()
     const cls = await emptyClass(year)
     const payer = await child(year, cls)
@@ -274,18 +370,14 @@ describe("the seat lock never waits for a lead row", () => {
     await actAsStaff(pay, ACCOUNTANT.id)
     await actAsStaff(edit, MANAGER.id)
     await pay.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [payer, today, randomUUID()])
-    await edit.query("select public.edit_stream($1, 'A', 0)", [opened.rows[0].s.id])
-    await Promise.all([edit.query("commit"), pay.query("commit")])
-    const count = await asSystem((sql) =>
-      sql.query<{ placed: number; seats: number }>(
-        "select s.seats, (select count(*)::int from public.seat_placements p where p.stream_id = s.id) as placed from public.streams s where s.id = $1",
-        [opened.rows[0].s.id],
-      ),
-    )
-    expect(count.rows[0].placed).toBeLessThanOrEqual(count.rows[0].seats)
+    const editing = outcome(edit.query("select public.edit_stream($1, 'A', 0)", [opened.rows[0].s.id]))
+    await pay.query("commit")
+    expect(await editing).toBe("below_placed")
+    await edit.query("rollback")
+    expect(await streamOf(payer)).toBe("A")
   })
 
-  test("two sessions paying for the last seat: one is placed, the other waits, and nobody is over the seats", async () => {
+  test("two sessions paying for the last seat: one is placed, the other's whole payment is refused", async () => {
     const year = await yearWithSchedule()
     const cls = await emptyClass(year)
     const [first, second] = [await child(year, cls), await child(year, cls)]
@@ -305,10 +397,15 @@ describe("the seat lock never waits for a lead row", () => {
       await actAsStaff(s, ACCOUNTANT.id)
     }
     await a.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [first, today, randomUUID()])
-    await b.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [second, today, randomUUID()])
-    await Promise.all([a.query("commit"), b.query("commit")])
+    // Both saw the seat free; the second waits for the first's seat lock and
+    // is then refused under it.
+    const paying = outcome(b.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [second, today, randomUUID()]))
+    await a.query("commit")
+    expect(await paying).toBe("no_class")
+    await b.query("rollback")
 
-    const placed = [await streamOf(first), await streamOf(second)].filter(Boolean)
-    expect(placed).toEqual(["A"])
+    expect([await streamOf(first), await streamOf(second)]).toEqual(["A", null])
+    const kept = await asSystem((sql) => sql.query<{ n: number }>("select count(*)::int as n from public.school_fee_payments where lead_id = $1", [second]))
+    expect(kept.rows[0].n).toBe(0)
   })
 })

@@ -170,6 +170,20 @@ async function placements(sql: Client, ids: string[]): Promise<Record<string, st
   return Object.fromEntries(ids.map((id) => [id, rows.find((r) => r.lead_id === id)?.label ?? null]))
 }
 
+/**
+ * A Seat priority reached without a new payment going through the block, as
+ * a payment correction or a sibling recompute does: the payment row written
+ * directly, then the lead recomputed with `cause`. Queues the lead.
+ */
+async function priorityWithoutBooking(sql: Client, leadId: string, paidOn: string, cause: string) {
+  await sql.query("select public.set_audit_actor('staff', $1)", [ACCOUNTANT.id])
+  await sql.query(
+    "insert into public.school_fee_payments (lead_id, payment_type, amount, paid_on, recorded_by, request_id) values ($1, 'initial_deposit', 300000, $2, $3, gen_random_uuid())",
+    [leadId, paidOn, ACCOUNTANT.id],
+  )
+  await sql.query("select public.recompute_lead_fee($1, $2)", [leadId, cause])
+}
+
 async function refusal(sql: Client, query: string, params: unknown[]): Promise<string> {
   await sql.query("savepoint refusal")
   try {
@@ -294,7 +308,7 @@ describe("editing a stream", () => {
 })
 
 describe("the seat sync", () => {
-  test("a new Seat priority takes a free seat at the end of the transaction, after the children already waiting", async () => {
+  test("a first booking takes a free seat within the payment, after the children already waiting", async () => {
     const { year, classes: [c] } = await yearAndClasses(1)
     const waiting = await holder(year, c, "Boy", 10)
     const newcomer = await child(year, c, "Boy")
@@ -311,9 +325,9 @@ describe("the seat sync", () => {
       await actAsStaff(sql, ACCOUNTANT.id)
       await sql.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [newcomer, today, randomUUID()])
       await asOwner(sql)
-      const { rows } = await sql.query("select count(*)::int as n from public.seat_sync_queue where lead_id = $1 and not retry", [newcomer])
-      expect(rows[0].n).toBe(1)
-      await sql.query("select public.flush_seat_queue()")
+      // Slice 4b: a first booking runs the sync itself, under the seat lock.
+      const { rows } = await sql.query("select count(*)::int as n from public.seat_sync_queue where lead_id = $1", [newcomer])
+      expect(rows[0].n).toBe(0)
       expect(await placements(sql, [waiting, newcomer])).toEqual({ [waiting]: "A", [newcomer]: "A" })
     })
   })
@@ -368,10 +382,9 @@ describe("the seat sync", () => {
       // The waiting child was recorded by an earlier transaction.
       await sql.query("update public.seat_placements set waiting_xid = '1'::xid8 where lead_id = $1", [waiting])
       // In one transaction: the newcomer reaches a priority dated before the
-      // waiting child's (so it ranks higher), and the placed child is declined.
-      await actAsStaff(sql, ACCOUNTANT.id)
-      await sql.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [newcomer, daysAgo(10), randomUUID()])
-      await asOwner(sql)
+      // waiting child's (so it ranks higher) by a route around the payment
+      // block (a correction), and the placed child is declined.
+      await priorityWithoutBooking(sql, newcomer, daysAgo(10), "payment_adjustment")
       await actAsStaff(sql, MANAGER.id)
       await sql.query("select public.decline_lead($1, 'No seat available', null)", [placed])
       await asOwner(sql)
@@ -466,15 +479,10 @@ describe("the seat sync", () => {
       await named(sql)
       await open(sql, year, c, "A", "Mixed", 5)
       await asOwner(sql)
-      await actAsStaff(sql, ACCOUNTANT.id)
-      await sql.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [first, today, randomUUID()])
-      await asOwner(sql)
-      // A second child queued by a sibling recompute, then every actor
-      // cleared, as some blocks do before the commit: the queue kept it.
-      await actAsStaff(sql, ACCOUNTANT.id)
-      await sql.query("select public.record_school_fee_payment($1, 'initial_deposit', 300000, $2, $3)", [second, today, randomUUID()])
-      await asOwner(sql)
-      await sql.query("update public.seat_sync_queue set cause = 'sibling' where lead_id = $1", [second])
+      // Two children queued by recomputes with their own causes, then every
+      // actor cleared, as some blocks do before the commit: the queue kept it.
+      await priorityWithoutBooking(sql, first, today, "payment_adjustment")
+      await priorityWithoutBooking(sql, second, today, "sibling")
       await sql.query("select set_config('request.jwt.claims', '', true), set_config('audit.actor_kind', '', true)")
       expect((await sql.query("select public.flush_seat_queue() as n")).rows[0].n).toBe(2)
       expect((await sql.query("select public.flush_seat_queue() as n")).rows[0].n).toBe(0)
@@ -486,7 +494,7 @@ describe("the seat sync", () => {
          order by p.lead_id`,
         [[first, second]],
       )
-      expect(Object.fromEntries(rows.map((r) => [r.lead_id, r.cause]))).toEqual({ [first]: "payment", [second]: "sibling" })
+      expect(Object.fromEntries(rows.map((r) => [r.lead_id, r.cause]))).toEqual({ [first]: "payment_adjustment", [second]: "sibling" })
       expect(rows.map((r) => r.actor_kind)).toEqual(["staff", "staff"])
     })
   })

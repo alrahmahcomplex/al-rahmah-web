@@ -3,6 +3,7 @@ import { formatDate } from "@/lib/school-calendar"
 import { FEE_DISCOUNT_NAMES } from "@/lib/services/discounts"
 import { BAND_NAMES } from "@/lib/services/fees"
 import { getLeadFee } from "@/lib/services/lead-fees"
+import type { Lead } from "@/lib/services/leads"
 import { listPayments } from "@/lib/services/school-fee-payments"
 import type { StaffMember } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
@@ -16,6 +17,7 @@ import { PaymentList } from "./payment-list"
 import { PreFormOneProgramme } from "./pre-form-one-programme"
 import { PreFormOneTickSection } from "./pre-form-one-tick-section"
 import { readSiblingView } from "./lead-reads"
+import { readSeatCard } from "./seat-card"
 import { SeatPriorityTag } from "./seat-priority-tag"
 
 const INSTALMENTS = ["First", "Second", "Third"] as const
@@ -39,6 +41,7 @@ const NO_SIBLING_FEE = { canEdit: false, feeEditNeeded: false, canKeep: false, s
 // for now.
 export async function SchoolFeeSection({
   leadId,
+  lead,
   staff,
   canRecord,
   canAdjust,
@@ -46,6 +49,10 @@ export async function SchoolFeeSection({
   formOne = false,
 }: {
   leadId: string
+  // An open lead, for its seat note once streams are on (#449): every staff
+  // member who sees the School fee sees it; the request and Open a new stream
+  // buttons go by permission.
+  lead?: Lead
   staff: StaffMember
   canRecord: boolean
   canAdjust: boolean
@@ -60,10 +67,11 @@ export async function SchoolFeeSection({
   }
 
   const supabase = await createClient()
-  const [fee, payments, sibling] = await Promise.all([
+  const [fee, payments, sibling, seat] = await Promise.all([
     getLeadFee(supabase, leadId),
     listPayments(supabase, leadId),
     readSiblingView(leadId, staff.permissions.join(",")),
+    lead ? readSeatCard(supabase, lead, staff) : null,
   ])
   const siblingFee = sibling?.fee ?? null
   const byHand = siblingFee && setByHandLine(siblingFee)
@@ -135,11 +143,17 @@ export async function SchoolFeeSection({
             canEdit={canEditPreFormOne}
           />
 
+          {seat?.card}
           {canRecord ? (
             <SiblingFeeControls
               leadId={leadId}
               fee={siblingFee ?? NO_SIBLING_FEE}
-              record={{ canWaive: fee.data.discount?.kind === "qualified_orphan", canPayPreFormOne: fee.data.preFormOne.applies }}
+              // While no stream can take the child, only a Pre-Form One fee can be recorded (#449).
+              record={
+                seat?.outlook.blocked && !fee.data.preFormOne.applies
+                  ? null
+                  : { canWaive: fee.data.discount?.kind === "qualified_orphan", canPayPreFormOne: fee.data.preFormOne.applies }
+              }
             />
           ) : (
             siblingFee?.canKeep && <SiblingFeeControls leadId={leadId} fee={{ ...siblingFee, canEdit: false }} />

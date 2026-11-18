@@ -4,9 +4,11 @@ import { KeyValueList, Note } from "@/components/kit"
 import { enrollmentYears, formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadHistory } from "@/lib/services/audit"
 import { listContactChildren } from "@/lib/services/leads"
+import { getSeatMode, getSeatOutlook, getYearStreams, streamName } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 import { formatShillings } from "../../fees/format"
+import { GenderSheet } from "./gender-sheet"
 import { describeLeadHistory } from "./history/describe"
 import { CardHeading } from "./lead-card"
 import { ContactEditor, StudentEditor } from "./lead-editors"
@@ -16,6 +18,7 @@ import { parentRows, studentRows } from "./lead-rows"
 import { Details } from "./lead-summary"
 import type { LeadPanelProps } from "./panels"
 import { SeatPriorityTag } from "./seat-priority-tag"
+import { noAnswerNote } from "./seat-text"
 import { SiblingGroupCard } from "./sibling-group"
 import { leadTabHref } from "./tabs"
 
@@ -25,11 +28,53 @@ import { leadTabHref } from "./tabs"
 // How many history entries Recent activity shows.
 export const RECENT_ENTRIES = 4
 
+// The child’s seat once streams are on (#449, v42), for staff who may view
+// payments: the stream they sit in, or that they wait for one, and the
+// class’s streams for a child with no Boy or girl answer. Null before streams
+// are on; nothing but the mode when it can’t be read.
+async function readStudentSeat(lead: LeadPanelProps["lead"], seesPayments: boolean) {
+  const supabase = await createClient()
+  if ((await getSeatMode(supabase)) !== "named") return null
+  if (!seesPayments) return { seat: null, classStreams: null }
+  const [outlook, year] = await Promise.all([
+    getSeatOutlook(supabase, lead.id),
+    lead.gender === null ? getYearStreams(supabase, lead.enrollmentYear) : null,
+  ])
+  const placed = outlook.ok ? outlook.data.placed : null
+  return {
+    seat: placed ? streamName(placed.className, placed.label, placed.takes) : outlook.ok && outlook.data.waiting ? "Waiting for a stream" : null,
+    classStreams: year?.ok ? (year.data.classes.find((c) => c.className === lead.className)?.streams ?? []) : null,
+  }
+}
+
 export async function StudentPanel({ lead, staff, open }: LeadPanelProps) {
   // A closed lead is read-only: it offers no corrections.
   const canEditDetails = open && staff.permissions.includes("leads.edit")
   const canCorrectVisit = open && lead.visitDate !== null && staff.permissions.includes("visits.record")
-  const [details, group] = await Promise.all([readFatherAndSchool(lead.id), readSiblingView(lead.id, staff.permissions.join(","))])
+  const [details, group, streams] = await Promise.all([
+    readFatherAndSchool(lead.id),
+    readSiblingView(lead.id, staff.permissions.join(",")),
+    readStudentSeat(lead, staff.permissions.includes("payments.view")),
+  ])
+  const rows = studentRows(lead).map(([key, value]) => ({ key, value: value as React.ReactNode }))
+  // Boy or girl after Day or boarding, then the seat (v42).
+  const at = rows.findIndex((row) => row.key === "Day or boarding") + 1
+  rows.splice(
+    at,
+    0,
+    {
+      key: "Boy or girl",
+      value: (
+        <span className="lr-answer">
+          {lead.gender ?? <span className="lr-quiet">Not given</span>}
+          {canEditDetails && (
+            <GenderSheet leadId={lead.id} studentName={lead.studentName} className={lead.className} gender={lead.gender} />
+          )}
+        </span>
+      ),
+    },
+    ...(streams?.seat ? [{ key: "Seat", value: streams.seat as React.ReactNode }] : []),
+  )
   return (
     <StudentEditor
       lead={lead}
@@ -38,7 +83,8 @@ export async function StudentPanel({ lead, staff, open }: LeadPanelProps) {
       canEditDetails={canEditDetails}
       canCorrectVisit={canCorrectVisit}
     >
-      <Details rows={studentRows(lead)} />
+      <KeyValueList items={rows} />
+      {streams && lead.gender === null && <Note>{noAnswerNote(lead, streams.classStreams)}</Note>}
       {details.ok ? (
         <div className="fs-rows">
           <FatherNameRow

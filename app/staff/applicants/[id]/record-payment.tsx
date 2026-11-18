@@ -17,7 +17,7 @@ import { visitDateToday } from "./actions"
 import { DateField, Select } from "./form-controls"
 import { Field, Input, Saved } from "./lead-editors"
 import { previewSchoolFeePayment, recordSchoolFeePayment } from "./payment-actions"
-import { overfillWarning, type PaymentField, type PaymentRefusal } from "./payment-outcome"
+import { overfillWarning, type PaymentField, type PaymentRefusal, type SeatNote } from "./payment-outcome"
 
 const LOST_REQUEST: PaymentRefusal = {
   status: "refused",
@@ -55,11 +55,13 @@ export function RecordPayment({
 }) {
   const [today, setToday] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
+  const [seatNote, setSeatNote] = useState<SeatNote | null>(null)
   const [unopened, setUnopened] = useState(false)
   const [opening, startOpening] = useTransition()
 
   function open() {
     setSaved(null)
+    setSeatNote(null)
     setUnopened(false)
     startOpening(async () => {
       try {
@@ -78,9 +80,10 @@ export function RecordPayment({
         canWaive={canWaive}
         canPayPreFormOne={canPayPreFormOne}
         note={note}
-        onDone={(message) => {
+        onDone={(message, seat) => {
           setToday(null)
-          setSaved(message)
+          setSaved(seat ? null : message)
+          setSeatNote(seat ?? null)
         }}
       />
     )
@@ -100,6 +103,19 @@ export function RecordPayment({
         </Note>
       )}
       {saved && <Saved message={saved} />}
+      {seatNote && (
+        <Note tone={seatNote.tone} role="status">
+          <span>
+            <b>{seatNote.title}</b> {seatNote.text}
+            {seatNote.stream && (
+              <>
+                {" "}
+                <b>{seatNote.stream}</b>.
+              </>
+            )}
+          </span>
+        </Note>
+      )}
     </div>
   )
 }
@@ -117,7 +133,7 @@ function PaymentForm({
   canWaive: boolean
   canPayPreFormOne: boolean
   note: string | null
-  onDone: (saved: string | null) => void
+  onDone: (saved: string | null, seat?: SeatNote) => void
 }) {
   const [type, setType] = useState<RecordablePaymentType | "">("")
   const waived = type === "fee_waived"
@@ -159,7 +175,7 @@ function PaymentForm({
     startTransition(async () => {
       try {
         const outcome = await recordSchoolFeePayment(leadId, input, requestId)
-        if (outcome.status === "recorded") onDone(outcome.message)
+        if (outcome.status === "recorded") onDone(outcome.message, outcome.seat)
         else {
           // Back to the form, so the Accountant can fix what was refused.
           setReviewed(null)

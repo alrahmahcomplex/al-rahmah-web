@@ -110,14 +110,24 @@ const toStream = (row: StreamRow): Stream => ({
   broughtUpFrom: row.brought_up_from,
 })
 
-/** The school's seat mode. Legacy when it can't be read, so a failed read never shows the new screens. */
-export async function getSeatMode(supabase: SupabaseClient): Promise<SeatMode> {
+/** The school's seat mode as the database gave it, or an error: for a caller that must know the mode rather than assume it. */
+export async function readSeatMode(supabase: SupabaseClient): Promise<Result<SeatMode, StreamError>> {
   const { data, error } = await supabase.rpc("seat_mode")
   if (error) {
     console.error("Could not read the seat mode", error)
-    return "legacy"
+    return { ok: false, error: "unavailable" }
   }
-  return data === "named" ? "named" : "legacy"
+  if (data !== "legacy" && data !== "named") {
+    console.error("Could not read the seat mode", { data })
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data }
+}
+
+/** The school's seat mode. Legacy when it can't be read, so a failed read never shows the new screens. */
+export async function getSeatMode(supabase: SupabaseClient): Promise<SeatMode> {
+  const mode = await readSeatMode(supabase)
+  return mode.ok ? mode.data : "legacy"
 }
 
 type YearStreamsRow = {
@@ -393,6 +403,26 @@ export async function getSeatOutlook(supabase: SupabaseClient, leadId: string): 
         : null,
     },
   }
+}
+
+export type SeatStream = NonNullable<SeatOutlook["placed"]>
+
+// Before streams are on this is always: not placed, nothing moves.
+export type GenderOutlook = {
+  // The stream the child is placed in now; null when not placed, or before streams are on.
+  placed: SeatStream | null
+  // The other answer takes them out of it.
+  moves: boolean
+  // Where they would move: null when no stream for the new answer has a free seat, so they would wait.
+  wouldTake: SeatStream | null
+}
+
+/** What correcting a child's Boy or girl answer would do to their seat. Needs leads.view and leads.edit. */
+export async function getGenderOutlook(supabase: SupabaseClient, leadId: string, gender: StudentGender): Promise<Result<GenderOutlook, StreamError>> {
+  const { data, error } = await supabase.rpc("lead_gender_outlook", { lead_id: leadId, gender })
+  if (error) return { ok: false, error: streamError(error, "read what a Boy or girl correction does") }
+  const row = data as { placed: StreamRef | null; moves: boolean; would_take: StreamRef | null }
+  return { ok: true, data: { placed: toRef(row.placed), moves: row.moves, wouldTake: toRef(row.would_take) } }
 }
 
 /** A stream as screens name it: its class, its label, and who it takes when it isn't Mixed ("FORM 1 B (Boys)"). */

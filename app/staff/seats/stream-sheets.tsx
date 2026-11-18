@@ -7,6 +7,8 @@ import { Button, ChoiceTiles, Field, Note, Sheet, Tag, toast } from "@/component
 import type { LeadClass } from "@/lib/services/leads"
 import { streamName, STREAM_TAKES, type Stream, type StreamTakes } from "@/lib/services/streams"
 
+import "./seats.css"
+
 import { bringUpAction, editStreamAction, openStreamAction, requestStreamAction } from "./stream-actions"
 import { clashingStream, nextLabel, placeholderSeats, type BringUpRow } from "./stream-rules"
 
@@ -32,6 +34,8 @@ export function OpenStreamButton({
   need = "Mixed",
   label,
   variant = "ghost",
+  size = "small",
+  forChild,
 }: {
   year: number
   className: LeadClass
@@ -39,6 +43,10 @@ export function OpenStreamButton({
   need?: StreamTakes
   label: string
   variant?: "go" | "ghost"
+  size?: "small" | "wide"
+  // Opened from a child’s Record payment: when the database says their
+  // payment can now go through, the toast says so (v42).
+  forChild?: { leadId: string; studentName: string }
 }) {
   const [open, setOpen] = useState(false)
   const [takes, setTakes] = useState<StreamTakes>(need)
@@ -88,20 +96,22 @@ export function OpenStreamButton({
           seats: count,
           requestId,
           name: streamName(className, clean, takes),
+          forLeadId: forChild?.leadId,
         })
       } catch {
         outcome = { status: "refused" as const, message: LOST }
       }
       if (outcome.status === "refused") return setProblem(outcome.message)
       setOpen(false)
-      toast(outcome.message)
+      const name = streamName(className, clean, takes)
+      toast(forChild && outcome.childCanPay ? `${name} is open. ${forChild.studentName}’s payment can go ahead.` : outcome.message)
     })
   }
 
   const shown = `${className} ${name.trim() || "…"}${takes === "Mixed" ? "" : ` (${takes})`}`
   return (
     <>
-      <Button size="small" variant={variant} icon={variant === "ghost" ? "plus" : undefined} onClick={() => changeOpen(true)}>
+      <Button size={size} variant={variant} icon={variant === "ghost" ? "plus" : undefined} onClick={() => changeOpen(true)}>
         {label}
       </Button>
       <Sheet
@@ -363,14 +373,19 @@ export function RequestStreamButton({
   className,
   need,
   variant = "go",
+  size = "small",
+  alreadySent = false,
 }: {
   target: { leadId: string } | { year: number; className: LeadClass; need: "Boys" | "Girls" | null }
   className: LeadClass
   need: "Boys" | "Girls" | null
   variant?: "go" | "ghost"
+  size?: "small" | "wide"
+  // A request for this is open already: the button shows Request sent.
+  alreadySent?: boolean
 }) {
   const [pending, startTransition] = useTransition()
-  const [sent, setSent] = useState(false)
+  const [sent, setSent] = useState(alreadySent)
 
   function send() {
     startTransition(async () => {
@@ -391,13 +406,13 @@ export function RequestStreamButton({
 
   if (sent) {
     return (
-      <Button size="small" variant="ghost" disabled>
+      <Button size={size} variant="ghost" disabled>
         Request sent
       </Button>
     )
   }
   return (
-    <Button size="small" variant={variant} onClick={send} disabled={pending}>
+    <Button size={size} variant={variant} onClick={send} disabled={pending}>
       Send a request to open a new stream
     </Button>
   )

@@ -5,6 +5,7 @@ import { getLeadClosure } from "@/lib/services/lead-closure"
 import type { Lead } from "@/lib/services/leads"
 import { needsRetakeChoice, type ReopeningRequest } from "@/lib/services/reopening-requests"
 import { seatCheck } from "@/lib/services/seats"
+import { getSeatMode } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 import { DecideReopening } from "./decide-reopening"
@@ -126,6 +127,11 @@ async function Decide({ lead, requestId }: { lead: Lead; requestId: string }) {
     // A thrown request counts as a failed check, never as a broken panel.
     seatCheck(supabase, lead.id).catch(() => ({ ok: false, error: "unavailable" }) as const),
   ])
+  // Once streams are on (#449) the old seat count says nothing: a child with
+  // no free stream after approval waits, as Record payment says. The mode is
+  // read only when the old count would warn.
+  let shown = approvalSeats(seats)
+  if (shown.kind === "full" && (await getSeatMode(supabase)) === "named") shown = { kind: "room" }
   if (!closure.ok) {
     return <p className="lr-error">Approve and Reject could not be loaded. Reload the page to try again.</p>
   }
@@ -138,7 +144,7 @@ async function Decide({ lead, requestId }: { lead: Lead; requestId: string }) {
       admissionNumber={lead.admissionNumber}
       consequence={approvalConsequence({ status: lead.status, closure: lead.closure, statusBefore, visitDate: lead.visitDate })}
       askRetake={lead.status === "Declined" && needsRetakeChoice(statusBefore)}
-      seats={approvalSeats(seats)}
+      seats={shown}
     />
   )
 }

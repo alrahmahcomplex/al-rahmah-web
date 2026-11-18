@@ -630,6 +630,8 @@ export type Lead = {
   className: LeadClass
   enrollmentYear: number
   dayOrBoarding: DayOrBoarding
+  // Boy or girl (#449); null until the answer is given.
+  gender: StudentGender | null
   status: LeadStatus
   closure: LeadClosure | null
   visitDate: string | null
@@ -653,6 +655,7 @@ type LeadRow = {
   class_name: LeadClass
   enrollment_year: number
   day_or_boarding: DayOrBoarding
+  gender: StudentGender | null
   status: LeadStatus
   closure: LeadClosure | null
   visit_date: string | null
@@ -713,7 +716,7 @@ export async function getLead(supabase: SupabaseClient, id: string): Promise<Res
   const { data, error } = await supabase
     .from("leads")
     .select(
-      "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, closure, visit_date, returning_family_joined, returning_family_reapplied, initially_declined, guardian_contacts!guardian_contact_id (id, full_name, relationship, relationship_description, phone, whatsapp)",
+      "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, gender, status, closure, visit_date, returning_family_joined, returning_family_reapplied, initially_declined, guardian_contacts!guardian_contact_id (id, full_name, relationship, relationship_description, phone, whatsapp)",
     )
     .eq("id", id)
     .maybeSingle<LeadRow>()
@@ -735,6 +738,7 @@ export async function getLead(supabase: SupabaseClient, id: string): Promise<Res
       className: data.class_name,
       enrollmentYear: data.enrollment_year,
       dayOrBoarding: data.day_or_boarding,
+      gender: data.gender,
       status: data.status,
       closure: data.closure,
       visitDate: data.visit_date,

@@ -268,7 +268,7 @@ export async function previewGrant(requestId: string, leadId: string): Promise<G
   const lines =
     changes &&
     changes.flatMap((c) =>
-      c.before !== null && c.after !== null ? [`${firstName(c.studentName)}: ${tzs(c.before)} becomes ${tzs(c.after)}.`] : [],
+      c.before !== null && c.after !== null ? [`${c.studentName ? firstName(c.studentName) : "A sibling"}: ${tzs(c.before)} becomes ${tzs(c.after)}.`] : [],
     )
   // A role that may approve discounts without viewing leads sees the fees, not the group.
   if (!explanation) return { status: "ready", compareWith: null, members: null, changes: lines }

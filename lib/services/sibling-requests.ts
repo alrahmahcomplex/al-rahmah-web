@@ -263,12 +263,13 @@ export type SiblingGrantPreview = {
   // For the group's full payer after the grant; null without payments.view.
   fullPayerTie: boolean | null
   // Null without payments.view.
-  changes: { leadId: string; studentName: string; before: number | null; after: number | null }[] | null
+  // studentName is null, without leads.view, for anyone the request doesn't name.
+  changes: { leadId: string; studentName: string | null; before: number | null; after: number | null }[] | null
 }
 
 type PreviewRow = {
   explanation: (ExplanationRow & { full_payer_tie: boolean | null }) | null
-  changes: { lead_id: string; student_name: string; before: number | null; after: number | null }[] | null
+  changes: { lead_id: string; student_name: string | null; before: number | null; after: number | null }[] | null
 }
 
 export async function previewSiblingGrant(

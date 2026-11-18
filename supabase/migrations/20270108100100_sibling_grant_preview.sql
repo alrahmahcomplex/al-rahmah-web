@@ -21,7 +21,9 @@
 --                      grant, plus "full_payer_tie" for its full payer, or
 --                      null without leads.view,
 --       "changes": [{"lead_id", "student_name", "before", "after"}] whose
---                  School fee moves,
+--                  School fee moves (without leads.view, student_name is
+--                  null for anyone but the request's lead and the sibling
+--                  it names),
 --                  or null without payments.view}
 --
 -- Rollback: drop both functions. Nothing else uses them.
@@ -137,8 +139,15 @@ begin
             select coalesce(jsonb_agg(jsonb_build_object(
                        'lead_id', x,
                        -- Named here, so staff who may see fees but not leads
-                       -- still read whose fee moves.
-                       'student_name', (select l.student_name from public.leads l where l.id = x),
+                       -- still read whose fee moves. Without leads.view only
+                       -- the students the request itself names are named
+                       -- (as pending_sibling_requests names them); any other
+                       -- member whose fee moves stays unnamed.
+                       'student_name', case
+                           when public.has_permission('leads.view')
+                                or x = request.lead_id or x = request.sibling_of_lead_id
+                               then (select l.student_name from public.leads l where l.id = x)
+                       end,
                        'before', (fees_before -> x::text ->> 'school_fee')::integer,
                        'after', (fees_after -> x::text ->> 'school_fee')::integer
                    ) order by x), '[]'::jsonb)

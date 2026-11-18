@@ -177,6 +177,36 @@ describe("preview_sibling_grant for a role without leads.view", () => {
   })
 })
 
+describe("preview_sibling_grant names only whom the request names, without leads.view", () => {
+  test("merging two groups: the full payer who loses the place stays unnamed", async () => {
+    const year = await yearWithSchedule()
+    // Two groups, each with its full payer: A (FORM 1) over B, and C (STD 2) over D.
+    const first = await pair(year, father(), "FORM 1", "KG 1")
+    const second = await pair(year, father(), "STD 2", "KG 1")
+    // B asks to bring its group into D's. The request names B and D.
+    const asked = await requestSiblingDiscount(await signedIn(ADMISSIONS), {
+      leadId: first.b,
+      note: "Proof.",
+      requestId: randomUUID(),
+      siblingOfLeadId: second.b,
+    })
+    if (!asked.ok) throw new Error(`request failed: ${JSON.stringify(asked.error)}`)
+    const STD2 = 2_000_000
+
+    // One full payer stays; C, the other, gets the 10%.
+    const approver = await createThrowawayStaff(["discounts.approve", "payments.view"])
+    expect(await previewSiblingGrant(await signedIn(approver), asked.data)).toEqual({
+      ok: true,
+      data: { explanation: null, fullPayerTie: null, changes: [{ leadId: second.a, studentName: null, before: STD2, after: tenOff(STD2) }] },
+    })
+    // Staff who may view leads read the name.
+    const manager = await previewSiblingGrant(await signedIn(MANAGER), asked.data)
+    expect(manager.ok && manager.data.changes).toEqual([
+      { leadId: second.a, studentName: expect.stringMatching(/^Kid/), before: STD2, after: tenOff(STD2) },
+    ])
+  })
+})
+
 describe("sibling_full_payer_tie", () => {
   test("is true for the full payer when a sibling's fee is the same, false when it is lower, null for anyone else", async () => {
     const year = await yearWithSchedule()

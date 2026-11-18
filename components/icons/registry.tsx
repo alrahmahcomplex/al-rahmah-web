@@ -140,6 +140,12 @@ export const right = icon({ outline: <path d="m9 18 6-6-6-6" /> })
 export const check = icon({ outline: <path d="M20 6 9 17l-5-5" /> })
 export const plus = icon({ outline: <path d="M12 5v14M5 12h14" /> })
 export const x = icon({ outline: <path d="M18 6 6 18M6 6l12 12" /> })
+export const up = icon({ outline: <path d="M12 19V5M6 11l6-6 6 6" /> })
+
+export const pen = icon({
+  outline: <path d="M4 20h4L19 9l-4-4L4 16z" />,
+  detail: <path d="M13.5 6.5l4 4" />,
+})
 
 export const reset = icon({
   outline: <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />,
@@ -292,6 +298,8 @@ export const ICONS = {
   down,
   calendar,
   upload,
+  up,
+  pen,
 } satisfies Record<string, IconDef>
 
 export type IconName = keyof typeof ICONS

@@ -15,15 +15,17 @@ const SET_1 = [
 const FORM_ONLY = ["clock", "globe", "trash"]
 // The form parts' glyphs (#358); the calendar has two lines since v38.
 const FORM_PARTS = ["down", "calendar", "upload"]
-const ONE_LINE = ["back", "right", "check", "plus", "x", "phone", "down", "upload"]
+// Seats' streams (#449, prototype v42): bring up, and the pencil on a stream.
+const STREAMS = ["up", "pen"]
+const ONE_LINE = ["back", "right", "check", "plus", "x", "phone", "down", "upload", "up"]
 const names = Object.keys(ICONS) as IconName[]
 
 // @ts-expect-error: the registry type rejects an icon without an outline.
 icon({ detail: <path d="M0 0" /> })
 
 describe("icon registry", () => {
-  it("holds set 1 and the Admission form's glyphs, nothing else", () => {
-    expect(names).toEqual([...SET_1, ...FORM_ONLY, ...FORM_PARTS])
+  it("holds set 1, the Admission form's glyphs and the streams' two, nothing else", () => {
+    expect(names).toEqual([...SET_1, ...FORM_ONLY, ...FORM_PARTS, ...STREAMS])
   })
 
   it("gives every icon a second line except the one-line glyphs", () => {

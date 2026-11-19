@@ -26,19 +26,21 @@ export type StudentImportKey =
   | "status"
 
 // The headers the template writes. The aliases are the workbook's own
-// headers and other names a file may use. Only the student, class, year,
-// parent and phone columns must be in the file.
+// headers and other names a file may use. By the owner's decision of
+// 2026-11-19, the file must have the student, class, year, phone, visit date
+// and discount code columns, and every row needs a value in each of them
+// except the discount code. Any other column may be left out or blank.
 export const STUDENT_IMPORT_COLUMNS: readonly ImportColumn<StudentImportKey>[] = [
   { key: "studentName", header: "Student name", aliases: ["name", "student"] },
   { key: "className", header: "Class", aliases: ["class name"] },
   { key: "enrollmentYear", header: "Enrollment year", aliases: ["year", "enrolment year"] },
   { key: "dayOrBoarding", header: "Day or boarding", aliases: ["day/boarding"], optional: true },
-  { key: "guardianName", header: "Parent/guardian name", aliases: ["parent name", "guardian name", "parent/guardian contacts"] },
+  { key: "guardianName", header: "Parent/guardian name", aliases: ["parent name", "guardian name", "parent/guardian contacts"], optional: true },
   { key: "relationship", header: "Relationship", optional: true },
   { key: "phone", header: "Parent phone", aliases: ["phone", "mobile", "contact"] },
   { key: "whatsapp", header: "WhatsApp", optional: true },
-  { key: "visitDate", header: "Visit date", aliases: ["date"], optional: true },
-  { key: "discountCode", header: "Discount code", aliases: ["code"], optional: true },
+  { key: "visitDate", header: "Visit date", aliases: ["date"] },
+  { key: "discountCode", header: "Discount code", aliases: ["code"] },
   { key: "status", header: "Status", aliases: ["customer journey"], optional: true },
 ]
 
@@ -240,12 +242,12 @@ export const STUDENT_REASONS = {
   missingYear: "Missing enrollment year",
   yearOutOfRange: (from: number, to: number) => `Enrollment year must be ${from} to ${to}`,
   unknownDayOrBoarding: "Day or boarding not recognised",
-  missingGuardian: "Missing parent/guardian name",
   guardianTooLong: "Parent/guardian name too long",
   relationshipTooLong: "Relationship too long",
   phoneMissing: "Parent phone missing",
   unreadablePhone: "Unreadable parent phone",
   unreadableWhatsapp: "Unreadable WhatsApp",
+  missingDate: "Missing visit date",
   unreadableDate: "Unreadable visit date",
   futureDate: "Visit date in the future",
   unreadableCode: "Unreadable discount code",
@@ -262,11 +264,24 @@ export const STUDENT_NOTES = {
   joinsFamily: (name: string) => `Phone matches ${name}'s family. Staff confirm the match on the application.`,
 } as const
 
+// The parent's name on a row that leaves it blank and shares its phone with
+// no named row.
+export const UNNAMED_GUARDIAN = "Parent/guardian"
+
 export function screenStudentRows(
   records: readonly ImportRecord<StudentImportKey>[],
   today: string = tanzaniaToday(),
 ): ScreenedStudentRow[] {
   const thisYear = Number(today.slice(0, 4))
+  // Rows with the same parent phone share one contact, so a blank parent
+  // name takes the first name another of those rows gives. A name too long
+  // to store is refused on its own row and never passed on.
+  const namedGuardians = new Map<string, string>()
+  for (const { cells } of records) {
+    const phone = normalizeAgentPhone(cells.phone)
+    const name = collapse(cells.guardianName)
+    if (phone !== null && name !== "" && name.length <= 100 && !namedGuardians.has(phone)) namedGuardians.set(phone, name)
+  }
   const rows = records.map((record) => {
     const { cells } = record
     const studentName = collapse(cells.studentName)
@@ -285,7 +300,7 @@ export function screenStudentRows(
       preFormOne: klass?.preFormOne ?? false,
       enrollmentYear: year,
       dayOrBoarding: parseDayOrBoarding(cells.dayOrBoarding),
-      guardianName: guardianName === "" ? null : guardianName,
+      guardianName: guardianName !== "" ? guardianName : ((phone === null ? undefined : namedGuardians.get(phone)) ?? UNNAMED_GUARDIAN),
       relationship: relationship?.relationship ?? null,
       relationshipDescription: relationship?.description ?? null,
       phone,
@@ -327,13 +342,13 @@ export function screenStudentRows(
     else if (n.enrollmentYear === null) problem = refused(STUDENT_REASONS.missingYear)
     else if (n.enrollmentYear < thisYear - 1 || n.enrollmentYear > thisYear + 2) problem = refused(STUDENT_REASONS.yearOutOfRange(thisYear - 1, thisYear + 2))
     else if (n.dayOrBoarding === null) problem = refused(STUDENT_REASONS.unknownDayOrBoarding)
-    else if (n.guardianName === null) problem = refused(STUDENT_REASONS.missingGuardian)
-    else if (n.guardianName.length > 100) problem = refused(STUDENT_REASONS.guardianTooLong)
+    else if (n.guardianName !== null && n.guardianName.length > 100) problem = refused(STUDENT_REASONS.guardianTooLong)
     else if (n.relationship === null) problem = refused(STUDENT_REASONS.relationshipTooLong)
     else if (o.phone.trim() === "") problem = refused(STUDENT_REASONS.phoneMissing)
     else if (n.phone === null) problem = refused(STUDENT_REASONS.unreadablePhone)
     else if (o.whatsapp.trim() !== "" && normalizeAgentPhone(o.whatsapp) === null) problem = refused(STUDENT_REASONS.unreadableWhatsapp)
-    else if (o.visitDate.trim() !== "" && n.visitDate === null) problem = refused(STUDENT_REASONS.unreadableDate)
+    else if (o.visitDate.trim() === "") problem = refused(STUDENT_REASONS.missingDate)
+    else if (n.visitDate === null) problem = refused(STUDENT_REASONS.unreadableDate)
     else if (n.visitDate !== null && n.visitDate > today) problem = refused(STUDENT_REASONS.futureDate)
     else if (codeUnreadable) problem = refused(STUDENT_REASONS.unreadableCode)
     else if (n.status === null) problem = refused(STUDENT_REASONS.unknownStatus)

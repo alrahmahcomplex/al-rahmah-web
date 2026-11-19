@@ -119,7 +119,7 @@ describe("who may import students", () => {
     }
     expect((await anonClient().rpc("check_student_import", { rows: [row] })).error?.code).toBe("42501")
     expect((await anonClient().rpc("confirm_student_import", { file_name: "x.csv", row_count: 1, rows: [row] })).error?.code).toBe("42501")
-    const file = `${HEADER}\r\nNobody,STD 1,${nextYear},,Nobody,Mother,${row.phone},,,,\r\n`
+    const file = `${HEADER}\r\nNobody,STD 1,${nextYear},,Nobody,Mother,${row.phone},,01/09/2026,,\r\n`
     expect(await checkStudentImportFile(await signedIn(ADMISSIONS), "x.csv", bytes(file))).toEqual({ ok: false, error: { kind: "forbidden" } })
   })
 })
@@ -132,16 +132,16 @@ describe("importing a workbook", () => {
     const known = await existingLead(`Existing Child ${s}`, family.stored)
     const file = [
       HEADER,
-      `Applied Kid ${s},STD 1,${nextYear},,Mama A ${s},Mother,${a.typed},,,,`,
+      `Applied Kid ${s},STD 1,${nextYear},,Mama A ${s},Mother,${a.typed},,01/09/2026,,Applied`,
       `Visited Kid ${s},KG 2,${nextYear},Boarding,Baba B ${s},Father,${b.typed},,05/09/2026,,`,
       `Interviewed Kid ${s},PRE-FORM ONE,${nextYear},Day,Shangazi C ${s},Aunt,${c.typed},,2026-09-06,,Interviewed`,
       `Contracted Kid ${s},STD 4,${nextYear},Day,Mama D ${s},,${d.typed},,6-Sep-26,,Contracted`,
-      `Declined Kid ${s},STD 2,${nextYear},Day,Mama E ${s},Mother,${e.typed},,,,Declined`,
-      `Sibling Kid ${s},STD 2,${nextYear},Day,Mama A ${s},Mother,${a.typed},,,,`,
-      `New Sibling ${s},STD 3,${nextYear},Day,Mzazi F ${s},Guardian,${family.typed},,,,`,
-      `Existing Child ${s},STD 3,${nextYear},Day,Mzazi F ${s},Guardian,${family.typed},,,,`,
-      `Code Kid ${s},STD 5,${nextYear},Day,Mama G ${s},Mother,${g.typed},,,NOBODY${s.toUpperCase()},`,
-      `Bad Class Kid ${s},GRADE 9,${nextYear},Day,Mama H ${s},Mother,${importPhone().typed},,,,`,
+      `Declined Kid ${s},STD 2,${nextYear},Day,Mama E ${s},Mother,${e.typed},,01/09/2026,,Declined`,
+      `Sibling Kid ${s},STD 2,${nextYear},Day,Mama A ${s},Mother,${a.typed},,01/09/2026,,`,
+      `New Sibling ${s},STD 3,${nextYear},Day,Mzazi F ${s},Guardian,${family.typed},,01/09/2026,,`,
+      `Existing Child ${s},STD 3,${nextYear},Day,Mzazi F ${s},Guardian,${family.typed},,01/09/2026,,`,
+      `Code Kid ${s},STD 5,${nextYear},Day,Mama G ${s},Mother,${g.typed},,01/09/2026,NOBODY${s.toUpperCase()},`,
+      `Bad Class Kid ${s},GRADE 9,${nextYear},Day,Mama H ${s},Mother,${importPhone().typed},,01/09/2026,,`,
     ].join("\r\n")
     const manager = await signedIn(MANAGER)
     const fileName = `workbook-${s}.csv`
@@ -183,7 +183,7 @@ describe("importing a workbook", () => {
         ).rows[0],
     )
     expect(onFile).toEqual({ student_name: `Existing Child ${s}`, full_name: "Mzazi Aliyepo" })
-    expect(leads.get("APPLIED KID")).toMatchObject({ status: "Applied", visit_date: null, class_name: "STD 1", day_or_boarding: "Day", origin: "front_desk" })
+    expect(leads.get("APPLIED KID")).toMatchObject({ status: "Applied", visit_date: "2026-09-01", class_name: "STD 1", day_or_boarding: "Day", origin: "front_desk" })
     expect(leads.get("VISITED KID")).toMatchObject({ status: "Visited", visit_date: "2026-09-05", day_or_boarding: "Boarding", relationship: "Father" })
     expect(leads.get("INTERVIEWED KID")).toMatchObject({
       status: "Interviewed",
@@ -206,7 +206,7 @@ describe("importing a workbook", () => {
       status: "Declined",
       declined_reason: "Other",
       declined_explanation: "Imported from the workbook",
-      status_before_decline: "Applied",
+      status_before_decline: "Visited",
       interviews: [],
     })
     expect(leads.get("SIBLING KID")?.guardian_contact_id).toBe(leads.get("APPLIED KID")?.guardian_contact_id)
@@ -230,10 +230,32 @@ describe("importing a workbook", () => {
     expect(await confirmStudentImport(manager, confirmationOf(again.data))).toEqual({ ok: false, error: { kind: "nothing-to-import" } })
   })
 
+  test("creates a row that fills only the required cells, from a file with only the required columns", async () => {
+    const s = randomUUID().slice(0, 6)
+    const phone = importPhone()
+    const file = `Student name,Class,Enrollment year,Parent phone,Visit date,Discount code\r\nBare Kid ${s},STD 1,${nextYear},${phone.typed},01/09/2026,\r\n`
+    const manager = await signedIn(MANAGER)
+    const checked = await checkStudentImportFile(manager, `bare-${s}.csv`, bytes(file))
+    if (!checked.ok) throw new Error(JSON.stringify(checked.error))
+    expect(studentImportSummary(checked.data.rows)).toMatchObject({ create: 1, skipped: 0 })
+    const confirmed = await confirmStudentImport(manager, confirmationOf(checked.data))
+    if (!confirmed.ok || confirmed.data.kind !== "imported") throw new Error(JSON.stringify(confirmed))
+    const leads = await leadsOfBatch(confirmed.data.batchId)
+    expect(leads.get("BARE KID")).toMatchObject({
+      status: "Visited",
+      visit_date: "2026-09-01",
+      day_or_boarding: "Day",
+      referral_code: null,
+      guardian_name: "PARENT/GUARDIAN",
+      relationship: "Other",
+      relationship_description: "Parent/guardian",
+    })
+  })
+
   test("writes nothing when a verdict changed since the check", async () => {
     const s = randomUUID().slice(0, 6)
     const phone = importPhone()
-    const file = `${HEADER}\r\nLate Kid ${s},STD 1,${nextYear},,Mama Late ${s},Mother,${phone.typed},,,,\r\n`
+    const file = `${HEADER}\r\nLate Kid ${s},STD 1,${nextYear},,Mama Late ${s},Mother,${phone.typed},,01/09/2026,,\r\n`
     const manager = await signedIn(MANAGER)
     const checked = await checkStudentImportFile(manager, "late.csv", bytes(file))
     if (!checked.ok) throw new Error(JSON.stringify(checked.error))
@@ -326,9 +348,9 @@ describe("numbers a sibling row links", () => {
     const manager = await signedIn(MANAGER)
     const file = [
       HEADER,
-      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},,,`,
-      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,,,`,
-      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${two.typed},,,,`,
+      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},01/09/2026,,`,
+      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,01/09/2026,,`,
+      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${two.typed},,01/09/2026,,`,
     ].join("\r\n")
 
     const checked = await checkStudentImportFile(manager, "linked.csv", bytes(file))
@@ -370,9 +392,9 @@ describe("numbers a sibling row links", () => {
     const manager = await signedIn(MANAGER)
     const file = [
       HEADER,
-      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},,,`,
-      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,,,`,
-      `Juma Mfano ${s},STD 2,${nextYear},,Mama Mfano,Mother,${two.typed},,,,`,
+      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},01/09/2026,,`,
+      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,01/09/2026,,`,
+      `Juma Mfano ${s},STD 2,${nextYear},,Mama Mfano,Mother,${two.typed},,01/09/2026,,`,
     ].join("\r\n")
 
     const checked = await checkStudentImportFile(manager, "siblings.csv", bytes(file))
@@ -392,8 +414,8 @@ describe("numbers a sibling row links", () => {
     const manager = await signedIn(MANAGER)
     const file = [
       HEADER,
-      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},,,`,
-      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,,,`,
+      `Baraka Mfano ${s},STD 3,${nextYear},,Mama Mfano,Mother,${one.typed},${two.typed},01/09/2026,,`,
+      `Asha Mfano ${s},STD 1,${nextYear},,Mama Mfano,Mother,${one.typed},,01/09/2026,,`,
     ].join("\r\n")
 
     const checked = await checkStudentImportFile(manager, "on-file.csv", bytes(file))

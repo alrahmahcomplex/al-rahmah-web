@@ -276,3 +276,71 @@ describe("a discount a child holds on file at check-in (#309)", () => {
     expect(preview.rows[0]).toMatchObject({ why: "No discount", pays: 1_200_000 })
   })
 })
+
+// The database's choose_full_payer never ranks a result set by hand or fixed at an enrolment, or a larger
+// discount. A 10% the save keeps (source `legacy`) is ranked like any other.
+describe("the full payer among children checked in as siblings (#309)", () => {
+  const FEES = { 2027: { nursery: { day: 1_000_000, boarding: 2_500_000 }, primary_lower: { day: 1_100_000, boarding: 2_600_000 }, primary_upper: { day: 1_200_000, boarding: 2_700_000 }, secondary: { day: 1_300_000, boarding: 2_800_000 } } }
+  const yusuf: Student = { key: 1, name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" }, gender: "Boy", className: "STD 6", year: 2027, board: "Day" }
+  const sibling = (key: number, firstName: string, className: Student["className"]): Student => ({ ...yusuf, key, name: { ...yusuf.name!, firstName }, className, sibling: { kind: "match", of: 1, seen: [1] } })
+  const mariam = sibling(2, "MARIAM", "STD 1")
+  const family = (...students: Student[]): Answers => ({ students, more: true, custodians: {}, onFileAsks: [], onFile: {} })
+  const own = (more: Partial<OnFileFee>): OnFileFee => ({
+    leadId: "11111111-1111-4111-8111-111111111111", name: "YUSUF ALI HASSAN", className: "STD 6", status: "Applied", fee: 1_200_000, pays: 1_200_000,
+    anchorName: null, fullPayerName: null, groupId: null, father: "ALI OMARI HASSAN", counted: [], selfCounts: true, mayPayFull: true, unranked: false, ...more,
+  })
+  const byHand = { manual: true, unranked: true, mayPayFull: false }
+  const shown = (p: ReturnType<typeof feePreview>) => p!.rows.map((r) => [r.key, r.why, r.off, r.pays, r.tied ?? false])
+
+  it.each([
+    ["set by hand", byHand],
+    ["fixed at an earlier enrolment", { unranked: true, mayPayFull: false }],
+  ])("a higher fee with a Sibling 10%% %s is not the full payer: the next sibling pays full", (_why, more) => {
+    const preview = feePreview(family(yusuf, mariam), FEES, 2027, {}, {}, { 1: own({ pays: 1_080_000, ...more }) })
+    expect(shown(preview)).toEqual([
+      ["1", "Fee kept", 0.1, 1_080_000, false],
+      ["2", "Pays full", 0, 1_100_000, false],
+    ])
+    expect(preview!.total).toBe(2_180_000)
+  })
+
+  it("a higher fee with a 10% the save keeps is still the full payer, so its sibling gets the 10% too", () => {
+    const preview = feePreview(family(yusuf, mariam), FEES, 2027, {}, {}, { 1: own({ pays: 1_080_000 }), 2: own({ leadId: "m", fee: 1_100_000, pays: 1_100_000 }) })
+    expect(shown(preview)).toEqual([
+      ["1", "Fee kept", 0.1, 1_080_000, false],
+      ["2", "Sibling 10% · same father", 0.1, 990_000, false],
+    ])
+    expect(preview!.total).toBe(2_070_000)
+  })
+
+  it("a lower fee set by hand keeps its fee beside the full payer and a third sibling's 10%", () => {
+    const preview = feePreview(family(yusuf, mariam, sibling(3, "ZAINAB", "KG 2")), FEES, 2027, {}, {}, { 2: own({ leadId: "m", fee: 1_100_000, pays: 990_000, ...byHand }) })
+    expect(shown(preview)).toEqual([
+      ["1", "Pays full · highest fee", 0, 1_200_000, false],
+      ["2", "Fee kept", 0.1, 990_000, false],
+      ["3", "Sibling 10% · same father", 0.1, 900_000, false],
+    ])
+    expect(preview!.total).toBe(3_090_000)
+  })
+
+  it("an equal fee set by hand is no tie: the other one pays full", () => {
+    const preview = feePreview(family(yusuf, sibling(2, "MARIAM", "STD 6")), FEES, 2027, {}, {}, { 1: own({ pays: 1_080_000, ...byHand }) })
+    expect(shown(preview)).toEqual([
+      ["1", "Fee kept", 0.1, 1_080_000, false],
+      ["2", "Pays full · highest fee", 0, 1_200_000, false],
+    ])
+    expect(preview!.total).toBe(2_280_000)
+  })
+
+  it("with every sibling's fee set by hand, nobody is the full payer and each keeps its fee", () => {
+    const preview = feePreview(family(yusuf, mariam), FEES, 2027, {}, {}, {
+      1: own({ pays: 1_080_000, ...byHand }),
+      2: own({ leadId: "m", fee: 1_100_000, pays: 1_100_000, ...byHand }),
+    })
+    expect(shown(preview)).toEqual([
+      ["1", "Fee kept", 0.1, 1_080_000, false],
+      ["2", "Fee kept", 0, 1_100_000, false],
+    ])
+    expect(preview!.total).toBe(2_180_000)
+  })
+})

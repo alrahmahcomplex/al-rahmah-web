@@ -124,6 +124,7 @@ describe("readOnFileSibling", () => {
         counted: [],
         selfCounts: true,
         mayPayFull: true,
+        unranked: false,
         manual: false,
       },
     })
@@ -155,6 +156,8 @@ describe("readOnFileSibling", () => {
       selfCounts: false,
       // Not counted, it is not ranked for the full payer either.
       mayPayFull: false,
+      // That is this group's doing: in a group that counts it, the database would rank it.
+      unranked: false,
     })
   })
 
@@ -181,7 +184,7 @@ describe("readOnFileSibling", () => {
     ["is closed", { leadOpen: false }],
   ])("a child that %s may not be the full payer", async (_why, more) => {
     stubs.group.mockResolvedValue(explained([self(more)]))
-    expect(await read()).toMatchObject({ selfCounts: true, mayPayFull: false })
+    expect(await read()).toMatchObject({ selfCounts: true, mayPayFull: false, unranked: true })
   })
 
   it("says when the child's Sibling discount was set by hand, which check-in keeps (#309)", async () => {

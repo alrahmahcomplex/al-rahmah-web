@@ -692,6 +692,9 @@ export type OnFileFee = {
   // Whether the database may choose it as the full payer (choose_full_payer): it counts, is open and not
   // Enrolled, and holds no manual result, no result fixed at an enrolment and no larger discount.
   mayPayFull: boolean
+  // The database never ranks it for the full payer, in any group (choose_full_payer): it is Enrolled, Declined
+  // or closed, or holds a manual result, a result fixed at an enrolment or a larger discount.
+  unranked?: boolean
   // Its Sibling discount was set by hand (#311): no recompute changes it.
   manual?: boolean
 }
@@ -740,6 +743,11 @@ export const tieWhy = (tied: number) => `Equal fees · one pays full, ${tied ===
  * \`held\`, at check-in: by student key, every other child's own fee as read on
  * file. The save never raises a fee and never changes one set by hand
  * (complete_admission_visit, rule 4), so such a row shows the fee it keeps.
+ * A child the database never ranks (a result set by hand or fixed at an
+ * enrolment, a larger discount) counts as a sibling but is never the full
+ * payer: the highest fee among the others pays full. A 10% the save keeps
+ * (source `legacy`) is ranked: that child can be the full payer and keep its
+ * 10%, and its siblings get theirs.
  */
 export function feePreview(
   a: Answers,
@@ -787,6 +795,8 @@ export function feePreview(
     if (linked) shownAfter.set(linked.leadId, h.root)
   }
 
+  // choose_full_payer skips a manual result, a result fixed at an enrolment and a larger discount.
+  const unranked = (k: number) => !!held[k] && !!(held[k].manual || held[k].unranked)
   const newRows = new Map<number, Pick<FeeRow, "off" | "why" | "tone"> & { tied: boolean; counted: number }>()
   const fileRows = new Map<string, FeeRow>()
   for (const g of groups) {
@@ -797,14 +807,16 @@ export function feePreview(
     // The new students who share the highest fee, when the pick among them is the database's.
     let tied: number[] = []
     if (!giver && proven.length > 0 && (proven.length > 1 || g.linked.length > 0)) {
-      const top = Math.max(...proven.map((k) => feeAt.get(k)!))
-      const highest = proven.filter((k) => feeAt.get(k) === top)
+      // The database picks among the students it ranks. With none, only a child on file can pay full.
+      const ranked = proven.filter((k) => !unranked(k))
+      const top = Math.max(...ranked.map((k) => feeAt.get(k)!))
+      const highest = ranked.filter((k) => feeAt.get(k) === top)
       const [onFile] = g.linked.filter((l) => l.mayPayFull && l.fee !== null && l.fee >= top).sort((x, y) => y.fee! - x.fee!)
       if (onFile) fullPayer = onFile
       else if (highest.length > 1) {
         fullPayer = "tied"
         tied = highest
-      } else fullPayer = highest[0]
+      } else fullPayer = highest[0] ?? null
       if (g.linked.length === 0) together = true
     }
     for (const k of g.households.flatMap((h) => h.members)) {
@@ -823,7 +835,8 @@ export function feePreview(
       } else if (tied.includes(k)) {
         why = tieWhy(tied.length)
       } else if (fullPayer !== null) {
-        if (fullPayer === k) why = "Pays full · highest fee"
+        // Beside a higher fee the database does not rank, it pays full without the highest fee.
+        if (fullPayer === k) why = proven.some((p) => unranked(p) && feeAt.get(p)! > fee) ? "Pays full" : "Pays full · highest fee"
         else {
           off = 0.1
           tone = "good"
@@ -877,10 +890,10 @@ export function feePreview(
       }
       const fee = feeAt.get(k)!
       const { off, why, tone, tied, counted } = newRows.get(k)!
-      // A discount the child holds on file stays: one set by hand, or a 10% the rule would take away.
+      // The fee the child holds on file stays: one no recompute changes, or a 10% the rule would take away.
       const onRecord = held[k]
       const ruled = tied ? fee * 0.9 : fee * (1 - off)
-      if (onRecord && onRecord.pays !== null && onRecord.fee !== null && (onRecord.manual || onRecord.pays < ruled)) {
+      if (onRecord && onRecord.pays !== null && onRecord.fee !== null && (unranked(k) || onRecord.pays < ruled)) {
         const keeps = onRecord.pays < onRecord.fee
         rows.push({
           key: String(k),

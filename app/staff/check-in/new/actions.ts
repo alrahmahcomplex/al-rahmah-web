@@ -212,9 +212,11 @@ export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOu
   // when the group has no name to check against, or one of them is its own.
   const selfCounts =
     !inGroup || (self.legacy ? counted.length === 0 || counted.some((m) => fatherNameMatch(father, m.father) === "same") : basisCounts(self.basis))
-  // choose_full_payer's own conditions for a member it ranks.
-  const mayPayFull =
-    selfCounts && self.leadOpen && self.status !== "Enrolled" && self.status !== "Declined" && self.source !== "manual" && self.lockedResult === null && self.largerDiscount === null
+  // choose_full_payer's own conditions for a member it ranks. Those of the lead itself hold in any group it
+  // counts in, so check-in reads them for a child whose group the save makes.
+  const unranked =
+    !self.leadOpen || self.status === "Enrolled" || self.status === "Declined" || self.source === "manual" || self.lockedResult !== null || self.largerDiscount !== null
+  const mayPayFull = selfCounts && !unranked
 
   return {
     status: "read",
@@ -232,6 +234,7 @@ export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOu
       counted,
       selfCounts,
       mayPayFull,
+      unranked,
       manual: self.source === "manual",
     },
   }

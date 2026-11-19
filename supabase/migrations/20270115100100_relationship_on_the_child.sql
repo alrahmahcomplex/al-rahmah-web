@@ -59,7 +59,10 @@ declare
 begin
     perform public.set_audit_actor('system');
 
-    lock table public.leads, public.guardian_contacts in share row exclusive mode;
+    -- Access exclusive from the start: the trigger drops and the column
+    -- change below need it, and taking it later could deadlock with a
+    -- transaction that reads these tables and then writes.
+    lock table public.leads, public.guardian_contacts in access exclusive mode;
 
     drop table if exists pg_temp.relationship_snapshot_before;
     create temp table relationship_snapshot_before as select * from public.fee_snapshot();
@@ -155,7 +158,7 @@ begin
     comment on column public.leads.custodian_relationship is
         'The custodian''s relationship to this child. Every reader reads it here (#312).';
     comment on column public.leads.custodian_relationship_own is
-        'This child''s relationship differs from the one the person''s first child holds (#304, #312). Read by nothing.';
+        'Staff gave this child its own relationship when registering it (#304). Approximate since #312: set against the person''s first child, never recomputed by a correction or a move, and read by nothing.';
 
     create function public.refuse_contact_relationship_change()
     returns trigger

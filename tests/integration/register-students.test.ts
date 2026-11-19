@@ -12,6 +12,7 @@ import { getLeadFee } from "@/lib/services/lead-fees"
 import {
   createLead,
   getFathersOfLeads,
+  getLeadCreatedAt,
   LEAD_CLASSES,
   registerStudents,
   updateGuardianContact,
@@ -800,10 +801,13 @@ describe("the form's own payload, for a child on file that waits on a Sibling re
     const members = explained.data.members
     const fathers = await getFathersOfLeads(admissions, members.map((m) => m.leadId))
     if (!fathers.ok) throw new Error("no fathers")
+    const created = await getLeadCreatedAt(admissions, leadId)
+    if (!created.ok) throw new Error("no record date")
     const self = members.find((m) => m.leadId === leadId)!
     const counts = (basis: string | null) => basis === "matched" || basis === "typo_confirmed" || basis === "granted"
     return {
       leadId,
+      createdAt: created.data,
       name: self.studentName,
       className: self.className,
       status: self.status,

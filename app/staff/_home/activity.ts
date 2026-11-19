@@ -6,6 +6,7 @@ import type { PaymentType } from "@/lib/services/school-fee-payments"
 
 import { agentsHref } from "../agents/search-params"
 import { leadTabHref } from "../applicants/[id]/tabs"
+import { checkInHref, mayCheckIn } from "../check-in/permissions"
 
 // Home's Activity log (#406): each row as prototype v39 draws it, with its
 // next step for the roles that may take it. The words are v39's, including
@@ -102,7 +103,14 @@ export function activityView(row: ActivityRow, context: ActivityContext): Activi
         who: listed(row.children.map((child) => child.studentName)),
         about: listed(row.children.map((child) => child.className)),
         details: `Sent the Admission form on ${longDate(row.sentOn)}. Check them in when they arrive.`,
-        action: first && has(context, "visits.record") ? { label: "Check in", href: pageOf(first, "overview") } : null,
+        // Check-in opens for staff who may check in (#309); anyone else who records visits gets the record.
+        action: !first
+          ? null
+          : mayCheckIn(context.permissions)
+            ? { label: "Check in", href: checkInHref(first.leadId) }
+            : has(context, "visits.record")
+              ? { label: "Check in", href: pageOf(first, "overview") }
+              : null,
         recordedBy: "Admission form",
         note: null,
       }

@@ -669,6 +669,8 @@ export function withCustodian(a: Answers, root: number, custodian: Custodian): A
 /** What the form knows of a child on file staff linked: its fee and its group, as the database holds them now. */
 export type OnFileFee = {
   leadId: string
+  // When its record was made: with the lead id, how the database breaks a tie for the full payer.
+  createdAt: string
   name: string
   className: string
   status: string
@@ -692,6 +694,11 @@ export type OnFileFee = {
   // Whether the database may choose it as the full payer (choose_full_payer): it counts, is open and not
   // Enrolled, and holds no manual result, no result fixed at an enrolment and no larger discount.
   mayPayFull: boolean
+  // The database never ranks it for the full payer, in any group (choose_full_payer): it is Enrolled, Declined
+  // or closed, or holds a manual result, a result fixed at an enrolment or a larger discount.
+  unranked?: boolean
+  // Its Sibling discount was set by hand (#311): no recompute changes it.
+  manual?: boolean
 }
 
 export type FeeRow = {
@@ -713,6 +720,13 @@ export type FeeRow = {
 
 export type FeePreview = { rows: FeeRow[]; total: number; together: boolean; enrolledOnFile: string | null }
 
+/**
+ * choose_full_payer's order between two records with the same fee: the older
+ * one, then the lower lead id (uuids sort as their text does).
+ */
+const older = (x: OnFileFee, y: OnFileFee) =>
+  Date.parse(x.createdAt) - Date.parse(y.createdAt) || (x.leadId < y.leadId ? -1 : x.leadId > y.leadId ? 1 : 0)
+
 /** The Discount chip on each row of a tie for the highest fee. */
 export const tieWhy = (tied: number) => `Equal fees · one pays full, ${tied === 2 ? "one gets" : "the others get"} 10%`
 
@@ -728,11 +742,34 @@ export const tieWhy = (tied: number) => `Equal fees · one pays full, ${tied ===
  *
  * The groups are the ones the save makes: households linked to the same child
  * on file, or to children in one group on file, are one group with one full
- * payer. A child on file with the same fee is older, so it wins the tie, but
- * only one the database may choose: a child with a larger discount, a manual
- * or fixed result, or waiting on a Sibling request keeps the fee it has.
+ * payer. On an equal fee the database picks the older record, then the lower
+ * lead id (choose_full_payer orders by `l.created_at, l.id`). A new student
+ * has no record yet, so a child on file with the same fee wins the tie. At
+ * check-in every student has a record (`held`), so the same order names the
+ * payer among them and the children on file. Only a child the database may
+ * choose is picked: one with a larger discount, a manual or fixed result, or
+ * waiting on a Sibling request keeps the fee it has.
+ *
+ * `kept`, at check-in (#309): by student key, the group a child already in a
+ * sibling group keeps, as read on file. Its household counts with that group,
+ * as the save leaves it, and its row takes the fee the rule gives it there.
+ * \`held\`, at check-in: by student key, every other child's own fee as read on
+ * file. The save never raises a fee and never changes one set by hand
+ * (complete_admission_visit, rule 4), so such a row shows the fee it keeps.
+ * A child the database never ranks (a result set by hand or fixed at an
+ * enrolment, a larger discount) counts as a sibling but is never the full
+ * payer: the highest fee among the others pays full. A 10% the save keeps
+ * (source `legacy`) is ranked: that child can be the full payer and keep its
+ * 10%, and its siblings get theirs.
  */
-export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFileFees: Record<string, OnFileFee>): FeePreview | null {
+export function feePreview(
+  a: Answers,
+  fees: FeeTable,
+  defaultYear: number,
+  onFileFees: Record<string, OnFileFee>,
+  kept: Record<number, OnFileFee> = {},
+  held: Record<number, OnFileFee> = {},
+): FeePreview | null {
   const rows: FeeRow[] = []
   let total = 0
   let together = false
@@ -747,7 +784,9 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
 
   const { basis } = linking(a.students, onFileLinks(a, onFileFees))
   const all = households(a.students)
+  const keptLeads = new Set(Object.values(kept).map((k) => k.leadId))
   const linkedTo = (h: Household) => {
+    if (kept[h.root]) return kept[h.root]
     const ask = onFileAnswer(a, h.root) === true ? onFileAsk(a, h.root) : null
     return (ask && onFileFees[ask.leadId]) || undefined
   }
@@ -757,37 +796,47 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
   const shownAfter = new Map<string, number>()
   for (const h of all) {
     const linked = linkedTo(h)
+    // Kept siblings beyond the household's first share its group: their own reads come too.
+    const reads = [...(linked ? [linked] : []), ...h.members.filter((k) => k !== h.root && kept[k]).map((k) => kept[k])]
     const id = linked ? (linked.groupId ?? linked.leadId) : null
     const g = id === null ? undefined : groups.find((x) => x.id === id)
-    if (!g) groups.push({ id, households: [h], linked: linked ? [linked] : [] })
+    if (!g) groups.push({ id, households: [h], linked: reads })
     else {
       g.households.push(h)
-      if (linked && !g.linked.some((l) => l.leadId === linked.leadId)) g.linked.push(linked)
+      for (const r of reads) if (!g.linked.some((l) => l.leadId === r.leadId)) g.linked.push(r)
     }
     if (linked) shownAfter.set(linked.leadId, h.root)
   }
 
+  // choose_full_payer skips a manual result, a result fixed at an enrolment and a larger discount.
+  const unranked = (k: number) => !!held[k] && !!(held[k].manual || held[k].unranked)
   const newRows = new Map<number, Pick<FeeRow, "off" | "why" | "tone"> & { tied: boolean; counted: number }>()
   const fileRows = new Map<string, FeeRow>()
   for (const g of groups) {
     // The students the database counts as siblings: a Sibling request waits.
-    const proven = g.households.flatMap((h) => h.members.filter((k) => (basis.has(k) ? counts(basis.get(k)) : k === h.root)))
+    const proven = g.households.flatMap((h) => h.members.filter((k) => !kept[k] && (basis.has(k) ? counts(basis.get(k)) : k === h.root)))
     const giver = g.linked.find((l) => l.anchorName || l.fullPayerName)
     let fullPayer: number | OnFileFee | "tied" | null = null
     // The new students who share the highest fee, when the pick among them is the database's.
     let tied: number[] = []
     if (!giver && proven.length > 0 && (proven.length > 1 || g.linked.length > 0)) {
-      const top = Math.max(...proven.map((k) => feeAt.get(k)!))
-      const highest = proven.filter((k) => feeAt.get(k) === top)
-      const [onFile] = g.linked.filter((l) => l.mayPayFull && l.fee !== null && l.fee >= top).sort((x, y) => y.fee! - x.fee!)
-      if (onFile) fullPayer = onFile
+      // The database picks among the students it ranks. With none, only a child on file can pay full.
+      const ranked = proven.filter((k) => !unranked(k))
+      const top = Math.max(...ranked.map((k) => feeAt.get(k)!))
+      const highest = ranked.filter((k) => feeAt.get(k) === top)
+      const [onFile] = g.linked.filter((l) => l.mayPayFull && l.fee !== null && l.fee >= top).sort((x, y) => y.fee! - x.fee! || older(x, y))
+      // At check-in the students are on file too: among equal fees the database's own order names the payer.
+      const [recorded] = highest.filter((k) => held[k]).sort((x, y) => older(held[x], held[y]))
+      if (onFile && (onFile.fee! > top || recorded === undefined || older(onFile, held[recorded]) < 0)) fullPayer = onFile
+      else if (recorded !== undefined) fullPayer = recorded
       else if (highest.length > 1) {
         fullPayer = "tied"
         tied = highest
-      } else fullPayer = highest[0]
+      } else fullPayer = highest[0] ?? null
       if (g.linked.length === 0) together = true
     }
     for (const k of g.households.flatMap((h) => h.members)) {
+      if (kept[k]) continue
       const fee = feeAt.get(k)!
       let off = 0
       let why = "No discount"
@@ -802,7 +851,8 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
       } else if (tied.includes(k)) {
         why = tieWhy(tied.length)
       } else if (fullPayer !== null) {
-        if (fullPayer === k) why = "Pays full · highest fee"
+        // Beside a higher fee the database does not rank, it pays full without the highest fee.
+        if (fullPayer === k) why = proven.some((p) => unranked(p) && feeAt.get(p)! > fee) ? "Pays full" : "Pays full · highest fee"
         else {
           off = 0.1
           tone = "good"
@@ -847,8 +897,33 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
   for (const h of all) {
     for (const k of h.members) {
       const s = a.students.find((x) => x.key === k)!
+      const own = kept[k] ? fileRows.get(kept[k].leadId) : undefined
+      if (own) {
+        // A child already in a sibling group: the fee the rule gives it there, shown as the student it is.
+        rows.push({ ...own, key: String(k), name: studentName(s.name), detail: `${s.className} · ${s.board} · ${yearOf(a.students, a.students.indexOf(s), defaultYear)}`, onFile: undefined })
+        total += own.pays ?? feeAt.get(k)!
+        continue
+      }
       const fee = feeAt.get(k)!
       const { off, why, tone, tied, counted } = newRows.get(k)!
+      // The fee the child holds on file stays: one no recompute changes, or a 10% the rule would take away.
+      const onRecord = held[k]
+      const ruled = tied ? fee * 0.9 : fee * (1 - off)
+      if (onRecord && onRecord.pays !== null && onRecord.fee !== null && (unranked(k) || onRecord.pays < ruled)) {
+        const keeps = onRecord.pays < onRecord.fee
+        rows.push({
+          key: String(k),
+          name: studentName(s.name),
+          detail: `${s.className} · ${s.board} · ${yearOf(a.students, a.students.indexOf(s), defaultYear)}`,
+          fee: onRecord.fee,
+          off: keeps ? 0.1 : 0,
+          why: "Fee kept",
+          tone: keeps ? "good" : "plain",
+          pays: onRecord.pays,
+        })
+        total += onRecord.pays
+        continue
+      }
       rows.push({
         key: String(k),
         name: studentName(s.name),
@@ -862,7 +937,7 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
       })
       total += counted
     }
-    for (const [leadId, after] of shownAfter) if (after === h.root) rows.push(fileRows.get(leadId)!)
+    for (const [leadId, after] of shownAfter) if (after === h.root && !keptLeads.has(leadId)) rows.push(fileRows.get(leadId)!)
   }
   return { rows, total, together, enrolledOnFile }
 }
@@ -871,7 +946,7 @@ export function feePreview(a: Answers, fees: FeeTable, defaultYear: number, onFi
 export const feeSignature = (p: FeePreview) => p.rows.map((r) => `${r.key}:${r.fee}:${r.off}:${r.why}`).join("|")
 
 /** The sibling discount is mentioned only when the family has more than one child, on this form or on file (v38). */
-export const mentionsSiblings = (a: Answers, preview: FeePreview | null) => a.students.length > 1 || !!preview?.rows.some((r) => r.onFile)
+export const mentionsSiblings = (a: Answers, preview: FeePreview | null) => a.students.length > 1 || !!preview?.rows.some((r) => r.onFile || r.off > 0)
 
 // ---------------------------------------------------------------------------
 // The save.

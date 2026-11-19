@@ -100,7 +100,7 @@ describe("what each row says", () => {
     expect(listed(["A", "B", "C"])).toBe("A, B and C")
   })
 
-  it("expected at the desk: all day, every waiting child, Check in for those who record visits", () => {
+  it("expected at the desk: all day, every waiting child, Check in opening check-in for those who may check in (#309)", () => {
     const row: ActivityRow = {
       kind: "expected",
       id: "s1",
@@ -114,9 +114,12 @@ describe("what each row says", () => {
       who: "AMANI DAUDI PETRO and MARIAM ALI",
       about: "KG 2 and STD 1",
       details: "Sent the Admission form on 9 November. Check them in when they arrive.",
-      action: { label: "Check in", href: "/staff/applicants/l1" },
+      action: { label: "Check in", href: "/staff/check-in/l1" },
       recordedBy: "Admission form",
     })
+    // Recording visits without leads.edit: the record, as before.
+    const recorder: Permission[] = ["leads.view", "visits.record", "payments.view"]
+    expect(activityView(row, as(recorder)).action).toEqual({ label: "Check in", href: "/staff/applicants/l1" })
     expect(activityView(row, as(ACCOUNTANT)).action).toBeNull()
   })
 

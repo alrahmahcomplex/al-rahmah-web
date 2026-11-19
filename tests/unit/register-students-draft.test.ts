@@ -50,4 +50,23 @@ describe("the Register students draft", () => {
     expect(readDraft("staff-a")).toEqual(answers("NEEMA"))
     expect(key).toHaveBeenCalled()
   })
+
+  test("check-in keeps its own draft, read back only for the same family (#309)", () => {
+    saveDraft("staff-a", answers("NEEMA"))
+    saveDraft("staff-a", answers("YUSUF"), "lead-1,lead-2")
+    expect(readDraft("staff-a", "lead-1,lead-2")).toEqual(answers("YUSUF"))
+    expect(readDraft("staff-a", "lead-9")).toBeNull()
+    // Another family's draft leaves this one alone.
+    saveDraft("staff-a", answers("ZAWADI"), "lead-9")
+    expect(readDraft("staff-a", "lead-1,lead-2")).toEqual(answers("YUSUF"))
+    expect(readDraft("staff-a", "lead-9")).toEqual(answers("ZAWADI"))
+    // The Register form's draft is untouched by them.
+    expect(readDraft("staff-a")).toEqual(answers("NEEMA"))
+  })
+
+  test("another staff member's check-in draft goes as soon as one is read", () => {
+    saveDraft("staff-a", answers("YUSUF"), "lead-1")
+    expect(readDraft("staff-b")).toBeNull()
+    expect(window.sessionStorage.length).toBe(0)
+  })
 })

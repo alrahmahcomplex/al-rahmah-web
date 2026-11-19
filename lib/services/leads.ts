@@ -1340,6 +1340,20 @@ export async function getFathersOfLeads(
   return { ok: true, data: fathers }
 }
 
+/**
+ * When a lead's record was made. Among siblings with the same fee the
+ * database makes the older record the full payer, then the lower lead id
+ * (choose_full_payer), so the fee step reads it to name the same one.
+ */
+export async function getLeadCreatedAt(supabase: SupabaseClient, leadId: string): Promise<Result<string, "unavailable">> {
+  const { data, error } = await supabase.from("leads").select("created_at").eq("id", leadId).maybeSingle<{ created_at: string }>()
+  if (error || !data) {
+    if (error) console.error("Could not read when a lead was made", error)
+    return { ok: false, error: "unavailable" }
+  }
+  return { ok: true, data: data.created_at }
+}
+
 // ---------------------------------------------------------------------------
 // The Family link on the lead screen: which Family a lead belongs to, and
 // settling an unconfirmed match the Admission form left. Each write is a

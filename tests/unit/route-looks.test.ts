@@ -43,7 +43,7 @@ describe("the staff route map", () => {
     expect(Object.keys(ROUTE_LOOKS).filter((pattern) => !pages.has(pattern))).toEqual([])
   })
 
-  it("puts only the converted routes in the new shell (#322, #323, #324, #325, #326, #327, #328, #329, #330, #331, #308)", () => {
+  it("puts only the converted routes in the new shell (#322, #323, #324, #325, #326, #327, #328, #329, #330, #331, #308, #309)", () => {
     expect(Object.entries(ROUTE_LOOKS).filter(([, look]) => look === "new").map(([pattern]) => pattern)).toEqual([
       "/staff",
       "/staff/agents",
@@ -53,6 +53,7 @@ describe("the staff route map", () => {
       "/staff/applicants/[id]/history",
       "/staff/applicants/[id]/reopen",
       "/staff/audit",
+      "/staff/check-in/[id]",
       "/staff/check-in/new",
       "/staff/discounts",
       "/staff/fees",
@@ -91,6 +92,9 @@ describe("routeFor and lookFor", () => {
   it("keeps a page and the page beneath it apart", () => {
     expect(routeFor("/staff/check-in")).toBe("/staff/check-in")
     expect(routeFor("/staff/check-in/new")).toBe("/staff/check-in/new")
+    // Check-in of an Admission form family (#309): any other name is a lead.
+    expect(routeFor("/staff/check-in/1ead0000-0000-4000-8000-000000000080")).toBe("/staff/check-in/[id]")
+    expect(lookFor("/staff/check-in/1ead0000-0000-4000-8000-000000000080")).toBe("new")
   })
 
   it("fills a dynamic segment, and prefers a fixed name to it", () => {

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 // post to it, so it checks the shape and the owner's permission rule itself
 // before the database does. The services are stubbed.
 
-const stubs = vi.hoisted(() => ({ allowed: vi.fn(), register: vi.fn(), fee: vi.fn(), group: vi.fn(), fathers: vi.fn() }))
+const stubs = vi.hoisted(() => ({ allowed: vi.fn(), register: vi.fn(), fee: vi.fn(), group: vi.fn(), fathers: vi.fn(), created: vi.fn() }))
 
 vi.mock("server-only", () => ({}))
 vi.mock("@/utils/supabase/server", () => ({ createClient: async () => ({ signed: "in" }) }))
@@ -13,6 +13,7 @@ vi.mock("@/lib/services/leads", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/services/leads")>()),
   registerStudents: (...args: unknown[]) => stubs.register(...args),
   getFathersOfLeads: (...args: unknown[]) => stubs.fathers(...args),
+  getLeadCreatedAt: (...args: unknown[]) => stubs.created(...args),
 }))
 
 vi.mock("@/lib/services/lead-fees", () => ({ getLeadFee: (...args: unknown[]) => stubs.fee(...args) }))
@@ -49,6 +50,7 @@ beforeEach(() => {
   stubs.fee.mockReset()
   stubs.group.mockReset()
   stubs.fathers.mockReset()
+  stubs.created.mockReset()
   stubs.register.mockResolvedValue({ ok: true, data: { kind: "created", students: [{ student: 1, leadId: "L", admissionNumber: "ADMSN-1", sibling: null }] } })
 })
 
@@ -77,6 +79,7 @@ describe("readOnFileSibling", () => {
   const THIRD = "33333333-3333-4333-8333-333333333333"
   const SALIM = "JUMA SALIM MRISHO"
   const OMARI = "OMARI JUMA HASSAN"
+  const CREATED = "2026-11-09T07:30:00.123456+00:00"
   const member = (leadId: string, studentName: string, more: Record<string, unknown> = {}) => ({
     leadId,
     studentName,
@@ -105,6 +108,7 @@ describe("readOnFileSibling", () => {
     stubs.group.mockResolvedValue(explained([self()]))
     stubs.fee.mockResolvedValue(fee)
     stubs.fathers.mockResolvedValue({ ok: true, data: { [LEAD]: SALIM, [OTHER]: OMARI, [THIRD]: OMARI } })
+    stubs.created.mockResolvedValue({ ok: true, data: CREATED })
   })
 
   it("gives the child's fee and group: in no group, the child itself is compared and may pay full", async () => {
@@ -112,6 +116,7 @@ describe("readOnFileSibling", () => {
       status: "read",
       fee: {
         leadId: LEAD,
+        createdAt: CREATED,
         name: "SALMA JUMA MRISHO",
         className: "STD 4",
         status: "Visited",
@@ -124,6 +129,8 @@ describe("readOnFileSibling", () => {
         counted: [],
         selfCounts: true,
         mayPayFull: true,
+        unranked: false,
+        manual: false,
       },
     })
   })
@@ -154,6 +161,8 @@ describe("readOnFileSibling", () => {
       selfCounts: false,
       // Not counted, it is not ranked for the full payer either.
       mayPayFull: false,
+      // That is this group's doing: in a group that counts it, the database would rank it.
+      unranked: false,
     })
   })
 
@@ -180,7 +189,12 @@ describe("readOnFileSibling", () => {
     ["is closed", { leadOpen: false }],
   ])("a child that %s may not be the full payer", async (_why, more) => {
     stubs.group.mockResolvedValue(explained([self(more)]))
-    expect(await read()).toMatchObject({ selfCounts: true, mayPayFull: false })
+    expect(await read()).toMatchObject({ selfCounts: true, mayPayFull: false, unranked: true })
+  })
+
+  it("says when the child's Sibling discount was set by hand, which check-in keeps (#309)", async () => {
+    stubs.group.mockResolvedValue(explained([self({ source: "manual", result: "ten" })]))
+    expect(await read()).toMatchObject({ manual: true })
   })
 
   it("reads a year with no Fee schedule as no fee, not as a failure", async () => {
@@ -190,6 +204,11 @@ describe("readOnFileSibling", () => {
 
   it("says so when the fee can't be read, rather than giving a child with no fee", async () => {
     stubs.fee.mockResolvedValue({ ok: false, error: "unavailable" })
+    expect(await readOnFileSibling(LEAD)).toEqual({ status: "unavailable" })
+  })
+
+  it("says so when the record's age can't be read: the tie for the full payer would be a guess", async () => {
+    stubs.created.mockResolvedValue({ ok: false, error: "unavailable" })
     expect(await readOnFileSibling(LEAD)).toEqual({ status: "unavailable" })
   })
 

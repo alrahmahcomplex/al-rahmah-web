@@ -38,6 +38,8 @@ type Common<V> = {
   /** The longest each box takes, when there is a limit. */
   maxLength?: number
   disabled?: boolean
+  /** Shown and focusable, but not changed: a name the record keeps as it is. */
+  readOnly?: boolean
   "aria-describedby"?: string
   /** Names the group, such as the open question's title. */
   "aria-labelledby"?: string
@@ -133,6 +135,7 @@ function NameBoxGroup<K extends string>({ boxes, heading, ...props }: Common<Rec
         required={props.required ?? true}
         maxLength={props.maxLength}
         disabled={props.disabled}
+        readOnly={props.readOnly}
         autoComplete="off"
         autoCapitalize="characters"
         spellCheck={false}

@@ -131,13 +131,6 @@ export type PaymentPreview = {
   balanceAfter: number
   priority: SeatPriority | null
   priorityAfter: SeatPriority | null
-  // The lead's class: its seats set (null when not set) and the seats taken
-  // by other leads.
-  seats: number | null
-  seatsTaken: number
-  // The payment would give the lead a seat in a class whose seats taken
-  // already reach its seats set. A warning only: recording still goes ahead.
-  wouldOverfill: boolean
   // The Pre-Form One fee (null with no Fee schedule), what is paid toward it
   // now and after this payment, and the balance after. A Pre-Form One fee
   // payment moves only these; any other payment leaves them as they are.
@@ -151,9 +144,6 @@ type PreviewRow = {
   balance_after: number
   priority: SeatPriority | null
   priority_after: SeatPriority | null
-  seats: number | null
-  seats_taken: number
-  would_overfill: boolean
   pre_form_one_fee: number | null
   pre_form_one_paid: number
   pre_form_one_paid_after: number
@@ -161,7 +151,7 @@ type PreviewRow = {
 }
 
 // What recording the payment would do: the new Total paid, balance and Seat
-// priority, and whether it would overfill the lead's class. Records nothing. Refuses exactly what recordPayment refuses.
+// priority. Records nothing. Refuses exactly what recordPayment refuses.
 // Needs payments.record.
 export async function previewPayment(
   supabase: SupabaseClient,
@@ -180,9 +170,6 @@ export async function previewPayment(
       balanceAfter: row.balance_after,
       priority: row.priority,
       priorityAfter: row.priority_after,
-      seats: row.seats,
-      seatsTaken: row.seats_taken,
-      wouldOverfill: row.would_overfill,
       preFormOne: {
         fee: row.pre_form_one_fee,
         paid: row.pre_form_one_paid,

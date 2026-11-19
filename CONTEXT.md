@@ -202,7 +202,7 @@ The permissions are:
 | `payments.view` | Seeing school-fee payments and payment adjustments. |
 | `payments.record` | Recording school-fee payments and payment adjustments, maintaining the fee amounts in the **Fee schedule**, and changing a student's Sibling discount with a **Manual Sibling fee edit**. |
 | `discounts.approve` | Granting or refusing a **Staff child** or **Qualified orphan** discount or a **Sibling request**. |
-| `academic_years.manage` | Setting the **Academic-year start** and the seats in each class, and releasing a seat with **No seat available**. |
+| `academic_years.manage` | Setting the **Academic-year start**, opening **Streams**, correcting their names and seats and **Bringing up streams**, and releasing a seat with **No seat available**. |
 | `group_links.manage` | Saving or replacing the admissions WhatsApp group link for an Enrollment year. |
 | `reports.view` | Opening **Reports**, the lead and seat statistics. Every count is answered under `leads.view`, so `reports.view` implies it: a role given `reports.view` gets `leads.view` with it, and a role that loses `leads.view` loses `reports.view` too. Seats by class still needs `payments.view`. |
 | `discount_codes.manage` | Setting the **Standard discount** and each Marketing Agent's own interview discount, and creating, editing, pausing, resuming and ending **Promo codes**. Needs `leads.view`. |
@@ -245,7 +245,7 @@ Every change and action the system records is visible, event by event, to the **
 
 Admissions Staff may edit interview results and percentage scores directly. Every edit preserves the previous value, the new value, the staff member who made the edit, and the audit history.
 
-**Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. They grant **Staff child** and **Qualified orphan** discounts and **Sibling requests**, and set each year's **Academic-year start** and class seats. The Admissions Manager template also manages the Admissions Staff: inviting, deactivating and reactivating them. Roles themselves are the Super Admin's.
+**Admissions Manager** has the Admissions Staff capabilities and may approve lead reopening, approve Marketing Agents, and perform authorized lifecycle interventions. They grant **Staff child** and **Qualified orphan** discounts and **Sibling requests**, and set each year's **Academic-year start** and **Streams**. The Admissions Manager template also manages the Admissions Staff: inviting, deactivating and reactivating them. Roles themselves are the Super Admin's.
 
 **Accountant** records school-fee payments and payment adjustments, maintains the fee amounts, and marks the interview fee **Paid** or **Not Paid**. School-fee payment records are the source of the system-derived **Enrolled** status. The Accountant reads leads to find the student being paid for, and reads Reports, including the Sibling discount follow-up counts. The only lead detail they change is the Sibling discount: by a **Manual Sibling fee edit** with a reason, and by applying or dismissing **Granted: fee edit needed**. The system records fees for information and handles no money, so a recorded fee can be corrected by hand, with an audit entry.
 
@@ -335,7 +335,7 @@ Only **Enrolled students** depends on a lead's current status. The other metrics
 
 Counts follow corrected values. A corrected **Visit date**, interview date, result, class or enrollment year moves the lead to the corrected count or period; the lead's history keeps the old value, and the dashboard does not rebuild past counts from it.
 
-**Seats by class** shows, for each class and **Enrollment year**, the seats taken against the seats available, split by **Seat priority** and by day and boarding.
+**Seats by class** shows, for each class and **Enrollment year**, each **Stream**'s seats, the leads placed in it by **Seat priority** and its free seats, then the class total with how many are **Waiting for a stream**. A class with no streams has no seat limit, so it shows only its seat holders by **Seat priority**.
 
 **Seats by class** is a snapshot of the seats as they stand now, so it has only an **Enrollment year** filter and no period. It opens on the latest year with a Fee schedule and offers the other years that have one. It shows counts, never the leads holding the seats, and only to staff who may view payments.
 

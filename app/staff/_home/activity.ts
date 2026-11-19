@@ -231,14 +231,11 @@ export function activityView(row: ActivityRow, context: ActivityContext): Activi
         icon: "seats",
         task: "Class is full",
         who: row.className,
-        // Once streams are on (#449, v42): who the class has no seat for, and
-        // a stream that still has seats for the others.
-        about: row.named ? `no free seat for ${row.named.need ? row.named.need.toLowerCase() : "any child"}` : `${row.taken} of ${row.seats} seats`,
-        details: row.named
-          ? row.named.elsewhere && row.named.need
-            ? `${row.named.elsewhere} still has seats for ${row.named.need === "Boys" ? "girls" : "boys"}.`
-            : "Open Seats to see who waits."
-          : "No seats left. Open Seats to see who holds them.",
+        // Who the class has no seat for, and a stream that still has seats
+        // for the others (#449, v42).
+        about: `no free seat for ${row.need ? row.need.toLowerCase() : "any child"}`,
+        details:
+          row.elsewhere && row.need ? `${row.elsewhere} still has seats for ${row.need === "Boys" ? "girls" : "boys"}.` : "Open Seats to see who waits.",
         action: { label: "Open Seats", href: "/staff/seats" },
         recordedBy: null,
         note: null,

@@ -1,42 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, it, vi } from "vitest"
 
-import type { ClassSeatFigures } from "@/lib/services/dashboard-seats"
-import { activityWindow, fullClasses, getHomeActivity, type FullClass } from "@/lib/services/home-activity"
-
-function seats(className: ClassSeatFigures["className"], dayOrBoarding: "Day" | "Boarding", set: number | null, taken: number): ClassSeatFigures {
-  return {
-    className,
-    dayOrBoarding,
-    seats: set,
-    taken,
-    full: taken,
-    firstInstalment: 0,
-    deposit: 0,
-    left: set === null ? null : Math.max(0, set - taken),
-    overBy: set !== null && taken > set ? taken - set : null,
-  }
-}
-
-describe("fullClasses", () => {
-  it("lists every class whose set seats are all taken, adding day and boarding", () => {
-    expect(
-      fullClasses([
-        seats("STD 1", "Day", 30, 12),
-        seats("STD 6", "Day", 30, 30),
-        seats("STD 6", "Boarding", 5, 6),
-        seats("FORM 1", "Day", 40, 40),
-      ]),
-    ).toEqual([
-      { className: "STD 6", taken: 36, seats: 35 },
-      { className: "FORM 1", taken: 40, seats: 40 },
-    ])
-  })
-
-  it("never counts a class full while one of its seat kinds is not set", () => {
-    expect(fullClasses([seats("KG 1", "Day", 20, 20), seats("KG 1", "Boarding", null, 3)])).toEqual([])
-  })
-})
+import { activityWindow, getHomeActivity, type FullClass } from "@/lib/services/home-activity"
 
 describe("activityWindow", () => {
   it("puts the rows ahead on the first pages and offsets the database by them", () => {
@@ -72,7 +37,7 @@ const FEE = {
 describe("getHomeActivity", () => {
   it("maps the database's rows after the full classes, with the combined total", async () => {
     const { supabase, rpc } = client({ data: { total: 11, rows: [FEE] } })
-    const full: FullClass[] = [{ className: "STD 6", taken: 35, seats: 35 }]
+    const full: FullClass[] = [{ className: "STD 6", need: null, elsewhere: null }]
     const result = await getHomeActivity(supabase, 1, full)
     expect(rpc).toHaveBeenCalledWith("home_activity", { row_offset: 0, row_limit: 9 })
     expect(result).toEqual({
@@ -82,7 +47,7 @@ describe("getHomeActivity", () => {
         page: 1,
         pageCount: 2,
         rows: [
-          { kind: "class_full", id: "STD 6", className: "STD 6", taken: 35, seats: 35 },
+          { kind: "class_full", id: "STD 6 any", className: "STD 6", need: null, elsewhere: null },
           {
             kind: "fee_paid",
             id: "p1",
@@ -159,7 +124,7 @@ describe("getHomeActivity", () => {
 
   it("still shows the full classes when the database refuses the rest", async () => {
     const { supabase } = client({ error: { message: "not_permitted" } })
-    const result = await getHomeActivity(supabase, 1, [{ className: "FORM 1", taken: 40, seats: 40 }])
+    const result = await getHomeActivity(supabase, 1, [{ className: "FORM 1", need: "Boys", elsewhere: "FORM 1 A (Girls)" }])
     expect(result.ok && result.data.total).toBe(1)
   })
 

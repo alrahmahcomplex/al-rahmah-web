@@ -17,7 +17,7 @@ import { visitDateToday } from "./actions"
 import { DateField, Select } from "./form-controls"
 import { Field, Input, Saved } from "./lead-editors"
 import { previewSchoolFeePayment, recordSchoolFeePayment } from "./payment-actions"
-import { overfillWarning, type PaymentField, type PaymentRefusal, type SeatNote } from "./payment-outcome"
+import type { PaymentField, PaymentRefusal, SeatNote } from "./payment-outcome"
 
 const LOST_REQUEST: PaymentRefusal = {
   status: "refused",
@@ -196,20 +196,11 @@ function PaymentForm({
 
   if (reviewed) {
     const { input, preview, requestId } = reviewed
-    const warning = overfillWarning(preview)
     return (
       <section aria-label="Review payment" className="lr-form lr-inline">
         {siblingNote}
         <p className="lr-text font-semibold">Check this payment before you confirm it. Once recorded, it can&apos;t be changed.</p>
         {refusalAlert}
-        {warning && (
-          <div role="alert" aria-label="Class full">
-            <Note tone="wait">
-              <b className="block">Class full</b>
-              {warning}
-            </Note>
-          </div>
-        )}
         <dl className="kit-kv">
           <dt>Payment</dt>
           <dd>

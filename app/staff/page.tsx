@@ -13,10 +13,10 @@ import { createClient } from "@/utils/supabase/server"
 import { fullClassesFor, mayReadActivity } from "./_home/activity-data"
 import { ActivityLog, ActivitySkeleton } from "./_home/activity-log"
 import { ChartCard } from "./_home/chart-card"
-import { classesTab, monthsTab, seatsTab, sourcesTab, type ChartTab } from "./_home/charts"
+import { classesTab, monthsTab, sourcesTab, type ChartTab } from "./_home/charts"
 import { FindFamily } from "./_home/find-family"
 import { Notices } from "./_home/notices"
-import { mayCallBack, mayDecideDiscounts, mayOpenSeats, onlyFullClass, quickActions } from "./_home/quick-action-list"
+import { mayCallBack, mayDecideDiscounts, mayOpenSeats, quickActions } from "./_home/quick-action-list"
 import { QuickActions } from "./_home/quick-actions"
 import { RegisterButton } from "./_home/register-button"
 import { namedSeatsTab, needCaption } from "./_home/seats-named"
@@ -74,8 +74,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const actions = quickActions({
     permissions,
     overdue: overdue?.ok ? overdue.data : null,
-    fullClass: mayOpenSeats(permissions) && seats?.ok ? onlyFullClass(seats.data.classes) : null,
-    seatsCaption: mayOpenSeats(permissions) && seats?.ok && seats.data.named?.streams ? needCaption(seats.data.named.streams) : undefined,
+    seatsCaption: mayOpenSeats(permissions) && seats?.ok && seats.data.streams ? needCaption(seats.data.streams) : null,
     waitingDiscounts: discounts?.ok ? discounts.data : null,
   })
   const statsFailed =
@@ -86,7 +85,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
     counts && sourcesTab(counts),
     counts && classesTab(counts),
     counts && monthsTab(counts, today),
-    canSeeSeats && seats?.ok ? (seats.data.named?.streams ? namedSeatsTab(seats.data.named.streams) : seats.data.named ? null : seatsTab(seats.data.classes)) : null,
+    canSeeSeats && seats?.ok && seats.data.streams ? namedSeatsTab(seats.data.streams) : null,
   ].filter((tab): tab is ChartTab => !!tab)
 
   return (

@@ -1,10 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { LEAD_CLASSES, type DayOrBoarding, type LeadClass } from "./leads"
+import type { LeadClass } from "./leads"
 import type { Result } from "./result"
-
-// Seats belong to the fees module too; they live in their own file.
-export { getSeats, seatCheck, type ClassSeats, type SeatCheck, type SeatHolder } from "./seats"
 
 // The fees module: every read and write of the Fee schedule goes through
 // here. Writes are database functions that check the permission themselves;
@@ -41,24 +38,16 @@ export type FeeAmounts = {
   preFormOne: DayAndBoarding
 }
 
-// The seats the Admissions Manager has set for one class, day or boarding.
-export type SeatSetting = { className: LeadClass; dayOrBoarding: DayOrBoarding; seats: number }
-
 export type FeeSchedule = FeeAmounts & {
   year: number
   // Set by the Admissions Manager; empty until then.
   academicYearStart: string | null
-  // Only the classes whose seats are set, in class order, Day before
-  // Boarding. A class missing here has its seats not set.
-  seats: SeatSetting[]
 }
 
-// What the Admissions Manager sets on a year's schedule. Null leaves a start
-// or a class that isn't set as it is; classes left out keep what they have.
-export type AcademicYearSettings = {
-  start: string | null
-  seats: { className: LeadClass; dayOrBoarding: DayOrBoarding; seats: number | null }[]
-}
+// What the Admissions Manager sets on a year's schedule: the Academic-year
+// start. Null leaves a start that isn't set as it is. Seats live in streams
+// (#449), on the Seats screen.
+export type AcademicYearSettings = { start: string | null }
 
 // The value a refusal is about.
 export type FeeField =
@@ -77,7 +66,7 @@ export type FeeField =
   | "pre_form_one_day_fee"
   | "pre_form_one_boarding_fee"
 
-export type AcademicYearField = "academic_year_start" | "seats" | `seats.${LeadClass}.${DayOrBoarding}`
+export type AcademicYearField = "academic_year_start"
 
 export type SetAcademicYearError =
   | { kind: "forbidden" }
@@ -104,13 +93,10 @@ type ScheduleRow = {
   pre_form_one_boarding_fee: number
   academic_year_start: string | null
   fee_band_amounts: { band: FeeBand; day_fee: number; boarding_fee: number }[]
-  class_seats: { class_name: LeadClass; day_or_boarding: DayOrBoarding; seats: number }[]
 }
 
 const SCHEDULE_COLUMNS =
-  "enrollment_year, first_share, second_share, third_share, first_due, second_due, third_due, minimum_deposit, pre_form_one_day_fee, pre_form_one_boarding_fee, academic_year_start, fee_band_amounts (band, day_fee, boarding_fee), class_seats (class_name, day_or_boarding, seats)"
-
-const seatOrder = (seat: SeatSetting) => LEAD_CLASSES.indexOf(seat.className) * 2 + (seat.dayOrBoarding === "Day" ? 0 : 1)
+  "enrollment_year, first_share, second_share, third_share, first_due, second_due, third_due, minimum_deposit, pre_form_one_day_fee, pre_form_one_boarding_fee, academic_year_start, fee_band_amounts (band, day_fee, boarding_fee)"
 
 function toSchedule(row: ScheduleRow): FeeSchedule {
   const bands = Object.fromEntries(
@@ -124,9 +110,6 @@ function toSchedule(row: ScheduleRow): FeeSchedule {
     minimumDeposit: row.minimum_deposit,
     preFormOne: { day: row.pre_form_one_day_fee, boarding: row.pre_form_one_boarding_fee },
     academicYearStart: row.academic_year_start,
-    seats: row.class_seats
-      .map((seat) => ({ className: seat.class_name, dayOrBoarding: seat.day_or_boarding, seats: seat.seats }))
-      .sort((a, b) => seatOrder(a) - seatOrder(b)),
   }
 }
 
@@ -228,56 +211,38 @@ export async function saveFeeAmounts(
   return { ok: true, data: null }
 }
 
-const ACADEMIC_YEAR_FIELDS = new Set<string>([
-  "academic_year_start",
-  "seats",
-  ...LEAD_CLASSES.flatMap((className) => [`seats.${className}.Day`, `seats.${className}.Boarding`]),
-])
+const ACADEMIC_YEAR_FIELDS = new Set<string>(["academic_year_start"])
 
-// JSON has no NaN or Infinity and would send them as null, which reads as
-// "leave it as it is". Sent as text, the database refuses them by name.
-const asSent = (seats: number | null) => (seats === null || Number.isFinite(seats) ? seats : String(seats))
+// What the caller read before changing anything: the start.
+export type AcademicYearSeen = { start: string | null }
 
-// What the caller read before changing anything: the start, and the seats
-// that were set.
-export type AcademicYearSeen = { start: string | null; seats: SeatSetting[] }
-
-// Sets the year's Academic-year start, a date in January of that year, and
-// the seats in each class, for day and for boarding. Needs
+// Sets the year's Academic-year start, a date in January of that year. Needs
 // academic_years.manage, and a Fee schedule for the year, which the
-// Accountant creates. A start or a seat count, once set, can be changed but
-// not cleared. When anything is refused, nothing is saved.
+// Accountant creates. A start, once set, can be changed but not cleared.
 //
-// Only what differs from `seen` is sent, each with the value it replaces. If
-// someone else changed one of those values in the meantime, the save is
-// refused as `stale`, so an older view never undoes a newer change. Values
-// left alone are not sent, so they keep whatever is saved now.
+// Only a start that differs from `seen` is sent, with the value it replaces.
+// If someone else changed it in the meantime, the save is refused as
+// `stale`, so an older view never undoes a newer change. Seats are never
+// sent: they live in streams (#449).
 export async function setAcademicYear(
   supabase: SupabaseClient,
   year: number,
   settings: AcademicYearSettings,
   seen: AcademicYearSeen,
 ): Promise<Result<null, SetAcademicYearError>> {
-  const seenSeats = new Map(seen.seats.map((seat) => [`${seat.className}.${seat.dayOrBoarding}`, seat.seats]))
-  const changedSeats = settings.seats.flatMap((seat) => {
-    const was = seenSeats.get(`${seat.className}.${seat.dayOrBoarding}`) ?? null
-    return Object.is(seat.seats, was)
-      ? []
-      : [{ class_name: seat.className, day_or_boarding: seat.dayOrBoarding, seats: asSent(seat.seats), was }]
-  })
   const changedStart =
     settings.start === seen.start ? {} : { academic_year_start: settings.start, academic_year_start_was: seen.start }
 
   const { error } = await supabase.rpc("set_academic_year", {
     schedule_year: year,
-    settings: { ...changedStart, seats: changedSeats },
+    settings: changedStart,
   })
   if (error) {
     if (error.message === "not_permitted") return { ok: false, error: { kind: "forbidden" } }
     if (error.message === "no_schedule") return { ok: false, error: { kind: "no-schedule" } }
-    // Streams are on (#449): seats no longer live here, so a form opened
-    // before saved seats nothing reads. Refused like any form that is out of
-    // date, so it reloads, now without its seat boxes.
+    // Seats live in streams (#449). A Fee schedule tab opened before then
+    // may still send seats: refused like any form that is out of date, so it
+    // reloads without its seat boxes.
     if (error.message === "seats_moved") return { ok: false, error: { kind: "stale", field: null } }
     if (error.message === "invalid" || error.message === "stale") {
       return {

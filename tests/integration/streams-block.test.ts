@@ -9,7 +9,7 @@ import { decideDiscount, requestDiscount } from "@/lib/services/discounts"
 
 import { actAsStaff, inRolledBackTransaction, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
-import { AMOUNTS, asOwner, child, holder, legacy, named, open, placements, refusal, streamYears, today } from "../support/streams"
+import { AMOUNTS, asOwner, child, holder, named, open, placements, refusal, streamYears, today } from "../support/streams"
 
 // Streams, slice 4b (#449): the school-fee block, stream requests, the reads
 // and the Fee schedule's seats once streams are on. Each test opens its
@@ -65,26 +65,6 @@ async function paidTotal(sql: Client, leadId: string): Promise<number> {
   const { rows } = await sql.query<{ total: string }>("select coalesce(sum(amount), 0) as total from public.school_fee_payments where lead_id = $1", [leadId])
   return Number(rows[0].total)
 }
-
-describe("while the seat mode is legacy", () => {
-  test("nothing is refused: no block, no requests, and the Fee schedule still saves seats", async () => {
-    const { year, classes: [c] } = await yearAndClasses(1)
-    const id = await child(year, c, "Boy")
-    await inRolledBackTransaction(async (sql) => {
-      // The mode before the activation migration, for this transaction only.
-      await legacy(sql)
-      await asOwner(sql)
-      await actAsStaff(sql, ADMISSIONS.id)
-      expect(await refusal(sql, "select public.request_stream($1, null, null, null)", [id])).toBe("seat_mode_legacy")
-      await asOwner(sql)
-      await pay(sql, id, 300_000)
-      expect(await paidTotal(sql, id)).toBe(300_000)
-      await actAsStaff(sql, MANAGER.id)
-      const seats = JSON.stringify({ seats: [{ class_name: c, day_or_boarding: "Day", seats: 30, was: null }] })
-      expect(await refusal(sql, "select public.set_academic_year($1, $2::jsonb)", [year, seats])).toMatch(/^(no refusal|stale)$/)
-    })
-  })
-})
 
 describe("the school-fee block", () => {
   test("a child with no seat priority can't pay while no stream takes them, and can once one does", async () => {
@@ -357,7 +337,7 @@ describe("stream requests", () => {
   })
 })
 
-describe("the Fee schedule once streams are on", () => {
+describe("the Fee schedule", () => {
   test("a seats change is refused with seats_moved; the Academic-year start still saves", async () => {
     const { year, classes: [c] } = await yearAndClasses(1)
     await inRolledBackTransaction(async (sql) => {

@@ -26,7 +26,7 @@ vi.mock("@/components/kit", async (importOriginal) => ({
 
 import type { ActivityView } from "@/app/staff/_home/activity"
 import { fullClassesFor, mayReadActivity, type ActivityScreenPage } from "@/app/staff/_home/activity-data"
-import type { ClassSeatFigures } from "@/lib/services/dashboard"
+import type { SeatsByClass } from "@/lib/services/dashboard"
 import { ActivityList } from "@/app/staff/_home/activity-list"
 
 const row = (who: string): ActivityView => ({
@@ -198,12 +198,15 @@ describe("the side sheet", () => {
 
 describe("who sees the card", () => {
   it("names full classes only for staff who may open Seats: everyone who may view payments (#449)", () => {
-    const full = { year: 2027, years: [2027], classes: [{ className: "STD 6", dayOrBoarding: "Day", seats: 35, taken: 35 }] as ClassSeatFigures[], named: null }
-    expect(fullClassesFor(["payments.view", "academic_years.manage"], full)).toEqual([{ className: "STD 6", taken: 35, seats: 35 }])
-    expect(fullClassesFor(["leads.view", "payments.view"], full)).toEqual([{ className: "STD 6", taken: 35, seats: 35 }])
+    const stream = { id: "s1", label: "A", takes: "Mixed" as const, seats: 35, position: 1, placed: 35, broughtUpFrom: null }
+    const std6 = { className: "STD 6" as const, streams: [stream], freeForBoy: false, freeForGirl: false, freeForAny: false, waiting: [] }
+    const full: SeatsByClass = { year: 2027, years: [2027], streams: { year: 2027, classes: [std6], requests: [] } }
+    expect(fullClassesFor(["payments.view", "academic_years.manage"], full)).toEqual([{ className: "STD 6", need: null, elsewhere: null }])
+    expect(fullClassesFor(["leads.view", "payments.view"], full)).toEqual([{ className: "STD 6", need: null, elsewhere: null }])
     expect(fullClassesFor(["leads.view"], full)).toEqual([])
     expect(fullClassesFor(["academic_years.manage"], full)).toEqual([])
     expect(fullClassesFor(["payments.view", "academic_years.manage"], null)).toEqual([])
+    expect(fullClassesFor(["payments.view"], { year: null, years: [], streams: null })).toEqual([])
   })
 
   it("staff who may view applicants, or who may open Seats", () => {

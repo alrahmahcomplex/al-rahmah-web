@@ -242,7 +242,6 @@ describe("a Pre-Form One fee payment", () => {
         balanceAfter: 2_500_000,
         priority: "Deposit",
         priorityAfter: "Deposit",
-        wouldOverfill: false,
         preFormOne: { fee: 450_000, paid: 0, paidAfter: 3_000_000, balanceAfter: -2_550_000 },
       }),
     })

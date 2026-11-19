@@ -7,8 +7,7 @@ import { REOPENING_REASON_MAX } from "@/lib/services/reopening-requests"
 
 import { TextArea } from "./form-controls"
 import { approveReopeningAction, rejectReopeningAction } from "./reopening-decision-actions"
-import { RETAKE_LABELS, type ApprovalSeats, type DecisionOutcome } from "./reopening-decision-outcome"
-import { SeatPriorityTag } from "./seat-priority-tag"
+import { RETAKE_LABELS, type DecisionOutcome } from "./reopening-decision-outcome"
 
 const LOST_REQUEST: DecisionOutcome = {
   status: "refused",
@@ -25,8 +24,6 @@ type DecideReopeningProps = {
   // The lead was declined from Interviewed or Enrolled: the approver chooses
   // between a retaken interview and enrolling without one.
   askRetake: boolean
-  // Whether approving would give the lead a seat in a full class (#103).
-  seats: ApprovalSeats
 }
 
 // Approve and Reject, for approvers, on a Pending request. Each asks in a
@@ -63,7 +60,7 @@ function useDecision() {
   return { refusal, setRefusal, pending, send }
 }
 
-function ApproveReopening({ leadId, requestId, studentName, admissionNumber, consequence, askRetake, seats }: DecideReopeningProps) {
+function ApproveReopening({ leadId, requestId, studentName, admissionNumber, consequence, askRetake }: DecideReopeningProps) {
   const [open, setOpen] = useState(false)
   const [choice, setChoice] = useState<"retake" | "enrol" | null>(null)
   const [missing, setMissing] = useState(false)
@@ -115,7 +112,6 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
         }
       >
         <form id={formId} className="lr-form" onSubmit={approve} noValidate>
-          <SeatWarning seats={seats} />
           {askRetake && (
             <ChoiceTiles
               name="retake"
@@ -143,48 +139,6 @@ function ApproveReopening({ leadId, requestId, studentName, admissionNumber, con
         </form>
       </Sheet>
     </>
-  )
-}
-
-// Slice 9's seat warning, as the Accountant sees it before a payment, with
-// the class's ranking for staff who may view payments. Advice only: the
-// approver can still approve, and a failed check is a quiet note.
-function SeatWarning({ seats }: { seats: ApprovalSeats }) {
-  if (seats.kind === "room") return null
-  if (seats.kind === "unchecked") return <p className="lr-hint">{seats.message}</p>
-  return (
-    <div role="alert" aria-label="Class full">
-      <Note tone="wait">
-        <span className="flex flex-col gap-2">
-          <b>Class full</b>
-          <span>{seats.message}</span>
-          {seats.ranked && (
-            <ol aria-label="Applicants ranked for the seats" className="lr-list max-h-56 overflow-y-auto">
-              {seats.ranked.map((holder) => (
-                <li
-                  key={holder.leadId}
-                  aria-current={holder.thisLead || undefined}
-                  className="flex flex-wrap items-center gap-x-2 gap-y-1 aria-[current=true]:font-semibold"
-                >
-                  <span className="lr-num w-6 shrink-0">{holder.rank}.</span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span>
-                      {holder.studentName}
-                      {holder.thisLead && " (this applicant)"}
-                    </span>
-                    <span className="lr-num text-xs font-normal">{holder.admissionNumber}</span>
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <SeatPriorityTag priority={holder.priority} />
-                    {holder.pastLastSeat && <span className="lr-error text-xs">Past the last seat</span>}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </span>
-      </Note>
-    </div>
   )
 }
 

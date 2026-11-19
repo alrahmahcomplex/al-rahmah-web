@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { classesTab, monthsTab, niceScale, RING, ringArcs, seatsTab, sourcesTab } from "@/app/staff/_home/charts"
-import type { ClassSeatFigures } from "@/lib/services/dashboard"
+import { classesTab, monthsTab, niceScale, RING, ringArcs, seatsTabOf, sourcesTab, type SeatsTabClass } from "@/app/staff/_home/charts"
 import { APPLICATION_SOURCES, type ApplicationSource, type HomeChartCounts } from "@/lib/services/home-charts"
 import { LEAD_CLASSES, type LeadClass } from "@/lib/services/leads"
 
@@ -33,18 +32,9 @@ const V38 = counts({
 })
 const NONE = counts({})
 
-function seat(className: LeadClass, seats: number | null, taken: number, dayOrBoarding: "Day" | "Boarding" = "Day"): ClassSeatFigures {
-  return {
-    className,
-    dayOrBoarding,
-    seats,
-    taken,
-    full: taken,
-    firstInstalment: 0,
-    deposit: 0,
-    left: seats === null ? null : Math.max(seats - taken, 0),
-    overBy: seats !== null && taken > seats ? taken - seats : null,
-  }
+// One class's bar as namedSeatsTab adds it up from the class's streams.
+function seat(className: LeadClass, seats: number, held: number): SeatsTabClass {
+  return { className, seats, held, full: held >= seats, free: Math.max(0, seats - held) }
 }
 
 describe("Classes", () => {
@@ -106,11 +96,11 @@ describe("Seats", () => {
   const V38_SEATS = [seat("DAY CARE", 15, 9), seat("KG 2", 25, 18), seat("STD 1", 40, 31), seat("STD 4", 30, 22), seat("STD 6", 35, 35), seat("FORM 1", 60, 44)]
 
   it("names the full class and the one with the most free seats, as v38 does", () => {
-    expect(seatsTab(V38_SEATS)?.heading).toBe("STD 6 is full. FORM 1 has the most free seats, 16")
+    expect(seatsTabOf(V38_SEATS)?.heading).toBe("STD 6 is full. FORM 1 has the most free seats, 16")
   })
 
   it("puts N free or Full on each capsule, and the tooltip's words", () => {
-    const tab = seatsTab(V38_SEATS)!
+    const tab = seatsTabOf(V38_SEATS)!
     expect(tab.points.map((point) => [point.short, point.full ? "Full" : `${point.seats - point.value} free`])).toEqual([
       ["DC", "6 free"],
       ["KG 2", "7 free"],
@@ -123,43 +113,29 @@ describe("Seats", () => {
     expect(tab.points[5].tip).toEqual({ number: "44 of 60", words: "FORM 1 · 16 free" })
   })
 
-  it("adds Day and Boarding together, and leaves out a class with no seats set", () => {
-    const tab = seatsTab([seat("FORM 1", 20, 20), seat("FORM 1", 10, 4, "Boarding"), seat("FORM 2", null, 3)])!
-    expect(tab.points).toHaveLength(1)
-    expect(tab.points[0]).toMatchObject({ label: "FORM 1", seats: 30, value: 24, full: false })
-    expect(tab.heading).toBe("FORM 1 has the most free seats, 6")
-  })
-
-  it("leaves out a class holding seats in a section with no seats set, since its free seats are not known", () => {
-    const tab = seatsTab([seat("FORM 1", 20, 15), seat("FORM 1", null, 5, "Boarding"), seat("FORM 2", 10, 4), seat("FORM 2", null, 0, "Boarding")])!
-    expect(tab.points.map((point) => point.label)).toEqual(["FORM 2"])
-    expect(tab.heading).toBe("FORM 2 has the most free seats, 6")
-  })
-
   it("shows a class set to zero seats as Full", () => {
-    const tab = seatsTab([seat("FORM 4", 0, 0), seat("FORM 3", 10, 3)])!
+    const tab = seatsTabOf([seat("FORM 4", 0, 0), seat("FORM 3", 10, 3)])!
     expect(tab.points[0]).toMatchObject({ label: "FORM 4", full: true, fill: 100, tip: { number: "0 of 0", words: "FORM 4 · Full" } })
     expect(tab.heading).toBe("FORM 4 is full. FORM 3 has the most free seats, 7")
   })
 
   it("keeps an over-full class full, its capsule filled to the top", () => {
-    const tab = seatsTab([seat("STD 6", 10, 12), seat("STD 7", 10, 2)])!
+    const tab = seatsTabOf([seat("STD 6", 10, 12), seat("STD 7", 10, 2)])!
     expect(tab.points[0]).toMatchObject({ full: true, fill: 100 })
     expect(tab.heading).toBe("STD 6 is full. STD 7 has the most free seats, 8")
   })
 
   it("names two full classes, counts more, and says when every class is full", () => {
-    expect(seatsTab([seat("STD 5", 5, 5), seat("STD 6", 5, 5), seat("STD 7", 5, 1)])?.heading).toBe("STD 5 and STD 6 are full. STD 7 has the most free seats, 4")
-    expect(seatsTab([seat("STD 4", 5, 5), seat("STD 5", 5, 5), seat("STD 6", 5, 5), seat("STD 7", 5, 1)])?.heading).toBe(
+    expect(seatsTabOf([seat("STD 5", 5, 5), seat("STD 6", 5, 5), seat("STD 7", 5, 1)])?.heading).toBe("STD 5 and STD 6 are full. STD 7 has the most free seats, 4")
+    expect(seatsTabOf([seat("STD 4", 5, 5), seat("STD 5", 5, 5), seat("STD 6", 5, 5), seat("STD 7", 5, 1)])?.heading).toBe(
       "3 classes are full. STD 7 has the most free seats, 4",
     )
-    expect(seatsTab([seat("STD 5", 5, 5), seat("STD 6", 5, 6), seat("STD 7", 5, 5)])?.heading).toBe("Every class is full")
-    expect(seatsTab([seat("STD 6", 5, 5)])?.heading).toBe("STD 6 is full")
+    expect(seatsTabOf([seat("STD 5", 5, 5), seat("STD 6", 5, 6), seat("STD 7", 5, 5)])?.heading).toBe("Every class is full")
+    expect(seatsTabOf([seat("STD 6", 5, 5)])?.heading).toBe("STD 6 is full")
   })
 
-  it("is left out when no class has seats set", () => {
-    expect(seatsTab([seat("STD 1", null, 2)])).toBeNull()
-    expect(seatsTab([])).toBeNull()
+  it("is left out when no class has streams", () => {
+    expect(seatsTabOf([])).toBeNull()
   })
 })
 

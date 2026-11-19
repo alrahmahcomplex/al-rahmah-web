@@ -57,12 +57,12 @@ export function saveScheduleOutcome(error: SaveFeeAmountsError): SaveScheduleOut
   }
 }
 
-// What the start and seats form is told after it saves.
+// What the Academic-year start form is told after it saves.
 export type AcademicYearOutcome =
   | { status: "saved" }
   | { status: "refused"; field: AcademicYearField | null; message: string; stale?: true }
 
-// Turns what the fees module refused into what the start and seats form shows.
+// Turns what the fees module refused into what the Academic-year start form shows.
 export function academicYearOutcome(error: SetAcademicYearError, year: number): AcademicYearOutcome {
   switch (error.kind) {
     case "invalid": {
@@ -71,14 +71,6 @@ export function academicYearOutcome(error: SetAcademicYearError, year: number): 
           status: "refused",
           field: error.field,
           message: `Choose an Academic-year start in January ${year}. Once set, it can be changed but not cleared.`,
-        }
-      }
-      if (error.field?.startsWith("seats.")) {
-        const [, className, dayOrBoarding] = error.field.split(".")
-        return {
-          status: "refused",
-          field: error.field,
-          message: `Enter the ${className} ${dayOrBoarding} seats as a whole number, 0 or more. Once set, seats can be changed but not cleared.`,
         }
       }
       return {
@@ -93,7 +85,7 @@ export function academicYearOutcome(error: SetAcademicYearError, year: number): 
         field: error.field,
         stale: true,
         message:
-          "Someone else changed the start or seats while you were editing. Cancel to see their change, then make yours again.",
+          "Someone else changed the start while you were editing. Cancel to see their change, then make yours again.",
       }
     case "no-schedule":
       return {
@@ -102,8 +94,8 @@ export function academicYearOutcome(error: SetAcademicYearError, year: number): 
         message: `The ${year} Fee schedule hasn't been created yet. The Accountant creates it first.`,
       }
     case "forbidden":
-      return { status: "refused", field: null, message: "Your role can't set the Academic-year start or seats." }
+      return { status: "refused", field: null, message: "Your role can't set the Academic-year start." }
     case "unavailable":
-      return { status: "refused", field: null, message: "The start and seats could not be saved. Try again in a moment." }
+      return { status: "refused", field: null, message: "The start could not be saved. Try again in a moment." }
   }
 }

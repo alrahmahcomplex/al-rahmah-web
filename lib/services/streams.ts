@@ -15,9 +15,6 @@ import type { SeatPriority } from "./school-fee-payments"
 export const STREAM_TAKES = ["Boys", "Girls", "Mixed"] as const
 export type StreamTakes = (typeof STREAM_TAKES)[number]
 
-/** How the school counts seats: `legacy` per class and Day or Boarding, `named` in streams. */
-export type SeatMode = "legacy" | "named"
-
 export type Stream = {
   id: string
   label: string
@@ -67,7 +64,6 @@ export type StreamRequest = {
 }
 
 export type YearStreams = {
-  mode: SeatMode
   year: number
   // Only the classes that have streams; a class with none has no limit.
   classes: ClassStreams[]
@@ -110,28 +106,7 @@ const toStream = (row: StreamRow): Stream => ({
   broughtUpFrom: row.brought_up_from,
 })
 
-/** The school's seat mode as the database gave it, or an error: for a caller that must know the mode rather than assume it. */
-export async function readSeatMode(supabase: SupabaseClient): Promise<Result<SeatMode, StreamError>> {
-  const { data, error } = await supabase.rpc("seat_mode")
-  if (error) {
-    console.error("Could not read the seat mode", error)
-    return { ok: false, error: "unavailable" }
-  }
-  if (data !== "legacy" && data !== "named") {
-    console.error("Could not read the seat mode", { data })
-    return { ok: false, error: "unavailable" }
-  }
-  return { ok: true, data }
-}
-
-/** The school's seat mode. Legacy when it can't be read, so a failed read never shows the new screens. */
-export async function getSeatMode(supabase: SupabaseClient): Promise<SeatMode> {
-  const mode = await readSeatMode(supabase)
-  return mode.ok ? mode.data : "legacy"
-}
-
 type YearStreamsRow = {
-  mode: SeatMode
   enrollment_year: number
   classes: {
     class_name: LeadClass
@@ -173,7 +148,6 @@ export async function getYearStreams(supabase: SupabaseClient, year: number): Pr
   return {
     ok: true,
     data: {
-      mode: row.mode,
       year: row.enrollment_year,
       classes: row.classes.map((each) => ({
         className: each.class_name,
@@ -307,7 +281,6 @@ type StreamRef = {
 }
 
 export type SeatOutlook = {
-  mode: SeatMode
   hasStreams: boolean
   gender: StudentGender | null
   priority: SeatPriority | null
@@ -359,7 +332,6 @@ export async function getSeatOutlook(supabase: SupabaseClient, leadId: string): 
   })
   if (error) return { ok: false, error: streamError(error, "read a child's seat") }
   const row = data as {
-    mode: SeatMode
     has_streams: boolean
     gender: StudentGender | null
     priority: SeatPriority | null
@@ -381,7 +353,6 @@ export async function getSeatOutlook(supabase: SupabaseClient, leadId: string): 
   return {
     ok: true,
     data: {
-      mode: row.mode,
       hasStreams: row.has_streams,
       gender: row.gender,
       priority: row.priority,

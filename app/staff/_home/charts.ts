@@ -1,4 +1,3 @@
-import type { ClassSeatFigures } from "@/lib/services/dashboard"
 import type { ApplicationSource, HomeChartCounts } from "@/lib/services/home-charts"
 import type { LeadClass } from "@/lib/services/leads"
 
@@ -95,30 +94,6 @@ export function monthsTab(counts: HomeChartCounts, today: string): MonthsTab | n
     points,
     note: `${MONTHS[current]} so far, shown lighter.`,
   }
-}
-
-/**
- * Seats held against the seats in each class, Day and Boarding together, in
- * the year the Seats screen opens on. A section with no seats set and none
- * held (Boarding where the class has none) is skipped. A class is left out
- * when it has no seats set at all, or when seats are held in a section with
- * no seats set, since its free seats are then not known. Zero seats set is a
- * class with no seats: Full.
- */
-export function seatsTab(classes: readonly ClassSeatFigures[]): SeatsTab | null {
-  const byClass = new Map<LeadClass, { seats: number; held: number; unknown: boolean }>()
-  for (const entry of classes) {
-    if (entry.seats === null && entry.taken === 0) continue
-    const sum = byClass.get(entry.className) ?? { seats: 0, held: 0, unknown: false }
-    if (entry.seats === null) sum.unknown = true
-    else sum.seats += entry.seats
-    sum.held += entry.taken
-    byClass.set(entry.className, sum)
-  }
-  const rows = [...byClass]
-    .filter(([, { unknown }]) => !unknown)
-    .map(([className, { seats, held }]) => ({ className, seats, held, full: held >= seats, free: seats - held }))
-  return seatsTabOf(rows)
 }
 
 /** One class on the Seats tab: its seats and seats held, whether it is full, and its free seats. */

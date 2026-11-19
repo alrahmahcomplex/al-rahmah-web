@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { getSeatsByClass, type ClassStreamFigures, type SeatsByClass } from "@/lib/services/dashboard"
+import { getSeatFiguresByClass, getSeatsByClass, type ClassStreamFigures, type SeatsByClass } from "@/lib/services/dashboard"
 import type { ClassStreams } from "@/lib/services/streams"
 
 import { anonClient, asSystem, createThrowawayStaff, signedIn } from "../support/db"
@@ -10,15 +10,15 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 // dashboard's own fixtures in supabase/seeds/95_dashboard.sql. Its header
 // lists the 2031 streams and the leads placed in them. Seats are counted in
 // streams since the activation migration (#449): Reports asks for the counts
-// by stream (`figures`), and Home for the year's streams as Seats reads them.
+// by stream (getSeatFiguresByClass), and Home for the year's streams as Seats
+// reads them (getSeatsByClass).
 
 const YEAR = 2031
 
 async function figures2031(person = MANAGER): Promise<ClassStreamFigures[]> {
-  const result = await getSeatsByClass(await signedIn(person), YEAR, { figures: true })
+  const result = await getSeatFiguresByClass(await signedIn(person), YEAR)
   if (!result.ok) throw new Error(`seats refused: ${result.error}`)
-  if (!result.data.named?.figures) throw new Error("no counts by stream")
-  return result.data.named.figures
+  return result.data.classes
 }
 
 function entry(classes: ClassStreamFigures[], className: string): ClassStreamFigures {
@@ -34,20 +34,19 @@ async function home2031(): Promise<SeatsByClass> {
 }
 
 function streamsOf(seats: SeatsByClass, className: string): ClassStreams {
-  const found = seats.named?.streams?.classes.find((each) => each.className === className)
+  const found = seats.streams?.classes.find((each) => each.className === className)
   if (!found) throw new Error(`no streams for ${className}`)
   return found
 }
 
 describe("Seats by class, for Reports", () => {
   test("lists the classes with a stream or a seat holder, in class order, and no Day or Boarding rows", async () => {
-    const result = await getSeatsByClass(await signedIn(MANAGER), YEAR, { figures: true })
+    const result = await getSeatFiguresByClass(await signedIn(MANAGER), YEAR)
     if (!result.ok) throw new Error(`seats refused: ${result.error}`)
     expect(result.data.year).toBe(YEAR)
-    expect(result.data.classes).toEqual([])
-    expect(result.data.named?.streams).toBeNull()
+    expect(Object.keys(result.data).sort()).toEqual(["classes", "year", "years"])
     const fixtures = ["STD 2", "STD 3", "STD 4"]
-    expect(result.data.named?.figures?.map((each) => each.className).filter((name) => fixtures.includes(name))).toEqual(fixtures)
+    expect(result.data.classes.map((each) => each.className).filter((name) => fixtures.includes(name))).toEqual(fixtures)
   })
 
   test("shows each stream's seats, the children placed in it by Seat priority, and its free seats", async () => {
@@ -106,7 +105,7 @@ describe("Seats by class, for Reports", () => {
   })
 
   test("names no lead", async () => {
-    const result = await getSeatsByClass(await signedIn(MANAGER), YEAR, { figures: true })
+    const result = await getSeatFiguresByClass(await signedIn(MANAGER), YEAR)
     const text = JSON.stringify(result)
     expect(text).not.toMatch(/Takwimu|ADMSN-|1ead2031|ranked|leadId|studentName/)
   })
@@ -120,8 +119,7 @@ describe("Seats by class, for Reports", () => {
 describe("Seats by class, for Home", () => {
   test("reads the year's streams as Seats does: seats, children placed, whether a seat is free, and who waits", async () => {
     const seats = await home2031()
-    expect(seats.classes).toEqual([])
-    expect(seats.named?.figures).toBeNull()
+    expect(seats.year).toBe(YEAR)
 
     const full = streamsOf(seats, "STD 2")
     expect(full.streams).toEqual([expect.objectContaining({ label: "A", takes: "Mixed", seats: 3, placed: 3 })])
@@ -133,19 +131,21 @@ describe("Seats by class, for Home", () => {
     expect(room).toMatchObject({ freeForAny: true, waiting: [] })
 
     // Only classes with streams are listed; STD 4 has none, so no limit.
-    expect(seats.named?.streams?.classes.map((each) => each.className)).not.toContain("STD 4")
+    expect(seats.streams?.classes.map((each) => each.className)).not.toContain("STD 4")
   })
 })
 
 describe("the year shown", () => {
   test("opens on the latest year with a Fee schedule, and offers every year that has one", async () => {
-    const result = await getSeatsByClass(await signedIn(MANAGER))
-    if (!result.ok) throw new Error(`seats refused: ${result.error}`)
-    const { year, years } = result.data
-    expect(years).toContain(YEAR)
-    expect(years).toContain(2027)
-    expect(years).toEqual([...years].sort((a, b) => b - a))
-    expect(year).toBe(years[0])
+    for (const read of [getSeatsByClass, getSeatFiguresByClass]) {
+      const result = await read(await signedIn(MANAGER))
+      if (!result.ok) throw new Error(`seats refused: ${result.error}`)
+      const { year, years } = result.data
+      expect(years).toContain(YEAR)
+      expect(years).toContain(2027)
+      expect(years).toEqual([...years].sort((a, b) => b - a))
+      expect(year).toBe(years[0])
+    }
   })
 
   test("a year with no Fee schedule falls back to the latest that has one", async () => {
@@ -160,10 +160,11 @@ describe("who may read Seats by class", () => {
   test("a role without payments.view is refused", async () => {
     const reader = await createThrowawayStaff(["leads.view"])
     expect(await getSeatsByClass(await signedIn(reader), YEAR)).toEqual({ ok: false, error: "forbidden" })
-    expect(await getSeatsByClass(await signedIn(reader), YEAR, { figures: true })).toEqual({ ok: false, error: "forbidden" })
+    expect(await getSeatFiguresByClass(await signedIn(reader), YEAR)).toEqual({ ok: false, error: "forbidden" })
   })
 
   test("a visitor who is not signed in is refused", async () => {
     expect(await getSeatsByClass(anonClient(), YEAR)).toEqual({ ok: false, error: "forbidden" })
+    expect(await getSeatFiguresByClass(anonClient(), YEAR)).toEqual({ ok: false, error: "forbidden" })
   })
 })

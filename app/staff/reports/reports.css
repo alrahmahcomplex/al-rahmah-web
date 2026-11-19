@@ -27,8 +27,6 @@
 .rp-count { margin: 4px 0 0; font: 600 30px/1.2 var(--font-sans), system-ui, sans-serif; color: var(--gf-ink); font-variant-numeric: tabular-nums; }
 .rp-cap { margin: 0; color: var(--gf-quiet); font-size: 12.5px; }
 .rp-quiet { color: var(--gf-quiet); }
-.rp-over { font-weight: 700; color: var(--gf-red); }
-.rp-split { display: block; color: var(--gf-quiet); font-size: 12.5px; }
 .rp-link { align-self: flex-start; color: var(--gf-indigo); font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; border-radius: 4px; }
 .rp-link:focus-visible { outline: 3px solid rgb(9 0 187 / 0.45); outline-offset: 2px; }
 .rp-err { margin: 0; color: var(--gf-ink-soft); font-size: 14px; }

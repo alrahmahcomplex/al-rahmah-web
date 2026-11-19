@@ -60,6 +60,12 @@ test("Admissions Staff export the applicant columns only", async ({ page }) => {
   await expect(sheet.getByText(/Full data is the Super Admin.s export only/)).toBeVisible()
   await expect(sheet.getByRole("checkbox", { name: "Parent phone" })).toHaveCount(0)
   await expect(sheet.getByRole("checkbox", { name: "Admission Number" })).toBeChecked()
+  // Boy or girl sits right after Day or boarding (#449).
+  await expect(sheet.getByRole("group", { name: "Choose columns" })).toContainText(/Day or boarding\s*Boy or girl\s*Status/)
+  await expect(sheet.getByRole("checkbox", { name: "Boy or girl" })).not.toBeChecked()
+  const chosen = await page.request.get("/staff/applicants/export?preset=custom&scope=all&col=adm&col=db&col=gender")
+  expect(chosen.status()).toBe(200)
+  expect(headerRow(await chosen.text())).toBe("Admission Number,Day or boarding,Boy or girl")
 
   await choosePreset(sheet, /^Class list/)
   await expect(sheet.getByText(/^\d[\d,]* rows?, 6 columns$/)).toBeVisible()

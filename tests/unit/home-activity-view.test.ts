@@ -225,13 +225,13 @@ describe("what each row says", () => {
   })
 
   it("a full class opens Seats", () => {
-    const row: ActivityRow = { kind: "class_full", id: "STD 6", className: "STD 6", taken: 35, seats: 35 }
+    const row: ActivityRow = { kind: "class_full", id: "STD 6 any", className: "STD 6", need: null, elsewhere: null }
     expect(activityView(row, as(MANAGER))).toMatchObject({
       time: "All day",
       task: "Class is full",
       who: "STD 6",
-      about: "35 of 35 seats",
-      details: "No seats left. Open Seats to see who holds them.",
+      about: "no free seat for any child",
+      details: "Open Seats to see who waits.",
       action: { label: "Open Seats", href: "/staff/seats" },
     })
   })

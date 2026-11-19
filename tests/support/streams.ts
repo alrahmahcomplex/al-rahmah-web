@@ -125,25 +125,9 @@ export async function holder(
   return id
 }
 
-/**
- * Counts seats in streams for this transaction and acts as the Manager. The
- * mode is `named` already; the update is for a transaction that put it back
- * to `legacy`, and touches no row otherwise, so tests don't queue on it.
- */
+/** Acts as the Manager for this transaction, with the system as the audit actor. Seats are counted in streams. */
 export async function named(sql: Client) {
   await sql.query("select public.set_audit_actor('system')")
-  await sql.query("update public.seat_settings set mode = 'named' where mode <> 'named'")
-  await actAsStaff(sql, MANAGER.id)
-}
-
-/**
- * Puts this transaction back to how seats were counted before streams, and
- * acts as the Manager: for tests of what the clean-up slice removes. Only
- * inside a rolled-back transaction; nothing else may see `legacy` again.
- */
-export async function legacy(sql: Client) {
-  await sql.query("select public.set_audit_actor('system')")
-  await sql.query("update public.seat_settings set mode = 'legacy' where mode <> 'legacy'")
   await actAsStaff(sql, MANAGER.id)
 }
 

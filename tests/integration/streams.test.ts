@@ -14,7 +14,6 @@ import { recordPayment } from "@/lib/services/school-fee-payments"
 import { actAsStaff, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear, FEE_YEARS } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
-import { legacy } from "../support/streams"
 
 // Streams (#449, slice 4a). The seat mode is `named` since the activation
 // migration. Children get their Seat priority from committed payments in a
@@ -140,10 +139,9 @@ async function holder(year: number, className: string, gender: StudentGender | u
   return id
 }
 
-/** Counts seats in streams (the mode already is `named`) and acts as the Manager. */
+/** Acts as the Manager, with the system as the audit actor. Seats are counted in streams. */
 async function named(sql: Client) {
   await sql.query("select public.set_audit_actor('system')")
-  await sql.query("update public.seat_settings set mode = 'named' where mode <> 'named'")
   await actAsStaff(sql, MANAGER.id)
 }
 
@@ -197,24 +195,6 @@ async function refusal(sql: Client, query: string, params: unknown[]): Promise<s
     await sql.query("rollback to savepoint refusal")
   }
 }
-
-describe("while the seat mode is legacy", () => {
-  test("streams can't be opened, edited or brought up, and a recompute queues nothing", async () => {
-    const year = await yearWithSchedule()
-    const id = await child(year, "FORM 1", "Boy")
-    await inRolledBackTransaction(async (sql) => {
-      // The mode before the activation migration, for this transaction only.
-      await legacy(sql)
-      expect(await refusal(sql, "select public.open_stream($1, 'FORM 1', 'A', 'Boys', 30, $2)", [year, randomUUID()])).toBe("seat_mode_legacy")
-      expect(await refusal(sql, "select public.bring_up_streams($1, array[gen_random_uuid()])", [year])).toBe("seat_mode_legacy")
-      await asOwner(sql)
-      await sql.query("select public.set_audit_actor('system')")
-      await sql.query("select public.recompute_lead_fee($1, 'lead_details')", [id])
-      const { rows } = await sql.query("select count(*)::int as n from public.seat_sync_queue where lead_id = $1", [id])
-      expect(rows[0].n).toBe(0)
-    })
-  })
-})
 
 describe("opening streams", () => {
   test("the first stream places the children it takes, in ranking order, up to its seats; the rest wait", async () => {

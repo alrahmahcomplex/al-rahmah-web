@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import type { ClassSeatFigures } from "./dashboard-seats"
 import type { FeeDiscountKind } from "./discounts"
 import type { InterviewResult } from "./interviews"
 import type { LeadClass, LeadClosure, LeadStatus, Relationship } from "./leads"
@@ -56,38 +55,16 @@ export type ActivityRow =
         relationship: Relationship
         relationshipDescription: string | null
       })
-  | { kind: "class_full"; id: string; className: LeadClass; taken: number; seats: number; named?: FullClassNeed }
+  | ({ kind: "class_full"; id: string } & FullClass)
 
 export type ActivityPage = { rows: ActivityRow[]; total: number; page: number; pageCount: number }
 
 /**
- * Once streams are on (#449, v42): which children the class has no free seat
- * for (boys, girls, or any child in a class of Mixed streams), and a stream of
+ * A class with no free seat (#449, v42): which children it has none for
+ * (boys, girls, or any child in a class of Mixed streams), and a stream of
  * the class that still has seats for the others, by name.
  */
-export type FullClassNeed = { need: "Boys" | "Girls" | null; elsewhere: string | null }
-
-export type FullClass = { className: LeadClass; taken: number; seats: number; named?: FullClassNeed }
-
-/**
- * The classes with no seat left, in class order: every seat kind of the class
- * is set and taken, as Home's Seats caption counts it. Day and boarding seats
- * are added together.
- */
-export function fullClasses(classes: readonly ClassSeatFigures[]): FullClass[] {
-  const byClass = new Map<LeadClass, ClassSeatFigures[]>()
-  for (const entry of classes) byClass.set(entry.className, [...(byClass.get(entry.className) ?? []), entry])
-  const full: FullClass[] = []
-  for (const [className, entries] of byClass) {
-    if (!entries.every((entry) => entry.seats !== null && entry.taken >= entry.seats)) continue
-    full.push({
-      className,
-      taken: entries.reduce((sum, entry) => sum + entry.taken, 0),
-      seats: entries.reduce((sum, entry) => sum + (entry.seats ?? 0), 0),
-    })
-  }
-  return full
-}
+export type FullClass = { className: LeadClass; need: "Boys" | "Girls" | null; elsewhere: string | null }
 
 /**
  * Where page `page` falls when `ahead` rows come before the database's: which
@@ -197,7 +174,7 @@ function toRow(row: Row): ActivityRow | null {
 }
 
 /**
- * One page (from 1) of the Activity log, with `full` (from fullClasses, for
+ * One page (from 1) of the Activity log, with `full` (from fullClassesFor, for
  * those who may open Seats; empty otherwise) first. A page past the end
  * comes back empty with the real total. `forbidden` when the caller sees no
  * kind at all.
@@ -231,7 +208,7 @@ export async function getHomeActivity(
 
   const classRows: ActivityRow[] = full
     .slice(window.aheadShown.from, window.aheadShown.to)
-    .map((entry) => ({ kind: "class_full", id: entry.named ? `${entry.className} ${entry.named.need ?? "any"}` : entry.className, ...entry }))
+    .map((entry) => ({ kind: "class_full", id: `${entry.className} ${entry.need ?? "any"}`, ...entry }))
   const total = full.length + dbTotal
   return {
     ok: true,

@@ -11,9 +11,6 @@
 /* The read-only lists and tables: money and dates right-aligned, tabular. */
 .fs-kv-end dd { text-align: right; }
 .fs-band small { display: block; }
-.fs-muted { color: var(--gf-quiet); }
-/* Seat counts, not money: a cell may wrap so the table fits a phone. */
-.fs-counts .kit-tbl [data-align="end"] { white-space: normal; }
 
 /* Edit-in-place: the bar with the Edit button and the saved line, then the form. */
 .fs-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
@@ -33,14 +30,8 @@
 .fs-instalment { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 12px; }
 .fs-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
-/* Money, shares and seat counts read the same in the form as in the tables. */
+/* Money and shares read the same in the form as in the tables. */
 .kit-field.fs-money { text-align: right; font-variant-numeric: tabular-nums; }
-
-/* The seats grid: class, then a Day and a Boarding field. */
-.fs-seats { display: grid; grid-template-columns: minmax(0, 1fr) 6.5rem 6.5rem; align-items: center; gap: 8px 12px; }
-.fs-seats-head { color: var(--gf-quiet); font-size: 12px; font-weight: 600; text-align: right; padding-right: 16px; }
-.fs-seats-head:first-child { text-align: left; padding-right: 0; }
-.fs-seats-class { font-size: 14px; font-weight: 600; }
 
 /* New schedule: the year and Open year on one line. */
 .fs-year-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -48,5 +39,4 @@
 
 @media (max-width: 480px) {
   .fs-instalment { grid-template-columns: 5.5rem minmax(0, 1fr); }
-  .fs-seats { grid-template-columns: minmax(0, 1fr) 5.5rem 5.5rem; gap: 8px; }
 }

@@ -49,6 +49,14 @@ describe("the export columns", () => {
     expect(columnsForChoices(["phone", "adm", "pname"])).toEqual(["admission_number", "guardian_name", "guardian_phone"])
   })
 
+  it("offer Boy or girl right after Day or boarding, in the applicant columns (#449)", () => {
+    const keys = EXPORT_CHOICES.map((choice) => choice.key)
+    expect(keys.indexOf("gender")).toBe(keys.indexOf("db") + 1)
+    expect(EXPORT_CHOICES.find((choice) => choice.key === "gender")).toEqual({ key: "gender", label: "Boy or girl", tier: "view", columns: ["gender"] })
+    expect(columnsForChoices(["gender", "adm", "db"])).toEqual(["admission_number", "day_or_boarding", "gender"])
+    expect(tierNeeded(columnsForChoices(["gender"]))).toBe("view")
+  })
+
   it("make presets that need the tier they show", () => {
     const need = Object.fromEntries(EXPORT_PRESETS.filter((p) => p.columns.length > 0).map((p) => [p.key, tierNeeded(p.columns)]))
     expect(need).toEqual({ class: "view", calls: "contact", codes: "view", full: "full" })

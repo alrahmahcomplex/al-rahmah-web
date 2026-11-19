@@ -62,38 +62,28 @@ describe("academicYearOutcome", () => {
     })
   })
 
-  it("names the class and Day or Boarding of a refused seat count", () => {
-    expect(academicYearOutcome({ kind: "invalid", field: "seats.STD 3.Boarding" }, 2027)).toEqual({
-      status: "refused",
-      field: "seats.STD 3.Boarding",
-      message: "Enter the STD 3 Boarding seats as a whole number, 0 or more. Once set, seats can be changed but not cleared.",
+  it("falls back to a general sentence for a field it doesn't know", () => {
+    expect(academicYearOutcome({ kind: "invalid", field: null }, 2027)).toMatchObject({
+      message: "Some seat numbers could not be accepted. Check them and try again.",
     })
   })
 
-  it("falls back to a general sentence for the seat list or a field it doesn't know", () => {
-    for (const field of ["seats", null] as const) {
-      expect(academicYearOutcome({ kind: "invalid", field }, 2027)).toMatchObject({
-        message: "Some seat numbers could not be accepted. Check them and try again.",
-      })
-    }
-  })
-
   it("says when the year has no schedule, the role can't set it, or nothing could be saved", () => {
-    expect(academicYearOutcome({ kind: "stale", field: "seats.STD 1.Day" }, 2027)).toEqual({
+    expect(academicYearOutcome({ kind: "stale", field: "academic_year_start" }, 2027)).toEqual({
       status: "refused",
-      field: "seats.STD 1.Day",
+      field: "academic_year_start",
       stale: true,
       message:
-        "Someone else changed the start or seats while you were editing. Cancel to see their change, then make yours again.",
+        "Someone else changed the start while you were editing. Cancel to see their change, then make yours again.",
     })
     expect(academicYearOutcome({ kind: "no-schedule" }, 2027)).toMatchObject({
       message: "The 2027 Fee schedule hasn't been created yet. The Accountant creates it first.",
     })
     expect(academicYearOutcome({ kind: "forbidden" }, 2027)).toMatchObject({
-      message: "Your role can't set the Academic-year start or seats.",
+      message: "Your role can't set the Academic-year start.",
     })
     expect(academicYearOutcome({ kind: "unavailable" }, 2027)).toMatchObject({
-      message: "The start and seats could not be saved. Try again in a moment.",
+      message: "The start could not be saved. Try again in a moment.",
     })
   })
 })

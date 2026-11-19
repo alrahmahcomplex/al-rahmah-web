@@ -3,9 +3,8 @@
 import { useRouter } from "next/navigation"
 import { useId, useState, useTransition } from "react"
 
-import { Button, DateField, Field, Note } from "@/components/kit"
-import type { AcademicYearField, AcademicYearSettings, SeatSetting } from "@/lib/services/fees"
-import { DAY_OR_BOARDING, LEAD_CLASSES, type DayOrBoarding, type LeadClass } from "@/lib/services/leads"
+import { Button, DateField, Note } from "@/components/kit"
+import type { AcademicYearField } from "@/lib/services/fees"
 
 import { saveAcademicYear } from "./actions"
 import type { AcademicYearOutcome } from "./outcome"
@@ -18,54 +17,16 @@ const LOST_REQUEST: Refused = {
   message: "The change could not be confirmed. Check your connection, reload the page and see whether it was saved.",
 }
 
-const cellKey = (className: LeadClass, dayOrBoarding: DayOrBoarding) => `${className}.${dayOrBoarding}` as const
-
-// The form's values, as typed: the start date, and each cell's seats.
-type Draft = { start: string; seats: Record<string, string> }
-
-function draftOf(start: string | null, seats: SeatSetting[]): Draft {
-  return {
-    start: start ?? "",
-    seats: Object.fromEntries(seats.map((seat) => [cellKey(seat.className, seat.dayOrBoarding), String(seat.seats)])),
-  }
-}
-
-// A blank cell stays not set. Anything that isn't a whole number becomes NaN,
-// which the database refuses by name.
-function seatCount(typed: string | undefined): number | null {
-  const digits = (typed ?? "").replace(/[\s,]/g, "")
-  if (digits === "") return null
-  return /^-?\d+(\.\d+)?$/.test(digits) ? Number(digits) : Number.NaN
-}
-
-function settingsOf(draft: Draft): AcademicYearSettings {
-  return {
-    start: draft.start === "" ? null : draft.start,
-    seats: LEAD_CLASSES.flatMap((className) =>
-      DAY_OR_BOARDING.map((dayOrBoarding) => ({
-        className,
-        dayOrBoarding,
-        seats: seatCount(draft.seats[cellKey(className, dayOrBoarding)]),
-      })),
-    ),
-  }
-}
-
-// The start and seats for the Admissions Manager: the read-only view with
-// Edit start and seats, or the form. Once streams are on (#449) the seats
-// live on the Seats screen: the form keeps only the start, and sends no
-// seats, since only seats that changed are sent.
+// The Academic-year start for the Admissions Manager: the read-only view with
+// Edit start, or the form. Seats are set in streams, on the Seats screen
+// (#449).
 export function AcademicYearEditor({
   year,
   start,
-  seats,
-  streamsOn = false,
   children,
 }: {
   year: number
   start: string | null
-  seats: SeatSetting[]
-  streamsOn?: boolean
   children: React.ReactNode
 }) {
   const [editing, setEditing] = useState(false)
@@ -76,11 +37,9 @@ export function AcademicYearEditor({
       <AcademicYearForm
         year={year}
         start={start}
-        seats={seats}
-        streamsOn={streamsOn}
         onSaved={() => {
           setEditing(false)
-          setSaved(streamsOn ? "Start saved." : "Start and seats saved.")
+          setSaved("Start saved.")
         }}
         onCancel={() => setEditing(false)}
       />
@@ -99,7 +58,7 @@ export function AcademicYearEditor({
             setEditing(true)
           }}
         >
-          {streamsOn ? "Edit start" : "Edit start and seats"}
+          Edit start
         </Button>
         <p role="status" className="fs-saved">
           {saved}
@@ -113,19 +72,15 @@ export function AcademicYearEditor({
 function AcademicYearForm({
   year,
   start,
-  seats,
-  streamsOn,
   onSaved,
   onCancel,
 }: {
   year: number
   start: string | null
-  seats: SeatSetting[]
-  streamsOn: boolean
   onSaved: () => void
   onCancel: () => void
 }) {
-  const [draft, setDraft] = useState(() => draftOf(start, seats))
+  const [draft, setDraft] = useState(start ?? "")
   const [refusal, setRefusal] = useState<Refused | null>(null)
   const [pending, startTransition] = useTransition()
   const router = useRouter()
@@ -139,7 +94,7 @@ function AcademicYearForm({
       try {
         // What the form opened with, so the save is refused rather than
         // undoing a change someone else made since.
-        outcome = await saveAcademicYear(year, settingsOf(draft), { start, seats })
+        outcome = await saveAcademicYear(year, { start: draft === "" ? null : draft }, { start })
       } catch {
         outcome = LOST_REQUEST
       }
@@ -169,8 +124,8 @@ function AcademicYearForm({
           id={startId}
           min={`${year}-01-01`}
           max={`${year}-01-31`}
-          value={draft.start}
-          onChange={(start) => setDraft({ ...draft, start })}
+          value={draft}
+          onChange={setDraft}
           invalid={invalid("academic_year_start")}
           aria-describedby={`${startId}-hint`}
         />
@@ -178,32 +133,6 @@ function AcademicYearForm({
           A date in January {year}.
         </p>
       </div>
-
-      {!streamsOn && (
-      <fieldset>
-        <legend className="fs-legend">Seats in each class</legend>
-        <p className="fs-hint">Leave a class blank while its seats are not set. 0 means no seats.</p>
-        <div className="fs-seats">
-          <span aria-hidden className="fs-seats-head">
-            Class
-          </span>
-          {DAY_OR_BOARDING.map((choice) => (
-            <span key={choice} aria-hidden className="fs-seats-head">
-              {choice}
-            </span>
-          ))}
-          {LEAD_CLASSES.map((className) => (
-            <SeatRow
-              key={className}
-              leadClass={className}
-              draft={draft}
-              invalid={invalid}
-              onChange={(key, value) => setDraft({ ...draft, seats: { ...draft.seats, [key]: value } })}
-            />
-          ))}
-        </div>
-      </fieldset>
-      )}
 
       {refusal && (
         <Note tone="bad" role="alert">
@@ -219,45 +148,5 @@ function AcademicYearForm({
         </Button>
       </div>
     </form>
-  )
-}
-
-function SeatRow({
-  leadClass,
-  draft,
-  invalid,
-  onChange,
-}: {
-  leadClass: LeadClass
-  draft: Draft
-  invalid: (field: AcademicYearField) => true | undefined
-  onChange: (key: string, value: string) => void
-}) {
-  const id = useId()
-  return (
-    <>
-      <span className="fs-seats-class">{leadClass}</span>
-      {DAY_OR_BOARDING.map((choice) => {
-        const key = cellKey(leadClass, choice)
-        return (
-          <div key={choice}>
-            <label htmlFor={`${id}-${choice}`} className="sr-only">
-              {leadClass} {choice} seats
-            </label>
-            <Field
-              id={`${id}-${choice}`}
-              size="compact"
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="Not set"
-              className="fs-money"
-              value={draft.seats[key] ?? ""}
-              onChange={(event) => onChange(key, event.target.value)}
-              invalid={invalid(`seats.${key}`)}
-            />
-          </div>
-        )
-      })}
-    </>
   )
 }

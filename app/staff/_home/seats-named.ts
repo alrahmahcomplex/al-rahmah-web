@@ -5,8 +5,8 @@ import { streamName, type YearStreams } from "@/lib/services/streams"
 import { afterQueue, seatNeeds } from "../seats/stream-rules"
 import { seatsTabOf, type SeatsTab } from "./charts"
 
-// Home's seats once streams are on (#449, prototype v42), from the same read
-// and the same notices as the Seats screen, so the two never disagree.
+// Home's seats in streams (#449, prototype v42), from the same read and the
+// same notices as the Seats screen, so the two never disagree.
 
 const free = (stream: { seats: number; placed: number }) => Math.max(0, stream.seats - stream.placed)
 
@@ -61,9 +61,8 @@ export function namedFullClasses(data: YearStreams): FullClass[] {
     const elsewhere = other ? streams.toSorted((a, b) => a.position - b.position).find((s) => s.takes === other && queue.freeAfter(s) > 0) : undefined
     return {
       className: need.className,
-      taken: streams.reduce((sum, stream) => sum + stream.placed, 0),
-      seats: streams.reduce((sum, stream) => sum + stream.seats, 0),
-      named: { need: need.need, elsewhere: elsewhere ? streamName(need.className, elsewhere.label, elsewhere.takes) : null },
+      need: need.need,
+      elsewhere: elsewhere ? streamName(need.className, elsewhere.label, elsewhere.takes) : null,
     }
   })
 }

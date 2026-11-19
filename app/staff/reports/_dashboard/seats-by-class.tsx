@@ -3,11 +3,10 @@
 import Link from "next/link"
 
 import { Card, EmptyState, Table, Tag } from "@/components/kit"
-import type { ClassSeatFigures, ClassStreamFigures, SeatsByClass, StreamSeatFigures } from "@/lib/services/dashboard"
+import type { ClassStreamFigures, SeatFiguresByClass, StreamSeatFigures } from "@/lib/services/dashboard"
 import type { Result } from "@/lib/services/result"
 import { cn } from "@/lib/utils"
 
-import { takenLine } from "../../seats/format"
 import { TakesTag } from "../../seats/stream-sheets"
 import { PanelHead } from "./panel"
 import { SeatsYearFilter } from "./seats-year-filter"
@@ -23,7 +22,7 @@ export function SeatsByClassPanel({
 }: {
   // Any refusal shows as could not be loaded; the dashboard leaves the panel
   // out for `forbidden`.
-  seats: Result<SeatsByClass, unknown>
+  seats: Result<SeatFiguresByClass, unknown>
   canOpenSeats: boolean
   // Where the panel sits in the dashboard's grid.
   className?: string
@@ -44,7 +43,7 @@ export function SeatsByClassPanel({
         <EmptyState title="No fee schedule yet" />
       ) : (
         <>
-          {seats.data.named?.figures ? <StreamSeatsTable classes={seats.data.named.figures} /> : <SeatsTable classes={seats.data.classes} />}
+          <StreamSeatsTable classes={seats.data.classes} />
           <p className="rp-cap">
             An applicant takes a seat once they have a Seat priority. Declined applicants take none; Inactive and Archived applicants keep theirs.
           </p>
@@ -59,78 +58,10 @@ export function SeatsByClassPanel({
   )
 }
 
-function SeatsTable({ classes }: { classes: ClassSeatFigures[] }) {
-  return (
-    <Table
-      label="Seats in each class"
-      rows={classes.map((entry) => ({ ...entry, id: `${entry.className} ${entry.dayOrBoarding}` }))}
-      rowKey={(entry) => entry.id}
-      columns={[
-        {
-          header: "Class",
-          cell: (entry) => (
-            <span className={entry.seats === null && entry.taken === 0 ? "rp-quiet" : undefined} data-testid={`seats-row-${entry.id}`}>
-              {entry.id}
-            </span>
-          ),
-        },
-        {
-          header: "Seats",
-          align: "end",
-          cell: (entry) => (
-            <span className={entry.seats === null ? "rp-quiet" : undefined} data-testid="seats-set">
-              {entry.seats === null ? "Seats not set" : entry.seats.toLocaleString("en-GB")}
-            </span>
-          ),
-        },
-        {
-          header: "Taken",
-          align: "end",
-          cell: (entry) => {
-            const split = takenLine(entry)
-            return (
-              <>
-                <span className={entry.taken === 0 ? "rp-quiet" : undefined} data-testid="seats-taken">
-                  {entry.taken.toLocaleString("en-GB")}
-                </span>
-                {split && (
-                  <span className="rp-split" data-testid="seats-priorities">
-                    {split}
-                  </span>
-                )}
-              </>
-            )
-          },
-        },
-        {
-          header: "Left",
-          align: "end",
-          cell: (entry) => (
-            <span data-testid="seats-left">
-              {entry.overBy !== null ? (
-                <span className="rp-over">Over by {entry.overBy.toLocaleString("en-GB")}</span>
-              ) : entry.left === null ? (
-                <>
-                  <span className="rp-quiet" aria-hidden>
-                    –
-                  </span>
-                  <span className="sr-only">Seats not set</span>
-                </>
-              ) : (
-                entry.left.toLocaleString("en-GB")
-              )}
-            </span>
-          ),
-        },
-      ]}
-    />
-  )
-}
-
-// Once streams are on (#449, prototype v42): one row per stream under its
-// class, then the class total with how many wait for a stream. A class with no
-// streams shows only its total: its seats are not set, and its children with
-// a Seat priority count by priority (lead, 2026-11-19).
+// One row per stream under its class (#449, prototype v42), then the class
+// total with how many wait for a stream. A class with no streams shows only
+// its total: its seats are not set, and its children with a Seat priority
+// count by priority (lead, 2026-11-19).
 type StreamRow =
   | { kind: "class"; id: string; className: string }
   | { kind: "stream"; id: string; className: string; stream: StreamSeatFigures }

@@ -7,7 +7,7 @@ vi.mock("server-only", () => ({}))
 
 import { actAsStaff, inRolledBackTransaction } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS } from "../support/fixtures"
-import { asOwner, child, holder, legacy, named, open, placements, refusal, streamYears, today } from "../support/streams"
+import { asOwner, child, holder, named, open, placements, refusal, streamYears, today } from "../support/streams"
 
 // Streams, slice 5b (#449): the applicant page's reads once streams are on.
 // What a Boy or girl correction would do to a placed child's seat, and three
@@ -74,13 +74,10 @@ describe("what a Boy or girl correction does to a seat", () => {
     })
   })
 
-  test("before streams are on it reads no seat, and it needs leads.edit", async () => {
+  test("it needs leads.edit", async () => {
     const { year, classes: [c] } = await yearAndClasses(1)
     const id = await holder(year, c, "Boy", 5)
     await inRolledBackTransaction(async (sql) => {
-      // The mode before the activation migration, for this transaction only.
-      await legacy(sql)
-      expect(await genderOutlook(sql, id, "Girl")).toEqual({ placed: null, moves: false, would_take: null })
       // The Accountant may view leads but not edit them.
       await actAsStaff(sql, ACCOUNTANT.id)
       expect(await refusal(sql, "select public.lead_gender_outlook($1, 'Girl')", [id])).toBe("forbidden")

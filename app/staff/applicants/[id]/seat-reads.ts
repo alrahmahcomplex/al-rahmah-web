@@ -4,13 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import { getLead } from "@/lib/services/leads"
 import type { RecordablePaymentType } from "@/lib/services/school-fee-payments"
-import { getSeatMode, getSeatOutlook, getYearStreams, type SeatOutlook, type Stream } from "@/lib/services/streams"
+import { getSeatOutlook, getYearStreams, type SeatOutlook, type Stream } from "@/lib/services/streams"
 
 import { paymentRefusal, type PaymentRefusal, type SeatNote } from "./payment-outcome"
 import { belowBookingNote, blockedNote, placedNote, type SeatChild } from "./seat-text"
 
-// What Record payment reads about a child's seat once streams are on (#449,
-// v42): the child and their class's streams for the red note, and the seat
+// What Record payment reads about a child's seat in streams (#449, v42): the child and their class's streams for the red note, and the seat
 // before and after a payment for the note that follows it.
 
 /** The child and their class's streams this year, or null when either can't be read. */
@@ -34,11 +33,11 @@ export async function noClassRefusal(supabase: SupabaseClient, leadId: string, d
   return { status: "refused", field: null, message: `${note.title} ${note.text}` }
 }
 
-/** The seat before a school-fee payment, once streams are on; null otherwise or when unread. */
+/** The seat before a school-fee payment in a class with streams; null otherwise or when unread. */
 export async function seatBefore(supabase: SupabaseClient, leadId: string, type: RecordablePaymentType): Promise<SeatOutlook | null> {
-  if (type === "pre_form_one_fee" || (await getSeatMode(supabase)) !== "named") return null
+  if (type === "pre_form_one_fee") return null
   const outlook = await getSeatOutlook(supabase, leadId)
-  return outlook.ok && outlook.data.mode === "named" && outlook.data.hasStreams ? outlook.data : null
+  return outlook.ok && outlook.data.hasStreams ? outlook.data : null
 }
 
 /**

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { getLeadsByClass, getMetricCount, getSeatsByClass, listEnrollmentYears, type DashboardMetric } from "@/lib/services/dashboard"
+import { getLeadsByClass, getMetricCount, getSeatFiguresByClass, listEnrollmentYears, type DashboardMetric } from "@/lib/services/dashboard"
 
 import "../reports.css"
 
@@ -48,7 +48,7 @@ export async function Dashboard({
       }),
     ),
     getLeadsByClass(supabase, classFilters),
-    getSeatsByClass(supabase, parseSeatsYear(searchParams), { figures: true }),
+    getSeatFiguresByClass(supabase, parseSeatsYear(searchParams)),
   ])
   const enrollmentYears = years.ok ? years.data : []
 

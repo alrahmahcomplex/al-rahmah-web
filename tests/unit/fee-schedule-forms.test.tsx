@@ -7,13 +7,12 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }))
 
 import { AcademicYearEditor } from "@/app/staff/fees/academic-year-editor"
 import { ScheduleEditor } from "@/app/staff/fees/schedule-editor"
-import { BAND_NAMES, FEE_BANDS, type AcademicYearSettings, type FeeAmounts, type SeatSetting } from "@/lib/services/fees"
-import { DAY_OR_BOARDING, LEAD_CLASSES } from "@/lib/services/leads"
+import { BAND_NAMES, FEE_BANDS, type FeeAmounts } from "@/lib/services/fees"
 
 // The Fee schedule's two edit forms, with the server actions stubbed: each
 // field saves under its own key. One value changes, the form is saved, and
-// only that amount, share, date or seat cell differs from what the form
-// opened with (#329: the redesign rewired every field).
+// only that amount, share or date differs from what the form opened with
+// (#329: the redesign rewired every field).
 
 const YEAR = 2027
 
@@ -101,83 +100,16 @@ describe("the Fee schedule form", () => {
 })
 
 const START = "2027-01-11"
-// Some cells set, the rest not set, so a cell saved under its neighbour's key shows.
-const SEATS: SeatSetting[] = LEAD_CLASSES.flatMap((className, i) =>
-  DAY_OR_BOARDING.flatMap((dayOrBoarding, j) => (i % 3 === 2 ? [] : [{ className, dayOrBoarding, seats: i * 2 + j + 1 }])),
-)
 
-function settingsOpened(): AcademicYearSettings {
-  return {
-    start: START,
-    seats: LEAD_CLASSES.flatMap((className) =>
-      DAY_OR_BOARDING.map((dayOrBoarding) => ({
-        className,
-        dayOrBoarding,
-        seats: SEATS.find((seat) => seat.className === className && seat.dayOrBoarding === dayOrBoarding)?.seats ?? null,
-      })),
-    ),
-  }
-}
-
-type SeatCase = { label: string; value: string; expect: (settings: AcademicYearSettings) => void }
-
-const seatCases: SeatCase[] = [
-  { label: "Academic-year start", value: "20/01/2027", expect: (s) => (s.start = "2027-01-20") },
-  ...LEAD_CLASSES.flatMap((className) =>
-    DAY_OR_BOARDING.map((dayOrBoarding) => ({
-      label: `${className} ${dayOrBoarding} seats`,
-      value: "97",
-      expect: (s: AcademicYearSettings) => {
-        s.seats.find((seat) => seat.className === className && seat.dayOrBoarding === dayOrBoarding)!.seats = 97
-      },
-    })),
-  ),
-]
-
-describe("the Academic year and seats form", () => {
+describe("the Academic year form", () => {
   beforeEach(() => {
     actions.saveAcademicYear.mockReset()
     actions.saveAcademicYear.mockResolvedValue({ status: "saved" })
   })
 
-  it("has the 29 fields the cases cover", () => {
+  it("has the start alone, and saves it against the start it opened with, never seats (#449)", async () => {
     render(
-      <AcademicYearEditor year={YEAR} start={START} seats={SEATS}>
-        <p>View</p>
-      </AcademicYearEditor>,
-    )
-    fireEvent.click(screen.getByRole("button", { name: "Edit start and seats" }))
-    const form = screen.getByRole("form", { name: `Academic year ${YEAR}` })
-    expect(form.querySelectorAll("input")).toHaveLength(seatCases.length)
-  })
-
-  it.each(seatCases)("saves $label under its own key", async ({ label, value, expect: change }) => {
-    render(
-      <AcademicYearEditor year={YEAR} start={START} seats={SEATS}>
-        <p>View</p>
-      </AcademicYearEditor>,
-    )
-    fireEvent.click(screen.getByRole("button", { name: "Edit start and seats" }))
-    fireEvent.change(field(label), { target: { value } })
-    fireEvent.click(screen.getByRole("button", { name: "Save" }))
-
-    const expected = settingsOpened()
-    change(expected)
-    await waitFor(() => expect(actions.saveAcademicYear).toHaveBeenCalledTimes(1))
-    expect(actions.saveAcademicYear).toHaveBeenCalledWith(YEAR, expected, { start: START, seats: SEATS })
-    expect(await screen.findByRole("status")).toHaveTextContent("Start and seats saved.")
-  })
-})
-
-describe("the Academic year form once streams are on (#449)", () => {
-  beforeEach(() => {
-    actions.saveAcademicYear.mockReset()
-    actions.saveAcademicYear.mockResolvedValue({ status: "saved" })
-  })
-
-  it("keeps only the start, and sends the seats as they were, so none changes", async () => {
-    render(
-      <AcademicYearEditor year={YEAR} start={START} seats={SEATS} streamsOn>
+      <AcademicYearEditor year={YEAR} start={START}>
         <p>View</p>
       </AcademicYearEditor>,
     )
@@ -185,8 +117,21 @@ describe("the Academic year form once streams are on (#449)", () => {
     const form = screen.getByRole("form", { name: `Academic year ${YEAR}` })
     expect(form.querySelectorAll("input")).toHaveLength(1)
     expect(screen.queryByText("Seats in each class")).not.toBeInTheDocument()
+    fireEvent.change(field("Academic-year start"), { target: { value: "20/01/2027" } })
     fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(actions.saveAcademicYear).toHaveBeenCalledWith(YEAR, settingsOpened(), { start: START, seats: SEATS }))
+    await waitFor(() => expect(actions.saveAcademicYear).toHaveBeenCalledTimes(1))
+    expect(actions.saveAcademicYear).toHaveBeenCalledWith(YEAR, { start: "2027-01-20" }, { start: START })
     expect(await screen.findByRole("status")).toHaveTextContent("Start saved.")
+  })
+
+  it("sends no start when none was set and none is typed", async () => {
+    render(
+      <AcademicYearEditor year={YEAR} start={null}>
+        <p>View</p>
+      </AcademicYearEditor>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Edit start" }))
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+    await waitFor(() => expect(actions.saveAcademicYear).toHaveBeenCalledWith(YEAR, { start: null }, { start: null }))
   })
 })

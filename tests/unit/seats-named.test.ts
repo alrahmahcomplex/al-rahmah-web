@@ -22,7 +22,7 @@ const cls = (className: ClassStreams["className"], streams: Stream[], free: Part
   waiting: [],
   ...free,
 })
-const year = (classes: ClassStreams[], requests: StreamRequest[] = []): YearStreams => ({ mode: "named", year: 2027, classes, requests })
+const year = (classes: ClassStreams[], requests: StreamRequest[] = []): YearStreams => ({ year: 2027, classes, requests })
 
 // v42's year: STD 6 has one full Mixed stream; FORM 1 has Girls with room and Boys full.
 const STD6 = cls("STD 6", [stream("A", "Mixed", 30, 30)], { freeForBoy: false, freeForGirl: false, freeForAny: false })
@@ -60,11 +60,11 @@ describe("the Class is full rows", () => {
 
   it("say who the class has no seat for, and which stream still has seats for the others", () => {
     const rows = namedFullClasses(year([FORM1, STD6]))
-    expect(rows.map((row) => row.named)).toEqual([
+    expect(rows.map(({ need, elsewhere }) => ({ need, elsewhere }))).toEqual([
       { need: "Boys", elsewhere: "FORM 1 A (Girls)" },
       { need: null, elsewhere: null },
     ])
-    const [boys, any] = rows.map((row) => activityView({ kind: "class_full", id: `${row.className} ${row.named?.need ?? "any"}`, ...row }, context))
+    const [boys, any] = rows.map((row) => activityView({ kind: "class_full", id: `${row.className} ${row.need ?? "any"}`, ...row }, context))
     expect(boys).toMatchObject({
       task: "Class is full",
       who: "FORM 1",
@@ -79,6 +79,6 @@ describe("the Class is full rows", () => {
     const girl = { leadId: "g", admissionNumber: "ADMSN-1", studentName: "Girl", gender: "Girl" as const, priority: "Deposit" as const, reachedOn: "2027-01-10", rank: 1 }
     // FORM 1 A (Girls) shows one seat, but a girl waits for it (her row was busy).
     const busy = cls("FORM 1", [stream("A", "Girls", 20, 19), stream("B", "Boys", 20, 20)], { freeForBoy: false, freeForGirl: false, waiting: [girl] })
-    expect(namedFullClasses(year([busy])).find((row) => row.named?.need === "Boys")?.named).toEqual({ need: "Boys", elsewhere: null })
+    expect(namedFullClasses(year([busy])).find((row) => row.need === "Boys")).toEqual({ className: "FORM 1", need: "Boys", elsewhere: null })
   })
 })

@@ -308,12 +308,13 @@ test("a role without reports.view is refused the Reports page, however much else
   await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" })).toHaveCount(0)
 })
 
-test("a Reports reader who does not manage academic years sees Seats by class without the Seats screen link", async ({ page }) => {
+test("a Reports reader who does not manage academic years sees Seats by class with the Seats screen link too", async ({ page }) => {
   const person = await createThrowawayStaff(["leads.view", "payments.view", "reports.view"])
   await signIn(page, person)
   await page.goto("/staff/reports?seats_year=2031")
   await expect(seatsCells(page, /^STD 2 total/).nth(1)).toHaveText("1 waiting")
-  await expect(seatsPanel(page).getByRole("link")).toHaveCount(0)
+  // Everyone who may view payments opens Seats (#449).
+  await expect(seatsPanel(page).getByRole("link", { name: "Open the Seats screen" })).toHaveAttribute("href", "/staff/seats?year=2031")
 })
 
 test("staff without payments.view see the dashboard without Seats by class", async ({ page }) => {

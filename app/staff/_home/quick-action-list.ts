@@ -10,7 +10,10 @@ import type { QuickAction } from "./quick-actions"
 const has = (permissions: readonly Permission[], ...needed: Permission[]) => needed.every((permission) => permissions.includes(permission))
 
 export const mayCallBack = (permissions: readonly Permission[]) => has(permissions, "leads.view")
-export const mayOpenSeats = (permissions: readonly Permission[]) => has(permissions, "academic_years.manage", "payments.view")
+// Seats are counted in streams (#449): everyone who may view payments opens
+// Seats, as the sidebar shows it; only staff who manage academic years
+// change streams there.
+export const mayOpenSeats = (permissions: readonly Permission[]) => has(permissions, "payments.view")
 export const mayDecideDiscounts = (permissions: readonly Permission[]) => has(permissions, "discounts.approve")
 
 /**

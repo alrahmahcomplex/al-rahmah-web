@@ -13,9 +13,9 @@ import { PanelHead } from "./panel"
 import { SeatsYearFilter } from "./seats-year-filter"
 
 // Seats by class: how full each class is in one Enrollment year, as it
-// stands now. Counts only, never the leads holding the seats. Staff who
-// manage academic years get a link to the Seats screen, where an over-full
-// class's leads are ranked.
+// stands now. Counts only, never the leads holding the seats. Staff who may
+// open Seats get a link to it, where the children waiting for a stream are
+// named.
 export function SeatsByClassPanel({
   seats,
   canOpenSeats,

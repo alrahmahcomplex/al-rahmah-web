@@ -148,12 +148,16 @@ describe("admission_form_family", () => {
     }
   })
 
-  test("leaves a child whose visit is recorded out of the children check-in completes", async () => {
+  test("leaves a child whose visit is recorded out of the children check-in completes, and offers it as a child on file", async () => {
     const form = await sendForm([
       { first: word(), father: father(), className: "KG 1" },
       { first: word(), father: father(), className: "KG 1" },
     ])
     const admissions = await signedIn(ADMISSIONS)
+    // While both wait, neither is a child on file of the parent: they are the children checked in.
+    const before = await getAdmissionFormFamily(admissions, form.leadIds[0])
+    expect(before.ok && before.data.onFile).toEqual([])
+
     const visited = await recordVisit(admissions, form.leadIds[0], today)
     if (!visited.ok) throw new Error(`setup failed: ${JSON.stringify(visited.error)}`)
 
@@ -161,6 +165,12 @@ describe("admission_form_family", () => {
     if (!read.ok) throw new Error(`read failed: ${read.error}`)
     expect(read.data.children.map((c) => c.status)).toEqual(["Visited", "Applied"])
     expect(waitingChildren(read.data).map((c) => c.leadId)).toEqual([form.leadIds[1]])
+    // The visited child is not checked in again, so it is a "Sibling of" choice for the one still waiting.
+    expect(read.data.onFile.map((c) => c.leadId)).toEqual([form.leadIds[0]])
+    expect(read.data.onFile[0]).toMatchObject({ status: "Visited", closure: null })
+    const { checkIn } = startCheckIn(read.data, waitingChildren(read.data))
+    expect(checkIn.children.map((c) => c.leadId)).toEqual([form.leadIds[1]])
+    expect(checkIn.contact?.contact.children.map((c) => c.id)).toEqual([form.leadIds[0]])
   })
 
   test("marks a child already linked as a sibling outside the old family rule", async () => {

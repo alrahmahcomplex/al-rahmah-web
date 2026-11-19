@@ -7,7 +7,7 @@ import { Button, ButtonLink, GuidedTask, Note, PageHeader, Sheet, TextLink, toas
 import type { RegistrationQuestion } from "@/lib/services/leads"
 
 import { completeVisit, type CompleteVisitOutcome } from "../[id]/actions"
-import { checkInStudents, type CheckIn } from "../[id]/model"
+import { checkInStudents, custodianAtCheckIn, type CheckIn } from "../[id]/model"
 import { readOnFileSibling, registerFamily, type RegisterFamilyOutcome } from "./actions"
 import { clearDraft, readDraft, saveDraft } from "./draft"
 import {
@@ -626,7 +626,8 @@ function RegisterForm({ staffId, today, years, defaultYear, fees, canLink, canEn
               return k === null ? null : firstOf(studentName(a.students.find((s) => s.key === k)?.name))
             })()}
             prefill={k === 0 ? mode?.given.contact : null}
-            onDone={(custodian) => answer(id, (x) => withCustodian(x, h.root, custodian))}
+            // At check-in a number on file is often the family's own: its children on this form are no siblings on file.
+            onDone={(custodian) => answer(id, (x) => withCustodian(x, h.root, mode ? custodianAtCheckIn(custodian, mode.given) : custodian))}
           />
         ),
       })

@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest"
 
-import { checkInStudents, familyName, formName, givenRelationship, personParts, startCheckIn } from "@/app/staff/check-in/[id]/model"
-import { feePreview, households, mentionsSiblings, payload, type Answers, type OnFileFee, type Student } from "@/app/staff/check-in/new/model"
+import { checkInStudents, custodianAtCheckIn, familyName, formName, givenRelationship, personParts, startCheckIn } from "@/app/staff/check-in/[id]/model"
+import {
+  feePreview,
+  households,
+  knownContacts,
+  mentionsSiblings,
+  onFileMatch,
+  payload,
+  people,
+  withCustodian,
+  withOnFile,
+  type Answers,
+  type Custodian,
+  type KnownContact,
+  type OnFileFee,
+  type Student,
+} from "@/app/staff/check-in/new/model"
 import type { AdmissionFormFamily, FormChild } from "@/lib/services/admission-form-family"
 
 // Check-in of an Admission form family (#309): it starts from what the form
@@ -139,6 +154,24 @@ describe("the answers check-in starts from", () => {
     expect(startCheckIn(family([child(), visited]), [child()]).checkIn.contact?.contact.id).toBe(PARENT)
   })
 
+  // admission_form_family leaves only the waiting children out of `on_file`.
+  it("offer a form child whose visit is already recorded as a child on file of the parent", () => {
+    const visited = { ...cousin, status: "Visited" as const, fatherFullName: "ALI OMARI HASSAN", studentName: "ZAWADI ALI HASSAN" }
+    const read = family([child(), visited])
+    const recorded = { leadId: visited.leadId, admissionNumber: visited.admissionNumber, studentName: visited.studentName, className: visited.className, status: visited.status, closure: null, fatherFullName: visited.fatherFullName }
+    const { answers: start, checkIn: given } = startCheckIn({ ...read, onFile: [recorded, ...read.onFile] }, [child()])
+    expect(given.children.map((c) => c.leadId)).toEqual([child().leadId])
+    expect(given.contact?.contact.children.map((c) => c.id)).toEqual([visited.leadId, "o1"])
+    const a = withCustodian(start, 1, { kind: "known", contact: given.contact!.contact, phone: "+255755000222", whatsapp: "", relationship: "Mother", description: "" })
+    expect(onFileMatch(a, 1)).toMatchObject({ student: 1, leadId: visited.leadId, name: "ZAWADI ALI HASSAN" })
+  })
+
+  it("never offer a child checked in as a child on file of the parent, whatever the read holds", () => {
+    const own = { leadId: child().leadId, admissionNumber: "ADMSN-90005", studentName: "YUSUF ALI HASSAN", className: "STD 6" as const, status: "Applied" as const, closure: null, fatherFullName: "ALI OMARI HASSAN" }
+    const read = family([child()])
+    expect(startCheckIn({ ...read, onFile: [own, ...read.onFile] }, [child()]).checkIn.contact?.contact.children.map((c) => c.id)).toEqual(["o1"])
+  })
+
   it("preselect the relationship the form gave, but never Father, which is the switch", () => {
     const given = checkIn.contact!
     expect(givenRelationship(given)).toEqual({ choice: "Mother", description: "" })
@@ -148,6 +181,78 @@ describe("the answers check-in starts from", () => {
 
   it("name the family after the first child's last name", () => {
     expect(familyName([child()])).toBe("Hassan")
+  })
+})
+
+// One child was separated from the family, so no parent is offered and the number is looked up. The
+// people on file with that number hold the very children being checked in.
+describe("a number looked up at check-in that is the family's own (#309)", () => {
+  const COPY = "c0a70000-0000-4000-8000-000000000310"
+  const MARIAM = "22222222-2222-4222-8222-222222222222"
+  const PHONE = "+255755000222"
+  const mariam = child({ leadId: MARIAM, admissionNumber: "ADMSN-90006", studentName: "MARIAM ALI HASSAN", className: "STD 1", contactId: COPY })
+  const { answers: seeded, checkIn } = startCheckIn(family([child(), mariam]), [child(), mariam])
+  // Staff said the two are not siblings: each has its own custodian question.
+  const start: Answers = { ...seeded, students: seeded.students.map((s) => (s.key === 2 ? { ...s, sibling: { kind: "none" as const, seen: [1] } } : s)) }
+  const onFile = (c: FormChild): KnownContact["children"][number] => ({
+    id: c.leadId, admissionNumber: c.admissionNumber, studentName: c.studentName, className: c.className, status: c.status, closure: c.closure, fatherFullName: c.fatherFullName,
+  })
+  const salma: KnownContact["children"][number] = { id: "o1", admissionNumber: "ADMSN-80001", studentName: "SALMA ALI HASSAN", className: "STD 4", status: "Enrolled", closure: null, fatherFullName: "ALI OMARI HASSAN" }
+  const person = (id: string, children: KnownContact["children"]): KnownContact => ({ id, fullName: "SAIDA OMARI HASSAN", phone: PHONE, whatsapp: null, children })
+  const known = (contact: KnownContact): Custodian => ({ kind: "known", contact, phone: PHONE, whatsapp: "", relationship: "Mother", description: "" })
+  // As the form keeps a custodian answer at check-in.
+  const answered = (a: Answers, root: number, c: Custodian) => withCustodian(a, root, custodianAtCheckIn(c, checkIn))
+
+  it("offers no parent, so the number is looked up", () => {
+    expect(checkIn.contact).toBeNull()
+    expect(households(start.students).map((h) => h.root)).toEqual([1, 2])
+  })
+
+  it("offers no child as its own sibling on file, nor another child on the form", () => {
+    const a = answered(answered(start, 1, known(person(PARENT, [onFile(child())]))), 2, known(person(COPY, [onFile(mariam)])))
+    expect(onFileMatch(a, 1)).toBeNull()
+    expect(onFileMatch(a, 2)).toBeNull()
+    for (const s of checkInStudents(payload(a, 2027).students, a, checkIn)) expect(s).not.toHaveProperty("siblingOf")
+  })
+
+  it("still offers the person's other child on file, and a Yes sends that child's lead", () => {
+    const a = answered(start, 1, known(person(PARENT, [onFile(child()), onFile(mariam), salma])))
+    expect(onFileMatch(a, 1)).toMatchObject({ student: 1, leadId: "o1", name: "SALMA ALI HASSAN" })
+    const yes = withOnFile(answered(a, 2, known(person(COPY, [onFile(mariam)]))), 1, { leadId: "o1", yes: true })
+    const sent = checkInStudents(payload(yes, 2027).students, yes, checkIn)
+    expect(sent[0].siblingOf).toEqual({ leadId: "o1" })
+  })
+
+  it("keeps the people on file selectable: each is saved as the person they are", () => {
+    const a = answered(answered(start, 1, known(person(PARENT, [onFile(child())]))), 2, { kind: "father", phone: PHONE, whatsapp: "", contact: person(COPY, [onFile(mariam)]) })
+    expect(knownContacts(a).map((c) => [c.id, c.fullName, c.children])).toEqual([
+      [PARENT, "SAIDA OMARI HASSAN", []],
+      [COPY, "SAIDA OMARI HASSAN", []],
+    ])
+    expect(people(a).people.map((p) => p.payload)).toEqual([
+      { contactId: PARENT, alsoCheckPhones: [PHONE] },
+      { contactId: COPY, alsoCheckPhones: [PHONE] },
+    ])
+  })
+
+  it("leaves every other custodian answer as it was given", () => {
+    const stranger = known(person("c9", [salma]))
+    expect(custodianAtCheckIn(stranger, checkIn)).toBe(stranger)
+    const typed: Custodian = { kind: "new", name: { firstName: "ZAINA", middleName: "SALIM", lastName: "JUMA" }, phone: PHONE, whatsapp: "", relationship: "Guardian", description: "" }
+    expect(custodianAtCheckIn(typed, checkIn)).toBe(typed)
+    const dad: Custodian = { kind: "father", phone: PHONE, whatsapp: "" }
+    expect(custodianAtCheckIn(dad, checkIn)).toBe(dad)
+    const same: Custodian = { kind: "same", relationship: "Aunt", description: "" }
+    expect(custodianAtCheckIn(same, checkIn)).toBe(same)
+  })
+
+  // Register students has no check-in: its students hold no lead, and a child on file is a real choice.
+  it("changes nothing in Register students, where the looked-up person's children are all offered", () => {
+    const registered: Answers = { students: start.students.map((s) => ({ ...s, sibling: undefined })).slice(0, 1), more: true, custodians: {}, onFileAsks: [], onFile: {} }
+    const contact = person(PARENT, [onFile(child()), salma])
+    const a = withCustodian(registered, 1, known(contact))
+    expect(knownContacts(a)).toEqual([contact])
+    expect(onFileMatch(a, 1)).toMatchObject({ student: 1, leadId: child().leadId, name: "YUSUF ALI HASSAN" })
   })
 })
 

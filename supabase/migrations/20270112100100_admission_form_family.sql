@@ -26,7 +26,11 @@
 --                 contacts, and check-in offers `contact` only when they
 --                 all sit on it.
 --       on_file   the parent's other children, open or not, each with its
---                 father's name.
+--                 father's name. Only the form's children that check-in
+--                 completes are left out: those still Applied and open
+--                 (complete_admission_visit, rule 1). A form child whose
+--                 visit is recorded, or that is closed, is not checked in
+--                 again, so it is here like any other child of the parent.
 --
 -- Needs leads.view, which every table it reads asks of staff. It is security
 -- definer because no API role reads admission_submissions. Anyone else,
@@ -127,7 +131,8 @@ begin
             from public.leads l
             where contact.id is not null
               and l.guardian_contact_id = contact.id
-              and l.id <> all (child_ids)
+              -- The same rule as waitingChildren in lib/services/admission-form-family.ts.
+              and not (l.id = any (child_ids) and l.status = 'Applied' and l.closure is null)
         ), '[]'::jsonb)
     );
 end;

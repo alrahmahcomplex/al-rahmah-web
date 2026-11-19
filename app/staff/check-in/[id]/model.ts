@@ -4,7 +4,7 @@ import type { CheckInStudent, RegistrationStudent, Relationship } from "@/lib/se
 
 import { fatherNameMatch } from "@/lib/father-name"
 
-import { fatherName, NO_SCHOOL_ASKED, sameFatherEarlier, type Answers, type KnownContact, type RelationshipChoice, type Student } from "../new/model"
+import { fatherName, NO_SCHOOL_ASKED, sameFatherEarlier, type Answers, type Custodian, type KnownContact, type RelationshipChoice, type Student } from "../new/model"
 
 // Check-in of an Admission form family (#309, prototype v38): the Register
 // form's answers, started from what the form gave. Staff are asked only the
@@ -85,6 +85,25 @@ function student(child: FormChild, key: number): { student: Student; given: Give
   }
 }
 
+/**
+ * A person on file as check-in keeps them: without the children being checked
+ * in. A child on file under a custodian is a "Sibling of" choice, and the
+ * number looked up at check-in is often the family's own, so its children are
+ * the ones on the form. None of them is its own sibling on file (the save
+ * refuses that `sibling_of`), and two of them are siblings by the form's own
+ * question, as the save reads them (complete_admission_visit leaves every lead
+ * it checks in out of its same-father question). The person stays the same.
+ */
+const withoutCheckedIn = (contact: KnownContact, leadIds: ReadonlySet<string>): KnownContact =>
+  contact.children.some((c) => leadIds.has(c.id)) ? { ...contact, children: contact.children.filter((c) => !leadIds.has(c.id)) } : contact
+
+/** A custodian answer as check-in keeps it: a person on file comes without the children being checked in. */
+export function custodianAtCheckIn(custodian: Custodian, checkIn: CheckIn): Custodian {
+  if ((custodian.kind !== "father" && custodian.kind !== "known") || !custodian.contact) return custodian
+  const contact = withoutCheckedIn(custodian.contact, new Set(checkIn.children.map((c) => c.leadId)))
+  return contact === custodian.contact ? custodian : { ...custodian, contact }
+}
+
 /** The answers check-in starts from, and what the form gave. `children`: those still waiting for their visit. */
 export function startCheckIn(family: AdmissionFormFamily, children: FormChild[]): { answers: Answers; checkIn: CheckIn } {
   const seeded = children.map((c, i) => student(c, i + 1))
@@ -104,27 +123,33 @@ export function startCheckIn(family: AdmissionFormFamily, children: FormChild[])
   // contact to the other with nothing on the screen saying so. Then the number is looked up as in
   // Register students, and staff say which person on file it is.
   const c = family.contact && children.every((child) => child.contactId === family.contact?.id) ? family.contact : null
+  // The parent's children on file are the "Sibling of" choices: a form child whose visit is already
+  // recorded is one of them, and a child checked in here never is.
+  const checkedIn = new Set(children.map((child) => child.leadId))
   return {
     answers: { students, more: true, custodians: {}, onFileAsks: [], onFile: {} },
     checkIn: {
       children: seeded.map((s) => s.given),
       contact: c
         ? {
-            contact: {
-              id: c.id,
-              fullName: c.fullName,
-              phone: c.phone,
-              whatsapp: c.whatsapp,
-              children: family.onFile.map((f) => ({
-                id: f.leadId,
-                admissionNumber: f.admissionNumber,
-                studentName: f.studentName,
-                className: f.className,
-                status: f.status,
-                closure: f.closure,
-                fatherFullName: f.fatherFullName,
-              })),
-            },
+            contact: withoutCheckedIn(
+              {
+                id: c.id,
+                fullName: c.fullName,
+                phone: c.phone,
+                whatsapp: c.whatsapp,
+                children: family.onFile.map((f) => ({
+                  id: f.leadId,
+                  admissionNumber: f.admissionNumber,
+                  studentName: f.studentName,
+                  className: f.className,
+                  status: f.status,
+                  closure: f.closure,
+                  fatherFullName: f.fatherFullName,
+                })),
+              },
+              checkedIn,
+            ),
             relationship: c.relationship,
             description: c.relationshipDescription,
           }

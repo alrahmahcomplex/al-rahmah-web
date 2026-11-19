@@ -52,7 +52,9 @@ export type OnFileChild = {
 export type AdmissionFormFamily = {
   sentOn: string
   contact: FormContact | null
+  // Every child the form created, waiting or not: read them through waitingChildren.
   children: FormChild[]
+  // The parent's other children. A form child no longer waiting (visited, enrolled or closed) is here too.
   onFile: OnFileChild[]
 }
 
@@ -130,5 +132,9 @@ export async function getAdmissionFormFamily(supabase: SupabaseClient, leadId: s
   }
 }
 
-/** The children check-in completes: those still Applied and open (complete_admission_visit, rule 1). */
+/**
+ * The children check-in completes: those still Applied and open
+ * (complete_admission_visit, rule 1). admission_form_family leaves the same
+ * children out of `on_file`, so the two rules change together.
+ */
 export const waitingChildren = (family: AdmissionFormFamily) => family.children.filter((c) => c.status === "Applied" && c.closure === null)

@@ -288,9 +288,38 @@ describe("several children on one form", () => {
     expect(new Set(leads.map((l) => l.contact.id)).size).toBe(1)
   })
 
+  test("every child carries the parent's relationship, and the contact holds none (#312)", async () => {
+    const sent = form({
+      parent: parent({ relationship: "Other", relationshipDescription: "Grandmother" }),
+      children: [child(), child({ className: "STD 4" })],
+    })
+    const result = await submitAdmissionForm(secretClient(), sent)
+    if (!result.ok) throw new Error(JSON.stringify(result.error))
+
+    const leads = await Promise.all(sent.children.map((c) => leadOf(c.fullName)))
+    for (const lead of leads) {
+      expect(lead.contact).toMatchObject({ relationship: "Other", relationshipDescription: "Grandmother" })
+    }
+    const rows = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query(
+            `select l.custodian_relationship::text as lead, g.relationship::text as contact
+             from public.leads l join public.guardian_contacts g on g.id = l.guardian_contact_id
+             where l.id = any($1::uuid[])`,
+            [leads.map((l) => l.id)],
+          )
+        ).rows,
+    )
+    expect(rows).toEqual([
+      { lead: "Other", contact: null },
+      { lead: "Other", contact: null },
+    ])
+  })
+
   test("a parent phone that matches a Family gives every child the same unconfirmed match and the Family cause", async () => {
     // A Family the front desk registered earlier, with one child.
-    const known = parent()
+    const known = parent({ relationship: "Guardian" })
     const desk = await createLead(await signedIn(ADMISSIONS), {
       guardian: { contact: known },
       student: child({ fullName: `Desk Pupil ${randomUUID().slice(0, 8)}` }),
@@ -302,7 +331,7 @@ describe("several children on one form", () => {
     const familyContact = deskLead.data.contact.id
 
     // The same parent applies online for two more children.
-    const sent = form({ parent: { ...known, fullName: "Typed On The Form" }, children: [child(), child()] })
+    const sent = form({ parent: { ...known, fullName: "Typed On The Form", relationship: "Mother" }, children: [child(), child()] })
     const result = await submitAdmissionForm(secretClient(), sent)
     expect(result.ok).toBe(true)
 
@@ -314,6 +343,8 @@ describe("several children on one form", () => {
     for (const lead of [first, second]) {
       const family = await getLeadFamily(staff, lead.id)
       expect(family.ok && family.data.pendingMatch?.id).toBe(familyContact)
+      // The matched parent's relationship to their first child (#312), not the form's.
+      expect(family.ok && family.data.pendingMatch?.relationship).toBe("Guardian")
       expect(family.ok && family.data.children.map((c) => [c.id, c.unconfirmed])).toEqual([
         [desk.data.leadId, false],
         [first.id, true],

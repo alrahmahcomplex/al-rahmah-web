@@ -222,7 +222,7 @@ describe("correcting the parent/guardian contact", () => {
       relationshipDescription: " Grandmother ",
       phone: `0${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`,
       whatsapp: `255${whatsappDigits}`,
-    })
+    }, undefined, undefined, lead.id)
     expect(result).toEqual({ ok: true, data: null })
 
     expect((await reread(lead.id)).contact).toEqual({
@@ -248,7 +248,8 @@ describe("correcting the parent/guardian contact", () => {
 
   test("leaving Other clears its description", async () => {
     const lead = await walkInLead({ contact: contact({ relationship: "Other", relationshipDescription: "Uncle" }) })
-    expect((await updateGuardianContact(await signedIn(ADMISSIONS), lead.contact.id, { relationship: "Father" })).ok).toBe(
+    const staff = await signedIn(ADMISSIONS)
+    expect((await updateGuardianContact(staff, lead.contact.id, { relationship: "Father" }, undefined, undefined, lead.id)).ok).toBe(
       true,
     )
     expect((await reread(lead.id)).contact).toMatchObject({ relationship: "Father", relationshipDescription: null })

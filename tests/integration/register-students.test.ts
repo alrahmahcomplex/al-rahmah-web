@@ -16,6 +16,7 @@ import {
   LEAD_CLASSES,
   registerStudents,
   updateGuardianContact,
+  type ContactChanges,
   type LeadClass,
   type RegisterStudentsInput,
   type RegistrationPerson,
@@ -341,7 +342,7 @@ describe("one save for the whole form", () => {
     expect(eight).toHaveLength(8)
   })
 
-  test("one person is stored once, Mother to one child and Aunt to another, and keeps both when the person is corrected", async () => {
+  test("one person is stored once, Mother to one child and Aunt to another, and a correction reaches only the children sharing one", async () => {
     const year = await registrationYear()
     const parent = person({ whatsapp: phone() })
     const [own, niece] = await created({
@@ -358,39 +359,37 @@ describe("one save for the whole form", () => {
     expect(nieceRow).toMatchObject({ custodian_relationship: "Other", custodian_relationship_description: "Aunt" })
     const contacts = await inRolledBackTransaction(async (sql) =>
       (
-        await sql.query<{ n: number; relationship: string }>(
-          "select count(*)::int as n, min(relationship::text) as relationship from public.guardian_contacts where phone = public.normalize_phone($1)",
-          [(parent as { phone: string }).phone],
-        )
+        await sql.query<{ n: number }>("select count(*)::int as n from public.guardian_contacts where phone = public.normalize_phone($1)", [
+          (parent as { phone: string }).phone,
+        ])
       ).rows[0],
     )
-    expect(contacts).toEqual({ n: 1, relationship: "Mother" })
+    expect(contacts).toEqual({ n: 1 })
+    expect(await rowOf(own.leadId)).toMatchObject({ custodian_relationship_own: false })
+    expect(await rowOf(niece.leadId)).toMatchObject({ custodian_relationship_own: true })
 
-    // Today's correction screen changes the person's relationship: the child
-    // whose relationship was the person's follows, the niece stays.
-    expect(await updateGuardianContact(await signedIn(ADMISSIONS), ownRow.guardian_contact_id, { relationship: "Guardian" })).toEqual({
-      ok: true,
-      data: null,
-    })
+    // A correction from the first child's page (#312) reaches the children
+    // holding its relationship: the niece stays.
+    const staff = await signedIn(ADMISSIONS)
+    const fromOwn = (changes: ContactChanges) =>
+      updateGuardianContact(staff, ownRow.guardian_contact_id, changes, undefined, undefined, own.leadId)
+    expect(await fromOwn({ relationship: "Guardian" })).toEqual({ ok: true, data: null })
     expect((await rowOf(own.leadId)).custodian_relationship).toBe("Guardian")
     expect(await rowOf(niece.leadId)).toMatchObject({ custodian_relationship: "Other", custodian_relationship_description: "Aunt" })
 
-    // More corrections, one of them to the niece's own value: the niece's
-    // relationship is hers, not a copy that happens to match.
-    const staff = await signedIn(ADMISSIONS)
-    for (const changes of [
-      { relationship: "Other" as const, relationshipDescription: "Aunt" },
-      { relationship: "Mother" as const, relationshipDescription: null },
-    ]) {
-      expect(await updateGuardianContact(staff, ownRow.guardian_contact_id, changes)).toEqual({ ok: true, data: null })
-      expect(await rowOf(own.leadId)).toMatchObject({
-        custodian_relationship: changes.relationship,
-        custodian_relationship_description: changes.relationshipDescription,
-      })
-      expect(await rowOf(niece.leadId)).toMatchObject({ custodian_relationship: "Other", custodian_relationship_description: "Aunt" })
+    // From the niece's page, only the niece changes.
+    expect(
+      await updateGuardianContact(staff, ownRow.guardian_contact_id, { relationship: "Mother" }, undefined, undefined, niece.leadId),
+    ).toEqual({ ok: true, data: null })
+    expect(await rowOf(niece.leadId)).toMatchObject({ custodian_relationship: "Mother", custodian_relationship_description: null })
+    expect((await rowOf(own.leadId)).custodian_relationship).toBe("Guardian")
+
+    // Once the two hold the same relationship, a correction reaches both.
+    expect(await fromOwn({ relationship: "Mother" })).toEqual({ ok: true, data: null })
+    expect(await fromOwn({ relationship: "Other", relationshipDescription: "Aunt" })).toEqual({ ok: true, data: null })
+    for (const id of [own.leadId, niece.leadId]) {
+      expect(await rowOf(id)).toMatchObject({ custodian_relationship: "Other", custodian_relationship_description: "Aunt" })
     }
-    expect(await rowOf(own.leadId)).toMatchObject({ custodian_relationship_own: false })
-    expect(await rowOf(niece.leadId)).toMatchObject({ custodian_relationship_own: true })
   })
 
   test("the father as custodian: the person takes the father's full name, and the relationship is Father", async () => {
@@ -406,13 +405,13 @@ describe("one save for the whole form", () => {
     })
     const contact = await inRolledBackTransaction(async (sql) =>
       (
-        await sql.query<{ full_name: string; relationship: string }>(
-          "select full_name, relationship::text from public.guardian_contacts where phone = public.normalize_phone($1)",
+        await sql.query<{ full_name: string }>(
+          "select full_name from public.guardian_contacts where phone = public.normalize_phone($1)",
           [number],
         )
       ).rows[0],
     )
-    expect(contact).toEqual({ full_name: nameOf(family), relationship: "Father" })
+    expect(contact).toEqual({ full_name: nameOf(family) })
     expect((await rowOf(first.leadId)).custodian_relationship).toBe("Father")
     expect(second.sibling).toMatchObject({ basis: "matched" })
   })

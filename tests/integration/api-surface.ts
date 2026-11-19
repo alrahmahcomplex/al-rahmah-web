@@ -1200,12 +1200,13 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: {},
     agent: { anyAnswer: "Today's date in Tanzania, the same for everyone." },
   },
-  "public.update_guardian_contact(contact_id uuid, changes jsonb, expected_lead_ids uuid[])": {
+  "public.update_guardian_contact(contact_id uuid, changes jsonb, expected_lead_ids uuid[], lead_id uuid)": {
     roles: ["authenticated"],
     args: {
       contact_id: "'c0c0c0c0-0000-4000-8000-000000000431'",
       changes: '\'{"student_name": "Asha Referral"}\'::jsonb',
       expected_lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]",
+      lead_id: "'1ead0000-0000-4000-8000-000000000431'",
     },
     agent: { refused: "not_permitted" },
   },

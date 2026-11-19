@@ -641,6 +641,7 @@ export type Lead = {
   contact: {
     id: string
     fullName: string
+    // This child's relationship to the contact, held on the lead (#312).
     relationship: Relationship
     relationshipDescription: string | null
     phone: string
@@ -662,11 +663,12 @@ type LeadRow = {
   returning_family_joined: boolean
   returning_family_reapplied: boolean
   initially_declined: boolean
+  // The custodian's relationship to this child (#312).
+  custodian_relationship: Relationship
+  custodian_relationship_description: string | null
   guardian_contacts: {
     id: string
     full_name: string
-    relationship: Relationship
-    relationship_description: string | null
     phone: string
     whatsapp: string | null
   }
@@ -716,7 +718,7 @@ export async function getLead(supabase: SupabaseClient, id: string): Promise<Res
   const { data, error } = await supabase
     .from("leads")
     .select(
-      "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, gender, status, closure, visit_date, returning_family_joined, returning_family_reapplied, initially_declined, guardian_contacts!guardian_contact_id (id, full_name, relationship, relationship_description, phone, whatsapp)",
+      "id, admission_number, student_name, class_name, enrollment_year, day_or_boarding, gender, status, closure, visit_date, returning_family_joined, returning_family_reapplied, initially_declined, custodian_relationship, custodian_relationship_description, guardian_contacts!guardian_contact_id (id, full_name, phone, whatsapp)",
     )
     .eq("id", id)
     .maybeSingle<LeadRow>()
@@ -747,8 +749,8 @@ export async function getLead(supabase: SupabaseClient, id: string): Promise<Res
       contact: {
         id: data.guardian_contacts.id,
         fullName: data.guardian_contacts.full_name,
-        relationship: data.guardian_contacts.relationship,
-        relationshipDescription: data.guardian_contacts.relationship_description,
+        relationship: data.custodian_relationship,
+        relationshipDescription: data.custodian_relationship_description,
         phone: data.guardian_contacts.phone,
         whatsapp: data.guardian_contacts.whatsapp,
       },
@@ -1073,16 +1075,22 @@ export async function updateLeadDetails(
 // as `children-changed`.
 // With `sourceLeadId`, that lead must still be open and on this contact;
 // the database holds it through the write. Re-application Apply uses this.
+// The relationship is each child's own (#312): a change goes to the child
+// edited (`childId`, or the source lead) and to every child on the contact
+// that held the same relationship before. With neither, a relationship is
+// accepted only when no child would change.
 export async function updateGuardianContact(
   supabase: SupabaseClient,
   contactId: string,
   changes: ContactChanges,
   expectedChildren?: string[],
   sourceLeadId?: string,
+  childId?: string,
 ): Promise<Result<null, CorrectionError>> {
+  const leadId = sourceLeadId ?? childId
   return correction(
     supabase.rpc(sourceLeadId === undefined ? "update_guardian_contact" : "update_guardian_contact_for_lead", {
-      ...(sourceLeadId === undefined ? {} : { lead_id: sourceLeadId }),
+      ...(leadId === undefined ? {} : { lead_id: leadId }),
       contact_id: contactId,
       changes: given({
         full_name: changes.fullName,
@@ -1215,8 +1223,6 @@ export type FamilyChild = {
 export type FamilyContact = {
   id: string
   fullName: string
-  relationship: Relationship
-  relationshipDescription: string | null
   phone: string
   whatsapp: string | null
   // Every lead on this contact, oldest first, then, marked unconfirmed, the
@@ -1244,8 +1250,6 @@ type FamilyMatchRow = {
   contacts: {
     id: string
     full_name: string
-    relationship: Relationship
-    relationship_description: string | null
     phone: string
     whatsapp: string | null
     children: FamilyChildRow[]
@@ -1309,8 +1313,6 @@ export async function findFamilyByPhone(
       contacts: row.contacts.map((contact) => ({
         id: contact.id,
         fullName: contact.full_name,
-        relationship: contact.relationship,
-        relationshipDescription: contact.relationship_description,
         phone: contact.phone,
         whatsapp: contact.whatsapp,
         children: contact.children.map(familyChild),
@@ -1370,7 +1372,11 @@ export type LeadFamilyChild = FamilyChild & {
 export type LeadFamily = {
   // The contact the Admission form matched this lead's parent to, which staff
   // have not yet confirmed, or null when there is nothing to settle.
-  pendingMatch: Omit<FamilyContact, "children"> | null
+  // Its relationship is the matched parent's to their first child, empty
+  // when no child is on that contact (#312).
+  pendingMatch:
+    | (Omit<FamilyContact, "children"> & { relationship: Relationship | null; relationshipDescription: string | null })
+    | null
   // The Family's children, the lead included: those on the Family's contact,
   // oldest first, then those still unconfirmed. With a pending match, the
   // Family is the matched one, and the lead is among the unconfirmed.
@@ -1382,7 +1388,7 @@ type LeadFamilyRow = {
   pending_match: {
     id: string
     full_name: string
-    relationship: Relationship
+    relationship: Relationship | null
     relationship_description: string | null
     phone: string
     whatsapp: string | null

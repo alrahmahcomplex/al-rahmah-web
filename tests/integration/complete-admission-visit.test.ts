@@ -1212,7 +1212,7 @@ describe("refusals of the call", () => {
 });
 
 describe("a child's own relationship", () => {
-  test("survives two corrections of the person's relationship in a row", async () => {
+  test("survives two corrections of the first child's relationship in a row", async () => {
     const year = await registrationYear();
     const [a, nephew] = [child(fatherParts()), child(fatherParts())];
     const { leadIds, contactId } = await applied([a, nephew], year);
@@ -1235,13 +1235,27 @@ describe("a child's own relationship", () => {
     });
 
     const staff = await signedIn(ADMISSIONS);
+    // From the first child's page (#312): only children holding its
+    // relationship change.
     expect(
-      await updateGuardianContact(staff, contactId, {
-        relationship: "Guardian",
-      }),
+      await updateGuardianContact(
+        staff,
+        contactId,
+        { relationship: "Guardian" },
+        undefined,
+        undefined,
+        leadIds[0],
+      ),
     ).toMatchObject({ ok: true });
     expect(
-      await updateGuardianContact(staff, contactId, { relationship: "Mother" }),
+      await updateGuardianContact(
+        staff,
+        contactId,
+        { relationship: "Mother" },
+        undefined,
+        undefined,
+        leadIds[0],
+      ),
     ).toMatchObject({ ok: true });
     expect(await rowOf(leadIds[1])).toMatchObject({
       custodian_relationship: "Other",

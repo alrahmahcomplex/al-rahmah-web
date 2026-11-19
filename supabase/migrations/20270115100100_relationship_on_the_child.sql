@@ -103,8 +103,10 @@ begin
 
     -- set_lead_custodian_relationship, as 20261216100100 made it, now only
     -- filling an empty relationship on a new lead, for test and seed rows
-    -- that insert leads directly. A lead moved to another contact keeps its
-    -- own. Removed with the contact's columns.
+    -- that insert leads directly: the contact's first child's, as create_lead
+    -- gives a child on a known contact, or else the contact's frozen one. A
+    -- lead moved to another contact keeps its own. Removed with the
+    -- contact's columns.
     create or replace function public.set_lead_custodian_relationship()
     returns trigger
     language plpgsql
@@ -113,6 +115,14 @@ begin
     declare
         contact public.guardian_contacts;
     begin
+        if new.custodian_relationship is null then
+            select l.custodian_relationship, l.custodian_relationship_description
+            into new.custodian_relationship, new.custodian_relationship_description
+            from public.leads l
+            where l.guardian_contact_id = new.guardian_contact_id
+            order by l.created_at, l.id
+            limit 1;
+        end if;
         if new.custodian_relationship is null then
             select * into contact from public.guardian_contacts g where g.id = new.guardian_contact_id;
             if found then

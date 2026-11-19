@@ -467,7 +467,9 @@ insert into public.streams (enrollment_year, class_name, label, takes, seats, po
 select c.enrollment_year, c.class_name, 'A', 'Mixed', sum(c.seats)::integer, 1
 from public.class_seats c
 where c.enrollment_year = 2027
-group by c.enrollment_year, c.class_name;
+group by c.enrollment_year, c.class_name
+-- As the activation: 0 on one side with the other not set gets no stream.
+having not (count(*) = 1 and sum(c.seats) = 0);
 
 select public.reconcile_class_seats(s.enrollment_year, s.class_name, '{}'::jsonb, 'migration', '{}'::text[])
 from public.streams s

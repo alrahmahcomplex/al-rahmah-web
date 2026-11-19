@@ -5,7 +5,7 @@ vi.mock("server-only", () => ({}))
 
 import { declineLead, markLead } from "@/lib/services/lead-closure"
 
-import { inRolledBackTransaction, signedIn, unusedAdmissionNumber } from "../../support/db"
+import { actAsStaff, asSystem, inRolledBackTransaction, signedIn, unusedAdmissionNumber } from "../../support/db"
 import { MANAGER } from "../../support/fixtures"
 import { child, holder, refusal, streamYears } from "../../support/streams"
 
@@ -34,6 +34,9 @@ import { child, holder, refusal, streamYears } from "../../support/streams"
 //                                  child with no payment
 //   zeroBoth  Day 0, Boarding 0    one holder
 //   zeroOne   Day 0, Boarding 2    one holder
+//   zeroUnset Boarding 0 only      one holder: the class gets no stream and
+//                                  keeps no limit (the lead's decision of
+//                                  2026-11-19, from the owner's Q17)
 //   notSet    no seats             one holder
 
 const yearAndClasses = streamYears()
@@ -56,20 +59,22 @@ type Report = {
   classes_with_one_of_day_and_boarding_set: number
   classes_at_0_on_both_sides: number
   classes_at_0_on_one_side_only: number
+  classes_at_0_with_other_side_not_set: number
+  classes_left_with_no_stream: { year: number; class: string; day_seats: number | null; boarding_seats: number | null; seat_holders: number }[]
   classes: ClassReport[]
 }
 
 let year: number
-let both: string, daySet: string, over: string, zeroBoth: string, zeroOne: string, notSet: string
+let both: string, daySet: string, over: string, zeroBoth: string, zeroOne: string, zeroUnset: string, notSet: string
 const lead: Record<string, string> = {}
 // For the Enrolled imported child each run makes inside its transaction.
 let importedNumber: string
 
 beforeAll(async () => {
   importedNumber = await unusedAdmissionNumber()
-  const claimed = await yearAndClasses(6)
+  const claimed = await yearAndClasses(7)
   year = claimed.year
-  ;[both, daySet, over, zeroBoth, zeroOne, notSet] = claimed.classes
+  ;[both, daySet, over, zeroBoth, zeroOne, zeroUnset, notSet] = claimed.classes
   const manager = await signedIn(MANAGER)
 
   lead.bothDay = await holder(year, both, "Boy", 9)
@@ -94,6 +99,7 @@ beforeAll(async () => {
 
   lead.zeroBoth = await holder(year, zeroBoth, "Boy", 4)
   lead.zeroOne = await holder(year, zeroOne, "Girl", 4)
+  lead.zeroUnset = await holder(year, zeroUnset, "Girl", 4)
   lead.notSet = await holder(year, notSet, "Boy", 4)
   // A child with no payment at all.
   lead.noPayment = await child(year, both, "Girl")
@@ -109,6 +115,7 @@ const SEATS: () => [string, "Day" | "Boarding", number][] = () => [
   [zeroBoth, "Boarding", 0],
   [zeroOne, "Day", 0],
   [zeroOne, "Boarding", 2],
+  [zeroUnset, "Boarding", 0],
 ]
 
 /**
@@ -225,8 +232,10 @@ describe("the activation's dry run", () => {
             A(zeroOne, 2), // 0 on one side takes the other side's number (Q17)
           ]),
         )
-        // Seats not set: no stream, so no limit.
+        // Seats not set, or 0 on one side with the other not set: no stream,
+        // so no limit.
         expect(streams.map((s) => s.class_name)).not.toContain(notSet)
+        expect(streams.map((s) => s.class_name)).not.toContain(zeroUnset)
 
         // The children.
         expect(await seatsOf(sql, everyone)).toEqual({
@@ -250,6 +259,8 @@ describe("the activation's dry run", () => {
           imported: "no seat",
           zeroBoth: `waiting for ${zeroBoth}`,
           zeroOne: `placed in ${zeroOne} A`,
+          // No stream in their class: neither placed nor waiting.
+          zeroUnset: "no seat",
           notSet: "no seat",
         })
         const { rows: causes } = await sql.query<{ cause: string }>("select distinct cause from public.seat_placements")
@@ -280,11 +291,12 @@ describe("the activation's dry run", () => {
           waiting: report.children_waiting,
           audit_rows: before.audit_rows + 1,
         })
-        const { rows: shapes } = await sql.query<{ classes: number; one_side: number; zero_both: number; zero_one: number }>(
-          `select count(*)::int as classes,
-                  (count(*) filter (where sides = 1))::int as one_side,
+        const { rows: shapes } = await sql.query<{ classes: number; one_side: number; zero_both: number; zero_one: number; zero_unset: number }>(
+          `select (count(*) filter (where not (sides = 1 and most = 0)))::int as classes,
+                  (count(*) filter (where sides = 1 and most > 0))::int as one_side,
                   (count(*) filter (where sides = 2 and most = 0))::int as zero_both,
-                  (count(*) filter (where sides = 2 and least = 0 and most > 0))::int as zero_one
+                  (count(*) filter (where sides = 2 and least = 0 and most > 0))::int as zero_one,
+                  (count(*) filter (where sides = 1 and most = 0))::int as zero_unset
            from (select count(*) as sides, min(seats) as least, max(seats) as most
                  from public.class_seats group by enrollment_year, class_name) c`,
         )
@@ -293,7 +305,15 @@ describe("the activation's dry run", () => {
           one_side: report.classes_with_one_of_day_and_boarding_set,
           zero_both: report.classes_at_0_on_both_sides,
           zero_one: report.classes_at_0_on_one_side_only,
+          zero_unset: report.classes_at_0_with_other_side_not_set,
         }).toEqual(shapes[0])
+        // The classes left with no stream are named, so the Manager can open
+        // streams for them on Seats.
+        expect(report.classes_left_with_no_stream).toHaveLength(report.classes_at_0_with_other_side_not_set)
+        expect(report.classes_left_with_no_stream.filter((entry) => entry.year === year)).toEqual([
+          { year, class: zeroUnset, day_seats: null, boarding_seats: 0, seat_holders: 1 },
+        ])
+        expect(mine[zeroUnset]).toBeUndefined()
 
         // The audit row the Super Admin reads: one, payment scope, as the system.
         const { rows: audit } = await sql.query(
@@ -317,7 +337,8 @@ describe("the activation's dry run", () => {
             "Dry run of activate_streams() (rolled back)",
             `Before: mode ${before.mode}, ${before.streams} streams, ${before.placed} placed, ${before.waiting} waiting`,
             `After:  mode ${after.mode}, ${after.streams} streams, ${after.placed} placed, ${after.waiting} waiting, 1 audit row (streams_activated)`,
-            `Classes with only one of Day and Boarding set: ${report.classes_with_one_of_day_and_boarding_set}; at 0 on both sides: ${report.classes_at_0_on_both_sides}; at 0 on one side only: ${report.classes_at_0_on_one_side_only}`,
+            `Streams from a class with only one of Day and Boarding set: ${report.classes_with_one_of_day_and_boarding_set}; at 0 on both sides: ${report.classes_at_0_on_both_sides}; at 0 on one side only: ${report.classes_at_0_on_one_side_only}`,
+            `Classes left with no stream (0 on one side, the other not set): ${report.classes_at_0_with_other_side_not_set}`,
             "",
             `Fixture year ${year}, shaped like the school's data:`,
             `${"class".padEnd(22)} | Day seats | Boarding seats | stream A seats | seat holders | placed | waiting`,
@@ -331,6 +352,7 @@ describe("the activation's dry run", () => {
               const c = mine[className]
               return `${`${name} (${className})`.padEnd(22)} | ${String(c.day_seats ?? "not set").padEnd(9)} | ${String(c.boarding_seats ?? "not set").padEnd(14)} | ${String(c.seats).padEnd(14)} | ${String(c.seat_holders).padEnd(12)} | ${String(c.placed).padEnd(6)} | ${c.waiting}`
             }),
+            `${`zeroUnset (${zeroUnset})`.padEnd(22)} | not set   | 0              | no stream      | 1            | -      | -`,
             `${`notSet (${notSet})`.padEnd(22)} | not set   | not set        | no stream      | 1            | -      | -`,
             "",
             `Other years' seats moved in the same run (seeded and earlier tests'): ${others.length} classes, ${others.reduce((n, c) => n + c.placed, 0)} placed, ${others.reduce((n, c) => n + c.waiting, 0)} waiting`,
@@ -385,6 +407,20 @@ describe("the activation's dry run", () => {
     })
   })
 
+  test("it refuses to start while the seat sync queue holds a row", async () => {
+    await inRolledBackTransaction(async (sql) => {
+      await beforeActivation(sql)
+      // A retry left behind: the first check would read it as a skipped child.
+      await sql.query("insert into public.seat_sync_queue (lead_id, cause, retry, retry_year, retry_class) values ($1, 'retry', true, $2, $3)", [
+        lead.bothDay, year, both,
+      ])
+      const before = await counts(sql)
+      expect(await refusal(sql, "select public.activate_streams()", [])).toBe("seat_queue_not_empty")
+      expect(await counts(sql)).toEqual(before)
+      expect(before).toMatchObject({ mode: "legacy", streams: 0 })
+    })
+  })
+
   test("no API role may run it", async () => {
     const granted = await inRolledBackTransaction(async (sql) => {
       const { rows } = await sql.query<{ role: string; granted: boolean }>(
@@ -394,5 +430,61 @@ describe("the activation's dry run", () => {
       return rows.filter((row) => row.granted)
     })
     expect(granted).toEqual([])
+  })
+})
+
+// 20270113100050: set_academic_year checks the seat mode again once it holds
+// the year's schedule row. The activation holds the schedules while it moves
+// the seats, so a Fee schedule save sent in that moment passes the first
+// check under legacy and waits. This plays that moment with two sessions. It
+// commits the mode as `legacy` for the length of the test and puts `named`
+// back, which is why it is here, where nothing runs beside it.
+describe("a seats save that crosses the activation", () => {
+  test("passes the mode check under legacy, waits for the schedule row, and is refused once the mode is named", async () => {
+    const activation = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    const save = new Client({ connectionString: process.env.SUPABASE_DB_URL })
+    await activation.connect()
+    await save.connect()
+    const seatsOf = async () =>
+      (await activation.query("select day_or_boarding::text, seats from public.class_seats where enrollment_year = $1 and class_name = $2 order by 1", [year, notSet])).rows
+    try {
+      const seatsBefore = await seatsOf()
+      await asSystem((sql) => sql.query("update public.seat_settings set mode = 'legacy'"))
+
+      // The activation: it holds the year's schedule and has switched the
+      // mode, and has not committed yet.
+      await activation.query("begin")
+      await activation.query("select public.set_audit_actor('system')")
+      await activation.query("select 1 from public.fee_schedules where enrollment_year = $1 for update", [year])
+      await activation.query("update public.seat_settings set mode = 'named'")
+
+      // The Manager's save, from a Fee schedule form that still has seat boxes.
+      await save.query("begin")
+      await actAsStaff(save, MANAGER.id)
+      const { rows } = await save.query<{ pid: number }>("select pg_backend_pid() as pid")
+      const settings = JSON.stringify({ seats: [{ class_name: notSet, day_or_boarding: "Day", seats: 30, was: null }] })
+      const answer = save.query("select public.set_academic_year($1, $2::jsonb)", [year, settings]).then(
+        () => "saved",
+        (error: Error) => error.message,
+      )
+
+      // It got past the first check, or it would not be waiting for the row.
+      await expect
+        .poll(async () => (await activation.query("select wait_event_type from pg_stat_activity where pid = $1", [rows[0].pid])).rows[0]?.wait_event_type, {
+          timeout: 15_000,
+        })
+        .toBe("Lock")
+
+      await activation.query("commit")
+      expect(await answer).toBe("seats_moved")
+      await save.query("rollback")
+      expect(await seatsOf()).toEqual(seatsBefore)
+    } finally {
+      await activation.query("rollback").catch(() => {})
+      await save.query("rollback").catch(() => {})
+      await activation.end()
+      await save.end()
+      await asSystem((sql) => sql.query("update public.seat_settings set mode = 'named' where mode <> 'named'"))
+    }
   })
 })

@@ -12,13 +12,23 @@
 -- API role may execute it. The clean-up slice drops it with that test.
 --
 -- 1. Guard: raises `streams_already_active` when the mode is not `legacy`,
---    and `streams_exist` when any stream or seat placement exists.
--- 2. For each Enrollment year and class with seats set in class_seats: one
---    Mixed stream labelled A, position 1. Its seats are Day plus Boarding;
---    a side that is not set counts as nothing, so a class with one side set
---    takes that side (Q8). 0 on both sides stays 0, a full class; 0 on one
---    side takes the other side's number (Q17). A class with seats not set
---    gets no stream and keeps no limit.
+--    `streams_exist` when any stream or seat placement exists, and
+--    `seat_queue_not_empty` when the seat sync queue holds a row (a retry
+--    left there would fail the first check every time).
+-- 2. The rule, for each Enrollment year and class with seats set in
+--    class_seats. It is written once, in the query that fills
+--    streams_activation_classes; everything after reads that table.
+--      Day and Boarding both set   one Mixed stream labelled A, position 1,
+--                                  its seats Day plus Boarding. 0 on both
+--                                  sides stays 0, a full class; 0 on one
+--                                  side takes the other side's number (Q17).
+--      one side set, above 0       the stream takes that side's number (Q8).
+--      one side at 0, the other    no stream: the class keeps no limit, as
+--      not set                     the side not set has today (the lead's
+--                                  decision of 2026-11-19, from Q17). The
+--                                  audit row names these classes, so the
+--                                  Manager can open streams for them.
+--      seats not set               no stream; the class keeps no limit.
 -- 3. Each migrated class is reconciled by the engine's own
 --    reconcile_class_seats, cause `migration`: its seat holders (a Seat
 --    priority, not Declined; Inactive and Archived keep theirs) are placed
@@ -27,8 +37,9 @@
 --    any other (Q7). A child with no Seat priority, an Enrolled imported
 --    student with no payment among them, holds no seat before or after
 --    (Q18). Day or boarding no longer splits the count: in a class where
---    only one side was set, the children of the other side now count
---    against that side's number.
+--    only one side was set, above 0, the children of the other side now
+--    count against that side's number. A class left with no stream is not
+--    reconciled: its seat holders are neither placed nor waiting.
 -- 4. Checks, each raising:
 --      activation_child_busy      a child's row was held by another
 --                                 transaction, so the engine skipped them;
@@ -44,10 +55,12 @@
 --                                 count differs from fee_snapshot() taken
 --                                 before the move.
 -- 5. One audit row, action `streams_activated`, payment scope, as `system`:
---    streams created, children placed and waiting, classes with only one
---    of Day and Boarding set, classes at 0 on both sides, classes at 0 on
---    one side only, and each class's own numbers. The Super Admin reads it
---    on the Audit screen.
+--    streams created, children placed and waiting, and how many streams
+--    came from a class with only one of Day and Boarding set, with 0 on
+--    both sides, and with 0 on one side and a number on the other; each
+--    stream's class with its own numbers; and the classes left with no
+--    stream because one side was 0 and the other not set, counted and
+--    named. The Super Admin reads it on the Audit screen.
 -- 6. seat_settings.mode becomes `named`.
 --
 -- Locks, in the order the Fee schedule's own writers take them: fee
@@ -94,21 +107,52 @@ begin
         if exists (select 1 from public.streams) or exists (select 1 from public.seat_placements) then
             raise exception 'streams_exist';
         end if;
+        -- Nothing is queued while the mode is legacy. A row left here would
+        -- be read below as a child the engine skipped.
+        if exists (select 1 from public.seat_sync_queue) then
+            raise exception 'seat_queue_not_empty';
+        end if;
 
         drop table if exists pg_temp.streams_activation_snapshot_before;
         create temp table streams_activation_snapshot_before as select * from public.fee_snapshot();
 
-        -- 2 and 3. One Mixed stream A per class and year with seats set, then
-        -- the engine places its seat holders.
+        -- 2. THE RULE: what each class's seats become. This query is the one
+        -- place that decides it; `stream_seats` is the seats of the class's
+        -- stream, or null when the class gets no stream. To change the rule,
+        -- change this `case` and nothing else.
+        drop table if exists pg_temp.streams_activation_classes;
+        create temp table streams_activation_classes as
+        select c.enrollment_year, c.class_name, c.day_seats, c.boarding_seats,
+               case
+                   -- Day and Boarding both set: the two added together. 0 on
+                   -- both sides stays 0, a full class; 0 on one side takes
+                   -- the other side's number (Q17).
+                   when c.day_seats is not null and c.boarding_seats is not null
+                       then least(c.day_seats::bigint + c.boarding_seats, 2147483647)::integer
+                   -- One side at 0 and the other not set: no stream, so the
+                   -- class keeps no limit, as the side not set has today.
+                   when coalesce(c.day_seats, c.boarding_seats) = 0 then null
+                   -- One side set: that side (Q8).
+                   else coalesce(c.day_seats, c.boarding_seats)
+               end as stream_seats
+        from (
+            select s.enrollment_year, s.class_name,
+                   max(s.seats) filter (where s.day_or_boarding = 'Day') as day_seats,
+                   max(s.seats) filter (where s.day_or_boarding = 'Boarding') as boarding_seats
+            from public.class_seats s
+            group by s.enrollment_year, s.class_name
+        ) c;
+
+        -- 3. One Mixed stream A per class the rule gives seats, then the
+        -- engine places its seat holders.
         for target in
-            select c.enrollment_year, c.class_name,
-                   least(sum(c.seats::bigint), 2147483647)::integer as seats
-            from public.class_seats c
-            group by c.enrollment_year, c.class_name
+            select c.enrollment_year, c.class_name, c.stream_seats
+            from pg_temp.streams_activation_classes c
+            where c.stream_seats is not null
             order by c.enrollment_year, c.class_name
         loop
             insert into public.streams (enrollment_year, class_name, label, takes, seats, position)
-            values (target.enrollment_year, target.class_name, 'A', 'Mixed', target.seats, 1);
+            values (target.enrollment_year, target.class_name, 'A', 'Mixed', target.stream_seats, 1);
             perform public.reconcile_class_seats(target.enrollment_year, target.class_name, '{}'::jsonb, 'migration', '{}'::text[]);
         end loop;
 
@@ -186,25 +230,39 @@ begin
         perform public.assert_fee_snapshot_unchanged('pg_temp.streams_activation_snapshot_before');
 
         -- 5. The record of what it did.
+        -- The first three class counts are of the streams created; a class
+        -- left with no stream is in none of them, and has its own count and
+        -- its name in the list after it.
         with classes as (
-            select s.enrollment_year, s.class_name, s.seats,
-                   d.seats as day_seats, b.seats as boarding_seats,
+            select s.enrollment_year, s.class_name, s.seats, c.day_seats, c.boarding_seats,
                    (select count(*) from pg_temp.streams_activation_holders h where h.stream_id = s.id) as holders,
                    (select count(*) from public.seat_placements p where p.stream_id = s.id) as placed
             from public.streams s
-            left join public.class_seats d
-                on d.enrollment_year = s.enrollment_year and d.class_name = s.class_name and d.day_or_boarding = 'Day'
-            left join public.class_seats b
-                on b.enrollment_year = s.enrollment_year and b.class_name = s.class_name and b.day_or_boarding = 'Boarding'
+            join pg_temp.streams_activation_classes c
+                on c.enrollment_year = s.enrollment_year and c.class_name = s.class_name
+        ),
+        no_stream as (
+            select c.enrollment_year, c.class_name, c.day_seats, c.boarding_seats,
+                   (select count(*) from public.seat_holders(c.enrollment_year) h where h.class_name = c.class_name) as holders
+            from pg_temp.streams_activation_classes c
+            where c.stream_seats is null
         )
         select jsonb_build_object(
             'ticket', '#449',
             'streams_created', count(*),
             'children_placed', coalesce(sum(c.placed), 0),
             'children_waiting', coalesce(sum(c.holders - c.placed), 0),
-            'classes_with_one_of_day_and_boarding_set', count(*) filter (where (c.day_seats is null) <> (c.boarding_seats is null)),
+            'classes_with_one_of_day_and_boarding_set', count(*) filter (where c.day_seats is null or c.boarding_seats is null),
             'classes_at_0_on_both_sides', count(*) filter (where c.day_seats = 0 and c.boarding_seats = 0),
             'classes_at_0_on_one_side_only', count(*) filter (where (c.day_seats = 0) <> (c.boarding_seats = 0)),
+            'classes_at_0_with_other_side_not_set', (select count(*) from no_stream),
+            'classes_left_with_no_stream', (
+                select coalesce(jsonb_agg(jsonb_build_object(
+                    'year', n.enrollment_year, 'class', n.class_name,
+                    'day_seats', n.day_seats, 'boarding_seats', n.boarding_seats, 'seat_holders', n.holders
+                ) order by n.enrollment_year, n.class_name), '[]'::jsonb)
+                from no_stream n
+            ),
             'classes', coalesce(jsonb_agg(jsonb_build_object(
                 'year', c.enrollment_year, 'class', c.class_name,
                 'day_seats', c.day_seats, 'boarding_seats', c.boarding_seats, 'seats', c.seats,
@@ -218,6 +276,7 @@ begin
         values ('streams_activated', report, 'payment', 'system');
 
         drop table pg_temp.streams_activation_holders;
+        drop table pg_temp.streams_activation_classes;
         drop table pg_temp.streams_activation_snapshot_before;
 
         -- 6. The switch, last: everything above was checked first.

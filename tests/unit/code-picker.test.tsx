@@ -51,6 +51,20 @@ describe("the list's rules", () => {
     expect(completeCode("", sorted)).toBeNull()
   })
 
+  it("never swaps a whole listed code for a longer one", () => {
+    const overlapping = sortCodeOptions([
+      { kind: "promo", code: "SAVE100", detail: "TZS 20,000 off" },
+      { kind: "promo", code: "SAVE10", detail: "TZS 10,000 off" },
+      { kind: "agent", code: "ABC-123", detail: "Amina Bakari Chande" },
+      { kind: "promo", code: "ABC1234", detail: "TZS 5,000 off" },
+    ])
+    expect(completeCode("SAVE1", overlapping)).toBe("SAVE10")
+    expect(completeCode("SAVE10", overlapping)).toBeNull()
+    // A whole agent code stays, though a Promo code listed before it begins the same way.
+    expect(completeCode("ABC-123", overlapping)).toBeNull()
+    expect(completeCode("ABC123", overlapping)).toBeNull()
+  })
+
   it("shows an agent's name beside the code, and what a Promo code takes off", () => {
     expect(codeOptionOf({ kind: "agent", code: "BJN-402", holderName: "Baraka Juma Ngowi", amountOff: 10_000 })).toEqual({
       kind: "agent",

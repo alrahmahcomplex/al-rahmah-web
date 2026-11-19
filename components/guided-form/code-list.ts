@@ -27,11 +27,13 @@ export function filterCodeOptions(query: string, options: readonly CodeOption[])
 /**
  * What the box shows when `typed` begins a listed code: the typed letters
  * as they are, then the rest of the first such code in list order. Null when
- * no code begins with them, or the code is already whole.
+ * no code begins with them, or when they already are a listed code, so a
+ * whole code (SAVE10) is never swapped for a longer one (SAVE100).
  */
 export function completeCode(typed: string, options: readonly CodeOption[]): string | null {
   if (typed === "") return null
   const typedKey = codeKey(typed)
+  if (options.some((option) => codeKey(option.code) === typedKey)) return null
   for (const option of options) {
     if (option.code.length > typed.length && option.code.toUpperCase().startsWith(typed.toUpperCase())) return typed + option.code.slice(typed.length)
     const key = codeKey(option.code)

@@ -754,7 +754,8 @@ describe("check-in of an Admission form family", () => {
             await sql.query(
               `select l.class_name, l.enrollment_year, l.day_or_boarding, l.brought_by_name, l.brought_by_phone,
                       l.brought_by_relationship, l.previous_school_name, l.previous_school_type, l.previous_school_region,
-                      l.previous_school_not_known, g.full_name, g.phone, g.whatsapp, g.relationship
+                      l.previous_school_not_known, l.custodian_relationship, l.custodian_relationship_description,
+                      g.full_name, g.phone, g.whatsapp
                from public.leads l join public.guardian_contacts g on g.id = l.guardian_contact_id where l.id = $1`,
               [id],
             )
@@ -1398,7 +1399,7 @@ describe("app.sibling_defer_contact_recompute", () => {
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')");
       const fresh = await sql.query<{ id: string }>(
-        "insert into public.guardian_contacts (full_name, relationship, phone, origin) values ('Move Test', 'Mother', public.normalize_phone($1), 'front_desk') returning id",
+        "insert into public.guardian_contacts (full_name, phone, origin) values ('Move Test', public.normalize_phone($1), 'front_desk') returning id",
         [phone()],
       );
       await sql.query(

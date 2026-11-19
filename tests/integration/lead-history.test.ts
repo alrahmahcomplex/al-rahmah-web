@@ -104,8 +104,8 @@ describe("a lead's history", () => {
     // and the lead moved onto it.
     const after = await asStaffActor(MANAGER.id, async (sql) => {
       const copy = await sql.query<{ id: string }>(
-        `insert into public.guardian_contacts (full_name, relationship, phone, origin)
-         select full_name, relationship, phone, origin from public.guardian_contacts where id = $1
+        `insert into public.guardian_contacts (full_name, phone, origin)
+         select full_name, phone, origin from public.guardian_contacts where id = $1
          returning id`,
         [before],
       )

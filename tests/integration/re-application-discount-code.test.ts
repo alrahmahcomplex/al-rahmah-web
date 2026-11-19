@@ -45,15 +45,15 @@ async function onFile({ referralCode = null, closure = null }: { referralCode?: 
   const admissionNumber = await unusedAdmissionNumber()
   const id = await asSystem(async (sql) => {
     const contact = await sql.query<{ id: string }>(
-      `insert into public.guardian_contacts (full_name, relationship, phone, origin)
-       values ($1, 'Mother', $2, 'admission_form') returning id`,
+      `insert into public.guardian_contacts (full_name, phone, origin)
+       values ($1, $2, 'admission_form') returning id`,
       [parent.fullName, stored(parent.phone)],
     )
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (
          admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-         status, closure, closure_reason, visit_date, guardian_contact_id, referral_code
-       ) values ($1, $2, 'STD 3', $3, 'Day', 'Visited', $4, $5, '2026-09-01', $6, $7) returning id`,
+         status, closure, closure_reason, visit_date, guardian_contact_id, referral_code, custodian_relationship
+       ) values ($1, $2, 'STD 3', $3, 'Day', 'Visited', $4, $5, '2026-09-01', $6, $7, 'Mother') returning id`,
       [
         admissionNumber,
         studentName,

@@ -115,16 +115,16 @@ async function onFile(
   const admissionNumber = await unusedAdmissionNumber()
   const id = await asSystem(async (sql) => {
     const contact = await sql.query<{ id: string }>(
-      `insert into public.guardian_contacts (full_name, relationship, phone, origin)
-       values ($1, 'Mother', $2, 'admission_form') returning id`,
+      `insert into public.guardian_contacts (full_name, phone, origin)
+       values ($1, $2, 'admission_form') returning id`,
       [parent.fullName, stored(parent.phone)],
     )
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (
          admission_number, student_name, class_name, enrollment_year, day_or_boarding,
          status, visit_date, guardian_contact_id, declined_reason, status_before_decline, gender,
-         closure, closure_reason
-       ) values ($1, $2, 'STD 3', $3, 'Day', $4, '2026-09-01', $5, $6, $7, $8, $9, $10) returning id`,
+         closure, closure_reason, custodian_relationship
+       ) values ($1, $2, 'STD 3', $3, 'Day', $4, '2026-09-01', $5, $6, $7, $8, $9, $10, 'Mother') returning id`,
       [
         admissionNumber,
         studentName,

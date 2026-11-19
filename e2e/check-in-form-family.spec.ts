@@ -33,15 +33,15 @@ async function sentForm(children: Child[]) {
   })
   const numbers = await asSystem(async (sql) => {
     await sql.query(
-      "insert into public.guardian_contacts (id, full_name, relationship, phone, origin) values ($1, $2, 'Mother', public.normalize_phone($3), 'admission_form')",
+      "insert into public.guardian_contacts (id, full_name, phone, origin) values ($1, $2, public.normalize_phone($3), 'admission_form')",
       [contactId, parent, parentPhone],
     )
     const taken: string[] = []
     for (const [i, c] of children.entries()) {
       const { rows } = await sql.query<{ admission_number: string }>(
         `insert into public.leads (id, admission_number, student_name, father_full_name, father_full_name_source, gender, class_name,
-                                   enrollment_year, day_or_boarding, status, guardian_contact_id)
-         select $1, free.number, $2, $3, 'entered', $4, $5, $6, 'Day', 'Applied', $7
+                                   enrollment_year, day_or_boarding, status, guardian_contact_id, custodian_relationship)
+         select $1, free.number, $2, $3, 'entered', $4, $5, $6, 'Day', 'Applied', $7, 'Mother'
          from (select 'ADMSN-' || lpad(n::text, 5, '0') as number from generate_series(0, 99999) n
                where not exists (select 1 from public.leads l where l.admission_number = 'ADMSN-' || lpad(n::text, 5, '0'))
                order by random() limit 1) free

@@ -227,9 +227,11 @@ describe("listing an enrollment year's interviews", () => {
 // register_for_interview would.
 async function addRegistrations(count: number) {
   await asSystem(async (sql) => {
-    const contact = await sql.query<{ guardian_contact_id: string }>("select guardian_contact_id from public.leads where id = $1", [
-      lead.waiting,
-    ])
+    const contact = await sql.query<{ guardian_contact_id: string; relationship: string; description: string | null }>(
+      `select guardian_contact_id, custodian_relationship::text as relationship, custodian_relationship_description as description
+         from public.leads where id = $1`,
+      [lead.waiting],
+    )
     const counter = await sql.query<{ last_number: number }>(
       "select last_number from public.interview_serial_counters where enrollment_year = $1 for update",
       [year],
@@ -242,12 +244,20 @@ async function addRegistrations(count: number) {
       [count],
     )
     const leads = await sql.query<{ id: string }>(
-      `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id)
-       select number, 'Paged ' || number, 'STD 1', $2, 'Day', 'Visited', $3::date, $4
+      `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id,
+                                 custodian_relationship, custodian_relationship_description)
+       select number, 'Paged ' || number, 'STD 1', $2, 'Day', 'Visited', $3::date, $4, $5::public.guardian_relationship, $6
          from unnest($1::text[]) with ordinality as t(number, position)
         order by position
        returning id`,
-      [numbers.rows.map((row) => row.admission_number), year, today, contact.rows[0].guardian_contact_id],
+      [
+        numbers.rows.map((row) => row.admission_number),
+        year,
+        today,
+        contact.rows[0].guardian_contact_id,
+        contact.rows[0].relationship,
+        contact.rows[0].description,
+      ],
     )
     await sql.query(
       `insert into public.interviews (lead, serial_number, serial_year, registered_by)

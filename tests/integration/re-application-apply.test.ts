@@ -36,15 +36,15 @@ async function onFile(closure: "Archived" | null = null): Promise<Lead> {
   const admissionNumber = await unusedAdmissionNumber()
   return asSystem(async (sql) => {
     const contact = await sql.query<{ id: string }>(
-      `insert into public.guardian_contacts (full_name, relationship, phone, origin)
-       values ('Mama Linganisha', 'Mother', $1, 'admission_form') returning id`,
+      `insert into public.guardian_contacts (full_name, phone, origin)
+       values ('Mama Linganisha', $1, 'admission_form') returning id`,
       [international(local)],
     )
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (
          admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-         status, closure, closure_reason, visit_date, guardian_contact_id
-       ) values ($1, $2, 'STD 3', $3, 'Day', 'Visited', $4, $5, '2026-09-01', $6) returning id`,
+         status, closure, closure_reason, visit_date, guardian_contact_id, custodian_relationship
+       ) values ($1, $2, 'STD 3', $3, 'Day', 'Visited', $4, $5, '2026-09-01', $6, 'Mother') returning id`,
       [admissionNumber, studentName, nextYear, closure, closure ? "No longer pursuing admission" : null, contact.rows[0].id],
     )
     return { id: lead.rows[0].id, contactId: contact.rows[0].id, studentName, phone: local }
@@ -77,8 +77,9 @@ async function openSibling(lead: Lead) {
   return asSystem(async (sql) => {
     const { rows } = await sql.query<{ id: string }>(
       `insert into public.leads (
-         admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id
-       ) values ($1, $2, 'KG 1', $3, 'Day', 'Applied', $4) returning id`,
+         admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id,
+         custodian_relationship
+       ) values ($1, $2, 'KG 1', $3, 'Day', 'Applied', $4, 'Mother') returning id`,
       [admissionNumber, `Ndugu Linganisha ${randomUUID().slice(0, 8)}`, nextYear, lead.contactId],
     )
     return rows[0].id
@@ -189,8 +190,9 @@ describe("Apply on a re-application", () => {
     await asSystem((sql) =>
       sql.query(
         `insert into public.leads (
-           admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id
-         ) values ($1, $2, 'KG 1', $3, 'Day', 'Applied', $4)`,
+           admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, guardian_contact_id,
+           custodian_relationship
+         ) values ($1, $2, 'KG 1', $3, 'Day', 'Applied', $4, 'Mother')`,
         [siblingNumber, `Ndugu Linganisha ${randomUUID().slice(0, 8)}`, nextYear, lead.contactId],
       ),
     )

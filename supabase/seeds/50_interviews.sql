@@ -14,25 +14,26 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000501', 'Rukia Interview', 'Mother', null, '+255700000501', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000502', 'Saidi Interview', 'Father', null, '+255700000502', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000503', 'Zawadi Interview', 'Mother', null, '+255700000503', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000504', 'Hamisi Interview', 'Father', null, '+255700000504', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000501', 'Rukia Interview', '+255700000501', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000502', 'Saidi Interview', '+255700000502', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000503', 'Zawadi Interview', '+255700000503', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000504', 'Hamisi Interview', '+255700000504', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined
+    status, closure, visit_date, guardian_contact_id, returning_family_joined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000501', 'ADMSN-90501', 'Amani Interview', 'STD 5', 2027, 'Day',
-        'Visited', null, date '2026-09-15', 'c0c0c0c0-0000-4000-8000-000000000501', false),
+        'Visited', null, date '2026-09-15', 'c0c0c0c0-0000-4000-8000-000000000501', false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000502', 'ADMSN-90502', 'Jabari Interview', 'KG 1', 2027, 'Boarding',
-        'Visited', null, date '2026-09-16', 'c0c0c0c0-0000-4000-8000-000000000502', false),
+        'Visited', null, date '2026-09-16', 'c0c0c0c0-0000-4000-8000-000000000502', false, 'Father', null),
     ('1ead0000-0000-4000-8000-000000000503', 'ADMSN-90503', 'Neema Interview', 'STD 1', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000503', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000503', false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000504', 'ADMSN-90504', 'Baraka Interview', 'FORM 1', 2027, 'Boarding',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000504', false);
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000504', false, 'Father', null);
 
 -- Registered by Test Admissions, as the lead screen would have done it, and
 -- for 90503 and 90504 with the result recorded after the interview.

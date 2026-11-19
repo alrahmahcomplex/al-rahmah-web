@@ -51,15 +51,15 @@ async function onFile(closure: "Archived" | null = null): Promise<Lead> {
   const admissionNumber = await unusedAdmissionNumber()
   const id = await asSystem(async (sql) => {
     const contact = await sql.query<{ id: string }>(
-      `insert into public.guardian_contacts (full_name, relationship, phone, origin)
-       values ('Mama Mapitio', 'Mother', $1, 'admission_form') returning id`,
+      `insert into public.guardian_contacts (full_name, phone, origin)
+       values ('Mama Mapitio', $1, 'admission_form') returning id`,
       [`+255${local.slice(1)}`],
     )
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (
          admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-         status, closure, closure_reason, visit_date, guardian_contact_id
-       ) values ($1, $2, 'STD 3', $3, 'Day', 'Visited', $4, $5, '2026-09-01', $6) returning id`,
+         status, closure, closure_reason, visit_date, guardian_contact_id, custodian_relationship
+       ) values ($1, $2, 'STD 3', $3, 'Day', 'Visited', $4, $5, '2026-09-01', $6, 'Mother') returning id`,
       [admissionNumber, studentName, nextYear, closure, closure ? "No longer pursuing admission" : null, contact.rows[0].id],
     )
     return lead.rows[0].id

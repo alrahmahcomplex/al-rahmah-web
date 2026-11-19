@@ -14,11 +14,13 @@ import { recordPayment } from "@/lib/services/school-fee-payments"
 import { actAsStaff, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear, FEE_YEARS } from "../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
+import { legacy } from "../support/streams"
 
-// Streams, switched off (#449, slice 4a). Every test switches the seat mode
-// to `named` inside its own rolled-back transaction, so nothing here is seen
-// by the rest of the suite. Children get their Seat priority from committed
-// payments in a claimed fee year; streams are opened in the transaction.
+// Streams (#449, slice 4a). The seat mode is `named` since the activation
+// migration. Children get their Seat priority from committed payments in a
+// claimed fee year, in classes with no stream; streams are opened inside
+// each test's own rolled-back transaction, so nothing here is seen by the
+// rest of the suite.
 // Queued syncs run at commit, which a rolled-back test never reaches, so the
 // tests call flush_seat_queue() themselves.
 
@@ -138,10 +140,10 @@ async function holder(year: number, className: string, gender: StudentGender | u
   return id
 }
 
-/** Switches this transaction to streams and acts as the Manager. */
+/** Counts seats in streams (the mode already is `named`) and acts as the Manager. */
 async function named(sql: Client) {
   await sql.query("select public.set_audit_actor('system')")
-  await sql.query("update public.seat_settings set mode = 'named'")
+  await sql.query("update public.seat_settings set mode = 'named' where mode <> 'named'")
   await actAsStaff(sql, MANAGER.id)
 }
 
@@ -201,7 +203,8 @@ describe("while the seat mode is legacy", () => {
     const year = await yearWithSchedule()
     const id = await child(year, "FORM 1", "Boy")
     await inRolledBackTransaction(async (sql) => {
-      await actAsStaff(sql, MANAGER.id)
+      // The mode before the activation migration, for this transaction only.
+      await legacy(sql)
       expect(await refusal(sql, "select public.open_stream($1, 'FORM 1', 'A', 'Boys', 30, $2)", [year, randomUUID()])).toBe("seat_mode_legacy")
       expect(await refusal(sql, "select public.bring_up_streams($1, array[gen_random_uuid()])", [year])).toBe("seat_mode_legacy")
       await asOwner(sql)
@@ -282,7 +285,6 @@ describe("opening streams", () => {
     const year = await yearWithSchedule()
     await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
-      await sql.query("update public.seat_settings set mode = 'named'")
       await actAsStaff(sql, ADMISSIONS.id)
       expect(await refusal(sql, "select public.open_stream($1, 'STD 3', 'A', 'Mixed', 20, $2)", [year, randomUUID()])).toBe("not_permitted")
       expect(await refusal(sql, "select public.edit_stream(gen_random_uuid(), 'A', 3)", [])).toBe("not_permitted")
@@ -346,6 +348,36 @@ describe("the seat sync", () => {
       await asOwner(sql)
       await sql.query("select public.flush_seat_queue()")
       expect(await placements(sql, [placed, waiting])).toEqual({ [placed]: null, [waiting]: "A" })
+    })
+  })
+
+  test("a reopening approved when no stream has room goes through, and the child waits for a stream", async () => {
+    const { year, classes: [c] } = await yearAndClasses(1)
+    const seated = await holder(year, c, "Boy", 6)
+    const back = await holder(year, c, "Boy", 3)
+    await inRolledBackTransaction(async (sql) => {
+      await named(sql)
+      await sql.query("select public.decline_lead($1, 'Fees or cost', null)", [back])
+      await open(sql, year, c, "A", "Mixed", 1)
+      await asOwner(sql)
+      expect(await placements(sql, [seated, back])).toEqual({ [seated]: "A", [back]: null })
+
+      await actAsStaff(sql, ADMISSIONS.id)
+      const { rows } = await sql.query<{ id: string }>("select public.raise_reopening_request($1, 'A sponsor will pay the fee.', 'lead') as id", [back])
+      await asOwner(sql)
+      await actAsStaff(sql, MANAGER.id)
+      // Nothing refuses it: the old count only ever warned, and streams don't warn here.
+      await sql.query("select public.approve_reopening_request($1, true)", [rows[0].id])
+      await asOwner(sql)
+      await sql.query("select public.flush_seat_queue()")
+
+      const { rows: after } = await sql.query(
+        `select l.status::text, p.stream_id, p.waiting_class::text
+         from public.leads l left join public.seat_placements p on p.lead_id = l.id where l.id = $1`,
+        [back],
+      )
+      expect(after).toEqual([{ status: "Interviewed", stream_id: null, waiting_class: c }])
+      expect(await placements(sql, [seated])).toEqual({ [seated]: "A" })
     })
   })
 

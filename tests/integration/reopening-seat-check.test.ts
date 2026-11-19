@@ -20,6 +20,13 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 // each seeded role. The approver reads seat_check before deciding; it only
 // advises, so approval goes ahead in a full class too.
 //
+// seat_check is the seat count from before streams (#449). The approval
+// screen no longer shows its warning since the activation migration, and
+// the clean-up slice removes it with this file; what a reopening does once
+// no stream has room is in streams.test.ts and
+// e2e/reopening-seat-warning.spec.ts. A claimed year has no stream, so the
+// tests run as they are.
+//
 // Each test claims a year of its own (tests/support/fee-years.ts). Claimed
 // years are reused across runs and leads are never deleted, so each test
 // reads the class first and sets its seats relative to what it finds.

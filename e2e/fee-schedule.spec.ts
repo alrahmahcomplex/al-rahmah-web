@@ -95,7 +95,7 @@ test.describe("the Fee schedule", () => {
     await expect(page.getByRole("form", { name: "New schedule" })).toHaveCount(0)
   })
 
-  test("the Admissions Manager sets the Academic-year start and seats, and a date outside January is refused", async ({
+  test("the Admissions Manager sets the Academic-year start, with no seats to set, and a date outside January is refused", async ({
     page,
   }) => {
     // A year of its own, created by the Accountant, so reruns start empty.
@@ -119,15 +119,14 @@ test.describe("the Fee schedule", () => {
     await expect(page.getByRole("heading", { name: "Fee schedule", exact: true })).toBeVisible()
     await page.goto(`/staff/fees/${year}`)
 
-    const section = page.getByRole("region", { name: "Academic year and seats" })
+    // Seats are set per stream on the Seats screen (#449), not here.
+    const section = page.getByRole("region", { name: "Academic year" })
     await expect(section.getByText("Not set yet")).toBeVisible()
-    await expect(section.getByRole("row", { name: /^STD 1/ })).toContainText("Seats not set")
+    await expect(section.getByRole("table")).toHaveCount(0)
 
-    await section.getByRole("button", { name: "Edit start and seats" }).click()
+    await section.getByRole("button", { name: "Edit start" }).click()
     const form = page.getByRole("form", { name: `Academic year ${year}` })
-    await form.getByLabel("STD 1 Day seats").fill("30")
-    await form.getByLabel("STD 1 Boarding seats").fill("15")
-    await form.getByLabel("FORM 1 Day seats").fill("0")
+    await expect(form.getByLabel("STD 1 Day seats")).toHaveCount(0)
 
     // February is outside January.
     await form.getByLabel("Academic-year start").fill(`${year}-02-01`)
@@ -137,24 +136,18 @@ test.describe("the Fee schedule", () => {
 
     await form.getByLabel("Academic-year start").fill(`${year}-01-11`)
     await form.getByRole("button", { name: "Save" }).click()
-    await expect(section.getByRole("status")).toHaveText("Start and seats saved.")
+    await expect(section.getByRole("status")).toHaveText("Start saved.")
 
     await expect(section.getByText(`11 Jan ${year}`)).toBeVisible()
-    const std1 = section.getByRole("row", { name: /^STD 1/ })
-    await expect(std1.getByRole("cell").nth(1)).toHaveText("30")
-    await expect(std1.getByRole("cell").nth(2)).toHaveText("15")
-    await expect(section.getByRole("row", { name: /^FORM 1/ }).getByRole("cell").nth(1)).toHaveText("0")
-    await expect(section.getByRole("row", { name: /^FORM 1/ }).getByRole("cell").nth(2)).toHaveText("Seats not set")
   })
 
-  test("the Accountant reads the 2027 start and seats but can't change them", async ({ page }) => {
+  test("the Accountant reads the 2027 start but can't change it", async ({ page }) => {
     await signIn(page, ACCOUNTANT)
     await page.goto("/staff/fees/2027")
 
-    const section = page.getByRole("region", { name: "Academic year and seats" })
-    await expect(section.getByRole("row", { name: /^KG 2/ }).getByRole("cell").nth(2)).toHaveText("2")
-    await expect(section.getByRole("row", { name: /^STD 2/ })).toContainText("Seats not set")
-    await expect(section.getByRole("button", { name: "Edit start and seats" })).toHaveCount(0)
+    const section = page.getByRole("region", { name: "Academic year" })
+    await expect(section.getByText("11 Jan 2027")).toBeVisible()
+    await expect(section.getByRole("button", { name: "Edit start" })).toHaveCount(0)
     await expect(page.getByRole("button", { name: "Edit amounts" })).toBeVisible()
   })
 })

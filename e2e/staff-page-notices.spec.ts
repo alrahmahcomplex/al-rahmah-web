@@ -14,8 +14,9 @@ const NO_SUCH_ID = "00000000-0000-4000-8000-000000000000"
 const FORBIDDEN = "Not available to your role"
 const NOT_FOUND = "This page does not exist"
 
+// Seats is no case here since streams (#449): everyone who may view payments
+// opens it, and every seeded role may.
 const CASES: { what: string; who: FixtureStaff; path: string; heading: string }[] = [
-  { what: "Seats, for Admissions Staff", who: ADMISSIONS, path: "/staff/seats", heading: FORBIDDEN },
   { what: "Reports, for Admissions Staff", who: ADMISSIONS, path: "/staff/reports", heading: FORBIDDEN },
   { what: "an application that is not there", who: MANAGER, path: `/staff/applicants/${NO_SUCH_ID}`, heading: NOT_FOUND },
   { what: "reopening an application that is not there", who: MANAGER, path: `/staff/applicants/${NO_SUCH_ID}/reopen`, heading: NOT_FOUND },

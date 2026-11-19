@@ -173,6 +173,20 @@ async function recordAsAccountant(sql: Client, leadId: string, type: string, amo
   return rows[0].recorded.payment_id as string
 }
 
+// A payment as a row, then the recompute that recording it runs. For a test
+// that goes on to save a start: recording through record_school_fee_payment
+// takes the school's seat lock (#449), which must come after the
+// enrolment's lock and every lead row, and a start save takes those next.
+async function paidAsRow(sql: Client, leadId: string, type: string, amount: number, paidOn: string) {
+  await sql.query("select public.set_audit_actor('staff', $1)", [ACCOUNTANT.id])
+  await sql.query(
+    "insert into public.school_fee_payments (lead_id, payment_type, amount, paid_on, recorded_by, request_id) values ($1, $2, $3, $4, $5, gen_random_uuid())",
+    [leadId, type, amount, paidOn, ACCOUNTANT.id],
+  )
+  await sql.query("select public.recompute_lead_fee($1, 'payment')", [leadId])
+  await sql.query("select public.set_audit_actor('system')")
+}
+
 describe("enrol_from_academic_year_start", () => {
   test("before the start it leaves a First instalment lead alone; on the start it enrols it, dated the start", async () => {
     const { year, start } = await yearStartingJanuary10()
@@ -269,8 +283,8 @@ describe("setting a start of today or earlier", () => {
 
     await inRolledBackTransaction(async (sql) => {
       const past = await pastYear(sql, "none", [first, deposit])
-      await recordAsAccountant(sql, first, "first_instalment", 800_000, `${past}-01-05`)
-      await recordAsAccountant(sql, deposit, "initial_deposit", 300_000, `${past}-01-05`)
+      await paidAsRow(sql, first, "first_instalment", 800_000, `${past}-01-05`)
+      await paidAsRow(sql, deposit, "initial_deposit", 300_000, `${past}-01-05`)
       expect(await statusOf(sql, first)).toBe("Interviewed")
 
       await asStaff(sql, MANAGER.id)

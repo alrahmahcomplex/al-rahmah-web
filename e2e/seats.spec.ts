@@ -1,143 +1,93 @@
-import { randomInt, randomUUID } from "node:crypto"
-
 import { type Page } from "@playwright/test"
 import { expect, test } from "./staff-test"
 import { chooseOption } from "./kit-parts"
 
-import { tanzaniaToday } from "@/lib/school-calendar"
-import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
-import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
-import { createLead } from "@/lib/services/leads"
-import { recordPayment } from "@/lib/services/school-fee-payments"
-import { getSeats } from "@/lib/services/seats"
-
-import { asSystem, signedIn } from "../tests/support/db"
-import { claimFeeYear, type FeeYearClaim } from "../tests/support/fee-years"
-import { ACCOUNTANT, ADMISSIONS, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
+import { ACCOUNTANT, MANAGER, type FixtureStaff } from "../tests/support/fixtures"
 
 import { leadUrl } from "./lead-page"
 import { signInOnce } from "./log-in"
+import { open, payDeposit, pupil, streamYear, yesterday, type StreamYear } from "./streams"
 
-// Seats (#111): the Accountant records a payment into a full class through
-// the warning, and the Manager sees the class ranked on the Seats screen. The
-// test claims a year of its own (tests/support/fee-years.ts), so the seeded
-// 2027 seats are left alone.
+// Seats in streams (#449): a child no stream can take can't pay the school
+// fee; the Accountant asks for a stream, the Manager opens one on Seats, and
+// the payment then places the child. The test claims a year of its own
+// (e2e/streams.ts), so the seeded streams are left alone.
 
-const DAY = 24 * 60 * 60 * 1000
-const today = tanzaniaToday()
-const yesterday = tanzaniaToday(new Date(Date.now() - DAY))
-const thisYear = Number(today.slice(0, 4))
-
-const AMOUNTS: FeeAmounts = {
-  bands: {
-    nursery: { day: 1_100_000, boarding: 3_000_000 },
-    primary_lower: { day: 2_000_000, boarding: 3_000_000 },
-    primary_upper: { day: 2_100_000, boarding: 3_300_000 },
-    secondary: { day: 2_800_000, boarding: 4_300_000 },
-  },
-  split: { first: 40, second: 40, third: 20 },
-  dueDates: { first: "2026-11-01", second: "2027-04-01", third: "2027-06-01" },
-  minimumDeposit: 300_000,
-  preFormOne: { day: 450_000, boarding: 580_000 },
-}
-
-let claims: FeeYearClaim[] = []
+let years: StreamYear[] = []
 
 test.afterEach(async () => {
-  await Promise.all(claims.map((claim) => claim.release()))
-  claims = []
+  await Promise.all(years.map((each) => each.done()))
+  years = []
 })
 
 async function signIn(page: Page, person: FixtureStaff) {
+  await page.context().clearCookies()
   await signInOnce(page, person.email, person.password)
   await expect(page).toHaveURL(/\/staff$/)
 }
 
-// A walk-in KG 2 Boarding lead in `year`, interviewed and Passed.
-async function passedLead(year: number): Promise<{ id: string; name: string }> {
-  const admissions = await signedIn(ADMISSIONS)
-  const name = `Seat ${randomUUID().slice(0, 6)}`
-  const phone = `05${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
-  const created = await createLead(admissions, {
-    guardian: { contact: { fullName: `Parent ${randomUUID().slice(0, 6)}`, relationship: "Mother", phone } },
-    student: { fullName: name, className: "KG 2", enrollmentYear: thisYear + 1, dayOrBoarding: "Boarding" },
-    start: { kind: "walk-in", visitDate: today },
-  })
-  if (!created.ok) throw new Error(`setup failed: ${JSON.stringify(created.error)}`)
-  const registered = await registerForInterview(admissions, created.data.leadId)
-  if (!registered.ok) throw new Error(registered.error)
-  const recorded = await recordInterviewResult(admissions, registered.data.interviewId, {
-    interviewDate: today,
-    result: "Passed",
-    score: 80,
-  })
-  if (!recorded.ok) throw new Error(recorded.error)
-  await asSystem((sql) => sql.query("update public.leads set enrollment_year = $2 where id = $1", [created.data.leadId, year]))
-  return { id: created.data.leadId, name }
-}
+test("a child no stream can take can't pay until the Manager opens a stream, and the payment then places him", async ({ page }) => {
+  const fixture = await streamYear()
+  years.push(fixture)
+  const { year, className } = fixture
 
-test("a payment into a full class is recorded through the warning, and Seats ranks the class's leads", async ({ page }) => {
-  const claim = await claimFeeYear()
-  claims.push(claim)
-  const year = claim.year
-  if (!(await saveFeeAmounts(await signedIn(ACCOUNTANT), year, AMOUNTS)).ok) throw new Error("schedule failed")
+  // One stream for boys with one seat, taken by a boy who paid yesterday.
+  await open(year, className, "A", "Boys", 1)
+  const seated = await pupil(year, className, "Boy")
+  await payDeposit(seated.id, yesterday)
+  const boy = await pupil(year, className, "Boy")
 
-  // One lead already holds a Deposit seat, from yesterday; the class is then
-  // set to exactly the seats taken, whatever earlier runs left in the year.
-  const holder = await passedLead(year)
-  const paid = await recordPayment(
-    await signedIn(ACCOUNTANT),
-    holder.id,
-    { type: "initial_deposit", amount: 300_000, paidOn: yesterday },
-    randomUUID(),
-  )
-  if (!paid.ok) throw new Error(paid.error)
-  const seats = await getSeats(await signedIn(MANAGER), year)
-  const taken = seats.ok ? seats.data.find((entry) => entry.className === "KG 2" && entry.dayOrBoarding === "Boarding")?.taken : undefined
-  if (taken === undefined) throw new Error("no seats")
-  await asSystem((sql) =>
-    sql.query(
-      `insert into public.class_seats (enrollment_year, class_name, day_or_boarding, seats) values ($1, 'KG 2', 'Boarding', $2)
-       on conflict (enrollment_year, class_name, day_or_boarding) do update set seats = excluded.seats`,
-      [year, taken],
-    ),
-  )
-  const lead = await passedLead(year)
-
+  // The Accountant can't record his school fee, and asks for a stream.
   await signIn(page, ACCOUNTANT)
-  await page.goto(leadUrl(lead.id, "School fee"))
+  await page.goto(leadUrl(boy.id, "School fee"))
   const section = page.getByRole("region", { name: "School fee" })
+  await expect(section).toContainText(
+    `No stream can take him yet. ${className} A (Boys) is full. A new ${className} stream for boys must be opened before his school fee can be recorded.`,
+  )
+  await expect(section).toContainText("The interview fee can still be recorded while the streams are full.")
+  await expect(section.getByRole("button", { name: "Record payment" })).toHaveCount(0)
+  await section.getByRole("button", { name: "Send a request to open a new stream" }).click()
+  await expect(section.getByRole("button", { name: "Request sent" })).toBeDisabled()
+
+  // The Manager sees the full stream and who asked, and opens a second one.
+  await signIn(page, MANAGER)
+  await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Seats", exact: true })).toHaveAttribute("href", "/staff/seats")
+  await page.goto(`/staff/seats?year=${year}`)
+  await expect(page.getByRole("heading", { level: 1, name: "Seats" })).toBeVisible()
+  const streams = page.getByRole("list", { name: `${className} streams` }).getByRole("listitem")
+  await expect(streams).toHaveCount(1)
+  await expect(streams.first()).toContainText(`${className} A`)
+  await expect(streams.first()).toContainText("Full")
+  await expect(streams.first()).toContainText("1 of 1")
+  const main = page.getByRole("main")
+  await expect(main).toContainText(`Open a new ${className} stream for boys. ${className} A (Boys) is full.`)
+  await expect(main).toContainText(`${boy.name} can’t pay his school fee until a stream takes him.`)
+
+  await main.getByRole("button", { name: `Open a new ${className} stream` }).click()
+  const sheet = page.getByRole("dialog", { name: `Open a new ${className} stream` })
+  // Filled in for boys: the next free label after A.
+  await expect(sheet.getByLabel("Label", { exact: true })).toHaveValue("B")
+  await sheet.getByLabel("Seats for new students").fill("2")
+  await sheet.getByRole("button", { name: "Open the stream" }).click()
+  await expect(page.getByRole("status").filter({ hasText: `${className} B (Boys) is open with 2 seats.` })).toBeVisible()
+  await expect(streams).toHaveCount(2)
+  await expect(streams.nth(1)).toContainText(`${className} B`)
+  await expect(streams.nth(1)).toContainText("2 free")
+  await expect(main.getByText(`Open a new ${className} stream for boys.`)).toHaveCount(0)
+
+  // The payment now goes through, and places him in the new stream.
+  await signIn(page, ACCOUNTANT)
+  await page.goto(leadUrl(boy.id, "School fee"))
+  await expect(section).toContainText(
+    `His seat will be in ${className} B (Boys), the first stream for boys with a free seat. A seat is booked once the deposit is paid.`,
+  )
   await section.getByRole("button", { name: "Record payment" }).click()
   const form = page.getByRole("form", { name: "Record payment" })
   await chooseOption(form.getByLabel("Payment type"), "Initial deposit")
   await form.getByLabel("Amount (TZS)").fill("300,000")
   await form.getByRole("button", { name: "Review payment" }).click()
-
   const review = page.getByRole("region", { name: "Review payment" })
-  const warning = review.getByRole("alert", { name: "Class full" })
-  await expect(warning).toContainText(`This applicant's class is full: ${taken} ${taken === 1 ? "seat" : "seats"}, ${taken} taken.`)
-  await expect(warning).toContainText("You can still record it; tell the Admissions Manager.")
-
+  await expect(review.getByRole("alert", { name: "Class full" })).toHaveCount(0)
   await review.getByRole("button", { name: "Confirm payment" }).click()
-  await expect(section.getByRole("status")).toHaveText("Payment recorded. Total paid is TZS 300,000. Seat priority: Deposit.")
-
-  // The Manager sees the class over capacity, ranked: both Deposit, the
-  // holder first because it reached Deposit a day earlier.
-  await page.context().clearCookies()
-  await signIn(page, MANAGER)
-  await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Seats", exact: true })).toHaveAttribute("href", "/staff/seats")
-  await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto(`/staff/seats?year=${year}`)
-  await expect(page.getByRole("heading", { name: `Seats ${year}` })).toBeVisible()
-
-  const ranking = page.getByRole("region", { name: "KG 2 Boarding ranking" })
-  await expect(ranking.getByRole("heading")).toHaveText(`KG 2 Boarding: ${taken + 1} applicants for ${taken} ${taken === 1 ? "seat" : "seats"}`)
-  const names = await ranking.getByRole("listitem").getByRole("link").allTextContents()
-  expect(names.indexOf(holder.name)).toBeGreaterThanOrEqual(0)
-  expect(names.indexOf(lead.name)).toBeGreaterThan(names.indexOf(holder.name))
-  // Only the lead ranked last is past the last seat.
-  await expect(ranking.getByText("Past the last seat")).toHaveCount(1)
-
-  const row = page.getByRole("table", { name: "Seats by class" }).getByRole("row").filter({ hasText: "KG 2 Boarding" })
-  await expect(row).toContainText(`${taken + 1} · over capacity`)
+  await expect(section.getByRole("status")).toHaveText(`Deposit recorded. Placed automatically in ${className} B (Boys).`)
 })

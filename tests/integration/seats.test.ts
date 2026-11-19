@@ -18,6 +18,12 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
 // class, the ranking of an over-full class, and seat_check, through the seats
 // and payments modules against local Supabase, signed in as each seeded role.
 //
+// These are the seat counts from before streams (#449): class_seats,
+// year_seats, seat_check and the preview's would_overfill. No screen reads
+// them since the activation migration, and the clean-up slice removes them
+// with this file. They read the same in either seat mode, so the tests run
+// as they are: a claimed year has no stream, so no payment here is refused.
+//
 // Each test claims a year of its own (tests/support/fee-years.ts). Claimed
 // years are reused across runs and leads are never deleted, so a class may
 // already hold leads from earlier runs: each test reads the class first and

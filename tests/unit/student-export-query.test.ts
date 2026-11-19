@@ -122,6 +122,8 @@ describe("what the export sheet offers", () => {
     const preset = (key: string) => options.presets.find((each) => each.key === key)!
     expect(preset("class").choices).toEqual(["adm", "name", "cls", "year", "db", "status"])
     expect(preset("calls").choices).toEqual(["adm", "name", "cls", "status", "since", "pname", "phone", "wa"])
+    // Full data ticks every box, Boy or girl among them.
+    expect(preset("full").choices).toContain("gender")
     expect(preset("full").columns).toBe(EXPORT_COLUMNS.length)
     expect(preset("full").tier).toBe("full")
     expect(preset("custom").columns).toBe(0)

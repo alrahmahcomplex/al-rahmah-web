@@ -3,8 +3,8 @@
 -- reads the old per class and Day or Boarding count any more.
 --
 -- 1. Guards, each raising so nothing changes: the seat mode is `named`; and
---    no function outside the set dropped here, and no policy, still names
---    one of them.
+--    no function outside the set dropped here, no policy and no scheduled
+--    job still names one of them.
 -- 2. Dropped: year_seats and seat_check (the old Seats screen and the
 --    reopening approval's seat warning), with ranked_seats and
 --    seat_holder_entry, which only they used; class_seat_occupancy, once
@@ -54,6 +54,13 @@ begin
         from pg_policies pol
         cross join unnest(dropped) as d (name)
         where coalesce(pol.qual, '') || ' ' || coalesce(pol.with_check, '') ~ ('(^|[^a-z_])' || d.name || '\s*\(');
+    end if;
+    -- Scheduled jobs too, where pg_cron is installed.
+    if still_used is null and to_regclass('cron.job') is not null then
+        execute format(
+            'select string_agg(distinct %L || j.jobname || %L || d.name, %L) from cron.job j cross join unnest($1) as d (name) where j.command ~ (%L || d.name || %L)',
+            'cron job ', ' uses ', ', ', '(^|[^a-z_])', '\s*\('
+        ) into still_used using dropped;
     end if;
     if still_used is not null then
         raise exception 'cleanup_still_used' using detail = still_used;

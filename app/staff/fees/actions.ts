@@ -69,7 +69,7 @@ export async function saveSchedule(year: number, amounts: FeeAmounts): Promise<S
 const REFUSED_SETTINGS: AcademicYearOutcome = {
   status: "refused",
   field: null,
-  message: "The start and seats could not be read. Reload the page and try again.",
+  message: "The start could not be read. Reload the page and try again.",
 }
 
 const isSettings = (value: unknown): value is AcademicYearSettings =>

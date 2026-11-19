@@ -74,16 +74,16 @@ describe("academicYearOutcome", () => {
       field: "academic_year_start",
       stale: true,
       message:
-        "Someone else changed the start or seats while you were editing. Cancel to see their change, then make yours again.",
+        "Someone else changed the start while you were editing. Cancel to see their change, then make yours again.",
     })
     expect(academicYearOutcome({ kind: "no-schedule" }, 2027)).toMatchObject({
       message: "The 2027 Fee schedule hasn't been created yet. The Accountant creates it first.",
     })
     expect(academicYearOutcome({ kind: "forbidden" }, 2027)).toMatchObject({
-      message: "Your role can't set the Academic-year start or seats.",
+      message: "Your role can't set the Academic-year start.",
     })
     expect(academicYearOutcome({ kind: "unavailable" }, 2027)).toMatchObject({
-      message: "The start and seats could not be saved. Try again in a moment.",
+      message: "The start could not be saved. Try again in a moment.",
     })
   })
 })

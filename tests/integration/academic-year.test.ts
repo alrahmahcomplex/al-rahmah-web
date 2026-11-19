@@ -28,7 +28,7 @@ import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER } from "../support/fixt
 //
 // Seats are counted in streams since the activation migration (#449):
 // set_academic_year sets the start alone and refuses any seats it is sent
-// (20270115100100). class_seats keeps the seats set before then.
+// (20270116100100). class_seats keeps the seats set before then.
 
 const AMOUNTS: FeeAmounts = {
   bands: {

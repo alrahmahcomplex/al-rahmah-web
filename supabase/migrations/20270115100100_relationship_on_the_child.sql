@@ -56,18 +56,17 @@ declare
     differing uuid[];
     unheld uuid[];
     unheld_count integer;
-    earlier_lock_timeout text := current_setting('lock_timeout');
 begin
     perform public.set_audit_actor('system');
 
     -- Access exclusive from the start: the trigger drops and the column
     -- change below need it, and taking it later could deadlock with a
-    -- transaction that reads these tables and then writes. The lock blocks
-    -- reads too, so it waits at most 15 seconds for a running transaction:
-    -- past that the migration fails, changes nothing, and is run again.
-    perform set_config('lock_timeout', '15s', true);
+    -- transaction that reads these tables and then writes. It sets no lock
+    -- timeout: the API roles' statements stop after a few seconds (Supabase's
+    -- statement_timeout, 3s for anon and 8s for authenticated), so the wait
+    -- is short, and a migration that failed on its lock has no documented
+    -- retry.
     lock table public.leads, public.guardian_contacts in access exclusive mode;
-    perform set_config('lock_timeout', earlier_lock_timeout, true);
 
     drop table if exists pg_temp.relationship_snapshot_before;
     create temp table relationship_snapshot_before as select * from public.fee_snapshot();

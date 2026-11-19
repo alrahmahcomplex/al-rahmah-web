@@ -1,5 +1,7 @@
 // Concept C's guided form primitives. See README.md for usage.
 export { BottomSheet, trapTab, type BottomSheetProps } from "./bottom-sheet"
+export { codeKey, completeCode, filterCodeOptions, sortCodeOptions, type CodeOption } from "./code-list"
+export { CodePicker, type CodePickerProps } from "./code-picker"
 export { Confetti } from "./confetti"
 export {
   ChangeLink,

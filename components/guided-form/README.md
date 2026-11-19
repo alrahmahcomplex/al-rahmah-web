@@ -128,6 +128,11 @@ const LABELS = { first: "First name", middle: "Middle name", last: "Last name" }
 | `FullNameBox` | One box, spaces kept ("Who brought the students") | its `name` |
 | `CodeBox` | The Admission form's box, for an agent's code or a Promo code: capitals, no spaces; three letters followed by a digit get the hyphen between them (AAN132 → AAN-132) and a hyphen typed again there is dropped; anything else, such as a Promo code (SAVE10, KARIBU2026, AS-135, $AVE), stays as typed; at most 20 characters | its `name` |
 | `AgentCodeBox` | An agent's code only, ABC-123: three letters, the hyphen by itself, three digits; anything else is dropped and a repeated hyphen ignored | its `name` |
+| `CodePicker` | `CodeBox` with an arrow that opens the codes to pick from under a search box, Promo codes first, then agent codes, each A to Z, and a faint completion of the first listed code the typed letters begin (Tab or → takes it). The list opens in the page's flow, pushing what follows down. Register Students reads the list from `usable_discount_codes` | nothing; the caller keeps `value` |
+
+```tsx
+<CodePicker value={code} onValueChange={setCode} options={codes} listState="ready" aria-label="Discount code" placeholder="Discount code, e.g. ABC-123" />
+```
 
 - **The labels are the placeholders**, inside the boxes, and each box's name for a screen reader. Never put a label above them. Name the group with `aria-labelledby` (the question's title).
 - **Typing:** capitals; Space ends a box and moves to the next, a pasted full name spreads across the boxes, Backspace in an empty box goes back to the one before, Enter moves on instead of sending the form. The last box keeps its spaces (BIN SALIM). While a phone keyboard is composing a word, nothing changes until the word is done.

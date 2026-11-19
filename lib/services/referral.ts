@@ -270,6 +270,25 @@ export async function findDiscountCode(
   }
 }
 
+// A code staff may pick: an active Promo code or an Approved agent's code,
+// with its holder's name and what it takes off the interview fee now.
+export type UsableDiscountCode = { kind: "agent" | "promo"; code: string; holderName: string; amountOff: number }
+
+// Every code that takes money off today, Promo codes first, then agent codes,
+// each in code order. For the Discount code list on Register Students. Staff
+// with leads.edit; anyone else is refused.
+export async function listUsableDiscountCodes(supabase: SupabaseClient): Promise<Result<UsableDiscountCode[], "forbidden" | "unavailable">> {
+  const { data, error } = await supabase.rpc("usable_discount_codes")
+  if (error) {
+    // 42501: the function isn't granted to the caller at all, as for someone signed out.
+    if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
+    console.error("Could not list the Discount codes", error)
+    return { ok: false, error: "unavailable" }
+  }
+  const rows = (data ?? []) as { kind: "agent" | "promo"; code: string; holder_name: string; amount_off: number }[]
+  return { ok: true, data: rows.map((row) => ({ kind: row.kind, code: row.code, holderName: row.holder_name, amountOff: row.amount_off })) }
+}
+
 // What a code typed on the Admission form means for the interview fee: an
 // Approved agent's code or an Active Promo code (`approved`), a Pending
 // agent's (`pending`), a switched-off agent's or a paused, ended or expired

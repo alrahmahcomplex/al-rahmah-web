@@ -1,12 +1,25 @@
-import type { Client } from "pg"
-import { describe, expect, test } from "vitest"
+import { randomInt, randomUUID } from "node:crypto"
 
-import { inRolledBackTransaction } from "../support/db"
+import type { Client } from "pg"
+import { describe, expect, test, vi } from "vitest"
+
+vi.mock("server-only", () => ({}))
+
+import { describeLeadHistory } from "@/app/staff/applicants/[id]/history/describe"
+import { admissionYears } from "@/lib/admission-form"
+import { tanzaniaToday } from "@/lib/school-calendar"
+import { getLeadHistory } from "@/lib/services/audit"
+import { createLead, getLead } from "@/lib/services/leads"
+
+import { asSystem, inRolledBackTransaction, signedIn } from "../support/db"
+import { ADMISSIONS, SUPER_ADMIN } from "../support/fixtures"
 
 // What 20270118100100 leaves behind (#312): the guardian contact holds no
 // relationship, the guard and the fallback are gone, and no function in the
-// schema still names the dropped columns. All as the database owner, in
-// transactions that are rolled back.
+// schema still names the dropped columns, as the database owner in
+// transactions that are rolled back. And how the audit row the migration
+// wrote for a contact with no audit trail reads on a child's History, as the
+// Super Admin.
 
 type FunctionError = { name: string; message: string }
 
@@ -148,5 +161,51 @@ describe("the guardian contact's relationship, dropped", () => {
     expect(found.map((e) => e.name)).toEqual(["probe_contact_relationship_plpgsql()", "probe_contact_relationship_sql()"])
     expect(found[0].message).toMatch(/column g\.relationship does not exist/)
     expect(found[1].message).toMatch(/column g\.relationship_description does not exist/)
+  })
+
+  // The migration wrote this row for a contact whose relationship no audit
+  // row held, so the value outlived the column. Hosted keeps such rows for
+  // good, so the History screen must go on reading them this way.
+  test("the row written for a contact with no audit trail reads on History as a change to None", async () => {
+    const staff = await signedIn(ADMISSIONS)
+    const [, nextYear] = admissionYears()
+    const name = `Trail Parent ${randomUUID().slice(0, 6)}`
+    const created = await createLead(staff, {
+      guardian: {
+        contact: { fullName: name, relationship: "Mother", phone: `06${String(randomInt(0, 100_000_000)).padStart(8, "0")}` },
+      },
+      student: { fullName: `Pupil ${randomUUID().slice(0, 8)} Baba`, className: "STD 2", enrollmentYear: nextYear, dayOrBoarding: "Day" },
+      start: { kind: "walk-in", visitDate: tanzaniaToday() },
+    })
+    if (!created.ok) throw new Error(`create failed: ${JSON.stringify(created.error)}`)
+    const lead = await getLead(staff, created.data.leadId)
+    if (!lead.ok) throw new Error("setup failed: lead missing")
+
+    // The same values the migration's write step gives the row.
+    await asSystem((sql) =>
+      sql.query(
+        `insert into public.audit_log (table_name, row_id, lead_id, action, old_values, new_values, scope, actor_kind, actor_staff_id)
+         select 'guardian_contacts', $1, null, 'update', '{"relationship": "Mother"}', '{"relationship": null}', s.scope, 'system', null
+         from public.audit_scopes s where s.table_name = 'public.guardian_contacts'::regclass`,
+        [lead.data.contact.id],
+      ),
+    )
+
+    const history = await getLeadHistory(await signedIn(SUPER_ADMIN), lead.data.id)
+    if (!history.ok) throw new Error(`history refused: ${history.error}`)
+    expect(history.data.entries[0]).toMatchObject({
+      record: "contact",
+      recordId: lead.data.contact.id,
+      action: "update",
+      actor: "System",
+      changes: [{ field: "relationship", from: "Mother", to: null }],
+    })
+
+    const [latest] = describeLeadHistory(history.data.entries, history.data.contactNames)
+    expect(latest).toMatchObject({
+      actor: "System",
+      summary: `changed the parent or guardian ${name}`,
+      changes: [{ label: "Relationship", from: "Mother", to: "None" }],
+    })
   })
 })

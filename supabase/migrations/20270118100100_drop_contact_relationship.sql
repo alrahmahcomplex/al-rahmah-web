@@ -7,9 +7,10 @@
 -- Dropping a column can't be undone, so nothing is dropped unless every value
 -- in it is already kept somewhere else:
 --
--- 1. Three counts, as notices: contacts with a relationship, contacts whose
---    relationship no child holds, and contacts whose relationship matches
---    their audit trail.
+-- 1. Counts, as notices: contacts with a relationship, contacts whose
+--    relationship no child holds, contacts whose relationship matches their
+--    audit trail, contacts with a relationship and no audit trail, and the
+--    audit rows written for those.
 -- 2. No change since the freeze. The guard trigger from 20270117100100 must
 --    still be in place and switched on: it refuses every change to either
 --    column, so with it there no audited change can have happened. The
@@ -19,15 +20,25 @@
 --    after the freeze, so an audited change to either column later than the
 --    first such contact is refused too. Either raises
 --    `contact_relationship_changed`.
--- 3. The audit trail. For every contact with a relationship, the audit log's
---    latest value for each of the two columns must equal the column. An
+-- 3. The audit trail. For every contact with a relationship, each of the two
+--    columns is compared with the audit log's latest value for it. An
 --    update's audit row holds only the fields that changed, so each column
 --    is read from the latest row that carries it: the insert, or the last
---    correction. A contact that differs was written with the audit switched
---    off, or has no audit row; it raises `contact_relationship_unaudited`
---    with the first contacts in its detail. A relationship no child holds
---    is not refused: it was only the parent's first answer, and it stays in
---    the audit log.
+--    correction.
+--    - A column whose latest audit value differs from it was written with
+--      the audit switched off. It raises
+--      `contact_relationship_audit_differs`, with the first contacts in its
+--      detail.
+--    - A column that holds a value and has no audit row at all gets one
+--      written here, so the value outlives the column: an `update` by the
+--      system, the value in old_values and null in new_values, with the
+--      scope and lead id the audit trigger gives this table. The row holds
+--      only the columns that have a value, as the trigger records only what
+--      changed. On a child's History it reads "System changed the parent or
+--      guardian NAME" and "Relationship: Mother → None", which is what this
+--      migration does.
+--    A relationship no child holds is not refused: it was only the parent's
+--    first answer, and it stays in the audit log.
 -- 4. No function names the columns. registration_custodian and
 --    registration_brought_by return their answers under new names
 --    (custodian_relationship, custodian_relationship_description,
@@ -69,7 +80,10 @@ declare
     unheld_count integer;
     unheld uuid[];
     matching integer;
-    unaudited uuid[];
+    untracked_count integer;
+    differing uuid[];
+    actor record;
+    written integer;
     first_empty timestamptz;
     still_named text[];
     still_used text[];
@@ -99,47 +113,55 @@ begin
     -- 1. The counts. One row per contact that holds a value in either column
     -- (a description with no relationship passes the table's check, so it is
     -- counted too), with what the audit log last recorded for each column.
+    -- `differs`: a column's latest audit value is not the column's.
+    -- `untracked`: a column holds a value and no audit row carries it.
     -- -----------------------------------------------------------------------
 
     drop table if exists pg_temp.contact_relationship_trail;
     create temp table contact_relationship_trail as
     select g.id,
+           g.relationship,
+           g.relationship_description,
            not exists (
                select 1 from public.leads l
                where l.guardian_contact_id = g.id
                  and (l.custodian_relationship, l.custodian_relationship_description)
                      is not distinct from (g.relationship, g.relationship_description)
            ) as unheld,
-           -- A missing audit row reads as empty, which never equals a value
-           -- that is there.
-           (
-               select a.new_values ->> 'relationship'
-               from public.audit_log a
-               where a.table_name = 'guardian_contacts' and a.row_id = g.id and a.new_values ? 'relationship'
-               order by a.id desc
-               limit 1
-           ) is not distinct from g.relationship::text
-           and (
-               select a.new_values ->> 'relationship_description'
-               from public.audit_log a
-               where a.table_name = 'guardian_contacts' and a.row_id = g.id and a.new_values ? 'relationship_description'
-               order by a.id desc
-               limit 1
-           ) is not distinct from g.relationship_description as audited
+           (r.found is not null and r.was is distinct from g.relationship::text)
+           or (d.found is not null and d.was is distinct from g.relationship_description) as differs,
+           (r.found is null and g.relationship is not null)
+           or (d.found is null and g.relationship_description is not null) as untracked
     from public.guardian_contacts g
+    left join lateral (
+        select true as found, a.new_values ->> 'relationship' as was
+        from public.audit_log a
+        where a.table_name = 'guardian_contacts' and a.row_id = g.id and a.new_values ? 'relationship'
+        order by a.id desc
+        limit 1
+    ) r on true
+    left join lateral (
+        select true as found, a.new_values ->> 'relationship_description' as was
+        from public.audit_log a
+        where a.table_name = 'guardian_contacts' and a.row_id = g.id and a.new_values ? 'relationship_description'
+        order by a.id desc
+        limit 1
+    ) d on true
     where g.relationship is not null or g.relationship_description is not null;
 
     select count(*),
            count(*) filter (where t.unheld),
            (array_agg(t.id order by t.id) filter (where t.unheld))[1:50],
-           count(*) filter (where t.audited),
-           (array_agg(t.id order by t.id) filter (where not t.audited))[1:20]
-    into with_value, unheld_count, unheld, matching, unaudited
+           count(*) filter (where not t.differs and not t.untracked),
+           count(*) filter (where t.untracked),
+           (array_agg(t.id order by t.id) filter (where t.differs))[1:20]
+    into with_value, unheld_count, unheld, matching, untracked_count, differing
     from pg_temp.contact_relationship_trail t;
 
     raise notice 'contacts with a relationship: %', with_value;
     raise notice 'contacts whose relationship no child holds: % (first 50: %)', unheld_count, coalesce(unheld, '{}');
     raise notice 'contacts whose relationship matches their audit trail: % of %', matching, with_value;
+    raise notice 'contacts with a relationship and no audit trail: %', untracked_count;
 
     -- -----------------------------------------------------------------------
     -- 2. No change since the freeze.
@@ -196,9 +218,47 @@ begin
     -- 3. The audit trail.
     -- -----------------------------------------------------------------------
 
-    if cardinality(unaudited) > 0 then
-        raise exception 'contact_relationship_unaudited'
-            using detail = jsonb_build_object('contact_ids', unaudited)::text;
+    if cardinality(differing) > 0 then
+        raise exception 'contact_relationship_audit_differs'
+            using detail = jsonb_build_object('contact_ids', differing)::text;
+    end if;
+
+    -- A contact with a value and no audit trail: one row, written the way
+    -- audit_row_change writes an update of this table, so the value stays in
+    -- the audit log when the column goes.
+    select * into actor from public.audit_actor();
+
+    insert into public.audit_log (
+        table_name, row_id, lead_id, action, old_values, new_values,
+        scope, actor_kind, actor_staff_id
+    )
+    select 'guardian_contacts',
+           t.id,
+           case when registered.lead_id_column is not null
+               then (to_jsonb(g) ->> registered.lead_id_column)::uuid end,
+           'update',
+           held.old_values,
+           (select jsonb_object_agg(k, 'null'::jsonb) from jsonb_object_keys(held.old_values) k),
+           registered.scope,
+           actor.kind,
+           actor.staff_id
+    from pg_temp.contact_relationship_trail t
+    join public.guardian_contacts g on g.id = t.id
+    join public.audit_scopes registered on registered.table_name = 'public.guardian_contacts'::regclass
+    cross join lateral (
+        select jsonb_strip_nulls(jsonb_build_object(
+            'relationship', t.relationship,
+            'relationship_description', t.relationship_description
+        )) as old_values
+    ) held
+    where t.untracked
+    order by t.id;
+
+    get diagnostics written = row_count;
+    raise notice 'audit rows written for contacts with no audit trail: %', written;
+    if written <> untracked_count then
+        raise exception 'contact_relationship_audit_not_written'
+            using detail = jsonb_build_object('expected', untracked_count, 'written', written)::text;
     end if;
 
     drop table pg_temp.contact_relationship_trail;

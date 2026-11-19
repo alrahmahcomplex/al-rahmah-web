@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-// The seat read behind the Boy or girl sheet (#449): when it fails, the answer
-// can still be saved only if the seat mode is confirmed as legacy, where no
-// answer moves a seat. The database is stubbed.
+// The seat read behind the Boy or girl sheet (#449): when it fails, there is
+// no answer, so the sheet saves nothing. The database is stubbed.
 
 const db = vi.hoisted(() => ({ rpc: vi.fn() }))
 
@@ -15,16 +14,15 @@ import { genderOutlookAction } from "@/app/staff/applicants/[id]/gender-actions"
 
 type Reply = { data?: unknown; error?: unknown }
 
-function database(replies: { outlook: Reply; mode?: Reply }) {
+function database(outlook: Reply) {
   db.rpc.mockImplementation(async (name: string) => {
-    const reply = name === "lead_gender_outlook" ? replies.outlook : name === "seat_mode" ? replies.mode : undefined
+    const reply = name === "lead_gender_outlook" ? outlook : undefined
     if (!reply) throw new Error(`unexpected read: ${name}`)
     return { data: reply.data ?? null, error: reply.error ?? null }
   })
 }
 
 const DOWN = { error: { message: "boom" } }
-const NO_MOVE = { placed: null, moves: false, wouldTake: null }
 
 beforeEach(() => {
   db.rpc.mockReset()
@@ -32,9 +30,9 @@ beforeEach(() => {
 })
 
 describe("genderOutlookAction", () => {
-  it("gives the database's answer without reading the seat mode", async () => {
+  it("gives the database's answer", async () => {
     const stream = { id: "b", class_name: "FORM 1", label: "B", takes: "Boys" }
-    database({ outlook: { data: { placed: stream, moves: true, would_take: null } } })
+    database({ data: { placed: stream, moves: true, would_take: null } })
     expect(await genderOutlookAction("lead-1", "Girl")).toEqual({
       placed: { id: "b", className: "FORM 1", label: "B", takes: "Boys" },
       moves: true,
@@ -44,24 +42,10 @@ describe("genderOutlookAction", () => {
     expect(db.rpc).toHaveBeenCalledWith("lead_gender_outlook", { lead_id: "lead-1", gender: "Girl" })
   })
 
-  it("says nothing moves when the read fails and the seat mode is confirmed as legacy", async () => {
-    database({ outlook: DOWN, mode: { data: "legacy" } })
-    expect(await genderOutlookAction("lead-1", "Girl")).toEqual(NO_MOVE)
-  })
-
-  it("gives no answer when the read fails and streams are on", async () => {
-    database({ outlook: DOWN, mode: { data: "named" } })
+  it("gives no answer when the read fails, and reads nothing else", async () => {
+    database(DOWN)
     expect(await genderOutlookAction("lead-1", "Girl")).toBeNull()
-  })
-
-  it("gives no answer when neither the read nor the seat mode can be read", async () => {
-    database({ outlook: DOWN, mode: DOWN })
-    expect(await genderOutlookAction("lead-1", "Girl")).toBeNull()
-  })
-
-  it("gives no answer when the seat mode comes back empty", async () => {
-    database({ outlook: DOWN, mode: { data: null } })
-    expect(await genderOutlookAction("lead-1", "Girl")).toBeNull()
+    expect(db.rpc).toHaveBeenCalledTimes(1)
   })
 
   it("reads nothing for an answer that is not Boy or Girl", async () => {

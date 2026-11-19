@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { onlyFullClass, quickActions } from "@/app/staff/_home/quick-action-list"
+import { quickActions } from "@/app/staff/_home/quick-action-list"
 import { sparkShape, SPARK_HEIGHT } from "@/app/staff/_home/spark"
 import {
   addDays,
@@ -15,7 +15,6 @@ import {
   shortDay,
   shortRange,
 } from "@/app/staff/_home/stats"
-import type { ClassSeatFigures } from "@/lib/services/dashboard"
 import type { Permission } from "@/lib/permissions"
 
 // Sunday 15 November 2026.
@@ -121,45 +120,26 @@ describe("the 7-day line", () => {
 })
 
 describe("Quick actions", () => {
-  const seat = (className: string, dayOrBoarding: "Day" | "Boarding", seats: number | null, taken: number) =>
-    ({ className, dayOrBoarding, seats, taken }) as ClassSeatFigures
-
-  it("names the one full class, and no class when none or several are full", () => {
-    expect(onlyFullClass([seat("STD 6", "Day", 35, 35), seat("FORM 1", "Day", 60, 44)])).toBe("STD 6")
-    expect(onlyFullClass([seat("STD 6", "Day", 35, 36)])).toBe("STD 6")
-    expect(onlyFullClass([seat("STD 6", "Day", 35, 34), seat("KG 1", "Day", null, 9)])).toBeNull()
-    expect(onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 5", "Day", 30, 30)])).toBeNull()
-    // Full for Day pupils but not Boarders is not "STD 6 is full".
-    expect(onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 6", "Boarding", 20, 12)])).toBeNull()
-    expect(onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 6", "Boarding", 20, 20)])).toBe("STD 6")
-    // A class only partly full does not hide the one that is full.
-    expect(
-      onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 6", "Boarding", 20, 20), seat("STD 5", "Day", 30, 30), seat("STD 5", "Boarding", 20, 3)]),
-    ).toBe("STD 6")
-    // Boarding seats not set are never full, so the class is not full.
-    expect(onlyFullClass([seat("STD 6", "Day", 35, 35), seat("STD 6", "Boarding", null, 4)])).toBeNull()
-  })
-
   const all: Permission[] = ["leads.view", "academic_years.manage", "payments.view", "discounts.approve"]
 
   it("shows each row only to staff who can open its page, with a caption only when there is something to say", () => {
-    expect(quickActions({ permissions: all, overdue: 2, fullClass: "STD 6", waitingDiscounts: 3 })).toEqual([
+    expect(quickActions({ permissions: all, overdue: 2, seatsCaption: "STD 6 needs a new stream", waitingDiscounts: 3 })).toEqual([
       { href: "/staff/follow-ups", icon: "followups", title: "Call a family back", caption: "2 overdue" },
-      { href: "/staff/seats", icon: "seats", title: "Seats", caption: "STD 6 is full" },
+      { href: "/staff/seats", icon: "seats", title: "Seats", caption: "STD 6 needs a new stream" },
       { href: "/staff/discounts", icon: "discounts", title: "Request a discount", caption: "3 waiting for a decision" },
     ])
-    expect(quickActions({ permissions: all, overdue: 0, fullClass: null, waitingDiscounts: 0 }).map((action) => action.caption)).toEqual([
+    expect(quickActions({ permissions: all, overdue: 0, seatsCaption: null, waitingDiscounts: 0 }).map((action) => action.caption)).toEqual([
       undefined,
       undefined,
       undefined,
     ])
-    expect(quickActions({ permissions: ["leads.view"], overdue: 1, fullClass: null, waitingDiscounts: null }).map((action) => action.title)).toEqual([
+    expect(quickActions({ permissions: ["leads.view"], overdue: 1, seatsCaption: null, waitingDiscounts: null }).map((action) => action.title)).toEqual([
       "Call a family back",
     ])
     // Seats goes to everyone who may view payments (#449), whether or not they manage academic years.
-    expect(quickActions({ permissions: ["payments.view"], overdue: null, fullClass: "STD 6", waitingDiscounts: null })).toEqual([
-      { href: "/staff/seats", icon: "seats", title: "Seats", caption: "STD 6 is full" },
+    expect(quickActions({ permissions: ["payments.view"], overdue: null, seatsCaption: "STD 6 needs a new stream", waitingDiscounts: null })).toEqual([
+      { href: "/staff/seats", icon: "seats", title: "Seats", caption: "STD 6 needs a new stream" },
     ])
-    expect(quickActions({ permissions: ["academic_years.manage"], overdue: null, fullClass: "STD 6", waitingDiscounts: null })).toEqual([])
+    expect(quickActions({ permissions: ["academic_years.manage"], overdue: null, seatsCaption: "STD 6 needs a new stream", waitingDiscounts: null })).toEqual([])
   })
 })

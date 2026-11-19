@@ -1040,11 +1040,6 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_ids: "array['1ead0000-0000-4000-8000-000000000431']::uuid[]" },
     agent: { refused: "not_permitted" },
   },
-  "public.seat_check(lead_id uuid)": {
-    roles: ["authenticated"],
-    args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
-    agent: { refused: "forbidden" },
-  },
   // Seats per stream (#449): named since the activation migration, the same for everyone.
   "public.seat_mode()": {
     roles: ["authenticated"],
@@ -1238,11 +1233,6 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
       "insert into public.reopening_requests (id, lead_id, source, reason, requested_by) values ('5e0e0000-0000-4000-8000-000000000188', '1ead0000-0000-4000-8000-000000000905', 'lead', 'A sample reason', '5a000000-0000-4000-8000-000000000002')",
     args: { request_id: "'5e0e0000-0000-4000-8000-000000000188'" },
     agent: { refused: "not_permitted" },
-  },
-  "public.year_seats(schedule_year integer)": {
-    roles: ["authenticated"],
-    args: { schedule_year: "2027" },
-    agent: { refused: "forbidden" },
   },
   // Discount amounts and Promo codes (owner decisions of 2026-11-09). The
   // standard amount is the figure every public page states, so an agent

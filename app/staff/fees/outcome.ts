@@ -73,14 +73,6 @@ export function academicYearOutcome(error: SetAcademicYearError, year: number): 
           message: `Choose an Academic-year start in January ${year}. Once set, it can be changed but not cleared.`,
         }
       }
-      if (error.field?.startsWith("seats.")) {
-        const [, className, dayOrBoarding] = error.field.split(".")
-        return {
-          status: "refused",
-          field: error.field,
-          message: `Enter the ${className} ${dayOrBoarding} seats as a whole number, 0 or more. Once set, seats can be changed but not cleared.`,
-        }
-      }
       return {
         status: "refused",
         field: error.field,

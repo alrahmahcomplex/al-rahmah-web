@@ -1,12 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { describe, expect, test, vi } from "vitest"
 
-import { editStream, getSeatMode, readSeatMode } from "@/lib/services/streams"
+import { editStream } from "@/lib/services/streams"
 
 // The streams service (#449): a refusal below the children placed carries the
-// database's count, which may be higher than the screen showed; a failed read
-// of the seat mode never shows the new screens, and a caller that must know
-// the mode gets an error instead.
+// database's count, which may be higher than the screen showed.
 
 function client(result: { data?: unknown; error?: unknown }) {
   return { rpc: vi.fn(async () => ({ data: result.data ?? null, error: result.error ?? null })) } as unknown as SupabaseClient
@@ -28,23 +26,5 @@ describe("editStream", () => {
   test("other refusals carry no count", async () => {
     const supabase = client({ error: { message: "label_taken", code: "P0001" } })
     expect(await editStream(supabase, change)).toEqual({ ok: false, error: "label_taken" })
-  })
-})
-
-describe("getSeatMode", () => {
-  test("is legacy when the read fails", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    expect(await getSeatMode(client({ error: { message: "boom" } }))).toBe("legacy")
-    expect(await getSeatMode(client({ data: "named" }))).toBe("named")
-  })
-})
-
-describe("readSeatMode", () => {
-  test("gives the mode only when the database gave one", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    expect(await readSeatMode(client({ data: "legacy" }))).toEqual({ ok: true, data: "legacy" })
-    expect(await readSeatMode(client({ data: "named" }))).toEqual({ ok: true, data: "named" })
-    expect(await readSeatMode(client({ error: { message: "boom" } }))).toEqual({ ok: false, error: "unavailable" })
-    expect(await readSeatMode(client({ data: null }))).toEqual({ ok: false, error: "unavailable" })
   })
 })

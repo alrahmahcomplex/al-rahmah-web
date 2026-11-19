@@ -5,9 +5,9 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), useSea
 vi.mock("@/app/staff/seats/stream-actions", () => ({ openStreamAction: vi.fn(), editStreamAction: vi.fn(), bringUpAction: vi.fn(), requestStreamAction: vi.fn() }))
 
 import { SeatsByClassPanel } from "@/app/staff/reports/_dashboard/seats-by-class"
-import type { ClassStreamFigures, SeatsByClass } from "@/lib/services/dashboard"
+import type { ClassStreamFigures, SeatFiguresByClass } from "@/lib/services/dashboard"
 
-// Reports' Seats by class once streams are on (#449, v42, the owner's Q10):
+// Reports' Seats by class in streams (#449, v42, the owner's Q10):
 // one row per stream under its class, a class total with how many wait, and a
 // class with no streams as its total alone (lead, 2026-11-19).
 
@@ -24,19 +24,14 @@ const FORM1: ClassStreamFigures = {
 }
 const DAYCARE: ClassStreamFigures = { className: "DAY CARE", streams: [], full: 1, firstInstalment: 0, deposit: 2, waiting: 0 }
 
-const named = (figures: ClassStreamFigures[]): SeatsByClass => ({
-  year: 2027,
-  years: [2027],
-  classes: [],
-  named: { streams: null, figures },
-})
+const named = (classes: ClassStreamFigures[]): SeatFiguresByClass => ({ year: 2027, years: [2027], classes })
 
 const cells = (name: string) =>
   within(screen.getByRole("row", { name: new RegExp(`^${name}`) }))
     .getAllByRole("cell")
     .map((cell) => cell.textContent)
 
-describe("SeatsByClassPanel once streams are on", () => {
+describe("SeatsByClassPanel", () => {
   it("shows a row per stream, the class total with who waits, and a class with no streams as its total", () => {
     render(<SeatsByClassPanel seats={{ ok: true, data: named([DAYCARE, FORM1]) }} canOpenSeats={false} />)
     expect(screen.getAllByRole("columnheader").map((th) => th.textContent)).toEqual(["Stream", "Takes", "Seats", "Full", "First instalment", "Deposit", "Free"])

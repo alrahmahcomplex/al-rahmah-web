@@ -3,8 +3,15 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { LEAD_CLASSES, type LeadClass } from "./leads"
 import type { Result } from "./result"
 
-// Seats by class reads slice 9's seats; it lives in its own file.
-export { getSeatsByClass, type ClassSeatFigures, type ClassStreamFigures, type SeatsByClass, type StreamSeatFigures } from "./dashboard-seats"
+// Seats by class reads the streams (#449); it lives in its own file.
+export {
+  getSeatFiguresByClass,
+  getSeatsByClass,
+  type ClassStreamFigures,
+  type SeatFiguresByClass,
+  type SeatsByClass,
+  type StreamSeatFigures,
+} from "./dashboard-seats"
 
 // The dashboard module: every count on the staff home goes through here. It
 // only reads. The counting, and the calendar arithmetic that turns a period

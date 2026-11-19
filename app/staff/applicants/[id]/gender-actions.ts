@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { STUDENT_GENDERS, updateLeadDetails, type StudentGender } from "@/lib/services/leads"
 import { requirePermission } from "@/lib/services/staff-auth"
-import { getGenderOutlook, readSeatMode, type GenderOutlook } from "@/lib/services/streams"
+import { getGenderOutlook, type GenderOutlook } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 import { correctionOutcome, type CorrectionOutcome } from "./correction-outcome"
@@ -32,18 +32,12 @@ export async function correctGender(leadId: string, gender: StudentGender): Prom
 
 /**
  * What the other answer would do to the child's seat; null when it can't be
- * read, so the sheet saves nothing.
- *
- * Before streams are on no answer moves a seat, so when the read fails and a
- * second read confirms the seat mode is legacy, this answers "nothing moves"
- * and the answer can still be saved. A named mode, or one that can't be read,
- * stays null. The save checks the permission and the rules itself.
+ * read, so the sheet saves nothing. The save checks the permission and the
+ * rules itself.
  */
 export async function genderOutlookAction(leadId: string, gender: StudentGender): Promise<GenderOutlook | null> {
   if (typeof leadId !== "string" || !isGender(gender)) return null
   const supabase = await createClient()
   const outlook = await getGenderOutlook(supabase, leadId, gender)
-  if (outlook.ok) return outlook.data
-  const mode = await readSeatMode(supabase)
-  return mode.ok && mode.data === "legacy" ? { placed: null, moves: false, wouldTake: null } : null
+  return outlook.ok ? outlook.data : null
 }

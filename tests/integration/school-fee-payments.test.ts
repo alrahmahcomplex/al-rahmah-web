@@ -212,9 +212,8 @@ describe("the preview", () => {
     const accountant = await signedIn(ACCOUNTANT)
     await pay(accountant, id, payment(300_000))
 
-    // The lead already holds a seat, so the payment overfills nothing
-    // (seats.test.ts covers the warning).
-    expect(await previewPayment(accountant, id, payment(500_000, { type: "first_instalment" }))).toMatchObject({
+    const preview = await previewPayment(accountant, id, payment(500_000, { type: "first_instalment" }))
+    expect(preview).toMatchObject({
       ok: true,
       data: {
         schoolFee: 2_000_000,
@@ -223,9 +222,30 @@ describe("the preview", () => {
         balanceAfter: 1_200_000,
         priority: "Deposit",
         priorityAfter: "First instalment",
-        wouldOverfill: false,
       },
     })
+    // Seats are counted in streams (#449): the preview no longer reports the
+    // old per class seat count.
+    const answer = await accountant.rpc("preview_school_fee_payment", {
+      lead_id: id,
+      payment_type: "first_instalment",
+      amount: 500_000,
+      paid_on: today,
+    })
+    expect(answer.error).toBeNull()
+    expect(Object.keys(answer.data).sort()).toEqual([
+      "balance_after",
+      "pre_form_one_balance_after",
+      "pre_form_one_fee",
+      "pre_form_one_paid",
+      "pre_form_one_paid_after",
+      "priority",
+      "priority_after",
+      "priority_reached_on_after",
+      "school_fee",
+      "total_paid",
+      "total_paid_after",
+    ])
     expect(await storedPayments(id)).toHaveLength(1)
   })
 })

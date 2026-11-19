@@ -4,7 +4,7 @@ import { KeyValueList, Note } from "@/components/kit"
 import { enrollmentYears, formatDate, tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadHistory } from "@/lib/services/audit"
 import { listContactChildren } from "@/lib/services/leads"
-import { getSeatMode, getSeatOutlook, getYearStreams, streamName } from "@/lib/services/streams"
+import { getSeatOutlook, getYearStreams, streamName } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 import { formatShillings } from "../../fees/format"
@@ -28,14 +28,12 @@ import { leadTabHref } from "./tabs"
 // How many history entries Recent activity shows.
 export const RECENT_ENTRIES = 4
 
-// The child’s seat once streams are on (#449, v42), for staff who may view
-// payments: the stream they sit in, or that they wait for one, and the
-// class’s streams for a child with no Boy or girl answer. Null before streams
-// are on; nothing but the mode when it can’t be read.
+// The child’s seat in streams (#449, v42), for staff who may view payments:
+// the stream they sit in, or that they wait for one, and the class’s streams
+// for a child with no Boy or girl answer.
 async function readStudentSeat(lead: LeadPanelProps["lead"], seesPayments: boolean) {
-  const supabase = await createClient()
-  if ((await getSeatMode(supabase)) !== "named") return null
   if (!seesPayments) return { seat: null, classStreams: null }
+  const supabase = await createClient()
   const [outlook, year] = await Promise.all([
     getSeatOutlook(supabase, lead.id),
     lead.gender === null ? getYearStreams(supabase, lead.enrollmentYear) : null,
@@ -73,7 +71,7 @@ export async function StudentPanel({ lead, staff, open }: LeadPanelProps) {
         </span>
       ),
     },
-    ...(streams?.seat ? [{ key: "Seat", value: streams.seat as React.ReactNode }] : []),
+    ...(streams.seat ? [{ key: "Seat", value: streams.seat as React.ReactNode }] : []),
   )
   return (
     <StudentEditor
@@ -84,7 +82,7 @@ export async function StudentPanel({ lead, staff, open }: LeadPanelProps) {
       canCorrectVisit={canCorrectVisit}
     >
       <KeyValueList items={rows} />
-      {streams && lead.gender === null && <Note>{noAnswerNote(lead, streams.classStreams)}</Note>}
+      {lead.gender === null && <Note>{noAnswerNote(lead, streams.classStreams)}</Note>}
       {details.ok ? (
         <div className="fs-rows">
           <FatherNameRow

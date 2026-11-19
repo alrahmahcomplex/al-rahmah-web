@@ -1,25 +1,3 @@
-import type { ClassSeats } from "@/lib/services/seats"
-
-// The seats set, as the Seats screen shows them.
-export function seatsLine({ seats }: ClassSeats): string {
-  return seats === null ? "Seats not set" : String(seats)
-}
-
-// The seats taken split by Seat priority, leaving out priorities nobody
-// holds: "Full 1 · Deposit 2".
-export function takenLine<T extends Pick<ClassSeats, "full" | "firstInstalment" | "deposit">>({ full, firstInstalment, deposit }: T): string {
-  return (
-    [
-      ["Full", full],
-      ["First instalment", firstInstalment],
-      ["Deposit", deposit],
-    ] as const
-  )
-    .filter(([, count]) => count > 0)
-    .map(([name, count]) => `${name} ${count}`)
-    .join(" · ")
-}
-
 // The year the screen opens on: the latest year with a Fee schedule up to
 // next year, the year admissions are for, or the earliest when every
 // schedule is later. Null when there is none.

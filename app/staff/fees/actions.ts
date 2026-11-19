@@ -10,7 +10,6 @@ import {
   type AcademicYearSettings,
   type FeeAmounts,
 } from "@/lib/services/fees"
-import { DAY_OR_BOARDING, LEAD_CLASSES } from "@/lib/services/leads"
 import { requirePermission } from "@/lib/services/staff-auth"
 import { createClient } from "@/utils/supabase/server"
 
@@ -73,33 +72,21 @@ const REFUSED_SETTINGS: AcademicYearOutcome = {
   message: "The start and seats could not be read. Reload the page and try again.",
 }
 
-const isSeat = (value: unknown): value is AcademicYearSettings["seats"][number] =>
-  typeof value === "object" &&
-  value !== null &&
-  isString((value as Record<string, unknown>).className) &&
-  isString((value as Record<string, unknown>).dayOrBoarding) &&
-  (isNumber((value as Record<string, unknown>).seats) || (value as Record<string, unknown>).seats === null)
-
 const isSettings = (value: unknown): value is AcademicYearSettings =>
   typeof value === "object" &&
   value !== null &&
-  ((value as AcademicYearSettings).start === null || isString((value as AcademicYearSettings).start)) &&
-  Array.isArray((value as AcademicYearSettings).seats) &&
-  (value as AcademicYearSettings).seats.length <= LEAD_CLASSES.length * DAY_OR_BOARDING.length &&
-  (value as AcademicYearSettings).seats.every(isSeat)
+  ((value as AcademicYearSettings).start === null || isString((value as AcademicYearSettings).start))
 
-// A seat the form saw as set has a count.
-const isSetSeat = (seat: AcademicYearSettings["seats"][number]) => isNumber(seat.seats)
-
-// Sets the year's Academic-year start and seats, against what the form saw
-// when it opened, so a stale form can't undo a newer change. The shape is checked here;
-// the database checks the permission, the date and every count.
+// Sets the year's Academic-year start, against what the form saw when it
+// opened, so a stale form can't undo a newer change. The shape is checked
+// here; the database checks the permission and the date. Seats are never
+// sent: they live in streams (#449).
 export async function saveAcademicYear(
   year: number,
   settings: AcademicYearSettings,
   seen: AcademicYearSeen,
 ): Promise<AcademicYearOutcome> {
-  if (!Number.isInteger(year) || !isSettings(settings) || !isSettings(seen) || !seen.seats.every(isSetSeat)) {
+  if (!Number.isInteger(year) || !isSettings(settings) || !isSettings(seen)) {
     return REFUSED_SETTINGS
   }
 
@@ -107,12 +94,7 @@ export async function saveAcademicYear(
   const allowed = await requirePermission(supabase, "academic_years.manage")
   if (!allowed.ok) return academicYearOutcome({ kind: "forbidden" }, year)
 
-  const result = await setAcademicYear(
-    supabase,
-    year,
-    { start: settings.start, seats: settings.seats.map(({ className, dayOrBoarding, seats }) => ({ className, dayOrBoarding, seats })) },
-    { start: seen.start, seats: seen.seats.map(({ className, dayOrBoarding, seats }) => ({ className, dayOrBoarding, seats })) },
-  )
+  const result = await setAcademicYear(supabase, year, { start: settings.start }, { start: seen.start })
   if (!result.ok) return academicYearOutcome(result.error, year)
   revalidatePath("/staff/fees", "layout")
   return { status: "saved" }

@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache"
 
 import { isRecordablePaymentType, previewPayment, recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 import { requirePermission } from "@/lib/services/staff-auth"
-import { getSeatMode } from "@/lib/services/streams"
 import { createClient } from "@/utils/supabase/server"
 
 import {
@@ -46,10 +45,6 @@ export async function previewSchoolFeePayment(leadId: string, input: PaymentInpu
   const preview = await previewPayment(supabase, leadId, { type: input.type, amount: input.amount ?? null, paidOn: input.paidOn })
   if (!preview.ok) {
     return preview.error === "no_class" ? noClassRefusal(supabase, leadId, "checked") : paymentRefusal(preview.error, "checked")
-  }
-  // Once streams are on, the old seat count says nothing, so its warning goes.
-  if (preview.data.wouldOverfill && (await getSeatMode(supabase)) === "named") {
-    return { status: "preview", preview: { ...preview.data, wouldOverfill: false } }
   }
   return { status: "preview", preview: preview.data }
 }

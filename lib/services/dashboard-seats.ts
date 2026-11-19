@@ -1,31 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-import { getSeats, listFeeSchedules } from "./fees"
-import type { DayOrBoarding, LeadClass } from "./leads"
+import { listFeeSchedules } from "./fees"
+import type { LeadClass } from "./leads"
 import type { Result } from "./result"
-import { getSeatMode, getYearStreams, type StreamTakes, type YearStreams } from "./streams"
+import { getYearStreams, type StreamTakes, type YearStreams } from "./streams"
 
-// Seats by class on the dashboard: a snapshot of how full each class is in
-// one Enrollment year, read from slice 9's seat count. Counts only: the
-// ranked leads slice 9 adds for an over-full class never leave this file.
+// Seats by class, for Home and Reports: how full each class's streams (#449)
+// are in one Enrollment year. Home reads the year's streams as Seats does, on
+// the server. Reports reads counts by stream alone, since it hands them to
+// the browser and the streams name the children waiting.
 
-export type ClassSeatFigures = {
-  className: LeadClass
-  dayOrBoarding: DayOrBoarding
-  // Null when the seats are not set.
-  seats: number | null
-  taken: number
-  full: number
-  firstInstalment: number
-  deposit: number
-  // Seats set minus seats taken, never below zero. Null when the seats are
-  // not set.
-  left: number | null
-  // How many more seats are taken than set; null unless the class is over.
-  overBy: number | null
-}
-
-/** One stream on Reports once streams are on (#449): its seats, the children placed in it by Seat priority, and its free seats. */
+/** One stream on Reports: its seats, the children placed in it by Seat priority, and its free seats. */
 export type StreamSeatFigures = {
   id: string
   label: string
@@ -38,9 +23,9 @@ export type StreamSeatFigures = {
 }
 
 /**
- * A class on Reports once streams are on: its streams in order, its seat
- * holders by Seat priority (placed or not; what a class with no streams
- * shows), and how many wait for a stream.
+ * A class on Reports: its streams in order, its seat holders by Seat priority
+ * (placed or not; what a class with no streams shows), and how many wait for
+ * a stream.
  */
 export type ClassStreamFigures = {
   className: LeadClass
@@ -51,29 +36,23 @@ export type ClassStreamFigures = {
   waiting: number
 }
 
-export type SeatsByClass = {
+type ShownYear = {
   // The year shown; null when no year has a Fee schedule.
   year: number | null
   // The years with a Fee schedule, newest first.
   years: number[]
-  // Every class in class order, Day before Boarding. Empty when `year` is
-  // null, and once streams are on, when `named` says it instead.
-  classes: ClassSeatFigures[]
-  // Once streams are on (#449), null before: the year’s streams as Seats reads
-  // them, for Home, which reads them on the server; or, with `figures` asked
-  // for, Reports’ counts by stream alone, since Reports hands them to the
-  // browser and the streams name the children waiting.
-  named: { streams: YearStreams; figures: null } | { streams: null; figures: ClassStreamFigures[] } | null
 }
 
-// The seats in `year`, or in the latest year with a Fee schedule when `year`
-// is left out or has none. Needs payments.view, checked here first, so a
-// staff member without it gets `forbidden` and slice 9 is never asked.
-export async function getSeatsByClass(
-  supabase: SupabaseClient,
-  year?: number | null,
-  { figures = false }: { figures?: boolean } = {},
-): Promise<Result<SeatsByClass, "forbidden" | "unavailable">> {
+/** Home's seats: the year's streams as Seats reads them; null when `year` is. */
+export type SeatsByClass = ShownYear & { streams: YearStreams | null }
+
+/** Reports' seats: counts by stream, every class in class order; empty when `year` is null. */
+export type SeatFiguresByClass = ShownYear & { classes: ClassStreamFigures[] }
+
+// The year to show: `year`, or the latest year with a Fee schedule when
+// `year` is left out or has none. Needs payments.view, checked here first, so
+// a staff member without it gets `forbidden` and no seat is read.
+async function shownYear(supabase: SupabaseClient, year: number | null | undefined): Promise<Result<ShownYear, "forbidden" | "unavailable">> {
   const permitted = await supabase.rpc("has_permission", { permission: "payments.view" })
   if (permitted.error) {
     // 42501: not signed in, so the function may not be called at all.
@@ -86,43 +65,30 @@ export async function getSeatsByClass(
   const schedules = await listFeeSchedules(supabase)
   if (!schedules.ok) return schedules
   const years = schedules.data.map((schedule) => schedule.year).toSorted((a, b) => b - a)
-  const shown = year != null && years.includes(year) ? year : (years[0] ?? null)
-  if (shown === null) return { ok: true, data: { year: null, years, classes: [], named: null } }
+  return { ok: true, data: { year: year != null && years.includes(year) ? year : (years[0] ?? null), years } }
+}
 
-  if ((await getSeatMode(supabase)) === "named") {
-    if (figures) {
-      const counted = await yearSeatFigures(supabase, shown)
-      if (!counted.ok) return counted
-      return { ok: true, data: { year: shown, years, classes: [], named: { streams: null, figures: counted.data } } }
-    }
-    const streams = await getYearStreams(supabase, shown)
-    if (!streams.ok) return { ok: false, error: "unavailable" }
-    return { ok: true, data: { year: shown, years, classes: [], named: { streams: streams.data, figures: null } } }
-  }
+/** Home's seats in `year` (see shownYear). */
+export async function getSeatsByClass(supabase: SupabaseClient, year?: number | null): Promise<Result<SeatsByClass, "forbidden" | "unavailable">> {
+  const shown = await shownYear(supabase, year)
+  if (!shown.ok) return shown
+  if (shown.data.year === null) return { ok: true, data: { ...shown.data, streams: null } }
+  const streams = await getYearStreams(supabase, shown.data.year)
+  if (!streams.ok) return { ok: false, error: "unavailable" }
+  return { ok: true, data: { ...shown.data, streams: streams.data } }
+}
 
-  const seats = await getSeats(supabase, shown)
-  if (!seats.ok) return seats
-  return {
-    ok: true,
-    data: {
-      year: shown,
-      years,
-      // Field by field, so nothing slice 9 adds, the ranked leads among it,
-      // reaches the dashboard.
-      classes: seats.data.map((entry) => ({
-        className: entry.className,
-        dayOrBoarding: entry.dayOrBoarding,
-        seats: entry.seats,
-        taken: entry.taken,
-        full: entry.full,
-        firstInstalment: entry.firstInstalment,
-        deposit: entry.deposit,
-        left: entry.seats === null ? null : Math.max(entry.seats - entry.taken, 0),
-        overBy: entry.seats !== null && entry.taken > entry.seats ? entry.taken - entry.seats : null,
-      })),
-      named: null,
-    },
-  }
+/** Reports' counts by stream in `year` (see shownYear). Counts only. */
+export async function getSeatFiguresByClass(
+  supabase: SupabaseClient,
+  year?: number | null,
+): Promise<Result<SeatFiguresByClass, "forbidden" | "unavailable">> {
+  const shown = await shownYear(supabase, year)
+  if (!shown.ok) return shown
+  if (shown.data.year === null) return { ok: true, data: { ...shown.data, classes: [] } }
+  const counted = await yearSeatFigures(supabase, shown.data.year)
+  if (!counted.ok) return counted
+  return { ok: true, data: { ...shown.data, classes: counted.data } }
 }
 
 type FiguresRow = {

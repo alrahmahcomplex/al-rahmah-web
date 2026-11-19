@@ -10,6 +10,7 @@ import { getLeadFee } from "@/lib/services/lead-fees"
 import { createLead, getLead, type LeadStatus } from "@/lib/services/leads"
 import { adjustPayment, type AdjustmentInput } from "@/lib/services/payment-adjustments"
 import { listPayments, listSeatPriorities, recordPayment, type PaymentInput, type SeatPriority } from "@/lib/services/school-fee-payments"
+import { getSeatOutlook } from "@/lib/services/streams"
 
 import { anonClient, asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
@@ -267,7 +268,7 @@ describe("voiding and restoring", () => {
     expect((await stateOf(id)).status).toBe("Enrolled")
   })
 
-  test("Seat priorities and seat counts leave a voided payment out", async () => {
+  test("Seat priorities and the seat outlook leave a voided payment out", async () => {
     const id = await passedLead()
     const paymentId = await pay(id, 300_000)
     const accountant = await signedIn(ACCOUNTANT)
@@ -275,8 +276,7 @@ describe("voiding and restoring", () => {
 
     await adjust(paymentId, VOID)
     expect(await listSeatPriorities(accountant, [id])).toEqual({ ok: true, data: {} })
-    const { data } = await accountant.rpc("seat_check", { lead_id: id })
-    expect(data).toMatchObject({ priority: null, holds_seat: false })
+    expect(await getSeatOutlook(accountant, id)).toMatchObject({ ok: true, data: { priority: null, placed: null, waiting: false } })
   })
 })
 

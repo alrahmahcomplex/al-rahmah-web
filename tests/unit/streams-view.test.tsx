@@ -54,7 +54,6 @@ const FORM1: ClassStreams = {
 }
 
 const YEAR: YearStreams = {
-  mode: "named",
   year: 2027,
   classes: [FORM1],
   requests: [],

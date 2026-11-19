@@ -6,7 +6,7 @@ vi.mock("server-only", () => ({}))
 
 import { EXPORT_COLUMNS, EXPORT_PRESETS, exportStudents, studentsCsv, type ExportColumn } from "@/lib/services/student-export"
 
-import { anonClient, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
+import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn } from "../support/db"
 import { leadWithCode } from "../support/discount-codes"
 import { ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
@@ -55,6 +55,20 @@ describe("export tiers", () => {
     expect(await logsOf(ADMISSIONS.id, since)).toEqual([
       { kind: "students", columns: VIEW, row_count: 1, filters: { query: lead.admissionNumber } },
     ])
+  })
+
+  test("Boy or girl holds the child's answer, and is empty for a child with none", async () => {
+    const lead = await oneLead()
+    const admissions = await signedIn(ADMISSIONS)
+    const columns: ExportColumn[] = ["admission_number", "day_or_boarding", "gender"]
+    // No answer: a child from before the question, or from the workbook import.
+    const before = await exportStudents(admissions, { query: lead.admissionNumber }, columns)
+    expect(before.ok && before.data.rows).toEqual([[lead.admissionNumber, "Day", ""]])
+    expect(studentsCsv({ columns, rows: [] }).trimEnd()).toBe("Admission Number,Day or boarding,Boy or girl")
+
+    await asSystem((sql) => sql.query("update public.leads set gender = 'Girl' where id = $1", [lead.leadId]))
+    const after = await exportStudents(admissions, { query: lead.admissionNumber }, columns)
+    expect(after.ok && after.data.rows).toEqual([[lead.admissionNumber, "Day", "Girl"]])
   })
 
   test("a Manager with leads.export gets the contact columns, never the full ones", async () => {

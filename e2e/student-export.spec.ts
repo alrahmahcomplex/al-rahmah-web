@@ -126,8 +126,8 @@ test("the Super Admin exports Full data", async ({ page }) => {
   expect(answer.status()).toBe(200)
   expect(answer.headers()["content-disposition"]).toMatch(DATED_NAME("full"))
   const header = headerRow(await readFile((await (await download).path())!, "utf8")).split(",")
-  expect(header).toHaveLength(28)
-  expect(header).toEqual(expect.arrayContaining(["Parent phone", "Interview fee status", "Follow-up notes", "History entries"]))
+  expect(header).toHaveLength(29)
+  expect(header).toEqual(expect.arrayContaining(["Boy or girl", "Parent phone", "Interview fee status", "Follow-up notes", "History entries"]))
 })
 
 test("an export the route refuses says why in the sheet, and never says Exported", async ({ page, allowConsoleError }) => {

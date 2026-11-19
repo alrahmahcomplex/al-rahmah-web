@@ -69,7 +69,9 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
     iconName: "fees",
     permission: ["payments.view", "academic_years.manage"],
   },
-  { href: "/staff/seats", label: "Seats", group: "Money", icon: ArmchairIcon, iconName: "seats", permission: "academic_years.manage", alsoNeeds: "payments.view" },
+  // Seats are counted in streams (#449): everyone who may view payments opens
+  // the screen; only staff who manage academic years change streams there.
+  { href: "/staff/seats", label: "Seats", group: "Money", icon: ArmchairIcon, iconName: "seats", permission: "payments.view" },
   { href: "/staff/discounts", label: "Discount requests", group: "Admin", icon: BadgePercentIcon, iconName: "discounts", permission: "discounts.approve" },
   {
     href: "/staff/reopenings",

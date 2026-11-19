@@ -160,6 +160,7 @@ describe("groupNav", () => {
     expect(names(groupNav([STAFF_HOME, ...navFor(ADMISSIONS_STAFF)]))).toEqual(["", "Admissions", "Referrals", "Money"])
     expect(groupNav(navFor(ADMISSIONS_STAFF)).find((group) => group.name === "Money")?.entries.map((entry) => entry.label)).toEqual([
       "Fee schedule",
+      "Seats",
     ])
     expect(names(groupNav(navFor(["payments.view"])))).toEqual(["Money"])
     expect(groupNav([])).toEqual([])

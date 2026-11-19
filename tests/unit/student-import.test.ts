@@ -200,6 +200,20 @@ describe("the file's own checks", () => {
     ])
   })
 
+  it("passes on no parent name too long to store, and keeps the blank row importable", () => {
+    const long = "M".repeat(101)
+    const rows = read([
+      "Asha Mfano,STD 1,2027,,,,0712000001,,01/11/2026,,",
+      `Baraka Mfano,STD 2,2027,,${long},,0712000001,,01/11/2026,,`,
+      "Juma Mfano,STD 3,2027,,Baba Mfano,,0712000001,,01/11/2026,,",
+    ])
+    expect(rows.map((row) => [row.problem?.reason ?? null, row.normalized.guardianName])).toEqual([
+      [null, "Baba Mfano"],
+      ["Parent/guardian name too long", long],
+      [null, "Baba Mfano"],
+    ])
+  })
+
   it("accepts a visit dated today, and refuses one dated tomorrow", () => {
     const rows = read(["Kid,STD 1,2027,,Mama,,0712000001,,09/11/2026,,", "Kid Two,STD 1,2027,,Mama,,0712000002,,10/11/2026,,"])
     expect(rows.map((row) => row.problem)).toEqual([null, { class: "refused", reason: "Visit date in the future" }])

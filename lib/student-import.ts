@@ -274,12 +274,13 @@ export function screenStudentRows(
 ): ScreenedStudentRow[] {
   const thisYear = Number(today.slice(0, 4))
   // Rows with the same parent phone share one contact, so a blank parent
-  // name takes the first name another of those rows gives.
+  // name takes the first name another of those rows gives. A name too long
+  // to store is refused on its own row and never passed on.
   const namedGuardians = new Map<string, string>()
   for (const { cells } of records) {
     const phone = normalizeAgentPhone(cells.phone)
     const name = collapse(cells.guardianName)
-    if (phone !== null && name !== "" && !namedGuardians.has(phone)) namedGuardians.set(phone, name)
+    if (phone !== null && name !== "" && name.length <= 100 && !namedGuardians.has(phone)) namedGuardians.set(phone, name)
   }
   const rows = records.map((record) => {
     const { cells } = record

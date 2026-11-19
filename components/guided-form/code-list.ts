@@ -16,12 +16,15 @@ export function sortCodeOptions(options: readonly CodeOption[]): CodeOption[] {
   return [...options].sort((a, b) => rank(a) - rank(b) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
 }
 
-/** The codes a search finds: the code or the line beside it holds what was typed, ignoring case, spaces and the agent hyphen. */
+// A code or part of one as searched: capitals, no spaces or hyphens, so "bjn-", "N-4" and "bjn4" all find BJN-402.
+const searchable = (text: string) => text.toUpperCase().replace(/[\s-]+/g, "")
+
+/** The codes a search finds: the code or the line beside it holds what was typed, ignoring case, spaces and hyphens in the code. */
 export function filterCodeOptions(query: string, options: readonly CodeOption[]): CodeOption[] {
   const words = query.trim().toLowerCase()
   if (words === "") return [...options]
-  const typedKey = codeKey(words.replace(/\s+/g, ""))
-  return options.filter((option) => codeKey(option.code).includes(typedKey) || option.detail.toLowerCase().includes(words))
+  const typed = searchable(words)
+  return options.filter((option) => (typed !== "" && searchable(option.code).includes(typed)) || option.detail.toLowerCase().includes(words))
 }
 
 /**

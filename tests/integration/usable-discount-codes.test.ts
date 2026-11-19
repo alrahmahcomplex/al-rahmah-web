@@ -70,4 +70,17 @@ describe("which codes are listed", () => {
     const firstAgent = listed.data.findIndex((c) => c.kind === "agent")
     expect(listed.data.slice(firstAgent).every((c) => c.kind === "agent")).toBe(true)
   })
+
+  test("a list longer than one page is read whole", async () => {
+    const mine = [await promo(3_000), await promo(3_000), await promo(3_000)].map((p) => p.code)
+    // Two rows a page stands in for the API's 1,000: every page is read, and
+    // each code is listed once. Other test files change their own codes
+    // meanwhile, so only this test's codes are checked by name.
+    const paged = await listUsableDiscountCodes(await signedIn(ADMISSIONS), { pageSize: 2 })
+    if (!paged.ok) throw new Error(paged.error)
+    const codes = paged.data.map((c) => c.code)
+    expect(codes.length).toBeGreaterThan(2)
+    expect(new Set(codes).size).toBe(codes.length)
+    expect(codes).toEqual(expect.arrayContaining(mine))
+  })
 })

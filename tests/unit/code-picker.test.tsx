@@ -32,6 +32,9 @@ describe("the list's rules", () => {
     const sorted = sortCodeOptions(CODES)
     expect(filterCodeOptions("neema", sorted).map((c) => c.code)).toEqual(["NZR-215"])
     expect(filterCodeOptions("bjn4", sorted).map((c) => c.code)).toEqual(["BJN-402"])
+    // The hyphen as the code shows it, typed part way.
+    expect(filterCodeOptions("BJN-", sorted).map((c) => c.code)).toEqual(["BJN-402"])
+    expect(filterCodeOptions("n-4", sorted).map((c) => c.code)).toEqual(["BJN-402"])
     expect(filterCodeOptions("eid-20", sorted).map((c) => c.code)).toEqual(["EID2026"])
     expect(filterCodeOptions("10,000", sorted).map((c) => c.code)).toEqual(["SAVE10"])
     expect(filterCodeOptions("  ", sorted)).toHaveLength(5)

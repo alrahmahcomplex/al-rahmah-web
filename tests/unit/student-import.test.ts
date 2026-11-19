@@ -41,15 +41,30 @@ describe("the template", () => {
 
   it("accepts the workbook's own headers, and leaves out the optional columns", () => {
     const file = readImportFile(
-      new TextEncoder().encode("Name,Class name,Year,Parent/guardian contacts,Mobile\r\nAsha Mfano,STD 1,2027,Mama Mfano,0712000001\r\n"),
+      new TextEncoder().encode("Name,Class name,Year,Parent/guardian contacts,Mobile,Date,Code\r\nAsha Mfano,STD 1,2027,Mama Mfano,0712000001,05/09/2026,\r\n"),
       STUDENT_IMPORT_COLUMNS,
     )
-    expect(file.ok && file.data.rows[0].cells).toMatchObject({ studentName: "Asha Mfano", guardianName: "Mama Mfano", phone: "0712000001", status: "" })
+    expect(file.ok && file.data.rows[0].cells).toMatchObject({
+      studentName: "Asha Mfano",
+      guardianName: "Mama Mfano",
+      phone: "0712000001",
+      visitDate: "05/09/2026",
+      discountCode: "",
+      status: "",
+    })
+  })
+
+  it("needs only the student, class, year, phone, visit date and code columns", () => {
+    const file = readImportFile(
+      new TextEncoder().encode("Student name,Class,Enrollment year,Parent phone,Visit date,Discount code\r\nAsha Mfano,STD 1,2027,0712000001,05/09/2026,\r\n"),
+      STUDENT_IMPORT_COLUMNS,
+    )
+    expect(file.ok && file.data.rows[0].cells).toMatchObject({ guardianName: "", relationship: "", dayOrBoarding: "", whatsapp: "", status: "" })
   })
 
   it("says which required columns are missing", () => {
-    const file = readImportFile(new TextEncoder().encode("Student name,Class\r\nA,STD 1\r\n"), STUDENT_IMPORT_COLUMNS)
-    expect(file).toEqual({ ok: false, error: { kind: "missing-columns", columns: ["Enrollment year", "Parent/guardian name", "Parent phone"] } })
+    const file = readImportFile(new TextEncoder().encode("Student name,Class,Parent/guardian name\r\nA,STD 1,Mama\r\n"), STUDENT_IMPORT_COLUMNS)
+    expect(file).toEqual({ ok: false, error: { kind: "missing-columns", columns: ["Enrollment year", "Parent phone", "Visit date", "Discount code"] } })
   })
 })
 
@@ -127,26 +142,26 @@ describe("the file's own checks", () => {
 
   it("refuses each kind of bad value with its reason, and flags Excel numbers", () => {
     const rows = read([
-      ",STD 1,2027,,Mama,,0712000001,,,,",
-      "Kid,GRADE 9,2027,,Mama,,0712000001,,,,",
-      "Kid,STD 1,2020,,Mama,,0712000001,,,,",
-      "Kid,STD 1,2027,weekly,Mama,,0712000001,,,,",
-      "Kid,STD 1,2027,,,,0712000001,,,,",
-      "Kid,STD 1,2027,,Mama,,,,,,",
-      "Kid,STD 1,2027,,Mama,,0712,,,,",
-      "Kid,STD 1,2027,,Mama,,0712000001,abc,,,",
+      ",STD 1,2027,,Mama,,0712000001,,01/11/2026,,",
+      "Kid,GRADE 9,2027,,Mama,,0712000001,,01/11/2026,,",
+      "Kid,STD 1,2020,,Mama,,0712000001,,01/11/2026,,",
+      "Kid,STD 1,2027,weekly,Mama,,0712000001,,01/11/2026,,",
+      "Kid,STD 1,2027,,Mama,,0712000001,,,,",
+      "Kid,STD 1,2027,,Mama,,,,01/11/2026,,",
+      "Kid,STD 1,2027,,Mama,,0712,,01/11/2026,,",
+      "Kid,STD 1,2027,,Mama,,0712000001,abc,01/11/2026,,",
       "Kid,STD 1,2027,,Mama,,0712000001,,31/02/2026,,",
       "Kid,STD 1,2027,,Mama,,0712000001,,01/01/2027,,",
-      "Kid,STD 1,2027,,Mama,,0712000001,,,bad€code,",
-      "Kid,STD 1,2027,,Mama,,0712000001,,,,Paid",
-      "Kid,STD 1,2027,,Mama,,712000012.0,,,,",
+      "Kid,STD 1,2027,,Mama,,0712000001,,01/11/2026,bad€code,",
+      "Kid,STD 1,2027,,Mama,,0712000001,,01/11/2026,,Paid",
+      "Kid,STD 1,2027,,Mama,,712000012.0,,01/11/2026,,",
     ])
     expect(rows.map((row) => row.problem)).toEqual([
       { class: "refused", reason: "Missing student name" },
       { class: "refused", reason: "Unknown class" },
       { class: "refused", reason: "Enrollment year must be 2025 to 2028" },
       { class: "refused", reason: "Day or boarding not recognised" },
-      { class: "refused", reason: "Missing parent/guardian name" },
+      { class: "refused", reason: "Missing visit date" },
       { class: "refused", reason: "Parent phone missing" },
       { class: "refused", reason: "Unreadable parent phone" },
       { class: "refused", reason: "Unreadable WhatsApp" },
@@ -158,6 +173,33 @@ describe("the file's own checks", () => {
     ])
   })
 
+  it("accepts a row with every optional cell blank, and a blank code", () => {
+    const [row] = read(["Kid,STD 1,2027,,,,0712000001,,01/11/2026,,"])
+    expect(row.problem).toBeNull()
+    expect(row.normalized).toMatchObject({
+      dayOrBoarding: "Day",
+      guardianName: "Parent/guardian",
+      relationship: "Other",
+      relationshipDescription: "Parent/guardian",
+      whatsapp: null,
+      discountCode: null,
+      status: "Visited",
+    })
+  })
+
+  it("gives a blank parent name the name another row with the same phone gives", () => {
+    const rows = read([
+      "Asha Mfano,STD 1,2027,,,,0712000001,,01/11/2026,,",
+      "Baraka Mfano,STD 2,2027,,Mama  Mfano,,+255 712 000 001,,01/11/2026,,",
+      "Juma Mfano,STD 3,2027,,,,0712000002,,01/11/2026,,",
+    ])
+    expect(rows.map((row) => [row.problem, row.normalized.guardianName])).toEqual([
+      [null, "Mama Mfano"],
+      [null, "Mama Mfano"],
+      [null, "Parent/guardian"],
+    ])
+  })
+
   it("accepts a visit dated today, and refuses one dated tomorrow", () => {
     const rows = read(["Kid,STD 1,2027,,Mama,,0712000001,,09/11/2026,,", "Kid Two,STD 1,2027,,Mama,,0712000002,,10/11/2026,,"])
     expect(rows.map((row) => row.problem)).toEqual([null, { class: "refused", reason: "Visit date in the future" }])
@@ -165,9 +207,9 @@ describe("the file's own checks", () => {
 
   it("refuses a student named twice with the same parent phone, and keeps siblings", () => {
     const rows = read([
-      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,",
-      "asha  mfano,STD 2,2027,,Mama,,+255 712 000 001,,,,",
-      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,,,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,01/11/2026,,",
+      "asha  mfano,STD 2,2027,,Mama,,+255 712 000 001,,01/11/2026,,",
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,,01/11/2026,,",
     ])
     expect(rows.map((row) => row.problem?.reason ?? null)).toEqual([
       "Same student twice in the file (rows 2, 3)",
@@ -179,15 +221,15 @@ describe("the file's own checks", () => {
   it("refuses a student named twice when the rows share any parent number, phone or WhatsApp", () => {
     const rows = read([
       // The same child with the two numbers swapped.
-      "Asha Mfano,STD 1,2027,,Mama,,0712000001,0712000002,,,",
-      "Asha Mfano,STD 1,2027,,Mama,,0712000002,0712000001,,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,0712000002,01/11/2026,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000002,0712000001,01/11/2026,,",
       // One row's WhatsApp is the other's phone.
-      "Juma Mfano,STD 2,2027,,Baba,,0712000003,0712000004,,,",
-      "Juma Mfano,STD 2,2027,,Baba,,0712000004,,,,",
+      "Juma Mfano,STD 2,2027,,Baba,,0712000003,0712000004,01/11/2026,,",
+      "Juma Mfano,STD 2,2027,,Baba,,0712000004,,01/11/2026,,",
       // A sibling on the same numbers is another child.
-      "Baraka Mfano,STD 3,2027,,Mama,,0712000002,0712000001,,,",
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000002,0712000001,01/11/2026,,",
       // The same name with no number in common is another family's child.
-      "Asha Mfano,STD 1,2027,,Mama Mwingine,,0712000009,,,,",
+      "Asha Mfano,STD 1,2027,,Mama Mwingine,,0712000009,,01/11/2026,,",
     ])
     expect(rows.map((row) => row.problem?.reason ?? null)).toEqual([
       "Same student twice in the file (rows 2, 3)",
@@ -204,9 +246,9 @@ describe("the file's own checks", () => {
   // of the rows sharing that phone.
   it("refuses a student named twice under two numbers a sibling row links", () => {
     const rows = read([
-      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,0712000002,,,",
-      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,",
-      "Asha Mfano,STD 1,2027,,Mama,,0712000002,,,,",
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,0712000002,01/11/2026,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,01/11/2026,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000002,,01/11/2026,,",
     ])
     expect(rows.map((row) => row.problem?.reason ?? null)).toEqual([
       null,
@@ -217,11 +259,11 @@ describe("the file's own checks", () => {
 
   it("links the WhatsApp of every row with the phone, not only the first row's", () => {
     const rows = read([
-      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,,,,",
-      "Juma Mfano,STD 2,2027,,Mama,,0712000001,0712000002,,,",
-      "Neema Mfano,STD 4,2027,,Mama,,0712000001,0712000003,,,",
-      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,",
-      "Asha Mfano,STD 1,2027,,Mama,,0712000003,,,,",
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,,01/11/2026,,",
+      "Juma Mfano,STD 2,2027,,Mama,,0712000001,0712000002,01/11/2026,,",
+      "Neema Mfano,STD 4,2027,,Mama,,0712000001,0712000003,01/11/2026,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,01/11/2026,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000003,,01/11/2026,,",
     ])
     expect(rows.map((row) => row.problem?.reason ?? null)).toEqual([
       null,
@@ -234,9 +276,9 @@ describe("the file's own checks", () => {
 
   it("keeps siblings who share the linked numbers as two children", () => {
     const rows = read([
-      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,0712000002,,,",
-      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,",
-      "Juma Mfano,STD 2,2027,,Mama,,0712000002,,,,",
+      "Baraka Mfano,STD 3,2027,,Mama,,0712000001,0712000002,01/11/2026,,",
+      "Asha Mfano,STD 1,2027,,Mama,,0712000001,,01/11/2026,,",
+      "Juma Mfano,STD 2,2027,,Mama,,0712000002,,01/11/2026,,",
     ])
     expect(rows.map((row) => row.problem)).toEqual([null, null, null])
   })
@@ -244,11 +286,11 @@ describe("the file's own checks", () => {
 
 describe("the database's verdicts", () => {
   const rows = read([
-    "Asha Mfano,STD 1,2027,,Mama,,0712000001,,,,Interviewed",
-    "Baraka Mfano,STD 2,2027,,Mama,,0712000001,,,XYZ1,",
-    "Chausiku Mfano,STD 3,2027,,Mama,,0712000002,,,,",
-    "Dotto Mfano,STD 3,2027,,Mama,,0712000003,,,,",
-    "Bad Mfano,GRADE 9,2027,,Mama,,0712000004,,,,",
+    "Asha Mfano,STD 1,2027,,Mama,,0712000001,,01/11/2026,,Interviewed",
+    "Baraka Mfano,STD 2,2027,,Mama,,0712000001,,01/11/2026,XYZ1,",
+    "Chausiku Mfano,STD 3,2027,,Mama,,0712000002,,01/11/2026,,",
+    "Dotto Mfano,STD 3,2027,,Mama,,0712000003,,01/11/2026,,",
+    "Bad Mfano,GRADE 9,2027,,Mama,,0712000004,,01/11/2026,,",
   ])
   const verdicts = new Map<number, StudentVerdict>([
     [2, { verdict: "create", familyRow: null, family: null, unknownCode: false }],
@@ -260,7 +302,7 @@ describe("the database's verdicts", () => {
 
   it("classes each row and explains what staff need to know", () => {
     expect(classified.map((row) => [row.class, row.reason, row.notes])).toEqual([
-      ["create", null, ["No visit date in the file. The import date is used."]],
+      ["create", null, []],
       ["create", null, ["Same parent as row 2", "Code not recognised. It stays on the application and gives no discount."]],
       ["joins-family", null, ["Phone matches Juma Mfano's family. Staff confirm the match on the application."]],
       ["present", "Already on file as ADMSN-90001", []],
@@ -297,6 +339,6 @@ describe("the database's verdicts", () => {
   })
 
   it("writes the refused rows back as uploaded, with the reason", () => {
-    expect(refusedStudentRowsCsv(classified).split("\r\n")[1]).toBe("Bad Mfano,GRADE 9,2027,,Mama,,0712000004,,,,,Unknown class,6")
+    expect(refusedStudentRowsCsv(classified).split("\r\n")[1]).toBe("Bad Mfano,GRADE 9,2027,,Mama,,0712000004,,01/11/2026,,,Unknown class,6")
   })
 })

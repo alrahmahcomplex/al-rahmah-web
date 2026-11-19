@@ -669,6 +669,8 @@ export function withCustodian(a: Answers, root: number, custodian: Custodian): A
 /** What the form knows of a child on file staff linked: its fee and its group, as the database holds them now. */
 export type OnFileFee = {
   leadId: string
+  // When its record was made: with the lead id, how the database breaks a tie for the full payer.
+  createdAt: string
   name: string
   className: string
   status: string
@@ -718,6 +720,13 @@ export type FeeRow = {
 
 export type FeePreview = { rows: FeeRow[]; total: number; together: boolean; enrolledOnFile: string | null }
 
+/**
+ * choose_full_payer's order between two records with the same fee: the older
+ * one, then the lower lead id (uuids sort as their text does).
+ */
+const older = (x: OnFileFee, y: OnFileFee) =>
+  Date.parse(x.createdAt) - Date.parse(y.createdAt) || (x.leadId < y.leadId ? -1 : x.leadId > y.leadId ? 1 : 0)
+
 /** The Discount chip on each row of a tie for the highest fee. */
 export const tieWhy = (tied: number) => `Equal fees · one pays full, ${tied === 2 ? "one gets" : "the others get"} 10%`
 
@@ -733,9 +742,13 @@ export const tieWhy = (tied: number) => `Equal fees · one pays full, ${tied ===
  *
  * The groups are the ones the save makes: households linked to the same child
  * on file, or to children in one group on file, are one group with one full
- * payer. A child on file with the same fee is older, so it wins the tie, but
- * only one the database may choose: a child with a larger discount, a manual
- * or fixed result, or waiting on a Sibling request keeps the fee it has.
+ * payer. On an equal fee the database picks the older record, then the lower
+ * lead id (choose_full_payer orders by `l.created_at, l.id`). A new student
+ * has no record yet, so a child on file with the same fee wins the tie. At
+ * check-in every student has a record (`held`), so the same order names the
+ * payer among them and the children on file. Only a child the database may
+ * choose is picked: one with a larger discount, a manual or fixed result, or
+ * waiting on a Sibling request keeps the fee it has.
  *
  * `kept`, at check-in (#309): by student key, the group a child already in a
  * sibling group keeps, as read on file. Its household counts with that group,
@@ -811,8 +824,11 @@ export function feePreview(
       const ranked = proven.filter((k) => !unranked(k))
       const top = Math.max(...ranked.map((k) => feeAt.get(k)!))
       const highest = ranked.filter((k) => feeAt.get(k) === top)
-      const [onFile] = g.linked.filter((l) => l.mayPayFull && l.fee !== null && l.fee >= top).sort((x, y) => y.fee! - x.fee!)
-      if (onFile) fullPayer = onFile
+      const [onFile] = g.linked.filter((l) => l.mayPayFull && l.fee !== null && l.fee >= top).sort((x, y) => y.fee! - x.fee! || older(x, y))
+      // At check-in the students are on file too: among equal fees the database's own order names the payer.
+      const [recorded] = highest.filter((k) => held[k]).sort((x, y) => older(held[x], held[y]))
+      if (onFile && (onFile.fee! > top || recorded === undefined || older(onFile, held[recorded]) < 0)) fullPayer = onFile
+      else if (recorded !== undefined) fullPayer = recorded
       else if (highest.length > 1) {
         fullPayer = "tied"
         tied = highest

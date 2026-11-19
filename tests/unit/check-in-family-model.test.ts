@@ -7,8 +7,13 @@ import type { AdmissionFormFamily, FormChild } from "@/lib/services/admission-fo
 // Check-in of an Admission form family (#309): it starts from what the form
 // gave, and asks only the rest.
 
+const PARENT = "c0a70000-0000-4000-8000-000000000309"
+// When the form's children were made: one form makes them together.
+const SENT = "2026-11-09T07:30:00+00:00"
+
 const child = (more: Partial<FormChild> = {}): FormChild => ({
   leadId: "11111111-1111-4111-8111-111111111111",
+  contactId: PARENT,
   admissionNumber: "ADMSN-90005",
   studentName: "YUSUF ALI HASSAN",
   fatherFullName: "ALI OMARI HASSAN",
@@ -28,7 +33,7 @@ const child = (more: Partial<FormChild> = {}): FormChild => ({
 const family = (children: FormChild[]): AdmissionFormFamily => ({
   sentOn: "2026-11-09",
   contact: {
-    id: "c0a70000-0000-4000-8000-000000000309",
+    id: PARENT,
     fullName: "SAIDA OMARI HASSAN",
     relationship: "Mother",
     relationshipDescription: null,
@@ -112,8 +117,26 @@ describe("the answers check-in starts from", () => {
   })
 
   it("offer the form's parent with the children on file under them", () => {
-    expect(checkIn.contact).toMatchObject({ relationship: "Mother", contact: { id: "c0a70000-0000-4000-8000-000000000309", fullName: "SAIDA OMARI HASSAN" } })
+    expect(checkIn.contact).toMatchObject({ relationship: "Mother", contact: { id: PARENT, fullName: "SAIDA OMARI HASSAN" } })
     expect(checkIn.contact?.contact.children).toEqual([expect.objectContaining({ id: "o1", fatherFullName: "ALI OMARI HASSAN" })])
+  })
+
+  // separate_from_family gives one child a copy of the parent, with the same name and number.
+  it("offer no parent when a child checked in sits on another contact, so the number is looked up", () => {
+    const COPY = "c0a70000-0000-4000-8000-000000000310"
+    // Whichever child staff looked up, `contact` is that child's: neither is offered for both.
+    const split = startCheckIn(family([child(), { ...cousin, contactId: COPY }]), [child(), { ...cousin, contactId: COPY }])
+    expect(split.checkIn.contact).toBeNull()
+    const looked = family([child({ contactId: COPY }), cousin])
+    expect(startCheckIn({ ...looked, contact: { ...looked.contact!, id: COPY } }, looked.children).checkIn.contact).toBeNull()
+    // The rest of what the form gave is still filled in.
+    expect(split.answers.students.map((s) => s.name?.firstName)).toEqual(["YUSUF", "ZAWADI"])
+    expect(split.answers.custodians).toEqual({})
+  })
+
+  it("still offer the parent when only a child not checked in sits on another contact", () => {
+    const visited = { ...cousin, status: "Visited" as const, contactId: "c0a70000-0000-4000-8000-000000000310" }
+    expect(startCheckIn(family([child(), visited]), [child()]).checkIn.contact?.contact.id).toBe(PARENT)
   })
 
   it("preselect the relationship the form gave, but never Father, which is the switch", () => {
@@ -160,6 +183,7 @@ describe("the fee step for a child already in a sibling group (#309)", () => {
   const yusuf: Student = { key: 1, name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" }, gender: "Boy", className: "STD 6", year: 2027, board: "Day" }
   const group = (more: Partial<OnFileFee>): OnFileFee => ({
     leadId: "11111111-1111-4111-8111-111111111111",
+    createdAt: SENT,
     name: "YUSUF ALI HASSAN",
     className: "STD 6",
     status: "Applied",
@@ -230,7 +254,7 @@ describe("children already siblings in one group (#309)", () => {
     const FEES = { 2027: { nursery: { day: 1_000_000, boarding: 2_500_000 }, primary_lower: { day: 1_100_000, boarding: 2_600_000 }, primary_upper: { day: 1_200_000, boarding: 2_700_000 }, secondary: { day: 1_300_000, boarding: 2_800_000 } } }
     const { answers } = startCheckIn(family([]), [first, second])
     const read = (leadId: string, name: string, fee: number, pays: number): OnFileFee => ({
-      leadId, name, className: "STD 6", status: "Applied", fee, pays, anchorName: null, fullPayerName: "YUSUF ALI HASSAN", groupId: "g1",
+      leadId, createdAt: SENT, name, className: "STD 6", status: "Applied", fee, pays, anchorName: null, fullPayerName: "YUSUF ALI HASSAN", groupId: "g1",
       father: "ALI OMARI HASSAN", counted: [], selfCounts: true, mayPayFull: true,
     })
     const preview = feePreview(answers, FEES, 2027, {}, {
@@ -249,7 +273,7 @@ describe("a discount a child holds on file at check-in (#309)", () => {
   const yusuf: Student = { key: 1, name: { firstName: "YUSUF", fatherFirst: "ALI", fatherMiddle: "OMARI", fatherLast: "HASSAN" }, gender: "Boy", className: "STD 6", year: 2027, board: "Day" }
   const answers: Answers = { students: [yusuf], more: true, custodians: {}, onFileAsks: [], onFile: {} }
   const own = (more: Partial<OnFileFee>): OnFileFee => ({
-    leadId: "11111111-1111-4111-8111-111111111111", name: "YUSUF ALI HASSAN", className: "STD 6", status: "Applied", fee: 1_200_000, pays: 1_200_000,
+    leadId: "11111111-1111-4111-8111-111111111111", createdAt: SENT, name: "YUSUF ALI HASSAN", className: "STD 6", status: "Applied", fee: 1_200_000, pays: 1_200_000,
     anchorName: null, fullPayerName: null, groupId: null, father: "ALI OMARI HASSAN", counted: [], selfCounts: true, mayPayFull: true, ...more,
   })
 
@@ -286,7 +310,7 @@ describe("the full payer among children checked in as siblings (#309)", () => {
   const mariam = sibling(2, "MARIAM", "STD 1")
   const family = (...students: Student[]): Answers => ({ students, more: true, custodians: {}, onFileAsks: [], onFile: {} })
   const own = (more: Partial<OnFileFee>): OnFileFee => ({
-    leadId: "11111111-1111-4111-8111-111111111111", name: "YUSUF ALI HASSAN", className: "STD 6", status: "Applied", fee: 1_200_000, pays: 1_200_000,
+    leadId: "11111111-1111-4111-8111-111111111111", createdAt: SENT, name: "YUSUF ALI HASSAN", className: "STD 6", status: "Applied", fee: 1_200_000, pays: 1_200_000,
     anchorName: null, fullPayerName: null, groupId: null, father: "ALI OMARI HASSAN", counted: [], selfCounts: true, mayPayFull: true, unranked: false, ...more,
   })
   const byHand = { manual: true, unranked: true, mayPayFull: false }
@@ -330,6 +354,73 @@ describe("the full payer among children checked in as siblings (#309)", () => {
       ["2", "Pays full · highest fee", 0, 1_200_000, false],
     ])
     expect(preview!.total).toBe(2_280_000)
+  })
+
+  // choose_full_payer orders by the fee, then `l.created_at, l.id`. At check-in every child has a record.
+  describe("on an equal fee, the older record pays full, then the lower lead id", () => {
+    const LOW = "11111111-1111-4111-8111-111111111111"
+    const HIGH = "22222222-2222-4222-8222-222222222222"
+    const LATER = "2026-11-12T09:00:00+00:00"
+    const twin = sibling(2, "MARIAM", "STD 6")
+    const mariamPays = [
+      ["1", "Sibling 10% · MARIAM pays full", 0.1, 1_080_000, false],
+      ["2", "Pays full · highest fee", 0, 1_200_000, false],
+    ]
+    const yusufPays = [
+      ["1", "Pays full · highest fee", 0, 1_200_000, false],
+      ["2", "Sibling 10% · same father", 0.1, 1_080_000, false],
+    ]
+
+    it.each([
+      ["made with it, with a lower lead id", { leadId: HIGH, groupId: "g1" }, { leadId: LOW }, mariamPays],
+      ["made with it, with a higher lead id", { leadId: LOW, groupId: "g1" }, { leadId: HIGH }, yusufPays],
+      ["made before it, whatever the lead ids", { leadId: LOW, groupId: "g1", createdAt: LATER }, { leadId: HIGH }, mariamPays],
+    ])("a child answered Sibling of one already in a group, %s", (_why, linked, unlinked, rows) => {
+      const preview = feePreview(family(yusuf, twin), FEES, 2027, {}, { 1: own(linked) }, { 2: own({ name: "MARIAM ALI HASSAN", ...unlinked }) })
+      expect(shown(preview)).toEqual(rows)
+      expect(preview!.total).toBe(2_280_000)
+    })
+
+    it("two of the form's children with no group yet are no tie: the lower lead id pays full", () => {
+      const preview = feePreview(family(yusuf, twin), FEES, 2027, {}, {}, { 1: own({ leadId: HIGH }), 2: own({ leadId: LOW, name: "MARIAM ALI HASSAN" }) })
+      expect(shown(preview)).toEqual([
+        ["1", "Sibling 10% · same father", 0.1, 1_080_000, false],
+        ["2", "Pays full · highest fee", 0, 1_200_000, false],
+      ])
+    })
+
+    // A sibling on file under the custodian, linked by staff's Yes on the on-file question.
+    const salma = { id: "S", admissionNumber: "ADMSN-80001", studentName: "SALMA ALI HASSAN", className: "STD 6" as const, status: "Visited" as const, closure: null, fatherFullName: "ALI OMARI HASSAN" }
+    const withSalma: Answers = {
+      ...family(yusuf),
+      custodians: { 1: { kind: "known", contact: { id: "c", fullName: "SAIDA OMARI HASSAN", phone: "+255755000222", whatsapp: null, children: [salma] }, phone: "+255755000222", whatsapp: "", relationship: "Mother", description: "" } },
+      onFile: { 1: { leadId: "S", yes: true } },
+    }
+    const onFile = (createdAt: string) => ({ S: own({ leadId: "S", name: "SALMA ALI HASSAN", createdAt }) })
+
+    it("a sibling registered at the desk after the form was sent does not take the place", () => {
+      const preview = feePreview(withSalma, FEES, 2027, onFile(LATER), {}, { 1: own({}) })
+      expect(shown(preview)).toEqual([
+        ["1", "Pays full · highest fee", 0, 1_200_000, false],
+        ["file:S", "Sibling 10% · YUSUF pays full", 0.1, 1_080_000, false],
+      ])
+    })
+
+    it("a sibling on file before the form was sent pays full", () => {
+      const preview = feePreview(withSalma, FEES, 2027, onFile("2026-10-01T08:00:00+00:00"), {}, { 1: own({}) })
+      expect(shown(preview)).toEqual([
+        ["1", "Sibling 10% · same father", 0.1, 1_080_000, false],
+        ["file:S", "Pays full · highest fee", 0, 1_200_000, false],
+      ])
+    })
+
+    it("in Register students the new student has no record, so the sibling on file pays full as before", () => {
+      const preview = feePreview(withSalma, FEES, 2027, onFile(LATER))
+      expect(shown(preview)).toEqual([
+        ["1", "Sibling 10% · same father", 0.1, 1_080_000, false],
+        ["file:S", "Pays full · highest fee", 0, 1_200_000, false],
+      ])
+    })
   })
 
   it("with every sibling's fee set by hand, nobody is the full payer and each keeps its fee", () => {

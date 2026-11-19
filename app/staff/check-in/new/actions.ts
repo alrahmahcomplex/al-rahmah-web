@@ -5,6 +5,7 @@ import { getLeadFee } from "@/lib/services/lead-fees"
 import {
   findFamilyByPhone,
   getFathersOfLeads,
+  getLeadCreatedAt,
   MAX_STUDENTS_PER_FORM,
   registerStudents,
   type RegistrationInvalidField,
@@ -185,9 +186,10 @@ export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOu
   const allowed = await requirePermission(supabase, "leads.view")
   if (!allowed.ok) return { status: "unavailable" }
 
-  const [explained, fee] = await Promise.all([explainSiblingGroup(supabase, leadId), getLeadFee(supabase, leadId)])
+  const [explained, fee, created] = await Promise.all([explainSiblingGroup(supabase, leadId), getLeadFee(supabase, leadId), getLeadCreatedAt(supabase, leadId)])
   // A fee that can't be read is not "no Fee schedule": the preview would charge full where the save gives the 10%.
-  if (!explained.ok || !fee.ok) return { status: "unavailable" }
+  // Without the record's age the preview can't tell who the database picks among equal fees.
+  if (!explained.ok || !fee.ok || !created.ok) return { status: "unavailable" }
   const members = explained.data.members
   const self = members.find((m) => m.leadId === leadId)
   if (!self) return { status: "unavailable" }
@@ -222,6 +224,7 @@ export async function readOnFileSibling(leadId: string): Promise<OnFileSiblingOu
     status: "read",
     fee: {
       leadId,
+      createdAt: created.data,
       name: self.studentName,
       className: self.className,
       status: self.status,

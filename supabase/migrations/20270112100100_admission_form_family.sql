@@ -20,7 +20,11 @@
 --                 Day or Boarding, status, closure, previous school, who
 --                 brought them, and `linked` with its `group_id` when the
 --                 child is already in a sibling group outside the old
---                 family rule.
+--                 family rule. `contact_id` is the parent the child itself
+--                 sits on: separate_from_family gives one child a copy of
+--                 the parent, so a form's children can sit on different
+--                 contacts, and check-in offers `contact` only when they
+--                 all sit on it.
 --       on_file   the parent's other children, open or not, each with its
 --                 father's name.
 --
@@ -101,6 +105,7 @@ begin
                 'previous_school_region', l.previous_school_region,
                 'previous_school_not_known', l.previous_school_not_known,
                 'brought_by_name', l.brought_by_name,
+                'contact_id', l.guardian_contact_id,
                 'linked', m.group_id is not null,
                 'group_id', m.group_id
             ) order by x.position)

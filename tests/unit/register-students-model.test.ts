@@ -56,6 +56,7 @@ const form = (students: Student[], more: Partial<Answers> = {}): Answers => ({ s
 // A child on file as the form reads it: in no sibling group yet, and free to be the full payer.
 const onFileFee = (more: Partial<OnFileFee> = {}): OnFileFee => ({
   leadId: "L1",
+  createdAt: "2026-10-01T08:00:00+00:00",
   name: "SALMA JUMA MRISHO",
   className: "STD 4",
   status: "Visited",

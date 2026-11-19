@@ -24,7 +24,7 @@ export type GivenChild = {
   linked: boolean
 }
 
-/** The form's parent, offered as the first custodian. */
+/** The form's parent, offered as the first custodian. Null when the children checked in sit on different contacts. */
 export type GivenContact = { contact: KnownContact; relationship: Relationship; description: string | null }
 
 export type CheckIn = {
@@ -99,7 +99,11 @@ export function startCheckIn(family: AdmissionFormFamily, children: FormChild[])
     if (j < 0 || !mine.name || !theirs?.name || fatherNameMatch(fatherName(mine.name), fatherName(theirs.name)) !== "same") continue
     students[i] = { ...mine, sibling: { kind: "match", of: theirs.key, seen: sameFatherEarlier(students, i) } }
   }
-  const c = family.contact
+  // The parent is offered only when every child checked in sits on it. A child separated from the family
+  // sits on a copy with the same name and number: offering one of the two would move a child from its
+  // contact to the other with nothing on the screen saying so. Then the number is looked up as in
+  // Register students, and staff say which person on file it is.
+  const c = family.contact && children.every((child) => child.contactId === family.contact?.id) ? family.contact : null
   return {
     answers: { students, more: true, custodians: {}, onFileAsks: [], onFile: {} },
     checkIn: {

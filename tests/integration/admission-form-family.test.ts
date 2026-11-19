@@ -8,7 +8,8 @@ import { fatherFullName, studentFullName } from "@/lib/names"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { getAdmissionFormFamily, waitingChildren } from "@/lib/services/admission-form-family"
 import { submitAdmissionForm } from "@/lib/services/admission-form"
-import { confirmFamilyMatch, createLead, recordVisit } from "@/lib/services/leads"
+import { startCheckIn } from "@/app/staff/check-in/[id]/model"
+import { confirmFamilyMatch, createLead, recordVisit, separateFromFamily } from "@/lib/services/leads"
 import { linkSibling } from "@/lib/services/sibling-groups"
 
 import { anonClient, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
@@ -81,6 +82,8 @@ describe("admission_form_family", () => {
     expect(read.data.sentOn).toBe(today)
     expect(read.data.contact).toMatchObject({ id: form.contactId, relationship: "Mother", familyMatch: false })
     expect(read.data.children.map((c) => c.leadId)).toEqual(form.leadIds)
+    // Each child with the parent it sits on: one form puts them all on its parent.
+    expect(read.data.children.map((c) => c.contactId)).toEqual([form.contactId, form.contactId])
     expect(read.data.children[0]).toMatchObject({
       studentName: studentFullName({ firstName: kids[0].first, ...dad }),
       fatherFullName: fatherFullName({ firstName: "", ...dad }),
@@ -120,6 +123,29 @@ describe("admission_form_family", () => {
     expect(read.data.contact).toMatchObject({ familyMatch: false })
     expect(read.data.children.map((c) => c.leadId)).toEqual(form.leadIds)
     expect(read.data.onFile.map((c) => c.leadId)).toEqual([walkIn.data.leadId])
+  })
+
+  test("gives each child its own parent once one was separated, so check-in offers neither for both", async () => {
+    const form = await sendForm([
+      { first: word(), father: father(), className: "STD 3" },
+      { first: word(), father: father(), className: "KG 1" },
+    ])
+    const admissions = await signedIn(ADMISSIONS)
+    // The second child gets a copy of the parent, with the same name and number.
+    const separated = await separateFromFamily(admissions, form.leadIds[1])
+    if (!separated.ok) throw new Error(`setup failed: ${JSON.stringify(separated.error)}`)
+
+    for (const looked of form.leadIds) {
+      const read = await getAdmissionFormFamily(admissions, looked)
+      if (!read.ok) throw new Error(`read failed: ${read.error}`)
+      const [first, second] = read.data.children
+      expect(first.contactId).toBe(form.contactId)
+      expect(second.contactId).toEqual(expect.any(String))
+      expect(second.contactId).not.toBe(form.contactId)
+      // `contact` is the looked-up child's own, whichever child that is.
+      expect(read.data.contact?.id).toBe(looked === form.leadIds[0] ? first.contactId : second.contactId)
+      expect(startCheckIn(read.data, waitingChildren(read.data)).checkIn.contact).toBeNull()
+    }
   })
 
   test("leaves a child whose visit is recorded out of the children check-in completes", async () => {

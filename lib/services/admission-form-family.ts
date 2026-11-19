@@ -20,6 +20,8 @@ export type FormChild = {
   closure: LeadClosure | null
   previousSchool: { name: string; type: "private" | "public"; region: string } | { notKnown: true } | null
   broughtByName: string | null
+  // The parent this child sits on. One child can sit on a copy of the form's parent (separate_from_family).
+  contactId: string | null
   // Already in a sibling group outside the old family rule: check-in keeps that link.
   linked: boolean
   // That group, when linked.
@@ -80,6 +82,7 @@ function child(r: Row): FormChild {
           ? { name: school, type: r.previous_school_type === "private" ? "private" : "public", region: text(r.previous_school_region) ?? "" }
           : null,
     broughtByName: text(r.brought_by_name),
+    contactId: text(r.contact_id),
     linked: r.linked === true,
     groupId: text(r.group_id),
   }

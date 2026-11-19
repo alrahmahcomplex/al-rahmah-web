@@ -4,7 +4,7 @@ Date: 2026-11-18
 
 ## Status
 
-Accepted. The owner approved prototype v41 and answered the brief's questions on 2026-11-17 and 2026-11-18 (#449, brief section 14). The tables and functions came in `20270104100100_streams.sql` and `20270107100100_streams_block.sql`, switched off. Slice 6 moves today's seats into streams and switches them on. Replaces counting seats per class and Day or Boarding (`class_seats`, `20261026900600_seats.sql`) once switched on.
+Accepted. The owner approved prototype v41 and answered the brief's questions on 2026-11-17 and 2026-11-18 (#449, brief section 14). The tables and functions came in `20270104100100_streams.sql` and `20270107100100_streams_block.sql`, switched off. `20270113100100_streams_activation.sql` moved the seats set until then into streams and switched them on. Replaces counting seats per class and Day or Boarding (`class_seats`, `20261026900600_seats.sql`).
 
 ## Context
 

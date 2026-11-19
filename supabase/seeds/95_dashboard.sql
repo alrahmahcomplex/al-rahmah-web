@@ -411,31 +411,44 @@ select set_config('app.recompute_as_of', '', true);
 
 commit;
 
--- Seats by class (#121) reads slice 9's seat count for 2031. Test Manager
--- sets seats for a few classes (set_academic_year). The leads above hold
--- them, a lead taking a seat once it has a Seat priority:
+-- Seats by class (#121) for 2031, in streams (#449). STD 2 and STD 3 had
+-- Day seats set before streams, and this turns them into streams the way
+-- the activation migration (20270113100100) did the school's: one Mixed
+-- stream A per class, the seat holders placed by the engine in ranking
+-- order. The leads above hold the seats, a lead taking one once it has a
+-- Seat priority:
 --
---   Class           Seats    Taken  By priority
---   STD 2 Day       3        4      Full 2 (31017, 31020), First instalment 1
---                                   (31026), Deposit 1 (31023): over by 1
---   STD 2 Boarding  5        0      5 left
---   STD 3 Day       3        2      Full 1 (31018), First instalment 1 (31021):
---                                   1 left; the Declined 31024 paid in full
---                                   and takes none
---   STD 4 Day       not set  3      Full 3 (31019, 31022, and 31025, which
---                                   keeps its seat while Archived)
+--   Stream    Seats    Holders  Placed, and who waits
+--   STD 2 A   3        4        Full 2 (31017, 31020) and First instalment 1
+--                               (31026) are placed: full. Deposit 1 (31023)
+--                               ranks last and waits for a stream.
+--   STD 3 A   3        2        Full 1 (31018), First instalment 1 (31021):
+--                               1 free; the Declined 31024 paid in full and
+--                               takes none
+--   STD 4     no stream 3       Full 3 (31019, 31022, and 31025, which keeps
+--                               its seat while Archived): no limit
 --
--- Every other 2031 class has its seats not set and none taken.
+-- Every other 2031 class has no stream and no seat holder.
 
 begin;
 
-select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
+select public.set_audit_actor('system');
+select public.seat_lock();
 
-select public.set_academic_year(2031, '{"seats": [
-    {"class_name": "STD 2", "day_or_boarding": "Day", "seats": 3, "was": null},
-    {"class_name": "STD 2", "day_or_boarding": "Boarding", "seats": 5, "was": null},
-    {"class_name": "STD 3", "day_or_boarding": "Day", "seats": 3, "was": null}
-]}'::jsonb);
+insert into public.class_seats (enrollment_year, class_name, day_or_boarding, seats) values
+    (2031, 'STD 2', 'Day', 3),
+    (2031, 'STD 3', 'Day', 3);
+
+insert into public.streams (enrollment_year, class_name, label, takes, seats, position)
+select c.enrollment_year, c.class_name, 'A', 'Mixed', sum(c.seats)::integer, 1
+from public.class_seats c
+where c.enrollment_year = 2031
+group by c.enrollment_year, c.class_name;
+
+select public.reconcile_class_seats(s.enrollment_year, s.class_name, '{}'::jsonb, 'migration', '{}'::text[])
+from public.streams s
+where s.enrollment_year = 2031
+order by s.class_name;
 
 commit;
 

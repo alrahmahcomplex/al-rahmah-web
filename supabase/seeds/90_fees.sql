@@ -20,9 +20,10 @@ insert into public.fee_band_amounts (enrollment_year, band, day_fee, boarding_fe
     (2027, 'primary_upper', 2100000, 3300000),
     (2027, 'secondary', 2800000, 4300000);
 
--- The Admissions Manager's 2027 seats, for a few classes only, so the rest
--- show Seats not set. KG 2 Boarding has 2 seats: the small class seat
--- counting tests fill with two leads (#111). Keep it at 2.
+-- The Admissions Manager's 2027 seats from before streams (#449), for a few
+-- classes only. Nothing reads class_seats once the seat mode is `named`;
+-- the end of this file turns these rows into streams the way the
+-- activation migration (20270113100100) turned the school's own.
 insert into public.class_seats (enrollment_year, class_name, day_or_boarding, seats) values
     (2027, 'KG 1', 'Day', 25),
     (2027, 'KG 2', 'Boarding', 2),
@@ -224,7 +225,7 @@ commit;
 -- with a payment and a Pending Reopening request raised by Test Admissions,
 -- one in a full class and one in a class with room, and the lead holding the
 -- full class's one seat. Each Passed on 2026-09-22 and paid before any
--- decline. STD 6 Boarding has 1 seat for this.
+-- decline. STD 6 Boarding has 1 seat for this, so STD 6 A has one.
 --
 --   ADMSN-90910 Amani Kiwelu    STD 6 Boarding: Initial deposit 300,000,
 --                               Deposit, holding the class's one seat
@@ -436,5 +437,41 @@ insert into public.school_fee_payments (id, lead_id, payment_type, amount, paid_
         date '2026-09-27', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-27 10:00:00+03'),
     ('fee00000-0000-4000-8000-000000000919', '1ead0000-0000-4000-8000-000000000918', 'pre_form_one_fee', 200000,
         date '2026-09-28', 'a1a1a1a1-0000-4000-8000-000000000004', timestamptz '2026-09-28 10:00:00+03');
+
+commit;
+
+-- Streams (#449). Migrations run before seeds, so the activation migration
+-- found no seats to move and only switched the seat mode to `named`. This
+-- does for the 2027 seats above what it did for the school's: one Mixed
+-- stream A per class, its seats Day plus Boarding, and the seat holders
+-- placed by the engine in ranking order. It comes last in this file: the
+-- payments above are inserted as rows, and only some are recomputed, so the
+-- classes are reconciled here once every 2027 payment is in. A later seed
+-- that adds a 2027 payment as a row must reconcile its class again.
+--
+--   Stream     Seats  Placed
+--   KG 1 A     25     1  ADMSN-90903
+--   KG 2 A     2      1  ADMSN-90917: one seat left
+--   STD 1 A    45     1  ADMSN-90904
+--   STD 6 A    1      1  ADMSN-90910: full, so the Declined ADMSN-90911
+--                        would wait for a stream if its reopening is approved
+--   FORM 1 A   70     1  ADMSN-90918
+--
+-- Every other 2027 class has no stream, so no limit.
+begin;
+
+select public.set_audit_actor('system');
+select public.seat_lock();
+
+insert into public.streams (enrollment_year, class_name, label, takes, seats, position)
+select c.enrollment_year, c.class_name, 'A', 'Mixed', sum(c.seats)::integer, 1
+from public.class_seats c
+where c.enrollment_year = 2027
+group by c.enrollment_year, c.class_name;
+
+select public.reconcile_class_seats(s.enrollment_year, s.class_name, '{}'::jsonb, 'migration', '{}'::text[])
+from public.streams s
+where s.enrollment_year = 2027
+order by s.class_name;
 
 commit;

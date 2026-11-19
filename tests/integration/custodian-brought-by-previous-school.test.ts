@@ -11,16 +11,16 @@ import { getLeadHistory } from "@/lib/services/audit"
 import { recordFollowUp, scheduleFollowUp } from "@/lib/services/follow-ups"
 import { declineLead } from "@/lib/services/lead-closure"
 import { approveReopeningRequest, raiseReopeningRequest } from "@/lib/services/reopening-requests"
-import { createLead, updateGuardianContact, updateLeadDetails, type NewContact } from "@/lib/services/leads"
+import { createLead, getLead, separateFromFamily, updateGuardianContact, updateLeadDetails, type NewContact } from "@/lib/services/leads"
 import { tanzaniaToday } from "@/lib/school-calendar"
 
-import { inRolledBackTransaction, signedIn } from "../support/db"
+import { asSystem, inRolledBackTransaction, signedIn } from "../support/db"
 import { ADMISSIONS, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // The custodian relationship on each lead, who brought the student and the
 // previous school (#298). The region list and the previous-school check as
-// the database owner, since no API role may call them; the relationship copy
-// through the leads services; corrections through update_lead_details as
+// the database owner, since no API role may call them; each child's
+// relationship (#312) through the leads services; corrections through update_lead_details as
 // Admissions Staff; the history as the Super Admin.
 
 const [, nextYear] = admissionYears()
@@ -153,28 +153,36 @@ describe("the previous-school check", () => {
        where p.pronamespace = 'public'::regnamespace
          and p.proname in ('previous_school_regions', 'previous_school_region', 'previous_school_asked',
                            'previous_school_answer_missing', 'set_lead_custodian_relationship',
-                           'sync_lead_custodian_relationship')`,
+                           'refuse_contact_relationship_change', 'custodian_relationship_sent',
+                           'contact_first_child_relationship')`,
     )
-    expect(rows).toHaveLength(6)
+    expect(rows).toHaveLength(8)
     for (const r of rows) expect(r.callers, r.name).toEqual([])
   })
 })
 
 describe("the custodian relationship on each lead", () => {
-  // Since #304 a child may hold its own relationship, marked as such; every
-  // other lead holds its contact's.
-  test("every lead without its own relationship holds its contact's", async () => {
-    const [{ differing }] = await owner<{ differing: number }>(
-      `select count(*)::int as differing
-       from public.leads l join public.guardian_contacts g on g.id = l.guardian_contact_id
-       where not l.custodian_relationship_own
-         and (l.custodian_relationship is distinct from g.relationship
-              or l.custodian_relationship_description is distinct from g.relationship_description)`,
+  // Since #312 each child holds its relationship, and the contact's copy is
+  // frozen until the next migration drops it.
+  test("the contact's relationship is frozen, and a new contact holds none", async () => {
+    const lead = await walkIn({ contact: parent({ relationship: "Guardian" }) })
+    const { guardian_contact_id: contactId } = await row(lead)
+    const [contact] = await owner<{ relationship: string | null }>(
+      "select relationship::text from public.guardian_contacts where id = $1",
+      [contactId],
     )
-    expect(differing).toBe(0)
+    expect(contact.relationship).toBeNull()
+    expect(await row(lead)).toMatchObject({ custodian_relationship: "Guardian", custodian_relationship_description: null })
+
+    await expect(
+      inRolledBackTransaction(async (sql) => {
+        await sql.query("select public.set_audit_actor('system')")
+        await sql.query("update public.guardian_contacts set relationship = 'Mother' where id = $1", [contactId])
+      }),
+    ).rejects.toThrow(/contact_relationship_retired/)
   })
 
-  test("a new lead and its sibling take the contact's relationship", async () => {
+  test("a new lead on a known contact takes its first child's relationship", async () => {
     const first = await walkIn({ contact: parent({ relationship: "Other", relationshipDescription: "Aunt" }) })
     const { guardian_contact_id: contactId } = await row(first)
     const second = await walkIn({ contactId })
@@ -184,7 +192,7 @@ describe("the custodian relationship on each lead", () => {
     }
   })
 
-  test("a contact's corrected relationship reaches every lead on it, a Declined one too, with history and no fee moved", async () => {
+  test("a corrected relationship reaches every child that held the edited child's, a Declined one too, with history and no fee moved", async () => {
     const open = await walkIn({ contact: parent() })
     const { guardian_contact_id: contactId } = await row(open)
     const declined = await walkIn({ contactId })
@@ -192,10 +200,14 @@ describe("the custodian relationship on each lead", () => {
     const before = await fees([open, declined])
 
     expect(
-      await updateGuardianContact(await signedIn(ADMISSIONS), contactId, {
-        relationship: "Other",
-        relationshipDescription: "Grandmother",
-      }),
+      await updateGuardianContact(
+        await signedIn(ADMISSIONS),
+        contactId,
+        { relationship: "Other", relationshipDescription: "Grandmother" },
+        undefined,
+        undefined,
+        open,
+      ),
     ).toEqual({ ok: true, data: null })
 
     for (const id of [open, declined]) {
@@ -206,19 +218,25 @@ describe("the custodian relationship on each lead", () => {
     }
     expect(await fees([open, declined])).toEqual(before)
 
-    // The lead's own entry, by the staff member who corrected the contact.
+    // The lead's own entry, by the staff member who corrected it, and none
+    // on the contact.
     const history = await getLeadHistory(await signedIn(SUPER_ADMIN), declined)
     if (!history.ok) throw new Error(`history refused: ${history.error}`)
-    const copy = history.data.entries.find(
+    const entry = history.data.entries.find(
       (e) => e.record === "lead" && e.changes.some((c) => c.field === "custodian_relationship"),
     )
-    expect(copy?.actor).toBe(ADMISSIONS.name)
-    expect(copy?.changes).toEqual(
+    expect(entry?.actor).toBe(ADMISSIONS.name)
+    expect(entry?.changes).toEqual(
       expect.arrayContaining([
         { field: "custodian_relationship", from: "Mother", to: "Other" },
         { field: "custodian_relationship_description", from: null, to: "Grandmother" },
       ]),
     )
+    expect(
+      history.data.entries.some(
+        (e) => e.record === "contact" && e.action === "update" && e.changes.some((c) => c.field === "relationship"),
+      ),
+    ).toBe(false)
 
     // The Declined lead itself stays closed to any other change.
     await expect(
@@ -230,27 +248,112 @@ describe("the custodian relationship on each lead", () => {
     ).rejects.toThrow(/lead_closed/)
   })
 
-  test("a lead moved to another contact takes that contact's relationship, unless the move sets its own", async () => {
+  test("in a family with two relationships, a correction reaches only the children that shared the edited child's", async () => {
+    // Mother to two children, Aunt to the third.
+    const first = await walkIn({ contact: parent() })
+    const { guardian_contact_id: contactId } = await row(first)
+    const second = await walkIn({ contactId })
+    const aunt = await walkIn({ contactId })
+    await asSystem((sql) =>
+      sql.query(
+        `update public.leads set custodian_relationship = 'Other', custodian_relationship_description = 'Aunt',
+                custodian_relationship_own = true
+         where id = $1`,
+        [aunt],
+      ),
+    )
+    const staff = await signedIn(ADMISSIONS)
+
+    // From the Aunt's page: only that child changes.
+    expect(
+      await updateGuardianContact(staff, contactId, { relationship: "Guardian" }, undefined, undefined, aunt),
+    ).toEqual({ ok: true, data: null })
+    expect(await row(aunt)).toMatchObject({ custodian_relationship: "Guardian", custodian_relationship_description: null })
+    expect(await row(first)).toMatchObject({ custodian_relationship: "Mother" })
+    expect(await row(second)).toMatchObject({ custodian_relationship: "Mother" })
+
+    // From a Mother child's page: both Mother children change, the third does not.
+    expect(
+      await updateGuardianContact(staff, contactId, { relationship: "Father" }, undefined, undefined, second),
+    ).toEqual({ ok: true, data: null })
+    expect(await row(first)).toMatchObject({ custodian_relationship: "Father" })
+    expect(await row(second)).toMatchObject({ custodian_relationship: "Father" })
+    expect(await row(aunt)).toMatchObject({ custodian_relationship: "Guardian" })
+
+    // With no child named, a relationship is taken only when no child would change.
+    expect(await updateGuardianContact(staff, contactId, { relationship: "Father" })).toEqual({
+      ok: false,
+      error: { kind: "invalid", field: "relationship" },
+    })
+    expect(await updateGuardianContact(staff, contactId, { fullName: "Renamed Parent" })).toEqual({ ok: true, data: null })
+    expect(await row(first)).toMatchObject({ custodian_relationship: "Father" })
+    expect(await row(second)).toMatchObject({ custodian_relationship: "Father" })
+    expect(await row(aunt)).toMatchObject({ custodian_relationship: "Guardian" })
+  })
+
+  test("with no child named, a relationship every child already holds is accepted and changes nothing, as the app before #312 sends it", async () => {
+    const first = await walkIn({ contact: parent() })
+    const { guardian_contact_id: contactId } = await row(first)
+    const second = await walkIn({ contactId })
+    const staff = await signedIn(ADMISSIONS)
+
+    expect(
+      await updateGuardianContact(staff, contactId, { fullName: "Mama Renamed", relationship: "Mother", relationshipDescription: null }),
+    ).toEqual({ ok: true, data: null })
+    for (const id of [first, second]) {
+      expect(await row(id)).toMatchObject({ custodian_relationship: "Mother", custodian_relationship_description: null })
+    }
+    const [contact] = await owner<{ full_name: string }>("select full_name from public.guardian_contacts where id = $1", [contactId])
+    expect(contact.full_name).toBe("Mama Renamed")
+  })
+
+  test("a child named that is not on the contact is refused", async () => {
     const lead = await walkIn({ contact: parent() })
-    const { guardian_contact_id: ownContact } = await row(lead)
+    const { guardian_contact_id: contactId } = await row(lead)
+    const stranger = await walkIn({ contact: parent() })
+    expect(
+      await updateGuardianContact(await signedIn(ADMISSIONS), contactId, { relationship: "Father" }, undefined, undefined, stranger),
+    ).toEqual({ ok: false, error: { kind: "children-changed" } })
+    expect((await row(lead)).custodian_relationship).toBe("Mother")
+  })
+
+  test("Separate from Family keeps the child's own relationship, and the applicant page shows it", async () => {
+    const first = await walkIn({ contact: parent() })
+    const { guardian_contact_id: contactId } = await row(first)
+    const niece = await walkIn({ contactId })
+    await asSystem((sql) =>
+      sql.query(
+        `update public.leads set custodian_relationship = 'Other', custodian_relationship_description = 'Aunt',
+                custodian_relationship_own = true
+         where id = $1`,
+        [niece],
+      ),
+    )
+    const staff = await signedIn(ADMISSIONS)
+    const page = await getLead(staff, niece)
+    expect(page.ok && page.data.contact).toMatchObject({ relationship: "Other", relationshipDescription: "Aunt" })
+
+    expect(await separateFromFamily(staff, niece)).toEqual({ ok: true, data: null })
+    const separated = await row(niece)
+    expect(separated.guardian_contact_id).not.toBe(contactId)
+    expect(separated).toMatchObject({ custodian_relationship: "Other", custodian_relationship_description: "Aunt" })
+    expect((await row(first)).custodian_relationship).toBe("Mother")
+  })
+
+  test("a lead moved to another contact keeps its own relationship", async () => {
+    const lead = await walkIn({ contact: parent() })
     const other = await walkIn({ contact: parent({ relationship: "Guardian" }) })
     const { guardian_contact_id: otherContact } = await row(other)
 
-    const [moved, ownSet] = await inRolledBackTransaction(async (sql) => {
+    const moved = await inRolledBackTransaction(async (sql) => {
       await sql.query("select public.set_audit_actor('system')")
       const a = await sql.query(
         "update public.leads set guardian_contact_id = $2 where id = $1 returning custodian_relationship::text as r",
         [lead, otherContact],
       )
-      const b = await sql.query(
-        `update public.leads set guardian_contact_id = $2, custodian_relationship = 'Father'
-         where id = $1 returning custodian_relationship::text as r`,
-        [lead, ownContact],
-      )
-      return [a.rows[0].r, b.rows[0].r]
+      return a.rows[0].r
     })
-    expect(moved).toBe("Guardian")
-    expect(ownSet).toBe("Father")
+    expect(moved).toBe("Mother")
   })
 })
 
@@ -505,7 +608,11 @@ describe("the lock order", () => {
     const lead = await walkIn({ contact: parent() })
     const { guardian_contact_id: contactId } = await row(lead)
     const staff = await signedIn(ADMISSIONS)
-    expect(await waitsForFamilyFirst(lead, () => updateGuardianContact(staff, contactId, { relationship: "Father" }))).toEqual({
+    expect(
+      await waitsForFamilyFirst(lead, () =>
+        updateGuardianContact(staff, contactId, { relationship: "Father" }, undefined, undefined, lead),
+      ),
+    ).toEqual({
       ok: true,
       data: null,
     })

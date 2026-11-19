@@ -7,8 +7,9 @@ vi.mock("server-only", () => ({}))
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { adjustPayment } from "@/lib/services/payment-adjustments"
 import { recordPayment } from "@/lib/services/school-fee-payments"
+import { exportStudents } from "@/lib/services/student-export"
 import { checkStudentImportFile, confirmStudentImport, getLeadImportMark, getStudentImport } from "@/lib/services/student-import"
-import { confirmationOf, studentImportSummary, tanzaniaToday } from "@/lib/student-import"
+import { confirmationOf, parseRelationship, studentImportSummary, tanzaniaToday } from "@/lib/student-import"
 
 import { anonClient, asSystem, createThrowawayStaff, inRolledBackTransaction, signedIn, unusedAdmissionNumber } from "../support/db"
 import { claimFeeYear } from "../support/fee-years"
@@ -79,7 +80,7 @@ async function leadsOfBatch(batchId: string): Promise<Map<string, LeadRow>> {
       `select l.id, l.student_name, l.father_full_name, l.father_full_name_source::text, g.full_name as guardian_name, l.class_name::text, l.status::text, to_char(l.visit_date, 'YYYY-MM-DD') as visit_date,
               l.day_or_boarding::text, l.referral_code, l.import_batch_id, l.enrolled_by_import, l.imported_as_enrolled,
               l.declined_reason::text, l.declined_explanation, l.status_before_decline::text, l.returning_family_joined,
-              l.guardian_contact_id, g.relationship::text, g.relationship_description, g.pending_family_match_id, g.origin::text,
+              l.guardian_contact_id, l.custodian_relationship::text as relationship, l.custodian_relationship_description as relationship_description, g.pending_family_match_id, g.origin::text,
               p.pre_form_one,
               coalesce((select jsonb_agg(jsonb_build_object('fee_status', i.fee_status, 'result', i.result, 'import_batch_id', i.import_batch_id))
                         from public.interviews i where i.lead = l.id), '[]') as interviews
@@ -405,6 +406,34 @@ describe("numbers a sibling row links", () => {
     expect(confirmed.data).toMatchObject({ created: 3, skipped: 0 })
     const leads = await leadsOfBatch(confirmed.data.batchId)
     expect(leads.get("ASHA MFANO")?.guardian_contact_id).toBe(leads.get("BARAKA MFANO")?.guardian_contact_id)
+  })
+
+  test("siblings on one parent keep each row's relationship, and Export gives each one back (#312)", async () => {
+    const s = randomUUID().slice(0, 6)
+    const parent = importPhone()
+    const manager = await signedIn(MANAGER)
+    const file = [
+      HEADER,
+      `Baraka Mlezi ${s},STD 3,${nextYear},,Mama Mlezi,Mother,${parent.typed},,01/09/2026,,`,
+      `Asha Mlezi ${s},STD 1,${nextYear},,Mama Mlezi,Aunt,${parent.typed},,01/09/2026,,`,
+    ].join("\r\n")
+
+    const checked = await checkStudentImportFile(manager, "relationships.csv", bytes(file))
+    if (!checked.ok) throw new Error(JSON.stringify(checked.error))
+    const confirmed = await confirmStudentImport(manager, confirmationOf(checked.data))
+    if (!confirmed.ok || confirmed.data.kind !== "imported") throw new Error(JSON.stringify(confirmed))
+    const leads = await leadsOfBatch(confirmed.data.batchId)
+    expect(leads.get("ASHA MLEZI")?.guardian_contact_id).toBe(leads.get("BARAKA MLEZI")?.guardian_contact_id)
+    expect(leads.get("BARAKA MLEZI")).toMatchObject({ relationship: "Mother", relationship_description: null })
+    expect(leads.get("ASHA MLEZI")).toMatchObject({ relationship: "Other", relationship_description: "Aunt" })
+
+    // Export's Relationship column, as an import reads it again.
+    const exported = await exportStudents(manager, { importBatchId: confirmed.data.batchId }, ["student_name", "relationship"])
+    if (!exported.ok) throw new Error(JSON.stringify(exported.error))
+    const cells = new Map(exported.data.rows.map(([name, relationship]) => [name.replace(/ \w+$/, ""), relationship]))
+    expect(cells).toEqual(new Map([["BARAKA MLEZI", "Mother"], ["ASHA MLEZI", "Aunt"]]))
+    expect(parseRelationship(cells.get("ASHA MLEZI")!)).toEqual({ relationship: "Other", description: "Aunt" })
+    expect(parseRelationship(cells.get("BARAKA MLEZI")!)).toEqual({ relationship: "Mother", description: null })
   })
 
   test("a child on file under a sibling row's WhatsApp is already on file, not a new application", async () => {

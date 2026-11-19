@@ -170,6 +170,23 @@ describe("a child already on file", () => {
     expect(row.differing_fields).toEqual([])
   })
 
+  test("compares the relationship with the child's own (#312)", async () => {
+    const lead = await onFile()
+    // Staff gave this child its own relationship: Aunt, not the parent's Mother.
+    await asSystem((sql) =>
+      sql.query(
+        `update public.leads set custodian_relationship = 'Other', custodian_relationship_description = 'Aunt',
+                custodian_relationship_own = true
+         where id = $1`,
+        [lead.id],
+      ),
+    )
+    const sent = form({ ...lead.parent, relationship: "Other", relationshipDescription: "Aunt" }, [sameChild(lead)])
+    expect((await submitAdmissionForm(secretClient(), sent)).ok).toBe(true)
+    const [row] = await reApplications(lead.id)
+    expect(row.differing_fields).toEqual([])
+  })
+
   test("names every field that differs, matched on the parent's WhatsApp number", async () => {
     const lead = await onFile()
     // The parent's old phone is now their WhatsApp; the name is spelt in a new

@@ -102,6 +102,37 @@ describe("Apply on a re-application", () => {
     expect(edit.changes).toEqual([{ field: "class_name", from: "STD 3", to: "STD 4" }])
   })
 
+  test("writes the relationship sent to this child and the siblings that shared it, not one with its own (#312)", async () => {
+    const lead = await onFile()
+    const sibling = await openSibling(lead)
+    const aunt = await openSibling(lead)
+    await asSystem((sql) =>
+      sql.query(
+        `update public.leads set custodian_relationship = 'Other', custodian_relationship_description = 'Aunt',
+                custodian_relationship_own = true
+         where id = $1`,
+        [aunt],
+      ),
+    )
+    const { data: id, error } = await secretClient().rpc("record_re_application", {
+      lead_id: lead.id,
+      submission_key: randomUUID(),
+      submitted: {
+        contact: { full_name: "Mama Linganisha", relationship: "Guardian", phone: lead.phone },
+        student: { full_name: lead.studentName, class_name: "STD 3", enrollment_year: nextYear, day_or_boarding: "Day" },
+      },
+    })
+    if (error) throw new Error(`could not record a re-application: ${error.message}`)
+
+    expect(await applyReApplicationField(await signedIn(ADMISSIONS), id as string, "relationship", [lead.id, sibling, aunt])).toEqual({
+      ok: true,
+      data: null,
+    })
+    expect((await stored(lead.id)).contact.relationship).toBe("Guardian")
+    expect((await stored(sibling)).contact.relationship).toBe("Guardian")
+    expect((await stored(aunt)).contact).toMatchObject({ relationship: "Other", relationshipDescription: "Aunt" })
+  })
+
   test("writes the phone sent to the contact, as the staff member's edit in its history", async () => {
     const lead = await onFile()
     const sentPhone = phone()

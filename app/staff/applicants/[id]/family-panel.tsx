@@ -56,8 +56,8 @@ export function FamilyPanel({
           <p className="lr-text">
             The Admission form matched this parent&apos;s phone to{" "}
             <span className="font-semibold">{match.fullName}</span> (
-            {relationshipLabel(match.relationship, match.relationshipDescription)}, {match.phone}), who is already on
-            file. Check with the family that they are the same person.
+            {match.relationship && `${relationshipLabel(match.relationship, match.relationshipDescription)}, `}
+            {match.phone}), who is already on file. Check with the family that they are the same person.
           </p>
           {step === "confirm" && (
             <SettleStep

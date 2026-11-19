@@ -489,7 +489,10 @@ describe("lead_next_step_inputs", () => {
     expect(seeded.length).toBeGreaterThan(0)
 
     // The seeded leads' rows, so a test running alongside that changes one
-    // makes the comparison run again rather than fail.
+    // makes the comparison run again rather than fail. Of the Fee schedules,
+    // only those of the seeded leads' own enrollment years: both reads take a
+    // lead's fee from its own year alone, and other tests save schedules in
+    // the years they claim (tests/support/fee-years.ts) all through the run.
     const state = (sql: Client) =>
       sql
         .query<{ versions: string }>(
@@ -503,8 +506,10 @@ describe("lead_next_step_inputs", () => {
              (select string_agg(t.xmin::text, ',' order by t.id) from public.payment_adjustments t where t.lead_id = any($1)),
              (select string_agg(t.xmin::text, ',' order by t.id) from public.discount_requests t where t.lead_id = any($1)),
              (select string_agg(t.xmin::text, ',' order by t.id) from public.lead_fee_profiles t where t.lead_id = any($1)),
-             (select string_agg(t.xmin::text, ',' order by t.enrollment_year) from public.fee_schedules t),
-             (select string_agg(t.xmin::text, ',' order by t.id) from public.fee_band_amounts t),
+             (select string_agg(t.xmin::text, ',' order by t.enrollment_year) from public.fee_schedules t
+               where t.enrollment_year in (select l.enrollment_year from public.leads l where l.id = any($1))),
+             (select string_agg(t.xmin::text, ',' order by t.id) from public.fee_band_amounts t
+               where t.enrollment_year in (select l.enrollment_year from public.leads l where l.id = any($1))),
              (select count(*)::text from public.audit_log t where t.lead_id = any($1) and t.action = 'result_released')
            )) as versions`,
           [seeded],

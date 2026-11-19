@@ -80,8 +80,6 @@ describe("finding a Family by phone", () => {
           {
             id: known.contactId,
             fullName: parent.fullName,
-            relationship: "Father",
-            relationshipDescription: null,
             phone: `+255${digits}`,
             whatsapp: null,
             children: [
@@ -143,7 +141,6 @@ describe("finding a Family by phone", () => {
     expect(found.ok && found.data.contacts).toMatchObject([
       {
         fullName: "Omari Fixture",
-        relationship: "Guardian",
         children: [{ admissionNumber: "ADMSN-90005", studentName: "Hamisi Fixture", status: "Visited", closure: "Archived" }],
       },
     ])

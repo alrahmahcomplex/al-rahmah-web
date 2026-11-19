@@ -286,6 +286,25 @@ describe("the custodian relationship on each lead", () => {
       error: { kind: "invalid", field: "relationship" },
     })
     expect(await updateGuardianContact(staff, contactId, { fullName: "Renamed Parent" })).toEqual({ ok: true, data: null })
+    expect(await row(first)).toMatchObject({ custodian_relationship: "Father" })
+    expect(await row(second)).toMatchObject({ custodian_relationship: "Father" })
+    expect(await row(aunt)).toMatchObject({ custodian_relationship: "Guardian" })
+  })
+
+  test("with no child named, a relationship every child already holds is accepted and changes nothing, as the app before #312 sends it", async () => {
+    const first = await walkIn({ contact: parent() })
+    const { guardian_contact_id: contactId } = await row(first)
+    const second = await walkIn({ contactId })
+    const staff = await signedIn(ADMISSIONS)
+
+    expect(
+      await updateGuardianContact(staff, contactId, { fullName: "Mama Renamed", relationship: "Mother", relationshipDescription: null }),
+    ).toEqual({ ok: true, data: null })
+    for (const id of [first, second]) {
+      expect(await row(id)).toMatchObject({ custodian_relationship: "Mother", custodian_relationship_description: null })
+    }
+    const [contact] = await owner<{ full_name: string }>("select full_name from public.guardian_contacts where id = $1", [contactId])
+    expect(contact.full_name).toBe("Mama Renamed")
   })
 
   test("a child named that is not on the contact is refused", async () => {

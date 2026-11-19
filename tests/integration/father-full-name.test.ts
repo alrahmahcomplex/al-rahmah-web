@@ -328,8 +328,8 @@ describe("re-deriving on a student name correction", () => {
 
 async function newContact(sql: Client): Promise<string> {
   const { rows } = await sql.query<{ id: string }>(
-    `insert into public.guardian_contacts (full_name, relationship, phone, origin)
-     values ('Backfill Parent', 'Mother', public.normalize_phone($1), 'front_desk') returning id`,
+    `insert into public.guardian_contacts (full_name, phone, origin)
+     values ('Backfill Parent', public.normalize_phone($1), 'front_desk') returning id`,
     [phone()],
   )
   return rows[0].id
@@ -352,9 +352,9 @@ async function insertLead(
   const { rows } = await sql.query<FatherRow & { id: string }>(
     `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status,
                                visit_date, guardian_contact_id, father_full_name, father_full_name_source,
-                               declined_reason)
+                               declined_reason, custodian_relationship)
      values ($1, $2, 'STD 2', $3, 'Day', $4::public.lead_status, $5, $6, $7, $8::public.father_name_source,
-             case when $4 = 'Declined' then 'School decision'::public.declined_reason end)
+             case when $4 = 'Declined' then 'School decision'::public.declined_reason end, 'Mother')
      returning id, father_full_name, father_full_name_source::text`,
     [number.rows[0].n, studentName, nextYear, status, today, contactId, fatherName, source],
   )

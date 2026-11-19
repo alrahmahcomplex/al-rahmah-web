@@ -45,16 +45,17 @@ export async function studentLead(spec: StudentLead): Promise<string> {
   const admissionNumber = await unusedAdmissionNumber()
   return asSystem(async (sql) => {
     const contact = await sql.query<{ id: string }>(
-      `insert into public.guardian_contacts (full_name, relationship, phone, whatsapp, origin)
-       values ('Mzazi Students', 'Mother', $1, null, 'admission_form') returning id`,
+      `insert into public.guardian_contacts (full_name, phone, whatsapp, origin)
+       values ('Mzazi Students', $1, null, 'admission_form') returning id`,
       [`+2556${String(randomInt(10_000_000, 100_000_000))}`],
     )
     const status = spec.status ?? "Applied"
     const inserted = await sql.query<{ id: string }>(
       `insert into public.leads (
            admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date,
-           guardian_contact_id, referral_code, declined_reason, declined_explanation, closure, closure_reason, created_at
-       ) values ($1, $2, 'STD 3', 2027, 'Day', $3, $4, $5, $6, $7, $8, $9, $10, coalesce($11::timestamptz, now()))
+           guardian_contact_id, referral_code, declined_reason, declined_explanation, closure, closure_reason, created_at,
+           custodian_relationship
+       ) values ($1, $2, 'STD 3', 2027, 'Day', $3, $4, $5, $6, $7, $8, $9, $10, coalesce($11::timestamptz, now()), 'Mother')
        returning id`,
       [
         admissionNumber,

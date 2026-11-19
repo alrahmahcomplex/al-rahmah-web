@@ -74,61 +74,62 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c02031-0000-4000-8000-000000000001', 'Mwajuma Takwimu', 'Mother', null, '+255700000951', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000002', 'Abdallah Takwimu', 'Father', null, '+255700000952', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000003', 'Rukia Takwimu', 'Mother', null, '+255700000953', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000004', 'Selemani Takwimu', 'Father', null, '+255700000954', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000005', 'Fatuma Takwimu', 'Guardian', null, '+255700000955', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000006', 'Ramadhani Takwimu', 'Father', null, '+255700000956', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000007', 'Mariamu Takwimu', 'Mother', null, '+255700000957', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000008', 'Idrisa Takwimu', 'Father', null, '+255700000958', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000009', 'Zainabu Takwimu', 'Mother', null, '+255700000959', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000010', 'Hadija Takwimu', 'Mother', null, '+255700000960', null, 'admission_form'),
-    ('c0c02031-0000-4000-8000-000000000011', 'Yusufu Takwimu', 'Father', null, '+255700000961', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000012', 'Amina Takwimu', 'Mother', null, '+255700000962', null, 'admission_form'),
-    ('c0c02031-0000-4000-8000-000000000013', 'Musa Takwimu', 'Father', null, '+255700000963', null, 'admission_form'),
-    ('c0c02031-0000-4000-8000-000000000014', 'Subira Takwimu', 'Mother', null, '+255700000964', null, 'admission_form'),
-    ('c0c02031-0000-4000-8000-000000000015', 'Mwanahawa Takwimu', 'Mother', null, '+255700000965', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000016', 'Athumani Takwimu', 'Father', null, '+255700000966', null, 'admission_form');
+    ('c0c02031-0000-4000-8000-000000000001', 'Mwajuma Takwimu', '+255700000951', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000002', 'Abdallah Takwimu', '+255700000952', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000003', 'Rukia Takwimu', '+255700000953', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000004', 'Selemani Takwimu', '+255700000954', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000005', 'Fatuma Takwimu', '+255700000955', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000006', 'Ramadhani Takwimu', '+255700000956', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000007', 'Mariamu Takwimu', '+255700000957', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000008', 'Idrisa Takwimu', '+255700000958', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000009', 'Zainabu Takwimu', '+255700000959', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000010', 'Hadija Takwimu', '+255700000960', null, 'admission_form'),
+    ('c0c02031-0000-4000-8000-000000000011', 'Yusufu Takwimu', '+255700000961', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000012', 'Amina Takwimu', '+255700000962', null, 'admission_form'),
+    ('c0c02031-0000-4000-8000-000000000013', 'Musa Takwimu', '+255700000963', null, 'admission_form'),
+    ('c0c02031-0000-4000-8000-000000000014', 'Subira Takwimu', '+255700000964', null, 'admission_form'),
+    ('c0c02031-0000-4000-8000-000000000015', 'Mwanahawa Takwimu', '+255700000965', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000016', 'Athumani Takwimu', '+255700000966', null, 'admission_form');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, created_at
+    status, closure, visit_date, guardian_contact_id, created_at,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead2031-0000-4000-8000-000000000001', 'ADMSN-31001', 'Juma Takwimu', 'STD 1', 2031, 'Day',
-        'Interviewed', null, date '2026-09-20', 'c0c02031-0000-4000-8000-000000000001', timestamptz '2026-09-20 09:00+03'),
+        'Interviewed', null, date '2026-09-20', 'c0c02031-0000-4000-8000-000000000001', timestamptz '2026-09-20 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000002', 'ADMSN-31002', 'Asha Takwimu', 'KG 1', 2031, 'Day',
-        'Interviewed', null, date '2026-09-21', 'c0c02031-0000-4000-8000-000000000002', timestamptz '2026-09-21 09:00+03'),
+        'Interviewed', null, date '2026-09-21', 'c0c02031-0000-4000-8000-000000000002', timestamptz '2026-09-21 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000003', 'ADMSN-31003', 'Bakari Takwimu', 'STD 3', 2031, 'Boarding',
-        'Interviewed', null, date '2026-08-31', 'c0c02031-0000-4000-8000-000000000003', timestamptz '2026-08-31 09:00+03'),
+        'Interviewed', null, date '2026-08-31', 'c0c02031-0000-4000-8000-000000000003', timestamptz '2026-08-31 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000004', 'ADMSN-31004', 'Mwanaisha Takwimu', 'FORM 1', 2031, 'Boarding',
-        'Interviewed', null, date '2026-09-01', 'c0c02031-0000-4000-8000-000000000004', timestamptz '2026-09-01 09:00+03'),
+        'Interviewed', null, date '2026-09-01', 'c0c02031-0000-4000-8000-000000000004', timestamptz '2026-09-01 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000005', 'ADMSN-31005', 'Shabani Takwimu', 'DAY CARE', 2031, 'Day',
-        'Interviewed', null, date '2025-12-31', 'c0c02031-0000-4000-8000-000000000005', timestamptz '2025-12-31 09:00+03'),
+        'Interviewed', null, date '2025-12-31', 'c0c02031-0000-4000-8000-000000000005', timestamptz '2025-12-31 09:00+03', 'Guardian', null),
     ('1ead2031-0000-4000-8000-000000000006', 'ADMSN-31006', 'Zuhura Takwimu', 'STD 5', 2031, 'Day',
-        'Interviewed', null, date '2026-01-01', 'c0c02031-0000-4000-8000-000000000006', timestamptz '2026-01-01 09:00+03'),
+        'Interviewed', null, date '2026-01-01', 'c0c02031-0000-4000-8000-000000000006', timestamptz '2026-01-01 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000007', 'ADMSN-31007', 'Rashidi Takwimu', 'STD 2', 2031, 'Day',
-        'Interviewed', null, date '2026-09-22', 'c0c02031-0000-4000-8000-000000000007', timestamptz '2026-09-22 09:00+03'),
+        'Interviewed', null, date '2026-09-22', 'c0c02031-0000-4000-8000-000000000007', timestamptz '2026-09-22 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000008', 'ADMSN-31008', 'Halima Takwimu', 'KG 2', 2031, 'Day',
-        'Interviewed', null, date '2026-09-23', 'c0c02031-0000-4000-8000-000000000008', timestamptz '2026-09-23 09:00+03'),
+        'Interviewed', null, date '2026-09-23', 'c0c02031-0000-4000-8000-000000000008', timestamptz '2026-09-23 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000009', 'ADMSN-31009', 'Omari Takwimu', 'FORM 2', 2031, 'Boarding',
-        'Interviewed', null, date '2026-09-24', 'c0c02031-0000-4000-8000-000000000009', timestamptz '2026-09-24 09:00+03'),
+        'Interviewed', null, date '2026-09-24', 'c0c02031-0000-4000-8000-000000000009', timestamptz '2026-09-24 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000010', 'ADMSN-31010', 'Saida Takwimu', 'STD 4', 2031, 'Day',
-        'Applied', null, null, 'c0c02031-0000-4000-8000-000000000010', timestamptz '2026-09-10 10:00+03'),
+        'Applied', null, null, 'c0c02031-0000-4000-8000-000000000010', timestamptz '2026-09-10 10:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000011', 'ADMSN-31011', 'Hassani Takwimu', 'STD 6', 2031, 'Day',
-        'Visited', null, date '2026-03-10', 'c0c02031-0000-4000-8000-000000000011', timestamptz '2026-03-10 09:00+03'),
+        'Visited', null, date '2026-03-10', 'c0c02031-0000-4000-8000-000000000011', timestamptz '2026-03-10 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000012', 'ADMSN-31012', 'Kassimu Takwimu', 'STD 1', 2031, 'Day',
-        'Applied', null, null, 'c0c02031-0000-4000-8000-000000000012', timestamptz '2026-09-27 23:30+03'),
+        'Applied', null, null, 'c0c02031-0000-4000-8000-000000000012', timestamptz '2026-09-27 23:30+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000013', 'ADMSN-31013', 'Neema Takwimu', 'STD 1', 2031, 'Day',
-        'Applied', null, null, 'c0c02031-0000-4000-8000-000000000013', timestamptz '2026-09-28 00:30+03'),
+        'Applied', null, null, 'c0c02031-0000-4000-8000-000000000013', timestamptz '2026-09-28 00:30+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000014', 'ADMSN-31014', 'Tatu Takwimu', 'FORM 1', 2031, 'Boarding',
-        'Applied', null, null, 'c0c02031-0000-4000-8000-000000000014', timestamptz '2026-07-15 11:00+03'),
+        'Applied', null, null, 'c0c02031-0000-4000-8000-000000000014', timestamptz '2026-07-15 11:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000015', 'ADMSN-31015', 'Rehema Takwimu', 'STD 3', 2031, 'Day',
-        'Interviewed', null, date '2026-06-03', 'c0c02031-0000-4000-8000-000000000015', timestamptz '2026-06-03 09:00+03'),
+        'Interviewed', null, date '2026-06-03', 'c0c02031-0000-4000-8000-000000000015', timestamptz '2026-06-03 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000016', 'ADMSN-31016', 'Salum Takwimu', 'KG 1', 2031, 'Boarding',
-        'Interviewed', null, date '2026-10-01', 'c0c02031-0000-4000-8000-000000000016', timestamptz '2026-06-15 20:00+03');
+        'Interviewed', null, date '2026-10-01', 'c0c02031-0000-4000-8000-000000000016', timestamptz '2026-06-15 20:00+03', 'Father', null);
 
 -- Registered by Test Admissions, as the lead screen would have done it, each
 -- on or after the lead's visit (ADMSN-31010 while still Applied), and the
@@ -271,43 +272,44 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c02031-0000-4000-8000-000000000017', 'Khadija Takwimu', 'Mother', null, '+255700000967', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000018', 'Hamadi Takwimu', 'Father', null, '+255700000968', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000019', 'Mwanaidi Takwimu', 'Mother', null, '+255700000969', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000020', 'Said Takwimu', 'Father', null, '+255700000970', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000021', 'Tatu Mwinyi Takwimu', 'Guardian', null, '+255700000971', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000022', 'Bakari Hemedi Takwimu', 'Father', null, '+255700000972', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000023', 'Asha Juma Takwimu', 'Mother', null, '+255700000973', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000024', 'Rajabu Takwimu', 'Father', null, '+255700000974', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000025', 'Zuena Takwimu', 'Mother', null, '+255700000975', null, 'front_desk'),
-    ('c0c02031-0000-4000-8000-000000000026', 'Hija Takwimu', 'Mother', null, '+255700000976', null, 'front_desk');
+    ('c0c02031-0000-4000-8000-000000000017', 'Khadija Takwimu', '+255700000967', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000018', 'Hamadi Takwimu', '+255700000968', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000019', 'Mwanaidi Takwimu', '+255700000969', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000020', 'Said Takwimu', '+255700000970', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000021', 'Tatu Mwinyi Takwimu', '+255700000971', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000022', 'Bakari Hemedi Takwimu', '+255700000972', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000023', 'Asha Juma Takwimu', '+255700000973', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000024', 'Rajabu Takwimu', '+255700000974', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000025', 'Zuena Takwimu', '+255700000975', null, 'front_desk'),
+    ('c0c02031-0000-4000-8000-000000000026', 'Hija Takwimu', '+255700000976', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, created_at
+    status, closure, visit_date, guardian_contact_id, created_at,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead2031-0000-4000-8000-000000000017', 'ADMSN-31017', 'Kheri Takwimu', 'STD 2', 2031, 'Day',
-        'Interviewed', null, date '2025-11-03', 'c0c02031-0000-4000-8000-000000000017', timestamptz '2025-11-03 09:00+03'),
+        'Interviewed', null, date '2025-11-03', 'c0c02031-0000-4000-8000-000000000017', timestamptz '2025-11-03 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000018', 'ADMSN-31018', 'Pili Takwimu', 'STD 3', 2031, 'Day',
-        'Interviewed', null, date '2025-11-04', 'c0c02031-0000-4000-8000-000000000018', timestamptz '2025-11-04 09:00+03'),
+        'Interviewed', null, date '2025-11-04', 'c0c02031-0000-4000-8000-000000000018', timestamptz '2025-11-04 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000019', 'ADMSN-31019', 'Faki Takwimu', 'STD 4', 2031, 'Day',
-        'Interviewed', null, date '2025-11-05', 'c0c02031-0000-4000-8000-000000000019', timestamptz '2025-11-05 09:00+03'),
+        'Interviewed', null, date '2025-11-05', 'c0c02031-0000-4000-8000-000000000019', timestamptz '2025-11-05 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000020', 'ADMSN-31020', 'Mosi Takwimu', 'STD 2', 2031, 'Day',
-        'Interviewed', null, date '2025-11-06', 'c0c02031-0000-4000-8000-000000000020', timestamptz '2025-11-06 09:00+03'),
+        'Interviewed', null, date '2025-11-06', 'c0c02031-0000-4000-8000-000000000020', timestamptz '2025-11-06 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000021', 'ADMSN-31021', 'Tabu Takwimu', 'STD 3', 2031, 'Day',
-        'Interviewed', null, date '2025-11-07', 'c0c02031-0000-4000-8000-000000000021', timestamptz '2025-11-07 09:00+03'),
+        'Interviewed', null, date '2025-11-07', 'c0c02031-0000-4000-8000-000000000021', timestamptz '2025-11-07 09:00+03', 'Guardian', null),
     ('1ead2031-0000-4000-8000-000000000022', 'ADMSN-31022', 'Sharifa Takwimu', 'STD 4', 2031, 'Day',
-        'Interviewed', null, date '2025-11-10', 'c0c02031-0000-4000-8000-000000000022', timestamptz '2025-11-10 09:00+03'),
+        'Interviewed', null, date '2025-11-10', 'c0c02031-0000-4000-8000-000000000022', timestamptz '2025-11-10 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000023', 'ADMSN-31023', 'Zawadi Takwimu', 'STD 2', 2031, 'Day',
-        'Interviewed', null, date '2025-11-11', 'c0c02031-0000-4000-8000-000000000023', timestamptz '2025-11-11 09:00+03'),
+        'Interviewed', null, date '2025-11-11', 'c0c02031-0000-4000-8000-000000000023', timestamptz '2025-11-11 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000024', 'ADMSN-31024', 'Kombo Takwimu', 'STD 3', 2031, 'Day',
-        'Interviewed', null, date '2025-11-12', 'c0c02031-0000-4000-8000-000000000024', timestamptz '2025-11-12 09:00+03'),
+        'Interviewed', null, date '2025-11-12', 'c0c02031-0000-4000-8000-000000000024', timestamptz '2025-11-12 09:00+03', 'Father', null),
     ('1ead2031-0000-4000-8000-000000000025', 'ADMSN-31025', 'Mwanahamisi Takwimu', 'STD 4', 2031, 'Day',
-        'Interviewed', null, date '2025-11-13', 'c0c02031-0000-4000-8000-000000000025', timestamptz '2025-11-13 09:00+03'),
+        'Interviewed', null, date '2025-11-13', 'c0c02031-0000-4000-8000-000000000025', timestamptz '2025-11-13 09:00+03', 'Mother', null),
     ('1ead2031-0000-4000-8000-000000000026', 'ADMSN-31026', 'Nasra Takwimu', 'STD 2', 2031, 'Day',
-        'Interviewed', null, date '2025-11-14', 'c0c02031-0000-4000-8000-000000000026', timestamptz '2025-11-14 09:00+03');
+        'Interviewed', null, date '2025-11-14', 'c0c02031-0000-4000-8000-000000000026', timestamptz '2025-11-14 09:00+03', 'Mother', null);
 
 -- Registered by Test Admissions on the day of the visit and Passed on
 -- 19 November 2025, S/Ns 14 to 23.
@@ -480,16 +482,17 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c02031-0000-4000-8000-000000000027', 'Hamida Takwimu', 'Mother', null, '+255700000977', null, 'front_desk');
+    ('c0c02031-0000-4000-8000-000000000027', 'Hamida Takwimu', '+255700000977', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, created_at, initially_declined
+    status, closure, visit_date, guardian_contact_id, created_at, initially_declined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead2031-0000-4000-8000-000000000027', 'ADMSN-31027', 'Kibwana Takwimu', 'STD 5', 2031, 'Day',
-        'Interviewed', null, date '2025-10-20', 'c0c02031-0000-4000-8000-000000000027', timestamptz '2025-10-20 09:00+03', true);
+        'Interviewed', null, date '2025-10-20', 'c0c02031-0000-4000-8000-000000000027', timestamptz '2025-10-20 09:00+03', true, 'Mother', null);
 
 -- ADMSN-31015 was inserted above as it stands, bar the mark its decline and
 -- reopening left.

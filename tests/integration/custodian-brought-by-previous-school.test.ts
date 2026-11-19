@@ -152,9 +152,9 @@ describe("the previous-school check", () => {
        from pg_proc p
        where p.pronamespace = 'public'::regnamespace
          and p.proname in ('previous_school_regions', 'previous_school_region', 'previous_school_asked',
-                           'previous_school_answer_missing', 'set_lead_custodian_relationship',
-                           'refuse_contact_relationship_change', 'custodian_relationship_sent',
-                           'contact_first_child_relationship')`,
+                           'previous_school_answer_missing', 'custodian_relationship_sent',
+                           'contact_first_child_relationship', 'registration_custodian',
+                           'registration_brought_by')`,
     )
     expect(rows).toHaveLength(8)
     for (const r of rows) expect(r.callers, r.name).toEqual([])
@@ -162,24 +162,11 @@ describe("the previous-school check", () => {
 })
 
 describe("the custodian relationship on each lead", () => {
-  // Since #312 each child holds its relationship, and the contact's copy is
-  // frozen until the next migration drops it.
-  test("the contact's relationship is frozen, and a new contact holds none", async () => {
+  // Since #312 each child holds its relationship and the contact holds none
+  // (tests/integration/contact-relationship-dropped.test.ts).
+  test("a new child holds the relationship the parent gave", async () => {
     const lead = await walkIn({ contact: parent({ relationship: "Guardian" }) })
-    const { guardian_contact_id: contactId } = await row(lead)
-    const [contact] = await owner<{ relationship: string | null }>(
-      "select relationship::text from public.guardian_contacts where id = $1",
-      [contactId],
-    )
-    expect(contact.relationship).toBeNull()
     expect(await row(lead)).toMatchObject({ custodian_relationship: "Guardian", custodian_relationship_description: null })
-
-    await expect(
-      inRolledBackTransaction(async (sql) => {
-        await sql.query("select public.set_audit_actor('system')")
-        await sql.query("update public.guardian_contacts set relationship = 'Mother' where id = $1", [contactId])
-      }),
-    ).rejects.toThrow(/contact_relationship_retired/)
   })
 
   test("a new lead on a known contact takes its first child's relationship", async () => {

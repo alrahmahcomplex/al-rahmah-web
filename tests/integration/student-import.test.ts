@@ -35,12 +35,13 @@ async function existingLead(name: string, phone: string): Promise<{ leadId: stri
   const admissionNumber = await unusedAdmissionNumber()
   return asSystem(async (sql) => {
     const contact = await sql.query<{ id: string }>(
-      "insert into public.guardian_contacts (full_name, relationship, phone, origin) values ('Mzazi Aliyepo', 'Father', $1, 'front_desk') returning id",
+      "insert into public.guardian_contacts (full_name, phone, origin) values ('Mzazi Aliyepo', $1, 'front_desk') returning id",
       [phone],
     )
     const lead = await sql.query<{ id: string }>(
-      `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id)
-       values ($1, $2, 'STD 3', $3, 'Day', 'Visited', '2026-09-01', $4) returning id`,
+      `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id,
+                                 custodian_relationship)
+       values ($1, $2, 'STD 3', $3, 'Day', 'Visited', '2026-09-01', $4, 'Father') returning id`,
       [admissionNumber, name, nextYear, contact.rows[0].id],
     )
     return { leadId: lead.rows[0].id, contactId: contact.rows[0].id }

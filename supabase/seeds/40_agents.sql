@@ -32,22 +32,23 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000431', 'Mwanaidi Referral', 'Mother', null, '+255700000431', null, 'admission_form'),
-    ('c0c0c0c0-0000-4000-8000-000000000432', 'Hassani Referral', 'Father', null, '+255700000432', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000433', 'Subira Referral', 'Mother', null, '+255700000433', null, 'admission_form');
+    ('c0c0c0c0-0000-4000-8000-000000000431', 'Mwanaidi Referral', '+255700000431', null, 'admission_form'),
+    ('c0c0c0c0-0000-4000-8000-000000000432', 'Hassani Referral', '+255700000432', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000433', 'Subira Referral', '+255700000433', null, 'admission_form');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined, referral_code
+    status, closure, visit_date, guardian_contact_id, returning_family_joined, referral_code,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000431', 'ADMSN-90431', 'Asha Referral', 'STD 2', 2027, 'Day',
-        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000431', false, 'BJN-402'),
+        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000431', false, 'BJN-402', 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000432', 'ADMSN-90432', 'Juma Referral', 'STD 6', 2027, 'Boarding',
-        'Visited', null, date '2026-09-18', 'c0c0c0c0-0000-4000-8000-000000000432', false, 'ZNM-401'),
+        'Visited', null, date '2026-09-18', 'c0c0c0c0-0000-4000-8000-000000000432', false, 'ZNM-401', 'Father', null),
     ('1ead0000-0000-4000-8000-000000000433', 'ADMSN-90433', 'Tatu Referral', 'KG 1', 2027, 'Day',
-        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000433', false, 'XYZ-999');
+        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000433', false, 'XYZ-999', 'Mother', null);
 
 commit;
 

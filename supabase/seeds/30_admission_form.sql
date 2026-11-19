@@ -19,19 +19,20 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000301', 'Saida Marudio', 'Mother', null, '+255700000301', null, 'admission_form'),
-    ('c0c0c0c0-0000-4000-8000-000000000302', 'Yusufu Marudio', 'Father', null, '+255700000302', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000301', 'Saida Marudio', '+255700000301', null, 'admission_form'),
+    ('c0c0c0c0-0000-4000-8000-000000000302', 'Yusufu Marudio', '+255700000302', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined
+    status, closure, visit_date, guardian_contact_id, returning_family_joined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000301', 'ADMSN-90301', 'Zuberi Marudio', 'STD 3', 2027, 'Day',
-        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000301', false),
+        'Applied', null, null, 'c0c0c0c0-0000-4000-8000-000000000301', false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000302', 'ADMSN-90302', 'Mariamu Marudio', 'KG 2', 2027, 'Boarding',
-        'Visited', null, date '2026-09-05', 'c0c0c0c0-0000-4000-8000-000000000302', false);
+        'Visited', null, date '2026-09-05', 'c0c0c0c0-0000-4000-8000-000000000302', false, 'Father', null);
 
 -- record_re_application sets the Admission form as the actor.
 select public.record_re_application(

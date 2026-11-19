@@ -22,28 +22,29 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000601', 'Mwanaisha Matokeo', 'Mother', null, '+255700000601', '+255700000602', 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000602', 'Bakari Matokeo', 'Father', null, '+255700000603', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000603', 'Pendo Matokeo', 'Mother', null, '+255700000604', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000604', 'Selemani Matokeo', 'Guardian', null, '+255700000605', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000605', 'Shukuru Matokeo', 'Father', null, '+255222000606', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000601', 'Mwanaisha Matokeo', '+255700000601', '+255700000602', 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000602', 'Bakari Matokeo', '+255700000603', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000603', 'Pendo Matokeo', '+255700000604', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000604', 'Selemani Matokeo', '+255700000605', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000605', 'Shukuru Matokeo', '+255222000606', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined, initially_declined
+    status, closure, visit_date, guardian_contact_id, returning_family_joined, initially_declined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000601', 'ADMSN-90601', 'Imani Matokeo', 'FORM 1', 2028, 'Boarding',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000601', false, false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000601', false, false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000602', 'ADMSN-90602', 'Faraji Matokeo', 'STD 3', 2028, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000602', false, false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000602', false, false, 'Father', null),
     ('1ead0000-0000-4000-8000-000000000603', 'ADMSN-90603', 'Upendo Matokeo', 'KG 2', 2028, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000603', false, false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000603', false, false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000604', 'ADMSN-90604', 'Tumaini Matokeo', 'STD 6', 2028, 'Day',
-        'Interviewed', null, date '2026-09-08', 'c0c0c0c0-0000-4000-8000-000000000604', false, true),
+        'Interviewed', null, date '2026-09-08', 'c0c0c0c0-0000-4000-8000-000000000604', false, true, 'Guardian', null),
     ('1ead0000-0000-4000-8000-000000000605', 'ADMSN-90605', 'Neema Matokeo', 'STD 2', 2028, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000605', false, false);
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000605', false, false, 'Father', null);
 
 -- Registered by Test Admissions, as the lead screen would have done it, with
 -- each result recorded after its interview.

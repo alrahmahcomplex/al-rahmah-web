@@ -213,10 +213,14 @@ describe("the overdue count and paging", () => {
           order by random() limit 54`,
       )
       const planted = await sql.query<{ id: string }>(
-        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id, created_at)
+        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date, guardian_contact_id, created_at,
+                                   custodian_relationship, custodian_relationship_description)
          select number, 'Paged ' || number, 'STD 4', $2, 'Day', 'Visited', $3::date,
-                (select guardian_contact_id from public.leads where id = $4), now() - interval '5 years'
+                family.guardian_contact_id, now() - interval '5 years',
+                family.custodian_relationship, family.custodian_relationship_description
            from unnest($1::text[]) as number
+          cross join (select guardian_contact_id, custodian_relationship, custodian_relationship_description
+                        from public.leads where id = $4) family
          returning id`,
         [numbers.rows.map((row) => row.admission_number), thisYear + 1, today, guardian.id],
       )

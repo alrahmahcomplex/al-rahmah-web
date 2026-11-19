@@ -288,7 +288,7 @@ describe("several children on one form", () => {
     expect(new Set(leads.map((l) => l.contact.id)).size).toBe(1)
   })
 
-  test("every child carries the parent's relationship, and the contact holds none (#312)", async () => {
+  test("every child carries the parent's relationship (#312)", async () => {
     const sent = form({
       parent: parent({ relationship: "Other", relationshipDescription: "Grandmother" }),
       children: [child(), child({ className: "STD 4" })],
@@ -304,16 +304,16 @@ describe("several children on one form", () => {
       async (sql) =>
         (
           await sql.query(
-            `select l.custodian_relationship::text as lead, g.relationship::text as contact
-             from public.leads l join public.guardian_contacts g on g.id = l.guardian_contact_id
+            `select l.custodian_relationship::text as relationship, l.custodian_relationship_description as description
+             from public.leads l
              where l.id = any($1::uuid[])`,
             [leads.map((l) => l.id)],
           )
         ).rows,
     )
     expect(rows).toEqual([
-      { lead: "Other", contact: null },
-      { lead: "Other", contact: null },
+      { relationship: "Other", description: "Grandmother" },
+      { relationship: "Other", description: "Grandmother" },
     ])
   })
 

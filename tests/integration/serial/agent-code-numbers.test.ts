@@ -217,11 +217,13 @@ describe("the Discount code format", () => {
       // A copy of a seeded lead, on a free Admission Number, carrying the
       // code the next ZXQ agent would get.
       const planted = await sql.query(
-        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, guardian_contact_id, status, visit_date, referral_code)
+        `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, guardian_contact_id, status, visit_date, referral_code,
+                                   custodian_relationship, custodian_relationship_description)
          select (select 'ADMSN-' || lpad(g::text, 5, '0') from generate_series(0, 99999) g
                  where not exists (select 1 from public.leads x where x.admission_number = 'ADMSN-' || lpad(g::text, 5, '0'))
                  order by random() limit 1),
-                'Coded Pupil', l.class_name, l.enrollment_year, l.day_or_boarding, l.guardian_contact_id, l.status, l.visit_date, $1
+                'Coded Pupil', l.class_name, l.enrollment_year, l.day_or_boarding, l.guardian_contact_id, l.status, l.visit_date, $1,
+                l.custodian_relationship, l.custodian_relationship_description
          from public.leads l limit 1`,
         [`ZXQ-${digits(n + 1)}`],
       )

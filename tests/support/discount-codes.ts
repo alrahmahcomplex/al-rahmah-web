@@ -46,14 +46,14 @@ export async function leadWithCode(
         ).rows[0].id
       : null
     const contact = await sql.query<{ id: string }>(
-      `insert into public.guardian_contacts (full_name, relationship, phone, origin)
-       values ('Mzazi Punguzo', 'Mother', $1, 'front_desk') returning id`,
+      `insert into public.guardian_contacts (full_name, phone, origin)
+       values ('Mzazi Punguzo', $1, 'front_desk') returning id`,
       [discountPhone()],
     )
     const lead = await sql.query<{ id: string }>(
       `insert into public.leads (admission_number, student_name, class_name, enrollment_year, day_or_boarding, status, visit_date,
-           guardian_contact_id, referral_code, import_batch_id)
-       values ($1, $2, 'STD 3', 2027, 'Day', 'Visited', '2026-09-01', $3, $4, $5) returning id`,
+           guardian_contact_id, referral_code, import_batch_id, custodian_relationship)
+       values ($1, $2, 'STD 3', 2027, 'Day', 'Visited', '2026-09-01', $3, $4, $5, 'Mother') returning id`,
       [admissionNumber, name, contact.rows[0].id, code, batch],
     )
     return lead.rows[0].id

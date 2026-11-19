@@ -47,25 +47,26 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000901', 'Mwanaidi Malipo', 'Mother', null, '+255700000901', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000902', 'Bakari Malipo', 'Father', null, '+255700000902', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000903', 'Tatu Malipo', 'Mother', null, '+255700000903', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000904', 'Shabani Malipo', 'Father', null, '+255700000904', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000901', 'Mwanaidi Malipo', '+255700000901', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000902', 'Bakari Malipo', '+255700000902', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000903', 'Tatu Malipo', '+255700000903', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000904', 'Shabani Malipo', '+255700000904', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined
+    status, closure, visit_date, guardian_contact_id, returning_family_joined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000901', 'ADMSN-90901', 'Halima Malipo', 'STD 2', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000901', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000901', false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000902', 'ADMSN-90902', 'Juma Malipo', 'STD 2', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000902', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000902', false, 'Father', null),
     ('1ead0000-0000-4000-8000-000000000903', 'ADMSN-90903', 'Rehema Malipo', 'KG 1', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000903', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000903', false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000904', 'ADMSN-90904', 'Omari Malipo', 'STD 1', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000904', false);
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000904', false, 'Father', null);
 
 -- The next four 2027 S/Ns, after whatever the earlier seeds issued.
 insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
@@ -115,26 +116,27 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000905', 'Mwajuma Malipo', 'Mother', null, '+255700000905', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000906', 'Hassani Malipo', 'Father', null, '+255700000906', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000905', 'Mwajuma Malipo', '+255700000905', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000906', 'Hassani Malipo', '+255700000906', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
     status, closure, visit_date, guardian_contact_id, returning_family_joined,
     declined_reason, declined_explanation, declined_at, declined_by, status_before_decline,
-    closure_reason, closure_note, closed_at, closed_by
+    closure_reason, closure_note, closed_at, closed_by,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000905', 'ADMSN-90905', 'Zawadi Malipo', 'STD 3', 2027, 'Day',
         'Declined', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000905', false,
         'Family changed plans', null, timestamptz '2026-09-29 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000001',
         'Interviewed',
-        null, null, null, null),
+        null, null, null, null, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000906', 'ADMSN-90906', 'Saidi Malipo', 'STD 4', 2027, 'Day',
         'Interviewed', 'Archived', date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000906', false,
         null, null, null, null, null,
-        'Admission cycle ended', null, timestamptz '2026-09-30 15:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000001');
+        'Admission cycle ended', null, timestamptz '2026-09-30 15:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000001', 'Father', null);
 
 -- The next two 2027 S/Ns.
 insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
@@ -171,22 +173,23 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000907', 'Zuhura Ruzuku', 'Mother', null, '+255700000907', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000908', 'Mariamu Ruzuku', 'Guardian', null, '+255700000908', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000909', 'Selemani Ruzuku', 'Father', null, '+255700000909', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000907', 'Zuhura Ruzuku', '+255700000907', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000908', 'Mariamu Ruzuku', '+255700000908', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000909', 'Selemani Ruzuku', '+255700000909', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined
+    status, closure, visit_date, guardian_contact_id, returning_family_joined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000907', 'ADMSN-90907', 'Neema Ruzuku', 'KG 1', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000907', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000907', false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000908', 'ADMSN-90908', 'Baraka Ruzuku', 'STD 1', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000908', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000908', false, 'Guardian', null),
     ('1ead0000-0000-4000-8000-000000000909', 'ADMSN-90909', 'Upendo Ruzuku', 'STD 2', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000909', false);
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000909', false, 'Father', null);
 
 -- The next three 2027 S/Ns.
 insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
@@ -243,26 +246,27 @@ select public.set_audit_actor('system');
 insert into public.class_seats (enrollment_year, class_name, day_or_boarding, seats) values
     (2027, 'STD 6', 'Boarding', 1);
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000910', 'Zainabu Kiwelu', 'Mother', null, '+255700000910', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000911', 'Hamza Kiwelu', 'Father', null, '+255700000911', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000912', 'Subira Kiwelu', 'Mother', null, '+255700000912', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000910', 'Zainabu Kiwelu', '+255700000910', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000911', 'Hamza Kiwelu', '+255700000911', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000912', 'Subira Kiwelu', '+255700000912', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
     status, closure, visit_date, guardian_contact_id, returning_family_joined,
-    declined_reason, declined_explanation, declined_at, declined_by, status_before_decline
+    declined_reason, declined_explanation, declined_at, declined_by, status_before_decline,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000910', 'ADMSN-90910', 'Amani Kiwelu', 'STD 6', 2027, 'Boarding',
         'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000910', false,
-        null, null, null, null, null),
+        null, null, null, null, null, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000911', 'ADMSN-90911', 'Faraji Kiwelu', 'STD 6', 2027, 'Boarding',
         'Declined', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000911', false,
-        'Fees or cost', null, timestamptz '2026-09-30 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000001', 'Interviewed'),
+        'Fees or cost', null, timestamptz '2026-09-30 10:00:00+03', 'a1a1a1a1-0000-4000-8000-000000000001', 'Interviewed', 'Father', null),
     ('1ead0000-0000-4000-8000-000000000912', 'ADMSN-90912', 'Imani Kiwelu', 'STD 1', 2027, 'Boarding',
         'Declined', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000912', false,
-        'Fees or cost', null, timestamptz '2026-09-30 10:30:00+03', 'a1a1a1a1-0000-4000-8000-000000000001', 'Interviewed');
+        'Fees or cost', null, timestamptz '2026-09-30 10:30:00+03', 'a1a1a1a1-0000-4000-8000-000000000001', 'Interviewed', 'Mother', null);
 
 -- The next three 2027 S/Ns.
 insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
@@ -320,29 +324,30 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000913', 'Mwanahawa Ndugu', 'Mother', null, '+255700000913', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000916', 'Rashidi Pendo', 'Father', null, '+255700000916', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000913', 'Mwanahawa Ndugu', '+255700000913', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000916', 'Rashidi Pendo', '+255700000916', null, 'front_desk');
 
 insert into public.guardian_contacts (
-    id, full_name, relationship, relationship_description, phone, whatsapp, origin, pending_family_match_id
+    id, full_name, phone, whatsapp, origin, pending_family_match_id
 ) values
-    ('c0c0c0c0-0000-4000-8000-000000000917', 'Rashidi Pendo', 'Father', null, '+255700000916', null, 'admission_form',
+    ('c0c0c0c0-0000-4000-8000-000000000917', 'Rashidi Pendo', '+255700000916', null, 'admission_form',
         'c0c0c0c0-0000-4000-8000-000000000916');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined
+    status, closure, visit_date, guardian_contact_id, returning_family_joined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000913', 'ADMSN-90913', 'Bahati Ndugu', 'STD 5', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000913', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000913', false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000914', 'ADMSN-90914', 'Furaha Ndugu', 'STD 3', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000913', true),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000913', true, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000916', 'ADMSN-90916', 'Tumaini Pendo', 'STD 4', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000916', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000916', false, 'Father', null),
     ('1ead0000-0000-4000-8000-000000000917', 'ADMSN-90917', 'Zuberi Pendo', 'KG 2', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000917', true);
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000917', true, 'Father', null);
 
 -- The next four 2027 S/Ns.
 insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)
@@ -397,22 +402,23 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000918', 'Mwanamisi Maandalizi', 'Mother', null, '+255700000918', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000919', 'Abdallah Maandalizi', 'Father', null, '+255700000919', null, 'front_desk'),
-    ('c0c0c0c0-0000-4000-8000-000000000920', 'Asha Maandalizi', 'Guardian', null, '+255700000920', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000918', 'Mwanamisi Maandalizi', '+255700000918', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000919', 'Abdallah Maandalizi', '+255700000919', null, 'front_desk'),
+    ('c0c0c0c0-0000-4000-8000-000000000920', 'Asha Maandalizi', '+255700000920', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined
+    status, closure, visit_date, guardian_contact_id, returning_family_joined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000918', 'ADMSN-90918', 'Rukia Maandalizi', 'FORM 1', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000918', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000918', false, 'Mother', null),
     ('1ead0000-0000-4000-8000-000000000919', 'ADMSN-90919', 'Khamisi Maandalizi', 'FORM 1', 2027, 'Boarding',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000919', false),
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000919', false, 'Father', null),
     ('1ead0000-0000-4000-8000-000000000920', 'ADMSN-90920', 'Sabra Maandalizi', 'FORM 2', 2027, 'Day',
-        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000920', false);
+        'Interviewed', null, date '2026-09-14', 'c0c0c0c0-0000-4000-8000-000000000920', false, 'Guardian', null);
 
 -- The next three 2027 S/Ns.
 insert into public.interviews (id, lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score)

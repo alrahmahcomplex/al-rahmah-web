@@ -80,16 +80,17 @@ begin;
 
 select public.set_audit_actor('system');
 
-insert into public.guardian_contacts (id, full_name, relationship, relationship_description, phone, whatsapp, origin)
+insert into public.guardian_contacts (id, full_name, phone, whatsapp, origin)
 values
-    ('c0c0c0c0-0000-4000-8000-000000000070', 'Zainabu Rejea', 'Mother', null, '+255700000170', null, 'front_desk');
+    ('c0c0c0c0-0000-4000-8000-000000000070', 'Zainabu Rejea', '+255700000170', null, 'front_desk');
 
 insert into public.leads (
     id, admission_number, student_name, class_name, enrollment_year, day_or_boarding,
-    status, closure, visit_date, guardian_contact_id, returning_family_joined, initially_declined
+    status, closure, visit_date, guardian_contact_id, returning_family_joined, initially_declined,
+    custodian_relationship, custodian_relationship_description
 ) values
     ('1ead0000-0000-4000-8000-000000000070', 'ADMSN-90070', 'Amani Rejea', 'STD 3', 2027, 'Day',
-        'Visited', null, public.tanzania_today() - 30, 'c0c0c0c0-0000-4000-8000-000000000070', false, true);
+        'Visited', null, public.tanzania_today() - 30, 'c0c0c0c0-0000-4000-8000-000000000070', false, true, 'Mother', null);
 
 -- Raised by Test Admissions, approved by Test Manager.
 insert into public.reopening_requests (

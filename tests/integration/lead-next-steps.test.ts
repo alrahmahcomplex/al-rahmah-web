@@ -509,7 +509,37 @@ describe("lead_next_step_inputs", () => {
            )) as versions`,
           [seeded],
         )
-        .then((answer) => answer.rows[0].versions)
+        .then(async (answer) => {
+          // TEMPORARY DIAGNOSTIC (#312): which rows change between reads.
+          const detail = await sql.query<{ part: string; id: string; xmin: string }>(
+            `select 'leads' as part, t.id::text, t.xmin::text from public.leads t where t.id = any($1)
+             union all select 'interviews', t.id::text, t.xmin::text from public.interviews t where t.lead = any($1)
+             union all select 'follow_ups', t.id::text, t.xmin::text from public.follow_ups t where t.lead_id = any($1)
+             union all select 'follow_up_records', t.id::text, t.xmin::text from public.follow_up_records t where t.lead_id = any($1)
+             union all select 'reopening_requests', t.id::text, t.xmin::text from public.reopening_requests t where t.lead_id = any($1)
+             union all select 'school_fee_payments', t.id::text, t.xmin::text from public.school_fee_payments t where t.lead_id = any($1)
+             union all select 'payment_adjustments', t.id::text, t.xmin::text from public.payment_adjustments t where t.lead_id = any($1)
+             union all select 'discount_requests', t.id::text, t.xmin::text from public.discount_requests t where t.lead_id = any($1)
+             union all select 'lead_fee_profiles', t.lead_id::text, t.xmin::text from public.lead_fee_profiles t where t.lead_id = any($1)
+             union all select 'fee_schedules', t.enrollment_year::text, t.xmin::text from public.fee_schedules t
+             union all select 'fee_band_amounts', t.id::text, t.xmin::text from public.fee_band_amounts t`,
+            [seeded],
+          )
+          const now = new Map(detail.rows.map((r) => [`${r.part}:${r.id}`, r.xmin]))
+          const before = (globalThis as { __diag?: Map<string, string> }).__diag
+          if (before) {
+            const changed = [...new Set([...before.keys(), ...now.keys()])].filter((k) => before.get(k) !== now.get(k))
+            if (changed.length) {
+              const leadIds = changed.filter((k) => k.startsWith("leads:")).map((k) => k.slice(6))
+              const lead = leadIds.length
+                ? (await sql.query("select id, admission_number, status, guardian_contact_id from public.leads where id = any($1)", [leadIds])).rows
+                : []
+              console.warn("DIAG changed", JSON.stringify(changed), JSON.stringify(lead))
+            }
+          }
+          ;(globalThis as { __diag?: Map<string, string> }).__diag = now
+          return answer.rows[0].versions
+        })
 
     const client = await as(ADMISSIONS)
     const { result: pages } = await whileUnchanged(

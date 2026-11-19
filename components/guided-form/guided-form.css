@@ -475,3 +475,63 @@ html.rm .gf-ld-menu { opacity: 1; transform: none; }
   .gf-ld, .gf-ld *, .gf-lp-globe, .gf-catch, .gf-catch::after { animation: none !important; }
   .gf-ld-menu { opacity: 1; transform: none; }
 }
+
+/* ---------- the Discount code box with its list (CodePicker) ---------- */
+.gf-cp { position: relative; }
+.gf-cp-box { position: relative; border-radius: 999px; background: var(--gf-paper); }
+.gf-cp-ghost {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  padding: 0 48px 0 14px; border: 1.5px solid transparent; border-radius: 999px; pointer-events: none; white-space: pre;
+  font-size: 17px; text-transform: uppercase; letter-spacing: 0.03em; color: transparent;
+}
+.gf-cp-ghost .gf-cp-rest { color: var(--gf-placeholder); opacity: 0.8; }
+.gf-cp-arrow {
+  position: absolute; right: 7px; top: 50%; translate: 0 -50%; width: 38px; height: 38px; border-radius: 50%;
+  border: 0; background: transparent; color: var(--gf-indigo); display: grid; place-items: center; cursor: pointer;
+  transition: background var(--gf-t-med) var(--gf-ease-out);
+}
+.gf-cp-arrow:hover { background: var(--gf-whisper); }
+.gf-cp-arrow:focus-visible { outline: 3px solid var(--gf-focus-ring); outline-offset: 1px; }
+.gf-cp-arrow svg { transition: transform var(--gf-t-med) var(--gf-ease-out); }
+.gf-cp.gf-open .gf-cp-arrow svg { transform: rotate(180deg); }
+.gf-cp.gf-open .gf-cp-box input { border-color: var(--gf-indigo); box-shadow: 0 0 0 4px rgb(9 0 187 / 0.12); }
+/* In the page's flow, so it pushes what follows down and the page always scrolls far enough to show all of it. */
+.gf-cp-panel {
+  position: relative; z-index: 1; margin-top: 8px; padding: 10px; text-align: left;
+  background: var(--gf-paper); border: 1.5px solid var(--gf-line); border-radius: 22px; box-shadow: var(--gf-lift);
+  transform-origin: top center; animation: gf-cp-drop var(--gf-t-med) var(--gf-ease-out);
+  /* Scrolled into view, it stops clear of the page's lower edge. */
+  scroll-margin-bottom: 32px;
+}
+@keyframes gf-cp-drop { from { opacity: 0; transform: translateY(-6px) scale(0.985); } to { opacity: 1; transform: none; } }
+.gf-cp-search { position: relative; }
+.gf-cp-search input {
+  width: 100%; height: 44px; border-radius: 999px; border: 1.5px solid var(--gf-line); background: var(--gf-chrome);
+  padding: 0 44px; font-size: 16px; color: var(--gf-ink); outline: none; transition: border-color var(--gf-t-med), box-shadow var(--gf-t-med), background var(--gf-t-med);
+}
+.gf-cp-search input::placeholder { color: var(--gf-placeholder); }
+.gf-cp-search input:focus { border-color: var(--gf-indigo); background: var(--gf-paper); box-shadow: 0 0 0 4px rgb(9 0 187 / 0.1); }
+.gf-cp-search > .gf-icon { position: absolute; left: 15px; top: 50%; translate: 0 -50%; color: var(--gf-quiet); pointer-events: none; }
+.gf-cp-clear {
+  position: absolute; right: 6px; top: 50%; translate: 0 -50%; width: 32px; height: 32px; border-radius: 50%;
+  border: 0; background: transparent; color: var(--gf-quiet); display: grid; place-items: center; cursor: pointer;
+}
+.gf-cp-clear:hover { background: var(--gf-whisper); color: var(--gf-indigo); }
+.gf-cp-clear:focus-visible { outline: 3px solid var(--gf-focus-ring); }
+.gf-cp-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 292px; overflow-y: auto; overscroll-behavior: contain; }
+.gf-cp-group { padding: 10px 14px 4px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gf-quiet); }
+.gf-cp-opt { display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 8px 14px; border-radius: 14px; cursor: pointer; }
+.gf-cp-opt .gf-icon { flex: none; color: var(--gf-indigo); visibility: hidden; }
+.gf-cp-opt[aria-selected="true"] .gf-icon { visibility: visible; }
+.gf-cp-opt b { flex: none; white-space: nowrap; font-weight: 600; letter-spacing: 0.04em; color: var(--gf-ink); font-variant-numeric: tabular-nums; }
+.gf-cp-opt small { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: var(--gf-quiet); text-align: right; }
+.gf-cp-opt.gf-on { background: var(--gf-whisper); }
+.gf-cp-opt.gf-on b { color: var(--gf-indigo); }
+.gf-cp-opt mark { background: none; color: var(--gf-indigo); text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.gf-cp-empty { padding: 18px 14px 14px; text-align: center; color: var(--gf-quiet); font-size: 14px; }
+html.rm .gf-cp-panel { animation: none; }
+html.rm .gf-cp-arrow svg { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .gf-cp-panel { animation: none; }
+  .gf-cp-arrow svg { transition: none; }
+}

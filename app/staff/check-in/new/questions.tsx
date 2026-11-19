@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 
 import {
-  CodeBox,
+  CodePicker,
   ContinuePill,
   FullNameBox,
   Hint,
@@ -14,6 +14,7 @@ import {
   formatCode,
   hasTwoNames,
   type PersonName,
+  type CodeOption,
   type StudentName,
 } from "@/components/guided-form"
 import {
@@ -58,6 +59,7 @@ import {
   type RelationshipChoice,
   type SchoolAnswer,
 } from "./model"
+import { listCodesToPick } from "./code-actions"
 
 // The questions of Register students (#308), each one open card of the
 // guided stack. Words from prototype v38. The two sheets start afresh each
@@ -886,6 +888,23 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
   const attempt = useRef(0)
   const errId = `${id}-error`
   const inputId = useId()
+  // The codes to pick from, read once the box shows.
+  const [codes, setCodes] = useState<{ state: "loading" | "ready" | "unavailable"; options: CodeOption[] }>({ state: "loading", options: [] })
+
+  useEffect(() => {
+    if (!typing) return
+    let live = true
+    listCodesToPick()
+      .then((listed) => {
+        if (live) setCodes(listed.status === "ok" ? { state: "ready", options: listed.codes } : { state: "unavailable", options: [] })
+      })
+      .catch(() => {
+        if (live) setCodes({ state: "unavailable", options: [] })
+      })
+    return () => {
+      live = false
+    }
+  }, [typing])
 
   // Continue checks the code itself, so pressing it straight after typing waits for the answer.
   async function submit(e: FormEvent) {
@@ -928,11 +947,13 @@ export function CodeQuestion({ id, saved, onDone }: { id: string; saved?: string
           They have a code
         </ContinuePill>
         <GuidedReveal open={typing}>
-          <CodeBox
+          <CodePicker
             id={inputId}
             placeholder="Discount code, e.g. ABC-123"
             aria-label="Discount code"
             value={code}
+            options={codes.options}
+            listState={codes.state}
             invalid={!!error}
             aria-describedby={errId}
             onValueChange={(v) => {

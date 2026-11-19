@@ -55,8 +55,12 @@ test.describe("a Discount code on Register students", () => {
     const child = await toCodeStep(page)
 
     await go(page, "They have a code").click()
-    await open(page).getByRole("textbox", { name: "Discount code" }).fill("bjn402")
-    await expect(open(page).getByRole("textbox", { name: "Discount code" })).toHaveValue("BJN-402")
+    // The first letters complete to the listed code, and Tab takes it.
+    const box = open(page).getByRole("combobox", { name: "Discount code" })
+    await box.pressSequentially("bjn4")
+    await expect(box).toHaveValue("BJN-4")
+    await box.press("Tab")
+    await expect(box).toHaveValue("BJN-402")
     await expect(open(page).getByText("Tell the family: the person who gave them this code will see this student's admission progress.")).toBeVisible()
     await go(page, "Continue").click()
     await expect(page.getByText("BJN-402 · family told who sees the progress")).toBeVisible()
@@ -79,11 +83,21 @@ test.describe("a Discount code on Register students", () => {
     await expect(entries.filter({ hasText: "added a Referral code" })).toContainText(ADMISSIONS.name)
   })
 
-  test("a code nobody holds is refused until it is corrected or No code is chosen", async ({ page }) => {
+  test("the arrow lists the codes to pick from; a typed code nobody holds is refused until it is corrected or No code is chosen", async ({ page }) => {
     await signIn(page, ADMISSIONS)
     await toCodeStep(page)
     await go(page, "They have a code").click()
-    await open(page).getByRole("textbox", { name: "Discount code" }).fill("NOP-404")
+    const box = open(page).getByRole("combobox", { name: "Discount code" })
+
+    await open(page).getByRole("button", { name: "Show all Discount codes" }).click()
+    const list = open(page).getByRole("listbox", { name: "Discount codes" })
+    await expect(list.getByText("Agent codes")).toBeVisible()
+    await open(page).getByRole("combobox", { name: "Search Discount codes" }).fill("bjn402")
+    await list.getByRole("option", { name: /BJN-402/ }).click()
+    await expect(box).toHaveValue("BJN-402")
+    await expect(list).toHaveCount(0)
+
+    await box.fill("NOP-404")
     // Continue checks the code, however soon it is pressed.
     await go(page, "Continue").click()
     await expect(open(page).getByText("No Marketing Agent or Promo code has this code. Correct it, or choose No code.")).toBeVisible()

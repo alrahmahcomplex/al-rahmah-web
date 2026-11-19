@@ -467,6 +467,8 @@ html.rm .kit-cf { display: none; }
 .kit-rv > div { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 12px; padding: 0 6px; }
 .kit-rv[data-open] { grid-template-rows: 1fr; opacity: 1; margin: 0 -6px; }
 .kit-rv[data-open] > div { padding: 6px; }
+/* An open list inside (CodePicker sets data-popup-open) shows past the fold's edge. */
+.kit-rv[data-open] > div:has([data-popup-open]) { overflow: visible; }
 
 /* ---------- form parts (prototype version 18, "round 17"; #358) ---------- */
 /* Tabs: the sliding track, in picked.css (#402). */

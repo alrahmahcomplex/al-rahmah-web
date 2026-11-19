@@ -1330,6 +1330,12 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: {},
     agent: { refused: "not_permitted" },
   },
+  // The Discount code list on Register Students: staff with leads.edit.
+  "public.usable_discount_codes()": {
+    roles: ["authenticated"],
+    args: {},
+    agent: { refused: "not_permitted" },
+  },
   // The student import and export (owner decisions of 2026-11-09).
   "public.check_student_import(rows jsonb)": {
     roles: ["authenticated"],

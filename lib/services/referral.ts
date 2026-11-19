@@ -270,6 +270,41 @@ export async function findDiscountCode(
   }
 }
 
+// A code staff may pick: an active Promo code or an Approved agent's code,
+// with its holder's name and what it takes off the interview fee now.
+export type UsableDiscountCode = { kind: "agent" | "promo"; code: string; holderName: string; amountOff: number }
+
+// The API's own limit on the rows one call returns.
+const USABLE_CODES_PAGE = 1000
+
+// Every code that takes money off today, Promo codes first, then agent codes,
+// each in code order. For the Discount code list on Register Students. Staff
+// with leads.edit; anyone else is refused.
+export async function listUsableDiscountCodes(
+  supabase: SupabaseClient,
+  { pageSize = USABLE_CODES_PAGE }: { pageSize?: number } = {},
+): Promise<Result<UsableDiscountCode[], "forbidden" | "unavailable">> {
+  type Row = { kind: "agent" | "promo"; code: string; holder_name: string; amount_off: number }
+  const rows: Row[] = []
+  // The API returns at most 1,000 rows a call, so read page by page until a short page.
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase.rpc("usable_discount_codes").range(from, from + pageSize - 1)
+    if (error) {
+      // 42501: the function isn't granted to the caller at all, as for someone signed out.
+      if (error.message === "not_permitted" || error.code === "42501") return { ok: false, error: "forbidden" }
+      console.error("Could not list the Discount codes", error)
+      return { ok: false, error: "unavailable" }
+    }
+    const page = (data ?? []) as Row[]
+    rows.push(...page)
+    if (page.length < pageSize) break
+  }
+  // A code added between two pages can push a row into the next page as well; list each code once.
+  const seen = new Set<string>()
+  const once = rows.filter((row) => !seen.has(row.code) && seen.add(row.code))
+  return { ok: true, data: once.map((row) => ({ kind: row.kind, code: row.code, holderName: row.holder_name, amountOff: row.amount_off })) }
+}
+
 // What a code typed on the Admission form means for the interview fee: an
 // Approved agent's code or an Active Promo code (`approved`), a Pending
 // agent's (`pending`), a switched-off agent's or a paused, ended or expired

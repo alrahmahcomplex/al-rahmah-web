@@ -156,6 +156,10 @@ describe("Quick actions", () => {
     expect(quickActions({ permissions: ["leads.view"], overdue: 1, fullClass: null, waitingDiscounts: null }).map((action) => action.title)).toEqual([
       "Call a family back",
     ])
+    // Seats goes to everyone who may view payments (#449), whether or not they manage academic years.
+    expect(quickActions({ permissions: ["payments.view"], overdue: null, fullClass: "STD 6", waitingDiscounts: null })).toEqual([
+      { href: "/staff/seats", icon: "seats", title: "Seats", caption: "STD 6 is full" },
+    ])
     expect(quickActions({ permissions: ["academic_years.manage"], overdue: null, fullClass: "STD 6", waitingDiscounts: null })).toEqual([])
   })
 })

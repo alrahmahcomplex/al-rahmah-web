@@ -22,10 +22,17 @@ import {
   signedIn,
 } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER, SECOND_MANAGER } from "../support/fixtures"
+import { asOwner, legacy } from "../support/streams"
 
-// The Academic-year start and class seats through the fees module, against
-// local Supabase, signed in as each seeded role. Each test works on a year of
-// its own, far from the seeded 2027, which the Accountant creates first.
+// The Academic-year start through the fees module, against local Supabase,
+// signed in as each seeded role. Each test works on a year of its own, far
+// from the seeded 2027, which the Accountant creates first.
+//
+// Seats are counted in streams since the activation migration (#449), so a
+// save that carries seats is refused. How the Manager set seats per class
+// and Day or Boarding before that is still in set_academic_year until the
+// clean-up slice removes it; the last describe tests it with the seat mode
+// put back to `legacy` inside rolled-back transactions.
 
 const AMOUNTS: FeeAmounts = {
   bands: {
@@ -86,52 +93,39 @@ const seat = (className: SeatSetting["className"], dayOrBoarding: SeatSetting["d
   seats,
 })
 
-describe("setting the start and seats", () => {
-  test("the Manager sets the start and seats, and every staff member with payments.view reads them", async () => {
+describe("setting the start", () => {
+  test("the Manager sets the start, and every staff member with payments.view reads it", async () => {
     const year = await scheduledYear()
-    const set = await saveFresh(await signedIn(MANAGER), year, {
-      start: `${year}-01-11`,
-      seats: [seat("FORM 1", "Boarding", 30), seat("KG 1", "Day", 25), seat("FORM 1", "Day", 0), seat("STD 1", "Day", null)],
-    })
+    const set = await saveFresh(await signedIn(MANAGER), year, { start: `${year}-01-11`, seats: [] })
     expect(set).toEqual({ ok: true, data: null })
 
     for (const person of [ACCOUNTANT, MANAGER, ADMISSIONS]) {
       const schedule = await getFeeSchedule(await signedIn(person), year)
       if (!schedule.ok) throw new Error(person.roleName)
       expect(schedule.data.academicYearStart, person.roleName).toBe(`${year}-01-11`)
-      // In class order, Day before Boarding; STD 1 Day stays not set.
-      expect(schedule.data.seats, person.roleName).toEqual([
-        seat("KG 1", "Day", 25),
-        seat("FORM 1", "Day", 0),
-        seat("FORM 1", "Boarding", 30),
-      ])
     }
     // The amounts are untouched.
     const schedule = await getFeeSchedule(await signedIn(ACCOUNTANT), year)
     expect(schedule.ok && schedule.data.bands).toEqual(AMOUNTS.bands)
   })
 
-  test("changing them later moves the start and the counts given, and leaves the rest", async () => {
+  test("changing it later moves the start", async () => {
     const year = await scheduledYear()
     const manager = await signedIn(MANAGER)
-    await saveFresh(manager, year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30), seat("STD 2", "Day", 28)] })
+    await saveFresh(manager, year, { start: `${year}-01-11`, seats: [] })
 
-    expect(
-      await saveFresh(manager, year, { start: `${year}-01-04`, seats: [seat("STD 1", "Day", 32), seat("STD 1", "Boarding", 10)] }),
-    ).toEqual({ ok: true, data: null })
-    expect(await read(year)).toEqual({
-      start: `${year}-01-04`,
-      seats: [seat("STD 1", "Day", 32), seat("STD 1", "Boarding", 10), seat("STD 2", "Day", 28)],
-    })
+    expect(await saveFresh(manager, year, { start: `${year}-01-04`, seats: [] })).toEqual({ ok: true, data: null })
+    expect(await read(year)).toEqual({ start: `${year}-01-04`, seats: [] })
   })
 
-  test("seats can be set before the start, which stays empty", async () => {
+  test("a save that carries seats is refused as out of date, and saves nothing, the start included", async () => {
+    // Streams are on: a Fee schedule form left open from before still has its
+    // seat boxes. The form reloads, now without them.
     const year = await scheduledYear()
-    expect(await saveFresh(await signedIn(MANAGER), year, { start: null, seats: [seat("KG 2", "Day", 20)] })).toEqual({
-      ok: true,
-      data: null,
-    })
-    expect(await read(year)).toEqual({ start: null, seats: [seat("KG 2", "Day", 20)] })
+    expect(
+      await saveFresh(await signedIn(MANAGER), year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30)] }),
+    ).toEqual({ ok: false, error: { kind: "stale", field: null } })
+    expect(await read(year)).toEqual({ start: null, seats: [] })
   })
 
   test("a year with no Fee schedule is refused until the Accountant creates one", async () => {
@@ -143,7 +137,7 @@ describe("setting the start and seats", () => {
     expect(await getFeeSchedule(await signedIn(ACCOUNTANT), year)).toEqual({ ok: false, error: "not-found" })
   })
 
-  test("the seeded 2027 schedule starts in January and has seats for a few classes, KG 2 Boarding small", async () => {
+  test("the seeded 2027 schedule starts in January, and still reads the seats set before streams", async () => {
     const { start, seats } = await read(2027)
     expect(start).toMatch(/^2027-01-\d{2}$/)
     expect(seats.length).toBeGreaterThan(2)
@@ -170,49 +164,29 @@ describe("refusals", () => {
     await refused(year, { start: "next January", seats: [] }, "academic_year_start")
   })
 
-  test("a refused start saves none of the seats with it", async () => {
+  test("a start, once set, can't be cleared", async () => {
     const year = await scheduledYear()
-    await refused(year, { start: `${year}-03-01`, seats: [seat("STD 1", "Day", 30)] }, "academic_year_start")
-  })
-
-  test("a seat count that isn't a whole number, 0 or more, naming the class and Day or Boarding", async () => {
-    const year = await scheduledYear()
-    await refused(year, { start: null, seats: [seat("STD 3", "Day", 30), seat("STD 3", "Boarding", -1)] }, "seats.STD 3.Boarding")
-    await refused(year, { start: null, seats: [seat("FORM 2", "Day", 12.5)] }, "seats.FORM 2.Day")
-    await refused(year, { start: null, seats: [seat("FORM 2", "Day", Number.NaN)] }, "seats.FORM 2.Day")
-  })
-
-  test("an unknown class, or the same class twice", async () => {
-    const year = await scheduledYear()
-    await refused(year, { start: null, seats: [seat("STD 8" as SeatSetting["className"], "Day", 30)] }, "seats")
-    await refused(year, { start: null, seats: [seat("STD 1", "Weekly" as SeatSetting["dayOrBoarding"], 30)] }, "seats")
-    await refused(year, { start: null, seats: [seat("STD 1", "Day", 30), seat("STD 1", "Day", 31)] }, "seats")
-  })
-
-  test("a start or a seat count, once set, can't be cleared", async () => {
-    const year = await scheduledYear()
-    await saveFresh(await signedIn(MANAGER), year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30)] })
+    await saveFresh(await signedIn(MANAGER), year, { start: `${year}-01-11`, seats: [] })
     await refused(year, { start: null, seats: [] }, "academic_year_start")
-    await refused(year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", null)] }, "seats.STD 1.Day")
   })
 })
 
 describe("permissions", () => {
-  test("the Accountant and Admissions Staff can't set the start or seats", async () => {
+  test("the Accountant and Admissions Staff can't set the start", async () => {
     const year = await scheduledYear()
     for (const person of [ACCOUNTANT, ADMISSIONS]) {
-      expect(
-        await saveFresh(await signedIn(person), year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30)] }),
-        person.roleName,
-      ).toEqual({ ok: false, error: { kind: "forbidden" } })
+      expect(await saveFresh(await signedIn(person), year, { start: `${year}-01-11`, seats: [] }), person.roleName).toEqual({
+        ok: false,
+        error: { kind: "forbidden" },
+      })
     }
     expect(await read(year)).toEqual({ start: null, seats: [] })
   })
 
-  test("someone signed out, and the secret key, can't set them or read the seats", async () => {
+  test("someone signed out, and the secret key, can't set it or read the seats", async () => {
     const year = await scheduledYear()
     for (const client of [anonClient(), secretClient()]) {
-      expect((await saveFresh(client, year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30)] })).ok).toBe(false)
+      expect((await saveFresh(client, year, { start: `${year}-01-11`, seats: [] })).ok).toBe(false)
     }
     expect(await read(year)).toEqual({ start: null, seats: [] })
     const { data } = await anonClient().from("class_seats").select("id")
@@ -228,10 +202,10 @@ describe("permissions", () => {
     expect(granted).toBe(false)
   })
 
-  test("managing academic years without payments.view may set them, but reads nothing back", async () => {
+  test("managing academic years without payments.view may set it, but reads nothing back", async () => {
     const year = await scheduledYear()
     const keeper = await signedIn(await createThrowawayStaff(["academic_years.manage"]))
-    expect(await saveFresh(keeper, year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30)] })).toEqual({
+    expect(await saveFresh(keeper, year, { start: `${year}-01-11`, seats: [] })).toEqual({
       ok: true,
       data: null,
     })
@@ -254,9 +228,11 @@ describe("permissions", () => {
     expect((await read(2027)).seats).toContainEqual(seat("KG 2", "Boarding", 2))
   })
 
-  test("seats are never deleted, even by the database owner", async () => {
+  test("the seats set before streams are never deleted, even by the database owner", async () => {
     const year = await scheduledYear()
-    await saveFresh(await signedIn(MANAGER), year, { start: null, seats: [seat("STD 1", "Day", 30)] })
+    await asSystem((sql) =>
+      sql.query("insert into public.class_seats (enrollment_year, class_name, day_or_boarding, seats) values ($1, 'STD 1', 'Day', 30)", [year]),
+    )
     await expect(
       asSystem((sql) => sql.query("delete from public.class_seats where enrollment_year = $1", [year])),
     ).rejects.toThrow(/delete_refused/)
@@ -265,72 +241,28 @@ describe("permissions", () => {
 })
 
 describe("two Managers editing the same year", () => {
-  test("a save from an older view is refused, and the newer change stays", async () => {
-    const year = await scheduledYear()
-    const opened = await seenNow(year)
-
-    expect(await setAcademicYear(await signedIn(MANAGER), year, { start: null, seats: [seat("STD 1", "Day", 30)] }, opened)).toEqual({
-      ok: true,
-      data: null,
-    })
-    expect(
-      await setAcademicYear(await signedIn(SECOND_MANAGER), year, { start: null, seats: [seat("STD 1", "Day", 25)] }, opened),
-    ).toEqual({ ok: false, error: { kind: "stale", field: "seats.STD 1.Day" } })
-    expect(await read(year)).toEqual({ start: null, seats: [seat("STD 1", "Day", 30)] })
-  })
-
-  test("a save from an older view keeps the cells it didn't change", async () => {
-    const year = await scheduledYear()
-    const opened = await seenNow(year)
-    await setAcademicYear(await signedIn(MANAGER), year, { start: null, seats: [seat("STD 1", "Day", 30)] }, opened)
-
-    // The second form still shows STD 1 Day blank, as it was when it opened,
-    // and changes only STD 2 Day.
-    const secondForm = { start: null, seats: [seat("STD 1", "Day", null), seat("STD 2", "Day", 28)] }
-    expect(await setAcademicYear(await signedIn(SECOND_MANAGER), year, secondForm, opened)).toEqual({ ok: true, data: null })
-    expect(await read(year)).toEqual({ start: null, seats: [seat("STD 1", "Day", 30), seat("STD 2", "Day", 28)] })
-  })
-
-  test("a start changed from an older view is refused, and nothing in that save is written", async () => {
+  test("a start changed from an older view is refused, and the newer start stays", async () => {
     const year = await scheduledYear()
     const opened = await seenNow(year)
     await setAcademicYear(await signedIn(MANAGER), year, { start: `${year}-01-11`, seats: [] }, opened)
 
-    expect(
-      await setAcademicYear(
-        await signedIn(SECOND_MANAGER),
-        year,
-        { start: `${year}-01-04`, seats: [seat("KG 1", "Day", 20)] },
-        opened,
-      ),
-    ).toEqual({ ok: false, error: { kind: "stale", field: "academic_year_start" } })
+    expect(await setAcademicYear(await signedIn(SECOND_MANAGER), year, { start: `${year}-01-04`, seats: [] }, opened)).toEqual({
+      ok: false,
+      error: { kind: "stale", field: "academic_year_start" },
+    })
     expect(await read(year)).toEqual({ start: `${year}-01-11`, seats: [] })
   })
 })
 
 describe("what a save leaves out", () => {
-  test("seats changed on their own keep the start that is set", async () => {
-    const year = await scheduledYear()
-    await saveFresh(await signedIn(MANAGER), year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30)] })
-
-    expect(await saveFresh(await signedIn(MANAGER), year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 31)] })).toEqual({
-      ok: true,
-      data: null,
-    })
-    expect(await read(year)).toEqual({ start: `${year}-01-11`, seats: [seat("STD 1", "Day", 31)] })
-  })
-
   test("the database keeps the start when a call leaves it out, and refuses a null start once one is set", async () => {
     const year = await scheduledYear()
     await saveFresh(await signedIn(MANAGER), year, { start: `${year}-01-11`, seats: [] })
     const manager = await signedIn(MANAGER)
 
-    const leftOut = await manager.rpc("set_academic_year", {
-      schedule_year: year,
-      settings: { seats: [{ class_name: "STD 1", day_or_boarding: "Day", seats: 30, was: null }] },
-    })
+    const leftOut = await manager.rpc("set_academic_year", { schedule_year: year, settings: { seats: [] } })
     expect(leftOut.error).toBeNull()
-    expect(await read(year)).toEqual({ start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30)] })
+    expect((await read(year)).start).toBe(`${year}-01-11`)
 
     const cleared = await manager.rpc("set_academic_year", {
       schedule_year: year,
@@ -341,7 +273,7 @@ describe("what a save leaves out", () => {
     expect((await read(year)).start).toBe(`${year}-01-11`)
   })
 
-  test("a change that doesn't say what it replaces is refused", async () => {
+  test("a start that doesn't say what it replaces is refused", async () => {
     const year = await scheduledYear()
     const manager = await signedIn(MANAGER)
     const noStartWas = await manager.rpc("set_academic_year", {
@@ -349,11 +281,6 @@ describe("what a save leaves out", () => {
       settings: { academic_year_start: `${year}-01-11`, seats: [] },
     })
     expect(noStartWas.error?.message).toBe("invalid")
-    const noSeatWas = await manager.rpc("set_academic_year", {
-      schedule_year: year,
-      settings: { seats: [{ class_name: "STD 1", day_or_boarding: "Day", seats: 30 }] },
-    })
-    expect(noSeatWas.error?.message).toBe("invalid")
     expect(await read(year)).toEqual({ start: null, seats: [] })
   })
 })
@@ -443,42 +370,145 @@ describe("a start of today or earlier", () => {
 })
 
 describe("history", () => {
-  test("setting and changing the start and seats is recorded with the Manager, and the old and new values", async () => {
+  test("setting and changing the start is recorded with the Manager, and the old and new values", async () => {
     const year = await scheduledYear()
     const manager = await signedIn(MANAGER)
-    await saveFresh(manager, year, { start: `${year}-01-11`, seats: [seat("STD 1", "Day", 30), seat("STD 2", "Day", 28)] })
-    // STD 2 is unchanged, so it records nothing.
-    await saveFresh(manager, year, { start: `${year}-01-04`, seats: [seat("STD 1", "Day", 32), seat("STD 2", "Day", 28)] })
+    await saveFresh(manager, year, { start: `${year}-01-11`, seats: [] })
+    await saveFresh(manager, year, { start: `${year}-01-04`, seats: [] })
 
     const entries = await inRolledBackTransaction(async (sql) => {
       const result = await sql.query(
-        `select a.table_name, a.action, a.old_values, a.new_values, s.full_name as name, a.scope, a.lead_id
+        `select a.old_values, a.new_values, s.full_name as name, a.scope, a.lead_id
          from public.audit_log a
          join public.staff_members s on s.id = a.actor_staff_id
-         where (a.table_name = 'class_seats' and a.row_id in (select id from public.class_seats where enrollment_year = $1))
-            or (a.table_name = 'fee_schedules' and a.action = 'update'
-                and a.row_id in (select id from public.fee_schedules where enrollment_year = $1))
+         where a.table_name = 'fee_schedules' and a.action = 'update'
+           and a.row_id in (select id from public.fee_schedules where enrollment_year = $1)
          order by a.id`,
         [year],
       )
-      return result.rows as {
-        table_name: string
-        action: string
-        old_values: unknown
-        new_values: Record<string, unknown>
-        name: string
-        scope: string
-        lead_id: string | null
-      }[]
+      return result.rows as { old_values: unknown; new_values: unknown; name: string; scope: string; lead_id: string | null }[]
     })
 
     expect(entries.every((e) => e.name === MANAGER.name && e.scope === "payment" && e.lead_id === null)).toBe(true)
-    expect(entries.map(({ table_name, action, old_values, new_values }) => ({ table_name, action, old_values, new_values }))).toEqual([
-      { table_name: "fee_schedules", action: "update", old_values: { academic_year_start: null }, new_values: { academic_year_start: `${year}-01-11` } },
-      { table_name: "class_seats", action: "insert", old_values: null, new_values: expect.objectContaining({ class_name: "STD 1", seats: 30 }) },
-      { table_name: "class_seats", action: "insert", old_values: null, new_values: expect.objectContaining({ class_name: "STD 2", seats: 28 }) },
-      { table_name: "fee_schedules", action: "update", old_values: { academic_year_start: `${year}-01-11` }, new_values: { academic_year_start: `${year}-01-04` } },
-      { table_name: "class_seats", action: "update", old_values: { seats: 30 }, new_values: { seats: 32 } },
+    expect(entries.map(({ old_values, new_values }) => ({ old_values, new_values }))).toEqual([
+      { old_values: { academic_year_start: null }, new_values: { academic_year_start: `${year}-01-11` } },
+      { old_values: { academic_year_start: `${year}-01-11` }, new_values: { academic_year_start: `${year}-01-04` } },
     ])
+  })
+})
+
+// How the Manager set seats per class and Day or Boarding before streams
+// (#449). Nothing reaches this once the seat mode is `named`, and the
+// clean-up slice removes it from set_academic_year; until then it is tested
+// here with the mode put back to `legacy` for one rolled-back transaction.
+describe("seats before streams (legacy seat mode)", () => {
+  type Entry = { class_name: string; day_or_boarding: string; seats?: number | null; was?: number | null }
+  type Settings = { academic_year_start?: string | null; academic_year_start_was?: string | null; seats: Entry[] }
+
+  // "saved", or the refusal with the field it names.
+  async function save(sql: Client, year: number, settings: Settings): Promise<"saved" | { refused: string; field?: string }> {
+    await sql.query("savepoint save")
+    try {
+      await sql.query("select public.set_academic_year($1, $2::jsonb)", [year, JSON.stringify(settings)])
+      await sql.query("release savepoint save")
+      return "saved"
+    } catch (error) {
+      await sql.query("rollback to savepoint save")
+      const { message, detail } = error as Error & { detail?: string }
+      return { refused: message, ...(detail ? { field: (JSON.parse(detail) as { field: string }).field } : {}) }
+    }
+  }
+
+  // The year's seats in class order, Day before Boarding.
+  async function seatsOf(sql: Client, year: number): Promise<string[]> {
+    const { rows } = await sql.query<{ line: string }>(
+      `select c.class_name || ' ' || c.day_or_boarding || ' ' || c.seats as line
+       from public.class_seats c where c.enrollment_year = $1 order by c.class_name, c.day_or_boarding`,
+      [year],
+    )
+    return rows.map((row) => row.line)
+  }
+
+  const set = (class_name: string, day_or_boarding: string, seats: number | null, was: number | null = null): Entry => ({
+    class_name,
+    day_or_boarding,
+    seats,
+    was,
+  })
+
+  test("the Manager sets seats, changes the counts given and leaves the rest; a count once set can't be cleared", async () => {
+    const year = await scheduledYear()
+    await inRolledBackTransaction(async (sql) => {
+      await legacy(sql)
+      expect(
+        await save(sql, year, { seats: [set("FORM 1", "Boarding", 30), set("KG 1", "Day", 25), set("FORM 1", "Day", 0), set("STD 1", "Day", null)] }),
+      ).toBe("saved")
+      // STD 1 Day stays not set, and no start is needed first.
+      expect(await seatsOf(sql, year)).toEqual(["KG 1 Day 25", "FORM 1 Day 0", "FORM 1 Boarding 30"])
+
+      expect(await save(sql, year, { seats: [set("KG 1", "Day", 26, 25), set("STD 1", "Boarding", 10)] })).toBe("saved")
+      expect(await seatsOf(sql, year)).toEqual(["KG 1 Day 26", "STD 1 Boarding 10", "FORM 1 Day 0", "FORM 1 Boarding 30"])
+
+      expect(await save(sql, year, { seats: [set("KG 1", "Day", null, 26)] })).toEqual({ refused: "invalid", field: "seats.KG 1.Day" })
+      expect(await seatsOf(sql, year)).toContain("KG 1 Day 26")
+    })
+  })
+
+  test("refuses a count that isn't a whole number, 0 or more, an unknown class, the same class twice, and a change that doesn't say what it replaces", async () => {
+    const year = await scheduledYear()
+    await inRolledBackTransaction(async (sql) => {
+      await legacy(sql)
+      expect(await save(sql, year, { seats: [set("STD 3", "Day", 30), set("STD 3", "Boarding", -1)] })).toEqual({
+        refused: "invalid",
+        field: "seats.STD 3.Boarding",
+      })
+      expect(await save(sql, year, { seats: [set("FORM 2", "Day", 12.5)] })).toEqual({ refused: "invalid", field: "seats.FORM 2.Day" })
+      expect(await save(sql, year, { seats: [set("STD 8", "Day", 30)] })).toEqual({ refused: "invalid", field: "seats" })
+      expect(await save(sql, year, { seats: [set("STD 1", "Weekly", 30)] })).toEqual({ refused: "invalid", field: "seats" })
+      expect(await save(sql, year, { seats: [set("STD 1", "Day", 30), set("STD 1", "Day", 31)] })).toEqual({ refused: "invalid", field: "seats" })
+      expect(await save(sql, year, { seats: [{ class_name: "STD 1", day_or_boarding: "Day", seats: 30 }] })).toEqual({ refused: "invalid", field: "seats" })
+      // A refused start saves none of the seats with it.
+      expect(
+        await save(sql, year, { academic_year_start: `${year}-03-01`, academic_year_start_was: null, seats: [set("STD 1", "Day", 30)] }),
+      ).toEqual({ refused: "invalid", field: "academic_year_start" })
+      expect(await seatsOf(sql, year)).toEqual([])
+    })
+  })
+
+  test("a count changed from an older view is refused, naming the class, and a cell the older view didn't change is kept", async () => {
+    const year = await scheduledYear()
+    await inRolledBackTransaction(async (sql) => {
+      await legacy(sql)
+      expect(await save(sql, year, { seats: [set("STD 1", "Day", 30)] })).toBe("saved")
+      // A second form, opened before that save, still shows STD 1 Day blank.
+      expect(await save(sql, year, { seats: [set("STD 1", "Day", 25)] })).toEqual({ refused: "stale", field: "seats.STD 1.Day" })
+      expect(await save(sql, year, { seats: [set("STD 2", "Day", 28)] })).toBe("saved")
+      expect(await seatsOf(sql, year)).toEqual(["STD 1 Day 30", "STD 2 Day 28"])
+    })
+  })
+
+  test("each seat set or changed is recorded with the Manager, and an unchanged count records nothing", async () => {
+    const year = await scheduledYear()
+    await inRolledBackTransaction(async (sql) => {
+      await legacy(sql)
+      expect(await save(sql, year, { seats: [set("STD 1", "Day", 30), set("STD 2", "Day", 28)] })).toBe("saved")
+      // STD 2 is unchanged, so it records nothing.
+      expect(await save(sql, year, { seats: [set("STD 1", "Day", 32, 30), set("STD 2", "Day", 28, 28)] })).toBe("saved")
+      await asOwner(sql)
+      const { rows } = await sql.query(
+        `select a.action, a.old_values, a.new_values, s.full_name as name, a.scope
+         from public.audit_log a
+         join public.staff_members s on s.id = a.actor_staff_id
+         where a.table_name = 'class_seats' and a.row_id in (select id from public.class_seats where enrollment_year = $1)
+         order by a.id`,
+        [year],
+      )
+      expect(rows.every((row) => row.name === MANAGER.name && row.scope === "payment")).toBe(true)
+      expect(rows.map(({ action, old_values, new_values }) => ({ action, old_values, new_values }))).toEqual([
+        { action: "insert", old_values: null, new_values: expect.objectContaining({ class_name: "STD 1", seats: 30 }) },
+        { action: "insert", old_values: null, new_values: expect.objectContaining({ class_name: "STD 2", seats: 28 }) },
+        { action: "update", old_values: { seats: 30 }, new_values: { seats: 32 } },
+      ])
+    })
   })
 })

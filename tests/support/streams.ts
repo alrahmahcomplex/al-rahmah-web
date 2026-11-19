@@ -6,19 +6,24 @@ import { afterAll } from "vitest"
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { saveFeeAmounts, type FeeAmounts } from "@/lib/services/fees"
 import { recordInterviewResult, registerForInterview } from "@/lib/services/interviews"
-import { createLead, type StudentGender } from "@/lib/services/leads"
-import { recordPayment } from "@/lib/services/school-fee-payments"
+import { createLead, type DayOrBoarding, type StudentGender } from "@/lib/services/leads"
+import { recordPayment, type PaymentInput } from "@/lib/services/school-fee-payments"
 
 import { actAsStaff, asSystem, signedIn } from "./db"
 import { claimFeeYear } from "./fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "./fixtures"
+import { classesWithoutSeatHolders } from "./stream-rows"
 
-// Helpers for the streams tests (#449). Children get their Seat priority from
-// committed payments in a claimed fee year. Streams are opened, and the seat
-// mode switched to `named`, inside each test's own rolled-back transaction,
-// so nothing reaches the rest of the suite. Local databases keep every
-// committed lead and fee test years are reused, so a test that counts seats
-// takes classes where nobody in its year holds one yet.
+export { removeStreams } from "./stream-rows"
+
+// Helpers for the streams tests (#449). The seat mode is `named` since the
+// activation migration (20270113100100). Children get their Seat priority
+// from committed payments in a claimed fee year, in classes with no stream
+// yet, so nothing places them. Streams are opened inside each test's own
+// rolled-back transaction, so nothing reaches the rest of the suite; a test
+// that commits streams removes them again (removeStreams). Local databases
+// keep every committed lead and fee test years are reused, so a test that
+// counts seats takes classes where nobody in its year holds one yet.
 
 const DAY = 24 * 60 * 60 * 1000
 export const today = tanzaniaToday()
@@ -63,27 +68,19 @@ export function streamYears(amounts: FeeAmounts = AMOUNTS) {
   /** The shared year and `n` of its classes (from `among`) where nobody holds a seat yet. */
   return async function yearAndClasses(n: number, among: string[] = CLASSES): Promise<{ year: number; classes: string[] }> {
     shared ??= await claimYear()
-    const free = await emptyClasses(shared, among)
+    const free = await classesWithoutSeatHolders(shared, among)
     if (free.length >= n) return { year: shared, classes: free.slice(0, n) }
     shared = await claimYear()
-    const fresh = await emptyClasses(shared, among)
+    const fresh = await classesWithoutSeatHolders(shared, among)
     if (fresh.length < n) throw new Error(`not enough classes of ${shared} without seat holders`)
     return { year: shared, classes: fresh.slice(0, n) }
   }
 }
 
-async function emptyClasses(year: number, among: string[]): Promise<string[]> {
-  const { rows } = await asSystem((sql) =>
-    sql.query<{ class_name: string }>("select distinct class_name::text from public.seat_holders($1)", [year]),
-  )
-  const taken = new Set(rows.map((r) => r.class_name))
-  return among.filter((c) => !taken.has(c))
-}
-
 const phone = () => `07${String(randomInt(0, 100_000_000)).padStart(8, "0")}`
 
 /** A child of `year` and `className` who passed their interview, with no payment yet. */
-export async function child(year: number, className: string, gender?: StudentGender): Promise<string> {
+export async function child(year: number, className: string, gender?: StudentGender, dayOrBoarding: DayOrBoarding = "Day"): Promise<string> {
   const admissions = await signedIn(ADMISSIONS)
   const created = await createLead(admissions, {
     guardian: { contact: { fullName: `Stream Parent ${randomUUID().slice(0, 6)}`, relationship: "Mother", phone: phone() } },
@@ -91,7 +88,7 @@ export async function child(year: number, className: string, gender?: StudentGen
       fullName: `Stream ${randomUUID().slice(0, 8)}`,
       className: className as never,
       enrollmentYear: thisYear + 1,
-      dayOrBoarding: "Day",
+      dayOrBoarding,
       ...(gender ? { gender } : {}),
     },
     start: { kind: "walk-in", visitDate: daysAgo(1) },
@@ -106,18 +103,47 @@ export async function child(year: number, className: string, gender?: StudentGen
   return id
 }
 
-/** A child holding a Deposit priority reached `paidDaysAgo` days ago (older ranks first). */
-export async function holder(year: number, className: string, gender: StudentGender | undefined, paidDaysAgo: number): Promise<string> {
-  const id = await child(year, className, gender)
-  const paid = await recordPayment(await signedIn(ACCOUNTANT), id, { type: "initial_deposit", amount: 300_000, paidOn: daysAgo(paidDaysAgo) }, randomUUID())
+/**
+ * A child holding a Deposit priority reached `paidDaysAgo` days ago (older
+ * ranks first). `payment` changes what was paid, and so the priority.
+ */
+export async function holder(
+  year: number,
+  className: string,
+  gender: StudentGender | undefined,
+  paidDaysAgo: number,
+  { dayOrBoarding = "Day", payment = {} }: { dayOrBoarding?: DayOrBoarding; payment?: Partial<Pick<PaymentInput, "type" | "amount">> } = {},
+): Promise<string> {
+  const id = await child(year, className, gender, dayOrBoarding)
+  const paid = await recordPayment(
+    await signedIn(ACCOUNTANT),
+    id,
+    { type: "initial_deposit", amount: 300_000, ...payment, paidOn: daysAgo(paidDaysAgo) },
+    randomUUID(),
+  )
   if (!paid.ok) throw new Error(`payment failed: ${JSON.stringify(paid.error)}`)
   return id
 }
 
-/** Switches this transaction to streams and acts as the Manager. */
+/**
+ * Counts seats in streams for this transaction and acts as the Manager. The
+ * mode is `named` already; the update is for a transaction that put it back
+ * to `legacy`, and touches no row otherwise, so tests don't queue on it.
+ */
 export async function named(sql: Client) {
   await sql.query("select public.set_audit_actor('system')")
-  await sql.query("update public.seat_settings set mode = 'named'")
+  await sql.query("update public.seat_settings set mode = 'named' where mode <> 'named'")
+  await actAsStaff(sql, MANAGER.id)
+}
+
+/**
+ * Puts this transaction back to how seats were counted before streams, and
+ * acts as the Manager: for tests of what the clean-up slice removes. Only
+ * inside a rolled-back transaction; nothing else may see `legacy` again.
+ */
+export async function legacy(sql: Client) {
+  await sql.query("select public.set_audit_actor('system')")
+  await sql.query("update public.seat_settings set mode = 'legacy' where mode <> 'legacy'")
   await actAsStaff(sql, MANAGER.id)
 }
 

@@ -63,7 +63,7 @@ test.describe("on a desktop", () => {
     await expect(entry(page, "Staff and roles")).toHaveAttribute("aria-current", "page")
   })
 
-  test("Admissions Staff see Admissions, Referrals and Fee schedule, and no Admin group", async ({ page }) => {
+  test("Admissions Staff see Admissions, Referrals, Fee schedule and Seats, and no Admin group", async ({ page }) => {
     await logIn(page, ADMISSIONS.email, ADMISSIONS.password)
     await expect(page).toHaveURL(/\/staff$/)
     await page.goto(UNKNOWN)
@@ -74,8 +74,10 @@ test.describe("on a desktop", () => {
       await expect(nav.getByText(group, { exact: true })).toBeVisible()
     }
     await expect(entry(page, "Fee schedule")).toBeVisible()
+    // Everyone who may view payments opens Seats (#449).
+    await expect(entry(page, "Seats")).toBeVisible()
     await expect(nav.getByText("Admin", { exact: true })).toHaveCount(0)
-    await expect(nav.getByRole("link", { name: /^(Seats|Discount requests|Reopening requests|Reports|Staff and roles)/ })).toHaveCount(0)
+    await expect(nav.getByRole("link", { name: /^(Discount requests|Reopening requests|Reports|Staff and roles)/ })).toHaveCount(0)
   })
 
   // #437: leaving the staff 404 for another page reported React error #419,

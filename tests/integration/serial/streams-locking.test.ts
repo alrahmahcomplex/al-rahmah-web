@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto"
 
 import { Client } from "pg"
-import { afterAll, beforeAll, describe, expect, onTestFinished, test, vi } from "vitest"
+import { afterAll, describe, expect, onTestFinished, test, vi } from "vitest"
 
 vi.mock("server-only", () => ({}))
 
@@ -14,12 +14,13 @@ import { recordPayment } from "@/lib/services/school-fee-payments"
 import { actAsStaff, asSystem, signedIn } from "../../support/db"
 import { claimFeeYear } from "../../support/fee-years"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../../support/fixtures"
+import { removeStreams } from "../../support/streams"
 
 // The seat lock's one rule, with two real sessions (#449, slice 4a): after
 // the seat lock, a transaction never waits for a lead row another one holds.
-// The seat mode is switched to `named` and committed here, which no other
-// test may see, so this file runs in integration-serial: after every other
-// file, and alone. It puts the mode back and removes its streams at the end.
+// It commits streams and holds lead rows in open transactions, which no
+// other test may meet, so this file runs in integration-serial: after every
+// other file, and alone. It removes its streams at the end.
 
 const DAY = 24 * 60 * 60 * 1000
 const today = tanzaniaToday()
@@ -46,10 +47,6 @@ function session(): Client {
     await client.end().catch(() => {})
   })
   return client
-}
-
-async function setMode(mode: "legacy" | "named") {
-  await asSystem((sql) => sql.query("update public.seat_settings set mode = $1", [mode]))
 }
 
 const years: number[] = []
@@ -102,32 +99,9 @@ async function streamOf(leadId: string): Promise<string | null> {
   })
 }
 
-beforeAll(async () => {
-  await setMode("named")
-})
-
-afterAll(async () => {
-  await setMode("legacy")
-  // Streams refuse deletes; this file's are removed so a later run that
-  // claims the same years starts clean. The replica role skips the refusal
-  // triggers for this transaction only, without altering a table.
-  if (years.length === 0) return
-  const sql = new Client({ connectionString: process.env.SUPABASE_DB_URL })
-  await sql.connect()
-  try {
-    await sql.query("begin")
-    await sql.query("set local session_replication_role = replica")
-    await sql.query(
-      "delete from public.seat_placements where stream_id in (select id from public.streams where enrollment_year = any ($1))",
-      [years],
-    )
-    await sql.query("delete from public.seat_sync_queue")
-    await sql.query("delete from public.streams where enrollment_year = any ($1)", [years])
-    await sql.query("commit")
-  } finally {
-    await sql.end()
-  }
-})
+// Streams refuse deletes; this file's are removed so a later run that claims
+// the same years finds no seat limit there.
+afterAll(() => removeStreams(years))
 
 describe("the seat lock never waits for a lead row", () => {
   test("opening a stream skips a waiting child whose row is busy, and the retry places them later", async () => {

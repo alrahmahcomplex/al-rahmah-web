@@ -38,8 +38,10 @@ test("the Seats year tabs go to the year and mark it", async ({ page }) => {
   const years = page.getByRole("main").getByRole("navigation", { name: "Enrollment years" })
   await years.getByRole("link", { name: "2027", exact: true }).click()
   await expect(page).toHaveURL(/\/staff\/seats\?year=2027$/)
-  await expect(page.getByRole("heading", { level: 1, name: "Seats 2027" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "Seats" })).toBeVisible()
   await expect(years.getByRole("link", { name: "2027", exact: true })).toHaveAttribute("aria-current", "page")
+  // The year's streams (#449): the seeded KG 2 A among them.
+  await expect(page.getByRole("list", { name: "KG 2 streams" }).getByRole("listitem")).toContainText("KG 2 A")
 })
 
 const SCREENS: { path: string; person: FixtureStaff }[] = [
@@ -69,9 +71,9 @@ for (const width of [1280, 390]) {
       expect(await axeProblems(page)).toEqual([])
     })
 
-    test("axe finds nothing in the open Academic year and seats form", { tag: "@nightly" }, async ({ page }) => {
+    test("axe finds nothing in the open Academic year form", { tag: "@nightly" }, async ({ page }) => {
       await open(page, MANAGER, "/staff/fees/2027")
-      await page.getByRole("button", { name: "Edit start and seats" }).click()
+      await page.getByRole("button", { name: "Edit start" }).click()
       await expect(page.getByRole("form", { name: "Academic year 2027" })).toBeVisible()
       expect(await axeProblems(page)).toEqual([])
     })

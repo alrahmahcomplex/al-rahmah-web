@@ -33,7 +33,8 @@ export default async function ReportsPage({
       <Dashboard
         supabase={supabase}
         searchParams={await searchParams}
-        canOpenSeats={staff.permissions.includes("academic_years.manage")}
+        // Everyone who may view payments opens Seats (#449), as the sidebar shows it.
+        canOpenSeats={staff.permissions.includes("payments.view")}
       />
       <SiblingFollowUp supabase={supabase} permissions={staff.permissions} />
     </>

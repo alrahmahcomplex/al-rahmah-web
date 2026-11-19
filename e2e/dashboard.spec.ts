@@ -216,9 +216,9 @@ test("a role that reads leads and payments but lacks reports.view sees no statis
 })
 
 const seatsPanel = (page: Page) => page.getByRole("region", { name: "Seats by class" })
-// The table row whose Class cell carries the row's test id.
-const seatsRow = (page: Page, row: string) =>
-  seatsPanel(page).getByRole("row").filter({ has: page.getByTestId(`seats-row-${row}`) })
+// The cells of the row that starts with `name`: Stream, Takes, Seats, Full,
+// First instalment, Deposit, Free. Seats are counted in streams (#449).
+const seatsCells = (page: Page, name: RegExp) => seatsPanel(page).getByRole("row", { name }).getByRole("cell")
 
 test("the Manager sees Seats by class for 2031, counts only, with the link to the Seats screen", async ({ page }) => {
   await signIn(page, MANAGER)
@@ -226,28 +226,18 @@ test("the Manager sees Seats by class for 2031, counts only, with the link to th
 
   const panel = seatsPanel(page)
   await expect(panel.getByTestId("seats-period")).toHaveText("Now · Enrollment year 2031")
-  const rows = await panel.locator("tbody tr td:first-child").allTextContents()
-  expect(rows.slice(0, 4)).toEqual(["DAY CARE Day", "DAY CARE Boarding", "KG 1 Day", "KG 1 Boarding"])
-  expect(rows).toHaveLength(28)
 
-  // Over-full: never a negative number left.
-  const over = seatsRow(page, "STD 2 Day")
-  await expect(over.getByTestId("seats-set")).toHaveText("3")
-  await expect(over.getByTestId("seats-taken")).toHaveText("4")
-  await expect(over.getByTestId("seats-priorities")).toHaveText("Full 2 · First instalment 1 · Deposit 1")
-  await expect(over.getByTestId("seats-left")).toHaveText("Over by 1")
+  // A row per stream, then its class's total. STD 2 A is full, and the
+  // fourth child holding a Seat priority there waits for a stream.
+  await expect(seatsCells(page, /^STD 2 A/)).toHaveText(["STD 2 A", "Mixed", "3", "2", "1", "0", "0"])
+  await expect(seatsCells(page, /^STD 2 total/)).toHaveText(["STD 2 total", "1 waiting", "3", "2", "1", "0", "0"])
 
-  // The Declined lead in STD 3 Day takes no seat.
-  const room = seatsRow(page, "STD 3 Day")
-  await expect(room.getByTestId("seats-taken")).toHaveText("2")
-  await expect(room.getByTestId("seats-left")).toHaveText("1")
+  // The Declined lead in STD 3 takes no seat: one is free.
+  await expect(seatsCells(page, /^STD 3 A/)).toHaveText(["STD 3 A", "Mixed", "3", "1", "1", "0", "1"])
 
-  // No seat number, with the taken seats (an Archived lead's among them)
-  // still counted.
-  const unset = seatsRow(page, "STD 4 Day")
-  await expect(unset.getByTestId("seats-set")).toHaveText("Seats not set")
-  await expect(unset.getByTestId("seats-taken")).toHaveText("3")
-  await expect(unset.getByTestId("seats-left")).toHaveText(/Seats not set/)
+  // No stream, so no seat number: the children holding a Seat priority (an
+  // Archived lead among them) are still counted.
+  await expect(seatsCells(page, /^STD 4 total/)).toHaveText(["STD 4 total", "", "Seats not set", "3", "0", "0", /Seats not set/])
 
   await expect(panel).not.toContainText("Takwimu")
   await expect(panel).not.toContainText("ADMSN-")
@@ -256,7 +246,10 @@ test("the Manager sees Seats by class for 2031, counts only, with the link to th
   await expect(link).toHaveAttribute("href", "/staff/seats?year=2031")
   await link.click()
   await expect(page).toHaveURL(/\/staff\/seats\?year=2031$/)
-  await expect(page.getByRole("heading", { name: "Seats 2031" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "Seats" })).toBeVisible()
+  // Seats names the child Reports only counted.
+  await expect(page.getByRole("main")).toContainText("Waiting for a stream")
+  await expect(page.getByRole("list", { name: "STD 2 streams" }).getByRole("listitem")).toContainText("3 of 3")
 })
 
 test("Seats by class opens on the latest year with a Fee schedule and keeps a chosen year in the address", async ({ page }) => {
@@ -315,12 +308,13 @@ test("a role without reports.view is refused the Reports page, however much else
   await expect(page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Reports" })).toHaveCount(0)
 })
 
-test("a Reports reader who does not manage academic years sees Seats by class without the Seats screen link", async ({ page }) => {
+test("a Reports reader who does not manage academic years sees Seats by class with the Seats screen link too", async ({ page }) => {
   const person = await createThrowawayStaff(["leads.view", "payments.view", "reports.view"])
   await signIn(page, person)
   await page.goto("/staff/reports?seats_year=2031")
-  await expect(seatsRow(page, "STD 2 Day").getByTestId("seats-left")).toHaveText("Over by 1")
-  await expect(seatsPanel(page).getByRole("link")).toHaveCount(0)
+  await expect(seatsCells(page, /^STD 2 total/).nth(1)).toHaveText("1 waiting")
+  // Everyone who may view payments opens Seats (#449).
+  await expect(seatsPanel(page).getByRole("link", { name: "Open the Seats screen" })).toHaveAttribute("href", "/staff/seats?year=2031")
 })
 
 test("staff without payments.view see the dashboard without Seats by class", async ({ page }) => {

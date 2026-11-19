@@ -1045,16 +1045,16 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     args: { lead_id: "'1ead0000-0000-4000-8000-000000000431'" },
     agent: { refused: "forbidden" },
   },
-  // Seats per stream (#449): legacy or named, the same for everyone.
+  // Seats per stream (#449): named since the activation migration, the same for everyone.
   "public.seat_mode()": {
     roles: ["authenticated"],
     args: {},
     agent: { anyAnswer: "How the school counts seats, legacy or named: one setting for the whole school, no staff data." },
   },
-  // Streams (#449): academic_years.manage, and only once the mode is named.
+  // Streams (#449): academic_years.manage. The mode is named since the
+  // activation migration, and the seeded 2027 has streams (FORM 1 A among them).
   "public.open_stream(schedule_year integer, class lead_class, label text, takes stream_takes, seats integer, request_id uuid)": {
     roles: ["authenticated"],
-    setup: "update public.seat_settings set mode = 'named'",
     args: {
       schedule_year: "2027",
       class: "'FORM 1'",
@@ -1068,7 +1068,7 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   "public.edit_stream(stream_id uuid, label text, seats integer)": {
     roles: ["authenticated"],
     setup:
-      "update public.seat_settings set mode = 'named'; insert into public.streams (id, enrollment_year, class_name, label, takes, seats, position) values ('5a5a0000-0000-4000-8000-000000000450', 2027, 'FORM 1', 'Z', 'Mixed', 1, 99)",
+      "insert into public.streams (id, enrollment_year, class_name, label, takes, seats, position) values ('5a5a0000-0000-4000-8000-000000000450', 2027, 'FORM 1', 'Z', 'Mixed', 1, 99)",
     args: { stream_id: "'5a5a0000-0000-4000-8000-000000000450'", label: "'Y'", seats: "2" },
     agent: { refused: "not_permitted" },
   },
@@ -1098,14 +1098,15 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
   },
   "public.request_stream(lead_id uuid, schedule_year integer, class lead_class, need stream_takes)": {
     roles: ["authenticated"],
+    // FORM 2 has no seeded stream: its only one, made here, has no seat, so
+    // the class is full and may be asked for.
     setup:
-      "update public.seat_settings set mode = 'named'; insert into public.streams (enrollment_year, class_name, label, takes, seats, position) values (2027, 'FORM 1', 'Z', 'Mixed', 0, 99)",
-    args: { lead_id: "null", schedule_year: "2027", class: "'FORM 1'", need: "null" },
+      "insert into public.streams (enrollment_year, class_name, label, takes, seats, position) values (2027, 'FORM 2', 'Z', 'Mixed', 0, 99)",
+    args: { lead_id: "null", schedule_year: "2027", class: "'FORM 2'", need: "null" },
     agent: { refused: "not_permitted" },
   },
   "public.bring_up_streams(schedule_year integer, sources uuid[])": {
     roles: ["authenticated"],
-    setup: "update public.seat_settings set mode = 'named'",
     args: { schedule_year: "2027", sources: "array['5a5a0000-0000-4000-8000-000000000451']::uuid[]" },
     agent: { refused: "not_permitted" },
   },

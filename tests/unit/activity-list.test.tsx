@@ -197,10 +197,11 @@ describe("the side sheet", () => {
 })
 
 describe("who sees the card", () => {
-  it("names full classes only for staff who may open Seats", () => {
+  it("names full classes only for staff who may open Seats: everyone who may view payments (#449)", () => {
     const full = { year: 2027, years: [2027], classes: [{ className: "STD 6", dayOrBoarding: "Day", seats: 35, taken: 35 }] as ClassSeatFigures[], named: null }
     expect(fullClassesFor(["payments.view", "academic_years.manage"], full)).toEqual([{ className: "STD 6", taken: 35, seats: 35 }])
-    expect(fullClassesFor(["leads.view", "payments.view"], full)).toEqual([])
+    expect(fullClassesFor(["leads.view", "payments.view"], full)).toEqual([{ className: "STD 6", taken: 35, seats: 35 }])
+    expect(fullClassesFor(["leads.view"], full)).toEqual([])
     expect(fullClassesFor(["academic_years.manage"], full)).toEqual([])
     expect(fullClassesFor(["payments.view", "academic_years.manage"], null)).toEqual([])
   })
@@ -208,7 +209,8 @@ describe("who sees the card", () => {
   it("staff who may view applicants, or who may open Seats", () => {
     expect(mayReadActivity(["leads.view"])).toBe(true)
     expect(mayReadActivity(["payments.view", "academic_years.manage"])).toBe(true)
-    expect(mayReadActivity(["payments.view"])).toBe(false)
+    expect(mayReadActivity(["payments.view"])).toBe(true)
+    expect(mayReadActivity(["academic_years.manage"])).toBe(false)
     expect(mayReadActivity(["agents.approve"])).toBe(false)
     expect(mayReadActivity([])).toBe(false)
   })

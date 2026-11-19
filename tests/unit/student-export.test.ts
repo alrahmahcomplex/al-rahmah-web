@@ -27,6 +27,7 @@ describe("the export columns", () => {
       "class_name",
       "enrollment_year",
       "day_or_boarding",
+      "gender",
       "status",
       "status_since",
       "visit_date",

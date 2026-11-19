@@ -9,12 +9,12 @@ import { decideDiscount, requestDiscount } from "@/lib/services/discounts"
 
 import { actAsStaff, inRolledBackTransaction, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, MANAGER } from "../support/fixtures"
-import { AMOUNTS, asOwner, child, holder, named, open, placements, refusal, streamYears, today } from "../support/streams"
+import { AMOUNTS, asOwner, child, holder, legacy, named, open, placements, refusal, streamYears, today } from "../support/streams"
 
 // Streams, slice 4b (#449): the school-fee block, stream requests, the reads
-// and the Fee schedule's seats once streams are on. Each test switches the
-// seat mode to `named` inside its own rolled-back transaction; payments made
-// there run record_school_fee_payment as the Accountant.
+// and the Fee schedule's seats once streams are on. Each test opens its
+// streams inside its own rolled-back transaction; payments made there run
+// record_school_fee_payment as the Accountant.
 
 const yearAndClasses = streamYears()
 // A year whose minimum deposit is above 40% of the nursery fee: there the
@@ -71,6 +71,9 @@ describe("while the seat mode is legacy", () => {
     const { year, classes: [c] } = await yearAndClasses(1)
     const id = await child(year, c, "Boy")
     await inRolledBackTransaction(async (sql) => {
+      // The mode before the activation migration, for this transaction only.
+      await legacy(sql)
+      await asOwner(sql)
       await actAsStaff(sql, ADMISSIONS.id)
       expect(await refusal(sql, "select public.request_stream($1, null, null, null)", [id])).toBe("seat_mode_legacy")
       await asOwner(sql)

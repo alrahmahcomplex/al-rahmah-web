@@ -24,6 +24,8 @@ export const EXPORT_COLUMNS = [
   { key: "class_name", header: "Class", tier: "view" },
   { key: "enrollment_year", header: "Enrollment year", tier: "view" },
   { key: "day_or_boarding", header: "Day or boarding", tier: "view" },
+  // The child's answer, Boy or Girl; empty when there is none (#449).
+  { key: "gender", header: "Boy or girl", tier: "view" },
   { key: "status", header: "Status", tier: "view" },
   { key: "status_since", header: "Status since", tier: "view" },
   { key: "visit_date", header: "Visit date", tier: "view" },
@@ -62,7 +64,8 @@ export function tierOf(column: ExportColumn): ExportTier {
 }
 
 // The checkboxes of "Choose columns", as the prototype groups them: each
-// choice adds one or more columns.
+// choice adds one or more columns. A column with no checkbox, such as Boy or
+// girl, comes with Full data.
 export const EXPORT_CHOICES = [
   { key: "adm", label: "Admission Number", tier: "view", columns: ["admission_number"] },
   { key: "name", label: "Student name", tier: "view", columns: ["student_name"] },

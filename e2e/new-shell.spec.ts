@@ -176,7 +176,7 @@ test.describe("on a desktop", () => {
     await page.goto("/staff/reopenings")
     await signOut(page)
     await page.goto("/staff/reopenings")
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
   })
 
   test("pressing the bottom of the stage's scrollbar jumps to the end of the page", async ({ page }) => {
@@ -249,7 +249,7 @@ test.describe("on a phone", () => {
     await page.goto("/staff/reopenings")
     await signOut(page)
     await page.goto("/staff/reopenings")
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
   })
 })
 

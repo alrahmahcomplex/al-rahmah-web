@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 import { LANGUAGE_STATE_PREFIX, languageStateRewrites } from "./lib/language-state";
-import { crossHostRedirects, portalRootRedirect } from "./lib/site-hosts";
+import { crossHostRedirects, movedSignInRedirects, portalRootRedirect } from "./lib/site-hosts";
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -21,17 +21,20 @@ const nextConfig: NextConfig = {
       // there goes to the public site (#497, lib/site-hosts.ts). Production
       // hosts only; first, so the rules below then run on the right host.
       ...crossHostRedirects(),
+      // Sign-in moved from /login to /auth (#497 slice C). Old links keep
+      // working, query and all.
+      ...movedSignInRedirects(),
       // The per-language copies are reached only through the rewrites below
       // (#286). Opened directly, they send the visitor to the public address,
       // where the cookie picks the copy.
       { source: `${LANGUAGE_STATE_PREFIX}/:state/:path*`, destination: "/:path*", permanent: false },
       // One sign-in page for everyone (#264). Old emails, bookmarks and
       // printed links to the Discount code sign-in pages keep working.
-      { source: "/discount-code/sign-in", destination: "/login", permanent: true },
-      { source: "/discount-code/forgot-password", destination: "/login/forgot-password", permanent: true },
+      { source: "/discount-code/sign-in", destination: "/auth", permanent: true },
+      { source: "/discount-code/forgot-password", destination: "/auth/forgot-password", permanent: true },
       // Every reset lands on one page (#265). Reset links sent before it
       // keep working: the query, token and all, comes along.
-      { source: "/discount-code/reset-password", destination: "/login/reset-password", permanent: true },
+      { source: "/discount-code/reset-password", destination: "/auth/reset-password", permanent: true },
       // The staff list of applicants moved from /staff/leads. Bookmarks and
       // links in old messages keep working, query and all.
       { source: "/staff/leads", destination: "/staff/applicants", permanent: true },
@@ -58,7 +61,7 @@ const nextConfig: NextConfig = {
           { type: "query", key: "type", value: "recovery" },
           { type: "query", key: "token_hash" },
         ],
-        destination: "/login/reset-password",
+        destination: "/auth/reset-password",
         permanent: false,
       },
       // After the two above: the portal's root opens sign-in.

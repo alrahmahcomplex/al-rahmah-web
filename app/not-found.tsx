@@ -38,9 +38,9 @@ export default function NotFound() {
           </Link>
         </section>
       </div>
-      {/* A plain link: on production /login is on the portal (#497). */}
+      {/* A plain link: on production /auth is on the portal (#497). */}
       <a
-        href="/login"
+        href="/auth"
         className="inline-flex min-h-11 items-center px-3 text-sm text-slate-600 underline-offset-4 hover:text-blue-600 hover:underline"
       >
         Staff sign-in

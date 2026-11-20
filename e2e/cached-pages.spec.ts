@@ -6,13 +6,13 @@ import { E2E_PORT } from "./server"
 // ADR 0006): the `lang` cookie picks the copy, the copies hold nothing that
 // belongs to one visitor, and the session pages stay per request.
 
-const CACHED = ["/", "/apply", "/login/forgot-password"] as const
+const CACHED = ["/", "/apply", "/auth/forgot-password"] as const
 
 // What each page says in its first HTML in Swahili and in English.
 const WORDS: Record<(typeof CACHED)[number], { sw: string; en: string }> = {
   "/": { sw: "Omba sasa", en: "Apply now" },
   "/apply": { sw: "Mwanafunzi anaitwa nani?", en: "What is the student&#x27;s name?" },
-  "/login/forgot-password": { sw: "Umesahau nenosiri?", en: "Forgot your password?" },
+  "/auth/forgot-password": { sw: "Umesahau nenosiri?", en: "Forgot your password?" },
 }
 
 test.describe("pages served from a prerendered copy", () => {
@@ -75,7 +75,7 @@ test.describe("pages served from a prerendered copy", () => {
       ["/by-language/en", "/"],
       ["/by-language/first", "/"],
       ["/by-language/sw/apply", "/apply"],
-      ["/by-language/en/login/forgot-password", "/login/forgot-password"],
+      ["/by-language/en/auth/forgot-password", "/auth/forgot-password"],
     ]) {
       const response = await request.get(copy, { maxRedirects: 0 })
       expect(response.status(), copy).toBe(307)
@@ -109,9 +109,9 @@ test.describe("pages served from a prerendered copy", () => {
     }
   })
 
-  test("switching language on /login/forgot-password keeps the email typed", async ({ page, context }) => {
+  test("switching language on /auth/forgot-password keeps the email typed", async ({ page, context }) => {
     await context.addCookies([{ name: "lang", value: "sw", url: "http://localhost:" + E2E_PORT }])
-    await page.goto("/login/forgot-password")
+    await page.goto("/auth/forgot-password")
     const email = page.getByRole("textbox").first()
     await email.fill("someone@example.test")
     await page.getByRole("button", { name: "English" }).click()
@@ -122,23 +122,23 @@ test.describe("pages served from a prerendered copy", () => {
 
   test("a switch on a page rendered per request wins over an earlier in-place switch", async ({ page, context }) => {
     await context.addCookies([{ name: "lang", value: "sw", url: "http://localhost:" + E2E_PORT }])
-    await page.goto("/login/forgot-password")
+    await page.goto("/auth/forgot-password")
     await page.getByRole("button", { name: "English" }).click()
     await expect(page.getByRole("heading", { name: "Forgot your password?" })).toBeVisible()
 
     await page.getByRole("link", { name: "Go to sign-in" }).click()
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
     await page.getByRole("button", { name: "Kiswahili" }).click()
     await expect(page.getByRole("main")).toHaveAttribute("lang", "sw")
 
     await page.getByRole("link", { name: "Umesahau nenosiri?" }).click()
-    await expect(page).toHaveURL(/\/login\/forgot-password$/)
+    await expect(page).toHaveURL(/\/auth\/forgot-password$/)
     await expect(page.getByRole("heading", { name: "Umesahau nenosiri?" })).toBeVisible()
     await expect(page.getByRole("main")).toHaveAttribute("lang", "sw")
   })
 
   test("the session pages still answer private, no-store", async ({ request }) => {
-    for (const path of ["/login", "/login/reset-password", "/discount-code"]) {
+    for (const path of ["/auth", "/auth/reset-password", "/discount-code"]) {
       const response = await request.get(path, { maxRedirects: 0 })
       expect(response.headers()["cache-control"], path).toMatch(/no-store/)
     }

@@ -13,12 +13,11 @@ const root = join(__dirname, "..", "..")
 const read = (path: string) => readFileSync(join(root, path), "utf8")
 const config = read("supabase/config.toml")
 
-// signIn: where the email tells the holder to sign in later. The reset
-// email names the one sign-in page (#264, #265); the invite's older address
-// redirects there.
+// signIn: where the email tells the holder to sign in later: the one
+// sign-in page (#264, #265), at /auth since #497.
 const TEMPLATES = [
-  { name: "invite", path: "supabase/templates/invite.html", signIn: "/discount-code/sign-in" },
-  { name: "recovery", path: "supabase/templates/recovery.html", signIn: "/login" },
+  { name: "invite", path: "supabase/templates/invite.html", signIn: "/auth" },
+  { name: "recovery", path: "supabase/templates/recovery.html", signIn: "/auth" },
 ] as const
 
 // The branch between `{{ if $agent }}` and its `{{ else }}`, every time.
@@ -90,7 +89,7 @@ describe("the links", () => {
     expect(html.match(/href="\{\{ \$link \}\}"/g)).toHaveLength(2)
   })
 
-  it.each(["/discount-code/set-password", "/login/reset-password", "/discount-code/reset-password"])(
+  it.each(["/discount-code/set-password", "/auth/reset-password", "/discount-code/reset-password"])(
     "%s is an allowed redirect locally",
     (path) => {
       expect(config).toContain(`"http://localhost:3100${path}"`)

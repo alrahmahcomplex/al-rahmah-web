@@ -8,7 +8,7 @@ export { DEFAULT_LANGUAGE, isLanguage, LANGUAGE_COOKIE, type Language }
 // The choice is the `lang` cookie, so every public page is in it from the
 // first byte. The staff side stays English.
 //
-// `/`, `/apply` and `/login/forgot-password` never read it: each is built
+// `/`, `/apply` and `/auth/forgot-password` never read it: each is built
 // once per language state and served from Vercel's cache, and a rewrite picks
 // the copy from the cookie (lib/language-state.ts, ADR 0006). The pages that
 // render per request (the sign-in, reset and Discount code pages) read it

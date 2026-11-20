@@ -6,13 +6,13 @@ import { logIn, signOut } from "./log-in"
 
 test.describe("the one sign-in page", () => {
   test("is Swahili first, switches to English, and has no separate Discount code sign-in", async ({ page }) => {
-    await page.goto("/login")
+    await page.goto("/auth")
 
     await expect(page.getByRole("heading", { name: "Karibu!" })).toBeVisible()
     await expect(page.getByLabel("Barua pepe")).toHaveAttribute("placeholder", "Barua pepe")
     await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveAttribute("placeholder", "Nenosiri")
     await expect(page.getByText(/Discount code holders/)).toHaveCount(0)
-    await expect(page.getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/login/forgot-password")
+    await expect(page.getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/auth/forgot-password")
 
     await page.getByRole("button", { name: "English" }).click()
     await expect(page.getByRole("heading", { name: "Welcome!" })).toBeVisible()
@@ -20,7 +20,7 @@ test.describe("the one sign-in page", () => {
   })
 
   test("the password toggle shows and hides the password", async ({ page }) => {
-    await page.goto("/login")
+    await page.goto("/auth")
     await page.getByRole("button", { name: "English" }).click()
     const password = page.getByLabel("Password", { exact: true })
     await password.fill("fixture-password")
@@ -50,19 +50,27 @@ test.describe("signing in", () => {
     await expect(page.locator("form").getByRole("alert")).toContainText(
       "Akaunti yako ya mfanyakazi imezimwa. Mwombe anayesimamia akaunti yako aiwashe tena.",
     )
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
 
     // No session was left behind.
     await page.goto("/staff")
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
   })
 
   test("explains an account that is not on the staff list", async ({ page }) => {
-    await page.goto("/login?error=not-staff")
+    await page.goto("/auth?error=not-staff")
 
     await expect(page.locator("form").getByRole("alert")).toContainText(
       "Akaunti hii haipo kwenye orodha ya wafanyakazi. Mwombe anayesimamia wafanyakazi akualike.",
     )
+  })
+
+  // Sign-in moved from /login (#497). An old link still opens it, query and all.
+  test("opens sign-in from its old /login address, query and all", async ({ page }) => {
+    await page.goto("/login?error=not-staff")
+
+    await expect(page).toHaveURL(/\/auth\?error=not-staff$/)
+    await expect(page.locator("form").getByRole("alert")).toContainText("Akaunti hii haipo kwenye orodha ya wafanyakazi.")
   })
 
   test("refuses a wrong password, keeps the email, and offers the reset link under the warning", async ({ page }) => {
@@ -75,7 +83,7 @@ test.describe("signing in", () => {
     await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveValue("")
     await expect(page.getByLabel("Nenosiri", { exact: true })).toBeFocused()
     await alert.getByRole("link", { name: "Umesahau nenosiri?" }).click()
-    await expect(page).toHaveURL(/\/login\/forgot-password$/)
+    await expect(page).toHaveURL(/\/auth\/forgot-password$/)
   })
 
   test("lets staff in, shows their name and role on the staff layout, and signs them out", async ({ page }) => {
@@ -88,7 +96,7 @@ test.describe("signing in", () => {
 
     await signOut(page)
     await page.goto("/staff")
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
   })
 
   test("sends a signed-in staff member to sign-in on their next request after they are deactivated", async ({
@@ -101,14 +109,14 @@ test.describe("signing in", () => {
     await asSystem((sql) => sql.query("update public.staff_members set active = false where id = $1", [person.id]))
 
     await page.reload()
-    await expect(page).toHaveURL(/\/login\?error=deactivated$/)
+    await expect(page).toHaveURL(/\/auth\?error=deactivated$/)
     await expect(page.locator("form").getByRole("alert")).toHaveText(/deactivated/)
   })
 
   test("sends visitors with no session from staff and Discount code pages to sign-in", async ({ page }) => {
     await page.goto("/staff")
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
     await page.goto("/discount-code/students")
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
   })
 })

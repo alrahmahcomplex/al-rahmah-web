@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 import { signIn, type SignInState } from "./actions"
 import { LOGIN_COPY, type LoginMessage, type LoginNotice } from "./copy"
 
-export const FORGOT_PASSWORD_PATH = "/login/forgot-password"
+export const FORGOT_PASSWORD_PATH = "/auth/forgot-password"
 
 // The one sign-in form (#264) for staff and Discount code holders. A small
 // grey reset link always sits under the button; after a wrong password a

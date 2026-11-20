@@ -11,7 +11,7 @@ import type { Metadata, MetadataRoute } from "next"
 // manifest from every page.
 //
 // Static on purpose: nothing here reads the request, so the cached
-// /login/forgot-password copy stays prerendered (ADR 0006).
+// /auth/forgot-password copy stays prerendered (ADR 0006).
 export const PORTAL_APP_METADATA = {
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Al-Rahmah", statusBarStyle: "default" },
@@ -21,15 +21,15 @@ export const PORTAL_APP_METADATA = {
 // worker: the forms send live data, and installing needs none.
 //
 // The app opens on sign-in, which sends someone already signed in on to their
-// own home. `id` is fixed so moving the start page later (#497 slice C) keeps
-// the installed app the same app.
+// own home. `id` stays "/" so moving the start page from /login to /auth
+// (#497 slice C) keeps an installed app the same app.
 export function portalManifest(): MetadataRoute.Manifest {
   return {
     id: "/",
     name: "Al-Rahmah Complex",
     short_name: "Al-Rahmah",
     description: "Al-Rahmah Schools: admissions and staff portal.",
-    start_url: "/login",
+    start_url: "/auth",
     scope: "/",
     display: "standalone",
     background_color: "#ffffff",

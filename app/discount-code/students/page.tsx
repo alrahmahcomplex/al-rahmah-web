@@ -38,11 +38,11 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   const supabase = await createClient()
   const agent = await getAgentUser(supabase)
 
-  if (!agent.ok && (agent.error === "signed-out" || agent.error === "not-agent")) redirect("/login")
+  if (!agent.ok && (agent.error === "signed-out" || agent.error === "not-agent")) redirect("/auth")
   if (!agent.ok) {
     return (
       <AccountShell language={language} wide>
-        <SignOutNotice language={language} message={account.messages[agent.error]} back="/login" />
+        <SignOutNotice language={language} message={account.messages[agent.error]} back="/auth" />
       </AccountShell>
     )
   }
@@ -52,12 +52,12 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   const shown = shownFrom(params.n)
   const list = await getAgentStudents(supabase, { search, limit: shown, offset: 0 })
 
-  if (!list.ok && list.error === "not-agent") redirect("/login")
+  if (!list.ok && list.error === "not-agent") redirect("/auth")
   if (!list.ok || list.data.kind !== "active") {
     const message = account.messages[list.ok && list.data.kind !== "active" ? list.data.kind : "unavailable"]
     return (
       <AccountShell language={language} wide>
-        <SignOutNotice language={language} message={message} back="/login" />
+        <SignOutNotice language={language} message={message} back="/auth" />
       </AccountShell>
     )
   }
@@ -112,7 +112,7 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
         </p>
 
         <form action={signOutAndReturn} className="-ml-2.5 self-start">
-          <input type="hidden" name="back" value="/login" />
+          <input type="hidden" name="back" value="/auth" />
           <button
             type="submit"
             className="inline-flex min-h-11 items-center rounded-full px-2.5 font-exo text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4 outline-none hover:bg-blue-50 focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"

@@ -8,7 +8,7 @@ import { logIn } from "./log-in"
 // Staff reset their password (#265) end to end, against local Supabase with
 // Turnstile's always-pass test keys: from "Umesahau nenosiri?" on their own,
 // and from a Manager's "Send reset link". The email lands in local Mailpit,
-// the shared reset page in the /login card sets the new password, and the
+// the shared reset page in the /auth card sets the new password, and the
 // person lands on the staff side and signs in with it. Each test makes its
 // own staff member with an example.test email.
 
@@ -68,9 +68,9 @@ async function signsInWithNewPassword(browser: Browser, email: string) {
 test("a staff member resets their own password from Umesahau nenosiri? and lands on the staff side", async ({ page, browser }) => {
   const member = await joinedStaff()
 
-  await page.goto("/login")
+  await page.goto("/auth")
   await page.getByRole("link", { name: "Umesahau nenosiri?" }).click()
-  await expect(page).toHaveURL(/\/login\/forgot-password$/)
+  await expect(page).toHaveURL(/\/auth\/forgot-password$/)
   // #264's "ask whoever manages your account" note is gone.
   await expect(page.getByText(/Mfanyakazi\?/)).toHaveCount(0)
   await page.getByLabel("Barua pepe").fill(member.email)
@@ -80,7 +80,7 @@ test("a staff member resets their own password from Umesahau nenosiri? and lands
 
   const [email] = await waitForEmails(member.email, 1)
   expect(email.subject).toBe("Reset your Al-Rahmah Admissions Portal password")
-  expect(email.link).toMatch(/^http:\/\/localhost:3100\/login\/reset-password\?token_hash=[^&]+&type=recovery$/)
+  expect(email.link).toMatch(/^http:\/\/localhost:3100\/auth\/reset-password\?token_hash=[^&]+&type=recovery$/)
   expect(email.html).toContain("Reset your password")
   expect(email.html).not.toContain("Punguzo")
 
@@ -106,7 +106,7 @@ test("a Manager's Send reset link emails a joined staff member a link that works
   await expect(page.getByTestId("role-outcome")).toHaveText(`Sent ${member.name} a reset link at ${member.email}. It works once, for 24 hours.`)
 
   const [email] = await waitForEmails(member.email, 1)
-  expect(email.link).toMatch(/^http:\/\/localhost:3100\/login\/reset-password\?token_hash=[^&]+&type=recovery$/)
+  expect(email.link).toMatch(/^http:\/\/localhost:3100\/auth\/reset-password\?token_hash=[^&]+&type=recovery$/)
   const reset = await openLink(browser, email.link)
   await setNewPassword(reset)
   await expect(reset).toHaveURL(/\/staff$/)

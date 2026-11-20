@@ -6,7 +6,7 @@ import { PageMain } from "@/components/page-language"
 import type { Language } from "@/lib/language"
 import type { CachedPublicPath } from "@/lib/language-state"
 
-// The card every sign-in page uses (#264): /login, /login/forgot-password,
+// The card every sign-in page uses (#264): /auth, /auth/forgot-password,
 // and the pages the set-password and reset emails open. The language switch
 // sits above it, centred; the logo and name sit inside it, so moving between
 // these pages looks like the card's contents changing.

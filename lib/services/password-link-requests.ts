@@ -101,7 +101,7 @@ export async function decidePasswordLink(
 export type LinkSenders = Record<Principal, { reset: AgentInviteSender; invite: AgentInviteSender }>
 
 // Where each link lands. Both resets land on the shared reset page in the
-// /login card; each invite on its own set-password page.
+// /auth card; each invite on its own set-password page.
 export type LinkRedirects = Record<Principal, { reset: string; invite: string }>
 
 const RECORDED: Record<SendFailure["kind"], string> = {

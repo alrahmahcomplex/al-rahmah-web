@@ -70,7 +70,7 @@ describe("the in-place switch", () => {
     respond(ok)
     render(
       <PageLanguageProvider>
-        <LanguageSwitch language="sw" returnTo="/login/forgot-password" inPlace />
+        <LanguageSwitch language="sw" returnTo="/auth/forgot-password" inPlace />
         <Probe />
       </PageLanguageProvider>,
     )

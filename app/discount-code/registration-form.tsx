@@ -617,7 +617,7 @@ export function DiscountCodeForm({
                     {notice === "joined" && (
                       <>
                         {" "}
-                        <Link href="/login" className="font-semibold underline underline-offset-4">
+                        <Link href="/auth" className="font-semibold underline underline-offset-4">
                           {copy.signIn}
                         </Link>
                       </>
@@ -640,7 +640,7 @@ export function DiscountCodeForm({
         <p className="mt-6 text-center text-sm text-slate-600">
           {copy.signInPrompt}{" "}
           <Link
-            href="/login"
+            href="/auth"
             className="font-semibold text-blue-600 underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-(color:--gf-focus-ring)"
           >
             {copy.signIn}

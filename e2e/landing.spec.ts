@@ -12,7 +12,7 @@ test.describe("the landing page", () => {
     await expect(page.getByText(/maadili ya Kiislamu/)).toBeVisible()
     await expect(page.getByRole("link", { name: "Omba sasa" })).toHaveAttribute("href", "/apply")
     await expect(page.getByRole("link", { name: "+255 673 526 644" })).toHaveAttribute("href", "tel:+255673526644")
-    await expect(page.getByRole("link", { name: "Staff sign-in" })).toHaveAttribute("href", "/login")
+    await expect(page.getByRole("link", { name: "Staff sign-in" })).toHaveAttribute("href", "/auth")
   })
 
   test("switches to English, and the choice survives a reload", async ({ page, context }) => {

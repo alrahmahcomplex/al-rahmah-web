@@ -79,7 +79,7 @@ describe("picking a page's copy from the lang cookie", () => {
     expect(isCachedPublicPath("/")).toBe(true)
     expect(isCachedPublicPath("https://example.com")).toBe(false)
     expect(isCachedPublicPath("//example.com")).toBe(false)
-    expect(isCachedPublicPath("/login")).toBe(false)
+    expect(isCachedPublicPath("/auth")).toBe(false)
     expect(isCachedPublicPath(null)).toBe(false)
   })
 })

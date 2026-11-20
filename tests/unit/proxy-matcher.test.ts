@@ -13,10 +13,11 @@ describe("proxy matcher", () => {
   it.each([
     "/staff",
     "/staff/applications",
-    "/login",
+    "/auth",
+    "/auth/confirm",
     "/auth/callback",
+    "/auth/reset-password",
     "/discount-code/set-password",
-    "/login/reset-password",
     "/discount-code/students",
   ])(
     "runs on the auth-bound route %s",
@@ -25,7 +26,9 @@ describe("proxy matcher", () => {
     },
   )
 
-  it.each(["/", "/apply", "/discount-code", "/login/forgot-password", "/admissions", "/about", "/Al-Rahmah_Official_Logo.svg", "/_next/static/chunk.js"])(
+  // The cached forgot-password page needs no session (ADR 0006). The old
+  // /login addresses are redirected to /auth before the proxy would run.
+  it.each(["/", "/apply", "/discount-code", "/auth/forgot-password", "/login", "/login/reset-password", "/admissions", "/about", "/Al-Rahmah_Official_Logo.svg", "/_next/static/chunk.js"])(
     "skips the public route %s",
     (url) => {
       expect(runsOn(url)).toBe(false)

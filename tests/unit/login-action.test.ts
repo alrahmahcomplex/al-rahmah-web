@@ -16,7 +16,7 @@ vi.mock("@/lib/rate-limit", () => ({ checkPublicFormLimit: (input: unknown) => s
 vi.mock("@/lib/services/sign-in", () => ({ HOME: { staff: "/staff", agent: "/discount-code/students" }, signIn: (...args: unknown[]) => stubs.signIn(...args) }))
 vi.mock("@/utils/supabase/server", () => ({ createClient: async () => ({ session: "client" }) }))
 
-import { signIn } from "@/app/login/actions"
+import { signIn } from "@/app/auth/actions"
 
 // Cloudflare's dummy Turnstile token, what the always-pass test site key gives.
 const TOKEN = "XXXX.DUMMY.TOKEN.XXXX"

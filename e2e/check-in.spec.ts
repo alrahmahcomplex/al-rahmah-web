@@ -36,6 +36,6 @@ test.describe("who sees what", () => {
 
   test("someone signed out is sent to sign in", async ({ page }) => {
     await page.goto("/staff/check-in")
-    await expect(page).toHaveURL(/\/login/)
+    await expect(page).toHaveURL(/\/auth/)
   })
 })

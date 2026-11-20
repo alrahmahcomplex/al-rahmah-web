@@ -306,7 +306,7 @@ test.describe("the Applicants screen", () => {
 
   test("someone signed out is sent to sign in", async ({ page }) => {
     await page.goto("/staff/applicants?q=Fixture")
-    await expect(page).toHaveURL(/\/login/)
+    await expect(page).toHaveURL(/\/auth/)
   })
 })
 

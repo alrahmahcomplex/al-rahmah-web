@@ -513,7 +513,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
   it("keeps the code question and the sign-in prompt apart, and links the sign-in page", async () => {
     render(await DiscountCodePage())
     expect(screen.getByText("Umeshaweka nenosiri?")).toContainElement(screen.getByRole("link", { name: "Ingia" }))
-    expect(screen.getByRole("link", { name: "Ingia" })).toHaveAttribute("href", "/login")
+    expect(screen.getByRole("link", { name: "Ingia" })).toHaveAttribute("href", "/auth")
   })
 
   it("sends a claim with Ndiyo and the code, then shows the claimed code and says to check spam", async () => {
@@ -570,7 +570,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     await fill(user)
     await send(user)
     const alert = await screen.findByRole("alert")
-    expect(alert.querySelector('a[href="/login"]')).toHaveTextContent("Ingia")
+    expect(alert.querySelector('a[href="/auth"]')).toHaveTextContent("Ingia")
   })
 
   it("the menu's 'Futa fomu yote' asks first, then clears every answer back to the first question", async () => {

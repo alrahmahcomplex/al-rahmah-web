@@ -28,8 +28,8 @@ import { MANAGER, SEEDED_AGENT } from "../support/fixtures"
 // Limits high enough that tests running alongside never reach them.
 const OPEN: LinkLimits = { perEmailLimit: 1_000, hourlyBudget: 1_000_000 }
 const REDIRECTS = {
-  agent: { reset: "http://localhost:3100/login/reset-password", invite: "http://localhost:3100/discount-code/set-password" },
-  staff: { reset: "http://localhost:3100/login/reset-password", invite: "http://localhost:3100/auth/confirm" },
+  agent: { reset: "http://localhost:3100/auth/reset-password", invite: "http://localhost:3100/discount-code/set-password" },
+  staff: { reset: "http://localhost:3100/auth/reset-password", invite: "http://localhost:3100/auth/confirm" },
 }
 
 const refuse: AgentInviteSender = async () => {

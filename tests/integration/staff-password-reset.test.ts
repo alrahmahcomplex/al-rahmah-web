@@ -25,7 +25,7 @@ import { DEACTIVATED, INVITED, MANAGER, SEEDED_AGENT, SUPER_ADMIN } from "../sup
 // changes is its own throwaway, with an example.test email.
 
 const OPEN: LinkLimits = { perEmailLimit: 1_000, hourlyBudget: 1_000_000 }
-const RESET_URL = "http://localhost:3100/login/reset-password"
+const RESET_URL = "http://localhost:3100/auth/reset-password"
 const REDIRECTS = {
   agent: { reset: RESET_URL, invite: "http://localhost:3100/discount-code/set-password" },
   staff: { reset: RESET_URL, invite: "http://localhost:3100/auth/confirm" },

@@ -15,10 +15,19 @@ export const PORTAL_HOST = "portal.alrahmahcomplex.or.tz"
 const PUBLIC_ORIGIN = `https://${PUBLIC_HOST}`
 const PORTAL_ORIGIN = `https://${PORTAL_HOST}`
 
-// The portal's pages: staff, sign-in and its reset pages, the invite landing
-// page, and everything a Discount code agent uses (sign-up, set password,
-// their students).
-export const PORTAL_PATHS = ["/staff", "/login", "/auth", "/discount-code"] as const
+// The portal's pages: staff, sign-in with its reset pages and the invite
+// landing page (all under /auth), and everything a Discount code agent uses
+// (sign-up, set password, their students).
+export const PORTAL_PATHS = ["/staff", "/auth", "/discount-code"] as const
+
+// Sign-in and its reset pages moved from /login to /auth (#497 slice C).
+// Each old address goes to its new one, query and all, on every host, so
+// bookmarks and links in emails sent before the move keep working.
+export const MOVED_SIGN_IN_PATHS = [
+  { from: "/login", to: "/auth" },
+  { from: "/login/forgot-password", to: "/auth/forgot-password" },
+  { from: "/login/reset-password", to: "/auth/reset-password" },
+] as const
 
 function hostOf(origin: string): string | null {
   try {
@@ -63,15 +72,23 @@ function onHost(host: string) {
 // query on to the destination, so links in emails sent before the move keep
 // their token_hash. Temporary (307): a browser doesn't remember them, which
 // leaves a rollback open.
+//
+// Each old address takes one hop. The bare prefix has its own rule, because
+// `:path*` with nothing after the prefix gives /staff/, which Next.js then
+// sends on to /staff with a second redirect. An old /login address goes
+// straight to its new portal address.
 export function crossHostRedirects(): Redirect[] {
   return [
-    ...PORTAL_PATHS.map((path) => ({
-      // `:path*` also matches the bare prefix, so /staff goes too.
-      source: `${path}/:path*`,
+    ...MOVED_SIGN_IN_PATHS.map(({ from, to }) => ({
+      source: from,
       has: onHost(PUBLIC_HOST),
-      destination: `${PORTAL_ORIGIN}${path}/:path*`,
+      destination: `${PORTAL_ORIGIN}${to}`,
       permanent: false,
     })),
+    ...PORTAL_PATHS.flatMap((path) => [
+      { source: path, has: onHost(PUBLIC_HOST), destination: `${PORTAL_ORIGIN}${path}`, permanent: false },
+      { source: `${path}/:path+`, has: onHost(PUBLIC_HOST), destination: `${PORTAL_ORIGIN}${path}/:path+`, permanent: false },
+    ]),
     // Only the portal installs as an app (lib/portal-app.ts), so the public
     // site serves no manifest of its own.
     { source: "/manifest.webmanifest", has: onHost(PUBLIC_HOST), destination: `${PORTAL_ORIGIN}/manifest.webmanifest`, permanent: false },
@@ -80,9 +97,16 @@ export function crossHostRedirects(): Redirect[] {
   ]
 }
 
+// The old /login addresses on every other host: the portal, localhost and
+// Previews. After crossHostRedirects, so the public site has already sent
+// them to the portal's new address.
+export function movedSignInRedirects(): Redirect[] {
+  return MOVED_SIGN_IN_PATHS.map(({ from, to }) => ({ source: from, destination: to, permanent: false }))
+}
+
 // The portal's root opens sign-in. It comes after the site-root rules in
 // next.config.ts, so an invite or reset link that lands on the root still
 // reaches its page first.
 export function portalRootRedirect(): Redirect {
-  return { source: "/", has: onHost(PORTAL_HOST), destination: "/login", permanent: false }
+  return { source: "/", has: onHost(PORTAL_HOST), destination: "/auth", permanent: false }
 }

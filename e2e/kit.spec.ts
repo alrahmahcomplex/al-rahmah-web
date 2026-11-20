@@ -18,7 +18,7 @@ async function openKit(page: Page) {
 
 test("a signed-out visitor is sent to sign in", async ({ page }) => {
   await page.goto("/staff/kit")
-  await expect(page).toHaveURL(/\/login/)
+  await expect(page).toHaveURL(/\/auth/)
 })
 
 test("shows both parts on the stage of the new shell, and is not indexed", async ({ page }) => {

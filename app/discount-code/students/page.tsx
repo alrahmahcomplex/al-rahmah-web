@@ -191,7 +191,17 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
             )}
 
             <nav className="flex flex-wrap gap-1.5" aria-label={copy.whereFamilies}>
-              {([null, ...STEPS, "Declined"] as const).map((status) => (
+              {([null, ...STEPS, "Declined"] as const).map((status) =>
+                // A step with no students is shown but not offered: it would list nobody.
+                status && steps[status] === 0 && step !== status ? (
+                  <span
+                    key={status}
+                    aria-disabled="true"
+                    className="inline-flex min-h-9 items-center rounded-full border-[1.5px] border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-400"
+                  >
+                    {copy.statuses[status]} (0)
+                  </span>
+                ) : (
                 <Link
                   key={status ?? "all"}
                   href={query({ step: status, n: null })}
@@ -201,7 +211,8 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
                 >
                   {status ? copy.statuses[status] : copy.all} ({status ? steps[status] : total})
                 </Link>
-              ))}
+                ),
+              )}
             </nav>
 
             {(total > PAGE_SIZE || search) && <SearchForm language={language} search={search} step={step} />}

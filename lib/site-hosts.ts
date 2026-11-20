@@ -20,13 +20,27 @@ const PORTAL_ORIGIN = `https://${PORTAL_HOST}`
 // (sign-up, set password, their students).
 export const PORTAL_PATHS = ["/staff", "/auth", "/discount-code"] as const
 
-// Sign-in and its reset pages moved from /login to /auth (#497 slice C).
-// Each old address goes to its new one, query and all, on every host, so
-// bookmarks and links in emails sent before the move keep working.
+// Old addresses of sign-in and its reset pages: /login until #497 slice C,
+// and the Discount code pages before one sign-in page for everyone (#264,
+// #265). Each goes to its new address, query and all, on every host, so
+// bookmarks and links in emails sent before a move keep working.
 export const MOVED_SIGN_IN_PATHS = [
   { from: "/login", to: "/auth" },
   { from: "/login/forgot-password", to: "/auth/forgot-password" },
   { from: "/login/reset-password", to: "/auth/reset-password" },
+  { from: "/discount-code/sign-in", to: "/auth" },
+  { from: "/discount-code/forgot-password", to: "/auth/forgot-password" },
+  { from: "/discount-code/reset-password", to: "/auth/reset-password" },
+] as const
+
+// An invite or reset link that lands on the site root: one sent with no
+// redirect (from the Supabase dashboard, for the first staff member) or
+// with one the redirect allow-list refused. Supabase then fills the
+// template's {{ .RedirectTo }} with the Site URL. Each goes on to its page,
+// query and all, so the home page never reads it.
+const ROOT_EMAIL_LINKS = [
+  { type: "invite", to: "/auth/confirm" },
+  { type: "recovery", to: "/auth/reset-password" },
 ] as const
 
 function hostOf(origin: string): string | null {
@@ -55,16 +69,25 @@ export function portalOrigin(requestOrigin: string): string {
   return onProductionHost(requestOrigin) ? PORTAL_ORIGIN : requestOrigin
 }
 
+type Condition = { type: "host"; value: string } | { type: "query"; key: string; value?: string }
+
 type Redirect = {
   source: string
   destination: string
   permanent: boolean
-  has?: { type: "host"; value: string }[]
+  has?: Condition[]
 }
 
 // Next.js reads a `has` value as a whole-value regular expression.
-function onHost(host: string) {
-  return [{ type: "host" as const, value: host.replaceAll(".", "\\.") }]
+function onHost(host: string): Condition[] {
+  return [{ type: "host", value: host.replaceAll(".", "\\.") }]
+}
+
+function emailLinkOf(type: string): Condition[] {
+  return [
+    { type: "query", key: "type", value: type },
+    { type: "query", key: "token_hash" },
+  ]
 }
 
 // Checked before every other redirect, and before proxy.ts runs, so the
@@ -75,10 +98,16 @@ function onHost(host: string) {
 //
 // Each old address takes one hop. The bare prefix has its own rule, because
 // `:path*` with nothing after the prefix gives /staff/, which Next.js then
-// sends on to /staff with a second redirect. An old /login address goes
-// straight to its new portal address.
+// sends on to /staff with a second redirect. An old sign-in address, and an
+// email link on the root, go straight to their page on the portal.
 export function crossHostRedirects(): Redirect[] {
   return [
+    ...ROOT_EMAIL_LINKS.map(({ type, to }) => ({
+      source: "/",
+      has: [...onHost(PUBLIC_HOST), ...emailLinkOf(type)],
+      destination: `${PORTAL_ORIGIN}${to}`,
+      permanent: false,
+    })),
     ...MOVED_SIGN_IN_PATHS.map(({ from, to }) => ({
       source: from,
       has: onHost(PUBLIC_HOST),
@@ -97,11 +126,18 @@ export function crossHostRedirects(): Redirect[] {
   ]
 }
 
-// The old /login addresses on every other host: the portal, localhost and
+// The old sign-in addresses on every other host: the portal, localhost and
 // Previews. After crossHostRedirects, so the public site has already sent
-// them to the portal's new address.
+// them to the portal's new address. Temporary, like the rules above: a
+// browser that remembered a permanent one would keep asking for /auth after
+// a rollback to an app without it.
 export function movedSignInRedirects(): Redirect[] {
   return MOVED_SIGN_IN_PATHS.map(({ from, to }) => ({ source: from, destination: to, permanent: false }))
+}
+
+// An email link on the root of every other host goes on to its page there.
+export function rootEmailLinkRedirects(): Redirect[] {
+  return ROOT_EMAIL_LINKS.map(({ type, to }) => ({ source: "/", has: emailLinkOf(type), destination: to, permanent: false }))
 }
 
 // The portal's root opens sign-in. It comes after the site-root rules in

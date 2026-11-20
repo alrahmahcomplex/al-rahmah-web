@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 import { LANGUAGE_STATE_PREFIX, languageStateRewrites } from "./lib/language-state";
-import { crossHostRedirects, movedSignInRedirects, portalRootRedirect } from "./lib/site-hosts";
+import { crossHostRedirects, movedSignInRedirects, portalRootRedirect, rootEmailLinkRedirects } from "./lib/site-hosts";
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -21,50 +21,21 @@ const nextConfig: NextConfig = {
       // there goes to the public site (#497, lib/site-hosts.ts). Production
       // hosts only; first, so the rules below then run on the right host.
       ...crossHostRedirects(),
-      // Sign-in moved from /login to /auth (#497 slice C). Old links keep
-      // working, query and all.
+      // Sign-in moved from /login to /auth (#497 slice C), and the Discount
+      // code sign-in pages before it (#264, #265). Old links keep working,
+      // query and all.
       ...movedSignInRedirects(),
       // The per-language copies are reached only through the rewrites below
       // (#286). Opened directly, they send the visitor to the public address,
       // where the cookie picks the copy.
       { source: `${LANGUAGE_STATE_PREFIX}/:state/:path*`, destination: "/:path*", permanent: false },
-      // One sign-in page for everyone (#264). Old emails, bookmarks and
-      // printed links to the Discount code sign-in pages keep working.
-      { source: "/discount-code/sign-in", destination: "/auth", permanent: true },
-      { source: "/discount-code/forgot-password", destination: "/auth/forgot-password", permanent: true },
-      // Every reset lands on one page (#265). Reset links sent before it
-      // keep working: the query, token and all, comes along.
-      { source: "/discount-code/reset-password", destination: "/auth/reset-password", permanent: true },
       // The staff list of applicants moved from /staff/leads. Bookmarks and
       // links in old messages keep working, query and all.
       { source: "/staff/leads", destination: "/staff/applicants", permanent: true },
       { source: "/staff/leads/:path*", destination: "/staff/applicants/:path*", permanent: true },
-      {
-        // An invite link lands on the site root when it was sent with no
-        // redirect (from the Supabase dashboard, for the first staff member)
-        // or with one the redirect allow-list refused. Supabase then fills
-        // the template's {{ .RedirectTo }} with the Site URL. Sending it on
-        // to /auth/confirm, query and all, keeps the invite usable without
-        // the public home page reading anything.
-        source: "/",
-        has: [
-          { type: "query", key: "type", value: "invite" },
-          { type: "query", key: "token_hash" },
-        ],
-        destination: "/auth/confirm",
-        permanent: false,
-      },
-      {
-        // The same for a reset sent from the Supabase dashboard (#265).
-        source: "/",
-        has: [
-          { type: "query", key: "type", value: "recovery" },
-          { type: "query", key: "token_hash" },
-        ],
-        destination: "/auth/reset-password",
-        permanent: false,
-      },
-      // After the two above: the portal's root opens sign-in.
+      // An invite or reset link on the site root goes on to its page.
+      ...rootEmailLinkRedirects(),
+      // After those: the portal's root opens sign-in.
       portalRootRedirect(),
     ];
   },

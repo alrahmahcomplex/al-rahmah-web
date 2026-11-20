@@ -33,17 +33,18 @@ describe("the site root", () => {
 })
 
 // One sign-in page (#264): old Discount code sign-in links from emails,
-// bookmarks and print land on /auth for good.
+// bookmarks and print land on /auth. Temporary since #497: a browser that
+// remembered a permanent one would keep asking for /auth after a rollback.
 describe("the old Discount code sign-in addresses", () => {
   it.each([
     ["/discount-code/sign-in", "/auth"],
     ["/discount-code/forgot-password", "/auth/forgot-password"],
     // Reset links sent before #265, token and all.
     ["/discount-code/reset-password?token_hash=a&type=recovery", "/auth/reset-password?token_hash=a&type=recovery"],
-  ])("permanently forward %s to %s", async (from, to) => {
+  ])("forward %s to %s", async (from, to) => {
     const response = await open(`https://school.example${from}`)
 
-    expect(response.status).toBe(308)
+    expect(response.status).toBe(307)
     expect(getRedirectUrl(response)).toBe(`https://school.example${to}`)
   })
 

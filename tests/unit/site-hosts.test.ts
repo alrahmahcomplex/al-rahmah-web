@@ -27,8 +27,7 @@ describe("the public site", () => {
     "/discount-code?code=AJM-407",
     "/discount-code/set-password?token_hash=abc123&type=invite",
     "/discount-code/students",
-    // Old addresses keep working: they move host first, then their own rule.
-    "/discount-code/reset-password?token_hash=abc123&type=recovery",
+    // An old address with its own rule moves host first, then that rule.
     "/staff/leads/42",
   ])("sends %s to the portal, query and all", async (path) => {
     const response = await open(`${PUBLIC}${path}`)
@@ -45,6 +44,9 @@ describe("the public site", () => {
     ["/login?error=not-staff", "/auth?error=not-staff"],
     ["/login/forgot-password", "/auth/forgot-password"],
     ["/login/reset-password?token_hash=abc123&type=recovery", "/auth/reset-password?token_hash=abc123&type=recovery"],
+    ["/discount-code/sign-in", "/auth"],
+    ["/discount-code/forgot-password", "/auth/forgot-password"],
+    ["/discount-code/reset-password?token_hash=abc123&type=recovery", "/auth/reset-password?token_hash=abc123&type=recovery"],
   ])("sends the old %s to the portal's %s", async (from, to) => {
     const response = await open(`${PUBLIC}${from}`)
 
@@ -81,14 +83,14 @@ describe("the public site", () => {
     expect(getRedirectUrl(response)).toBe(`${PORTAL}/manifest.webmanifest`)
   })
 
-  it("forwards an invite or reset link on the root to its page, which then moves to the portal", async () => {
-    const invite = await open(`${PUBLIC}/?token_hash=abc123&type=invite`)
-    expect(getRedirectUrl(invite)).toBe(`${PUBLIC}/auth/confirm?token_hash=abc123&type=invite`)
-    expect(getRedirectUrl(await open(getRedirectUrl(invite)!))).toBe(`${PORTAL}/auth/confirm?token_hash=abc123&type=invite`)
+  it.each([
+    ["/?token_hash=abc123&type=invite", "/auth/confirm?token_hash=abc123&type=invite"],
+    ["/?token_hash=abc123&type=recovery", "/auth/reset-password?token_hash=abc123&type=recovery"],
+  ])("sends an email link on the root, %s, straight to the portal's page", async (from, to) => {
+    const response = await open(`${PUBLIC}${from}`)
 
-    const reset = await open(`${PUBLIC}/?token_hash=abc123&type=recovery`)
-    expect(getRedirectUrl(reset)).toBe(`${PUBLIC}/auth/reset-password?token_hash=abc123&type=recovery`)
-    expect(getRedirectUrl(await open(getRedirectUrl(reset)!))).toBe(`${PORTAL}/auth/reset-password?token_hash=abc123&type=recovery`)
+    expect(response.status).toBe(307)
+    expect(getRedirectUrl(response)).toBe(`${PORTAL}${to}`)
   })
 })
 
@@ -116,7 +118,10 @@ describe("the portal", () => {
     ["/login/reset-password?token_hash=abc123&type=recovery", "/auth/reset-password?token_hash=abc123&type=recovery"],
     ["/discount-code/sign-in", "/auth"],
   ])("sends the old %s to %s", async (from, to) => {
-    expect(getRedirectUrl(await open(`${PORTAL}${from}`))).toBe(`${PORTAL}${to}`)
+    const response = await open(`${PORTAL}${from}`)
+
+    expect(response.status).toBe(307)
+    expect(getRedirectUrl(response)).toBe(`${PORTAL}${to}`)
   })
 
   it("sends a Referral link to the public site's Admission form, code and all", async () => {
@@ -162,10 +167,22 @@ describe("every other host is one site", () => {
         expect(getRedirectUrl(await open(`${origin}${path}`))).toBeNull()
       }
       expect(getRewrittenUrl(await open(`${origin}/`))).toBe(`${origin}/by-language/first`)
-      // Only the move to /auth: same host, query and all.
-      expect(getRedirectUrl(await open(`${origin}/login?next=%2Fstaff`))).toBe(`${origin}/auth?next=%2Fstaff`)
     },
   )
+
+  // Only the move to /auth, temporary, on the same host, query and all.
+  it.each(["http://localhost:3000", "https://al-rahmah-web-git-x-team.vercel.app"])("%s moves the old sign-in addresses to /auth", async (origin) => {
+    for (const [from, to] of [
+      ["/login?next=%2Fstaff", "/auth?next=%2Fstaff"],
+      ["/login/forgot-password", "/auth/forgot-password"],
+      ["/login/reset-password?token_hash=a&type=recovery", "/auth/reset-password?token_hash=a&type=recovery"],
+      ["/discount-code/sign-in", "/auth"],
+    ]) {
+      const response = await open(`${origin}${from}`)
+      expect(response.status).toBe(307)
+      expect(getRedirectUrl(response)).toBe(`${origin}${to}`)
+    }
+  })
 })
 
 // Next.js reads a host condition as a regular expression, so an unescaped dot

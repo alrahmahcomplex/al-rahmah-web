@@ -37,7 +37,7 @@ import { cn } from "@/lib/utils"
 
 import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
-import { COPY } from "./copy"
+import { COPY, discountWords } from "./copy"
 import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
 
 // The Discount code page's form and its confirmation, in concept C as
@@ -699,7 +699,7 @@ function Confirmation({
   const mark = useRef<HTMLSpanElement>(null)
   // The kit's finish confetti, once the mark's tick has drawn (DESIGN.md, Confetti).
   useEffect(() => rainConfetti(mark.current), [])
-  const shareHref = discountCodeShareLink(copy.shareText(done.code, done.link))
+  const shareHref = discountCodeShareLink(copy.shareText(done.code, done.link, discountWords(done.discount)))
 
   async function copyLink() {
     try {

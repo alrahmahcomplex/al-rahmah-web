@@ -36,6 +36,8 @@ export type StudentLead = {
   status?: "Applied" | "Visited" | "Interviewed" | "Enrolled" | "Declined"
   closure?: "Inactive" | "Archived"
   createdAt?: string
+  // YYYY-MM-DD; a lead past Applied gets 2026-09-01 without one.
+  visitDate?: string
 }
 
 // A lead carrying `code`, with a family of its own, written as the system. A
@@ -61,7 +63,7 @@ export async function studentLead(spec: StudentLead): Promise<string> {
         admissionNumber,
         spec.name,
         status,
-        status === "Applied" ? null : "2026-09-01",
+        status === "Applied" ? null : (spec.visitDate ?? "2026-09-01"),
         contact.rows[0].id,
         spec.code,
         status === "Declined" ? "Did not pass interview" : null,
@@ -75,7 +77,8 @@ export async function studentLead(spec: StudentLead): Promise<string> {
   })
 }
 
-export type StudentInterview = { result: "Passed" | "Failed"; score: number; paid: boolean; registeredAt: string }
+// `interviewDate` is YYYY-MM-DD, 2026-09-10 without one.
+export type StudentInterview = { result: "Passed" | "Failed"; score: number; paid: boolean; registeredAt: string; interviewDate?: string }
 
 // An interview with its result on `leadId`, its fee Paid (TZS 50,000) or not.
 export async function studentInterview(leadId: string, spec: StudentInterview): Promise<void> {
@@ -88,7 +91,7 @@ export async function studentInterview(leadId: string, spec: StudentInterview): 
     await sql.query(
       `insert into public.interviews (
            lead, serial_number, serial_year, registered_at, registered_by, interview_date, result, score, fee_status, locked_amount, locked_discount_applied
-       ) values ($1, $2, 2027, $3, $4, '2026-09-10', $5, $6, $7, $8, $9)`,
+       ) values ($1, $2, 2027, $3, $4, $10, $5, $6, $7, $8, $9)`,
       [
         leadId,
         counter.rows[0].last_number,
@@ -99,7 +102,15 @@ export async function studentInterview(leadId: string, spec: StudentInterview): 
         spec.paid ? "Paid" : "Not Paid",
         spec.paid ? 50000 : null,
         spec.paid ? false : null,
+        spec.interviewDate ?? "2026-09-10",
       ],
     )
   })
+}
+
+// The Tanzanian date `days` before today, YYYY-MM-DD, as the database counts days.
+export function tanzaniaDaysAgo(days: number): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Dar_es_Salaam" }).format(new Date())
+  const [year, month, day] = today.split("-").map(Number)
+  return new Date(Date.UTC(year, month - 1, day - days)).toISOString().slice(0, 10)
 }

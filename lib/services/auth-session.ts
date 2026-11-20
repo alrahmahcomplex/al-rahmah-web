@@ -52,13 +52,19 @@ export async function passwordSignIn(
 // The readers that call this then read the person's record from the
 // database, under the same token, on every request.
 export async function hasVerifiedSession(supabase: SupabaseClient): Promise<boolean> {
+  return (await verifiedUserId(supabase)) !== null
+}
+
+// The Auth user id of this request's verified session, or null when it has
+// none (checked as hasVerifiedSession checks it).
+export async function verifiedUserId(supabase: SupabaseClient): Promise<string | null> {
   try {
     const { data, error } = await supabase.auth.getClaims()
-    if (error || !data) return false
-    return typeof data.claims.sub === "string" && data.claims.sub !== ""
+    if (error || !data) return null
+    return typeof data.claims.sub === "string" && data.claims.sub !== "" ? data.claims.sub : null
   } catch (error) {
     console.error("Could not check the session token", error)
-    return false
+    return null
   }
 }
 

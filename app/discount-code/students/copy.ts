@@ -1,14 +1,39 @@
 import type { Language } from "@/lib/language"
-import type { AgentStudent, AgentStudentStatus } from "@/lib/services/agent-students"
+import type { AgentStudent, AgentStudentStatus, ReminderStep } from "@/lib/services/agent-students"
 
-// The words of the students list on the Discount code pages (#195), Swahili
-// first. Like the other Discount code pages they never say agent, referral or
-// Wakala. The status labels and Declined reasons wait for the owner's
-// approval on the PR; a native Swahili reader checks the Swahili before it
-// ships.
+// The words of the agent's students page on the Discount code pages (#195):
+// the dashboard of prototype v47 (#497, the owner's pick B), Swahili first.
+// They never say agent or Wakala. The dashboard's words (D-N numbers in the
+// prototype) and the reminders are the owner's, checked in Swahili.
 
 type Copy = {
-  heading: (code: string, total: number) => string
+  // "Habari, Amina!" over the page, with the code under it.
+  hello: (firstName: string) => string
+  yourCode: string
+  // Opens the message picker; the picker's own words.
+  shareCode: string
+  pickMessage: string
+  messages: { parent: string; group: string; short: string }
+  copyMessage: string
+  messageCopied: string
+  close: string
+  // The count per step, and who could use a reminder.
+  whereFamilies: string
+  remindHeading: (count: number) => string
+  waiting: Record<ReminderStep, (days: number) => string>
+  prepare: string
+  reminderTitle: string
+  // The reminder itself: the student's first name and the office's number.
+  reminder: Record<ReminderStep, (firstName: string, office: string) => string>
+  openWhatsApp: string
+  // The step filter's first chip.
+  all: string
+  // With no students yet, above the message picker.
+  emptyNote: string
+  // Once, right after the password is set (state 4): the title and the line
+  // above the button on to the list.
+  approved: string
+  signedInNote: string
   statuses: Record<AgentStudentStatus, string>
   notActive: string
   lastChange: (date: string) => string
@@ -21,13 +46,41 @@ type Copy = {
   noMatch: string
   more: string
   searchForMore: string
-  emptyText: string
   helpLine: string
 }
 
 export const STUDENTS_COPY: Record<Language, Copy> = {
   sw: {
-    heading: (code, total) => `Wanafunzi wanaotumia Code ya Punguzo ${code} (${total})`,
+    hello: (firstName) => `Habari, ${firstName}!`,
+    yourCode: "Code yako",
+    shareCode: "Shiriki code yako",
+    pickMessage: "Chagua ujumbe",
+    messages: { parent: "Kwa mzazi", group: "Kwa kikundi", short: "Fupi" },
+    copyMessage: "Nakili ujumbe",
+    messageCopied: "Ujumbe umenakiliwa",
+    close: "Funga",
+    whereFamilies: "Familia zako ziko wapi",
+    remindHeading: (count) => `Wanaweza kukumbushwa (${count})`,
+    waiting: {
+      Applied: (days) => `Alijisajili siku ${days} zilizopita, bado hajatembelea shule.`,
+      Visited: (days) => `Alitembelea siku ${days} zilizopita, bado hajafanya usaili.`,
+      Interviewed: (days) => `Alifaulu usaili siku ${days} zilizopita, bado hajajiunga.`,
+    },
+    prepare: "Andaa ujumbe",
+    reminderTitle: "Ujumbe wa kukumbusha",
+    reminder: {
+      Applied: (name, office) =>
+        `Habari! Hongera kwa kumsajili ${name} Al-Rahmah Complex. Karibuni mtembelee shule muone mazingira. Kwa maswali, piga ofisi ya udahili: ${office}.`,
+      Visited: (name, office) =>
+        `Habari! Asante kwa kutembelea Al-Rahmah Complex na ${name}. Hatua inayofuata ni usaili. Piga ofisi ya udahili kujua siku: ${office}.`,
+      Interviewed: (name, office) =>
+        `Habari! Hongera, ${name} amefaulu usaili Al-Rahmah Complex! Hatua inayofuata ni kukamilisha usajili. Piga ofisi ya udahili: ${office}.`,
+    },
+    openWhatsApp: "Fungua WhatsApp",
+    all: "Wote",
+    approved: "Umeidhinishwa!",
+    signedInNote: "Umeingia. Gusa kitufe hapa chini uone wanafunzi wote uliowaleta.",
+    emptyNote: "Familia ikitumia code yako, utaona hapa kila hatua yake: kujisajili, kutembelea shule, usaili na kujiunga.",
     statuses: {
       Applied: "Amejisajili",
       Visited: "Ametembelea shule",
@@ -56,12 +109,39 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
     noMatch: "Hakuna mwanafunzi mwenye jina hilo.",
     more: "Onyesha zaidi",
     searchForMore: "Tafuta kwa jina kuona wanafunzi wengine.",
-    emptyText:
-      "Bado hakuna mwanafunzi anayetumia code yako. Familia itaonekana hapa mara code yako itakapowekwa kwenye maombi ya mtoto wao. Shiriki code na kiungo chako:",
     helpLine: "Huoni familia? Waombe wahakikishe walitumia code yako, au piga simu ofisini.",
   },
   en: {
-    heading: (code, total) => `Students using Discount code ${code} (${total})`,
+    hello: (firstName) => `Hello, ${firstName}!`,
+    yourCode: "Your code",
+    shareCode: "Share your code",
+    pickMessage: "Pick a message",
+    messages: { parent: "To a parent", group: "To a group", short: "Short" },
+    copyMessage: "Copy message",
+    messageCopied: "Message copied",
+    close: "Close",
+    whereFamilies: "Where your families are",
+    remindHeading: (count) => `Could use a reminder (${count})`,
+    waiting: {
+      Applied: (days) => `Applied ${days} days ago, hasn't visited yet.`,
+      Visited: (days) => `Visited ${days} days ago, no interview yet.`,
+      Interviewed: (days) => `Passed the interview ${days} days ago, not enrolled yet.`,
+    },
+    prepare: "Prepare a message",
+    reminderTitle: "Reminder message",
+    reminder: {
+      Applied: (name, office) =>
+        `Hello! Well done on applying for ${name} at Al-Rahmah Complex. You're welcome to visit the school and see it for yourselves. For questions, call the admissions office: ${office}.`,
+      Visited: (name, office) =>
+        `Hello! Thank you for visiting Al-Rahmah Complex with ${name}. The next step is the interview. Call the admissions office to find out when: ${office}.`,
+      Interviewed: (name, office) =>
+        `Hello! Congratulations, ${name} passed the interview at Al-Rahmah Complex! The next step is to complete enrollment. Call the admissions office: ${office}.`,
+    },
+    openWhatsApp: "Open WhatsApp",
+    all: "All",
+    approved: "You're approved!",
+    signedInNote: "You're signed in. Tap the button below to see all the students you referred.",
+    emptyNote: "When a family uses your code, you'll see each step here: applying, visiting the school, the interview and enrolling.",
     statuses: {
       Applied: "Applied",
       Visited: "Visited",
@@ -90,8 +170,6 @@ export const STUDENTS_COPY: Record<Language, Copy> = {
     noMatch: "No student has that name.",
     more: "Show more",
     searchForMore: "Search by name to find the other students.",
-    emptyText:
-      "No student is using your code yet. A family shows here once your code is on their child's application. Share your code and link:",
     helpLine: "Don't see a family? Ask them to check they used your code, or call the office.",
   },
 }
@@ -131,4 +209,17 @@ export function shownFrom(value: string | string[] | undefined): number {
   const parsed = Number(typeof value === "string" ? value : "")
   if (!Number.isInteger(parsed) || parsed < PAGE_SIZE) return PAGE_SIZE
   return Math.min(MAX_SHOWN, Math.ceil(parsed / PAGE_SIZE) * PAGE_SIZE)
+}
+
+// A name's first word as people write it ("REHEMA ALI" reads "Rehema"), for
+// the greeting and the reminders.
+export function firstName(fullName: string): string {
+  const first = fullName.trim().split(/\s+/)[0] ?? ""
+  return first.charAt(0).toLocaleUpperCase("en") + first.slice(1).toLocaleLowerCase("en")
+}
+
+// The step a ?step= address asks for, or null for every step.
+export function stepFrom(value: string | string[] | undefined): AgentStudentStatus | null {
+  const steps: AgentStudentStatus[] = ["Applied", "Visited", "Interviewed", "Enrolled", "Declined"]
+  return steps.find((step) => step === value) ?? null
 }

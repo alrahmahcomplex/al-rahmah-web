@@ -6,9 +6,12 @@ import type { AgentField } from "@/lib/agent-registration"
 export type DiscountCodeState =
   | { status: "idle" }
   // A new code (or a retry of one), its Referral link and the email given.
-  | { status: "registered"; code: string; link: string; email: string }
-  // A claim on an existing code waits for the school (or a retry of one).
-  | { status: "claimed"; code: string; link: string }
+  // `discount`: what the code takes off the interview fee now, in whole TZS,
+  // for the share message; null names no figure (a Pending code, or a lookup
+  // that didn't answer).
+  | { status: "registered"; code: string; link: string; email: string; discount: number | null }
+  // A claim on an existing code waits for the Marketing Office (or a retry of one).
+  | { status: "claimed"; code: string; link: string; discount: number | null }
   // Messages that keep the form, each with its own words.
   | { status: "code-needed" }
   | { status: "phone-mismatch" }

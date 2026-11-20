@@ -152,13 +152,26 @@ export const FUNCTIONS: Record<string, FunctionEntry> = {
     },
     agent: { refused: "not_permitted" },
   },
-  // The students using the signed-in agent's own code (#195): their own
-  // leads' allowed fields only. The seeded agent's code has none. Staff and
-  // visitors get null.
-  "public.agent_students(search text, page_limit integer, page_offset integer)": {
+  // The students using the signed-in agent's own code (#195), with their
+  // step counts and reminders (#497): their own leads' allowed fields only.
+  // The seeded agent's code has none. Staff and visitors get null.
+  "public.agent_students(search text, page_limit integer, page_offset integer, step text)": {
     roles: ["authenticated"],
-    args: { search: "null", page_limit: "20", page_offset: "0" },
-    agent: { returns: [{ state: "active", code: "SAM-403", total: 0, matched: 0, students: [] }] },
+    args: { search: "null", page_limit: "20", page_offset: "0", step: "null" },
+    agent: {
+      returns: [
+        {
+          state: "active",
+          code: "SAM-403",
+          total: 0,
+          matched: 0,
+          students: [],
+          steps: { Applied: 0, Visited: 0, Interviewed: 0, Enrolled: 0, Declined: 0 },
+          reminders: [],
+          discount: 10000,
+        },
+      ],
+    },
   },
   "public.approve_marketing_agent(agent_id uuid)": {
     roles: ["authenticated"],

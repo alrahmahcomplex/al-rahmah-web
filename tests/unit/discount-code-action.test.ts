@@ -6,6 +6,7 @@ const stubs = vi.hoisted(() => ({
   turnstile: vi.fn(),
   register: vi.fn(),
   client: vi.fn(),
+  estimate: vi.fn(),
   headers: { value: new Headers() },
 }))
 
@@ -29,6 +30,11 @@ vi.mock("@/lib/services/agent-sign-up", () => ({
     calls.order.push("service")
     return stubs.register(...args)
   },
+}))
+
+vi.mock("@/lib/services/referral", async (original) => ({
+  ...(await original<typeof import("@/lib/services/referral")>()),
+  estimateDiscountCode: (...args: unknown[]) => stubs.estimate(...args),
 }))
 
 import { registerAsAgent } from "@/app/discount-code/actions"
@@ -62,6 +68,8 @@ beforeEach(() => {
   stubs.turnstile.mockReset().mockResolvedValue({ ok: true, data: null })
   stubs.client.mockReset().mockReturnValue({ secret: "client" })
   stubs.register.mockReset().mockResolvedValue({ ok: true, data: { kind: "registered", code: "RJ-407", email: "rehema@example.test" } })
+  // A new code is Pending: it takes nothing off yet.
+  stubs.estimate.mockReset().mockResolvedValue({ ok: true, data: { state: "pending", amount: 50000 } })
 })
 
 describe("registering for a Discount code", () => {
@@ -74,6 +82,7 @@ describe("registering for a Discount code", () => {
       code: "RJ-407",
       link: "https://alrahmah.example/apply?ref=RJ-407",
       email: "rehema@example.test",
+      discount: null,
     })
     expect(stubs.limit).toHaveBeenCalledWith({ headers: stubs.headers.value, key: "agent", subject: "Rehema@Example.test" })
     expect(stubs.turnstile).toHaveBeenCalledWith({
@@ -94,8 +103,23 @@ describe("registering for a Discount code", () => {
       status: "claimed",
       code: "RJ-407",
       link: "https://alrahmah.example/apply?ref=RJ-407",
+      discount: null,
     })
     expect(stubs.register).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ hasCode: true, code: "rj-407" }))
+  })
+
+  it("names what an Approved code takes off now, for the share message, and nothing when the lookup fails", async () => {
+    stubs.register.mockResolvedValue({ ok: true, data: { kind: "claimed", code: "RJ-407" } })
+    stubs.estimate.mockResolvedValue({ ok: true, data: { state: "approved", amount: 35000 } })
+    expect(await send(posted({ has_code: "yes", code: "RJ-407" }))).toMatchObject({ status: "claimed", discount: 15000 })
+    expect(stubs.estimate).toHaveBeenCalledWith({ secret: "client" }, "RJ-407", { signal: expect.any(AbortSignal) })
+
+    stubs.estimate.mockResolvedValue({ ok: false, error: "unavailable" })
+    expect(await send(posted({ has_code: "yes", code: "RJ-407" }))).toMatchObject({ status: "claimed", discount: null })
+    stubs.estimate.mockRejectedValue(new Error("aborted"))
+    expect(await send(posted({ has_code: "yes", code: "RJ-407" }))).toMatchObject({ status: "claimed", discount: null })
+    stubs.estimate.mockResolvedValue({ ok: true, data: { state: "switched_off", amount: 50000 } })
+    expect(await send(posted({ has_code: "yes", code: "RJ-407" }))).toMatchObject({ status: "claimed", discount: null })
   })
 
   it.each([

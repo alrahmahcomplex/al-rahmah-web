@@ -162,9 +162,7 @@ export async function createMarketingAgent(input: AgentDraftInput): Promise<Crea
   const client = await approverClient()
   if (!client.ok) return { status: "refused", ...createRefusal({ kind: client.error }) }
   const result = await createAgent(client.supabase, draftOf(input))
-  // Only the agents list changes. A created agent is Approved at once, so no
-  // count in the navigation moves (nav-counts.ts): the Pending count drops
-  // only on approve, retire or Recreate, which refresh the whole staff side.
+  // Only the agents list changes. The bell counts no agents (nav-counts.ts).
   if (!result.ok) {
     if (result.error.kind === "uncertain") revalidatePath("/staff/agents")
     return { status: "refused", ...createRefusal(result.error) }

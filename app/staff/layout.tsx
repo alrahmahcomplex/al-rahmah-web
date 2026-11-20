@@ -5,7 +5,7 @@ import { MotionProvider } from "@/components/motion-provider"
 import { managesStaff } from "@/lib/services/staff-auth"
 
 import { BELL_SCREENS } from "./bell-screens"
-import { bellPending, navCounts } from "./nav-counts"
+import { bellPending, requestCounts } from "./nav-counts"
 import { navFor, STAFF_HOME } from "./navigation"
 import { requireStaff } from "./session"
 import { parseSidebarCookies, SIDEBAR_RAIL_COOKIE, SIDEBAR_WIDTH_COOKIE } from "./shell-cookies"
@@ -21,7 +21,7 @@ export const metadata: Metadata = { robots: { index: false } }
 // The cookies are read here and nowhere above (ADR 0006).
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const staff = await requireStaff()
-  const [counts, cookieStore] = await Promise.all([navCounts(staff), cookies()])
+  const [counts, cookieStore] = await Promise.all([requestCounts(staff), cookies()])
   const sidebar = parseSidebarCookies(cookieStore.get(SIDEBAR_RAIL_COOKIE)?.value, cookieStore.get(SIDEBAR_WIDTH_COOKIE)?.value)
 
   const entries = [STAFF_HOME, ...navFor(staff.permissions, undefined, { managesStaff: managesStaff(staff) })]

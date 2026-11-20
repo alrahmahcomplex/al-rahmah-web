@@ -569,7 +569,7 @@ function describeEntry(
       .filter((c) => !unprovenOpening(entry, c.field, context.openings))
       .filter((c) => !(isPriorityChange(entry) && PRIORITY_CHANGE_HIDDEN.has(c.field)))
       .filter((c) => !(isResultRelease(entry) && RESULT_RELEASE_HIDDEN.has(c.field)))
-      .filter((c) => fromOld || !isEmpty(c.to) || seatKeepsEmpty(entry.record, c.field))
+      .filter((c) => fromOld || !isEmpty(c.to) || seatKeepsEmpty(entry, c.field))
       .sort((a, b) => rank(entry.record, a.field) - rank(entry.record, b.field))
       .map((c) => ({
         label:

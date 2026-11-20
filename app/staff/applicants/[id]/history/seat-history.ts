@@ -44,9 +44,13 @@ export function seatOrder(record: string | null): readonly string[] | null {
   return labels ? Object.keys(labels) : null
 }
 
-// A request for any stream has no need; a new request still says so.
-export function seatKeepsEmpty(record: string | null, field: string): boolean {
-  return record === REQUEST && field === "need"
+// A request for the whole class with no need is for any stream; a new
+// request still says so. A child's request takes its need from the child's
+// Boy or girl answer. With no answer only a Mixed stream takes the child, so
+// "Any stream" would be untrue, and the line is left out.
+export function seatKeepsEmpty(entry: LeadHistoryEntry, field: string): boolean {
+  const forChild = entry.changes.some((c) => c.field === "lead_id" && c.to !== null && c.to !== undefined)
+  return entry.record === REQUEST && field === "need" && !forChild
 }
 
 export function seatValue(record: string | null, field: string, value: unknown, streamNames: Readonly<Record<string, string>>): string | null {
@@ -66,9 +70,19 @@ const TIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))
 function microseconds(time: unknown): number | null {
   const parts = typeof time === "string" ? TIME.exec(time) : null
   if (!parts) return null
-  const [, year, month, day, hour, minute, second, fraction = "", sign, offsetHours = "0", offsetMinutes = "0"] = parts
-  const offset = (sign === "-" ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes))
-  const wholeSeconds = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)) / 1000 - offset * 60
+  const [year, month, day, hour, minute, second] = parts.slice(1, 7).map(Number)
+  const fraction = parts[7] ?? ""
+  const sign = parts[8]
+  const offsetHours = Number(parts[9] ?? 0)
+  const offsetMinutes = Number(parts[10] ?? 0)
+  // Date.UTC rolls a part that is too large over into the next month, day or
+  // hour, so 31 November would read as 1 December. Such a time is unreadable.
+  // Day 0 of the next month is this month's last day.
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  if (month < 1 || month > 12 || day < 1 || day > lastDay) return null
+  if (hour > 23 || minute > 59 || second > 59 || offsetHours > 23 || offsetMinutes > 59) return null
+  const offset = (sign === "-" ? -1 : 1) * (offsetHours * 60 + offsetMinutes)
+  const wholeSeconds = Date.UTC(year, month - 1, day, hour, minute, second) / 1000 - offset * 60
   return wholeSeconds * 1_000_000 + Number(fraction.padEnd(6, "0"))
 }
 

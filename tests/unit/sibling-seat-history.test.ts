@@ -368,18 +368,23 @@ describe("a move between streams, saved as a release and a placement", () => {
 })
 
 describe("a request for a new stream", () => {
+  // A child's request takes its need from the child's Boy or girl answer. With
+  // no answer only a Mixed stream takes the child, so no stream would do and
+  // the line is left out. A request for the whole class names no child.
   it.each([
-    ["Boys", "Needs: A stream for boys"],
-    [null, "Needs: Any stream"],
-  ])("says what it needs: %s", (need, line) => {
+    ["a boy's request", LEAD, "Boys", ["Needs: A stream for boys"]],
+    ["a girl's request", LEAD, "Girls", ["Needs: A stream for girls"]],
+    ["the request of a child with no Boy or girl answer", LEAD, null, []],
+    ["a request for the whole class", null, null, ["Needs: Any stream"]],
+  ])("says what it needs: %s", (_case, lead, need, needs) => {
     const [sent] = read([
       entry(
         "stream_requests",
         "insert",
-        created({ class_name: "STD 3", enrollment_year: 2027, need, lead_id: LEAD, requested_at: AT, requested_by: "a1a1a1a1-0000-4000-8000-000000000003" }),
+        created({ class_name: "STD 3", enrollment_year: 2027, need, lead_id: lead, requested_at: AT, requested_by: "a1a1a1a1-0000-4000-8000-000000000003" }),
       ),
     ])
-    expect(sent).toEqual({ summary: "sent a request to open a new stream", lines: ["Class: STD 3", "Enrollment year: 2027", line] })
+    expect(sent).toEqual({ summary: "sent a request to open a new stream", lines: ["Class: STD 3", "Enrollment year: 2027", ...needs] })
   })
 
   // A request sent on a Monday, and the entry that closes it with a stream
@@ -417,6 +422,24 @@ describe("a request for a new stream", () => {
     ["the closing time isn't one the database writes", closed(BOYS, "24 November 2026"), names],
   ])("doesn't say a stream was opened when %s", (_case, closing, known) => {
     expect(read([closing, sent], known)[0]).toEqual(hidden)
+  })
+
+  // Read loosely, each of these would roll over into midnight on 1 December,
+  // when Boys opened here.
+  it.each([
+    ["a day its month doesn't have", "2026-11-31T00:00:00Z"],
+    ["an offset of 60 minutes", "2026-12-01T01:00:00+00:60"],
+  ])("doesn't say a stream was opened when the closing time has %s", (_case, at) => {
+    const known = { streams: names.streams, streamOpenedAt: { [BOYS]: "2026-12-01T00:00:00Z" } }
+    expect(read([closed(BOYS, at), sent], known)[0]).toEqual(hidden)
+  })
+
+  it("reads 29 February in a leap year", () => {
+    const known = { streams: names.streams, streamOpenedAt: { [BOYS]: "2028-02-29T10:00:00+00:00" } }
+    expect(read([closed(BOYS, "2028-02-29T10:00:00Z"), sent], known)[0]).toEqual({
+      summary: "closed the request for a new stream",
+      lines: ["Stream opened: None → KG 2 A (Boys)"],
+    })
   })
 })
 

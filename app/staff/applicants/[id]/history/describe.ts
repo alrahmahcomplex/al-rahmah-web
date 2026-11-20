@@ -11,7 +11,15 @@ import {
   PRIORITY_CHANGE_HIDDEN,
 } from "./adjustment-history"
 import { isBecause, rowCauses, withCause } from "./because"
-import { DISCOUNT_HIDDEN, discountKinds, discountLabel, discountSummary, discountValue, type DiscountKinds } from "./discount-history"
+import {
+  DISCOUNT_HIDDEN,
+  discountKinds,
+  discountLabel,
+  discountSummary,
+  discountValue,
+  withoutAppliedReason,
+  type DiscountKinds,
+} from "./discount-history"
 import {
   ENROLMENT_FIELDS,
   ENROLMENT_HIDDEN,
@@ -38,8 +46,9 @@ import {
   resultReleaseSummary,
   resultReleaseValue,
 } from "./result-release-history"
-import { seatHidden, seatKeepsEmpty, seatLabel, seatOrder, seatSummary, seatValue } from "./seat-history"
+import { mergeSeatMoves, seatHidden, seatKeepsEmpty, seatLabel, seatOrder, seatSummary, seatValue } from "./seat-history"
 import {
+  siblingChoices,
   siblingHidden,
   siblingLabel,
   siblingOfValue,
@@ -47,6 +56,7 @@ import {
   siblingSummary,
   siblingValue,
   withEditResult,
+  type SiblingChoices,
 } from "./sibling-history"
 
 // A lead's history entry in plain words: who, what they did, and each field's
@@ -400,7 +410,7 @@ function summarize(
   if (entry.record === "reopening_requests") return reopeningSummary(entry)
   const discount = discountSummary(entry, context.kinds)
   if (discount) return discount
-  const sibling = siblingSummary(entry)
+  const sibling = siblingSummary(entry, context.choices)
   if (sibling) return sibling
   const seat = seatSummary(entry, context.streamNames)
   if (seat) return seat
@@ -452,6 +462,7 @@ export type HistoryNames = {
 // What the whole history tells each entry, and the names read alongside it.
 type Context = {
   kinds: DiscountKinds
+  choices: SiblingChoices
   leadNames: Readonly<Record<string, string>>
   streamNames: Readonly<Record<string, string>>
 }
@@ -470,10 +481,19 @@ export function describeLeadHistory(
   const plans = followUpPlans(entries)
   const causes = enrolmentCauses(entries)
   const serials = interviewSerials(entries)
-  const context: Context = { kinds: discountKinds(entries), leadNames: names.leads ?? {}, streamNames: names.streams ?? {} }
+  const choices = siblingChoices(entries)
+  const context: Context = {
+    kinds: discountKinds(entries),
+    choices,
+    leadNames: names.leads ?? {},
+    streamNames: names.streams ?? {},
+  }
   const rowCause = rowCauses(entries)
-  return entries.map((entry) => {
-    const prepared = withCause(withEditResult(withEarlierPlan(entry, plans)), rowCause)
+  // One save that wrote a row twice reads as one entry: a sibling answer
+  // followed by its link, and a seat released and placed again.
+  const shown = mergeSeatMoves(entries.filter((entry) => !choices.superseded.has(entry.id)))
+  return shown.map((entry) => {
+    const prepared = withCause(withoutAppliedReason(withEditResult(withEarlierPlan(entry, plans))), rowCause)
     const described = withInterviewSerial(entry, describeEntry(prepared, contactNames, timeline, causes, context), serials)
     const note = importNote(entry, importFile)
     return note ? { ...described, note } : described

@@ -72,6 +72,37 @@ describe("a sibling group entry", () => {
     expect(legacy).toEqual({ summary: "added the applicant to a sibling group", lines: ["Because: Sibling groups began"] })
   })
 
+  // Registration saves every child's answer as a membership with no group,
+  // then links the children staff named a sibling of, in the same save.
+  it("reads a registration that named a sibling as the link alone", () => {
+    const answer = entry("sibling_group_members", "insert", created({ cause: "registration", legacy: false, sibling_choice_made: true }), 1)
+    const link = entry(
+      "sibling_group_members",
+      "update",
+      [change("group_id", null, GROUP), change("sibling_of_lead_id", null, ASHA), change("basis", null, "matched"), change("cause", "registration", "sibling_link")],
+      2,
+    )
+    expect(read([link, answer])).toEqual([
+      {
+        summary: "added the applicant to a sibling group",
+        lines: ["Sibling of: None → Asha Kibwana · ADMSN-90080", "Counts as a sibling: None → Yes: the fathers’ names match", "Because: Staff chose Sibling of"],
+      },
+    ])
+  })
+
+  // Check-in marks the Admission form's membership answered.
+  it("reads a check-in Not a sibling answer as being in no sibling group, and one with a link as the link", () => {
+    const fromForm = entry("sibling_group_members", "insert", created({ cause: "lead_created", legacy: false }), 1)
+    const answer = { ...entry("sibling_group_members", "update", [change("sibling_choice_made", false, true), change("updated_at", AT, AT)], 2), at: "2026-11-20T08:00:00Z" }
+    expect(read([answer, fromForm])[0]).toEqual({ summary: "recorded that the applicant is in no sibling group", lines: ["Because: The application was created"] })
+
+    const link = { ...entry("sibling_group_members", "update", [change("group_id", null, GROUP), change("cause", "lead_created", "sibling_link")], 3), at: "2026-11-20T08:00:00.040Z" }
+    expect(read([link, answer, fromForm]).map((e) => e.summary)).toEqual([
+      "added the applicant to a sibling group",
+      "recorded that the applicant is in no sibling group",
+    ])
+  })
+
   it("records a Not a sibling answer as being in no sibling group", () => {
     const [none] = read([
       entry("sibling_group_members", "insert", created({ cause: "registration", lead_id: LEAD, updated_at: AT, sibling_choice_made: true })),
@@ -127,6 +158,16 @@ describe("a Sibling discount entry", () => {
       summary: "changed the applicant’s Sibling discount",
       lines: ["Sibling discount: 10% off → No Sibling discount", "Because: The applicant's Family changed"],
     })
+  })
+
+  it("says a manual result was fixed at enrolment though its source stays Set by hand", () => {
+    const [fixed] = read([entry("lead_sibling_results", "update", [change("cause", "sibling", "enrolled"), change("locked_at", null, AT), change("locked_result", null, "full")])])
+    expect(fixed).toEqual({ summary: "fixed the applicant’s Sibling discount when they were Enrolled", lines: ["Because: The student was Enrolled"] })
+  })
+
+  it("reads Back to automatic after enrolment as a change, not a new fix", () => {
+    const [back] = read([entry("lead_sibling_results", "update", [change("source", "manual", "locked"), change("result", "ten", "full"), change("cause", "enrolled", "sibling")])])
+    expect(back.summary).toBe("changed the applicant’s Sibling discount")
   })
 
   it("says the result was fixed at enrolment, hiding the copy it keeps", () => {
@@ -238,6 +279,21 @@ describe("a seat entry", () => {
   })
 })
 
+describe("a move between streams, saved as a release and a placement", () => {
+  const release = (at: string) => ({ ...entry("seat_placements", "update", [change("cause", "payment", "gender"), change("stream_id", BOYS, null), change("changed_at", AT, AT)], 1, "seat"), at })
+  const placement = (at: string) => ({ ...entry("seat_placements", "update", [change("stream_id", null, GIRLS), change("changed_at", AT, AT)], 2, "seat"), at })
+
+  it("reads as one move, saying why the child left the old stream", () => {
+    const described = read([placement("2026-11-20T08:15:02.030Z"), release("2026-11-20T08:15:02.010Z")])
+    expect(described).toEqual([{ summary: "moved the applicant from KG 2 A (Boys) to KG 2 A (Girls)", lines: ["Because: Boy or girl was corrected"] }])
+  })
+
+  it("stays two entries when the placement came in a later save", () => {
+    const described = read([placement("2026-11-21T08:00:00Z"), release("2026-11-20T08:15:02Z")])
+    expect(described.map((e) => e.summary)).toEqual(["placed the applicant in KG 2 A (Girls)", "released the applicant’s seat"])
+  })
+})
+
 describe("a request for a new stream", () => {
   it.each([
     ["Boys", "Needs: A stream for boys"],
@@ -300,6 +356,15 @@ describe("a Sibling request", () => {
         ],
       },
     ])
+  })
+
+  it("keeps the fee edit's own reason off the request when the 10% is applied", () => {
+    const applied = later(3, [
+      change("fee_edit", "needed", "applied"),
+      change("fee_edit_closed_at", null, AT),
+      change("fee_edit_reason", null, "sibling_proof_after_enrolment"),
+    ])
+    expect(read([applied, sent])[0]).toEqual({ summary: "applied the 10% for the granted Sibling request", lines: ["Fee edit: Needed → 10% applied"] })
   })
 
   it("is refused in its own words", () => {

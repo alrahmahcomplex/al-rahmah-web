@@ -69,6 +69,14 @@ export function discountValue(record: string | null, field: string, value: unkno
   return null
 }
 
+// A fee edit closed as applied keeps the Manual Sibling fee edit's reason,
+// which that edit's own entry already shows; only a dismissal's reason is
+// written here.
+export function withoutAppliedReason(entry: LeadHistoryEntry): LeadHistoryEntry {
+  if (entry.record !== RECORD || !entry.changes.some((c) => c.field === "fee_edit" && c.to === "applied")) return entry
+  return { ...entry, changes: entry.changes.filter((c) => c.field !== "fee_edit_reason") }
+}
+
 // Each request's kind, by request id, from its creation. A later entry
 // records only what changed, so it reads its kind from here.
 export type DiscountKinds = ReadonlyMap<string, unknown>

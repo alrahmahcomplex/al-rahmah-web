@@ -117,6 +117,8 @@ describe("getLeadHistory", () => {
   const sibling = "33333333-3333-4333-8333-333333333333"
   const placed = "44444444-4444-4444-8444-444444444444"
   const opened = "55555555-5555-4555-8555-555555555555"
+  const requested = "77777777-7777-4777-8777-777777777777"
+  const resolved = "88888888-8888-4888-8888-888888888888"
   const historyRow = (id: number, table: string, values: Record<string, unknown>, old: Record<string, unknown> | null = null) => ({
     ...row,
     id,
@@ -132,29 +134,36 @@ describe("getLeadHistory", () => {
     const { client, lookups } = fakeLookups(
       [
         historyRow(1, "sibling_group_members", { sibling_of_lead_id: sibling, group_id: randomId(90) }),
-        historyRow(2, "discount_requests", { sibling_of_lead_id: sibling, kind: "sibling" }),
+        historyRow(2, "discount_requests", { sibling_of_lead_id: requested, kind: "sibling" }),
         historyRow(3, "seat_placements", { stream_id: placed }, { stream_id: opened }),
-        historyRow(4, "stream_requests", { resolved_by_stream_id: opened }),
+        historyRow(4, "stream_requests", { resolved_by_stream_id: resolved }),
         // Another table's column of the same name points at nothing to name.
         historyRow(5, "leads", { stream_id: randomId(91), sibling_of_lead_id: randomId(92) }),
       ],
       {
         guardian_contacts: [],
-        leads: [{ id: sibling, student_name: "Asha Kibwana", admission_number: "ADMSN-90080" }],
+        leads: [
+          { id: sibling, student_name: "Asha Kibwana", admission_number: "ADMSN-90080" },
+          { id: requested, student_name: "Bahati Ndugu", admission_number: "ADMSN-90913" },
+        ],
         streams: [
           { id: placed, class_name: "KG 2", label: "A", takes: "Girls" },
           { id: opened, class_name: "STD 6", label: "A", takes: "Mixed" },
+          { id: resolved, class_name: "STD 3", label: "B", takes: "Boys" },
         ],
       },
     )
 
     const result = await getLeadHistory(client, row.row_id)
 
-    expect(result.ok && result.data.leadNames).toEqual({ [sibling]: "Asha Kibwana · ADMSN-90080" })
-    expect(result.ok && result.data.streamNames).toEqual({ [placed]: "KG 2 A (Girls)", [opened]: "STD 6 A" })
+    expect(result.ok && result.data.leadNames).toEqual({
+      [sibling]: "Asha Kibwana · ADMSN-90080",
+      [requested]: "Bahati Ndugu · ADMSN-90913",
+    })
+    expect(result.ok && result.data.streamNames).toEqual({ [placed]: "KG 2 A (Girls)", [opened]: "STD 6 A", [resolved]: "STD 3 B (Boys)" })
     // Each id is read once, from its own table only.
-    expect(lookups.filter((l) => l.table === "leads").flatMap((l) => l.ids)).toEqual([sibling])
-    expect(lookups.filter((l) => l.table === "streams").flatMap((l) => l.ids).sort()).toEqual([placed, opened].sort())
+    expect(lookups.filter((l) => l.table === "leads").flatMap((l) => l.ids).sort()).toEqual([sibling, requested].sort())
+    expect(lookups.filter((l) => l.table === "streams").flatMap((l) => l.ids).sort()).toEqual([placed, opened, resolved].sort())
   })
 
   it("reads a long history's siblings in batches of at most 100, and reads nothing when there are none", async () => {

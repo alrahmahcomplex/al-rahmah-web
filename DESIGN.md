@@ -518,7 +518,7 @@ The table gives the timing of each motion; the illustration bob, confetti, the s
 The `motion` library (pinned at 14.6.0) loads only through `MotionProvider` (`components/motion-provider.tsx`) in the staff layout, with `MotionConfig reducedMotion="user"`. CSS transitions do the rest. No parallax, no page-load choreography beyond the rise, no 3D.
 
 ### App icon
-Only the Admissions Portal installs as an app; the landing page and the Admission form do not (#497). The manifest is in `lib/portal-app.ts`. Every icon is the full Al-Rahmah logo, never the globe-and-book emblem alone. The theme colour is Rahmah Indigo.
+Only the Admissions Portal's pages carry the web app manifest and the Apple web-app tags; the landing page and the Admission form carry none, so browsers don't suggest installing them (#497). A browser's own "Add to Home Screen" still works on any page. The manifest is in `lib/portal-app.ts`. Every icon is the full Al-Rahmah logo, never the globe-and-book emblem alone. The theme colour is Rahmah Indigo.
 
 ## Do's and Don'ts
 

@@ -12,6 +12,7 @@ import { referralLink, requestOrigin } from "@/lib/agent-registration"
 import { getLanguage, type Language } from "@/lib/language"
 import { OFFICE_PHONE } from "@/lib/office"
 import { getAgentUser } from "@/lib/services/agent-auth"
+import { verifiedUserId } from "@/lib/services/auth-session"
 import { getAgentStudents, type AgentStudent, type AgentStudentStatus } from "@/lib/services/agent-students"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
@@ -42,7 +43,7 @@ type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>
 //
 // Right after the password is set it greets the agent once, with a button on
 // to the list (state 4): set-password leaves a short-lived cookie naming the
-// agent's code (./welcome.ts), and the button clears it. A switched-off or retired agent, or
+// login (./welcome.ts), and the button clears it. A switched-off or retired agent, or
 // anyone while agent access is off, sees only that reason's card (state 6),
 // read fresh on every visit. Without a session the agent signs in, under a
 // note saying why (state 5).
@@ -74,7 +75,8 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
 
   const copy = STUDENTS_COPY[language]
   const params = await searchParams
-  if ((await cookies()).get(WELCOME_COOKIE)?.value === agent.data.code) return <Welcome language={language} />
+  const welcome = (await cookies()).get(WELCOME_COOKIE)?.value
+  if (welcome && welcome === (await verifiedUserId(supabase))) return <Welcome language={language} />
 
   const search = typeof params.q === "string" ? params.q.slice(0, 100) : ""
   const step = stepFrom(params.step)

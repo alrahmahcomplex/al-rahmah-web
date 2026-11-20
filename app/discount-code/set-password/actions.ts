@@ -4,6 +4,7 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { acceptAgentInvite, type AcceptAgentInviteError } from "@/lib/services/agent-auth"
+import { verifiedUserId as sessionUserId } from "@/lib/services/auth-session"
 import { createClient } from "@/utils/supabase/server"
 
 import { WELCOME_COOKIE, WELCOME_MAX_AGE, WELCOME_PATH } from "../students/welcome"
@@ -27,7 +28,8 @@ export async function setAgentPassword(_previous: SetAgentPasswordState, formDat
   const [verifiedToken, verifiedUserId] = (jar.get(VERIFIED_COOKIE)?.value ?? "").split(" ")
   const retrying = verifiedToken === tokenHash && Boolean(verifiedUserId)
 
-  const result = await acceptAgentInvite(await createClient(), tokenHash, password, retrying ? { verifiedUserId } : {})
+  const supabase = await createClient()
+  const result = await acceptAgentInvite(supabase, tokenHash, password, retrying ? { verifiedUserId } : {})
   if (!result.ok) {
     if ("userId" in result) {
       jar.set(VERIFIED_COOKIE, `${tokenHash} ${result.userId}`, {
@@ -43,14 +45,18 @@ export async function setAgentPassword(_previous: SetAgentPasswordState, formDat
 
   if (retrying) jar.delete({ name: VERIFIED_COOKIE, path: PATH })
   // The students page greets a password set just now once, with a button on
-  // to the list (#497 state 4, owner's pick A). The cookie names this agent's
-  // code, so it greets no other account.
-  jar.set(WELCOME_COOKIE, result.data.code, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: WELCOME_PATH,
-    maxAge: WELCOME_MAX_AGE,
-  })
+  // to the list (#497 state 4, owner's pick A). The cookie names this login,
+  // not the code a recreated record would share, so it greets no other
+  // account. With no verified session there is nothing to greet.
+  const userId = await sessionUserId(supabase)
+  if (userId) {
+    jar.set(WELCOME_COOKIE, userId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: WELCOME_PATH,
+      maxAge: WELCOME_MAX_AGE,
+    })
+  }
   redirect(WELCOME_PATH)
 }

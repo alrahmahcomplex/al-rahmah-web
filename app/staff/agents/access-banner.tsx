@@ -33,7 +33,7 @@ export function AgentAccessBanner({ access }: { access: Result<AgentAccess, Agen
       <br />
       {enabled
         ? "Agents may sign up, claim a code, sign in and reset a password."
-        : "No agent can sign up, claim a code, sign in or reset a password. They're told these pages are paused for everyone and their code isn't affected."}
+        : "No agent can sign up, claim a code, sign in or reset a password. Signing in or on their students page, they're told these pages are paused for everyone and their code isn't affected; a password reset gets the usual reply and no email."}
     </Note>
   )
 }

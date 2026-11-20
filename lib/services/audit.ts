@@ -50,8 +50,8 @@ export type LeadHistoryEntry = {
 
 // The entries, and the current name of every contact, sibling and stream they
 // mention: a sibling as "Name · Admission Number" (#428). Each stream also
-// comes with when it was opened, so the screen can tell a stream opened after
-// a request for one from a stream that was already there.
+// comes with when it was opened, as the database wrote it, so the screen can
+// tell a stream opened to answer a request from one that was already there.
 export type LeadHistory = {
   entries: LeadHistoryEntry[]
   contactNames: Record<string, string>

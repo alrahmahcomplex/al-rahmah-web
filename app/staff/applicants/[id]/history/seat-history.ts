@@ -57,29 +57,44 @@ export function seatValue(record: string | null, field: string, value: unknown, 
   return null
 }
 
-// A request closes when a seat that fits comes up: in a stream opened since,
-// or in one that was already there (its seats were raised, or a child left
-// it). "Stream opened" is true only of the first, so the line shows only for
-// a stream opened after the request was sent. It is hidden when that can't
-// be told, because the request's own entry or the stream's opening time
-// isn't here; the summary already says the request closed.
+// A database time as microseconds since 1970, or null for anything else.
+// The database keeps microseconds, which Date.parse drops, and writes one
+// instant several ways: with the fraction's trailing zeros trimmed, and with
+// Z, +00:00 or the offset of the session that wrote it.
+const TIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:Z|([+-])(\d{2})(?::?(\d{2}))?)$/
+
+function microseconds(time: unknown): number | null {
+  const parts = typeof time === "string" ? TIME.exec(time) : null
+  if (!parts) return null
+  const [, year, month, day, hour, minute, second, fraction = "", sign, offsetHours = "0", offsetMinutes = "0"] = parts
+  const offset = (sign === "-" ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes))
+  const wholeSeconds = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)) / 1000 - offset * 60
+  return wholeSeconds * 1_000_000 + Number(fraction.padEnd(6, "0"))
+}
+
+// A request closes when a seat that fits comes up: in a stream opened just
+// then, or in one that was already there (its seats were raised, or a child
+// left it). "Stream opened" is true only of the first. Opening a stream
+// closes the requests it answers in the same save, and the database gives
+// both rows that save's time (now() in open_stream and
+// resolve_stream_requests). So the line shows only when the stream's opening
+// time and the request's closing time are the same instant, to the
+// microsecond. A stream opened after the request was sent proves nothing: it
+// may have filled, and closed the request days later when a seat was added.
+// The line is hidden when either time isn't here, and for a request the
+// database closed in a later save because its child's row was busy; the
+// summary already says the request closed.
 export type StreamOpenings = ReadonlySet<number>
 
-// The entries that close a request with a stream opened after it was sent.
+// The entries that close a request in the save that opened their stream.
 export function streamOpenings(entries: readonly LeadHistoryEntry[], openedAt: Readonly<Record<string, string>>): StreamOpenings {
-  const sent = new Map<string, number>()
-  for (const entry of entries) {
-    if (entry.record !== REQUEST || entry.action !== "insert" || !entry.recordId) continue
-    const at = entry.changes.find((c) => c.field === "requested_at")?.to
-    if (typeof at === "string") sent.set(entry.recordId, Date.parse(at))
-  }
   const openings = new Set<number>()
   for (const entry of entries) {
-    if (entry.record !== REQUEST || !entry.recordId) continue
+    if (entry.record !== REQUEST) continue
     const stream = entry.changes.find((c) => c.field === "resolved_by_stream_id")?.to
-    const opened = typeof stream === "string" ? Date.parse(openedAt[stream] ?? "") : NaN
-    // A missing or unreadable time is NaN, which is later than nothing.
-    if (opened > (sent.get(entry.recordId) ?? NaN)) openings.add(entry.id)
+    const opened = typeof stream === "string" ? microseconds(openedAt[stream]) : null
+    const closed = microseconds(entry.changes.find((c) => c.field === "resolved_at")?.to)
+    if (opened !== null && opened === closed) openings.add(entry.id)
   }
   return openings
 }

@@ -16,11 +16,12 @@ const GIRLS = "9e4a2f6c-0b13-4d77-8c5e-6a1f2b9d3e08"
 const REQUEST = "5e1d77a0-3b2c-4f19-8d61-0a9c4e2b7f35"
 const AT = "2026-11-19T07:14:03.518+00:00"
 
-// Girls was there before AT; Boys was opened after it.
+// Girls was there before AT. Boys was opened on the Tuesday after it, at a
+// time written here with a trailing zero, which the database trims.
 const names: HistoryNames = {
   leads: { [ASHA]: "Asha Kibwana · ADMSN-90080" },
   streams: { [BOYS]: "KG 2 A (Boys)", [GIRLS]: "KG 2 A (Girls)" },
-  streamOpenedAt: { [BOYS]: "2026-11-19T09:30:41.120+00:00", [GIRLS]: "2026-11-02T06:00:00+00:00" },
+  streamOpenedAt: { [BOYS]: "2026-11-24T08:15:02.3850+00:00", [GIRLS]: "2026-11-02T06:00:00+00:00" },
 }
 
 const change = (field: string, from: unknown, to: unknown) => ({ field, from, to })
@@ -381,24 +382,41 @@ describe("a request for a new stream", () => {
     expect(sent).toEqual({ summary: "sent a request to open a new stream", lines: ["Class: STD 3", "Enrollment year: 2027", line] })
   })
 
-  // A request sent at AT, and the entry that closes it with a stream.
-  const sent = entry("stream_requests", "insert", created({ class_name: "KG 2", enrollment_year: 2027, need: null, lead_id: LEAD, requested_at: AT }), 1, "request")
-  const closedBy = (stream: string) =>
-    entry("stream_requests", "update", [change("resolved_at", null, "2026-11-19T09:30:41.120+00:00"), change("resolved_by_stream_id", null, stream)], 2, "request")
+  // A request sent on a Monday, and the entry that closes it with a stream
+  // at a given time. Opening a stream closes the requests it answers in the
+  // same save, so both rows carry that save's time.
+  const sent = entry("stream_requests", "insert", created({ class_name: "KG 2", enrollment_year: 2027, need: null, lead_id: LEAD, requested_at: "2026-11-23T06:40:11.902114+00:00" }), 1, "request")
+  const closed = (stream: string, at: string) => entry("stream_requests", "update", [change("resolved_at", null, at), change("resolved_by_stream_id", null, stream)], 2, "request")
+  const hidden = { summary: "closed the request for a new stream", lines: [] }
 
-  it("names the stream that closed it when the stream was opened after the request", () => {
-    expect(read([closedBy(BOYS), sent])[0]).toEqual({ summary: "closed the request for a new stream", lines: ["Stream opened: None → KG 2 A (Boys)"] })
+  // Boys was opened at 08:15:02.385 UTC on Tuesday.
+  it.each([
+    ["with Z", "2026-11-24T08:15:02.385Z"],
+    ["with every digit", "2026-11-24T08:15:02.385000+00:00"],
+    ["in Tanzania's time", "2026-11-24T11:15:02.385+03:00"],
+  ])("names the stream opened in the save that closed it, its time written %s", (_case, at) => {
+    expect(read([closed(BOYS, at), sent])[0]).toEqual({ summary: "closed the request for a new stream", lines: ["Stream opened: None → KG 2 A (Boys)"] })
+  })
+
+  // Boys opened on Tuesday with one seat, which a child already waiting
+  // took. The request stayed open until a seat was added on Friday.
+  it("doesn't say a stream was opened when one opened after the request gained a seat later", () => {
+    expect(read([closed(BOYS, "2026-11-27T07:02:48.610233+00:00"), sent])[0]).toEqual(hidden)
+  })
+
+  it("doesn't say a stream was opened when the two times are a microsecond apart", () => {
+    expect(read([closed(BOYS, "2026-11-24T08:15:02.385001+00:00"), sent])[0]).toEqual(hidden)
   })
 
   it("doesn't say a stream was opened when one already there gained seats", () => {
-    expect(read([closedBy(GIRLS), sent])[0]).toEqual({ summary: "closed the request for a new stream", lines: [] })
+    expect(read([closed(GIRLS, "2026-11-24T08:15:02.385+00:00"), sent])[0]).toEqual(hidden)
   })
 
   it.each([
-    ["the request's own entry isn't in the history", [closedBy(BOYS)], names],
-    ["the stream's opening time couldn't be read", [closedBy(BOYS), sent], { streams: names.streams }],
-  ])("doesn't say a stream was opened when %s", (_case, entries, known) => {
-    expect(read(entries, known)[0]).toEqual({ summary: "closed the request for a new stream", lines: [] })
+    ["the stream's opening time couldn't be read", closed(BOYS, "2026-11-24T08:15:02.385+00:00"), { streams: names.streams }],
+    ["the closing time isn't one the database writes", closed(BOYS, "24 November 2026"), names],
+  ])("doesn't say a stream was opened when %s", (_case, closing, known) => {
+    expect(read([closing, sent], known)[0]).toEqual(hidden)
   })
 })
 

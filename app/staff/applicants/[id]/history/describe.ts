@@ -466,7 +466,7 @@ function rank(record: string | null, field: string) {
 
 // The siblings and streams the history points at, by id: a sibling as
 // "Name · Admission Number", a stream as screens name it. When each stream
-// was opened tells a stream opened for a request from one already there.
+// was opened tells a stream opened to answer a request from one already there.
 export type HistoryNames = {
   leads?: Readonly<Record<string, string>>
   streams?: Readonly<Record<string, string>>

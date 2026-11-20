@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { headers } from "next/headers"
 
+import { staffLinkOrigin } from "@/app/staff/agents/invite-link"
 import type { Permission } from "@/lib/permissions"
 import type { Result } from "@/lib/services/result"
 import {
@@ -23,7 +23,6 @@ import {
   type RoleNames,
 } from "@/lib/services/staff-admin"
 import { RESET_PATH } from "@/lib/password-reset"
-import { portalOrigin } from "@/lib/site-hosts"
 import { readLinkLimits } from "@/lib/services/password-link-requests"
 import { inviteSender, passwordResetSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
@@ -101,16 +100,8 @@ export async function retireRoleNow(roleId: string) {
   return settle<RoleNames>(await retireRole(supabase, roleId), ({ role }) => `Retired ${role}. It stays in history.`)
 }
 
-// Where invite and reset emails link back to: the portal (#497), or the site
-// the Manager is using anywhere but production, so a Preview's invites come
-// back to that Preview. Next.js has already checked that a Server Action's
-// Origin matches its Host. Supabase sends any address missing from its
-// allow-list to the Site URL instead.
-async function siteOrigin() {
-  const request = await headers()
-  const host = request.get("x-forwarded-host") ?? request.get("host")
-  return portalOrigin(request.get("origin") ?? `${request.get("x-forwarded-proto") ?? "https"}://${host}`)
-}
+// Invite and reset emails link back to the portal (#497); see staffLinkOrigin.
+const siteOrigin = staffLinkOrigin
 
 async function confirmUrl() {
   return `${await siteOrigin()}/auth/confirm`

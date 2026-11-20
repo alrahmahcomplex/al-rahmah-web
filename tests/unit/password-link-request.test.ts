@@ -115,6 +115,22 @@ describe("requesting a password link", () => {
     )
   })
 
+  // #497: on production every link leads to the portal, whichever host the
+  // request came in on.
+  it.each(["alrahmahcomplex.or.tz", "portal.alrahmahcomplex.or.tz"])("sends portal links from %s", async (host) => {
+    stubs.headers.value = new Headers({ "x-real-ip": "203.0.113.7", host, "x-forwarded-proto": "https" })
+    stubs.decide.mockResolvedValue({ ok: true, data: { kind: "reset", principal: "staff", email: "amani@example.test", attemptId: null } })
+
+    await requestPasswordLink(posted())
+    await stubs.after.mock.calls[0][0]()
+
+    const portal = "https://portal.alrahmahcomplex.or.tz"
+    expect(stubs.send.mock.calls[0][2]).toEqual({
+      agent: { reset: `${portal}/login/reset-password`, invite: `${portal}/discount-code/set-password` },
+      staff: { reset: `${portal}/login/reset-password`, invite: `${portal}/auth/confirm` },
+    })
+  })
+
   it("sends nothing when there is nobody to send to", async () => {
     await requestPasswordLink(posted())
     expect(stubs.after).not.toHaveBeenCalled()

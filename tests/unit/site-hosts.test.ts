@@ -107,6 +107,23 @@ describe("every other host is one site", () => {
   )
 })
 
+// Next.js reads a host condition as a regular expression, so an unescaped dot
+// would match any character.
+describe("hosts that only look like ours", () => {
+  it.each([
+    "https://alrahmahcomplexXorXtz",
+    "https://alrahmahcomplex-or-tz",
+    "https://portalXalrahmahcomplex.or.tz",
+    "https://portal-alrahmahcomplex-or-tz",
+    "https://evil.alrahmahcomplex.or.tz",
+    "https://alrahmahcomplex.or.tz.evil.example",
+  ])("%s moves nothing", async (origin) => {
+    for (const path of ["/staff", "/login", "/discount-code", "/apply?ref=AJM-407", "/"]) {
+      expect(getRedirectUrl(await open(`${origin}${path}`))).toBeNull()
+    }
+  })
+})
+
 describe("links the app hands out", () => {
   it("point a Referral link at the public site from either production host", () => {
     expect(referralLink(PORTAL, "AJM-407")).toBe(`${PUBLIC}/apply?ref=AJM-407`)

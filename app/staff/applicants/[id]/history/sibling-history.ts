@@ -124,7 +124,11 @@ export type SiblingChoices = { noGroup: ReadonlySet<number> }
 export function siblingChoices(entries: readonly LeadHistoryEntry[]): SiblingChoices {
   const noGroup = new Set<number>()
   for (const row of rowSequences(entries, GROUP).values()) {
-    let group: unknown = null
+    // The row's group is unknown (undefined) until an entry shows it. The
+    // first sibling groups were made before the history recorded them, so
+    // such a membership has no insert here, and it may sit in a group no
+    // entry names. Only a group known to be none reads as no sibling group.
+    let group: unknown
     for (const entry of row) {
       const groupChange = entry.changes.find((c) => c.field === "group_id")
       const answered = entry.changes.some((c) => c.field === "sibling_choice_made" && c.to === true)

@@ -46,7 +46,18 @@ import {
   resultReleaseSummary,
   resultReleaseValue,
 } from "./result-release-history"
-import { collapseSeatSaves, seatHidden, seatKeepsEmpty, seatLabel, seatOrder, seatSummary, seatValue } from "./seat-history"
+import {
+  collapseSeatSaves,
+  seatHidden,
+  seatKeepsEmpty,
+  seatLabel,
+  seatOrder,
+  seatSummary,
+  seatValue,
+  streamOpenings,
+  unprovenOpening,
+  type StreamOpenings,
+} from "./seat-history"
 import {
   collapseGroupSaves,
   siblingChoices,
@@ -454,16 +465,19 @@ function rank(record: string | null, field: string) {
 }
 
 // The siblings and streams the history points at, by id: a sibling as
-// "Name · Admission Number", a stream as screens name it.
+// "Name · Admission Number", a stream as screens name it. When each stream
+// was opened tells a stream opened for a request from one already there.
 export type HistoryNames = {
   leads?: Readonly<Record<string, string>>
   streams?: Readonly<Record<string, string>>
+  streamOpenedAt?: Readonly<Record<string, string>>
 }
 
 // What the whole history tells each entry, and the names read alongside it.
 type Context = {
   kinds: DiscountKinds
   choices: SiblingChoices
+  openings: StreamOpenings
   leadNames: Readonly<Record<string, string>>
   streamNames: Readonly<Record<string, string>>
 }
@@ -489,6 +503,7 @@ export function describeLeadHistory(
   const context: Context = {
     kinds: discountKinds(entries),
     choices,
+    openings: streamOpenings(entries, names.streamOpenedAt ?? {}),
     leadNames: names.leads ?? {},
     streamNames: names.streams ?? {},
   }
@@ -551,6 +566,7 @@ function describeEntry(
     changes: entry.changes
       .filter((c) => !HIDDEN[entry.record ?? ""]?.has(c.field))
       .filter((c) => !siblingHidden(entry.record, c.field) && !seatHidden(entry.record, c.field))
+      .filter((c) => !unprovenOpening(entry, c.field, context.openings))
       .filter((c) => !(isPriorityChange(entry) && PRIORITY_CHANGE_HIDDEN.has(c.field)))
       .filter((c) => !(isResultRelease(entry) && RESULT_RELEASE_HIDDEN.has(c.field)))
       .filter((c) => fromOld || !isEmpty(c.to) || seatKeepsEmpty(entry.record, c.field))

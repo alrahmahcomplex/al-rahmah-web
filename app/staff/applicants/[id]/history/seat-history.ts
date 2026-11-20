@@ -57,6 +57,37 @@ export function seatValue(record: string | null, field: string, value: unknown, 
   return null
 }
 
+// A request closes when a seat that fits comes up: in a stream opened since,
+// or in one that was already there (its seats were raised, or a child left
+// it). "Stream opened" is true only of the first, so the line shows only for
+// a stream opened after the request was sent. It is hidden when that can't
+// be told, because the request's own entry or the stream's opening time
+// isn't here; the summary already says the request closed.
+export type StreamOpenings = ReadonlySet<number>
+
+// The entries that close a request with a stream opened after it was sent.
+export function streamOpenings(entries: readonly LeadHistoryEntry[], openedAt: Readonly<Record<string, string>>): StreamOpenings {
+  const sent = new Map<string, number>()
+  for (const entry of entries) {
+    if (entry.record !== REQUEST || entry.action !== "insert" || !entry.recordId) continue
+    const at = entry.changes.find((c) => c.field === "requested_at")?.to
+    if (typeof at === "string") sent.set(entry.recordId, Date.parse(at))
+  }
+  const openings = new Set<number>()
+  for (const entry of entries) {
+    if (entry.record !== REQUEST || !entry.recordId) continue
+    const stream = entry.changes.find((c) => c.field === "resolved_by_stream_id")?.to
+    const opened = typeof stream === "string" ? Date.parse(openedAt[stream] ?? "") : NaN
+    // A missing or unreadable time is NaN, which is later than nothing.
+    if (opened > (sent.get(entry.recordId) ?? NaN)) openings.add(entry.id)
+  }
+  return openings
+}
+
+export function unprovenOpening(entry: LeadHistoryEntry, field: string, openings: StreamOpenings): boolean {
+  return entry.record === REQUEST && field === "resolved_by_stream_id" && !openings.has(entry.id)
+}
+
 // A move between streams is saved as a release and then a placement (the
 // gender or class reconciliation): one save reads as one move, saying why
 // the child left the old stream.

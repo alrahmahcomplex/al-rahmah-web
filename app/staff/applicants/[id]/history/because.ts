@@ -54,10 +54,21 @@ export function rowCauses(entries: readonly LeadHistoryEntry[]): RowCauses {
   return causes
 }
 
-// An update that kept its row's cause still says it.
+// Check-in marks a membership it found as answered and writes no cause, so
+// the row still holds the cause of whatever changed it before. Only check-in
+// (complete_admission_visit) sets the answer on a membership already there;
+// registration sets it on the one it inserts.
+function answeredAtCheckIn(entry: LeadHistoryEntry): boolean {
+  return entry.record === "sibling_group_members" && entry.changes.some((c) => c.field === "sibling_choice_made" && c.to === true)
+}
+
+// An update that kept its row's cause still says it. A check-in answer says
+// the check-in, not the earlier event whose cause the row kept.
 export function withCause(entry: LeadHistoryEntry, causes: RowCauses): LeadHistoryEntry {
-  if (entry.action !== "update" || !causes.has(entry.id) || entry.changes.some((c) => c.field === "cause")) return entry
-  return { ...entry, changes: [...entry.changes, { field: "cause", from: null, to: causes.get(entry.id) }] }
+  if (entry.action !== "update" || entry.changes.some((c) => c.field === "cause")) return entry
+  const checkIn = answeredAtCheckIn(entry)
+  if (!checkIn && !causes.has(entry.id)) return entry
+  return { ...entry, changes: [...entry.changes, { field: "cause", from: null, to: checkIn ? "visit_completion" : causes.get(entry.id) }] }
 }
 
 // The cause in words, or null for one no screen knows yet, which shows as stored.

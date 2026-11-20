@@ -49,12 +49,15 @@ export type LeadHistoryEntry = {
 }
 
 // The entries, and the current name of every contact, sibling and stream they
-// mention: a sibling as "Name · Admission Number" (#428).
+// mention: a sibling as "Name · Admission Number" (#428). Each stream also
+// comes with when it was opened, so the screen can tell a stream opened after
+// a request for one from a stream that was already there.
 export type LeadHistory = {
   entries: LeadHistoryEntry[]
   contactNames: Record<string, string>
   leadNames: Record<string, string>
   streamNames: Record<string, string>
+  streamOpenedAt: Record<string, string>
 }
 
 export type LeadHistoryError = "forbidden" | "not-found" | "unavailable"
@@ -149,7 +152,7 @@ export async function getLeadHistory(
     }
   }
 
-  const [contactNames, leadNames, streamNames] = await Promise.all([
+  const [contactNames, leadNames, streams] = await Promise.all([
     readNames<{ full_name: string }>(supabase, "guardian_contacts", "id, full_name", [...contactIds], (row) => row.full_name),
     readNames<{ student_name: string; admission_number: string }>(
       supabase,
@@ -158,37 +161,40 @@ export async function getLeadHistory(
       [...leadIds],
       (row) => `${row.student_name} · ${row.admission_number}`,
     ),
-    readNames<{ class_name: LeadClass; label: string; takes: StreamTakes }>(
+    readNames<{ class_name: LeadClass; label: string; takes: StreamTakes; opened_at: string }, { name: string; openedAt: string }>(
       supabase,
       "streams",
-      "id, class_name, label, takes",
+      "id, class_name, label, takes, opened_at",
       [...streamIds],
-      (row) => streamName(row.class_name, row.label, row.takes),
+      (row) => ({ name: streamName(row.class_name, row.label, row.takes), openedAt: row.opened_at }),
     ),
   ])
-  return { ok: true, data: { entries, contactNames, leadNames, streamNames } }
+  const streamNames = Object.fromEntries(Object.entries(streams).map(([id, stream]) => [id, stream.name]))
+  const streamOpenedAt = Object.fromEntries(Object.entries(streams).map(([id, stream]) => [id, stream.openedAt]))
+  return { ok: true, data: { entries, contactNames, leadNames, streamNames, streamOpenedAt } }
 }
 
 // Ids per request, so a long history never makes one oversized URL. The ids
 // come only from this lead's own entries, each read once.
 const NAMES_PER_REQUEST = 100
 
-// The current name of each contact, sibling or stream. The names only
-// decorate the history, so a batch that can't be read leaves those unnamed
-// (the screen shows their ids) rather than hiding the history.
-async function readNames<Row>(
+// The current name of each contact, sibling or stream (a stream's with when
+// it was opened). The names only decorate the history, so a batch that can't
+// be read leaves those unnamed (the screen shows their ids) rather than
+// hiding the history.
+async function readNames<Row, Name = string>(
   supabase: SupabaseClient,
   table: "guardian_contacts" | "leads" | "streams",
   columns: string,
   ids: string[],
-  name: (row: Row) => string,
-): Promise<Record<string, string>> {
+  name: (row: Row) => Name,
+): Promise<Record<string, Name>> {
   const batches: string[][] = []
   for (let i = 0; i < ids.length; i += NAMES_PER_REQUEST) batches.push(ids.slice(i, i + NAMES_PER_REQUEST))
 
   const results = await Promise.all(batches.map((batch) => supabase.from(table).select(columns).in("id", batch)))
 
-  const names: Record<string, string> = {}
+  const names: Record<string, Name> = {}
   for (const { data, error } of results) {
     if (error) {
       console.error(`Could not read the ${table} a lead's history names`, error)

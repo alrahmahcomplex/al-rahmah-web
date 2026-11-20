@@ -173,15 +173,16 @@ describe("a lead's history", () => {
     )
   })
 
-  test("names the sibling and the stream a sibling group or seat entry points at (#428)", async () => {
+  test("names the sibling and the stream a sibling group or seat entry points at, with when the stream was opened (#428)", async () => {
     const lead = await walkInLead()
     const sibling = await walkInLead()
     // A seeded stream: the seeded 2027 streams stay for the whole suite.
     const stream = await inRolledBackTransaction(
       async (sql) =>
         (
-          await sql.query<{ id: string; class_name: LeadClass; label: string; takes: StreamTakes }>(
-            "select id, class_name::text, label, takes::text from public.streams where enrollment_year = 2027 order by class_name, position limit 1",
+          await sql.query<{ id: string; class_name: LeadClass; label: string; takes: StreamTakes; opened_at: string }>(
+            // The time as JSON writes it, so it parses like the one read back.
+            "select id, class_name::text, label, takes::text, to_json(opened_at) #>> '{}' as opened_at from public.streams where enrollment_year = 2027 order by class_name, position limit 1",
           )
         ).rows[0],
     )
@@ -200,9 +201,11 @@ describe("a lead's history", () => {
       }
     })
 
-    const { leadNames, streamNames } = await historyOf(lead.id)
+    const { leadNames, streamNames, streamOpenedAt } = await historyOf(lead.id)
     expect(leadNames).toEqual({ [sibling.id]: `${sibling.studentName} · ${sibling.admissionNumber}` })
     expect(streamNames).toEqual({ [stream.id]: streamName(stream.class_name, stream.label, stream.takes) })
+    expect(Object.keys(streamOpenedAt)).toEqual([stream.id])
+    expect(Date.parse(streamOpenedAt[stream.id])).toBe(Date.parse(stream.opened_at))
   })
 
   test("a lead that does not exist is not found", async () => {

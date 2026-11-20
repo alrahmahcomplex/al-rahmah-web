@@ -16,9 +16,11 @@ const GIRLS = "9e4a2f6c-0b13-4d77-8c5e-6a1f2b9d3e08"
 const REQUEST = "5e1d77a0-3b2c-4f19-8d61-0a9c4e2b7f35"
 const AT = "2026-11-19T07:14:03.518+00:00"
 
+// Girls was there before AT; Boys was opened after it.
 const names: HistoryNames = {
   leads: { [ASHA]: "Asha Kibwana · ADMSN-90080" },
   streams: { [BOYS]: "KG 2 A (Boys)", [GIRLS]: "KG 2 A (Girls)" },
+  streamOpenedAt: { [BOYS]: "2026-11-19T09:30:41.120+00:00", [GIRLS]: "2026-11-02T06:00:00+00:00" },
 }
 
 const change = (field: string, from: unknown, to: unknown) => ({ field, from, to })
@@ -29,8 +31,8 @@ function entry(record: string, action: "insert" | "update", changes: LeadHistory
 }
 
 // Each entry as it reads on screen: its summary and its lines.
-function read(entries: LeadHistoryEntry[]) {
-  return describeLeadHistory(entries, {}, null, names).map((e) => ({
+function read(entries: LeadHistoryEntry[], known: HistoryNames = names) {
+  return describeLeadHistory(entries, {}, null, known).map((e) => ({
     summary: e.summary,
     lines: e.changes.map((c) => `${c.label}: ${c.from === null ? "" : `${c.from} → `}${c.to}`),
   }))
@@ -102,7 +104,24 @@ describe("a sibling group entry", () => {
     const link = (id: number, from: string) => group(id, [change("group_id", null, GROUP), change("sibling_of_lead_id", null, ASHA), change("basis", null, "matched"), change("cause", from, "sibling_link")])
 
     it("answered Not a sibling, with no group, reads as being in no sibling group", () => {
-      expect(read([answer, fromForm(false)])[0]).toEqual({ summary: "recorded that the applicant is in no sibling group", lines: ["Because: The application was created"] })
+      expect(read([answer, fromForm(false)])[0]).toEqual({
+        summary: "recorded that the applicant is in no sibling group",
+        lines: ["Because: Check-in completed the Admission form details"],
+      })
+    })
+
+    // The first sibling groups were made before the history recorded them, so
+    // such a membership has no insert here. Choosing Sibling of then moved it
+    // off the old family rule without changing its group, which no entry names.
+    it("of a membership whose group the history never showed doesn't say it is in no sibling group", () => {
+      const converted = group(1, [change("legacy", true, false), change("basis", null, "matched"), change("cause", "migration", "sibling_link"), change("updated_at", "2026-11-05T09:20:00.000+00:00", T0)])
+      expect(read([answer, converted])).toEqual([
+        { summary: "changed the applicant’s sibling group details", lines: ["Because: Check-in completed the Admission form details"] },
+        {
+          summary: "moved the applicant from the old family rule to the Sibling fee rule",
+          lines: ["Counts as a sibling: None → Yes: the fathers’ names match", "Because: Staff chose Sibling of"],
+        },
+      ])
     })
 
     it("that chose a sibling reads as the link", () => {
@@ -362,10 +381,24 @@ describe("a request for a new stream", () => {
     expect(sent).toEqual({ summary: "sent a request to open a new stream", lines: ["Class: STD 3", "Enrollment year: 2027", line] })
   })
 
-  it("names the stream that closed it", () => {
-    expect(read([entry("stream_requests", "update", [change("resolved_at", null, AT), change("resolved_by_stream_id", null, BOYS)])])).toEqual([
-      { summary: "closed the request for a new stream", lines: ["Stream opened: None → KG 2 A (Boys)"] },
-    ])
+  // A request sent at AT, and the entry that closes it with a stream.
+  const sent = entry("stream_requests", "insert", created({ class_name: "KG 2", enrollment_year: 2027, need: null, lead_id: LEAD, requested_at: AT }), 1, "request")
+  const closedBy = (stream: string) =>
+    entry("stream_requests", "update", [change("resolved_at", null, "2026-11-19T09:30:41.120+00:00"), change("resolved_by_stream_id", null, stream)], 2, "request")
+
+  it("names the stream that closed it when the stream was opened after the request", () => {
+    expect(read([closedBy(BOYS), sent])[0]).toEqual({ summary: "closed the request for a new stream", lines: ["Stream opened: None → KG 2 A (Boys)"] })
+  })
+
+  it("doesn't say a stream was opened when one already there gained seats", () => {
+    expect(read([closedBy(GIRLS), sent])[0]).toEqual({ summary: "closed the request for a new stream", lines: [] })
+  })
+
+  it.each([
+    ["the request's own entry isn't in the history", [closedBy(BOYS)], names],
+    ["the stream's opening time couldn't be read", [closedBy(BOYS), sent], { streams: names.streams }],
+  ])("doesn't say a stream was opened when %s", (_case, entries, known) => {
+    expect(read(entries, known)[0]).toEqual({ summary: "closed the request for a new stream", lines: [] })
   })
 })
 

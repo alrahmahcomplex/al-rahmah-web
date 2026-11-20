@@ -90,6 +90,7 @@ describe("getLeadHistory", () => {
         contactNames: { [contactId]: "Amina Juma" },
         leadNames: {},
         streamNames: {},
+        streamOpenedAt: {},
       },
     })
   })
@@ -130,7 +131,7 @@ describe("getLeadHistory", () => {
   })
   const randomId = (n: number) => `66666666-6666-4666-8666-${String(n).padStart(12, "0")}`
 
-  it("names the siblings and streams the entries point at, from the tables they belong to", async () => {
+  it("names the siblings and streams the entries point at, from the tables they belong to, with when each stream was opened", async () => {
     const { client, lookups } = fakeLookups(
       [
         historyRow(1, "sibling_group_members", { sibling_of_lead_id: sibling, group_id: randomId(90) }),
@@ -147,9 +148,9 @@ describe("getLeadHistory", () => {
           { id: requested, student_name: "Bahati Ndugu", admission_number: "ADMSN-90913" },
         ],
         streams: [
-          { id: placed, class_name: "KG 2", label: "A", takes: "Girls" },
-          { id: opened, class_name: "STD 6", label: "A", takes: "Mixed" },
-          { id: resolved, class_name: "STD 3", label: "B", takes: "Boys" },
+          { id: placed, class_name: "KG 2", label: "A", takes: "Girls", opened_at: "2027-01-13T05:00:00+00:00" },
+          { id: opened, class_name: "STD 6", label: "A", takes: "Mixed", opened_at: "2027-01-13T05:00:00+00:00" },
+          { id: resolved, class_name: "STD 3", label: "B", takes: "Boys", opened_at: "2027-02-02T08:41:17.203+00:00" },
         ],
       },
     )
@@ -161,9 +162,15 @@ describe("getLeadHistory", () => {
       [requested]: "Bahati Ndugu · ADMSN-90913",
     })
     expect(result.ok && result.data.streamNames).toEqual({ [placed]: "KG 2 A (Girls)", [opened]: "STD 6 A", [resolved]: "STD 3 B (Boys)" })
+    expect(result.ok && result.data.streamOpenedAt).toEqual({
+      [placed]: "2027-01-13T05:00:00+00:00",
+      [opened]: "2027-01-13T05:00:00+00:00",
+      [resolved]: "2027-02-02T08:41:17.203+00:00",
+    })
     // Each id is read once, from its own table only.
     expect(lookups.filter((l) => l.table === "leads").flatMap((l) => l.ids).sort()).toEqual([sibling, requested].sort())
     expect(lookups.filter((l) => l.table === "streams").flatMap((l) => l.ids).sort()).toEqual([placed, opened, resolved].sort())
+    expect(lookups.filter((l) => l.table === "streams").map((l) => l.columns)).toEqual(["id, class_name, label, takes, opened_at"])
   })
 
   it("reads a long history's siblings in batches of at most 100, and reads nothing when there are none", async () => {
@@ -190,7 +197,7 @@ describe("getLeadHistory", () => {
     const result = await getLeadHistory(client, row.row_id)
 
     expect(result.ok && result.data.entries).toHaveLength(2)
-    expect(result.ok && [result.data.leadNames, result.data.streamNames]).toEqual([{}, {}])
+    expect(result.ok && [result.data.leadNames, result.data.streamNames, result.data.streamOpenedAt]).toEqual([{}, {}, {}])
   })
 
   it("still returns the history when the contact names can't be read", async () => {

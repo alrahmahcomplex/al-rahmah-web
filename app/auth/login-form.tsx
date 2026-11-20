@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useActionState, useEffect, useRef, useState } from "react"
 
 import { AUTH_SUBMIT, IconField, PasswordField } from "@/components/auth-fields"
+import { NoticeBox } from "@/components/guided-form"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import type { Language } from "@/lib/language"
 import { cn } from "@/lib/utils"
@@ -27,7 +28,8 @@ export const FORGOT_PASSWORD_PATH = "/auth/forgot-password"
 // The password box is left to the browser, never held in React state: React
 // copies a held value into the box's `value` attribute, where injected CSS
 // or a browser extension could read it (#278).
-export function LoginForm({ language, notice }: { language: Language; notice: LoginNotice | null }) {
+// `studentsNote` shows the Discount code holder's note above the fields.
+export function LoginForm({ language, notice, studentsNote = false }: { language: Language; notice: LoginNotice | null; studentsNote?: boolean }) {
   const copy = LOGIN_COPY[language]
   const turnstile = useRef<TurnstileWidgetHandle>(null)
   const form = useRef<HTMLFormElement>(null)
@@ -64,6 +66,7 @@ export function LoginForm({ language, notice }: { language: Language; notice: Lo
 
       <form ref={form} action={formAction} className="flex w-full flex-col">
         <div className="flex flex-col gap-3">
+          {studentsNote && <NoticeBox tone="info">{copy.studentsNote}</NoticeBox>}
           <IconField
             id="email"
             label={copy.email}
@@ -113,7 +116,6 @@ function LoginMessageView({ language, message }: { language: Language; message: 
   return (
     <div role="alert" className="flex flex-col gap-1 text-center font-exo text-[12px] text-red-600">
       <p>{message.text}</p>
-      {message.code && <p className="text-slate-500">{copy.reasonCode(message.code)}</p>}
       {message.forgot && (
         <Link href={FORGOT_PASSWORD_PATH} className="text-[13px] text-blue-600 underline underline-offset-2">
           {copy.forgot}

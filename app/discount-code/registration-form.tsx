@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, ChevronDown, Copy, MessageCircle, Phone, Plus } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Copy, MessageCircle, Phone, Plus } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState, useTransition, type KeyboardEvent, type ReactNode } from "react"
 import { toast } from "sonner"
@@ -11,7 +11,6 @@ import {
   ChangeLink,
   ChoiceTiles,
   AgentCodeBox,
-  Confetti,
   ContinuePill,
   FieldError,
   FieldInput,
@@ -27,6 +26,8 @@ import {
   SummaryRow,
   type PersonName,
 } from "@/components/guided-form"
+import { rainConfetti } from "@/components/kit/confetti"
+import { FinishMark } from "@/components/kit/states"
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget"
 import { buttonVariants } from "@/components/ui/button"
 import { agentCodePrefix, agentFullName, agentRegistrationProblem, type AgentDraft, type AgentField } from "@/lib/agent-registration"
@@ -38,7 +39,6 @@ import { CARD } from "./frame"
 import { registerAsAgent } from "./actions"
 import { COPY } from "./copy"
 import type { DiscountCodeMessage, DiscountCodeState } from "./outcome"
-import "./discount-code.css"
 
 // The Discount code page's form and its confirmation, in concept C as
 // prototype v38 draws it: one question at a time, answered ones folding into
@@ -297,7 +297,6 @@ export function DiscountCodeForm({
           done={done}
           officePhone={officePhone}
           headingRef={heading}
-          onAgain={startOver}
           onNewForm={() => {
             startOver()
             toast(copy.newFormToast)
@@ -687,19 +686,19 @@ function Confirmation({
   done,
   officePhone,
   headingRef,
-  onAgain,
   onNewForm,
 }: {
   copy: Copy
   done: Done
   officePhone: string
   headingRef: React.RefObject<HTMLHeadingElement | null>
-  // "Start again" under the screen, and Start over in the progress bar.
-  onAgain: () => void
+  // Start over in the progress bar.
   onNewForm: () => void
 }) {
   const [copied, setCopied] = useState<"yes" | "failed" | null>(null)
   const mark = useRef<HTMLSpanElement>(null)
+  // The kit's finish confetti, once the mark's tick has drawn (DESIGN.md, Confetti).
+  useEffect(() => rainConfetti(mark.current), [])
   const shareHref = discountCodeShareLink(copy.shareText(done.code, done.link))
 
   async function copyLink() {
@@ -728,13 +727,7 @@ function Confirmation({
         labels={{ back: copy.back, reset: copy.startOver }}
         status={copy.progressFinished}
       />
-      <span ref={mark} className="block">
-        <svg className="dc-done-mark size-[84px]" viewBox="0 0 84 84" aria-hidden="true">
-          <circle cx="42" cy="42" r="40" />
-          <path d="M26 43l11 11 21-23" />
-        </svg>
-      </span>
-      <Confetti originRef={mark} />
+      <FinishMark ref={mark} />
       <h1
         ref={headingRef}
         tabIndex={-1}
@@ -758,13 +751,9 @@ function Confirmation({
           {copied === "yes" ? <Check className="size-5" aria-hidden /> : <Copy className="size-5" aria-hidden />}
           {copied === "yes" ? copy.copied : copy.copy}
         </button>
+        {/* Outlined like Copy link: the one orange button is the way on (owner's pick D3). */}
         {shareHref && (
-          <a
-            href={shareHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(buttonVariants({ variant: "orange" }), "min-h-13 rounded-full px-6 font-exo text-lg italic shadow-md shadow-orange-500/20")}
-          >
+          <a href={shareHref} target="_blank" rel="noopener noreferrer" className={OUTLINED_PILL}>
             <MessageCircle className="size-5" aria-hidden />
             {copy.share}
           </a>
@@ -785,6 +774,14 @@ function Confirmation({
         <Note tone="info">{copy.claimDoneNote}</Note>
       )}
 
+      <Link
+        href="/discount-code/students"
+        className={cn(buttonVariants({ variant: "orange" }), "min-h-13 w-full justify-between rounded-full pr-4 pl-6 font-exo text-lg italic shadow-md shadow-orange-500/20")}
+      >
+        {copy.seeStudents}
+        <ChevronRight className="size-5" aria-hidden />
+      </Link>
+
       <div className="flex flex-col items-center">
         <p className="text-sm text-slate-600">{copy.call}</p>
         <a
@@ -795,8 +792,6 @@ function Confirmation({
           {officePhone}
         </a>
       </div>
-
-      <ChangeLink onClick={onAgain}>{copy.again}</ChangeLink>
     </section>
   )
 }

@@ -195,7 +195,7 @@ test("a signed-in browser opening sign-in goes to its own side, and an agent nev
   await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
 })
 
-test("a switched-off agent is told to call the office, with the reason code", async ({ page }) => {
+test("a switched-off agent is told in the students page’s words to call the office, with no reason code", async ({ page }) => {
   const agent = await newAgent()
   // A login with a password, as if they had joined.
   const admin = secretClient().auth.admin
@@ -212,7 +212,7 @@ test("a switched-off agent is told to call the office, with the reason code", as
 
   await signInAgent(page, agent.email, PASSWORD)
 
-  await expect(notice(page)).toContainText("Huwezi kuingia kwa sasa. Piga simu ofisini.")
-  await expect(notice(page)).toContainText("Msimbo: switched_off")
+  await expect(notice(page)).toContainText("Ofisi ya Masoko imesimamisha Code yako ya Punguzo kwa sasa. Piga simu ofisini.")
+  await expect(notice(page)).not.toContainText("switched_off")
   await expect(page).toHaveURL(/\/auth$/)
 })

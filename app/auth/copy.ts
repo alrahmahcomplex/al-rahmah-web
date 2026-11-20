@@ -3,16 +3,17 @@ import type { SignInError } from "@/lib/services/sign-in"
 
 // The words of the one sign-in page (#264), for staff and Discount code
 // holders, in Swahili and English. Like the Discount code pages they never
-// say agent, referral or Wakala. A native Swahili reader checks the Swahili
-// before it ships.
+// say agent or Wakala; the note for an agent coming from the students page is
+// the owner's wording, "the students you referred" (#497). A native Swahili
+// reader checks the Swahili before it ships.
 
 // Problems /auth shows from the address, after a redirect: an expired email
 // link (/auth/callback) or a session the staff side refused (app/staff/session.ts).
 export const LOGIN_NOTICES = ["invalid-link", "not-staff", "deactivated", "unavailable"] as const
 export type LoginNotice = (typeof LOGIN_NOTICES)[number]
 
-// `forgot` puts the reset link under the message; `code` is a short reason a
-// person can read out on the phone.
+// `forgot` puts the reset link under the message. `code` names the reason
+// for logs and tests; the form never prints it (#497).
 export type LoginMessage = { text: string; code?: string; forgot?: boolean }
 
 type Copy = {
@@ -25,12 +26,19 @@ type Copy = {
   logIn: string
   processing: string
   forgot: string
-  reasonCode: (code: string) => string
+  // Above the form for a Discount code holder sent from the students page (#497 state 5).
+  studentsNote: string
   messages: Record<SignInError | LoginNotice, LoginMessage>
 }
 
 const OFF_SW = "Huwezi kuingia kwa sasa. Piga simu ofisini."
 const OFF_EN = "You can't sign in right now. Call the office."
+// A paused or closed Discount code says what the students page says (#497
+// state 6, decision 58), then where to turn.
+const PAUSED_SW = "Ofisi ya Masoko imesimamisha Code yako ya Punguzo kwa sasa. Piga simu ofisini."
+const PAUSED_EN = "The Marketing Office has paused your Discount code for now. Call the office."
+const CLOSED_SW = "Ofisi ya Masoko imefunga Code hii ya Punguzo. Piga simu ofisini."
+const CLOSED_EN = "The Marketing Office has closed this Discount code. Call the office."
 
 export const LOGIN_COPY: Record<Language, Copy> = {
   sw: {
@@ -43,7 +51,7 @@ export const LOGIN_COPY: Record<Language, Copy> = {
     logIn: "Ingia",
     processing: "Inaingia…",
     forgot: "Umesahau nenosiri?",
-    reasonCode: (code) => `Msimbo: ${code}`,
+    studentsNote: "Ingia uone wanafunzi uliowaleta.",
     messages: {
       "invalid-credentials": { text: "Barua pepe au nenosiri si sahihi.", forgot: true },
       "rate-limited": { text: "Majaribio ni mengi mno. Subiri dakika chache, kisha ujaribu tena.", code: "rate_limited" },
@@ -53,9 +61,9 @@ export const LOGIN_COPY: Record<Language, Copy> = {
       unavailable: { text: "Huduma haipatikani kwa sasa. Jaribu tena baada ya muda mfupi.", code: "unavailable" },
       deactivated: { text: "Akaunti yako ya mfanyakazi imezimwa. Mwombe anayesimamia akaunti yako aiwashe tena.", code: "deactivated" },
       "not-staff": { text: "Akaunti hii haipo kwenye orodha ya wafanyakazi. Mwombe anayesimamia wafanyakazi akualike.", code: "not_staff" },
-      "switched-off": { text: OFF_SW, code: "switched_off" },
-      retired: { text: OFF_SW, code: "retired" },
-      "access-off": { text: "Huduma hii imesimamishwa kwa muda.", code: "access_off" },
+      "switched-off": { text: PAUSED_SW, code: "switched_off" },
+      retired: { text: CLOSED_SW, code: "retired" },
+      "access-off": { text: "Tumesimamisha kurasa hizi kwa kila mtu kwa muda. Code yako haijaathirika.", code: "access_off" },
       "no-account": { text: "Akaunti hii haiwezi kuingia hapa. Piga simu ofisini.", code: "no_account" },
       "invalid-link": { text: "Kiungo hiki si sahihi au kimeisha muda.", code: "invalid_link" },
     },
@@ -70,7 +78,7 @@ export const LOGIN_COPY: Record<Language, Copy> = {
     logIn: "Log In",
     processing: "Processing...",
     forgot: "Forgot your password?",
-    reasonCode: (code) => `Code: ${code}`,
+    studentsNote: "Sign in to see the students you referred.",
     messages: {
       "invalid-credentials": { text: "Wrong email or password.", forgot: true },
       "rate-limited": { text: "Too many sign-in attempts. Wait a few minutes, then try again.", code: "rate_limited" },
@@ -80,9 +88,9 @@ export const LOGIN_COPY: Record<Language, Copy> = {
       unavailable: { text: "Sign-in is unavailable right now. Try again in a moment.", code: "unavailable" },
       deactivated: { text: "Your staff account is deactivated. Ask whoever manages your account to reactivate it.", code: "deactivated" },
       "not-staff": { text: "This account is not on the staff list. Ask whoever manages staff to invite you.", code: "not_staff" },
-      "switched-off": { text: OFF_EN, code: "switched_off" },
-      retired: { text: OFF_EN, code: "retired" },
-      "access-off": { text: "This service is paused for now.", code: "access_off" },
+      "switched-off": { text: PAUSED_EN, code: "switched_off" },
+      retired: { text: CLOSED_EN, code: "retired" },
+      "access-off": { text: "We've paused these pages for everyone for a while. Your code isn't affected.", code: "access_off" },
       "no-account": { text: "This account can't sign in here. Call the office.", code: "no_account" },
       "invalid-link": { text: "That sign-in link is invalid or has expired.", code: "invalid_link" },
     },

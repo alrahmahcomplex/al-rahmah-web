@@ -3,11 +3,12 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { supabaseEnv } from "./env"
 
-// Where a visitor with no session goes from a page that needs one.
-function signInPage(pathname: string): string | null {
-  if (pathname === "/staff" || pathname.startsWith("/staff/")) return "/auth"
+// Where a visitor with no session goes from a page that needs one. From the
+// Discount code students page, sign-in says why above its form (#497 state 5).
+function signInPage(pathname: string): { pathname: string; search: string } | null {
+  if (pathname === "/staff" || pathname.startsWith("/staff/")) return { pathname: "/auth", search: "" }
   if (pathname === "/discount-code/students" || pathname.startsWith("/discount-code/students/")) {
-    return "/auth"
+    return { pathname: "/auth", search: "?from=students" }
   }
   return null
 }
@@ -51,8 +52,8 @@ export async function refreshSessionAndGuardStaffRoutes(request: NextRequest) {
   const signInFor = !signedIn ? signInPage(request.nextUrl.pathname) : null
   if (signInFor) {
     const redirectTo = request.nextUrl.clone()
-    redirectTo.pathname = signInFor
-    redirectTo.search = ""
+    redirectTo.pathname = signInFor.pathname
+    redirectTo.search = signInFor.search
     return NextResponse.redirect(redirectTo)
   }
 

@@ -5,14 +5,13 @@ import type { Language } from "@/lib/language"
 
 import { ACCOUNT_COPY, type AccountMessage } from "./account-copy"
 
-// A refusal or problem on a Discount code account page, with its reason code
-// and the next step it points to.
+// A refusal or problem on a Discount code account page, with the next step
+// it points to. Its reason code stays unprinted (#497).
 export function AccountMessageView({ language, message }: { language: Language; message: AccountMessage }) {
   const copy = ACCOUNT_COPY[language]
   return (
     <div role="alert" className="flex flex-col gap-1 text-center font-exo text-[13px] text-red-600">
       <p>{message.text}</p>
-      {message.code && <p className="text-[12px] text-slate-500">{copy.reasonCode(message.code)}</p>}
       {message.forgot && (
         <Link href="/auth/forgot-password" className="text-blue-600 underline underline-offset-2">
           {copy.forgot}

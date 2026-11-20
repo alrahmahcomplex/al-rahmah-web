@@ -57,10 +57,11 @@ describe("the session proxy", () => {
     expect(response.headers.get("location")).toBe("https://school.example/auth")
   })
 
-  it("sends a visitor with no session from the Discount code students page to sign-in", async () => {
+  it("sends a visitor with no session from the Discount code students page to sign-in, marked for its note", async () => {
     sdk.getClaims.mockResolvedValue({ data: null, error: null })
 
-    expect((await visit("/discount-code/students")).headers.get("location")).toBe("https://school.example/auth")
+    expect((await visit("/discount-code/students")).headers.get("location")).toBe("https://school.example/auth?from=students")
+    expect((await visit("/discount-code/students?q=neema")).headers.get("location")).toBe("https://school.example/auth?from=students")
   })
 
   // A forged or expired token, a refresh the Auth server refused, an outage

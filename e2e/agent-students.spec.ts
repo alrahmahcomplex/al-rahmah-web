@@ -85,7 +85,7 @@ test("an empty list shows the code, the link, Copy and the number-free WhatsApp 
   await expect(page.getByRole("listitem")).toHaveCount(0)
 })
 
-test("a switched-off agent still signed in sees only the message", async ({ page }) => {
+test("a switched-off agent still signed in sees only the paused card, with no reason code, and can sign out", async ({ page }) => {
   const agent = await agentWithLogin()
   await studentLead({ name: "Siri Kadi", code: agent.code })
   await signInAgent(page, agent)
@@ -99,8 +99,24 @@ test("a switched-off agent still signed in sees only the message", async ({ page
   expect(error).toBeNull()
 
   await page.reload()
-  await expect(page.getByRole("main").getByRole("alert")).toContainText("Huwezi kuingia kwa sasa. Piga simu ofisini.")
+  const alert = page.getByRole("main").getByRole("alert")
+  await expect(alert.getByRole("heading", { name: "Code yako imesimamishwa" })).toBeVisible()
+  await expect(alert).toContainText("Ofisi ya Masoko imesimamisha Code yako ya Punguzo kwa sasa.")
+  await expect(alert).not.toContainText("switched_off")
   await expect(page.getByRole("main")).not.toContainText("Siri Kadi")
   await expect(page.getByRole("main")).not.toContainText(agent.code)
   await expect(page.getByRole("link", { name: "Shiriki kwenye WhatsApp" })).toHaveCount(0)
+
+  await alert.getByRole("button", { name: "Toka" }).click()
+  await expect(page).toHaveURL(/\/auth$/)
+  // Signed out for real: the students page now asks to sign in.
+  await page.goto("/discount-code/students")
+  await expect(page).toHaveURL(/\/auth\?from=students$/)
+})
+
+test("without a session, the students page sends the agent to sign in under a note saying why", async ({ page }) => {
+  await chooseLanguage(page.context(), "sw")
+  await page.goto("/discount-code/students")
+  await expect(page).toHaveURL(/\/auth\?from=students$/)
+  await expect(page.getByText("Ingia uone wanafunzi uliowaleta.")).toBeVisible()
 })

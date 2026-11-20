@@ -1,6 +1,5 @@
 import type { InviteBatchReport, InviteBudgetConfig } from "@/lib/services/agent-invite-batches"
 
-import { ACCESS_OFF_CODE } from "./access-banner"
 
 // The Agents screen's words for invite batches (#192). Times are in East
 // Africa Time. "Sent" means Auth accepted the email, never that it arrived.
@@ -43,7 +42,7 @@ export function batchStopLine(report: InviteBatchReport, now: number = Date.now(
     case "time_limit":
       return "Stopped at the time one batch may take. Send the next batch to carry on."
     case "access_off":
-      return `Stopped because agent access was turned off (${ACCESS_OFF_CODE}).`
+      return "Stopped because agent access was turned off."
     default:
       return now - new Date(report.startedAt).getTime() > CUT_OFF_AFTER_MS
         ? "This batch stopped before it finished, perhaps at the hosting time limit. The counts are read from what was recorded."

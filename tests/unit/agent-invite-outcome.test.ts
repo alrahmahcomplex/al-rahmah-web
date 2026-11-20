@@ -76,7 +76,7 @@ describe("the line under the badge", () => {
         lastAttempt: { result: "other_error", errorCode: "unexpected_failure", at: "2026-11-05T11:00:00Z" },
         joined: false,
       }),
-    ).toBe("Not sent 5 Nov 2026, 14:00: email error unexpected_failure")
+    ).toBe("Not sent 5 Nov 2026, 14:00: the email service gave an error")
   })
 
   it("is empty when nothing was tried", () => {
@@ -101,10 +101,10 @@ describe("sending an invite", () => {
       "Invite not sent: the hourly email limit is reached. Resend later.",
     )
     expect(inviteOutcome({ ok: false, error: { kind: "access-off" } }).message).toBe(
-      "Invite not sent: agent access is off (access_off). Turn it on first.",
+      "Invite not sent: agent access is off. Turn it on first.",
     )
     expect(inviteOutcome({ ok: false, error: { kind: "other-error", code: "boom" } }).message).toBe(
-      "Invite not sent: email error boom. Resend in a moment.",
+      "Invite not sent: the email service gave an error. Resend in a moment.",
     )
   })
 })

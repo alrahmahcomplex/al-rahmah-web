@@ -65,7 +65,7 @@ describe("the one sign-in form", () => {
     expect(screen.getAllByRole("link", { name: "Forgot your password?" })).toHaveLength(1)
   })
 
-  it("shows a refusal's reason code, without a reset link", async () => {
+  it("says a paused code in the students page's words, with no reason code and no reset link", async () => {
     stubs.signIn.mockResolvedValue({ error: "switched-off" })
     render(<LoginForm language="sw" notice={null} />)
 
@@ -74,8 +74,19 @@ describe("the one sign-in form", () => {
     await userEvent.click(screen.getByRole("button", { name: "Ingia" }))
 
     const alert = await screen.findByRole("alert")
-    expect(alert).toHaveTextContent("Msimbo: switched_off")
+    expect(alert).toHaveTextContent("Ofisi ya Masoko imesimamisha Code yako ya Punguzo kwa sasa. Piga simu ofisini.")
+    expect(alert).not.toHaveTextContent("switched_off")
+    expect(alert).not.toHaveTextContent("Msimbo")
     expect(alert.querySelector("a")).toBeNull()
+  })
+
+  it("says why to sign in above the fields only when sent from the students page", () => {
+    const { unmount } = render(<LoginForm language="sw" notice={null} studentsNote />)
+    expect(screen.getByText("Ingia uone wanafunzi uliowaleta.")).toBeInTheDocument()
+    unmount()
+
+    render(<LoginForm language="en" notice={null} />)
+    expect(screen.queryByText("Sign in to see the students you referred.")).not.toBeInTheDocument()
   })
 
   it("carries the sign-in security check inside the form", () => {
@@ -201,7 +212,7 @@ describe("the one sign-in form", () => {
 
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("The security check didn't finish. Try again.")
-    expect(alert).toHaveTextContent("Code: captcha_failed")
+    expect(alert).not.toHaveTextContent("captcha_failed")
     expect(alert).not.toHaveTextContent("Wrong email or password.")
     expect(stubs.reset).toHaveBeenCalledTimes(1)
   })

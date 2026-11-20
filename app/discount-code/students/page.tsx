@@ -15,8 +15,9 @@ import { getAgentStudents, type AgentStudent } from "@/lib/services/agent-studen
 import { cn } from "@/lib/utils"
 import { createClient } from "@/utils/supabase/server"
 
-import { ACCOUNT_COPY } from "../account-copy"
+import { ACCOUNT_COPY, type OffReason } from "../account-copy"
 import { AccountMessageView, SignOutNotice } from "../account-message"
+import { AccountOffCard } from "../account-off"
 import { AccountShell } from "../account-shell"
 import { COPY as DISCOUNT_COPY } from "../copy"
 import { cardLines, MAX_SHOWN, PAGE_SIZE, shownFrom, STUDENTS_COPY } from "./copy"
@@ -31,18 +32,28 @@ type SearchParams = Promise<{ [key: string]: string | string[] | undefined }>
 
 // Where a signed-in Discount code holder lands: the students using their
 // code (#195), newest first. A switched-off or retired agent, or anyone while
-// agent access is off, sees only the message, read fresh on every visit.
+// agent access is off, sees only that reason's card (#497 state 6), read
+// fresh on every visit.
+// Without a session the agent signs in, under a note saying why (#497 state 5).
+const SIGN_IN = "/auth?from=students"
+const OFF = new Set<string>(["switched-off", "retired", "access-off"] satisfies OffReason[])
+const isOff = (reason: string): reason is OffReason => OFF.has(reason)
+
 export default async function AgentStudentsPage({ searchParams }: { searchParams: SearchParams }) {
   const language = await getLanguage()
   const account = ACCOUNT_COPY[language]
   const supabase = await createClient()
   const agent = await getAgentUser(supabase)
 
-  if (!agent.ok && (agent.error === "signed-out" || agent.error === "not-agent")) redirect("/auth")
+  if (!agent.ok && (agent.error === "signed-out" || agent.error === "not-agent")) redirect(SIGN_IN)
   if (!agent.ok) {
     return (
       <AccountShell language={language} wide>
-        <SignOutNotice language={language} message={account.messages[agent.error]} back="/auth" />
+        {isOff(agent.error) ? (
+          <AccountOffCard language={language} reason={agent.error} />
+        ) : (
+          <SignOutNotice language={language} message={account.messages[agent.error]} back="/auth" />
+        )}
       </AccountShell>
     )
   }
@@ -52,12 +63,15 @@ export default async function AgentStudentsPage({ searchParams }: { searchParams
   const shown = shownFrom(params.n)
   const list = await getAgentStudents(supabase, { search, limit: shown, offset: 0 })
 
-  if (!list.ok && list.error === "not-agent") redirect("/auth")
+  if (!list.ok && list.error === "not-agent") redirect(SIGN_IN)
   if (!list.ok || list.data.kind !== "active") {
-    const message = account.messages[list.ok && list.data.kind !== "active" ? list.data.kind : "unavailable"]
     return (
       <AccountShell language={language} wide>
-        <SignOutNotice language={language} message={message} back="/auth" />
+        {list.ok && list.data.kind !== "active" ? (
+          <AccountOffCard language={language} reason={list.data.kind} />
+        ) : (
+          <SignOutNotice language={language} message={account.messages.unavailable} back="/auth" />
+        )}
       </AccountShell>
     )
   }

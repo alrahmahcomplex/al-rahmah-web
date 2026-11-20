@@ -182,7 +182,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(screen.getByRole("heading", { level: 1, name: "Code ya Punguzo" })).toHaveClass("sr-only")
     expect(screen.getByRole("button", { name: "Menyu" })).toBeInTheDocument()
     expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/ada ya usaili/)
-    expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/shule itakapothibitisha/)
+    expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/Ofisi ya Masoko itakapothibitisha/)
     expect(openStep().getByRole("heading", { name: WORDS.sw.name })).toBeInTheDocument()
     expect(screen.queryByLabelText(WORDS.sw.phone)).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: WORDS.sw.send })).not.toBeInTheDocument()
@@ -199,7 +199,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(screen.getByRole("main")).toHaveAttribute("lang", "en")
     expect(screen.getByRole("heading", { level: 1, name: "Discount code" })).toBeInTheDocument()
     expect(screen.getByRole("group", { name: WORDS.en.name })).toBeInTheDocument()
-    expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/interview fee once the school confirms/)
+    expect(screen.getByText(/TZS 10,000/)).toHaveTextContent(/interview fee once the Marketing Office confirms/)
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
     expect(await generateMetadata()).toEqual(expect.objectContaining({ title: "Discount code · Al-Rahmah Complex" }))
   })
@@ -219,12 +219,12 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
   ])("still renders, naming no figure, when %s", async (_, breakIt) => {
     breakIt()
     render(await DiscountCodePage())
-    expect(screen.getByText(/punguzo kwenye ada ya usaili, shule itakapothibitisha/)).toBeInTheDocument()
+    expect(screen.getByText(/punguzo kwenye ada ya usaili, Ofisi ya Masoko itakapothibitisha/)).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/TZS/)
 
     jar.values.set("lang", "en")
     render(await DiscountCodePage())
-    expect(screen.getByText(/get a discount on the interview fee once the school confirms/)).toBeInTheDocument()
+    expect(screen.getByText(/get a discount on the interview fee once the Marketing Office confirms/)).toBeInTheDocument()
   })
 
   it("asks for all three names in capitals, marks the empty ones, and folds the answer with its Badilisha link", async () => {
@@ -353,7 +353,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(code).toHaveValue("AAN-132")
     await next(user, "en")
     expect(screen.getByRole("button", { name: WORDS.en.sendClaim })).toBeInTheDocument()
-    expect(screen.getByText("We match this code to your phone number or your names. The school then confirms it.")).toBeInTheDocument()
+    expect(screen.getByText("We match this code to your phone number or your names. The Marketing Office then confirms it.")).toBeInTheDocument()
 
     // Changing the answer to No drops the code box and its code.
     await user.click(screen.getByRole("button", { name: "Change Answer" }))
@@ -420,7 +420,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(text).toContain("RAJ-124")
     expect(text.endsWith(REGISTERED.link)).toBe(true)
     expect(text).not.toMatch(FORBIDDEN)
-    expect(screen.getByText(/shule itakapothibitisha code yako\. Shule/)).toHaveTextContent(/Shule itawasiliana nawe/)
+    expect(screen.getByText(/Ofisi ya Masoko itakapothibitisha code yako, na itawasiliana nawe\./)).toHaveTextContent(/kushiriki code na kiungo sasa hivi/)
     expect(screen.getByText(/barua pepe ya kuweka nenosiri kwenye rehema@example\.test/)).toHaveTextContent(/angalia spam/)
     expect(screen.getByRole("link", { name: "+255 700 000 001" })).toHaveAttribute("href", "tel:+255700000001")
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
@@ -440,7 +440,8 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     const text = decodeURIComponent(href.slice("https://wa.me/?text=".length))
     expect(text).toMatch(/Discount code RAJ-124/)
     expect(text).not.toMatch(FORBIDDEN)
-    expect(screen.getByText(/once the school confirms your code\. The school/)).toHaveTextContent(/The school will contact you/)
+    expect(screen.getByText(/once the Marketing Office confirms your code, and they'll contact you\./)).toHaveTextContent(/start sharing your code and link now/)
+    expect(screen.getByRole("link", { name: "See my Referred Students" })).toHaveAttribute("href", "/discount-code/students")
     expect(screen.getByText(/email at rehema@example\.test to set your password/)).toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
   })
@@ -531,7 +532,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Ombi limepokelewa" })).toHaveFocus()
     expect(screen.getByText("RAJ-407")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Shiriki kwenye WhatsApp" })).toBeInTheDocument()
-    expect(screen.getByText(/Shule itathibitisha barua pepe yako/)).toHaveTextContent(/angalia spam/)
+    expect(screen.getByText(/Ofisi ya Masoko itathibitisha barua pepe yako/)).toHaveTextContent(/angalia spam/)
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
   })
 
@@ -539,7 +540,7 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     ["code-needed", "Namba hii tayari ina Code ya Punguzo. Weka alama kwenye 'Tayari una code?' na uiandike, au piga simu ofisini.", /Answer Yes to 'Do you already have a Discount code\?'/],
     ["phone-mismatch", "Hatukuweza kulinganisha code na namba hii. Zihakiki, au piga simu ofisini.", /couldn't match the code with this number/],
     ["no-match", "Hatukupata code hii. Ihakiki, au piga simu ofisini.", /couldn't find this code/],
-    ["claim-waiting", "Tumepokea ombi lako; shule itathibitisha.", /the school will confirm it/],
+    ["claim-waiting", "Tumepokea ombi lako; Ofisi ya Masoko itathibitisha.", /the Marketing Office will confirm it/],
     ["invited", "Tumekutumia barua pepe. Angalia spam, au tumia 'Tuma kiungo kipya'.", /Check spam, or use 'Send a new link'/],
     ["joined", "Tayari una akaunti. Ingia.", /You already have an account/],
     ["email-unusable", "Barua pepe hii haiwezi kutumika. Tumia nyingine au piga simu ofisini.", /This email can't be used/],
@@ -651,13 +652,15 @@ describe("Start over", { timeout: 30_000 }, () => {
     expect(stubs.toast).toHaveBeenCalledWith("Fomu mpya iko tayari.")
   })
 
-  it("'Anza tena' on the finished screen opens a new form too", async () => {
+  it("the finished screen's way on is 'Ona Wanafunzi Niliowaleta', to the students page, in place of 'Anza tena'", async () => {
     stubs.submit.mockResolvedValue(REGISTERED)
     const user = userEvent.setup()
     render(await DiscountCodePage())
     await fill(user)
     await send(user)
-    await user.click(await screen.findByRole("button", { name: "Anza tena" }))
-    expect(await screen.findByRole("group", { name: WORDS.sw.name })).toBeInTheDocument()
+    await screen.findByRole("heading", { level: 1, name: "Code yako ya Punguzo" })
+
+    expect(screen.getByRole("link", { name: "Ona Wanafunzi Niliowaleta" })).toHaveAttribute("href", "/discount-code/students")
+    expect(screen.queryByRole("button", { name: "Anza tena" })).not.toBeInTheDocument()
   })
 })

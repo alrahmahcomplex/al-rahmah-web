@@ -3,13 +3,17 @@ import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import type { AcceptAgentInviteError, AgentSignInError, AgentUserError } from "@/lib/services/agent-auth"
 
 // The words of the Discount code account pages (#191), in Swahili and
-// English. Like the Discount code page, they never say agent, referral or
-// Wakala. A native Swahili reader checks the Swahili before it ships.
+// English. Like the Discount code page, they never say agent or Wakala. A
+// native Swahili reader checks the Swahili before it ships; the owner checked
+// the #497 sentences.
 //
-// A refusal a person may need to read out on the phone carries a short
-// reason code.
+// `code` names the reason for logs and tests. The pages never print it
+// (#497): the words say what happened.
 
 export type AccountMessage = { text: string; code?: string; signIn?: boolean; forgot?: boolean }
+
+// Why the students page shows only its message (#497 state 6).
+export type OffReason = "switched-off" | "retired" | "access-off"
 
 type MessageKey =
   | AgentSignInError
@@ -35,7 +39,8 @@ type Copy = {
   saving: string
   goToSignIn: string
   signOut: string
-  reasonCode: (code: string) => string
+  // State 6's title and sentence for each reason.
+  off: Record<OffReason, { title: string; text: string }>
   messages: Record<MessageKey, AccountMessage>
 }
 
@@ -64,7 +69,14 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
     saving: "Inahifadhi…",
     goToSignIn: "Nenda kuingia",
     signOut: "Toka",
-    reasonCode: (code) => `Msimbo: ${code}`,
+    off: {
+      "switched-off": { title: "Code yako imesimamishwa", text: "Ofisi ya Masoko imesimamisha Code yako ya Punguzo kwa sasa." },
+      retired: { title: "Code hii haitumiki tena", text: "Ofisi ya Masoko imefunga Code hii ya Punguzo." },
+      "access-off": {
+        title: "Kurasa hizi zimesimamishwa kwa muda",
+        text: "Tumesimamisha kurasa hizi kwa kila mtu kwa muda. Code yako haijaathirika.",
+      },
+    },
     messages: {
       "invalid-credentials": { text: "Barua pepe au nenosiri si sahihi.", forgot: true },
       "rate-limited": { text: "Majaribio ni mengi mno. Subiri dakika chache, kisha ujaribu tena.", code: "rate_limited" },
@@ -105,7 +117,11 @@ export const ACCOUNT_COPY: Record<Language, Copy> = {
     saving: "Saving…",
     goToSignIn: "Go to sign-in",
     signOut: "Sign out",
-    reasonCode: (code) => `Code: ${code}`,
+    off: {
+      "switched-off": { title: "Your code is paused", text: "The Marketing Office has paused your Discount code for now." },
+      retired: { title: "This code is no longer in use", text: "The Marketing Office has closed this Discount code." },
+      "access-off": { title: "These pages are paused for now", text: "We've paused these pages for everyone for a while. Your code isn't affected." },
+    },
     messages: {
       "invalid-credentials": { text: "Wrong email or password.", forgot: true },
       "rate-limited": { text: "Too many attempts. Wait a few minutes, then try again.", code: "rate_limited" },

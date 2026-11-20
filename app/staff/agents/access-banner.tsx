@@ -2,10 +2,6 @@ import { Note } from "@/components/kit"
 import type { AgentAccess, AgentAccessError } from "@/lib/services/agent-access"
 import type { Result } from "@/lib/services/result"
 
-// The reason code an agent sees while agent access is off, so staff on the
-// phone can tell it apart from a switched-off agent.
-export const ACCESS_OFF_CODE = "access_off"
-
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium",
   timeStyle: "short",
@@ -37,7 +33,7 @@ export function AgentAccessBanner({ access }: { access: Result<AgentAccess, Agen
       <br />
       {enabled
         ? "Agents may sign up, claim a code, sign in and reset a password."
-        : `No agent can sign up, claim a code, sign in or reset a password. They see the reason code ${ACCESS_OFF_CODE}.`}
+        : "No agent can sign up, claim a code, sign in or reset a password. Signing in or on their students page, they're told these pages are paused for everyone and their code isn't affected; a password reset gets the usual reply and no email."}
     </Note>
   )
 }

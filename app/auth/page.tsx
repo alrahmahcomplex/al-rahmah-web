@@ -18,16 +18,17 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // The one sign-in page (#264) for staff and Discount code holders. A browser
 // already signed in goes to its own side, so one browser never holds two
-// accounts' sessions.
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const [language, { error }] = await Promise.all([getLanguage(), searchParams])
+// accounts' sessions. `from=students` comes from the Discount code students
+// page and puts a note above the form saying why to sign in (#497 state 5).
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; from?: string }> }) {
+  const [language, { error, from }] = await Promise.all([getLanguage(), searchParams])
   const home = await signedInHome(await createClient())
   if (home) redirect(home)
 
   const notice = LOGIN_NOTICES.find((n) => n === error) ?? null
   return (
     <AuthCard language={language}>
-      <LoginForm language={language} notice={notice} />
+      <LoginForm language={language} notice={notice} studentsNote={from === "students"} />
     </AuthCard>
   )
 }

@@ -4,10 +4,12 @@ import type { Language } from "@/lib/language"
 import type { DiscountCodeMessage } from "./outcome"
 
 // The Discount code page's words, in Swahili and English. The page is for
-// people the school wants to bring in families, but it never calls them
-// agents and never mentions referrals or approval: the code is a Discount
-// code, Code ya Punguzo. A native Swahili reader checks the Swahili before it
-// ships. The sign-up outcomes' Swahili is the owner's wording (#193).
+// people the school wants to bring in families. It never calls them agents:
+// the code is a Discount code, Code ya Punguzo. The finish screen's button
+// and notes are the owner's words (#497): they name the Marketing Office,
+// which confirms a code, and "the students you referred". The sign-up
+// outcomes' Swahili is the owner's wording (#193); the owner checked the
+// Swahili of the #497 sentences.
 
 // The answers that keep the form, other than the checks before sending.
 type SignUpMessage = Exclude<DiscountCodeMessage, "rate-limited" | "check-failed" | "unavailable">
@@ -92,15 +94,15 @@ type Copy = {
   // On a claimed code's done page.
   claimDoneNote: string
   call: string
-  // The finished screen's link to a new, empty form.
-  again: string
+  // The finished screen's main button, to the students page.
+  seeStudents: string
 }
 
 export const COPY: Record<Language, Copy> = {
   sw: {
     title: "Code ya Punguzo",
     intro: (discount) =>
-      `Shiriki Code yako ya Punguzo na familia unazozifahamu. Familia itakayoitumia itapata punguzo${discount ? ` la ${discount}` : ""} kwenye ada ya usaili, shule itakapothibitisha code yako.`,
+      `Shiriki Code yako ya Punguzo na familia unazozifahamu. Familia itakayoitumia itapata punguzo${discount ? ` la ${discount}` : ""} kwenye ada ya usaili, Ofisi ya Masoko itakapothibitisha code yako.`,
     groups: { you: "Wewe", code: "Code" },
     back: "Rudi",
     startOver: "Anza upya",
@@ -144,7 +146,7 @@ export const COPY: Record<Language, Copy> = {
       before: "Code yako ya Punguzo itaanza na ",
       after: ", herufi za kwanza za majina yako matatu. Utaiona code yote kwenye ukurasa unaofuata.",
     },
-    claimNote: "Tunalinganisha code hii na namba yako ya simu au majina yako. Kisha shule inaithibitisha.",
+    claimNote: "Tunalinganisha code hii na namba yako ya simu au majina yako. Kisha Ofisi ya Masoko inaithibitisha.",
     change: { name: "Badilisha Jina", phone: "Badilisha Namba", email: "Badilisha Barua pepe", hasCode: "Badilisha Jibu", code: "Badilisha Code" },
     signInPrompt: "Umeshaweka nenosiri?",
     signIn: "Ingia",
@@ -166,7 +168,7 @@ export const COPY: Record<Language, Copy> = {
       "phone-mismatch": "Hatukuweza kulinganisha code na namba hii. Zihakiki, au piga simu ofisini.",
       "name-mismatch": "Hatukuweza kulinganisha code na majina yako. Yahakiki, au piga simu ofisini.",
       "no-match": "Hatukupata code hii. Ihakiki, au piga simu ofisini.",
-      "claim-waiting": "Tumepokea ombi lako; shule itathibitisha.",
+      "claim-waiting": "Tumepokea ombi lako; Ofisi ya Masoko itathibitisha.",
       invited: "Tumekutumia barua pepe. Angalia spam, au tumia 'Tuma kiungo kipya'.",
       joined: "Tayari una akaunti. Ingia.",
       "email-unusable": "Barua pepe hii haiwezi kutumika. Tumia nyingine au piga simu ofisini.",
@@ -186,18 +188,18 @@ export const COPY: Record<Language, Copy> = {
     shareText: (code, link) =>
       `Jaza fomu ya udahili ya Al-Rahmah Complex kupitia kiungo hiki. Code yangu ya Punguzo, ${code}, itakuwa imeshajazwa: ${link}`,
     confirmNote:
-      "Punguzo litaanza kufanya kazi shule itakapothibitisha code yako. Shule itawasiliana nawe. Unaweza kuanza kushiriki code na kiungo sasa hivi.",
+      "Punguzo litaanza kufanya kazi Ofisi ya Masoko itakapothibitisha code yako, na itawasiliana nawe. Unaweza kuanza kushiriki code na kiungo sasa hivi.",
     emailNote: (email) =>
-      `Shule itakapothibitisha code yako, utapokea barua pepe ya kuweka nenosiri kwenye ${email}. Ikichelewa, angalia spam.`,
+      `Ofisi ya Masoko itakapothibitisha code yako, utapokea barua pepe ya kuweka nenosiri kwenye ${email}. Ikichelewa, angalia spam.`,
     claimDoneNote:
-      "Shule itathibitisha barua pepe yako, kisha utapokea barua pepe ya kuweka nenosiri. Ikichelewa, angalia spam.",
+      "Ofisi ya Masoko itathibitisha barua pepe yako, kisha utapokea barua pepe ya kuweka nenosiri. Ikichelewa, angalia spam.",
     call: "Una swali? Piga simu ofisi ya udahili",
-    again: "Anza tena",
+    seeStudents: "Ona Wanafunzi Niliowaleta",
   },
   en: {
     title: "Discount code",
     intro: (discount) =>
-      `Share your Discount code with families you know. Families who use it get ${discount ? `${discount} off` : "a discount on"} the interview fee once the school confirms your code.`,
+      `Share your Discount code with families you know. Families who use it get ${discount ? `${discount} off` : "a discount on"} the interview fee once the Marketing Office confirms your code.`,
     groups: { you: "You", code: "Code" },
     back: "Back",
     startOver: "Start over",
@@ -241,7 +243,7 @@ export const COPY: Record<Language, Copy> = {
       before: "Your Discount code will start with ",
       after: ", the first letters of your three names. You see the whole code on the next screen.",
     },
-    claimNote: "We match this code to your phone number or your names. The school then confirms it.",
+    claimNote: "We match this code to your phone number or your names. The Marketing Office then confirms it.",
     change: { name: "Change Name", phone: "Change Number", email: "Change Email", hasCode: "Change Answer", code: "Change Code" },
     signInPrompt: "Already set a password?",
     signIn: "Sign in",
@@ -264,7 +266,7 @@ export const COPY: Record<Language, Copy> = {
       "phone-mismatch": "We couldn't match the code with this number. Check both, or call the office.",
       "name-mismatch": "We couldn't match the code with your names. Check both, or call the office.",
       "no-match": "We couldn't find this code. Check it, or call the office.",
-      "claim-waiting": "We have your request; the school will confirm it.",
+      "claim-waiting": "We have your request; the Marketing Office will confirm it.",
       invited: "We have sent you an email. Check spam, or use 'Send a new link'.",
       joined: "You already have an account. Sign in.",
       "email-unusable": "This email can't be used. Use another or call the office.",
@@ -284,11 +286,12 @@ export const COPY: Record<Language, Copy> = {
     shareText: (code, link) =>
       `Apply to Al-Rahmah Complex through this link. My Discount code ${code} will already be filled in: ${link}`,
     confirmNote:
-      "The discount starts once the school confirms your code. The school will contact you. You can start sharing your code and link now.",
+      "The discount starts once the Marketing Office confirms your code, and they'll contact you. You can start sharing your code and link now.",
     emailNote: (email) =>
-      `Once the school confirms your code, you'll get an email at ${email} to set your password. If it's slow to arrive, check spam.`,
-    claimDoneNote: "The school will confirm your email, then you'll get an email to set your password. If it's slow to arrive, check spam.",
+      `Once the Marketing Office confirms your code, you'll get an email at ${email} to set your password. If it's slow to arrive, check spam.`,
+    claimDoneNote:
+      "The Marketing Office will confirm your email, then you'll get an email to set your password. If it's slow to arrive, check spam.",
     call: "Questions? Call the admissions office",
-    again: "Start again",
+    seeStudents: "See my Referred Students",
   },
 }

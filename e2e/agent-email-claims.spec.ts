@@ -98,7 +98,7 @@ test.describe("the Discount code page's answers", () => {
     await expect(page.getByText(agent.code, { exact: true })).toBeVisible()
     await expect(page.getByText(new RegExp(`/apply\\?ref=${agent.code}$`))).toBeVisible()
     await expect(page.getByRole("link", { name: t.share })).toBeVisible()
-    await expect(page.getByText(/Shule itathibitisha barua pepe yako/)).toContainText("angalia spam")
+    await expect(page.getByText(/Ofisi ya Masoko itathibitisha barua pepe yako/)).toContainText("angalia spam")
     expect(await page.locator("body").innerText()).not.toMatch(FORBIDDEN)
     expect(await storedEmail(agent.id)).toBeNull()
 
@@ -143,9 +143,9 @@ test.describe("the Discount code page's answers", () => {
     await expect(page.getByRole("heading", { level: 1, name: t.claimDone })).toBeVisible()
 
     await claim(page, agent, address, "Jina Lingine Kabisa")
-    await expect(notice(page)).toHaveText("Tumepokea ombi lako; shule itathibitisha.")
+    await expect(notice(page)).toHaveText("Tumepokea ombi lako; Ofisi ya Masoko itathibitisha.")
     await claim(page, agent, email("five-other"))
-    await expect(notice(page)).toHaveText("Tumepokea ombi lako; shule itathibitisha.")
+    await expect(notice(page)).toHaveText("Tumepokea ombi lako; Ofisi ya Masoko itathibitisha.")
   })
 
   test("6. invited but not joined: check spam or ask for a new link", async ({ page }) => {
@@ -206,7 +206,7 @@ test.describe("the Manager's queue", () => {
     await claim(visitor, agent, address, `${agent.fullName} Mwenyewe`)
     await expect(visitor.getByRole("heading", { level: 1, name: t.claimDone })).toBeVisible()
     await claim(visitor, agent, rival, "Mtu Mwingine Kabisa")
-    await expect(notice(visitor)).toHaveText("Tumepokea ombi lako; shule itathibitisha.")
+    await expect(notice(visitor)).toHaveText("Tumepokea ombi lako; Ofisi ya Masoko itathibitisha.")
     await visitor.close()
 
     await signInManager(page)

@@ -7,7 +7,6 @@ import { requirePermission } from "@/lib/services/staff-auth"
 import { agentInviteSender } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
 
-import { ACCESS_OFF_CODE } from "./access-banner"
 import { agentSetPasswordUrl } from "./invite-link"
 import type { BatchActionOutcome } from "./invite-batch-outcome"
 
@@ -38,7 +37,7 @@ export async function sendMarketingAgentInviteBatch(importBatchId: string | null
     case "forbidden":
       return { status: "refused", message: "You don't have permission to send invites." }
     case "access-off":
-      return { status: "refused", message: `No invites were sent: agent access is off (${ACCESS_OFF_CODE}). Turn it on first.` }
+      return { status: "refused", message: "No invites were sent: agent access is off. Turn it on first." }
     default:
       if (result.error.batchId) {
         return {

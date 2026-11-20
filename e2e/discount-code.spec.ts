@@ -101,6 +101,11 @@ for (const lang of ["sw", "en"] as const satisfies Lang[]) {
       whatsapp: "+255754000111",
       email: who.email,
     })
+
+    // The way on is the students page, which asks a person with no session to sign in, saying why (#497).
+    await page.getByRole("link", { name: lang === "sw" ? "Ona Wanafunzi Niliowaleta" : "See my Referred Students" }).click()
+    await expect(page).toHaveURL(/\/auth\?from=students$/)
+    await expect(page.getByText(lang === "sw" ? "Ingia uone wanafunzi uliowaleta." : "Sign in to see the students you referred.")).toBeVisible()
   })
 }
 
@@ -215,7 +220,7 @@ test("Yes opens the code box, which adds the hyphen by itself", async ({ page })
   await expect(box).toHaveValue("AAN-132")
   await continueFrom(page, "en")
   await expect(sendButton(page, "en", true)).toBeVisible()
-  await expect(page.getByText("We match this code to your phone number or your names. The school then confirms it.")).toBeVisible()
+  await expect(page.getByText("We match this code to your phone number or your names. The Marketing Office then confirms it.")).toBeVisible()
 })
 
 test("no page or response before the finish carries an agent's code, and the finish carries only the person's own", async ({ page }) => {

@@ -72,6 +72,9 @@ export function crossHostRedirects(): Redirect[] {
       destination: `${PORTAL_ORIGIN}${path}/:path*`,
       permanent: false,
     })),
+    // Only the portal installs as an app (lib/portal-app.ts), so the public
+    // site serves no manifest of its own.
+    { source: "/manifest.webmanifest", has: onHost(PUBLIC_HOST), destination: `${PORTAL_ORIGIN}/manifest.webmanifest`, permanent: false },
     // A Referral link opened on the portal, ?ref= and all.
     { source: "/apply", has: onHost(PORTAL_HOST), destination: `${PUBLIC_ORIGIN}/apply`, permanent: false },
   ]

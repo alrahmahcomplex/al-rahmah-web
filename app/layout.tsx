@@ -32,13 +32,12 @@ const exo = localFont({
 export const metadata: Metadata = {
   title: "Al-Rahmah Complex",
   description: "Al-Rahmah Schools: admissions and staff portal.",
-  manifest: "/manifest.webmanifest",
   // app/favicon.ico is picked up on its own; these add the PNG tab icon and the iPhone home-screen icon.
+  // No install tags here: only the portal's pages carry them (lib/portal-app.ts, #497).
   icons: {
     icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }],
     apple: "/apple-touch-icon.png",
   },
-  appleWebApp: { capable: true, title: "Al-Rahmah", statusBarStyle: "default" },
 }
 
 export const viewport: Viewport = {

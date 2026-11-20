@@ -110,13 +110,16 @@ test.describe("signing in", () => {
 
     await page.reload()
     await expect(page).toHaveURL(/\/auth\?error=deactivated$/)
-    await expect(page.locator("form").getByRole("alert")).toHaveText(/deactivated/)
+    // The words say it; no reason code is printed (#497).
+    await expect(page.locator("form").getByRole("alert")).toHaveText(/Akaunti yako ya mfanyakazi imezimwa|Your staff account is deactivated/)
+    await expect(page.locator("form").getByRole("alert")).not.toContainText(/Msimbo|Code:/)
   })
 
   test("sends visitors with no session from staff and Discount code pages to sign-in", async ({ page }) => {
     await page.goto("/staff")
     await expect(page).toHaveURL(/\/auth$/)
+    // The Discount code students page marks its sign-in for the note saying why (#497 state 5).
     await page.goto("/discount-code/students")
-    await expect(page).toHaveURL(/\/auth$/)
+    await expect(page).toHaveURL(/\/auth\?from=students$/)
   })
 })

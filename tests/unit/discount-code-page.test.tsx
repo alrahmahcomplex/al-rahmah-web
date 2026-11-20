@@ -446,6 +446,20 @@ describe("the Discount code page", { timeout: 30_000 }, () => {
     expect(document.body.textContent).not.toMatch(FORBIDDEN)
   })
 
+  it("names what the code takes off in the share message when it takes something off now", async () => {
+    stubs.submit.mockResolvedValue({ ...REGISTERED, discount: 10000 })
+    const user = userEvent.setup()
+    render(await DiscountCodePage())
+    await fill(user)
+    await send(user)
+
+    const href = (await screen.findByRole("link", { name: "Shiriki kwenye WhatsApp" })).getAttribute("href")!
+    const text = decodeURIComponent(href.slice("https://wa.me/?text=".length))
+    expect(text).toBe(
+      `Jaza fomu ya udahili ya Al-Rahmah Complex kupitia kiungo hiki. Code yangu ya Punguzo, RAJ-124, itakuwa imeshajazwa na inakupa punguzo la TZS 10,000 kwenye ada ya usaili: ${REGISTERED.link}`,
+    )
+  })
+
   it("Copy puts the link on the clipboard and says so", async () => {
     stubs.submit.mockResolvedValue(REGISTERED)
     const user = userEvent.setup()

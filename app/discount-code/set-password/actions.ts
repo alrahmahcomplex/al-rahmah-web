@@ -40,5 +40,7 @@ export async function setAgentPassword(_previous: SetAgentPasswordState, formDat
   }
 
   if (retrying) jar.delete({ name: VERIFIED_COOKIE, path: PATH })
-  redirect("/discount-code/students")
+  // The students page greets a password set just now once, with a button on
+  // to the list (#497 state 4, owner's pick A).
+  redirect("/discount-code/students?welcome=1")
 }

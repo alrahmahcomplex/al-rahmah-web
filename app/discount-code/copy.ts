@@ -87,7 +87,12 @@ type Copy = {
   copied: string
   copyFailed: string
   share: string
-  shareText: (code: string, link: string) => string
+  // The three ready-made share messages (#497): to a parent (the finish
+  // screen's too), to a group, and short. `discount` is the code's amount off
+  // the interview fee now, written "TZS 10,000", or null to name no figure.
+  shareText: (code: string, link: string, discount: string | null) => string
+  shareGroupText: (code: string, link: string, discount: string | null) => string
+  shareShortText: (code: string, link: string, discount: string | null) => string
   confirmNote: string
   // On a new code's done page: where the set-password email will go.
   emailNote: (email: string) => string
@@ -185,8 +190,12 @@ export const COPY: Record<Language, Copy> = {
     copied: "Kiungo kimenakiliwa",
     copyFailed: "Hatukuweza kunakili. Bonyeza kiungo kwa muda kisha ukinakili.",
     share: "Shiriki kwenye WhatsApp",
-    shareText: (code, link) =>
-      `Jaza fomu ya udahili ya Al-Rahmah Complex kupitia kiungo hiki. Code yangu ya Punguzo, ${code}, itakuwa imeshajazwa: ${link}`,
+    shareText: (code, link, discount) =>
+      `Jaza fomu ya udahili ya Al-Rahmah Complex kupitia kiungo hiki. Code yangu ya Punguzo, ${code}, itakuwa imeshajazwa${discount ? ` na inakupa punguzo la ${discount} kwenye ada ya usaili` : ""}: ${link}`,
+    shareGroupText: (code, link, discount) =>
+      `Wazazi, udahili wa Al-Rahmah Complex uko wazi. Jazeni fomu kupitia kiungo hiki; Code ya Punguzo ${code} itakuwa imeshajazwa${discount ? ` na inatoa punguzo la ${discount} kwenye ada ya usaili` : ""}: ${link}`,
+    shareShortText: (code, link, discount) =>
+      `Al-Rahmah Complex: jaza fomu hapa, code ${code}${discount ? ` (punguzo ${discount})` : ""}: ${link}`,
     confirmNote:
       "Punguzo litaanza kufanya kazi Ofisi ya Masoko itakapothibitisha code yako, na itawasiliana nawe. Unaweza kuanza kushiriki code na kiungo sasa hivi.",
     emailNote: (email) =>
@@ -283,8 +292,12 @@ export const COPY: Record<Language, Copy> = {
     copied: "Link copied",
     copyFailed: "We couldn't copy it. Press and hold the link to copy it.",
     share: "Share on WhatsApp",
-    shareText: (code, link) =>
-      `Apply to Al-Rahmah Complex through this link. My Discount code ${code} will already be filled in: ${link}`,
+    shareText: (code, link, discount) =>
+      `Apply to Al-Rahmah Complex through this link. My Discount code ${code} will already be filled in${discount ? ` and takes ${discount} off the interview fee` : ""}: ${link}`,
+    shareGroupText: (code, link, discount) =>
+      `Parents, admissions at Al-Rahmah Complex are open. Fill in the form through this link; Discount code ${code} will already be filled in${discount ? ` and takes ${discount} off the interview fee` : ""}: ${link}`,
+    shareShortText: (code, link, discount) =>
+      `Al-Rahmah Complex: apply here, code ${code}${discount ? ` (${discount} off)` : ""}: ${link}`,
     confirmNote:
       "The discount starts once the Marketing Office confirms your code, and they'll contact you. You can start sharing your code and link now.",
     emailNote: (email) =>
@@ -294,4 +307,10 @@ export const COPY: Record<Language, Copy> = {
     call: "Questions? Call the admissions office",
     seeStudents: "See my Referred Students",
   },
+}
+
+// An amount off as the school writes it ("TZS 10,000"), or null for none, so
+// a message names no figure.
+export function discountWords(amount: number | null | undefined): string | null {
+  return amount && amount > 0 ? `TZS ${amount.toLocaleString("en-US")}` : null
 }

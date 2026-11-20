@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { cardLines, MAX_SHOWN, PAGE_SIZE, shownFrom, STUDENTS_COPY } from "@/app/discount-code/students/copy"
+import { cardLines, firstName, MAX_SHOWN, PAGE_SIZE, shownFrom, stepFrom, STUDENTS_COPY } from "@/app/discount-code/students/copy"
 import type { AgentStudent } from "@/lib/services/agent-students"
 
 const base: AgentStudent = {
@@ -57,7 +57,9 @@ describe("a student card", () => {
     for (const copy of Object.values(STUDENTS_COPY)) {
       const words = [
         JSON.stringify(copy),
-        copy.heading("ABC-123", 3),
+        copy.hello("Amina"),
+        copy.remindHeading(4),
+        ...(["Applied", "Visited", "Interviewed"] as const).flatMap((step) => [copy.waiting[step](14), copy.reminder[step]("Neema", "+255 673 526 644")]),
         copy.lastChange("5 Nov 2026"),
         copy.result("Passed", 70),
         copy.result("Failed", 30),
@@ -65,6 +67,29 @@ describe("a student card", () => {
       for (const text of words) expect(text).not.toMatch(/agent|referral|wakala/i)
     }
     expect(STUDENTS_COPY.sw.helpLine).toBe("Huoni familia? Waombe wahakikishe walitumia code yako, au piga simu ofisini.")
+  })
+})
+
+describe("the dashboard's words", () => {
+  test("the reminders say the step, the days and the office, in both languages", () => {
+    expect(STUDENTS_COPY.sw.waiting.Applied(23)).toBe("Alijisajili siku 23 zilizopita, bado hajatembelea shule.")
+    expect(STUDENTS_COPY.en.waiting.Interviewed(14)).toBe("Passed the interview 14 days ago, not enrolled yet.")
+    expect(STUDENTS_COPY.sw.reminder.Visited("Imani", "+255 673 526 644")).toBe(
+      "Habari! Asante kwa kutembelea Al-Rahmah Complex na Imani. Hatua inayofuata ni usaili. Piga ofisi ya udahili kujua siku: +255 673 526 644.",
+    )
+    expect(STUDENTS_COPY.en.reminder.Interviewed("Asha", "+255 673 526 644")).toContain("Congratulations, Asha passed the interview")
+  })
+
+  test("a name reads by its first word, as people write it", () => {
+    expect(firstName("REHEMA ALI JUMA")).toBe("Rehema")
+    expect(firstName("  amina  k ")).toBe("Amina")
+  })
+
+  test("only the five statuses are a step to list", () => {
+    expect(stepFrom("Visited")).toBe("Visited")
+    expect(stepFrom("visited")).toBeNull()
+    expect(stepFrom(["Visited"])).toBeNull()
+    expect(stepFrom(undefined)).toBeNull()
   })
 })
 

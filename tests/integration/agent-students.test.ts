@@ -4,9 +4,10 @@ import { describe, expect, test, vi } from "vitest"
 vi.mock("server-only", () => ({}))
 
 import { getAgentStudents } from "@/lib/services/agent-students"
+import { setAgentDiscount } from "@/lib/services/discount-codes"
 import { changeAgentStatus } from "@/lib/services/marketing-agents"
 
-import { agentWithLogin, studentInterview, studentLead } from "../support/agent-students"
+import { agentWithLogin, studentInterview, studentLead, tanzaniaDaysAgo } from "../support/agent-students"
 import { anonClient, inRolledBackTransaction, signedIn } from "../support/db"
 import { MANAGER, SEEDED_AGENT } from "../support/fixtures"
 
@@ -53,6 +54,9 @@ describe("the students using an agent's Discount code", () => {
           },
           expect.objectContaining({ name: "Amina Wangu", status: "Applied" }),
         ],
+        steps: { Applied: 1, Visited: 1, Interviewed: 0, Enrolled: 0, Declined: 0 },
+        reminders: expect.any(Array),
+        discount: 10000,
       },
     })
 
@@ -198,7 +202,103 @@ describe("the students using an agent's Discount code", () => {
   test("the seeded agent's list is empty", async () => {
     expect(await getAgentStudents(await signedIn(SEEDED_AGENT), { search: "", limit: 20, offset: 0 })).toEqual({
       ok: true,
-      data: { kind: "active", code: SEEDED_AGENT.code, total: 0, matched: 0, students: [] },
+      data: {
+        kind: "active",
+        code: SEEDED_AGENT.code,
+        total: 0,
+        matched: 0,
+        students: [],
+        steps: { Applied: 0, Visited: 0, Interviewed: 0, Enrolled: 0, Declined: 0 },
+        reminders: [],
+        discount: 10000,
+      },
     })
+  })
+})
+
+// The dashboard (#497): counts per step, who could use a reminder after the
+// owner's waiting days (14 after applying, 14 after the visit, 7 after a
+// Paid, Passed interview), one step at a time, and the code's amount.
+describe("the agent dashboard's answer", () => {
+  const at = (days: number) => `${tanzaniaDaysAgo(days)} 09:00+03`
+
+  test("counts every student by step and lists who has waited long enough, the longest first", async () => {
+    const agent = await agentWithLogin()
+    const other = await agentWithLogin()
+    const code = agent.code
+    await studentLead({ name: "Applied Fourteen", code, createdAt: at(14) })
+    await studentLead({ name: "Applied Thirteen", code, createdAt: at(13) })
+    await studentLead({ name: "Applied Closed", code, createdAt: at(40), closure: "Inactive" })
+    await studentLead({ name: "Visited Twenty", code, status: "Visited", createdAt: at(30), visitDate: tanzaniaDaysAgo(20) })
+    await studentLead({ name: "Visited Ten", code, status: "Visited", createdAt: at(30), visitDate: tanzaniaDaysAgo(10) })
+    const passed = await studentLead({ name: "Passed Seven", code, status: "Interviewed", createdAt: at(30), visitDate: tanzaniaDaysAgo(25) })
+    await studentInterview(passed, { result: "Passed", score: 80, paid: true, registeredAt: at(9), interviewDate: tanzaniaDaysAgo(7) })
+    const recent = await studentLead({ name: "Passed Six", code, status: "Interviewed", createdAt: at(30), visitDate: tanzaniaDaysAgo(25) })
+    await studentInterview(recent, { result: "Passed", score: 80, paid: true, registeredAt: at(9), interviewDate: tanzaniaDaysAgo(6) })
+    const unpaid = await studentLead({ name: "Passed Unpaid", code, status: "Interviewed", createdAt: at(30), visitDate: tanzaniaDaysAgo(25) })
+    await studentInterview(unpaid, { result: "Passed", score: 80, paid: false, registeredAt: at(20), interviewDate: tanzaniaDaysAgo(20) })
+    const failed = await studentLead({ name: "Failed Twenty", code, status: "Interviewed", createdAt: at(30), visitDate: tanzaniaDaysAgo(25) })
+    await studentInterview(failed, { result: "Failed", score: 20, paid: true, registeredAt: at(20), interviewDate: tanzaniaDaysAgo(20) })
+    await studentLead({ name: "Enrolled Long", code, status: "Enrolled", createdAt: at(90), visitDate: tanzaniaDaysAgo(80) })
+    await studentLead({ name: "Declined Long", code, status: "Declined", createdAt: at(90), visitDate: tanzaniaDaysAgo(80) })
+    await studentLead({ name: "Someone Else", code: other.code, createdAt: at(60) })
+
+    const result = await getAgentStudents(await signedIn(agent), { search: "", limit: 1, offset: 0 })
+    if (!result.ok || result.data.kind !== "active") throw new Error(JSON.stringify(result))
+    // Counts and reminders cover the whole list, whatever the page.
+    expect(result.data.students).toHaveLength(1)
+    expect(result.data.steps).toEqual({ Applied: 3, Visited: 2, Interviewed: 4, Enrolled: 1, Declined: 1 })
+    expect(result.data.reminders).toEqual([
+      { name: "Visited Twenty", className: "STD 3", step: "Visited", days: 20 },
+      { name: "Applied Fourteen", className: "STD 3", step: "Applied", days: 14 },
+      { name: "Passed Seven", className: "STD 3", step: "Interviewed", days: 7 },
+    ])
+  })
+
+  test("the raw reminders carry only the name, the class, the step and the days", async () => {
+    const agent = await agentWithLogin()
+    await studentLead({ name: "Raw Reminder", code: agent.code, createdAt: at(20) })
+    const { data, error } = await (await signedIn(agent)).rpc("agent_students", { search: null, page_limit: 20, page_offset: 0, step: null })
+    expect(error).toBeNull()
+    const answer = data as { reminders: Record<string, unknown>[] }
+    expect(answer.reminders).toEqual([{ student_name: "Raw Reminder", class_name: "STD 3", step: "Applied", days: 20 }])
+    expect(JSON.stringify(data)).not.toMatch(/Mzazi|\+2556/)
+  })
+
+  test("a step lists only its students, with the search; the counts stay whole", async () => {
+    const agent = await agentWithLogin()
+    await studentLead({ name: "Step Applied", code: agent.code })
+    await studentLead({ name: "Step Visited One", code: agent.code, status: "Visited" })
+    await studentLead({ name: "Step Visited Two", code: agent.code, status: "Visited" })
+    const client = await signedIn(agent)
+
+    const visited = await getAgentStudents(client, { search: "", limit: 20, offset: 0, step: "Visited" })
+    expect(visited).toMatchObject({ ok: true, data: { total: 3, matched: 2, steps: { Applied: 1, Visited: 2 } } })
+    if (!visited.ok || visited.data.kind !== "active") throw new Error("not active")
+    expect(visited.data.students.map((st) => st.name).sort()).toEqual(["Step Visited One", "Step Visited Two"])
+
+    const searched = await getAgentStudents(client, { search: "two", limit: 20, offset: 0, step: "Visited" })
+    expect(searched).toMatchObject({ ok: true, data: { matched: 1, students: [{ name: "Step Visited Two" }] } })
+
+    const wrong = await client.rpc("agent_students", { search: null, page_limit: 20, page_offset: 0, step: "visited" })
+    expect(wrong.error?.message).toBe("invalid")
+  })
+
+  test("the discount is what the agent's code takes off now: their own amount, or the standard", async () => {
+    const agent = await agentWithLogin()
+    const client = await signedIn(agent)
+    expect(await getAgentStudents(client, { search: "", limit: 20, offset: 0 })).toMatchObject({ ok: true, data: { discount: 10000 } })
+    expect((await setAgentDiscount(await signedIn(MANAGER), agent.id, 15000, "Dashboard test")).ok).toBe(true)
+    expect(await getAgentStudents(client, { search: "", limit: 20, offset: 0 })).toMatchObject({ ok: true, data: { discount: 15000 } })
+  })
+
+  test("a refused state still carries nothing but the state", async () => {
+    const agent = await agentWithLogin()
+    await studentLead({ name: "Refused Reminder", code: agent.code, createdAt: at(30) })
+    const client = await signedIn(agent)
+    expect((await changeAgentStatus(await signedIn(MANAGER), agent.id, "switch-off", "Dashboard test")).ok).toBe(true)
+    const off = await client.rpc("agent_students", { search: null, page_limit: 20, page_offset: 0, step: null })
+    expect(off).toMatchObject({ error: null, data: { state: "switched_off" } })
+    expect(Object.keys(off.data as object)).toEqual(["state"])
   })
 })

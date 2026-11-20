@@ -5,6 +5,8 @@ import { headers } from "next/headers"
 import { parseAgentRegistration, referralLink, requestOrigin } from "@/lib/agent-registration"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { signUpAgent, type SignUpOutcome } from "@/lib/services/agent-sign-up"
+import { STANDARD_INTERVIEW_FEE } from "@/lib/services/discount-codes"
+import { estimateDiscountCode, FORM_CODE_LOOKUP_MS } from "@/lib/services/referral"
 import { verifyTurnstile } from "@/lib/turnstile"
 import { publicFormClient } from "@/utils/supabase/public-form"
 
@@ -79,8 +81,26 @@ export async function registerAsAgent(_previous: DiscountCodeState, formData: Fo
   }
   const outcome = signedUp.data
   if (outcome.kind === "registered") {
-    return { status: "registered", code: outcome.code, link: referralLink(origin, outcome.code), email: outcome.email }
+    const discount = await discountNow(supabase, outcome.code)
+    return { status: "registered", code: outcome.code, link: referralLink(origin, outcome.code), email: outcome.email, discount }
   }
-  if (outcome.kind === "claimed") return { status: "claimed", code: outcome.code, link: referralLink(origin, outcome.code) }
+  if (outcome.kind === "claimed") {
+    return { status: "claimed", code: outcome.code, link: referralLink(origin, outcome.code), discount: await discountNow(supabase, outcome.code) }
+  }
   return MESSAGES[outcome.kind]
+}
+
+// What a family typing the code gets off the interview fee now, for the share
+// message (#497): only an Approved code takes anything off, so a new, Pending
+// code names no figure. A lookup that fails or takes longer than the Admission
+// form's own wait names none either; the code is already saved.
+async function discountNow(supabase: NonNullable<ReturnType<typeof publicFormClient>>, code: string): Promise<number | null> {
+  try {
+    const estimate = await estimateDiscountCode(supabase, code, { signal: AbortSignal.timeout(FORM_CODE_LOOKUP_MS) })
+    if (!estimate.ok || estimate.data.state !== "approved") return null
+    const off = STANDARD_INTERVIEW_FEE - estimate.data.amount
+    return off > 0 ? off : null
+  } catch {
+    return null
+  }
 }

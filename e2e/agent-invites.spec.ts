@@ -133,8 +133,13 @@ test("the Manager sends the invite; the agent sets a password from the email and
   await expect(agentPage.getByLabel("Nenosiri jipya", { exact: true })).toHaveAttribute("type", "text")
   await setPassword(agentPage)
 
+  // Once, right after the password: approved, signed in, and the button on (#497 state 4).
+  await expect(agentPage).toHaveURL(/\/discount-code\/students\?welcome=1$/)
+  await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toBeVisible()
+  await agentPage.getByRole("link", { name: "Ona Wanafunzi Niliowaleta" }).click()
   await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
-  await expect(agentPage.getByRole("heading", { name: `Wanafunzi wanaotumia Code ya Punguzo ${agent.code} (0)` })).toBeVisible()
+  await expect(agentPage.getByText(`Code yako ${agent.code}`)).toBeVisible()
+  await expect(agentPage.getByRole("heading", { name: "Umeidhinishwa!" })).toHaveCount(0)
 
   await openAgentsScreen(page, agent.fullName)
   await expect(agentRow(page, agent.fullName)).toContainText("Joined")
@@ -147,7 +152,7 @@ test("an agent signs in on the one sign-in page; wrong credentials point to the 
 
   await signInAgent(page, SEEDED_AGENT.email, SEEDED_AGENT.password)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
-  await expect(page.getByRole("heading", { name: `Wanafunzi wanaotumia Code ya Punguzo ${SEEDED_AGENT.code} (0)` })).toBeVisible()
+  await expect(page.getByText(`Code yako ${SEEDED_AGENT.code}`)).toBeVisible()
 })
 
 test("the old Discount code sign-in address opens the one sign-in page, which sends nobody elsewhere", async ({ page }) => {
@@ -172,7 +177,7 @@ test("a browser signed in as staff refuses the agent's link until staff sign out
   await page.getByRole("button", { name: "Toka" }).click()
   await expect(page.getByRole("heading", { name: "Weka nenosiri lako" })).toBeVisible()
   await setPassword(page)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/discount-code\/students\?welcome=1$/)
 })
 
 test("a signed-in browser opening sign-in goes to its own side, and an agent never reaches the staff side", async ({

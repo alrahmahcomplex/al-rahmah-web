@@ -171,7 +171,7 @@ test("an expired invite link's Tuma kiungo kipya sends an invited agent a new in
   await page.goto(latest.link)
   await expect(page.getByRole("heading", { name: "Weka nenosiri lako" })).toBeVisible()
   await setPassword(page)
-  await expect(page).toHaveURL(/\/discount-code\/students$/)
+  await expect(page).toHaveURL(/\/discount-code\/students\?welcome=1$/)
 })
 
 test("a reset link sent before #265, to the old reset page, still works", async ({ page }) => {

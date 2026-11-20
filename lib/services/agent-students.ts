@@ -4,8 +4,9 @@ import { readWithClockRetry } from "./clock-retry"
 import type { Result } from "./result"
 
 // The students using the signed-in agent's Discount code (#195), read through
-// `agent_students`, the only way an agent session reads a lead. The database
-// decides what an agent may see; this only renames it.
+// `agent_students`, the only way an agent session reads a lead, with the
+// dashboard's step counts and reminders (#497). The database decides what an
+// agent may see and who could use a reminder; this only renames it.
 
 export type AgentStudentStatus = "Applied" | "Visited" | "Interviewed" | "Enrolled" | "Declined"
 
@@ -23,14 +24,33 @@ export type AgentStudent = {
   result: { outcome: "Passed" | "Failed"; score: number } | null
 }
 
+// The steps a reminder can be for.
+export type ReminderStep = "Applied" | "Visited" | "Interviewed"
+
+// A student waiting long enough at their step: whole days since it.
+export type AgentReminder = { name: string; className: string; step: ReminderStep; days: number }
+
 export type AgentStudents =
-  | { kind: "active"; code: string; total: number; matched: number; students: AgentStudent[] }
+  | {
+      kind: "active"
+      code: string
+      total: number
+      matched: number
+      students: AgentStudent[]
+      // Every student carrying the code, by status, whatever the search.
+      steps: Record<AgentStudentStatus, number>
+      reminders: AgentReminder[]
+      // What the code takes off the interview fee now, in whole TZS: the
+      // figure a family sees for it. 0 names no figure.
+      discount: number
+    }
   // Only the message shows: no code, no share buttons, no students.
   | { kind: "switched-off" | "retired" | "access-off" }
 
 export type AgentStudentsError = "not-agent" | "unavailable"
 
-export type AgentStudentsPage = { search: string; limit: number; offset: number }
+// `step` lists only the students at that status.
+export type AgentStudentsPage = { search: string; limit: number; offset: number; step?: AgentStudentStatus | null }
 
 type Row = {
   student_name: string
@@ -44,7 +64,20 @@ type Row = {
   interview_score: number | null
 }
 
-type Answer = { state: string; code?: string; total?: number; matched?: number; students?: Row[] } | null
+type ReminderRow = { student_name: string; class_name: string; step: ReminderStep; days: number }
+
+type Answer = {
+  state: string
+  code?: string
+  total?: number
+  matched?: number
+  students?: Row[]
+  steps?: Record<AgentStudentStatus, number>
+  reminders?: ReminderRow[]
+  discount?: number | null
+} | null
+
+const NO_STEPS: Record<AgentStudentStatus, number> = { Applied: 0, Visited: 0, Interviewed: 0, Enrolled: 0, Declined: 0 }
 
 const STATES: Record<string, "switched-off" | "retired" | "access-off"> = {
   switched_off: "switched-off",
@@ -59,7 +92,12 @@ export async function getAgentStudents(
   page: AgentStudentsPage,
 ): Promise<Result<AgentStudents, AgentStudentsError>> {
   const { data, error } = await readWithClockRetry(() =>
-    supabase.rpc("agent_students", { search: page.search.trim() || null, page_limit: page.limit, page_offset: page.offset }),
+    supabase.rpc("agent_students", {
+      search: page.search.trim() || null,
+      page_limit: page.limit,
+      page_offset: page.offset,
+      step: page.step ?? null,
+    }),
   )
   if (error) {
     console.error("Could not read the students using a Discount code", error)
@@ -95,6 +133,9 @@ export async function getAgentStudents(
             ? { outcome: row.interview_result, score: Number(row.interview_score) }
             : null,
       })),
+      steps: { ...NO_STEPS, ...answer.steps },
+      discount: Number(answer.discount ?? 0) || 0,
+      reminders: (answer.reminders ?? []).map((row) => ({ name: row.student_name, className: row.class_name, step: row.step, days: Number(row.days) })),
     },
   }
 }

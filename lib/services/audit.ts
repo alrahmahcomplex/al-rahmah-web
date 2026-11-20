@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+import type { LeadClass } from "./leads"
 import type { Result } from "./result"
+import { streamName, type StreamTakes } from "./streams"
 
 export type ActionKind = "invite_sent"
 export type RecordActionError = "not-permitted" | "lead-required" | "unavailable"
@@ -46,8 +48,14 @@ export type LeadHistoryEntry = {
   changes: LeadHistoryChange[]
 }
 
-// The entries, and the current name of every contact they mention.
-export type LeadHistory = { entries: LeadHistoryEntry[]; contactNames: Record<string, string> }
+// The entries, and the current name of every contact, sibling and stream they
+// mention: a sibling as "Name · Admission Number" (#428).
+export type LeadHistory = {
+  entries: LeadHistoryEntry[]
+  contactNames: Record<string, string>
+  leadNames: Record<string, string>
+  streamNames: Record<string, string>
+}
 
 export type LeadHistoryError = "forbidden" | "not-found" | "unavailable"
 
@@ -77,8 +85,17 @@ const RECORDS: Record<string, string> = {
 // Stored alongside a row, never a change anyone made.
 const BOOKKEEPING = new Set(["id", "created_at", "student_name_key"])
 
-// The columns that point at a contact, whose names the screen shows.
+// The columns that point at a contact, a sibling or a stream, whose names the
+// screen shows.
 const CONTACT_COLUMNS = ["guardian_contact_id", "pending_family_match_id"]
+const LEAD_COLUMNS: Readonly<Record<string, string>> = {
+  sibling_group_members: "sibling_of_lead_id",
+  discount_requests: "sibling_of_lead_id",
+}
+const STREAM_COLUMNS: Readonly<Record<string, string>> = {
+  seat_placements: "stream_id",
+  stream_requests: "resolved_by_stream_id",
+}
 
 function toEntry(row: LeadHistoryRow): LeadHistoryEntry {
   const oldValues = row.old_values ?? {}
@@ -115,38 +132,69 @@ export async function getLeadHistory(
   const entries = ((data ?? []) as LeadHistoryRow[]).map(toEntry)
 
   const contactIds = new Set<string>()
+  const leadIds = new Set<string>()
+  const streamIds = new Set<string>()
   for (const entry of entries) {
     if (entry.record === "contact" && entry.recordId) contactIds.add(entry.recordId)
     for (const change of entry.changes) {
-      if (!CONTACT_COLUMNS.includes(change.field)) continue
-      for (const value of [change.from, change.to]) if (typeof value === "string") contactIds.add(value)
+      const ids = CONTACT_COLUMNS.includes(change.field)
+        ? contactIds
+        : LEAD_COLUMNS[entry.record ?? ""] === change.field
+          ? leadIds
+          : STREAM_COLUMNS[entry.record ?? ""] === change.field
+            ? streamIds
+            : null
+      if (!ids) continue
+      for (const value of [change.from, change.to]) if (typeof value === "string") ids.add(value)
     }
   }
 
-  return { ok: true, data: { entries, contactNames: await readContactNames(supabase, [...contactIds]) } }
+  const [contactNames, leadNames, streamNames] = await Promise.all([
+    readNames<{ full_name: string }>(supabase, "guardian_contacts", "id, full_name", [...contactIds], (row) => row.full_name),
+    readNames<{ student_name: string; admission_number: string }>(
+      supabase,
+      "leads",
+      "id, student_name, admission_number",
+      [...leadIds],
+      (row) => `${row.student_name} · ${row.admission_number}`,
+    ),
+    readNames<{ class_name: LeadClass; label: string; takes: StreamTakes }>(
+      supabase,
+      "streams",
+      "id, class_name, label, takes",
+      [...streamIds],
+      (row) => streamName(row.class_name, row.label, row.takes),
+    ),
+  ])
+  return { ok: true, data: { entries, contactNames, leadNames, streamNames } }
 }
 
-// Ids per request, so a long history never makes one oversized URL.
-const CONTACT_NAMES_PER_REQUEST = 100
+// Ids per request, so a long history never makes one oversized URL. The ids
+// come only from this lead's own entries, each read once.
+const NAMES_PER_REQUEST = 100
 
-// The current name of each contact. The names only decorate the history, so
-// a batch that can't be read leaves those contacts unnamed (the screen shows
-// their ids) rather than hiding the history.
-async function readContactNames(supabase: SupabaseClient, ids: string[]): Promise<Record<string, string>> {
+// The current name of each contact, sibling or stream. The names only
+// decorate the history, so a batch that can't be read leaves those unnamed
+// (the screen shows their ids) rather than hiding the history.
+async function readNames<Row>(
+  supabase: SupabaseClient,
+  table: "guardian_contacts" | "leads" | "streams",
+  columns: string,
+  ids: string[],
+  name: (row: Row) => string,
+): Promise<Record<string, string>> {
   const batches: string[][] = []
-  for (let i = 0; i < ids.length; i += CONTACT_NAMES_PER_REQUEST) batches.push(ids.slice(i, i + CONTACT_NAMES_PER_REQUEST))
+  for (let i = 0; i < ids.length; i += NAMES_PER_REQUEST) batches.push(ids.slice(i, i + NAMES_PER_REQUEST))
 
-  const results = await Promise.all(
-    batches.map((batch) => supabase.from("guardian_contacts").select("id, full_name").in("id", batch)),
-  )
+  const results = await Promise.all(batches.map((batch) => supabase.from(table).select(columns).in("id", batch)))
 
   const names: Record<string, string> = {}
   for (const { data, error } of results) {
     if (error) {
-      console.error("Could not read the contacts a lead's history names", error)
+      console.error(`Could not read the ${table} a lead's history names`, error)
       continue
     }
-    for (const contact of data as { id: string; full_name: string }[]) names[contact.id] = contact.full_name
+    for (const row of data as unknown as (Row & { id: string })[]) names[row.id] = name(row)
   }
   return names
 }

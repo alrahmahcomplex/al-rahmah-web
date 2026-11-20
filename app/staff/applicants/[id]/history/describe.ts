@@ -10,7 +10,8 @@ import {
   isPriorityChange,
   PRIORITY_CHANGE_HIDDEN,
 } from "./adjustment-history"
-import { DISCOUNT_HIDDEN, discountLabel, discountSummary, discountValue } from "./discount-history"
+import { isBecause, rowCauses, withCause } from "./because"
+import { DISCOUNT_HIDDEN, discountKinds, discountLabel, discountSummary, discountValue, type DiscountKinds } from "./discount-history"
 import {
   ENROLMENT_FIELDS,
   ENROLMENT_HIDDEN,
@@ -37,6 +38,16 @@ import {
   resultReleaseSummary,
   resultReleaseValue,
 } from "./result-release-history"
+import { seatHidden, seatKeepsEmpty, seatLabel, seatOrder, seatSummary, seatValue } from "./seat-history"
+import {
+  siblingHidden,
+  siblingLabel,
+  siblingOfValue,
+  siblingOrder,
+  siblingSummary,
+  siblingValue,
+  withEditResult,
+} from "./sibling-history"
 
 // A lead's history entry in plain words: who, what they did, and each field's
 // old and new value. A field, table or action kind this file does not know
@@ -90,6 +101,8 @@ const LABELS: Record<string, string> = {
   previous_school_type: "Previous school: private or public",
   previous_school_region: "Previous school: region",
   previous_school_not_known: "Previous school not known yet",
+  // Asked at check-in (#309), and used to place the child in a stream (#449).
+  gender: "Boy or girl",
   // Its parent or guardian.
   full_name: "Full name",
   contact_name: "Parent or guardian name",
@@ -140,7 +153,8 @@ const LABELS: Record<string, string> = {
 // itself: who declined a lead and when; an interview's lead, and who
 // registered it when.
 const HIDDEN: Record<string, ReadonlySet<string>> = {
-  lead: new Set(["declined_at", "declined_by", "closed_at", "closed_by", IMPORT_HIDDEN]),
+  // Read by nothing since each child holds the custodian’s relationship (#312).
+  lead: new Set(["declined_at", "declined_by", "closed_at", "closed_by", "custodian_relationship_own", IMPORT_HIDDEN]),
   interviews: new Set(["lead", "registered_at", "registered_by", IMPORT_HIDDEN]),
   // The follow-up a date change replaced shows as the earlier date instead.
   follow_ups: new Set(["lead_id", "replaces_id", "replaced_due_on"]),
@@ -303,6 +317,7 @@ function summarize(
   contactNames: Readonly<Record<string, string>>,
   timeline: MatchTimeline,
   causes: EnrolmentCauses,
+  context: Context,
 ): string {
   const changed = new Map(entry.changes.map((c) => [c.field, c]))
   const insert = entry.action === "insert"
@@ -383,8 +398,12 @@ function summarize(
   }
 
   if (entry.record === "reopening_requests") return reopeningSummary(entry)
-  const discount = discountSummary(entry)
+  const discount = discountSummary(entry, context.kinds)
   if (discount) return discount
+  const sibling = siblingSummary(entry)
+  if (sibling) return sibling
+  const seat = seatSummary(entry, context.streamNames)
+  if (seat) return seat
   if (entry.record === "lead_fee_profiles") return enrolmentProfileSummary(entry)
   if (entry.record === "school_fee_payments" && insert) {
     return changed.get("payment_type")?.to === "pre_form_one_fee" ? "recorded a Pre-Form One fee payment" : "recorded a school-fee payment"
@@ -414,12 +433,27 @@ function summarize(
 }
 
 // Known fields in the order the lead screen shows them, then unknown ones as
-// they came.
+// they came. A sibling or seat table lists its own fields in its own order.
 const ORDER = [...Object.keys(LABELS), ...ENROLMENT_FIELDS]
 
-function rank(field: string) {
-  const at = ORDER.indexOf(field)
-  return at === -1 ? ORDER.length : at
+function rank(record: string | null, field: string) {
+  const order = siblingOrder(record) ?? seatOrder(record) ?? ORDER
+  const at = order.indexOf(field)
+  return at === -1 ? order.length : at
+}
+
+// The siblings and streams the history points at, by id: a sibling as
+// "Name · Admission Number", a stream as screens name it.
+export type HistoryNames = {
+  leads?: Readonly<Record<string, string>>
+  streams?: Readonly<Record<string, string>>
+}
+
+// What the whole history tells each entry, and the names read alongside it.
+type Context = {
+  kinds: DiscountKinds
+  leadNames: Readonly<Record<string, string>>
+  streamNames: Readonly<Record<string, string>>
 }
 
 // A whole history, in the order it came (newest first). The Family entries
@@ -430,13 +464,17 @@ export function describeLeadHistory(
   entries: readonly LeadHistoryEntry[],
   contactNames: Readonly<Record<string, string>>,
   importFile: string | null = null,
+  names: HistoryNames = {},
 ): DescribedEntry[] {
   const timeline = matchTimeline(entries)
   const plans = followUpPlans(entries)
   const causes = enrolmentCauses(entries)
   const serials = interviewSerials(entries)
+  const context: Context = { kinds: discountKinds(entries), leadNames: names.leads ?? {}, streamNames: names.streams ?? {} }
+  const rowCause = rowCauses(entries)
   return entries.map((entry) => {
-    const described = withInterviewSerial(entry, describeEntry(withEarlierPlan(entry, plans), contactNames, timeline, causes), serials)
+    const prepared = withCause(withEditResult(withEarlierPlan(entry, plans)), rowCause)
+    const described = withInterviewSerial(entry, describeEntry(prepared, contactNames, timeline, causes, context), serials)
     const note = importNote(entry, importFile)
     return note ? { ...described, note } : described
   })
@@ -475,20 +513,27 @@ function describeEntry(
   contactNames: Readonly<Record<string, string>>,
   timeline: MatchTimeline,
   causes: EnrolmentCauses,
+  context: Context,
 ): DescribedEntry {
   // A Seat priority change reads from the old priority, even from none.
   const fromOld = (entry.record !== null && entry.action === "update") || isPriorityChange(entry)
+  // A sibling's, a Sibling request's or a stream's value, in words.
+  const ownValue = (field: string, value: unknown) =>
+    siblingOfValue(entry.record, field, value, context.leadNames) ??
+    siblingValue(entry.record, field, value) ??
+    seatValue(entry.record, field, value, context.streamNames)
   return {
     id: entry.id,
     at: entry.at,
     actor: entry.actor,
-    summary: summarize(entry, contactNames, timeline, causes),
+    summary: summarize(entry, contactNames, timeline, causes, context),
     changes: entry.changes
       .filter((c) => !HIDDEN[entry.record ?? ""]?.has(c.field))
+      .filter((c) => !siblingHidden(entry.record, c.field) && !seatHidden(entry.record, c.field))
       .filter((c) => !(isPriorityChange(entry) && PRIORITY_CHANGE_HIDDEN.has(c.field)))
       .filter((c) => !(isResultRelease(entry) && RESULT_RELEASE_HIDDEN.has(c.field)))
-      .filter((c) => fromOld || !isEmpty(c.to))
-      .sort((a, b) => rank(a.field) - rank(b.field))
+      .filter((c) => fromOld || !isEmpty(c.to) || seatKeepsEmpty(entry.record, c.field))
+      .sort((a, b) => rank(entry.record, a.field) - rank(entry.record, b.field))
       .map((c) => ({
         label:
           resultReleaseLabel(entry.action, c.field) ??
@@ -497,15 +542,19 @@ function describeEntry(
           discountLabel(entry.record, c.field) ??
           enrolmentLabel(entry.record, c.field) ??
           adjustmentLabel(entry, c.field) ??
+          siblingLabel(entry.record, c.field) ??
+          seatLabel(entry.record, c.field) ??
           LABELS[c.field] ??
           c.field,
-        // A creation has no old value, except a follow-up's earlier date.
+        // A creation has no old value, except a follow-up's earlier date and a
+        // fee edit's earlier result.
         from:
-          fromOld || c.from !== null
+          (fromOld || c.from !== null) && !isBecause(entry.record, c.field)
             ? (reopeningValue(entry.record, c.field, c.from) ??
               discountValue(entry.record, c.field, c.from) ??
               enrolmentValue(entry.record, c.field, c.from) ??
               adjustmentValue(entry, c.field, c.from) ??
+              ownValue(c.field, c.from) ??
               display(c.field, c.from, contactNames))
             : null,
         to:
@@ -515,6 +564,7 @@ function describeEntry(
           discountValue(entry.record, c.field, c.to) ??
           enrolmentValue(entry.record, c.field, c.to) ??
           adjustmentValue(entry, c.field, c.to) ??
+          ownValue(c.field, c.to) ??
           display(c.field, c.to, contactNames),
       })),
   }

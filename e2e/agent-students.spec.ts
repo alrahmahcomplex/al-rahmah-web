@@ -109,6 +109,9 @@ test("a switched-off agent still signed in sees only the paused card, with no re
 
   await alert.getByRole("button", { name: "Toka" }).click()
   await expect(page).toHaveURL(/\/auth$/)
+  // Signed out for real: the students page now asks to sign in.
+  await page.goto("/discount-code/students")
+  await expect(page).toHaveURL(/\/auth\?from=students$/)
 })
 
 test("without a session, the students page sends the agent to sign in under a note saying why", async ({ page }) => {

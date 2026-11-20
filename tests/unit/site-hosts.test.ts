@@ -48,6 +48,13 @@ describe("the public site", () => {
     expect(getRewrittenUrl(await open(`${PUBLIC}/apply?ref=AJM-407`))).toBe(`${PUBLIC}/by-language/first/apply?ref=AJM-407`)
   })
 
+  it("serves no manifest: only the portal installs as an app", async () => {
+    const response = await open(`${PUBLIC}/manifest.webmanifest`)
+
+    expect(response.status).toBe(307)
+    expect(getRedirectUrl(response)).toBe(`${PORTAL}/manifest.webmanifest`)
+  })
+
   it("forwards an invite or reset link on the root to its page, which then moves to the portal", async () => {
     const invite = await open(`${PUBLIC}/?token_hash=abc123&type=invite`)
     expect(getRedirectUrl(invite)).toBe(`${PUBLIC}/auth/confirm?token_hash=abc123&type=invite`)
@@ -83,7 +90,14 @@ describe("the portal", () => {
     expect(getRedirectUrl(response)).toBe(`${PUBLIC}/apply?ref=AJM-407`)
   })
 
-  it.each(["/staff", "/login", "/auth/confirm?token_hash=a&type=invite", "/discount-code", "/discount-code/students"])(
+  it.each([
+    "/staff",
+    "/login",
+    "/auth/confirm?token_hash=a&type=invite",
+    "/discount-code",
+    "/discount-code/students",
+    "/manifest.webmanifest",
+  ])(
     "serves %s itself",
     async (path) => {
       expect(getRedirectUrl(await open(`${PORTAL}${path}`))).toBeNull()
@@ -99,7 +113,14 @@ describe("every other host is one site", () => {
   it.each(["http://localhost:3000", "https://al-rahmah-web-git-x-team.vercel.app", "https://al-rahmah-web.vercel.app"])(
     "%s moves nothing",
     async (origin) => {
-      for (const path of ["/staff", "/login", "/auth/confirm?token_hash=a&type=invite", "/discount-code", "/apply?ref=AJM-407"]) {
+      for (const path of [
+        "/staff",
+        "/login",
+        "/auth/confirm?token_hash=a&type=invite",
+        "/discount-code",
+        "/apply?ref=AJM-407",
+        "/manifest.webmanifest",
+      ]) {
         expect(getRedirectUrl(await open(`${origin}${path}`))).toBeNull()
       }
       expect(getRewrittenUrl(await open(`${origin}/`))).toBe(`${origin}/by-language/first`)

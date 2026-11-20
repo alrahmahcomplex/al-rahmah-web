@@ -120,7 +120,7 @@ test("the Manager sends the invite; the agent sets a password from the email and
   expect(email.link).toMatch(/^http:\/\/localhost:3100\/discount-code\/set-password\?token_hash=[^&]+&type=invite$/)
   // The Discount code wording: Swahili first, the sign-in address and the expiry.
   expect(email.html).toContain("Weka nenosiri")
-  expect(email.html).toContain("/discount-code/sign-in")
+  expect(email.html).toMatch(/href="[^"]*\/auth"/)
   expect(email.html).toContain("saa 24")
   expect(email.html).not.toMatch(/Admissions Manager to send a new invite/)
 
@@ -143,7 +143,7 @@ test("the Manager sends the invite; the agent sets a password from the email and
 test("an agent signs in on the one sign-in page; wrong credentials point to the forgotten password", async ({ page }) => {
   await signInAgent(page, SEEDED_AGENT.email, "not-the-password")
   await expect(notice(page)).toContainText("Barua pepe au nenosiri si sahihi.")
-  await expect(notice(page).getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/login/forgot-password")
+  await expect(notice(page).getByRole("link", { name: "Umesahau nenosiri?" })).toHaveAttribute("href", "/auth/forgot-password")
 
   await signInAgent(page, SEEDED_AGENT.email, SEEDED_AGENT.password)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
@@ -152,7 +152,7 @@ test("an agent signs in on the one sign-in page; wrong credentials point to the 
 
 test("the old Discount code sign-in address opens the one sign-in page, which sends nobody elsewhere", async ({ page }) => {
   await page.goto("/discount-code/sign-in")
-  await expect(page).toHaveURL(/\/login$/)
+  await expect(page).toHaveURL(/\/auth$/)
   await expect(page.getByRole("heading", { name: "Karibu!" })).toBeVisible()
   await expect(page.getByText(/Discount code holders|Mfanyakazi\? Ingia hapa/)).toHaveCount(0)
 })
@@ -180,7 +180,7 @@ test("a signed-in browser opening sign-in goes to its own side, and an agent nev
   browser,
 }) => {
   await signInStaff(page, MANAGER)
-  await page.goto("/login")
+  await page.goto("/auth")
   await expect(page).toHaveURL(/\/staff$/)
   // The students page sends staff to sign-in, which sends them home.
   await page.goto("/discount-code/students")
@@ -189,7 +189,7 @@ test("a signed-in browser opening sign-in goes to its own side, and an agent nev
   const agentPage = await newContextPage(browser)
   await signInAgent(agentPage, SEEDED_AGENT.email, SEEDED_AGENT.password)
   await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
-  await agentPage.goto("/login")
+  await agentPage.goto("/auth")
   await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
   await agentPage.goto("/staff")
   await expect(agentPage).toHaveURL(/\/discount-code\/students$/)
@@ -214,5 +214,5 @@ test("a switched-off agent is told to call the office, with the reason code", as
 
   await expect(notice(page)).toContainText("Huwezi kuingia kwa sasa. Piga simu ofisini.")
   await expect(notice(page)).toContainText("Msimbo: switched_off")
-  await expect(page).toHaveURL(/\/login$/)
+  await expect(page).toHaveURL(/\/auth$/)
 })

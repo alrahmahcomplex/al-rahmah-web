@@ -1,12 +1,12 @@
 import type { Metadata } from "next"
 
 import { LINK_REQUEST_COPY } from "@/app/discount-code/link-request-copy"
-import { ForgotPasswordCard } from "@/app/login/forgot-password-card"
+import { ForgotPasswordCard } from "@/app/auth/forgot-password-card"
 import { isLanguageState, LANGUAGE_STATES, languageOfState, type LanguageState } from "@/lib/language-state"
 import { OFFICE_PHONE } from "@/lib/office"
 
-// "Umesahau nenosiri?" from /login (#194, moved here in #264), at
-// `/login/forgot-password`, in the same card, for staff and Discount code
+// "Umesahau nenosiri?" from /auth (#194, moved here in #264), at
+// `/auth/forgot-password`, in the same card, for staff and Discount code
 // holders alike (#265): a reset link for someone who has joined, a new invite
 // for someone invited who hasn't, the same reply for everyone. The office is
 // the fallback. No session is read, so the page works while Supabase is down.

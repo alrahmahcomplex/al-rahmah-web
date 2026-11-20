@@ -10,7 +10,7 @@ import { createClient } from "@/utils/supabase/server"
 export async function signOut() {
   const supabase = await createClient()
   await signOutStaff(supabase)
-  redirect("/login")
+  redirect("/auth")
 }
 
 export async function dismissMyNotices(through: number): Promise<{ ok: boolean }> {

@@ -5,9 +5,9 @@ import { supabaseEnv } from "./env"
 
 // Where a visitor with no session goes from a page that needs one.
 function signInPage(pathname: string): string | null {
-  if (pathname === "/staff" || pathname.startsWith("/staff/")) return "/login"
+  if (pathname === "/staff" || pathname.startsWith("/staff/")) return "/auth"
   if (pathname === "/discount-code/students" || pathname.startsWith("/discount-code/students/")) {
-    return "/login"
+    return "/auth"
   }
   return null
 }

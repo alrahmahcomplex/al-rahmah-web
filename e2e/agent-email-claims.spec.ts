@@ -176,7 +176,7 @@ test.describe("the Discount code page's answers", () => {
     await claim(page, agent, email("seven-typed"))
     await expect(notice(page)).toContainText("Tayari una akaunti. Ingia.")
     await notice(page).getByRole("link", { name: "Ingia" }).click()
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
   })
 
   test("an email already in use gets the neutral reply", async ({ page }) => {
@@ -193,7 +193,7 @@ test.describe("the Discount code page's answers", () => {
     await expect(page.getByText("Una code lakini bado hujapokea barua pepe ya kuweka nenosiri? Chagua Ndiyo.")).toBeVisible()
     await expect(page.getByText("Umeshaweka nenosiri?")).toBeVisible()
     await page.getByRole("link", { name: "Ingia", exact: true }).click()
-    await expect(page).toHaveURL(/\/login$/)
+    await expect(page).toHaveURL(/\/auth$/)
   })
 })
 

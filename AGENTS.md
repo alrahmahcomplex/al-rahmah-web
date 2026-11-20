@@ -33,7 +33,7 @@ Next.js App Router with TypeScript, Tailwind v4, shadcn `base-nova`, Supabase, V
 - Every table has RLS and policies in its creating migration. Schema changes live in `supabase/migrations/` and are tested against local Supabase. Hosted migrations arrive only through the GitHub integration on merge; agents hold no hosted database credentials.
 - Service-role and secret keys stay server-only, never in `NEXT_PUBLIC_*`.
 - Add shadcn components through its CLI into `components/ui/`.
-- `proxy.ts` matches only routes reading the staff session: `/staff`, `/login`, `/auth`. Add a route only if it needs that session, so public pages stay up when Supabase is down or misconfigured.
+- `proxy.ts` matches only routes reading the staff session: `/staff`, and `/auth` page by page (never the cached `/auth/forgot-password`). Add a route only if it needs that session, so public pages stay up when Supabase is down or misconfigured.
 - Real family/student data stays out of Git and evidence. Use seeded fixture data and the seeded test account.
 - PR evidence goes in only through the PR's comment box in the signed-in in-app browser ([Workflow → Attaching evidence](docs/agents/workflow.md#attaching-evidence-to-a-pr)).
 - Worktrees share one local Supabase and limited memory. Before database resets, integration/e2e tests, builds or evidence servers, take the shared lock described in [Parallel work](docs/agents/parallel-work.md). Stop the database only when no other session uses it.

@@ -244,7 +244,7 @@ test("someone deactivated before accepting is signed out with a message, and sig
     "Your staff account was deactivated before you accepted the invite. Ask an Admissions Manager to reactivate it.",
   )
   await invitedPage.goto("/staff")
-  await expect(invitedPage).toHaveURL(/\/login$/)
+  await expect(invitedPage).toHaveURL(/\/auth$/)
 
   await page.reload()
   await personRow(page, invitee.name).getByRole("button", { name: "Reactivate" }).click()

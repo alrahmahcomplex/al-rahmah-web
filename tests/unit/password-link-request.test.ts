@@ -106,10 +106,10 @@ describe("requesting a password link", () => {
       },
       {
         agent: {
-          reset: "https://alrahmah.example/login/reset-password",
+          reset: "https://alrahmah.example/auth/reset-password",
           invite: "https://alrahmah.example/discount-code/set-password",
         },
-        staff: { reset: "https://alrahmah.example/login/reset-password", invite: "https://alrahmah.example/auth/confirm" },
+        staff: { reset: "https://alrahmah.example/auth/reset-password", invite: "https://alrahmah.example/auth/confirm" },
       },
       decision,
     )
@@ -126,8 +126,8 @@ describe("requesting a password link", () => {
 
     const portal = "https://portal.alrahmahcomplex.or.tz"
     expect(stubs.send.mock.calls[0][2]).toEqual({
-      agent: { reset: `${portal}/login/reset-password`, invite: `${portal}/discount-code/set-password` },
-      staff: { reset: `${portal}/login/reset-password`, invite: `${portal}/auth/confirm` },
+      agent: { reset: `${portal}/auth/reset-password`, invite: `${portal}/discount-code/set-password` },
+      staff: { reset: `${portal}/auth/reset-password`, invite: `${portal}/auth/confirm` },
     })
   })
 

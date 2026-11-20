@@ -21,7 +21,7 @@ export function ForgotPasswordCard({ language: copyLanguage, officePhone }: { la
   }, [copy.forgotHeading])
 
   return (
-    <AuthCard language={language} returnTo="/login/forgot-password">
+    <AuthCard language={language} returnTo="/auth/forgot-password">
       <AuthHeading intro={copy.forgotIntro}>{copy.forgotHeading}</AuthHeading>
       <div className="flex flex-col gap-5">
         <LinkRequestForm language={language} form="agent-reset" />

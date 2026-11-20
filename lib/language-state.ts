@@ -18,7 +18,7 @@ export const LANGUAGE_STATE_PREFIX = "/by-language"
 // The public addresses served this way. The language switch sends a visitor
 // back to one of these after setting the cookie, so the next request picks
 // the other copy.
-export const CACHED_PUBLIC_PATHS = ["/", "/apply", "/login/forgot-password"] as const
+export const CACHED_PUBLIC_PATHS = ["/", "/apply", "/auth/forgot-password"] as const
 
 export type CachedPublicPath = (typeof CACHED_PUBLIC_PATHS)[number]
 

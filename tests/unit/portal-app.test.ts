@@ -10,7 +10,7 @@ import { PORTAL_PATHS } from "@/lib/site-hosts"
 // without them would leave its pages uninstallable; e2e/install-portal-only
 // checks the HTML the pages send.
 describe("portal layouts", () => {
-  it.each([...PORTAL_PATHS.map((p) => `app${p}`), "app/by-language/[state]/login"])("%s/layout.tsx carries the install tags", (dir) => {
+  it.each([...PORTAL_PATHS.map((p) => `app${p}`), "app/by-language/[state]/auth"])("%s/layout.tsx carries the install tags", (dir) => {
     const file = path.join(process.cwd(), dir, "layout.tsx")
     expect(existsSync(file), `${dir}/layout.tsx`).toBe(true)
     expect(readFileSync(file, "utf8")).toMatch(/\bPORTAL_APP_METADATA\b/)

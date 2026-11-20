@@ -165,7 +165,7 @@ describe("signing in on the one sign-in page", () => {
   })
 })
 
-describe("where /login sends a browser that is already signed in", () => {
+describe("where /auth sends a browser that is already signed in", () => {
   it("shows the form to a signed-out browser", async () => {
     expect(await signedInHome(fakeSupabase().client)).toBeNull()
   })

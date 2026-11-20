@@ -25,7 +25,7 @@ An agent login must never reach staff functions or staff tables. Admissions staf
 - an active staff member with no login yet;
 - an Approved, switched-on, non-retired agent with no login yet and a confirmed email, while agent access is on. An email stored on an agent record is confirmed by whoever stored it.
 
-`user_metadata.kind` chooses email wording only. The triggers never read it, and it never grants access. Supabase has one recovery template, so since #265 every reset link, staff's and agents', opens the same page, `/login/reset-password`; the database then says whose login it is, as `/login` does, and the page lands each person on their own side.
+`user_metadata.kind` chooses email wording only. The triggers never read it, and it never grants access. Supabase has one recovery template, so since #265 every reset link, staff's and agents', opens the same page, `/auth/reset-password` (`/login/reset-password` until #497); the database then says whose login it is, as the sign-in page `/auth` does, and the page lands each person on their own side.
 
 **Agents write nothing.** An agent session has no audit actor, even when the transaction sets one, so the audit trigger refuses any audited write it would make. There is no `agent` actor kind.
 

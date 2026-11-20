@@ -28,7 +28,7 @@ async function emailCount(address: string): Promise<number> {
 
 test.describe("with Supabase's CAPTCHA protection on", () => {
   test("the sign-in form carries the security check, and staff get in", async ({ page }) => {
-    await page.goto("/login")
+    await page.goto("/auth")
     await expect(page.locator("form").locator('input[name="cf-turnstile-response"]')).toHaveValue(/.+/, { timeout: 20_000 })
 
     await logIn(page, MANAGER.email, MANAGER.password)
@@ -55,7 +55,7 @@ test.describe("with Supabase's CAPTCHA protection on", () => {
   test("Umesahau nenosiri? still sends the reset email", async ({ page }) => {
     const member = await createThrowawayStaff([])
 
-    await page.goto("/login/forgot-password")
+    await page.goto("/auth/forgot-password")
     await page.getByLabel("Barua pepe").fill(member.email)
     await expect(page.locator('input[name="cf-turnstile-response"]')).toHaveValue(/.+/, { timeout: 20_000 })
     await page.getByRole("button", { name: "Tuma kiungo kipya" }).click()

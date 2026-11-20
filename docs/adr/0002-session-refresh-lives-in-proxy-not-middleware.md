@@ -47,3 +47,7 @@ The matcher now lists only `/staff`, `/login` and `/auth`, the routes that read 
 staff session. Public pages no longer refresh the session cookie. Nothing on them
 reads it, so nothing is lost, and a Supabase fault can no longer take them down. A
 route that starts reading the session must join the matcher.
+
+Since #497 moved sign-in from `/login` to `/auth`, the matcher lists `/auth`, its
+reset page and its two email-link routes by name instead of `/auth/:path*`, so the
+cached `/auth/forgot-password` (ADR 0006) never runs the proxy.

@@ -9,7 +9,7 @@ import { getStaffUser, type StaffAccessError } from "./staff-auth"
 // The shared reset page (#265): Supabase has one recovery email for the
 // project, so staff and agents land on the same page. The link's token is
 // spent and the password saved first; then the database says whose login it
-// is, as on /login, and the person lands on their own side. Anyone who may
+// is, as on /auth, and the person lands on their own side. Anyone who may
 // not use either side loses the session the link gave them. The new password
 // is kept either way, so a staff member or agent who is switched back on can
 // sign in with it.
@@ -35,7 +35,7 @@ export async function resetPasswordFromLink(
     return { ok: false, error }
   }
 
-  // Staff first, as /login decides it. Fails closed.
+  // Staff first, as /auth decides it. Fails closed.
   const staff = await getStaffUser(supabase)
   if (staff.ok) return { ok: true, data: "staff" }
   if (staff.error !== "not-staff") return refused(staff.error === "signed-out" ? "unavailable" : staff.error)

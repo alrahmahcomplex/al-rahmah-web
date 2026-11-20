@@ -45,7 +45,7 @@ describe("Staff and roles emails", () => {
   it("Send reset link links to the portal's reset page", async () => {
     await sendStaffResetLink("staff-1")
 
-    expect(stubs.sendResetLink.mock.calls[0][4]).toBe("https://portal.alrahmahcomplex.or.tz/login/reset-password")
+    expect(stubs.sendResetLink.mock.calls[0][4]).toBe("https://portal.alrahmahcomplex.or.tz/auth/reset-password")
   })
 
   it("stay on a Preview", async () => {

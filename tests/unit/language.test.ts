@@ -83,7 +83,7 @@ describe("setLanguage", () => {
     expect(navigation.redirect).toHaveBeenCalledWith("/", "replace")
   })
 
-  it.each(["https://example.com/", "//example.com", "/login", "/by-language/en"])("won't return to %s", async (returnTo) => {
+  it.each(["https://example.com/", "//example.com", "/auth", "/by-language/en"])("won't return to %s", async (returnTo) => {
     await setLanguage(choose("en", returnTo))
 
     expect(jar.set).toHaveBeenCalled()

@@ -10,17 +10,17 @@ export async function GET(request: Request) {
   const code = searchParams.get("code")
   const next = safeNextPath(searchParams.get("next"))
 
-  if (!code) return NextResponse.redirect(`${origin}/login?error=invalid-link`)
+  if (!code) return NextResponse.redirect(`${origin}/auth?error=invalid-link`)
 
   const supabase = await createClient()
   const exchanged = await exchangeEmailLinkCode(supabase, code)
-  if (!exchanged.ok) return NextResponse.redirect(`${origin}/login?error=invalid-link`)
+  if (!exchanged.ok) return NextResponse.redirect(`${origin}/auth?error=invalid-link`)
 
   const staff = await getStaffUser(supabase)
   if (!staff.ok) {
     await signOutStaff(supabase)
     const reason = staff.error === "signed-out" ? "invalid-link" : staff.error
-    return NextResponse.redirect(`${origin}/login?error=${reason}`)
+    return NextResponse.redirect(`${origin}/auth?error=${reason}`)
   }
 
   return NextResponse.redirect(`${origin}${next}`)

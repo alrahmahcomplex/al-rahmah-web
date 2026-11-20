@@ -2,7 +2,7 @@ import { getRedirectUrl, getRewrittenUrl, unstable_getResponseFromNextConfig } f
 import { describe, expect, it } from "vitest"
 
 import { referralLink } from "@/lib/agent-registration"
-import { portalOrigin, publicSiteOrigin } from "@/lib/site-hosts"
+import { crossHostRedirects, PORTAL_PATHS, portalOrigin, publicSiteOrigin } from "@/lib/site-hosts"
 import nextConfig from "@/next.config"
 
 // The Admissions Portal on its own host (#497).
@@ -17,17 +17,17 @@ describe("the public site", () => {
   it.each([
     "/staff",
     "/staff/applicants/7f1c?tab=history",
-    "/login",
-    "/login/forgot-password",
-    "/login/reset-password?token_hash=abc123&type=recovery",
+    "/auth",
+    "/auth?error=not-staff",
+    "/auth/forgot-password",
+    "/auth/reset-password?token_hash=abc123&type=recovery",
     "/auth/confirm?token_hash=abc123&type=invite",
     "/auth/callback?code=xyz&next=%2Fstaff",
     "/discount-code",
     "/discount-code?code=AJM-407",
     "/discount-code/set-password?token_hash=abc123&type=invite",
     "/discount-code/students",
-    // Old addresses keep working: they move host first, then their own rule.
-    "/discount-code/reset-password?token_hash=abc123&type=recovery",
+    // An old address with its own rule moves host first, then that rule.
     "/staff/leads/42",
   ])("sends %s to the portal, query and all", async (path) => {
     const response = await open(`${PUBLIC}${path}`)
@@ -36,7 +36,35 @@ describe("the public site", () => {
     expect(getRedirectUrl(response)).toBe(`${PORTAL}${path}`)
   })
 
-  it.each(["/", "/apply", "/apply?ref=AJM-407", "/staffroom", "/logins", "/discount-codes", "/api/language"])(
+  // Sign-in moved from /login to /auth (slice C): an old address goes
+  // straight to its new portal address, one hop, query and all.
+  it.each([
+    ["/login", "/auth"],
+    ["/login?next=%2Fstaff%2Fapplicants", "/auth?next=%2Fstaff%2Fapplicants"],
+    ["/login?error=not-staff", "/auth?error=not-staff"],
+    ["/login/forgot-password", "/auth/forgot-password"],
+    ["/login/reset-password?token_hash=abc123&type=recovery", "/auth/reset-password?token_hash=abc123&type=recovery"],
+    ["/discount-code/sign-in", "/auth"],
+    ["/discount-code/forgot-password", "/auth/forgot-password"],
+    ["/discount-code/reset-password?token_hash=abc123&type=recovery", "/auth/reset-password?token_hash=abc123&type=recovery"],
+  ])("sends the old %s to the portal's %s", async (from, to) => {
+    const response = await open(`${PUBLIC}${from}`)
+
+    expect(response.status).toBe(307)
+    expect(getRedirectUrl(response)).toBe(`${PORTAL}${to}`)
+  })
+
+  // On Vercel, `/staff/:path*` with nothing after the prefix sends /staff to
+  // /staff/, and Next.js then redirects that a second time. The test helper
+  // doesn't show the slash, so this reads the rules: each bare prefix has its
+  // own rule, and no rule can end in an empty `:path*`.
+  it.each(PORTAL_PATHS)("sends the bare %s to the portal in one hop", (path) => {
+    const rules = crossHostRedirects()
+    expect(rules).toContainEqual(expect.objectContaining({ source: path, destination: `${PORTAL}${path}` }))
+    expect(rules.filter((rule) => rule.destination.endsWith(":path*"))).toEqual([])
+  })
+
+  it.each(["/", "/apply", "/apply?ref=AJM-407", "/staffroom", "/logins", "/authors", "/discount-codes", "/api/language"])(
     "keeps %s",
     async (path) => {
       expect(getRedirectUrl(await open(`${PUBLIC}${path}`))).toBeNull()
@@ -55,14 +83,14 @@ describe("the public site", () => {
     expect(getRedirectUrl(response)).toBe(`${PORTAL}/manifest.webmanifest`)
   })
 
-  it("forwards an invite or reset link on the root to its page, which then moves to the portal", async () => {
-    const invite = await open(`${PUBLIC}/?token_hash=abc123&type=invite`)
-    expect(getRedirectUrl(invite)).toBe(`${PUBLIC}/auth/confirm?token_hash=abc123&type=invite`)
-    expect(getRedirectUrl(await open(getRedirectUrl(invite)!))).toBe(`${PORTAL}/auth/confirm?token_hash=abc123&type=invite`)
+  it.each([
+    ["/?token_hash=abc123&type=invite", "/auth/confirm?token_hash=abc123&type=invite"],
+    ["/?token_hash=abc123&type=recovery", "/auth/reset-password?token_hash=abc123&type=recovery"],
+  ])("sends an email link on the root, %s, straight to the portal's page", async (from, to) => {
+    const response = await open(`${PUBLIC}${from}`)
 
-    const reset = await open(`${PUBLIC}/?token_hash=abc123&type=recovery`)
-    expect(getRedirectUrl(reset)).toBe(`${PUBLIC}/login/reset-password?token_hash=abc123&type=recovery`)
-    expect(getRedirectUrl(await open(getRedirectUrl(reset)!))).toBe(`${PORTAL}/login/reset-password?token_hash=abc123&type=recovery`)
+    expect(response.status).toBe(307)
+    expect(getRedirectUrl(response)).toBe(`${PORTAL}${to}`)
   })
 })
 
@@ -71,7 +99,7 @@ describe("the portal", () => {
     const response = await open(`${PORTAL}/`)
 
     expect(response.status).toBe(307)
-    expect(getRedirectUrl(response)).toBe(`${PORTAL}/login`)
+    expect(getRedirectUrl(response)).toBe(`${PORTAL}/auth`)
   })
 
   it("forwards an invite or reset link on its root to its page", async () => {
@@ -79,8 +107,21 @@ describe("the portal", () => {
       `${PORTAL}/auth/confirm?token_hash=abc123&type=invite`,
     )
     expect(getRedirectUrl(await open(`${PORTAL}/?token_hash=abc123&type=recovery`))).toBe(
-      `${PORTAL}/login/reset-password?token_hash=abc123&type=recovery`,
+      `${PORTAL}/auth/reset-password?token_hash=abc123&type=recovery`,
     )
+  })
+
+  it.each([
+    ["/login", "/auth"],
+    ["/login?next=%2Fstaff", "/auth?next=%2Fstaff"],
+    ["/login/forgot-password", "/auth/forgot-password"],
+    ["/login/reset-password?token_hash=abc123&type=recovery", "/auth/reset-password?token_hash=abc123&type=recovery"],
+    ["/discount-code/sign-in", "/auth"],
+  ])("sends the old %s to %s", async (from, to) => {
+    const response = await open(`${PORTAL}${from}`)
+
+    expect(response.status).toBe(307)
+    expect(getRedirectUrl(response)).toBe(`${PORTAL}${to}`)
   })
 
   it("sends a Referral link to the public site's Admission form, code and all", async () => {
@@ -92,8 +133,10 @@ describe("the portal", () => {
 
   it.each([
     "/staff",
-    "/login",
+    "/auth",
     "/auth/confirm?token_hash=a&type=invite",
+    "/auth/callback?code=xyz",
+    "/auth/reset-password?token_hash=a&type=recovery",
     "/discount-code",
     "/discount-code/students",
     "/manifest.webmanifest",
@@ -104,8 +147,8 @@ describe("the portal", () => {
     },
   )
 
-  it("serves the cached copy of /login/forgot-password", async () => {
-    expect(getRewrittenUrl(await open(`${PORTAL}/login/forgot-password`))).toBe(`${PORTAL}/by-language/first/login/forgot-password`)
+  it("serves the cached copy of /auth/forgot-password", async () => {
+    expect(getRewrittenUrl(await open(`${PORTAL}/auth/forgot-password`))).toBe(`${PORTAL}/by-language/first/auth/forgot-password`)
   })
 })
 
@@ -115,7 +158,7 @@ describe("every other host is one site", () => {
     async (origin) => {
       for (const path of [
         "/staff",
-        "/login",
+        "/auth",
         "/auth/confirm?token_hash=a&type=invite",
         "/discount-code",
         "/apply?ref=AJM-407",
@@ -126,6 +169,20 @@ describe("every other host is one site", () => {
       expect(getRewrittenUrl(await open(`${origin}/`))).toBe(`${origin}/by-language/first`)
     },
   )
+
+  // Only the move to /auth, temporary, on the same host, query and all.
+  it.each(["http://localhost:3000", "https://al-rahmah-web-git-x-team.vercel.app"])("%s moves the old sign-in addresses to /auth", async (origin) => {
+    for (const [from, to] of [
+      ["/login?next=%2Fstaff", "/auth?next=%2Fstaff"],
+      ["/login/forgot-password", "/auth/forgot-password"],
+      ["/login/reset-password?token_hash=a&type=recovery", "/auth/reset-password?token_hash=a&type=recovery"],
+      ["/discount-code/sign-in", "/auth"],
+    ]) {
+      const response = await open(`${origin}${from}`)
+      expect(response.status).toBe(307)
+      expect(getRedirectUrl(response)).toBe(`${origin}${to}`)
+    }
+  })
 })
 
 // Next.js reads a host condition as a regular expression, so an unescaped dot
@@ -139,7 +196,7 @@ describe("hosts that only look like ours", () => {
     "https://evil.alrahmahcomplex.or.tz",
     "https://alrahmahcomplex.or.tz.evil.example",
   ])("%s moves nothing", async (origin) => {
-    for (const path of ["/staff", "/login", "/discount-code", "/apply?ref=AJM-407", "/"]) {
+    for (const path of ["/staff", "/auth", "/discount-code", "/apply?ref=AJM-407", "/"]) {
       expect(getRedirectUrl(await open(`${origin}${path}`))).toBeNull()
     }
   })

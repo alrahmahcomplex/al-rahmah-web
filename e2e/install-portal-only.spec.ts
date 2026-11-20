@@ -9,7 +9,7 @@ import { expect, test } from "./staff-test"
 const INSTALL_TAG = /<link rel="manifest"|<meta name="(mobile-web-app-capable|apple-mobile-web-app-[a-z-]+)"/
 
 const PUBLIC_PAGES = ["/", "/apply", "/apply?ref=BJN-402"]
-const PORTAL_PAGES = ["/login", "/login/forgot-password", "/login/reset-password", "/auth/confirm", "/discount-code"]
+const PORTAL_PAGES = ["/auth", "/auth/forgot-password", "/auth/reset-password", "/auth/confirm", "/discount-code"]
 
 test.describe("install as an app", () => {
   for (const path of PUBLIC_PAGES) {
@@ -42,6 +42,6 @@ test.describe("install as an app", () => {
     const response = await request.get("/manifest.webmanifest")
     expect(response.status()).toBe(200)
     expect(response.headers()["content-type"]).toContain("application/manifest+json")
-    expect(await response.json()).toMatchObject({ id: "/", start_url: "/login", scope: "/", display: "standalone" })
+    expect(await response.json()).toMatchObject({ id: "/", start_url: "/auth", scope: "/", display: "standalone" })
   })
 })

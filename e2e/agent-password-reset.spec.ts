@@ -111,9 +111,9 @@ async function setPassword(page: Page) {
 test("Umesahau nenosiri? emails a reset link; the reset page sets the new password and signs the agent in", async ({ page }) => {
   const agent = await joinedAgent()
 
-  await page.goto("/login")
+  await page.goto("/auth")
   await page.getByRole("link", { name: "Umesahau nenosiri?" }).click()
-  await expect(page).toHaveURL(/\/login\/forgot-password$/)
+  await expect(page).toHaveURL(/\/auth\/forgot-password$/)
   await expect(page.getByRole("heading", { name: "Umesahau nenosiri?" })).toBeVisible()
   // The same card as sign-in, without the old security-check line (#264).
   await expect(page.getByText("AL-RAHMAH COMPLEX", { exact: true })).toBeVisible()
@@ -124,7 +124,7 @@ test("Umesahau nenosiri? emails a reset link; the reset page sets the new passwo
 
   const [email] = await waitForEmails(agent.address, 1)
   expect(email.subject).toBe("Reset your Al-Rahmah Admissions Portal password")
-  expect(email.link).toMatch(/^http:\/\/localhost:3100\/login\/reset-password\?token_hash=[^&]+&type=recovery$/)
+  expect(email.link).toMatch(/^http:\/\/localhost:3100\/auth\/reset-password\?token_hash=[^&]+&type=recovery$/)
   expect(email.html).toContain("Nenosiri jipya")
 
   await page.goto(email.link)
@@ -132,7 +132,7 @@ test("Umesahau nenosiri? emails a reset link; the reset page sets the new passwo
   await setPassword(page)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
 
-  // The new password signs in on /login.
+  // The new password signs in on /auth.
   await page.context().clearCookies()
   await logIn(page, agent.address, PASSWORD)
   await expect(page).toHaveURL(/\/discount-code\/students$/)
@@ -150,7 +150,7 @@ test("an email with no account gets the same reply, and nothing is sent", async 
   const stranger = `nobody-${randomUUID().slice(0, 8)}@example.test`
   // The old address still works (#264).
   await page.goto("/discount-code/forgot-password")
-  await expect(page).toHaveURL(/\/login\/forgot-password$/)
+  await expect(page).toHaveURL(/\/auth\/forgot-password$/)
   await requestLink(page, stranger)
   // The send happens after the reply; give it time to show up if it did.
   await page.waitForTimeout(2_000)
@@ -176,10 +176,10 @@ test("an expired invite link's Tuma kiungo kipya sends an invited agent a new in
 
 test("a reset link sent before #265, to the old reset page, still works", async ({ page }) => {
   const agent = await joinedAgent()
-  await page.goto("/login/forgot-password")
+  await page.goto("/auth/forgot-password")
   await requestLink(page, agent.address)
   const [email] = await waitForEmails(agent.address, 1)
-  const old = email.link.replace("/login/reset-password", "/discount-code/reset-password")
+  const old = email.link.replace("/auth/reset-password", "/discount-code/reset-password")
 
   await page.goto(old)
   await expect(page).toHaveURL(email.link)
@@ -188,7 +188,7 @@ test("a reset link sent before #265, to the old reset page, still works", async 
 })
 
 test("the reset page without a link offers a new one", async ({ page }) => {
-  await page.goto("/login/reset-password")
+  await page.goto("/auth/reset-password")
   await expect(page.getByRole("heading", { name: "Kiungo kimeisha muda" })).toBeVisible()
   await expect(page.getByLabel("Barua pepe")).toBeVisible()
 })

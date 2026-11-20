@@ -75,7 +75,7 @@ export function SetPasswordForm({
           {message && <AccountMessageView language={language} message={message} />}
           {!message?.signIn && (
             <Link
-              href="/login"
+              href="/auth"
               className="inline-flex min-h-11 items-center rounded-full px-2.5 text-[15px] font-semibold text-blue-600 underline decoration-blue-600/35 underline-offset-4"
             >
               {copy.goToSignIn}

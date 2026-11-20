@@ -16,7 +16,7 @@ import { LINK_REQUEST_COPY, type LinkRequestStatus } from "./link-request-copy"
 
 // Asks for a new password link by email (#194): "Umesahau nenosiri?" and
 // the expired-link panel's "Tuma kiungo kipya". `form` names the firewall key.
-// `guided` draws it in the Discount code pages' look (concept C); the /login
+// `guided` draws it in the Discount code pages' look (concept C); the /auth
 // pages keep the sign-in card's.
 export function LinkRequestForm({
   language,
@@ -112,7 +112,7 @@ export function LinkRequestForm({
 
 export function SignInLink({ language }: { language: Language }) {
   return (
-    <Link href="/login" className="text-center font-exo text-[13px] text-blue-600 underline underline-offset-2">
+    <Link href="/auth" className="text-center font-exo text-[13px] text-blue-600 underline underline-offset-2">
       {LINK_REQUEST_COPY[language].goToSignIn}
     </Link>
   )

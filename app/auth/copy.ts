@@ -6,7 +6,7 @@ import type { SignInError } from "@/lib/services/sign-in"
 // say agent, referral or Wakala. A native Swahili reader checks the Swahili
 // before it ships.
 
-// Problems /login shows from the address, after a redirect: an expired email
+// Problems /auth shows from the address, after a redirect: an expired email
 // link (/auth/callback) or a session the staff side refused (app/staff/session.ts).
 export const LOGIN_NOTICES = ["invalid-link", "not-staff", "deactivated", "unavailable"] as const
 export type LoginNotice = (typeof LOGIN_NOTICES)[number]

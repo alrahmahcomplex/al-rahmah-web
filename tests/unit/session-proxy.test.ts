@@ -54,13 +54,13 @@ describe("the session proxy", () => {
     const response = await visit("/staff/applicants?q=x")
 
     expect(response.status).toBe(307)
-    expect(response.headers.get("location")).toBe("https://school.example/login")
+    expect(response.headers.get("location")).toBe("https://school.example/auth")
   })
 
   it("sends a visitor with no session from the Discount code students page to sign-in", async () => {
     sdk.getClaims.mockResolvedValue({ data: null, error: null })
 
-    expect((await visit("/discount-code/students")).headers.get("location")).toBe("https://school.example/login")
+    expect((await visit("/discount-code/students")).headers.get("location")).toBe("https://school.example/auth")
   })
 
   // A forged or expired token, a refresh the Auth server refused, an outage
@@ -75,7 +75,7 @@ describe("the session proxy", () => {
     ]) {
       sdk.getClaims.mockResolvedValue(answer)
 
-      expect((await visit("/staff")).headers.get("location")).toBe("https://school.example/login")
+      expect((await visit("/staff")).headers.get("location")).toBe("https://school.example/auth")
     }
   })
 
@@ -83,13 +83,13 @@ describe("the session proxy", () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     sdk.getClaims.mockRejectedValue(new TypeError("crypto failed"))
 
-    expect((await visit("/staff")).headers.get("location")).toBe("https://school.example/login")
+    expect((await visit("/staff")).headers.get("location")).toBe("https://school.example/auth")
   })
 
   it("leaves the sign-in page open to a visitor with no session", async () => {
     sdk.getClaims.mockResolvedValue({ data: null, error: null })
 
-    expect((await visit("/login")).headers.get("location")).toBeNull()
+    expect((await visit("/auth")).headers.get("location")).toBeNull()
   })
 
   it("passes on the cookies a session refresh writes during the check", async () => {

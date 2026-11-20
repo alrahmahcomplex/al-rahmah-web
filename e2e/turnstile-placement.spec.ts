@@ -178,7 +178,7 @@ for (const { name, size } of VIEWPORTS) {
     })
 
     test("the forgot-password card shows no check while Cloudflare passes", async ({ page }) => {
-      await page.goto("/login/forgot-password")
+      await page.goto("/auth/forgot-password")
       await waitForSecurityCheck(page)
       const { container } = await boxAndCard(page)
       expect(container.height).toBeLessThanOrEqual(1)
@@ -188,7 +188,7 @@ for (const { name, size } of VIEWPORTS) {
       test(`on the forgot-password card, Send brings a check that needs a click into view, in ${lang}`, async ({ page, baseURL }) => {
         if (lang === "en") await page.context().addCookies([{ name: "lang", value: "en", url: baseURL! }])
         await cloudflareAsksForAClick(page)
-        await page.goto("/login/forgot-password")
+        await page.goto("/auth/forgot-password")
         await page.getByRole("textbox").fill("mzazi@example.test")
         await expectSendBringsCheckIntoView(page, lang, lang === "sw" ? "Tuma kiungo kipya" : "Send a new link")
       })
@@ -210,7 +210,7 @@ for (const { name, size } of VIEWPORTS) {
     })
 
     test("a password link request still sends with the always-pass keys", async ({ page }) => {
-      await page.goto("/login/forgot-password")
+      await page.goto("/auth/forgot-password")
       await waitForSecurityCheck(page)
       await page.getByRole("textbox").fill(`hakuna-akaunti-${randomUUID().slice(0, 8)}@example.test`)
       await page.getByRole("button", { name: "Tuma kiungo kipya" }).click()
@@ -225,7 +225,7 @@ test.describe("the sign-in card", () => {
     test(`on a ${name}, Ingia before the check is ticked keeps the email and password (#273)`, async ({ page }) => {
       await page.setViewportSize(size)
       await watchRealCheck(page, FORCED_INTERACTION_SITE_KEY)
-      await page.goto("/login")
+      await page.goto("/auth")
       await page.getByLabel("Barua pepe").fill("mzazi@example.test")
       await page.getByLabel("Nenosiri", { exact: true }).fill("a-password")
       await expect(page.getByText(NEEDS_CLICK.sw)).toBeVisible({ timeout: 20_000 })
@@ -236,13 +236,13 @@ test.describe("the sign-in card", () => {
       await expect(page.getByLabel("Nenosiri", { exact: true })).toHaveValue("a-password")
       expect((await page.getByLabel("Nenosiri", { exact: true }).getAttribute("value")) ?? "").toBe("")
       await expect(page.getByText(/Subiri ukaguzi wa usalama/)).toHaveCount(0)
-      await expect(page).toHaveURL(/\/login$/)
+      await expect(page).toHaveURL(/\/auth$/)
     })
   }
 
   test("a check that keeps failing says it couldn't load, and Ingia points to it (#272)", async ({ page }) => {
     await cloudflareKeepsFailing(page)
-    await page.goto("/login")
+    await page.goto("/auth")
     const alert = page.locator("form").getByRole("alert")
     await expect(alert).toHaveText("Ukaguzi wa usalama haukuweza kufunguka. Pakia ukurasa upya kisha ujaribu tena.")
     await page.getByLabel("Barua pepe").fill("mzazi@example.test")
@@ -275,7 +275,7 @@ test("a check that passed out of sight keeps its token when the window narrows (
 test("a check that needs a click near 300px settles on the compact box instead of redrawing over and over (#278)", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await cloudflareAsksForAClick(page)
-  await page.goto("/login/forgot-password")
+  await page.goto("/auth/forgot-password")
   await page.addStyleTag({
     content: `[data-turnstile-box] { width: 301px !important; flex: none !important; }
       [data-turnstile-box]:has([data-fake-check="flexible"]) { width: 283px !important; }`,

@@ -28,7 +28,7 @@ function messageFor(language: Language, error: Exclude<ErrorKey, "invalid-link">
     case "unavailable":
       return ACCOUNT_COPY[language].messages[error]
     default:
-      // Who may sign in, worded as /login words it.
+      // Who may sign in, worded as /auth words it.
       return LOGIN_COPY[language].messages[error]
   }
 }
@@ -94,7 +94,7 @@ export function ResetPasswordForm({
       ) : (
         <div className="flex flex-col items-center gap-4">
           {message && <AccountMessageView language={language} message={message} />}
-          <Link href="/login" className="font-exo text-[13px] text-blue-600 underline underline-offset-2">
+          <Link href="/auth" className="font-exo text-[13px] text-blue-600 underline underline-offset-2">
             {copy.goToSignIn}
           </Link>
         </div>

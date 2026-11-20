@@ -60,7 +60,7 @@ describe("the home page", () => {
   it.each(["first", "sw", "en"] as const)("keeps the Staff sign-in link in %s", async (state) => {
     await renderHome(state)
 
-    expect(screen.getByRole("link", { name: "Staff sign-in" })).toHaveAttribute("href", "/login")
+    expect(screen.getByRole("link", { name: "Staff sign-in" })).toHaveAttribute("href", "/auth")
   })
 
   it("speaks Swahili, with no card, to a visitor with any other lang value", async () => {

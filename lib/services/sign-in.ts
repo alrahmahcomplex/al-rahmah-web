@@ -50,7 +50,7 @@ export async function signIn(
   return refused(agent.error === "signed-out" ? "unavailable" : agent.error)
 }
 
-// Where /login sends a browser that is already signed in, or null to show the
+// Where /auth sends a browser that is already signed in, or null to show the
 // form. Only a session that can use its side right now goes on, so a
 // deactivated staff member sent back here by /staff sees the reason instead
 // of bouncing between the two pages.

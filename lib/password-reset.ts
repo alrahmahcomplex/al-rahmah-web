@@ -3,7 +3,7 @@
 // The hosted Redirect URLs allow-list must hold it for every site address.
 // Links to the old agent reset page (/discount-code/reset-password) are sent
 // here by next.config.ts, token and all.
-export const RESET_PATH = "/login/reset-password"
+export const RESET_PATH = "/auth/reset-password"
 
 // Names the link this browser already spent and the account it signed in,
 // when saving the new password failed after that: "<token_hash> <user id>".

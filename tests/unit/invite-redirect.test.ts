@@ -22,7 +22,7 @@ describe("the site root", () => {
     const response = await open("https://school.example/?token_hash=abc123&type=recovery")
 
     expect(response.status).toBe(307)
-    expect(getRedirectUrl(response)).toBe("https://school.example/login/reset-password?token_hash=abc123&type=recovery")
+    expect(getRedirectUrl(response)).toBe("https://school.example/auth/reset-password?token_hash=abc123&type=recovery")
   })
 
   it("serves the home page to everyone else", async () => {
@@ -33,22 +33,23 @@ describe("the site root", () => {
 })
 
 // One sign-in page (#264): old Discount code sign-in links from emails,
-// bookmarks and print land on /login for good.
+// bookmarks and print land on /auth. Temporary since #497: a browser that
+// remembered a permanent one would keep asking for /auth after a rollback.
 describe("the old Discount code sign-in addresses", () => {
   it.each([
-    ["/discount-code/sign-in", "/login"],
-    ["/discount-code/forgot-password", "/login/forgot-password"],
+    ["/discount-code/sign-in", "/auth"],
+    ["/discount-code/forgot-password", "/auth/forgot-password"],
     // Reset links sent before #265, token and all.
-    ["/discount-code/reset-password?token_hash=a&type=recovery", "/login/reset-password?token_hash=a&type=recovery"],
-  ])("permanently forward %s to %s", async (from, to) => {
+    ["/discount-code/reset-password?token_hash=a&type=recovery", "/auth/reset-password?token_hash=a&type=recovery"],
+  ])("forward %s to %s", async (from, to) => {
     const response = await open(`https://school.example${from}`)
 
-    expect(response.status).toBe(308)
+    expect(response.status).toBe(307)
     expect(getRedirectUrl(response)).toBe(`https://school.example${to}`)
   })
 
   it("keep the pages the email links open where they are", async () => {
-    for (const path of ["/discount-code/set-password?token_hash=a&type=invite", "/login/reset-password?token_hash=a&type=recovery"]) {
+    for (const path of ["/discount-code/set-password?token_hash=a&type=invite", "/auth/reset-password?token_hash=a&type=recovery"]) {
       expect(getRedirectUrl(await open(`https://school.example${path}`))).toBeNull()
     }
   })

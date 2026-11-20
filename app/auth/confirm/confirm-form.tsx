@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useActionState, useState } from "react"
 
-import { AGENT_SESSION, OtherSessionNotice } from "@/app/login/other-session-notice"
+import { AGENT_SESSION, OtherSessionNotice } from "@/app/auth/other-session-notice"
 import { buttonVariants } from "@/components/ui/button"
 import { MINIMUM_PASSWORD_LENGTH } from "@/lib/password"
 import { cn } from "@/lib/utils"
@@ -119,7 +119,7 @@ export function ConfirmForm({ tokenHash, agentSession = false }: { tokenHash: st
             <p role="alert" className="text-center text-[13px] font-exo text-red-600">
               {message}
             </p>
-            <Link href="/login" className="text-[12px] font-exo text-blue-600 underline underline-offset-2">
+            <Link href="/auth" className="text-[12px] font-exo text-blue-600 underline underline-offset-2">
               Go to sign-in
             </Link>
           </div>

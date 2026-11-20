@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const stubs = vi.hoisted(() => ({ signIn: vi.fn(), reset: vi.fn(), reveal: vi.fn(() => false), token: "XXXX.DUMMY.TOKEN.XXXX" }))
 
-vi.mock("@/app/login/actions", () => ({ signIn: stubs.signIn }))
+vi.mock("@/app/auth/actions", () => ({ signIn: stubs.signIn }))
 
 // Turnstile's widget, as far as the form sees it: the hidden token field it
 // adds, empty while the check is still running, its reset, and reveal, which
@@ -19,7 +19,7 @@ vi.mock("@/components/turnstile-widget", async () => {
   }
 })
 
-import { LoginForm } from "@/app/login/login-form"
+import { LoginForm } from "@/app/auth/login-form"
 
 beforeEach(() => {
   stubs.signIn.mockReset().mockResolvedValue({ error: "invalid-credentials" })
@@ -48,7 +48,7 @@ describe("the one sign-in form", () => {
 
     expect(screen.getByLabelText(email)).toHaveAttribute("placeholder", email)
     expect(screen.getByLabelText(password)).toHaveAttribute("placeholder", password)
-    expect(screen.getByRole("link", { name: forgot })).toHaveAttribute("href", "/login/forgot-password")
+    expect(screen.getByRole("link", { name: forgot })).toHaveAttribute("href", "/auth/forgot-password")
     expect(screen.queryByText(/Discount code holders/i)).toBeNull()
   })
 
@@ -61,7 +61,7 @@ describe("the one sign-in form", () => {
 
     const alert = await screen.findByRole("alert")
     expect(alert).toHaveTextContent("Wrong email or password.")
-    expect(alert.querySelector('a[href="/login/forgot-password"]')).toHaveTextContent("Forgot your password?")
+    expect(alert.querySelector('a[href="/auth/forgot-password"]')).toHaveTextContent("Forgot your password?")
     expect(screen.getAllByRole("link", { name: "Forgot your password?" })).toHaveLength(1)
   })
 

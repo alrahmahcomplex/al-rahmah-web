@@ -24,8 +24,8 @@ links already shared on WhatsApp.
 
 ## Decision
 
-`/`, `/apply` and `/login/forgot-password` live under
-`app/by-language/[state]/`, built at deploy time for three states with
+`/`, `/apply` and `/auth/forgot-password` (`/login/forgot-password` until #497
+moved sign-in to `/auth`) live under `app/by-language/[state]/`, built at deploy time for three states with
 `generateStaticParams` and `dynamicParams = false`:
 
 | State | `lang` cookie | Page |
@@ -48,7 +48,7 @@ The language switch on these pages:
   history entry), and the new cookie picks the other copy. Only the cached public
   addresses are accepted.
 - **With JavaScript on `/`**, does the same; the page has no entries to keep.
-- **With JavaScript on `/apply` and `/login/forgot-password`**, sets the cookie
+- **With JavaScript on `/apply` and `/auth/forgot-password`**, sets the cookie
   with a plain POST to `/api/language` and then changes the words in the
   browser (`components/page-language.tsx`). Not the Server Action: an action
   that sets a cookie makes Next.js render the page again, and that render is

@@ -3,7 +3,7 @@ import type { SiblingFeeEditReason } from "@/lib/services/sibling-groups"
 import { FEE_EDIT_REASONS } from "@/lib/sibling-sentences"
 
 import { becauseText } from "./because"
-import { oneSave, rowSequences } from "./row-sequence"
+import { collapseSaves, rowSequences } from "./row-sequence"
 
 // A lead's sibling group, Sibling discount and Manual Sibling fee edits in its
 // history (#428), for describe.ts. The owner approved these words in the
@@ -108,32 +108,31 @@ export function withEditResult(entry: LeadHistoryEntry): LeadHistoryEntry {
   return { ...entry, changes: [...entry.changes, { field: "result", from: before, to: after }] }
 }
 
-// Staff answering the sibling question at registration or check-in, as the
-// database saves it: a membership with no group (registration inserts one,
-// check-in marks the existing one answered), then in the same save a link
-// for a child staff named a sibling of. With a link, the answer reads as the
-// link alone; without one, as being in no sibling group (when it has none).
-export type SiblingChoices = { superseded: ReadonlySet<number>; noGroup: ReadonlySet<number> }
+// Staff answering the sibling question at registration or check-in. The
+// database saves it as a membership with no group (registration inserts one,
+// check-in marks the existing one answered), then in the same save takes a
+// child out of its Family's legacy group and links the children staff named
+// a sibling of. One save reads as one entry of what it changed overall.
+export function collapseGroupSaves(entries: readonly LeadHistoryEntry[]): LeadHistoryEntry[] {
+  return collapseSaves(entries, GROUP, "updated_at", "last")
+}
 
-const answered = (entry: LeadHistoryEntry) => entry.changes.some((c) => c.field === "sibling_choice_made" && c.to === true)
+// An answer that left the child in no group reads as being in no sibling
+// group: the entries (already collapsed) that only mark the answer.
+export type SiblingChoices = { noGroup: ReadonlySet<number> }
 
 export function siblingChoices(entries: readonly LeadHistoryEntry[]): SiblingChoices {
-  const superseded = new Set<number>()
   const noGroup = new Set<number>()
   for (const row of rowSequences(entries, GROUP).values()) {
     let group: unknown = null
-    row.forEach((entry, i) => {
+    for (const entry of row) {
       const groupChange = entry.changes.find((c) => c.field === "group_id")
-      const next = row[i + 1]
-      const linked = next && oneSave(entry, next) && next.changes.some((c) => c.field === "group_id" && c.from === null && c.to !== null)
-      if (answered(entry) && !(groupChange?.to ?? null)) {
-        if (linked) superseded.add(entry.id)
-        else if (entry.action === "update" && !groupChange && group === null) noGroup.add(entry.id)
-      }
+      const answered = entry.changes.some((c) => c.field === "sibling_choice_made" && c.to === true)
+      if (entry.action === "update" && answered && !groupChange && group === null) noGroup.add(entry.id)
       if (entry.action === "insert" || groupChange) group = groupChange?.to ?? null
-    })
+    }
   }
-  return { superseded, noGroup }
+  return { noGroup }
 }
 
 export function siblingSummary(entry: LeadHistoryEntry, choices: SiblingChoices): string | null {
@@ -154,11 +153,12 @@ export function siblingSummary(entry: LeadHistoryEntry, choices: SiblingChoices)
   }
 
   if (entry.record === RESULT) {
-    if (insert) return "worked out the applicant’s Sibling discount"
-    if (entry.action !== "update") return entry.action
-    // Enrolment fixes the result by setting the lock. A manual result keeps
-    // its source under the lock, and a later Back to automatic turns the
-    // source to locked without fixing anything new.
+    if (insert && !changed.get("locked_at")?.to) return "worked out the applicant’s Sibling discount"
+    if (!insert && entry.action !== "update") return entry.action
+    // Enrolment fixes the result by setting the lock, on a new row too (a
+    // first enrolment with no result stored). A manual result keeps its
+    // source under the lock, and a later Back to automatic turns the source
+    // to locked without fixing anything new.
     if (changed.get("locked_at")?.to) return "fixed the applicant’s Sibling discount when they were Enrolled"
     return "changed the applicant’s Sibling discount"
   }

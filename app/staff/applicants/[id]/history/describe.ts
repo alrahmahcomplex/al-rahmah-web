@@ -46,8 +46,9 @@ import {
   resultReleaseSummary,
   resultReleaseValue,
 } from "./result-release-history"
-import { mergeSeatMoves, seatHidden, seatKeepsEmpty, seatLabel, seatOrder, seatSummary, seatValue } from "./seat-history"
+import { collapseSeatSaves, seatHidden, seatKeepsEmpty, seatLabel, seatOrder, seatSummary, seatValue } from "./seat-history"
 import {
+  collapseGroupSaves,
   siblingChoices,
   siblingHidden,
   siblingLabel,
@@ -481,7 +482,10 @@ export function describeLeadHistory(
   const plans = followUpPlans(entries)
   const causes = enrolmentCauses(entries)
   const serials = interviewSerials(entries)
-  const choices = siblingChoices(entries)
+  // One save that wrote a row several times reads as one entry: a sibling
+  // answer with its link, and a seat released and placed again.
+  const shown = collapseSeatSaves(collapseGroupSaves(entries))
+  const choices = siblingChoices(shown)
   const context: Context = {
     kinds: discountKinds(entries),
     choices,
@@ -489,9 +493,6 @@ export function describeLeadHistory(
     streamNames: names.streams ?? {},
   }
   const rowCause = rowCauses(entries)
-  // One save that wrote a row twice reads as one entry: a sibling answer
-  // followed by its link, and a seat released and placed again.
-  const shown = mergeSeatMoves(entries.filter((entry) => !choices.superseded.has(entry.id)))
   return shown.map((entry) => {
     const prepared = withCause(withoutAppliedReason(withEditResult(withEarlierPlan(entry, plans))), rowCause)
     const described = withInterviewSerial(entry, describeEntry(prepared, contactNames, timeline, causes, context), serials)

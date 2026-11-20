@@ -1,7 +1,7 @@
 import type { LeadHistoryEntry } from "@/lib/services/audit"
 
 import { becauseText } from "./because"
-import { oneSave, rowSequences } from "./row-sequence"
+import { collapseSaves } from "./row-sequence"
 
 // A lead's seat in a stream and its requests for a new stream in its history
 // (#428), for describe.ts. The owner approved these words in the History
@@ -57,33 +57,11 @@ export function seatValue(record: string | null, field: string, value: unknown, 
   return null
 }
 
-// A move between streams is saved as two entries: the seat released, then
-// the child placed in the new stream (the gender or class reconciliation).
-// They read as one move, saying why the child left the old stream.
-export function mergeSeatMoves(entries: readonly LeadHistoryEntry[]): LeadHistoryEntry[] {
-  const merged = new Map<number, LeadHistoryEntry>()
-  const dropped = new Set<number>()
-  for (const row of rowSequences(entries, SEAT).values()) {
-    for (let i = 0; i + 1 < row.length; i++) {
-      const [release, placement] = [row[i], row[i + 1]]
-      const left = release.changes.find((c) => c.field === "stream_id")
-      const joined = placement.changes.find((c) => c.field === "stream_id")
-      const waits = release.changes.some((c) => c.field === "waiting_since" && c.to !== null)
-      if (release.action !== "update" || placement.action !== "update" || !left?.from || left.to !== null || waits) continue
-      if (!joined?.to || joined.from !== null || !oneSave(release, placement)) continue
-      const cause = release.changes.find((c) => c.field === "cause")
-      dropped.add(release.id)
-      merged.set(placement.id, {
-        ...placement,
-        changes: [
-          ...placement.changes.filter((c) => c.field !== "stream_id" && c.field !== "cause"),
-          { field: "stream_id", from: left.from, to: joined.to },
-          ...(cause ? [cause] : []),
-        ],
-      })
-    }
-  }
-  return entries.filter((e) => !dropped.has(e.id)).map((e) => merged.get(e.id) ?? e)
+// A move between streams is saved as a release and then a placement (the
+// gender or class reconciliation): one save reads as one move, saying why
+// the child left the old stream.
+export function collapseSeatSaves(entries: readonly LeadHistoryEntry[]): LeadHistoryEntry[] {
+  return collapseSaves(entries, SEAT, "changed_at", "first")
 }
 
 export function seatSummary(entry: LeadHistoryEntry, streamNames: Readonly<Record<string, string>>): string | null {

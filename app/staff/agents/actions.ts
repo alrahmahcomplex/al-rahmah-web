@@ -61,7 +61,7 @@ export async function approveMarketingAgent(
   }
 
   const result = await approveAgent(supabase, agentId)
-  // The list and the Pending count in the navigation both change.
+  // The list and the staff side around it change.
   if (result.ok || result.error === "no-change") revalidatePath("/staff", "layout")
   if (!result.ok) return approveOutcome(result, agent)
 

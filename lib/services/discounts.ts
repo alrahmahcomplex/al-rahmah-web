@@ -293,8 +293,8 @@ export async function listPendingDiscountRequests(
 }
 
 // How many Staff child and Qualified orphan requests are Pending, for the
-// navigation's count. Read through the table, which staff who may view leads
-// can read. Sibling requests (#302) wait on their own screen (#310).
+// bell's count; app/staff/nav-counts.ts adds the Sibling requests (#302,
+// #310). Read through the table, which staff who may view leads can read.
 export async function countPendingDiscountRequests(
   supabase: SupabaseClient,
 ): Promise<Result<number, "unavailable">> {

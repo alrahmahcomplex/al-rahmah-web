@@ -5,6 +5,7 @@ import { after } from "next/server"
 
 import { requestOrigin } from "@/lib/agent-registration"
 import { RESET_PATH } from "@/lib/password-reset"
+import { portalOrigin } from "@/lib/site-hosts"
 import { checkPublicFormLimit } from "@/lib/rate-limit"
 import { decidePasswordLink, readLinkLimits, sendPasswordLink } from "@/lib/services/password-link-requests"
 import { verifyTurnstile } from "@/lib/turnstile"
@@ -65,10 +66,12 @@ export async function requestPasswordLink(formData: FormData): Promise<{ status:
       return { status: "sent" }
   }
 
-  const reset = `${origin}${RESET_PATH}`
+  // The links lead to the portal on production (#497).
+  const portal = portalOrigin(origin)
+  const reset = `${portal}${RESET_PATH}`
   const redirects = {
-    agent: { reset, invite: `${origin}/discount-code/set-password` },
-    staff: { reset, invite: `${origin}/auth/confirm` },
+    agent: { reset, invite: `${portal}/discount-code/set-password` },
+    staff: { reset, invite: `${portal}/auth/confirm` },
   }
   const senders = {
     agent: { reset: passwordResetSender(), invite: agentInviteSender() },

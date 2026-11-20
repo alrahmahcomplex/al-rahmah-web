@@ -27,7 +27,6 @@ export const STAFF_HOME = {
   href: "/staff",
   label: "Home",
   group: "",
- 
   iconName: "house",
 } as const satisfies Omit<StaffNavEntry, "permission">
 
@@ -45,7 +44,6 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
     href: "/staff/fees",
     label: "Fee schedule",
     group: "Money",
-   
     iconName: "fees",
     permission: ["payments.view", "academic_years.manage"],
   },
@@ -57,7 +55,6 @@ export const STAFF_NAV: readonly StaffNavEntry[] = [
     href: "/staff/reopenings",
     label: "Reopening requests",
     group: "Admin",
-   
     iconName: "reopen",
     permission: "reopenings.approve",
     alsoNeeds: "leads.view",

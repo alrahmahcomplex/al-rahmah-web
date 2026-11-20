@@ -57,7 +57,6 @@ describe("navFor", () => {
       href: "/staff/either",
       label: "Either",
       group: "Money",
-     
       iconName: "today",
       permission: ["payments.view", "leads.view"],
     }

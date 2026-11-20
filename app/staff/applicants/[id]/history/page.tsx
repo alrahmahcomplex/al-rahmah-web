@@ -79,7 +79,13 @@ export default async function LeadHistoryPage({ params }: { params: Promise<{ id
               </Note>
             )}
             <Card className="lh-card">
-              <Entries entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }, importFile)} />
+              <Entries
+                entries={describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }, importFile, {
+                  leads: history.data.leadNames,
+                  streams: history.data.streamNames,
+                  streamOpenedAt: history.data.streamOpenedAt,
+                })}
+              />
             </Card>
           </>
         )}

@@ -188,7 +188,11 @@ export async function RecentActivityPanel({ lead, staff }: LeadPanelProps) {
     ),
   )
   const entries = history.ok
-    ? describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }).slice(0, RECENT_ENTRIES)
+    ? describeLeadHistory(history.data.entries, { ...contactedBy, ...history.data.contactNames }, null, {
+        leads: history.data.leadNames,
+        streams: history.data.streamNames,
+        streamOpenedAt: history.data.streamOpenedAt,
+      }).slice(0, RECENT_ENTRIES)
     : []
 
   return (

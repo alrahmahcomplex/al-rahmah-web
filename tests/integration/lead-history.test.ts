@@ -4,9 +4,10 @@ import { describe, expect, test } from "vitest"
 
 import { tanzaniaToday } from "@/lib/school-calendar"
 import { getLeadHistory, type LeadHistory } from "@/lib/services/audit"
-import { createLead, getLead, updateGuardianContact, updateLeadDetails, type Lead } from "@/lib/services/leads"
+import { createLead, getLead, updateGuardianContact, updateLeadDetails, type Lead, type LeadClass } from "@/lib/services/leads"
+import { streamName, type StreamTakes } from "@/lib/services/streams"
 
-import { anonClient, asStaffActor, asSystem, createThrowawayStaff, secretClient, signedIn } from "../support/db"
+import { anonClient, asStaffActor, asSystem, createThrowawayStaff, inRolledBackTransaction, secretClient, signedIn } from "../support/db"
 import { ACCOUNTANT, ADMISSIONS, DEACTIVATED, MANAGER, SUPER_ADMIN } from "../support/fixtures"
 
 // A lead's history through the audit module, against local Supabase. Each test
@@ -170,6 +171,41 @@ describe("a lead's history", () => {
         { field: "room", from: null, to: 4 },
       ]),
     )
+  })
+
+  test("names the sibling and the stream a sibling group or seat entry points at, with when the stream was opened (#428)", async () => {
+    const lead = await walkInLead()
+    const sibling = await walkInLead()
+    // A seeded stream: the seeded 2027 streams stay for the whole suite.
+    const stream = await inRolledBackTransaction(
+      async (sql) =>
+        (
+          await sql.query<{ id: string; class_name: LeadClass; label: string; takes: StreamTakes; opened_at: string }>(
+            // The time as JSON writes it, so it parses like the one read back.
+            "select id, class_name::text, label, takes::text, to_json(opened_at) #>> '{}' as opened_at from public.streams where enrollment_year = 2027 order by class_name, position limit 1",
+          )
+        ).rows[0],
+    )
+    // The rows as the sibling and seat functions write them, recorded directly
+    // so the test needs no streams or sibling group of its own.
+    await asSystem(async (sql) => {
+      for (const [table, values] of [
+        ["sibling_group_members", { sibling_of_lead_id: sibling.id, cause: "sibling_link" }],
+        ["seat_placements", { stream_id: stream.id, cause: "migration" }],
+      ] as const) {
+        await sql.query(
+          `insert into public.audit_log (table_name, row_id, lead_id, action, new_values, scope, actor_kind)
+           values ($1, gen_random_uuid(), $2, 'insert', $3, 'lead', 'system')`,
+          [table, lead.id, JSON.stringify(values)],
+        )
+      }
+    })
+
+    const { leadNames, streamNames, streamOpenedAt } = await historyOf(lead.id)
+    expect(leadNames).toEqual({ [sibling.id]: `${sibling.studentName} · ${sibling.admissionNumber}` })
+    expect(streamNames).toEqual({ [stream.id]: streamName(stream.class_name, stream.label, stream.takes) })
+    expect(Object.keys(streamOpenedAt)).toEqual([stream.id])
+    expect(Date.parse(streamOpenedAt[stream.id])).toBe(Date.parse(stream.opened_at))
   })
 
   test("a lead that does not exist is not found", async () => {

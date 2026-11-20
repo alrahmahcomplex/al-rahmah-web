@@ -47,7 +47,8 @@ const CAUSES: Readonly<Record<string, string>> = {
   prior_sibling: "Has a sibling already at Al-Rahmah was ticked or cleared",
 }
 
-function causeText(cause: unknown): string | null {
+// Also says why a sibling group, Sibling discount or seat changed (because.ts).
+export function causeText(cause: unknown): string | null {
   return typeof cause === "string" ? (CAUSES[cause] ?? cause) : null
 }
 
